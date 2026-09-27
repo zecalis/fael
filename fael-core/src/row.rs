@@ -41,6 +41,13 @@ pub struct Row {
     /// like `to`, same compat.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// When to look at this row again (row-hygiene chunk 5): a date
+    /// `YYYY-MM` or `YYYY-MM-DD`, or free text like `mdl lands`. A date ≤
+    /// today surfaces the row at the top of `kickoff` whatever its files;
+    /// free text only counts (`fael find --revisit` lists it). Top-level
+    /// like `to`, same compat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revisit: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
     #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
@@ -56,6 +63,14 @@ impl Row {
         self.to
             .as_deref()
             .or_else(|| self.extra.get("to").and_then(|v| v.as_str()))
+    }
+
+    /// When to look at this row again: the `revisit` field, falling back to
+    /// a hand-written `revisit` in `extra` (forward-compat read).
+    pub fn revisit(&self) -> Option<&str> {
+        self.revisit
+            .as_deref()
+            .or_else(|| self.extra.get("revisit").and_then(|v| v.as_str()))
     }
 
     /// The row's urgent number, if any: the `urgent` field, falling back to a

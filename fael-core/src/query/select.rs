@@ -1,5 +1,5 @@
 use super::Filter;
-use super::matching::{file_match, glob, is_md, lenient, same_dir, zone};
+use super::matching::{file_match, glob, is_md, lenient};
 use crate::{Aliases, Log, Row, anchor, is_alias_row, resolve, to_matches};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -211,6 +211,7 @@ pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
         closed(log).union(&superseded(log)).copied().collect()
     };
     let text = f.text.as_ref().map(|t| t.to_lowercase());
+    let revisit = f.revisit.as_ref().map(|q| q.to_lowercase());
     let files: Vec<String> = f
         .files
         .iter()
@@ -239,6 +240,11 @@ pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
                     r.text.to_lowercase().contains(t)
                         // lists show titles, so text search finds them too
                         || r.title.as_deref().is_some_and(|ti| ti.to_lowercase().contains(t))
+                })
+                // `--revisit`: any revisit, or a substring of it
+                && revisit.as_ref().is_none_or(|q| {
+                    r.revisit()
+                        .is_some_and(|v| q.is_empty() || v.to_lowercase().contains(q))
                 })
                 && (files.is_empty()
                     || r.files.iter().any(|rf| {
@@ -299,7 +305,8 @@ fn plan_anchor(file: &str) -> Option<String> {
 // ponytail: file mtime is the "current work" signal — no git spawn on session start; a fresh
 // clone or checkout resets mtimes, then the order falls back to roughly newest-row first.
 pub fn kickoff<'a>(log: &'a Log, f: &Filter, root: &Path, al: &Aliases) -> Vec<&'a Row> {
-    let fresh = |r: &Row| {
+    // a reference, so both halves below share it without a move
+    let fresh = &|r: &Row| {
         let row_ms = crate::ts_ms(&r.ts).unwrap_or(0);
         r.files
             .iter()
@@ -319,8 +326,13 @@ pub fn kickoff<'a>(log: &'a Log, f: &Filter, root: &Path, al: &Aliases) -> Vec<&
         .into_iter()
         .filter(|r| !gone(root, r, al))
         .collect();
-    // find() is ranked already, and the stable rank keeps that for ties
-    ranked(rows, None, |_| 0, fresh)
+    // due revisits wake up first, even from outside the file filter
+    // (with_due) — the stable rank keeps find()'s order for ties
+    let (due, rest) = super::with_due(log, rows, root, al);
+    ranked(due, None, |_| 0, fresh)
+        .into_iter()
+        .chain(ranked(rest, None, |_| 0, fresh))
+        .collect()
 }
 
 /// Widen a kickoff filter with `plan:<name>` anchors (see `plan_anchor`).
@@ -334,63 +346,4 @@ fn widened(f: &Filter) -> Filter {
         }
     }
     out
-}
-
-/// The read/edit push: rows about `files`, ranked so the most actionable comes
-/// first — urgent, then exact file, same directory, rows sharing a key with an
-/// exact hit. Open `issue` before `decision` before the rest, freshest first
-/// by row-or-mtime inside each. Closed and superseded rows never push. Each
-/// query expands through `al` first, so a row filed under a path that was
-/// renamed since still pushes at the new path. The read/edit path never
-/// computes reader identity (no git spawn there), so `to` does not reorder
-/// the push — session start is where routing lists. Deterministic: the
-/// same log and query give the same order on any machine. The caller cuts the
-/// result to the push budget with `render`.
-///
-/// `no_same_dir` is the read/edit split (PLAN-fael-row-hygiene chunk 2): reads
-/// pass true to drop the same-directory tier — the noisiest one, rows about
-/// neighbouring files — and keep exact file, zone/glob and shared-key hits;
-/// edits pass false to keep it, because a module-level decision matters most
-/// while changing that module.
-pub fn push<'a>(log: &'a Log, files: &[String], al: &Aliases, no_same_dir: bool) -> Vec<&'a Row> {
-    let hide: HashSet<&str> = closed(log).union(&superseded(log)).copied().collect();
-    let queries: Vec<String> = al.expand_all(
-        &files
-            .iter()
-            .map(|q| lenient(q).trim_end_matches('/').to_string())
-            .collect::<Vec<_>>(),
-    );
-    if queries.is_empty() {
-        return vec![];
-    }
-    // keys of the exact hits — tier 2 shares one of these
-    let mut hit_keys: HashSet<&str> = HashSet::new();
-    for r in &log.rows {
-        if hide.contains(r.id.as_str()) {
-            continue;
-        }
-        let rf: Vec<String> = r.files.iter().map(|f| lenient(f)).collect();
-        if queries.iter().any(|q| rf.iter().any(|f| zone(q, f))) {
-            hit_keys.extend(r.key.as_deref());
-        }
-    }
-    let tier = |r: &Row| {
-        let rf: Vec<String> = r.files.iter().map(|f| lenient(f)).collect();
-        if queries.iter().any(|q| rf.iter().any(|f| zone(q, f))) {
-            return 0;
-        }
-        if !no_same_dir && queries.iter().any(|q| rf.iter().any(|f| same_dir(q, f))) {
-            return 1;
-        }
-        if r.key.as_deref().is_some_and(|k| hit_keys.contains(k)) {
-            return 2;
-        }
-        3
-    };
-    let out: Vec<&Row> = log
-        .rows
-        .iter()
-        .filter(|r| !hide.contains(r.id.as_str()) && !is_alias_row(r) && tier(r) < 3)
-        .collect();
-    ranked(out, None, tier, fresh_ts)
 }

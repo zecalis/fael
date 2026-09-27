@@ -17,14 +17,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage:
-  fael add <kind> \"<text>\" [--files a,b] [--key k] [--title t] [--to who] [--urgent|--urgent-before id] [--supersedes id] [--force]
+  fael add <kind> \"<text>\" [--files a,b] [--key k] [--title t] [--to who] [--revisit date|text] [--urgent|--urgent-before id] [--supersedes id] [--force]
       (no --files = the files this session edited, as the edit hook recorded;
        --title = the ≤15-word headline lists show, the body is pulled by id;
        --force files a path that looks like a typo of an existing one)
   fael close <id> \"<why>\"
   fael bump <id> [--to who] [--urgent|--urgent-before id|--not-urgent]
       (same text/files, new version — text and files never change through bump)
-  fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--all] [--full] [--limit N] [--offset M]
+  fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M]
       (an exact id or unique prefix pulls that row's body; --full shows every body;
        a cut list prints the exact next call — rerun it with the new --offset)
   fael keys [glob]
@@ -98,7 +98,7 @@ impl Args {
             pos: vec![],
             flags: HashMap::new(),
         };
-        let mut it = argv.into_iter();
+        let mut it = argv.into_iter().peekable();
         while let Some(s) = it.next() {
             if s == "--" {
                 a.pos.extend(it.by_ref());
@@ -112,6 +112,18 @@ impl Args {
                 Some((n, v)) => (n.to_string(), Some(v.to_string())),
                 None => (name.to_string(), None),
             };
+            // `--revisit` takes an optional value: bare on `find` means "any
+            // revisit" (`find --revisit`), with a value it narrows (`add` and
+            // `find --revisit=<text>`); bare on `add` is rejected there.
+            if name == "revisit" {
+                let v = match inline {
+                    Some(v) => Some(v),
+                    None if it.peek().is_some_and(|n| !n.starts_with("--")) => it.next(),
+                    None => None,
+                };
+                a.flags.entry(name).or_default().extend(v);
+                continue;
+            }
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "replace-fapony" | "fix" | "prune"
                 | "urgent" | "not-urgent" | "full" | "rows" => {
@@ -171,54 +183,6 @@ impl Args {
             return Err("rejected: --limit 0 shows nothing — drop it or give 1 or more".into());
         }
         Ok((limit, num("offset")?.unwrap_or(0)))
-    }
-
-    /// Rebuild this `find`/`kickoff` call for the cut line: the same filters,
-    /// so the agent reruns it with the new `--offset` the renderer appends.
-    /// Kickoff takes no filter flags, only `--full` and `--limit`.
-    pub(crate) fn page_base(
-        &self,
-        cmd: &str,
-        positional: Option<&str>,
-        limit: Option<usize>,
-    ) -> String {
-        let mut s = format!("fael {cmd}");
-        if let Some(p) = positional.filter(|p| !p.is_empty()) {
-            s.push_str(&format!(" {}", quoted(p)));
-        }
-        if cmd == "find" {
-            let fs = self.files();
-            if !fs.is_empty() {
-                s.push_str(&format!(" --files {}", quoted(&fs.join(","))));
-            }
-            for f in ["key", "kind", "since", "by", "to"] {
-                if let Some(v) = self.one(f) {
-                    s.push_str(&format!(" --{f} {}", quoted(&v)));
-                }
-            }
-            if self.has("all") {
-                s.push_str(" --all");
-            }
-        }
-        if self.has("full") {
-            s.push_str(" --full");
-        }
-        if let Some(n) = limit {
-            s.push_str(&format!(" --limit {n}"));
-        }
-        s
-    }
-}
-
-/// Quote only when the shell would need it — `--kind issue` stays bare, a
-/// glob (`--key auth:*`) or `$x` is single-quoted so the shell passes it as-is.
-fn quoted(s: &str) -> String {
-    if s.chars()
-        .all(|c| c.is_alphanumeric() || "-_./:,@+=".contains(c))
-    {
-        s.to_string()
-    } else {
-        format!("'{}'", s.replace('\'', r"'\''"))
     }
 }
 
@@ -343,6 +307,17 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
             return Err("rejected: --urgent and --urgent-before pick one — the queue takes a single position".into());
         }
     };
+    // bare `--revisit` names no date or text — that only filters on `find`
+    let revisit = match (a.has("revisit"), a.one("revisit")) {
+        (false, _) => None,
+        (true, Some(v)) => Some(v),
+        (true, None) => {
+            return Err(
+                "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
+                    .into(),
+            );
+        }
+    };
     let (row, path, warns) = write::add_row(
         &r,
         kind,
@@ -352,6 +327,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
             key: a.one("key"),
             to: a.one("to"),
             title: a.one("title"),
+            revisit,
             urgent,
             supersedes: a.one("supersedes"),
             force: a.has("force"),

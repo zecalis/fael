@@ -1,14 +1,15 @@
-//! find · brief · keys · render · resolve · warnings · urgent · title — against an in-memory `Log`.
+//! find · brief · keys · render · resolve · warnings · urgent · title · revisit — against an in-memory `Log`.
 //!
 //! Thin entry only — the suites sit next to this file:
 //! `select` (find/brief/push/gone/kickoff/`to`), `render` (render/tokens),//! `paging` (limit/offset page + cut line), `lookup` (resolve/keys/warnings/glob),
 //! `urgent` (queue/bump/6-step rank), `title` (title/body split, `--title` fallback,
-//! `render_full`).
+//! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`).
 //! The shared builders live here.
 
 mod lookup;
 mod paging;
 mod render;
+mod revisit;
 mod select;
 mod stale;
 mod title;

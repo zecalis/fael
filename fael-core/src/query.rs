@@ -8,16 +8,20 @@
 
 mod lookup;
 mod matching;
+mod push;
 mod render;
+mod revisit;
 mod select;
 mod stale;
 
 pub use lookup::{KeyUse, keys, query, resolve, warnings};
 pub use matching::glob;
+pub use push::push;
 pub use render::{Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page};
+pub use revisit::{due, is_date, row_due, today, waiting, waiting_line, with_due};
 pub use select::{
     Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, gone, gone_files, kickoff, page,
-    push, ranked, resolve_urgent, superseded,
+    ranked, resolve_urgent, superseded,
 };
 pub use stale::{backtick_paths, stale_refs};
 
@@ -37,6 +41,9 @@ pub struct Filter {
     /// who the row routes to (`issue --to <who>`) — lowercased, matched like
     /// session start (`to_matches`): a full writer id or its name part, either way
     pub to: Option<String>,
+    /// only rows carrying `--revisit`: `Some("")` = any of them, `Some(q)` =
+    /// a case-insensitive substring (`find --revisit[=text]`)
+    pub revisit: Option<String>,
     /// show closed and superseded rows too
     pub all: bool,
     /// Postgres-style paging, applied after ranking before render
@@ -57,5 +64,6 @@ impl Filter {
             && self.since.is_none()
             && self.by.is_none()
             && self.to.is_none()
+            && self.revisit.is_none()
     }
 }
