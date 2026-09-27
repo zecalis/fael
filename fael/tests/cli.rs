@@ -161,8 +161,10 @@ fn add_find_close_round_trip() {
         "{out}"
     );
 
-    let (ok, out, _) = fael(&d, &["--version"]);
-    assert!(ok && out.starts_with("fael "), "{out}");
+    for flag in ["--version", "-V", "-v"] {
+        let (ok, out, _) = fael(&d, &[flag]);
+        assert!(ok && out.starts_with("fael "), "{flag}: {out}");
+    }
 }
 
 #[test]

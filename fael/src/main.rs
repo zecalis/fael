@@ -41,8 +41,8 @@ const USAGE: &str = "usage:
   fael import <path> [--map old/=new/]
   fael mcp                      MCP server on stdio
   fael install [--client claude|codex|opencode] [--dry-run] [--replace-fapony]
-  fael help | fael --help | fael <cmd> --help
-  fael --version
+  fael help | fael -h | fael --help | fael <cmd> --help
+  fael -V | fael -v | fael --version
   every command takes --json";
 
 fn main() -> ExitCode {
@@ -56,7 +56,7 @@ fn main() -> ExitCode {
 }
 
 fn run(argv: Vec<String>) -> Result<ExitCode, String> {
-    if matches!(argv.as_slice(), [v] if v == "--version" || v == "-V") {
+    if matches!(argv.as_slice(), [v] if v == "--version" || v == "-V" || v == "-v") {
         println!("fael {}", env!("CARGO_PKG_VERSION"));
         return Ok(ExitCode::SUCCESS);
     }
