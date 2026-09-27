@@ -1,6 +1,6 @@
 //! Chunk 3b (PLAN-fael-durable-log): a repeated note on the same writer +
-//! branch + files supersedes the open one itself; several open notes ask
-//! with the list. Thin entry only — suites sit next to this file.
+//! branch + files supersedes the open one itself; several open notes file and
+//! list, never ask. Thin entry only — suites sit next to this file.
 
 mod note;
 
@@ -61,7 +61,7 @@ fn repo() -> PathBuf {
     d
 }
 
-/// Short ids of the currently listed open notes.
+/// Full ids of the currently listed open notes.
 fn open_notes(d: &Path) -> Vec<String> {
     let (ok, out, err) = fael(d, &["find", "--kind", "note", "--json"], "");
     assert!(ok, "{err}");

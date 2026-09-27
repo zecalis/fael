@@ -4,7 +4,8 @@
 //! the old one). CLI and MCP share `write::add_row`, so both behave the same.
 //! The automatic choice is reported in one info line (`superseded <id>`) —
 //! info, not a warning, so it never counts as an ask. Several open notes is
-//! genuinely ambiguous: a `rejected:` ask naming the candidates, never a guess.
+//! ambiguous: the row is filed, nothing superseded, one info line names the
+//! candidates — never a guess, never a reject.
 //! (c) key, (d) text id and (e) auto-key follow in later commits.
 
 use crate::core;
@@ -17,7 +18,7 @@ pub(crate) struct Heal {
 }
 
 /// One open note, same writer + branch, overlapping files → supersede it.
-/// Zero → nothing; several → ask with the list. A caller-given `--supersedes`
+/// Zero → nothing; several → file it, supersede nothing, list them. A caller-given `--supersedes`
 /// always passes through untouched.
 pub(crate) fn heal(
     log: &core::Log,
@@ -54,12 +55,14 @@ pub(crate) fn heal(
                 h.supersedes = Some(one.id.clone());
             }
             [] => {}
-            many => {
-                return Err(format!(
-                    "rejected: open notes {} overlap these files — rerun with --supersedes <id>",
-                    id_list(many)
-                ));
-            }
+            // ponytail: several is ambiguous, but a reject here has no way out
+            // (no flag files a distinct note) and fires every Stop-hook turn on
+            // a branch already in debt — file it, supersede nothing, say so;
+            // doctor ([Shipped]) owns the cleanup (§1 step 2)
+            many => h.notes.push(format!(
+                "open notes {} overlap these files — kept all; pass --supersedes <id> to replace one",
+                id_list(many)
+            )),
         }
     }
     Ok(h)
@@ -76,14 +79,12 @@ fn open_rows(log: &core::Log) -> Vec<&core::Row> {
         .collect()
 }
 
-/// Up to 5 short ids, then `(+N more)` — the ask names candidates the agent
-/// can copy straight into `--supersedes`.
+/// Up to 5 full ids, then `(+N more)`. Full ids on purpose: a ULID's leading
+/// characters are its millisecond timestamp, so short prefixes collide for any
+/// two rows written in the same second and `--supersedes <prefix>` would be
+/// ambiguous — exactly what this line exists to avoid.
 fn id_list(rows: &[&core::Row]) -> String {
-    let mut s: Vec<&str> = rows
-        .iter()
-        .take(5)
-        .map(|r| r.id.get(..8).unwrap_or(&r.id))
-        .collect();
+    let mut s: Vec<&str> = rows.iter().take(5).map(|r| r.id.as_str()).collect();
     s.sort_unstable();
     let mut out = s.join(", ");
     if rows.len() > 5 {

@@ -1,4 +1,4 @@
-//! Chunk 3b: repeated notes self-supersede; ambiguity asks with the list.
+//! Chunk 3b: repeated notes self-supersede; ambiguity files and lists, never asks.
 
 use super::{fael, open_notes, repo, usage};
 
@@ -32,33 +32,22 @@ fn second_overlapping_note_supersedes_first() {
 }
 
 #[test]
-fn several_open_notes_ask_with_the_list() {
+fn several_open_notes_file_and_list_without_asking() {
     let d = repo();
     let (ok, _, err) = add(&d, "about a", "src/a.rs");
     assert!(ok, "{err}");
     let (ok, _, err) = add(&d, "about b", "src/b.rs");
     assert!(ok, "{err}");
-    // spanning both: two candidates — genuinely ambiguous, ask with the list
+    // spanning both: two candidates — ambiguous, so file it, supersede
+    // nothing, name them in one info line; a reject here would have no way out
     let (ok, _, err) = add(&d, "about both", "src/a.rs,src/b.rs");
-    assert!(!ok && err.contains("rejected: open notes"), "{err}");
-    assert!(err.contains("--supersedes"), "{err}");
-    let open = open_notes(&d);
-    assert_eq!(open.len(), 2, "the ambiguous add files nothing");
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "note",
-            "about both",
-            "--files",
-            "src/a.rs,src/b.rs",
-            "--supersedes",
-            &open[0],
-        ],
-        "",
-    );
     assert!(ok, "{err}");
-    assert_eq!(open_notes(&d).len(), 2);
+    assert!(
+        err.contains("open notes") && err.contains("--supersedes"),
+        "{err}"
+    );
+    assert_eq!(open_notes(&d).len(), 3, "nothing superseded");
+    assert!(usage(&d).is_empty(), "the list is info, no ask");
 }
 
 #[test]
