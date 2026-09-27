@@ -36,9 +36,9 @@ pub use log::{
 };
 pub use query::{
     Cut, Filter, KeyUse, Urgent, UrgentChange, abbrev, backtick_paths, brief, closed, cmp_rows,
-    est_tokens, find, fresh_ts, glob, gone, gone_files, keys, kickoff, page, push, query, ranked,
-    render, render_full, render_full_page, render_page, resolve, resolve_urgent, stale_refs,
-    superseded, warnings,
+    due, est_tokens, find, fresh_ts, glob, gone, gone_files, is_date, keys, kickoff, page, push,
+    query, ranked, render, render_full, render_full_page, render_page, resolve, resolve_urgent,
+    row_due, stale_refs, superseded, today, waiting, waiting_line, warnings, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{normalize_files, valid_key, validate, validate_alias, validate_close};

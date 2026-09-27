@@ -124,6 +124,12 @@ fn find(a: &Value) -> Result<String, String> {
         return Ok(core::render_full(&log, &[row], 10_000));
     }
     let files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
+    // `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`)
+    let revisit = match (a["revisit"].as_bool(), s(a, "revisit")) {
+        (_, Some(v)) => Some(v),
+        (Some(true), None) => Some(String::new()),
+        _ => None,
+    };
     let f = core::Filter {
         text: s(a, "text"),
         files: aliases::load(&r, &log, true).expand_all(&files),
@@ -131,6 +137,7 @@ fn find(a: &Value) -> Result<String, String> {
         kind: s(a, "kind"),
         since: s(a, "since"),
         to: s(a, "to").map(|t| t.trim().to_lowercase()),
+        revisit,
         limit: match a["limit"].as_u64() {
             Some(0) => {
                 return Err("rejected: limit 0 shows nothing — drop it or give 1 or more".into());
@@ -168,6 +175,7 @@ fn add(a: &Value) -> Result<String, String> {
             key: s(a, "key"),
             to: s(a, "to"),
             title: s(a, "title"),
+            revisit: s(a, "revisit"),
             urgent: urgent_ask(a)?,
             supersedes: s(a, "supersedes"),
             force: a["force"].as_bool().unwrap_or(false),
@@ -250,6 +258,7 @@ fn tools() -> Value {
                 "kind": str_("decision | issue | note, or a kind the repo declares"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),
                 "to": str_("only rows routed to this reader, e.g. ploy"),
+                "revisit": {"type": "boolean", "description": "only rows carrying --revisit (a date kickoff surfaces, or free text)"},
                 "limit": {"type": "integer", "minimum": 1, "description": "at most this many ranked rows — a cut list prints next: offset=N, repeat the call with it"},
                 "offset": {"type": "integer", "minimum": 0, "description": "skip this many ranked rows first"},
             }},
@@ -270,6 +279,7 @@ fn tools() -> Value {
                     "description": "repo-relative paths, or anchors scheme:ref (doc:pricing, customer:acme) for things that are not files — omit to use this session's edited files"},
                 "key": str_("optional colon key, e.g. auth:session"),
                 "to": str_("who has to answer, e.g. ploy — routed to them at their session start"),
+                "revisit": str_("a date YYYY-MM[-DD] kickoff surfaces when due, or free text like 'mdl lands'"),
                 "urgent": {"type": "boolean", "description": "file at the back of the urgent queue (issues only)"},
                 "urgent_before": str_("file just above this row in the urgent queue — one of urgent / urgent_before at most"),
                 "supersedes": str_("id of the row this one replaces"),
