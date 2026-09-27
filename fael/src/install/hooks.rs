@@ -47,6 +47,10 @@ pub(crate) fn hooks_json(
     for (event, matcher, sub) in want {
         let cmd = c.command(sub, client);
         let suffix = format!(" hook {sub} --client {client}");
+        // a stale install from before `--client` existed ends at the bare
+        // subcommand — adopt and repoint it, or it keeps firing next to the
+        // new one as a session-less `neutral` event that dedupe never sees
+        let bare = format!(" hook {sub}");
         let list = hooks.entry(*event).or_insert_with(|| json!([]));
         let Some(groups) = list.as_array_mut() else {
             continue;
@@ -58,8 +62,9 @@ pub(crate) fn hooks_json(
             .flatten()
             .filter_map(|h| h.get_mut("command"))
             .find(|v| {
-                v.as_str()
-                    .is_some_and(|s| s.contains("fael") && s.ends_with(&suffix))
+                v.as_str().is_some_and(|s| {
+                    s.contains("fael") && (s.ends_with(&suffix) || s.ends_with(&bare))
+                })
             });
         match mine {
             Some(v) if v == &json!(cmd) => {}

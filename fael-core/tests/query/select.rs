@@ -151,6 +151,7 @@ fn push_ranks_exact_then_dir_then_key() {
             &l,
             &f.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
             &Aliases::default(),
+            false,
         ))
     };
     // src/a.rs: 14 exact, 13 same dir (src/c.rs); 10 closed and 11 superseded never push
@@ -160,7 +161,7 @@ fn push_ranks_exact_then_dir_then_key() {
     // anchors push only on exact ref
     assert_eq!(q(&["doc:pricing/2026"]), ["15"]);
     assert!(q(&["doc:pricing"]).is_empty());
-    assert!(push(&l, &[], &Aliases::default()).is_empty());
+    assert!(push(&l, &[], &Aliases::default(), false).is_empty());
 }
 
 #[test]
@@ -185,6 +186,7 @@ fn push_and_find_hit_rows_filed_on_a_dir_or_glob() {
             &l,
             &f.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
             &Aliases::default(),
+            false,
         ))
     };
     // a file under the row's dir, and one its glob takes in
@@ -219,6 +221,7 @@ fn push_ignores_same_dir_for_markdown() {
             &l,
             &f.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
             &Aliases::default(),
+            false,
         ))
     };
     // the exact markdown file still pushes; the neighbouring plan does not —
@@ -269,11 +272,37 @@ fn push_shares_key_with_exact_hit() {
         &["elsewhere/z.rs"],
         Some("auth:session"), // same key as the exact hit 14
     ));
-    let got: Vec<String> = push(&l, &["src/a.rs".to_string()], &Aliases::default())
+    let got: Vec<String> = push(&l, &["src/a.rs".to_string()], &Aliases::default(), false)
         .iter()
         .map(|r| r.id[24..].to_string())
         .collect();
     assert_eq!(got, ["14", "13", "16"]);
+}
+
+#[test]
+fn push_read_scope_drops_same_dir_but_keeps_exact_and_key() {
+    // chunk 2: reads skip the same-directory tier (the noisiest one), edits keep it
+    let mut l = log();
+    l.rows.push(row(
+        "C0000000000000000000000016",
+        "note",
+        &["elsewhere/z.rs"],
+        Some("auth:session"), // same key as the exact hit 14
+    ));
+    let q = |f: &[&str], no_same_dir: bool| {
+        push(
+            &l,
+            &f.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &Aliases::default(),
+            no_same_dir,
+        )
+        .iter()
+        .map(|r| r.id[24..].to_string())
+        .collect::<Vec<_>>()
+    };
+    // src/a.rs: 14 exact, 13 same dir (src/c.rs), 16 shares 14's key
+    assert_eq!(q(&["src/a.rs"], false), ["14", "13", "16"]);
+    assert_eq!(q(&["src/a.rs"], true), ["14", "16"]);
 }
 
 #[test]

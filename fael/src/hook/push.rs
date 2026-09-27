@@ -67,7 +67,15 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     // the read/edit push resolves renames through the L1 cache only — no git
     // spawn on this path (one spawn is ~9 ms against a 5 ms ceiling).
     // `session-start` refreshes the cache once per session instead.
-    let mut rows = core::push(&c.log, &files, &aliases::load(&c.repo, &c.log, false));
+    // reads skip the same-directory tier (chunk 2: the noisiest tier — rows
+    // about neighbouring files); edits keep it, a module decision matters
+    // most while changing that module.
+    let mut rows = core::push(
+        &c.log,
+        &files,
+        &aliases::load(&c.repo, &c.log, false),
+        event == "read",
+    );
     // a row already pushed this session is still in the agent's context — say it once
     let seen = (!c.session.is_empty()).then(|| seen_path(&c.session, &c.repo.root));
     if let Some(p) = &seen {
@@ -79,26 +87,23 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         return no();
     }
     let body = core::render(&c.log, &rows, c.repo.cfg.push_tokens);
+    // usage counts only what fit the budget and was actually said — the ids
+    // render cut off never reached any context, so stats must not count them
+    let n = body.lines().filter(|l| l.starts_with("- [")).count();
+    let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
     if let Some(p) = &seen {
         // only what fit the budget was said; the cut rows may push on a later read
-        let n = body.lines().filter(|l| l.starts_with("- [")).count();
-        let shown: String = rows.iter().take(n).map(|r| format!("{}\n", r.id)).collect();
+        let out: String = shown.iter().map(|id| format!("{id}\n")).collect();
         use std::io::Write;
         let _ = std::fs::create_dir_all(p.parent().unwrap_or(&c.repo.root));
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(p)
-            .and_then(|mut f| f.write_all(shown.as_bytes()));
+            .and_then(|mut f| f.write_all(out.as_bytes()));
     }
     let context = format!("fael mem for {}:\n{body}", files.join(", "));
-    record_usage(
-        &c.client,
-        event,
-        &c.repo.root,
-        &context,
-        &rows.iter().map(|r| r.id.clone()).collect::<Vec<_>>(),
-    );
+    record_usage(&c.client, event, &c.repo.root, &context, &shown);
     Reply {
         block: false,
         reason: None,

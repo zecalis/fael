@@ -31,7 +31,8 @@ const USAGE: &str = "usage:
   fael kickoff [file|anchor] [--full] [--limit N] [--offset M]
   fael mv <old> <new>           record a move git can't see (anchors, uncommitted rewrites)
   fael hook <stop|session-start|read|edit> [--client c]   stdin in, stdout out; always exits 0
-  fael stats                  tokens fael has put into context, per machine
+  fael stats [--json] [--rows]   tokens fael has put into context, per machine
+       (--rows = per-row pushes against open/closed/superseded, flagging noise?)
   fael doctor [--fix]
   fael compact [--writer id] [--before yyyy-mm] [--prune]
   fael import <path> [--map old/=new/]
@@ -74,7 +75,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("mv", [old, new]) => mv(&a, old, new).map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
-        ("stats", []) => hook::stats(a.has("json")).map(|()| ExitCode::SUCCESS),
+        ("stats", []) => hook::stats(a.has("json"), a.has("rows")).map(|()| ExitCode::SUCCESS),
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
@@ -113,7 +114,7 @@ impl Args {
             };
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "replace-fapony" | "fix" | "prune"
-                | "urgent" | "not-urgent" | "full" => {
+                | "urgent" | "not-urgent" | "full" | "rows" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"

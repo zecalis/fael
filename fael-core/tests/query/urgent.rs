@@ -307,7 +307,7 @@ fn rank_urgent_beats_match_tier() {
         ),
     ]);
     // exact-file loses to same-dir once the same-dir row is urgent
-    let got = push(&l, &["src/a.rs".to_string()], &Aliases::default());
+    let got = push(&l, &["src/a.rs".to_string()], &Aliases::default(), false);
     assert_eq!(ids(&got), ["01", "02"]);
 }
 
