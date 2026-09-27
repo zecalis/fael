@@ -107,17 +107,19 @@ pub(crate) fn stop(e: &Event) -> Reply {
         bug_row_since,
     });
     let Some(reason) = reason else { return no() };
-    // once per session per worktree per problem — the second end lets through.
+    // once per session per worktree — the second end lets through, as the
+    // reason promises; keying on the phrase blocked again per new phrase.
     // A new row opens one more work block, for edits made after it.
-    let kind = bug_signal
-        .map(|m| format!("bug:{m}"))
-        .unwrap_or_else(|| format!("work:{}", last_row.unwrap_or(0)));
+    let kind = match bug_signal {
+        Some(_) => "bug".to_string(),
+        None => format!("work:{}", last_row.unwrap_or(0)),
+    };
     if stop_blocked_before(&c.session, &root.to_string_lossy(), &kind) {
         return no();
     }
     // the reason lands in context like any push; stats reads these back to
     // count how many blocks were followed by a row
-    let event = if kind.starts_with("bug:") {
+    let event = if kind == "bug" {
         "stop-bug"
     } else {
         "stop-work"
