@@ -27,7 +27,40 @@ pub fn ulid_at(ms: u64) -> String {
         .map(|i| CROCKFORD[((n >> (5 * i)) & 31) as usize] as char)
         .collect()
 }
-/// `2026-09-25T10:00:00.123Z` for a unix time in ms (UTC). Millis are always
+/// The ms timestamp inside a ULID (the first 10 chars are 48-bit ms
+/// big-endian Crockford base32). `None` on a short or non-ULID id — the
+/// `[Shipped]` doctor check falls back to the row's `ts` then.
+pub fn ulid_ms(id: &str) -> Option<u64> {
+    if id.len() < 10 {
+        return None;
+    }
+    let mut ms: u64 = 0;
+    for c in id.chars().take(10) {
+        ms = ms.checked_mul(32)?.checked_add(crockford_val(c)? as u64)?;
+    }
+    Some(ms)
+}
+
+fn crockford_val(c: char) -> Option<u8> {
+    // Crockford base32 skips I, L, O and U — the ranges below leave those
+    // out, so a wrong letter is None, never a shifted value.
+    match c {
+        '0'..='9' => Some(c as u8 - b'0'),
+        'A'..='H' => Some(c as u8 - b'A' + 10),
+        'J'..='K' => Some(c as u8 - b'J' + 18),
+        'M' => Some(20),
+        'N' => Some(21),
+        'P'..='T' => Some(c as u8 - b'P' + 22),
+        'V'..='Z' => Some(c as u8 - b'V' + 27),
+        'a'..='h' => Some(c as u8 - b'a' + 10),
+        'j'..='k' => Some(c as u8 - b'j' + 18),
+        'm' => Some(20),
+        'n' => Some(21),
+        'p'..='t' => Some(c as u8 - b'p' + 22),
+        'v'..='z' => Some(c as u8 - b'v' + 27),
+        _ => None,
+    }
+}
 /// present: the stop hook anchors recency at a transcript birthtime with ms
 /// precision, and a whole-second row filed just before the session start
 /// would otherwise read as newer.
@@ -152,5 +185,21 @@ mod tests {
     fn ts_ms_leading_sign_is_none_not_panic() {
         assert_eq!(super::ts_ms("-1"), None);
         assert_eq!(super::ts_ms("+x"), None);
+    }
+
+    #[test]
+    fn ulid_ms_round_trips_ulid_at() {
+        for ms in [0u64, 1, 1_000, 1_758_864_000_000] {
+            let id = super::ulid_at(ms);
+            assert_eq!(super::ulid_ms(&id), Some(ms), "{id}");
+        }
+    }
+
+    #[test]
+    fn ulid_ms_rejects_short_and_bad_chars() {
+        assert_eq!(super::ulid_ms(""), None);
+        assert_eq!(super::ulid_ms("01J8ZQ3K4"), None); // 9 chars
+        assert_eq!(super::ulid_ms("01J8ZQ3K4*XXXXXXXXXXXXXXXX"), None); // * not Crockford
+        assert_eq!(super::ulid_ms("01J8ZQ3K4IXXXXXXXXXXXXXXXX"), None); // I excluded
     }
 }

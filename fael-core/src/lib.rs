@@ -30,7 +30,7 @@ pub use doctor::{
 
 pub use hook::{BugSignal, StopFacts, decide_stop, last_row_ms};
 
-pub use id::{now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, writer_id};
+pub use id::{now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id};
 pub use log::{
     BumpOpts, Log, MONTH_MAX, add, add_row, append, bump_row, close, close_row, decode_text,
     is_month, mv_row, needs_seal, parse, read,

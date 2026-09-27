@@ -3,16 +3,29 @@
 //! to be traced by hand to a merged PR. Split out of `maintain.rs` next to
 //! `orphan.rs`: the `gh` half must never live in core (core spawns no
 //! processes).
+//!
+//! This file owns the single `gh pr list --state merged` call. `shipped`
+//! (durable-log chunk 2) reads the same rows for their `mergedAt`/`number`
+//! instead of spawning `gh` a second time.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::core;
 
+/// One merged PR off a branch: when it landed plus its number for the close
+/// command. `at` is `None` when gh gave no usable time.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Merge {
+    pub(super) at: Option<i64>,
+    pub(super) number: Option<u64>,
+}
+
 /// The `[Merged]` doctor problem, if any local branch already merged
 /// upstream but still exists — kept here (not in `maintain.rs`) so
 /// `open_row_notes` stays under the 100-line function cap.
-pub(super) fn problem(root: &Path) -> Option<core::Problem> {
-    let landed = rows(root);
+pub(super) fn problem(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Option<core::Problem> {
+    let landed = rows(root, prs);
     if landed.is_empty() {
         return None;
     }
@@ -37,8 +50,9 @@ pub(super) fn problem(root: &Path) -> Option<core::Problem> {
 /// Local branches that are gone upstream (their PR merged) but still sit in
 /// this clone — safe to delete. The current branch and the default branch
 /// (`origin/HEAD`, else `main`) never count.
-/// One `gh` call total; no `gh`, no auth, or no merged PR → empty, silently.
-fn rows(root: &Path) -> Vec<String> {
+/// The `prs` map comes from the one shared `gh` call; an empty map (no `gh`,
+/// no auth, or no merged PR) leaves this silent, never an error.
+fn rows(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Vec<String> {
     let mut local = vec![];
     for line in locals(root) {
         if !line.is_empty() {
@@ -48,14 +62,11 @@ fn rows(root: &Path) -> Vec<String> {
     if local.is_empty() {
         return vec![];
     }
-    let Some(merged) = merged_heads(root) else {
-        return vec![];
-    };
     let current = crate::git(root, &["symbolic-ref", "--short", "-q", "HEAD"]);
     let default = default_branch(root);
     let mut out: Vec<String> = local
         .into_iter()
-        .filter(|b| merged.contains(b))
+        .filter(|b| prs.contains_key(b))
         .filter(|b| Some(b) != current.as_ref() && *b != default)
         .collect();
     out.sort();
@@ -64,7 +75,8 @@ fn rows(root: &Path) -> Vec<String> {
 
 /// The remote's default branch from `origin/HEAD` (set by clone, or
 /// `git remote set-head origin -a`); no remote or no pointer → `main`.
-fn default_branch(root: &Path) -> String {
+/// Shared with `shipped` (its `git branch --merged` source).
+pub(super) fn default_branch(root: &Path) -> String {
     crate::git(
         root,
         &["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"],
@@ -85,13 +97,14 @@ fn locals(root: &Path) -> Vec<String> {
     .collect()
 }
 
-/// The set of branch heads with a merged PR. None = unknown (no `gh`, it
-/// failed, or unparseable output) — the caller stays silent, like Orphan.
+/// Branch → its merged PRs. None = unknown (no `gh`, it failed, or
+/// unparseable output) — callers fall back to `git branch --merged`, like
+/// Orphan stays silent without evidence.
 ///
 /// `FAEL_GH_MERGED_JSON` short-circuits the spawn with canned output (tests
 /// only — same reason as orphan's `FAEL_GH_JSON`: no fake survives Windows
 /// `CreateProcess` or runners with a real `gh`).
-fn merged_heads(root: &Path) -> Option<std::collections::HashSet<String>> {
+pub(super) fn merged_prs(root: &Path) -> Option<BTreeMap<String, Vec<Merge>>> {
     let json = if let Ok(fake) = std::env::var("FAEL_GH_MERGED_JSON") {
         fake
     } else {
@@ -102,7 +115,7 @@ fn merged_heads(root: &Path) -> Option<std::collections::HashSet<String>> {
                 "--state",
                 "merged",
                 "--json",
-                "headRefName",
+                "headRefName,mergedAt,number",
                 "--limit",
                 "200",
             ])
@@ -114,35 +127,64 @@ fn merged_heads(root: &Path) -> Option<std::collections::HashSet<String>> {
         }
         String::from_utf8_lossy(&out.stdout).into_owned()
     };
-    parse_heads(&json)
+    parse_merged(&json)
 }
 
 /// Pure half of the above: None on unparseable output (nothing to say), else
-/// the set of heads with a merged PR (possibly empty — no merged PR at all).
-fn parse_heads(json: &str) -> Option<std::collections::HashSet<String>> {
+/// the PRs per branch head (possibly empty — no merged PR at all). Entries
+/// without a head name are skipped; without a usable time they still count,
+/// as timeless, for the `[Shipped?]` fallback.
+fn parse_merged(json: &str) -> Option<BTreeMap<String, Vec<Merge>>> {
     let ps = serde_json::from_str::<serde_json::Value>(json)
         .ok()?
         .as_array()?
         .clone();
-    Some(
-        ps.iter()
-            .filter_map(|p| p.get("headRefName").and_then(|h| h.as_str()))
-            .map(String::from)
-            .collect(),
-    )
+    let mut out: BTreeMap<String, Vec<Merge>> = BTreeMap::new();
+    for p in &ps {
+        let Some(name) = p.get("headRefName").and_then(|h| h.as_str()) else {
+            continue;
+        };
+        let at = match p.get("mergedAt") {
+            None | Some(serde_json::Value::Null) => None,
+            Some(serde_json::Value::String(s)) if s.starts_with("0001-") => None,
+            Some(serde_json::Value::String(s)) => core::ts_ms(s),
+            _ => None,
+        };
+        out.entry(name.to_string()).or_default().push(Merge {
+            at,
+            number: p.get("number").and_then(|n| n.as_u64()),
+        });
+    }
+    Some(out)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_heads;
+    use super::parse_merged;
 
     #[test]
-    fn merged_parses_gh_head_refs() {
-        assert_eq!(parse_heads("not json"), None);
-        assert_eq!(parse_heads("{}"), None);
-        assert!(parse_heads("[]").is_some_and(|s| s.is_empty()));
-        assert!(parse_heads(r#"[{"headRefName":"feat/y"}]"#).is_some_and(|s| s.contains("feat/y")));
-        // rows without the key (a shape change) contribute nothing, silently
-        assert!(parse_heads(r#"[{"number":1}]"#).is_some_and(|s| s.is_empty()));
+    fn merged_parses_heads_times_and_numbers() {
+        assert_eq!(parse_merged("not json"), None);
+        assert_eq!(parse_merged("{}"), None);
+        assert!(parse_merged("[]").is_some_and(|m| m.is_empty()));
+        let m = parse_merged(
+            r#"[{"headRefName":"feat/y","mergedAt":"2026-09-27T04:50:08Z","number":43}]"#,
+        )
+        .unwrap();
+        let one = &m["feat/y"][0];
+        assert_eq!(one.at, crate::core::ts_ms("2026-09-27T04:50:08Z"));
+        assert_eq!(one.number, Some(43));
+        // null, zero and missing times read as timeless, never as errors
+        let m = parse_merged(
+            r#"[{"headRefName":"a","mergedAt":null},{"headRefName":"b","mergedAt":"0001-01-01T00:00:00Z"},{"headRefName":"c"}]"#,
+        )
+        .unwrap();
+        assert!(m.values().all(|v| v[0].at.is_none()));
+        // rows without the head key contribute nothing, silently
+        assert!(parse_merged(r#"[{"number":1}]"#).is_some_and(|m| m.is_empty()));
+        // a head-only entry (the old shape) is still a key in the map
+        assert!(
+            parse_merged(r#"[{"headRefName":"feat/y"}]"#).is_some_and(|m| m.contains_key("feat/y"))
+        );
     }
 }

@@ -9,6 +9,7 @@ mod branches;
 mod compact;
 mod doctor;
 mod import;
+mod shipped;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
