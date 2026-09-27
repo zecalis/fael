@@ -154,68 +154,37 @@ fn doctor_flags_orphan_branches() {
     assert!(ok, "{err}");
     let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
     assert!(ok);
-    // a fake gh first on PATH: each phase rewrites what it reports. Windows
-    // has no shebang/chmod, so the fake is batch there (gh.bat resolves
-    // through PATHEXT) and shell everywhere else.
-    let bin = d.join("fakebin");
-    std::fs::create_dir_all(&bin).unwrap();
-    #[cfg(windows)]
-    let gh = bin.join("gh.bat");
-    #[cfg(not(windows))]
-    let gh = bin.join("gh");
-    let script = |body: &str| {
-        #[cfg(windows)]
-        std::fs::write(&gh, format!("@echo off\r\n{body}\r\n")).unwrap();
-        #[cfg(not(windows))]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::write(&gh, format!("#!/bin/sh\n{body}\n")).unwrap();
-            std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // canned gh answers through FAEL_GH_JSON: no shell/batch fake survives
+    // Windows (CreateProcess resolves .exe only) or runners with a real gh
+    let doctor = |json: Option<&str>| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
+        c.args(["doctor"]).current_dir(&d);
+        if let Some(json) = json {
+            c.env("FAEL_GH_JSON", json);
+        } else {
+            c.env_remove("FAEL_GH_JSON");
         }
-    };
-    // batch echo prints its quotes, so only the shell half single-quotes
-    #[cfg(windows)]
-    let say = |json: &str| format!("echo {json}");
-    #[cfg(not(windows))]
-    let say = |json: &str| format!("echo '{json}'");
-    #[cfg(windows)]
-    let fail = "exit /b 1";
-    #[cfg(not(windows))]
-    let fail = "exit 1";
-    let doctor = || {
-        let sep = if cfg!(windows) { ";" } else { ":" };
-        let path = format!(
-            "{}{}{}",
-            bin.display(),
-            sep,
-            std::env::var("PATH").unwrap_or_default()
-        );
-        let o = Command::new(env!("CARGO_BIN_EXE_fael"))
-            .args(["doctor"])
-            .current_dir(&d)
-            .env("PATH", path)
-            .output()
-            .unwrap();
+        let o = c.output().unwrap();
         (
             o.status.success(),
             String::from_utf8_lossy(&o.stdout).into_owned(),
         )
     };
     // the PR closed unmerged: Orphan names the branch (text and json)
-    script(&say(r#"[{"mergedAt":null}]"#));
-    let (ok, out) = doctor();
+    let (ok, out) = doctor(Some(r#"[{"mergedAt":null}]"#));
     assert!(ok, "{out}");
     assert!(
         out.contains("note [Orphan]: 1 open row(s)") && out.contains("feat/doomed"),
         "{out}"
     );
     // merged after all: silent
-    script(&say(r#"[{"mergedAt":"2026-09-27T04:50:08Z"}]"#));
-    let (ok, out) = doctor();
+    let (ok, out) = doctor(Some(r#"[{"mergedAt":"2026-09-27T04:50:08Z"}]"#));
     assert!(ok && !out.contains("[Orphan]"), "{out}");
-    // gh failing (no auth, no binary on a bare PATH): skipped silently
-    script(fail);
-    let (ok, out) = doctor();
+    // unparseable answer: skipped silently
+    let (ok, out) = doctor(Some("not json"));
+    assert!(ok && !out.contains("[Orphan]"), "{out}");
+    // no seam: the real gh in a remote-less repo fails -> skipped silently
+    let (ok, out) = doctor(None);
     assert!(ok && !out.contains("[Orphan]"), "{out}");
 }
 

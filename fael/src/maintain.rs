@@ -184,7 +184,15 @@ fn orphan_rows(log: &core::Log) -> Vec<(String, Vec<String>)> {
 
 /// None = unknown (no `gh`, it failed, or no closed PR off this branch);
 /// Some(true) = every closed PR off this branch went unmerged.
+///
+/// `FAEL_GH_JSON` short-circuits the spawn with canned output (tests only —
+/// Windows `CreateProcess` never resolves a `.bat` fake off PATH, and CI
+/// runners ship a real `gh` that answers on its own, so no fake survives
+/// there; cf. `FAEL_STATE_DIR`).
 fn pr_closed_unmerged(branch: &str) -> Option<bool> {
+    if let Ok(fake) = std::env::var("FAEL_GH_JSON") {
+        return pr_all_unmerged(&fake);
+    }
     let out = std::process::Command::new("gh")
         .args([
             "pr", "list", "--state", "closed", "--head", branch, "--json", "mergedAt", "--limit",
