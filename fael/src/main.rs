@@ -11,6 +11,7 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
+mod selfheal;
 mod write;
 
 use fael_core::{self as core, Config, Log, Row};
@@ -20,8 +21,7 @@ use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
-    // the command for usage rows, so rejects join their command's warnings
-    // under one event (`Some` only when it looks like a command word)
+    // usage event for rejects, so they join their command's warnings
     let event = argv
         .first()
         .filter(|c| c.bytes().all(|b| b.is_ascii_alphabetic() || b == b'-'))

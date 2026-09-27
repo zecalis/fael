@@ -77,7 +77,10 @@ pub(crate) fn record_cli_reject(cmd: &str, e: &str) {
 }
 
 /// Every warning line the agent reads is an ask — the caller already printed
-/// them; this counts them next to the rejects.
+/// them; this counts them next to the rejects. Info lines without the
+/// `warning:` prefix (self-heal's `superseded <id>`) ride the same vec to the
+/// agent but cost no round, so they never count here — symmetric with the
+/// `rejected:` gate on rejects.
 pub(crate) fn record_asks(
     client: &str,
     ask: &str,
@@ -86,14 +89,22 @@ pub(crate) fn record_asks(
     texts: &[String],
 ) {
     for t in texts {
+        if ask == ASK_WARN && !t.starts_with("warning:") {
+            continue;
+        }
         record_ask(client, ask, event, repo, t);
     }
 }
 
 /// One MCP tool result: a reject (always `rejected:`-prefixed — anything else
-/// is fael's own failure) or a warning line the tool sends back.
+/// is fael's own failure) or a warning line the tool sends back (`warning:`-
+/// prefixed; self-heal info lines pass through uncounted, like above).
 pub(crate) fn record_mcp(root: &Path, tool: &str, ask: &str, text: &str) {
-    if ask != ASK_WARN && !text.starts_with("rejected:") {
+    if ask == ASK_WARN {
+        if !text.starts_with("warning:") {
+            return;
+        }
+    } else if !text.starts_with("rejected:") {
         return;
     }
     record_ask("mcp", ask, tool, Some(root), text);

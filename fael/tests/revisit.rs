@@ -180,22 +180,19 @@ fn bump_rejects_bare_revisit() {
 #[test]
 fn kickoff_wakes_due_and_counts_text() {
     let d = repo();
-    for (text, revisit) in [
-        ("due sleeper xyz", "2000-01"),
-        ("future xyz", "2999-01"),
-        ("text xyz", "mdl lands"),
+    for f in ["src/c.rs", "src/d.rs"] {
+        std::fs::write(d.join(f), format!("// {f}\n")).unwrap();
+    }
+    // one file each: same-files repeats self-supersede now (chunk 3b), and
+    // this fixture needs three open rows, not one replacing the rest
+    for (text, revisit, f) in [
+        ("due sleeper xyz", "2000-01", "src/a.rs"),
+        ("future xyz", "2999-01", "src/c.rs"),
+        ("text xyz", "mdl lands", "src/d.rs"),
     ] {
         let (ok, _, err) = fael(
             &d,
-            &[
-                "add",
-                "note",
-                text,
-                "--files",
-                "src/a.rs",
-                "--revisit",
-                revisit,
-            ],
+            &["add", "note", text, "--files", f, "--revisit", revisit],
         );
         assert!(ok, "{err}");
     }
