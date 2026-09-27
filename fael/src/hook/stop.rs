@@ -115,9 +115,12 @@ pub(crate) fn stop(e: &Event) -> Reply {
     // once per session per worktree — the second end lets through, as the
     // reason promises; keying on the phrase blocked again per new phrase.
     // A new row opens one more work block, for edits made after it.
-    let kind = match bug_signal {
-        Some(_) => "bug".to_string(),
-        None => format!("work:{}", last_row.unwrap_or(0)),
+    // Only the bug rule's own block takes the "bug" slot: a Weak mention (or a
+    // Strong one already cleared by an issue) riding a work block must key as
+    // work, or it would dedupe away a later real report (review finding).
+    let kind = match &bug_signal {
+        Some(sig) if sig.strong && !bug_row_since => "bug".to_string(),
+        _ => format!("work:{}", last_row.unwrap_or(0)),
     };
     if stop_blocked_before(&c.session, &root.to_string_lossy(), &kind) {
         return no();

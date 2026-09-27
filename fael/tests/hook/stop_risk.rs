@@ -70,6 +70,43 @@ fn stop_weak_risk_joins_work_block() {
 }
 
 #[test]
+fn stop_weak_work_block_does_not_consume_the_bug_slot() {
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(d.join("src/b.rs"), "//\n").unwrap();
+    let edit = format!(
+        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","files":["src/b.rs"]}}"#,
+        json(&d)
+    );
+    assert!(fael(&d, &["hook", "edit"], &edit).0);
+
+    // a Weak mention rides the work block — recorded as work, not the bug slot
+    let weak = format!(
+        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"config and schema are out of sync"}}"#,
+        json(&d)
+    );
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &weak);
+    assert!(
+        ok && out.contains("1 file(s) edited") && out.contains("out of sync"),
+        "{out}"
+    );
+
+    // the later real report must still block: the Weak block did not consume it
+    let strong = format!(
+        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"I found a bug in login"}}"#,
+        json(&d)
+    );
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &strong);
+    assert!(ok && out.contains("fael add issue"), "{out}");
+}
+
+#[test]
 fn stop_ignores_markers_in_code_and_quotes() {
     let d = repo();
     let (ok, _, err) = fael(
