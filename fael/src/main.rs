@@ -8,6 +8,7 @@ mod find;
 mod help;
 mod hook;
 mod install;
+mod journal;
 mod maintain;
 mod mcp;
 mod write;
@@ -188,6 +189,8 @@ pub(crate) struct Repo {
     pub(crate) cwd: PathBuf,
     pub(crate) fael: PathBuf,
     pub(crate) cfg: Config,
+    /// Clone-shared journal (`<git-common-dir>/fael`); `None` without git.
+    pub(crate) journal: Option<PathBuf>,
 }
 
 pub(crate) fn repo() -> Result<Repo, String> {
@@ -214,11 +217,13 @@ pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
         .unwrap_or_else(|| cwd.clone());
     let fael = root.join(".fael");
     let cfg = config(&fael.join("config.toml"))?;
+    let journal = journal::root(&root);
     Ok(Repo {
         root,
         cwd,
         fael,
         cfg,
+        journal,
     })
 }
 
@@ -249,16 +254,10 @@ fn config(path: &Path) -> Result<Config, String> {
     Config::from_toml(&s).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Read the log; skipped lines go to stderr as one summary, never fail the command.
+/// Read the log — tree + journal union, tree wins on duplicate ids; skipped
+/// lines go to stderr as one summary, never fail the command.
 pub(crate) fn read(r: &Repo) -> Log {
-    let log = core::read(&r.fael);
-    if let Some(first) = log.warnings.first() {
-        eprintln!(
-            "fael: {} log line(s) skipped — first: {first}",
-            log.warnings.len()
-        );
-    }
-    log
+    journal::merged(r)
 }
 
 /// Writer id from git identity; no email → hostname hash, with a warning.
@@ -335,7 +334,15 @@ fn close(a: &Args, id: &str, why: &str) -> Result<(), String> {
 }
 
 fn close_row(r: &Repo, id: &str, why: &str) -> Result<(Row, PathBuf, Vec<String>), String> {
-    core::close_row(&r.fael, &read(r), &r.cfg, &stamp(r), id, why)
+    core::close_row(
+        &r.fael,
+        r.journal.as_deref(),
+        &read(r),
+        &r.cfg,
+        &stamp(r),
+        id,
+        why,
+    )
 }
 
 /// `fael bump` — same text/files, new `to`/`urgent`/`revisit` (see write::bump).
@@ -365,7 +372,7 @@ fn mv(a: &Args, old: &str, new: &str) -> Result<(), String> {
             "rejected: {from} → {to} is already recorded — `fael find --files {to}` shows the rows"
         ));
     }
-    let (row, _) = core::mv_row(&r.fael, &r.cfg, &stamp(&r), from, to)?;
+    let (row, _) = core::mv_row(&r.fael, r.journal.as_deref(), &r.cfg, &stamp(&r), from, to)?;
     if a.has("json") {
         println!("{}", row.to_line());
     } else {

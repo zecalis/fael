@@ -1,6 +1,8 @@
 //! `find --branches` (row-hygiene chunk 9) through the real binary: rows on
-//! an unmerged branch read without a checkout, tagged ` @<branch>`, gone
-//! from the plain `find`, and untagged-once after the merge.
+//! an unmerged branch read without a checkout, tagged ` @<branch>`, and
+//! untagged-once after the merge. Since the journal (chunk 1) the plain
+//! `find` already sees the clone's journal rows tagged — `--branches` only
+//! adds rows the journal never saw (another clone's branch, pre-journal rows).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -67,15 +69,20 @@ fn main_and_feat(d: &Path) -> String {
 }
 
 #[test]
-fn find_branches_tags_unmerged_rows_and_plain_find_hides_them() {
+fn find_branches_tags_unmerged_rows_and_plain_find_tags_journal_rows() {
     let d = repo();
     let main = main_and_feat(&d);
 
-    // plain find: only the working branch's row
+    // plain find: the union read sees the clone's journal rows too — the
+    // foreign row lists tagged with its stamped branch, the local one untagged
     let (ok, out, _) = fael(&d, &["find"]);
     assert!(ok, "{out}");
     assert!(out.contains("row B on main"), "{out}");
-    assert!(!out.contains("row A on feat"), "{out}");
+    assert!(out.contains("row A on feat"), "{out}");
+    let a_line = out.lines().find(|l| l.contains("row A on feat")).unwrap();
+    assert!(a_line.ends_with("@feat/x"), "{a_line}");
+    let b_line = out.lines().find(|l| l.contains("row B on main")).unwrap();
+    assert!(!b_line.contains('@'), "{b_line}");
 
     // --branches: both, the foreign row tagged once, the local row untagged
     let (ok, out, _) = fael(&d, &["find", "--branches"]);

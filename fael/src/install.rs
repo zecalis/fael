@@ -143,6 +143,17 @@ pub fn cmd(client: Option<String>, dry: bool, replace: bool) -> Result<(), Strin
     for s in skills {
         skill(&c, &s)?;
     }
+    // worktrees that share one `.fael/` through a symlink (like this repo's)
+    // keep rows per worktree no longer — `local` holds them in the clone instead
+    if let Ok(r) = crate::repo()
+        && matches!(r.cfg.store, crate::core::Store::Tracked)
+        && std::fs::symlink_metadata(&r.fael).is_ok_and(|m| m.file_type().is_symlink())
+    {
+        println!(
+            "note: {} is a symlink — store = \"local\" in .fael/config.toml keeps rows in this clone instead",
+            r.fael.display()
+        );
+    }
     Ok(())
 }
 
