@@ -6,6 +6,18 @@
 use crate::Log;
 use crate::id::ts_ms;
 
+/// A bug-announcement match from the transcript tail or the turn text:
+/// Strong (confirmed-bug words) blocks without an issue row; Weak (risk
+/// words) never blocks — it rides along as a one-line note, or the adapter
+/// stashes it for the next push when there is no work block to join.
+#[derive(Clone, Debug)]
+pub struct BugSignal {
+    pub marker: String,
+    pub strong: bool,
+    /// ms of the matched transcript line (or the session start for free text)
+    pub at_ms: i64,
+}
+
 /// What the adapter learned about this turn.
 pub struct StopFacts {
     /// The client already fired this hook once — letting through avoids a loop.
@@ -23,8 +35,9 @@ pub struct StopFacts {
     /// fails open instead of blocking every turn.
     pub has_log: bool,
     /// A bug-announcement phrase from the transcript tail, if any.
-    pub bug_signal: Option<String>,
-    /// An `issue` row exists at or after the session start.
+    pub bug_signal: Option<BugSignal>,
+    /// An `issue` row exists at or after the match (`at_ms` above) — an issue
+    /// filed before the words does not clear them.
     pub bug_row_since: bool,
 }
 
@@ -35,14 +48,18 @@ pub fn decide_stop(f: &StopFacts) -> Option<String> {
         return None;
     }
     // Bug rule first: independent of commits (a reported bug with no row is
-    // lost when the room closes, whatever else the turn did).
-    if let Some(marker) = &f.bug_signal
+    // lost when the room closes, whatever else the turn did). Only a Strong
+    // signal blocks — a Weak one joins the work block below, or the adapter
+    // stashes it for the next push when there is nothing to join.
+    if let Some(sig) = &f.bug_signal
+        && sig.strong
         && !f.bug_row_since
     {
         return Some(format!(
-            "This turn reported a problem (\"{marker}\") but no issue row exists for this session.\n\
+            "This turn reported a problem (\"{}\") but no issue row exists for this session.\n\
                  Record it before ending: fael add issue \"<what is broken or at risk>\" --files <files>\n\
-                 Already filed, or not a problem? End the turn again — this fires once per session."
+                 Already filed, or not a problem? End the turn again — this fires once per session.",
+            sig.marker
         ));
     }
     // Work rule: files edited since the last row (or, failing that, commits
@@ -74,6 +91,16 @@ pub fn decide_stop(f: &StopFacts) -> Option<String> {
     out.push(format!(
         "Record one before ending: fael add <decision|issue|note> \"<what happened>\" --files {files}"
     ));
+    // a Weak signal joins the single work block — one block, not two
+    if let Some(sig) = &f.bug_signal
+        && !sig.strong
+        && !f.bug_row_since
+    {
+        out.push(format!(
+            "Also, this turn mentioned a possible problem (\"{}\") — file an issue too if it holds up: fael add issue \"<what is at risk>\" --files {files}",
+            sig.marker
+        ));
+    }
     out.push("Nothing worth recording? End the turn again — this fires once per session.".into());
     Some(out.join("\n"))
 }
@@ -175,9 +202,14 @@ mod tests {
 
     #[test]
     fn bug_rule_needs_no_commit() {
+        let strong = || BugSignal {
+            marker: "found a bug".into(),
+            strong: true,
+            at_ms: 0,
+        };
         let r = decide_stop(&StopFacts {
             commits: vec![],
-            bug_signal: Some("found a bug".into()),
+            bug_signal: Some(strong()),
             ..facts()
         })
         .unwrap();
@@ -185,12 +217,47 @@ mod tests {
         assert!(
             decide_stop(&StopFacts {
                 commits: vec![],
-                bug_signal: Some("found a bug".into()),
+                bug_signal: Some(strong()),
                 bug_row_since: true,
                 ..facts()
             })
             .is_none()
         );
+    }
+
+    #[test]
+    fn weak_joins_work_block_never_alone() {
+        let weak = || BugSignal {
+            marker: "out of sync".into(),
+            strong: false,
+            at_ms: 0,
+        };
+        // no work: no block (the adapter stashes the note for the next push)
+        assert!(
+            decide_stop(&StopFacts {
+                commits: vec![],
+                bug_signal: Some(weak()),
+                ..facts()
+            })
+            .is_none()
+        );
+        // work: one block carrying both the files and the risk
+        let r = decide_stop(&StopFacts {
+            edits: vec!["src/a.rs".into()],
+            bug_signal: Some(weak()),
+            ..facts()
+        })
+        .unwrap();
+        assert!(r.contains("1 file(s) edited") && r.contains("out of sync"), "{r}");
+        // an issue since the match quiets the note, not the work
+        let r = decide_stop(&StopFacts {
+            edits: vec!["src/a.rs".into()],
+            bug_signal: Some(weak()),
+            bug_row_since: true,
+            ..facts()
+        })
+        .unwrap();
+        assert!(!r.contains("out of sync"), "{r}");
     }
 
     #[test]

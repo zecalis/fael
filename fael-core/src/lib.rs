@@ -28,7 +28,7 @@ pub use doctor::{
     fix as doctor_fix, scan as doctor_scan,
 };
 
-pub use hook::{StopFacts, decide_stop, last_row_ms};
+pub use hook::{BugSignal, StopFacts, decide_stop, last_row_ms};
 
 pub use id::{now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, writer_id};
 pub use log::{

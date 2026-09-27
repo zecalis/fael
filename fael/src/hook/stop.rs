@@ -84,11 +84,21 @@ pub(crate) fn stop(e: &Event) -> Reply {
     } else {
         vec![]
     };
-    // bug rule: a marker in the transcript tail with no issue row since start
-    let bug_signal = match (&e.text, e.session.as_deref()) {
-        (Some(text), _) => has_bug_marker(text),
+    // bug rule: a marker in the turn text, or the transcript tail after the
+    // latest user message — with the match timestamp, so only an issue row
+    // at or after the words clears them
+    let bug_signal: Option<core::BugSignal> = match (&e.text, e.session.as_deref()) {
+        (Some(text), _) => has_bug_marker(text).map(|h| core::BugSignal {
+            marker: h.marker,
+            strong: h.strong,
+            at_ms: since_ms,
+        }),
         (None, Some(t)) if Path::new(t).is_file() => {
-            bug_signal_from_transcript(Path::new(t), since_ms)
+            bug_signal_from_transcript(Path::new(t), since_ms).map(|h| core::BugSignal {
+                marker: h.marker,
+                strong: h.strong,
+                at_ms: h.at_ms,
+            })
         }
         _ => None,
     };
