@@ -271,6 +271,28 @@ fn install_repoints_stale_hook_without_client() {
     );
 }
 
+/// The state the pre-fix installer left — a bare subcommand plus a suffixed
+/// one it appended — must collapse to one entry, whichever order they sit in
+/// (chunk 2 review: the old `find` only ever fixed the first match).
+#[test]
+fn install_dedupes_a_bare_and_a_suffixed_hook() {
+    for settings in [
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "/old/fael hook read"}]}, {"matcher": "Read", "hooks": [{"type": "command", "command": "/new/fael hook read --client claude"}]}]}}"#,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "/new/fael hook read --client claude"}]}, {"matcher": "Read", "hooks": [{"type": "command", "command": "/old/fael hook read"}]}]}}"#,
+    ] {
+        let home = std::env::temp_dir().join(format!("fael-install-{}", fael_core::ulid()));
+        let claude = home.join(".claude/settings.json");
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        std::fs::write(&claude, settings).unwrap();
+        let out = install(&home, &["--client", "claude"]);
+        let s = read(&claude);
+        assert_eq!(s.matches("hook read").count(), 1, "{out}\n{s}");
+        assert!(!s.contains("/old/fael"), "{out}\n{s}");
+        assert!(!s.contains("/new/fael"), "{out}\n{s}");
+        assert!(s.contains("hook read --client claude"), "{s}");
+    }
+}
+
 /// Native Windows has no HOME (only USERPROFILE) — install must still find
 /// the home dir. Dry run: nothing is written to the real home. A machine with
 /// no client installed (CI) still fails later with "found no Claude Code",
