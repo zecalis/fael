@@ -231,6 +231,9 @@ fn since_secs(ms: i64) -> String {
     s.replacen(".000Z", "Z", 1)
 }
 
+/// Any `.jsonl` under `dir` — lazy on purpose: the stop hook's adopted-here
+/// check exits on the first hit instead of walking + sorting the whole log
+/// tree the way `core::collect_files` does.
 fn walk_jsonl(dir: &Path) -> impl Iterator<Item = PathBuf> {
     let mut stack = vec![dir.to_path_buf()];
     std::iter::from_fn(move || {
@@ -289,7 +292,7 @@ fn stop_blocked_before(session: &str, worktree: &str, kind: &str) -> bool {
     if let Some(parent) = path.parent()
         && std::fs::create_dir_all(parent).is_ok()
     {
-        use std::io::{Read, Seek, SeekFrom, Write};
+        use std::io::Write;
         let row = serde_json::json!({
             "ts": now_rfc3339().unwrap_or_default(),
             "worktree": worktree, "kind": kind,
@@ -304,18 +307,7 @@ fn stop_blocked_before(session: &str, worktree: &str, kind: &str) -> bool {
             Err(_) => return false,
         };
         // seal a torn tail so the new row starts on its own line
-        let seal = f
-            .seek(SeekFrom::End(0))
-            .map(|n| {
-                if n == 0 {
-                    return false;
-                }
-                let mut last = [0u8];
-                f.seek(SeekFrom::End(-1)).is_ok()
-                    && f.read_exact(&mut last).is_ok()
-                    && last[0] != b'\n'
-            })
-            .unwrap_or(false);
+        let seal = core::needs_seal(&mut f).unwrap_or(false);
         let _ = writeln!(f, "{}{row}", if seal { "\n" } else { "" });
     }
     false

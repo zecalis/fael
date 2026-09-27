@@ -30,6 +30,17 @@ pub(crate) fn is_marker(line: &str) -> bool {
         .any(|m| line.starts_with(m))
 }
 
+/// The open file ends mid-line (no trailing `\n`) — write one before the next
+/// append, or the new row glues onto a torn line. The caller skips empty
+/// files (a backward seek from end fails there); IO errors propagate.
+/// Shared by `append` and the hook's stop-block file.
+pub fn needs_seal(f: &mut fs::File) -> std::io::Result<bool> {
+    let mut last = [0u8];
+    f.seek(SeekFrom::End(-1))
+        .and_then(|_| f.read_exact(&mut last))
+        .map(|_| last[0] != b'\n')
+}
+
 /// Everything under `.fael/log/`, deduped by id (first by file order wins).
 #[derive(Debug, Default)]
 pub struct Log {
@@ -376,14 +387,8 @@ pub fn append(fael: &Path, row: &Row, is_close: bool) -> Result<PathBuf, String>
     }
     let line = row.to_line();
     let mut buf = Vec::with_capacity(line.len() + 2);
-    if len > 0 {
-        let mut last = [0u8];
-        f.seek(SeekFrom::End(-1))
-            .and_then(|_| f.read_exact(&mut last))
-            .map_err(io)?;
-        if last[0] != b'\n' {
-            buf.push(b'\n'); // seal the torn line off; readers then skip it as a broken line
-        }
+    if len > 0 && needs_seal(&mut f).map_err(io)? {
+        buf.push(b'\n'); // seal the torn line off; readers then skip it as a broken line
     }
     buf.extend_from_slice(line.as_bytes());
     buf.push(b'\n');
