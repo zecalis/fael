@@ -139,6 +139,55 @@ fn session_start_decisions_opt_in() {
 }
 
 #[test]
+fn session_start_wakes_due_revisits() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
+    let add = |text: &str, extra: &[&str]| {
+        let mut args = vec!["add", "note", text, "--files", "src/a.rs"];
+        args.extend(extra);
+        let (ok, _, err) = fael(&d, &args, "");
+        assert!(ok, "{err}");
+    };
+    add("sleeping row", &["--revisit", "2000-01"]);
+    add("future row", &["--revisit", "2999-01"]);
+    // due but all files gone: buried, like kickoff buries it (separate
+    // call — the helper pins --files src/a.rs, and repeated --files merge)
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "buried row",
+            "--files",
+            "src/gone.rs",
+            "--revisit",
+            "2000-01",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "issue", "background noise", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+    assert!(ok, "{out}");
+    // due lists in full; the future date stays asleep, the gone row stays buried
+    assert!(out.contains("sleeping row"), "{out}");
+    assert!(!out.contains("future row"), "{out}");
+    assert!(!out.contains("buried row"), "{out}");
+    // like kickoff: due above everything, here above the count line
+    let (due, count) = (
+        out.find("sleeping row").unwrap(),
+        out.find("1 open issue").unwrap(),
+    );
+    assert!(due < count, "{out}");
+}
+
+#[test]
 fn session_start_lists_to_me_above_the_count() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();

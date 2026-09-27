@@ -194,7 +194,7 @@ Edits, not commits, are the primary signal: many agents are told never to commit
 
 **Session start:**
 ```
-client ─(session-start)─▶ open issues to you in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
+client ─(session-start)─▶ due revisits in full · open issues to you in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
 
 **Across branches** (one branch per person or per agent):
