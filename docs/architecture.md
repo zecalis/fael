@@ -1,7 +1,8 @@
 # fael architecture
 
 > **Status:** the log format and storage (§2, [format.md](format.md)) are implemented in `fael-core`, and so are
-> `add` `close` `find` `keys` `kickoff` `mv` in the `fael` CLI (`find --branches` not yet), `fael mcp`
+> `add` `close` `find` `keys` `kickoff` `mv` in the `fael` CLI (`find` and `kickoff` take
+> `--branches` to read unmerged branches without a checkout), `fael mcp`
 > (stdio, 3 tools), `fael hook <stop|session-start|read|edit>` (neutral + claude/codex adapters) with
 > per-machine usage accounting (`fael stats`), `fael install` (Claude Code, Codex, OpenCode),
 > and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11).
@@ -101,10 +102,10 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--urgent\|--urgent-before id] [--supersedes id]` | append a row (`--title` = the ≤15-word headline lists show) |
 | `fael close <id> "<why>"` | append a close row |
 | `fael bump <id> [--to who] [--revisit date\|text] [--urgent\|--urgent-before id\|--not-urgent]` | new version of an open row: same text/files, new `to`/`urgent`/`revisit`, superseding the old one |
-| `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--to who] [--all] [--full] [--limit N] [--offset M]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies; a cut list prints the exact next call (`--offset M`) |
+| `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--to who] [--all] [--branches] [--full] [--limit N] [--offset M]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies; `--branches` also reads branches not yet merged into HEAD, tagging their rows `@<branch>` without a checkout; a cut list prints the exact next call (`--offset M`) |
 | `fael keys [glob]` | list keys, with a count and last use for each — to reuse a key that already exists |
 | `fael mv <old> <new>` | record a move git can't see — an anchor, an uncommitted rewrite, or one file split into several (one old path may point at many new ones). Adds matches only, never hides a row |
-| `fael kickoff [anchor] [--full] [--limit N] [--offset M]` | the session brief: urgent first, then issues, decisions, notes by freshness (newer of the row and its files' last change); rows whose files are all gone are left out |
+| `fael kickoff [anchor] [--branches] [--full] [--limit N] [--offset M]` | the session brief: urgent first, then issues, decisions, notes by freshness (newer of the row and its files' last change); rows whose files are all gone are left out |
 | `fael hook <event> [--client c]` | hook entry point (see below) |
 | `fael mcp` | MCP server on stdio |
 | `fael install [--client c] [--dry-run] [--replace-fapony]` | detect installed clients and wire MCP, hooks and skill into each one; `--replace-fapony` takes out fapony's Stop/session-start hooks and MCP (opt-in: they are user scope and still serve repos without `.fael/`) |
@@ -202,6 +203,8 @@ client ─(session-start)─▶ open issues to you in full · due revisits in fu
 git for-each-ref ─▶ git cat-file --batch  .fael/log/** on each ref ─▶ dedupe by id ─▶ find / kickoff
 ```
 Reading needs no checkout. Rows are written only to your own branch and reach `main` through the normal pull request.
+Rows that only exist on another branch render with `@<branch>`; once merged they list once, untagged
+(HEAD wins on duplicate ids).
 
 ## 5. Tokens
 
