@@ -2,6 +2,7 @@
 //! (SPEC §6, §11). Thin adapters: the repo is resolved here, the rules live
 //! in `fael-core` so a hosted server calls the same entry points.
 
+mod merged;
 mod orphan;
 
 use crate::{Args, core, repo};
@@ -145,6 +146,9 @@ fn open_row_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core:
             ),
         });
     }
+    // landed branches: merged upstream but still sitting in this clone, so
+    // the next reader keeps wondering whether the work is done
+    out.extend(merged::problem(root));
     out
 }
 

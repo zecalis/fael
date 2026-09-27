@@ -189,6 +189,81 @@ fn doctor_flags_orphan_branches() {
 }
 
 #[test]
+fn doctor_flags_merged_branches() {
+    let d = repo();
+    let git = |args: &[&str]| {
+        let o = Command::new("git")
+            .args(args)
+            .current_dir(&d)
+            .output()
+            .unwrap();
+        assert!(
+            o.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+    };
+    // branches only exist after the first commit (unborn HEAD has none)
+    git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+    let branch = |args: &[&str]| {
+        let o = Command::new("git")
+            .args(args)
+            .current_dir(&d)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    };
+    let main = branch(&["symbolic-ref", "--short", "HEAD"]);
+    git(&["checkout", "-qb", "feat/landed"]);
+    git(&["checkout", "-q", &main]);
+    // canned gh answers through FAEL_GH_MERGED_JSON (same reason as orphan's
+    // FAEL_GH_JSON: no shell/batch fake survives Windows or real-gh runners)
+    let doctor = |json: Option<&str>| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
+        c.args(["doctor"]).current_dir(&d);
+        if let Some(json) = json {
+            c.env("FAEL_GH_MERGED_JSON", json);
+        } else {
+            c.env_remove("FAEL_GH_MERGED_JSON");
+        }
+        let o = c.output().unwrap();
+        (
+            o.status.success(),
+            String::from_utf8_lossy(&o.stdout).into_owned(),
+        )
+    };
+    // the PR merged but the branch still exists: Merged names it with the delete
+    let (ok, out) = doctor(Some(r#"[{"headRefName":"feat/landed"}]"#));
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("note [Merged]: 1 local branch(es)")
+            && out.contains("git branch -D feat/landed"),
+        "{out}"
+    );
+    // a branch with no merged PR is not flagged
+    let (ok, out) = doctor(Some(r#"[{"headRefName":"feat/other"}]"#));
+    assert!(ok && !out.contains("[Merged]"), "{out}");
+    // no merged PR at all: silent
+    let (ok, out) = doctor(Some("[]"));
+    assert!(ok && !out.contains("[Merged]"), "{out}");
+    // the current branch never counts, even when its PR merged
+    git(&["checkout", "-q", "feat/landed"]);
+    let (ok, out) = doctor(Some(r#"[{"headRefName":"feat/landed"}]"#));
+    assert!(ok && !out.contains("[Merged]"), "{out}");
+    git(&["checkout", "-q", &main]);
+    // `main` never counts either
+    let (ok, out) = doctor(Some(format!(r#"[{{"headRefName":{main:?}}}]"#).as_str()));
+    assert!(ok && !out.contains("[Merged]"), "{out}");
+    // unparseable answer: skipped silently
+    let (ok, out) = doctor(Some("not json"));
+    assert!(ok && !out.contains("[Merged]"), "{out}");
+    // no seam: the real gh in a remote-less repo fails -> skipped silently
+    let (ok, out) = doctor(None);
+    assert!(ok && !out.contains("[Merged]"), "{out}");
+}
+
+#[test]
 fn doctor_quarantines_a_broken_line() {
     let d = repo();
     let (ok, _, err) = fael(&d, &["add", "decision", "keep me", "--files", "src/a.rs"]);
