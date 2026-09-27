@@ -259,7 +259,9 @@ pub fn close_row(
 }
 
 /// Build, stamp, validate and append an alias row (`fael mv <old> <new>`).
-/// `from`/`to` must already be normalised. Returns the row and its file.
+/// `from`/`to` must already be normalised. Returns the row, its file and the
+/// non-fatal warnings (a `tracked` tree write that failed after the journal
+/// commit — same contract as `add_row`/`close_row`).
 pub fn mv_row(
     fael: &Path,
     journal: Option<&Path>,
@@ -267,12 +269,12 @@ pub fn mv_row(
     stamp: &Stamp,
     from: &str,
     to: &str,
-) -> Result<(Row, PathBuf), String> {
+) -> Result<(Row, PathBuf, Vec<String>), String> {
     let mut row = Row::moved(&stamp.by, from, to);
     stamp.apply(&mut row);
     validate_alias(&row, cfg)?;
-    let (path, _) = write_both(fael, journal, cfg, |d| append(d, &row, false))?;
-    Ok((row, path))
+    let (path, warns) = write_both(fael, journal, cfg, |d| append(d, &row, false))?;
+    Ok((row, path, warns))
 }
 
 /// Append without validating (import/compact write already-checked rows through here).
