@@ -168,8 +168,11 @@ fn bump_keeps_the_title() {
         &cfg,
         &st,
         &r.id,
-        Some("ploy".into()),
-        UrgentChange::Keep,
+        BumpOpts {
+            to: Some("ploy".into()),
+            urgent: UrgentChange::Keep,
+            revisit: None,
+        },
     )
     .unwrap();
     assert_eq!(b.title.as_deref(), Some("hot headline"));

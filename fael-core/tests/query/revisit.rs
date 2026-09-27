@@ -158,3 +158,63 @@ fn waiting_counts_free_text_only() {
     assert!(waiting_line(2).contains("2 rows waiting on revisit"));
     assert!(waiting_line(1).contains("fael find --revisit"));
 }
+
+#[test]
+fn bump_keeps_sets_and_clears_revisit() {
+    let dir = std::env::temp_dir().join(format!("fael-bump-revisit-{}", ulid()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cfg = Config::default();
+    let st = Stamp {
+        by: "tester-0000".into(),
+        branch: None,
+        sha: None,
+    };
+    let mut r = Row::new("tester-0000", "note", "sleeper", vec!["src/a.rs".into()]);
+    r.revisit = Some(PAST.into());
+    let r = add_row(&dir, &read(&dir), &cfg, &st, r, None).unwrap().0;
+    // absent revisit keeps the old date
+    let (b, _, _) = bump_row(
+        &dir,
+        &read(&dir),
+        &cfg,
+        &st,
+        &r.id,
+        BumpOpts {
+            to: None,
+            urgent: UrgentChange::Keep,
+            revisit: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(b.revisit.as_deref(), Some(PAST));
+    // a value sets it, no supersede round-trip needed
+    let (b2, _, _) = bump_row(
+        &dir,
+        &read(&dir),
+        &cfg,
+        &st,
+        &b.id,
+        BumpOpts {
+            to: None,
+            urgent: UrgentChange::Keep,
+            revisit: Some(FUTURE.into()),
+        },
+    )
+    .unwrap();
+    assert_eq!(b2.revisit.as_deref(), Some(FUTURE));
+    // blank clears it
+    let (b3, _, _) = bump_row(
+        &dir,
+        &read(&dir),
+        &cfg,
+        &st,
+        &b2.id,
+        BumpOpts {
+            to: None,
+            urgent: UrgentChange::Keep,
+            revisit: Some("  ".into()),
+        },
+    )
+    .unwrap();
+    assert!(b3.revisit.is_none());
+}
