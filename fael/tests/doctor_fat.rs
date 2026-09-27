@@ -38,8 +38,11 @@ fn repo() -> PathBuf {
 fn doctor_flags_fat_rows_and_ignores_closed_ones() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "").unwrap();
-    // the plan's done criterion: open decision, no key, two separators
-    let (ok, out, err) = fael(&d, &["add", "decision", "a; b; c", "--files", "src/a.rs"]);
+    // the plan's done criterion: open decision, no key, three separators
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "decision", "a; b; c; d", "--files", "src/a.rs"],
+    );
     assert!(ok, "{err}");
     let id = out.split_whitespace().next().unwrap().to_string();
     let (ok, _, _) = fael(&d, &["doctor", "--fix"]);

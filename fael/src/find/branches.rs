@@ -196,17 +196,16 @@ fn display(name: &str) -> String {
 /// Tag every rendered row line that came from another branch: `- [id] … rst`
 /// becomes `- [id] … rst @branch`. Cut/bodies lines never start with `- [`,
 /// so they pass through untouched. No branch map (plain `find`) = identity.
-pub fn tag(out: String, log: &core::Log, branch_of: &BranchMap) -> String {
+pub fn tag(out: String, branch_of: &BranchMap) -> String {
     if branch_of.is_empty() {
         return out;
     }
-    let width = core::abbrev(log);
     let mut tagged = String::with_capacity(out.len());
     for line in out.split_inclusive('\n') {
         let short = line
             .strip_prefix("- [")
             .and_then(|l| l.split(']').next())
-            .filter(|s| s.len() >= width.min(8));
+            .filter(|s| s.len() >= 8);
         let branch = short.and_then(|s| {
             branch_of
                 .iter()

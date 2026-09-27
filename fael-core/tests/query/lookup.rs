@@ -74,14 +74,14 @@ fn add_warnings_never_reject() {
 fn decision_without_key_and_multi_topic_text_warn() {
     let l = log();
     let cfg = Config::default();
-    // the plan's done criterion: decision + no key + "a; b; c" → two warnings
+    // the plan's done criterion: decision + no key + "a; b; c; d" → two warnings
     let mut r = row("D0000000000000000000000017", "decision", &["x"], None);
-    r.text = "a; b; c".into();
+    r.text = "a; b; c; d".into();
     let w = warnings(&r, &l, &cfg);
     assert_eq!(w.len(), 2, "{w:?}");
     assert!(w[0].contains("no --key"), "{w:?}");
     assert!(w[1].contains("topic separators"), "{w:?}");
-    // `·` counts too; one separator is still a single topic
+    // two `·` already list topics; one separator is still a single topic
     r.text = "a · b · c".into();
     assert!(
         warnings(&r, &l, &cfg).len() == 2,
@@ -91,6 +91,16 @@ fn decision_without_key_and_multi_topic_text_warn() {
     r.text = "a; b".into();
     let w = warnings(&r, &l, &cfg);
     assert_eq!(w.len(), 1, "{w:?}");
+    // two `;` is ordinary English prose inside one topic — no split nudge
+    r.text = "Key-match wins over files-match; files only apply to notes; \
+branch is ignored for keys."
+        .into();
+    let w = warnings(&r, &l, &cfg);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("no --key"), "{w:?}");
+    // mixed separators count together: three in all is several topics
+    r.text = "a; b; c · d".into();
+    assert_eq!(warnings(&r, &l, &cfg).len(), 2);
     // `—` joins clauses, not topics — it cuts the auto title but never warns
     r.text = "a — b — c".into();
     let w = warnings(&r, &l, &cfg);
@@ -109,9 +119,9 @@ fn decision_without_key_and_multi_topic_text_warn() {
 fn fat_reasons_shared_by_warnings_and_doctor() {
     let l = log();
     let cfg = Config::default();
-    // the plan's done criterion: open decision, no key, two separators
+    // the plan's done criterion: open decision, no key, three separators
     let mut r = row("D0000000000000000000000017", "decision", &["x"], None);
-    r.text = "a; b; c".into();
+    r.text = "a; b; c; d".into();
     let f = fat_reasons(&r, &cfg);
     assert_eq!(f.len(), 2, "{f:?}");
     assert!(f[0].contains("no --key"), "{f:?}");

@@ -29,6 +29,7 @@ pub(crate) struct Heal {
 pub(crate) fn heal(
     log: &core::Log,
     st: &core::Stamp,
+    new_id: &str,
     kind: &str,
     files: &[String],
     key: Option<&str>,
@@ -42,6 +43,11 @@ pub(crate) fn heal(
         return Ok(h);
     }
     let open = open_rows(log);
+    // ids print at their shortest unique prefix, same as render/doctor, so any
+    // of them pastes straight into `--supersedes` — unique against the row
+    // being added too, which a fast caller may write in the same millisecond
+    let w = core::abbrev(log).with(new_id);
+    let id = |r: &core::Row| w.short(&r.id).to_string();
     // (c) the caller's key is the strongest identity: same kind + key, any
     // branch, but only my own row is mine to close. Auto-key (e) must never
     // reach here — guessing a key and then using the guess to close rows is
@@ -50,8 +56,10 @@ pub(crate) fn heal(
         match key_hits(&open, kind, k).as_slice() {
             [one] if one.by == st.by => {
                 h.supersedes = Some(one.id.clone());
-                h.notes
-                    .push(format!("superseded {} (open {kind}, same key {k})", one.id));
+                h.notes.push(format!(
+                    "superseded {} (open {kind}, same key {k})",
+                    id(one)
+                ));
                 // (b) may still see other notes: name them so nothing hides
                 if kind == "note" {
                     let also: Vec<&core::Row> = files_match(&open, st, files)
@@ -61,7 +69,7 @@ pub(crate) fn heal(
                     if !also.is_empty() {
                         h.notes.push(format!(
                             "note {} also overlaps these files — kept open",
-                            id_list(&also)
+                            id_list(&also, &w)
                         ));
                     }
                 }
@@ -70,14 +78,14 @@ pub(crate) fn heal(
             [one] => {
                 h.notes.push(format!(
                     "open {kind} {} uses key {k} (another writer) — kept open",
-                    one.id
+                    id(one)
                 ));
                 return Ok(h);
             }
             many @ [_, ..] => {
                 h.notes.push(format!(
                     "open rows {} already use key {k} — kept all; pass --supersedes <id> to replace one",
-                    id_list(many)
+                    id_list(many, &w)
                 ));
                 return Ok(h);
             }
@@ -92,14 +100,14 @@ pub(crate) fn heal(
                 h.notes.push(match &st.branch {
                     Some(b) => format!(
                         "superseded {} (open note, same branch {b}, same files)",
-                        one.id
+                        id(one)
                     ),
-                    None => format!("superseded {} (open note, same files)", one.id),
+                    None => format!("superseded {} (open note, same files)", id(one)),
                 });
             }
             many @ [_, ..] => h.notes.push(format!(
                 "open notes {} overlap these files — kept all; pass --supersedes <id> to replace one",
-                id_list(many)
+                id_list(many, &w)
             )),
             [] => {}
         }
@@ -144,12 +152,12 @@ fn open_rows(log: &core::Log) -> Vec<&core::Row> {
         .collect()
 }
 
-/// Up to 5 full ids, then `(+N more)`. Full ids on purpose: a ULID's leading
-/// characters are its millisecond timestamp, so short prefixes collide for any
-/// two rows written in the same second and `--supersedes <prefix>` would be
-/// ambiguous — exactly what this line exists to avoid.
-fn id_list(rows: &[&core::Row]) -> String {
-    let mut s: Vec<&str> = rows.iter().take(5).map(|r| r.id.as_str()).collect();
+/// Up to 5 ids shortened by `w` (`core::abbrev`), then `(+N more)`. Never a
+/// fixed `[..8]`: a ULID's leading characters are its millisecond timestamp, so
+/// rows written in the same second share them and `--supersedes <prefix>`
+/// would be ambiguous — `Abbrev::short` lengthens a prefix until it is unique.
+fn id_list(rows: &[&core::Row], w: &core::Abbrev) -> String {
+    let mut s: Vec<&str> = rows.iter().take(5).map(|r| w.short(&r.id)).collect();
     s.sort_unstable();
     let mut out = s.join(", ");
     if rows.len() > 5 {

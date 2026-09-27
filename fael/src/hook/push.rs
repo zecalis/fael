@@ -110,11 +110,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         }
         return no();
     }
-    let body = crate::find::branches::tag(
-        core::render(&c.log, &rows, c.repo.cfg.push_tokens),
-        &c.log,
-        &c.tags,
-    );
+    let body =
+        crate::find::branches::tag(core::render(&c.log, &rows, c.repo.cfg.push_tokens), &c.tags);
     // usage counts only what fit the budget and was actually said — the ids
     // render cut off never reached any context, so stats must not count them
     let n = body.lines().filter(|l| l.starts_with("- [")).count();

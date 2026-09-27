@@ -18,7 +18,7 @@ pub(super) fn rows(log: &core::Log) -> Vec<(String, Vec<String>)> {
             by_branch
                 .entry(b.to_string())
                 .or_default()
-                .push(row.id[..w.min(row.id.len())].to_string());
+                .push(w.short(&row.id).to_string());
         }
     }
     by_branch

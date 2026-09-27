@@ -139,16 +139,12 @@ fn show(
     } else if a.has("full") {
         print!(
             "{}",
-            branches::tag(
-                core::render_full_page(log, rows, budget, cut),
-                log,
-                branch_of
-            )
+            branches::tag(core::render_full_page(log, rows, budget, cut), branch_of)
         );
     } else {
         print!(
             "{}",
-            branches::tag(core::render_page(log, rows, budget, cut), log, branch_of)
+            branches::tag(core::render_page(log, rows, budget, cut), branch_of)
         );
     }
     Ok(())
@@ -162,7 +158,7 @@ fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &branches::BranchMap) -> 
         // `--branches` tags a row that only lives on another branch, same as a list
         print!(
             "{}",
-            branches::tag(core::render_full(log, &[row], 10_000), log, branch_of)
+            branches::tag(core::render_full(log, &[row], 10_000), branch_of)
         );
     }
     Ok(())

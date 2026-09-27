@@ -143,7 +143,6 @@ fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
         let row = core::resolve(&log, &id)?;
         return Ok(crate::find::branches::tag(
             core::render_full(&log, &[row], 10_000),
-            &log,
             &branch_of,
         ));
     }
@@ -182,17 +181,9 @@ fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
     Ok(if rows.is_empty() {
         "no rows match".into()
     } else if a["full"].as_bool().unwrap_or(false) {
-        crate::find::branches::tag(
-            core::render_full_page(&log, &rows, budget, cut),
-            &log,
-            &branch_of,
-        )
+        crate::find::branches::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
     } else {
-        crate::find::branches::tag(
-            core::render_page(&log, &rows, budget, cut),
-            &log,
-            &branch_of,
-        )
+        crate::find::branches::tag(core::render_page(&log, &rows, budget, cut), &branch_of)
     })
 }
 

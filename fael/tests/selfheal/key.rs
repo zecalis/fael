@@ -2,7 +2,7 @@
 //! row with the same kind + key (any branch, same writer) supersedes itself;
 //! another writer's row, or several matches, is kept and listed, never asked.
 
-use super::{fael, repo, usage};
+use super::{fael, names, repo, usage};
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -70,7 +70,7 @@ fn single_key_match_supersedes_any_branch() {
     );
     let (ok, _, err) = add(&d, "decision", "second", "src/a.rs", "auth:session");
     assert!(ok, "{err}");
-    assert!(err.contains(&format!("superseded {first}")), "{err}");
+    assert!(names(&err, "superseded ", &first), "{err}");
     assert_eq!(open_rows(&d).len(), 1);
     assert!(usage(&d).is_empty(), "self-heal info is no ask");
 }
@@ -168,9 +168,9 @@ fn key_match_wins_and_files_note_is_kept() {
         "",
     );
     assert!(ok, "{err}");
-    assert!(err.contains(&format!("superseded {a}")), "{err}");
+    assert!(names(&err, "superseded ", &a), "{err}");
     assert!(
-        err.contains(&format!("note {b} also overlaps these files")),
+        names(&err, "note ", &b) && err.contains("also overlaps these files"),
         "{err}"
     );
     let open = open_rows(&d);
@@ -210,7 +210,7 @@ fn key_and_files_same_row_supersedes_once() {
         "",
     );
     assert!(ok, "{err}");
-    assert!(err.contains(&format!("superseded {a}")), "{err}");
+    assert!(names(&err, "superseded ", &a), "{err}");
     assert!(!err.contains("also overlaps"), "{err}");
     assert_eq!(open_rows(&d).len(), 1);
 }
