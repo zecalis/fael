@@ -216,3 +216,47 @@ fn stop_skips_commits_merged_in_from_origin() {
         "{out}"
     );
 }
+
+#[test]
+fn stop_warns_when_branch_changes_mid_session() {
+    // two agents, one worktree: the other session checks out its branch
+    // between our session-start and our stop — one line says so, no block
+    let d = repo();
+    let git = |args: &[&str]| {
+        let o = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&d)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {args:?}");
+        String::from_utf8(o.stdout).unwrap().trim().to_string()
+    };
+    let start = format!(r#"{{"cwd":{},"session":"drift-1"}}"#, json(&d));
+    let (ok, _, _) = fael(&d, &["hook", "session-start"], &start);
+    assert!(ok);
+    let before = git(&["branch", "--show-current"]);
+    git(&["checkout", "-qb", "drift/other"]);
+
+    let stop = format!(r#"{{"cwd":{},"session":"drift-1"}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &stop);
+    assert!(ok && out.contains(r#""block":false"#), "{out}");
+    assert!(
+        out.contains("branch changed mid-session")
+            && out.contains(&before)
+            && out.contains("drift/other"),
+        "{out}"
+    );
+
+    // same branch as session-start: silent (a fresh session baselines here)
+    let start = format!(r#"{{"cwd":{},"session":"drift-2"}}"#, json(&d));
+    let (ok, _, _) = fael(&d, &["hook", "session-start"], &start);
+    assert!(ok);
+    let stop = format!(r#"{{"cwd":{},"session":"drift-2"}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &stop);
+    assert!(ok && !out.contains("branch changed"), "{out}");
+
+    // a session that never started (no baseline file): silent
+    let stop = format!(r#"{{"cwd":{},"session":"drift-3"}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &stop);
+    assert!(ok && !out.contains("branch changed"), "{out}");
+}

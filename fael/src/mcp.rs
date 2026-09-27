@@ -116,7 +116,13 @@ fn repo_for(a: &Value) -> Result<Repo, String> {
 
 fn find(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    let log = read(&r);
+    // `branches: true` merges unmerged branches' rows into the working log
+    // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
+    let (log, branch_of) = if a["branches"].as_bool().unwrap_or(false) {
+        crate::find::branches::with_branches(&r.root, read(&r))
+    } else {
+        (read(&r), crate::find::branches::BranchMap::new())
+    };
     // `find {"id": ...}` pulls that row's body by exact id or unique prefix —
     // lists show titles, this is how the body is read on demand
     if let Some(id) = s(a, "id") {
@@ -158,9 +164,17 @@ fn find(a: &Value) -> Result<String, String> {
     Ok(if rows.is_empty() {
         "no rows match".into()
     } else if a["full"].as_bool().unwrap_or(false) {
-        core::render_full_page(&log, &rows, budget, cut)
+        crate::find::branches::tag(
+            core::render_full_page(&log, &rows, budget, cut),
+            &log,
+            &branch_of,
+        )
     } else {
-        core::render_page(&log, &rows, budget, cut)
+        crate::find::branches::tag(
+            core::render_page(&log, &rows, budget, cut),
+            &log,
+            &branch_of,
+        )
     })
 }
 
@@ -262,6 +276,7 @@ fn tools() -> Value {
                 "since": str_("yyyy-mm or yyyy-mm-dd"),
                 "to": str_("only rows routed to this reader, e.g. ploy"),
                 "revisit": {"type": ["boolean", "string"], "description": "only rows carrying --revisit: true = any, a string narrows to it (CLI --revisit[=text])"},
+                "branches": {"type": "boolean", "description": "also read branches not yet merged into HEAD, tagging their rows @<branch> — never checks anything out"},
                 "limit": {"type": "integer", "minimum": 1, "description": "at most this many ranked rows — a cut list prints next: offset=N, repeat the call with it"},
                 "offset": {"type": "integer", "minimum": 0, "description": "skip this many ranked rows first"},
             }},

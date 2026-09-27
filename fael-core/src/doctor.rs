@@ -52,6 +52,10 @@ pub enum Kind {
     /// work likely died with the branch; judged by the `gh` CLI in `doctor`,
     /// never in core (core never spawns processes)
     Orphan,
+    /// local branches whose PR already merged but still exist — found by the
+    /// other session's branch the hard way (row-hygiene chunk 9); judged by
+    /// `gh` in `doctor`, never in core
+    Merged,
 }
 
 #[derive(Debug, Clone)]

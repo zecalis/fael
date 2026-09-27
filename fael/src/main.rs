@@ -24,11 +24,12 @@ const USAGE: &str = "usage:
   fael close <id> \"<why>\"
   fael bump <id> [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent]
       (same text/files, new version — text and files never change through bump)
-  fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M]
+  fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M]
       (an exact id or unique prefix pulls that row's body; --full shows every body;
+       --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;
        a cut list prints the exact next call — rerun it with the new --offset)
   fael keys [glob]
-  fael kickoff [file|anchor] [--full] [--limit N] [--offset M]
+  fael kickoff [file|anchor] [--branches] [--full] [--limit N] [--offset M]
   fael mv <old> <new>           record a move git can't see (anchors, uncommitted rewrites)
   fael hook <stop|session-start|read|edit> [--client c]   stdin in, stdout out; always exits 0
   fael stats [--json] [--rows]   tokens fael has put into context, per machine
@@ -126,7 +127,7 @@ impl Args {
             }
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "replace-fapony" | "fix" | "prune"
-                | "urgent" | "not-urgent" | "full" | "rows" => {
+                | "urgent" | "not-urgent" | "full" | "rows" | "branches" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
