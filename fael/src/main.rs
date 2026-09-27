@@ -34,7 +34,12 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     }
     // `fael help`, `fael --help`, `fael -h`, `fael <cmd> --help` — usage on
     // stdout, exit 0; with a command it shows only that command's section
-    if argv.first().is_some_and(|c| c == "help") || argv.iter().any(|x| x == "--help" || x == "-h")
+    // after `--` it is text, not a flag: `fael add note --files a.rs -- -h`
+    if argv.first().is_some_and(|c| c == "help")
+        || argv
+            .iter()
+            .take_while(|x| *x != "--")
+            .any(|x| x == "--help" || x == "-h")
     {
         println!("{}", help::for_argv(&argv));
         return Ok(ExitCode::SUCCESS);
@@ -60,7 +65,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             .map(|()| ExitCode::SUCCESS),
         // bare `fael` is a probe, not an error — the usage, on stdout, exit 0
         ("", []) => {
-            println!("{}", help::USAGE);
+            println!("{}", help::usage());
             Ok(ExitCode::SUCCESS)
         }
         // a real command with the wrong arity names the command and points
