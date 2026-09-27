@@ -164,12 +164,15 @@ fn open_row_notes(
             ),
         });
     }
+    // one `gh pr list --state merged` call feeds both checks: `[Merged]` uses
+    // the branch set, `[Shipped]` the mergedAt/number per branch
+    let prs = merged::merged_prs(root).unwrap_or_default();
     // landed branches: merged upstream but still sitting in this clone, so
     // the next reader keeps wondering whether the work is done
-    out.extend(merged::problem(root));
+    out.extend(merged::problem(root, &prs));
     // shipped notes: open notes filed on a landed branch — the work is done
     // but the note still pushes (doctor never closes rows itself)
-    out.extend(shipped::problems(log, root));
+    out.extend(shipped::problems(log, root, &prs));
     // fat rows: the add-time warnings the agent skipped, repeated per row so
     // one topic per row can still be superseded alone
     out.extend(fat::problem(log, cfg));

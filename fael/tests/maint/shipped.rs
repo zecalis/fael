@@ -18,6 +18,20 @@ fn git(d: &Path, args: &[&str]) {
     );
 }
 
+/// The temp repo's first branch is whatever `git init` made — shipped's
+/// `git branch --merged` reads the default branch, so pin it to `main`.
+fn pin_main(d: &Path) {
+    git(d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    let o = Command::new("git")
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .current_dir(d)
+        .output()
+        .unwrap();
+    if String::from_utf8_lossy(&o.stdout).trim() != "main" {
+        git(d, &["branch", "-M", "main"]);
+    }
+}
+
 /// `fael doctor` with canned `gh pr list --state merged` output through
 /// `FAEL_GH_MERGED_JSON` (same reason as orphan's `FAEL_GH_JSON`: no
 /// shell/batch fake survives Windows or real-gh runners).
@@ -96,18 +110,7 @@ fn doctor_silent_for_reused_branch_name() {
 #[test]
 fn doctor_flags_shipped_maybe_from_git_only() {
     let d = repo();
-    git(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
-    // the temp repo's first branch is whatever `git init` made — shipped's
-    // `git branch --merged` reads the default branch, so pin it to `main`
-    let o = Command::new("git")
-        .args(["symbolic-ref", "--short", "HEAD"])
-        .current_dir(&d)
-        .output()
-        .unwrap();
-    let head = String::from_utf8_lossy(&o.stdout).trim().to_string();
-    if head != "main" {
-        git(&d, &["branch", "-M", "main"]);
-    }
+    pin_main(&d);
     file_rows(&d, "feat/landed-note");
     git(&d, &["checkout", "-q", "main"]);
     git(&d, &["merge", "-q", "--no-ff", "feat/landed-note"]);
@@ -121,4 +124,20 @@ fn doctor_flags_shipped_maybe_from_git_only() {
             && !out.contains("[Shipped]:"),
         "{out}"
     );
+}
+
+#[test]
+fn doctor_silent_for_note_on_default_branch() {
+    let d = repo();
+    pin_main(&d);
+    // a note filed on the default branch: the branch is always merged into
+    // itself, so it must not read as work that shipped on a branch
+    std::fs::write(d.join("src/a.rs"), "").unwrap();
+    let (ok, _, err) = fael(&d, &["add", "note", "on main", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    let (ok, out) = doctor(&d, "[]");
+    assert!(ok, "{out}");
+    assert!(!out.contains("[Shipped"), "{out}");
 }
