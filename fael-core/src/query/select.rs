@@ -297,16 +297,11 @@ fn plan_anchor(file: &str) -> Option<String> {
     Some(format!("plan:{}", name.to_lowercase()))
 }
 
-/// What a session opens with (`fael kickoff`, the session-start hook): the brief minus
-/// rows whose files are gone, open issues first, then everything else by how fresh it is —
-/// the newer of the row itself and the last change to any of its files. So an old decision
-/// about a file nobody touches sinks, and one about the file changed yesterday rises.
-/// A PLAN path widens the filter with its `plan:<name>` anchor (see `plan_anchor`).
-// ponytail: file mtime is the "current work" signal — no git spawn on session start; a fresh
-// clone or checkout resets mtimes, then the order falls back to roughly newest-row first.
-pub fn kickoff<'a>(log: &'a Log, f: &Filter, root: &Path, al: &Aliases) -> Vec<&'a Row> {
-    // a reference, so both halves below share it without a move
-    let fresh = &|r: &Row| {
+/// How fresh a row is: the newer of the row itself and the last change to
+/// any of its files (following renames) — kickoff order. Shared with the
+/// session-start hook, so due rows surface there in the same order.
+pub fn freshness<'a>(root: &'a Path, al: &'a Aliases) -> impl Fn(&Row) -> i64 + 'a {
+    move |r: &Row| {
         let row_ms = crate::ts_ms(&r.ts).unwrap_or(0);
         r.files
             .iter()
@@ -321,7 +316,19 @@ pub fn kickoff<'a>(log: &'a Log, f: &Filter, root: &Path, al: &Aliases) -> Vec<&
             .filter_map(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_millis() as i64)
             .fold(row_ms, i64::max)
-    };
+    }
+}
+/// What a session opens with (`fael kickoff`, the session-start hook): the brief minus
+/// rows whose files are gone, open issues first, then everything else by how fresh it is —
+/// the newer of the row itself and the last change to any of its files. So an old decision
+/// about a file nobody touches sinks, and one about the file changed yesterday rises.
+/// A PLAN path widens the filter with its `plan:<name>` anchor (see `plan_anchor`).
+// ponytail: file mtime is the "current work" signal — no git spawn on session start; a fresh
+// clone or checkout resets mtimes, then the order falls back to roughly newest-row first.
+pub fn kickoff<'a>(log: &'a Log, f: &Filter, root: &Path, al: &Aliases) -> Vec<&'a Row> {
+    // a reference, so both halves below share it without a move
+    let fresh = freshness(root, al);
+    let fresh = &fresh;
     let rows: Vec<&Row> = find(log, &widened(f))
         .into_iter()
         .filter(|r| !gone(root, r, al))
