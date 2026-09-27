@@ -20,8 +20,8 @@ pub use push::push;
 pub use render::{Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page};
 pub use revisit::{due, is_date, row_due, today, waiting, waiting_line, with_due};
 pub use select::{
-    Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, gone, gone_files, kickoff, page,
-    ranked, resolve_urgent, superseded,
+    Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, freshness, gone, gone_files,
+    kickoff, page, ranked, resolve_urgent, superseded,
 };
 pub use stale::{backtick_paths, stale_refs};
 

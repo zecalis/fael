@@ -63,15 +63,16 @@ pub fn row_due(r: &Row, today: &str) -> bool {
 }
 
 /// Open rows whose revisit is free text — kickoff counts them,
-/// `find --revisit` lists them. Rows whose files are all gone are dropped,
-/// the way kickoff drops them: the count must point at rows the list shows.
-pub fn waiting<'a>(log: &'a Log, root: &Path, al: &Aliases) -> Vec<&'a Row> {
+/// `find --revisit` lists them. Gone rows stay counted: the count line
+/// points at `find --revisit`, which lists them too, and kickoff never
+/// lists free-text rows at all — filtering here would split the count
+/// from its list instead of matching any list.
+pub fn waiting(log: &Log) -> Vec<&Row> {
     super::find(log, &Filter::default())
         .into_iter()
         .filter(|r| {
             r.revisit()
                 .is_some_and(|v| !v.trim().is_empty() && !is_date(v))
-                && !super::gone(root, r, al)
         })
         .collect()
 }

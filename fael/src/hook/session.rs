@@ -59,8 +59,10 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         .collect()
     };
     // chunk 5 wakes due revisits in CLI kickoff, but agents walk through
-    // this door instead — due rows list here too, first like kickoff,
-    // minus ids the to-do and decisions already show
+    // this door instead — due rows list here too, kickoff-ranked, minus ids
+    // the to-do and decisions already show. Chunk 3 promises the to-do in
+    // full under one shared budget, so it renders first: a flood of due
+    // rows can cut the decisions, never the reader's own issues.
     let due: Vec<&core::Row> = {
         let (due, _) = core::with_due(&c.log, vec![], &c.repo.root, &al);
         let shown: std::collections::HashSet<&str> = t
@@ -69,14 +71,17 @@ pub(crate) fn session_start(e: &Event) -> Reply {
             .chain(decisions.iter())
             .map(|r| r.id.as_str())
             .collect();
-        due.into_iter()
+        let due: Vec<&core::Row> = due
+            .into_iter()
             .filter(|r| !shown.contains(r.id.as_str()))
-            .collect()
+            .collect();
+        core::ranked(due, None, |_| 0, core::freshness(&c.repo.root, &al))
     };
-    // one render, one budget: due first, then to-do, then decisions, a single cut line
-    let shown: Vec<&core::Row> = due
+    // one render, one budget: to-do first, then due, then decisions, a single cut line
+    let shown: Vec<&core::Row> = t
+        .listed
         .iter()
-        .chain(t.listed.iter())
+        .chain(due.iter())
         .chain(decisions.iter())
         .copied()
         .collect();

@@ -188,6 +188,55 @@ fn session_start_wakes_due_revisits() {
 }
 
 #[test]
+fn session_start_todo_survives_a_flood_of_due() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
+    // monthly revisits all come due at once — more rows than any budget fits
+    for n in ["one", "two", "three", "four"] {
+        let (ok, _, err) = fael(
+            &d,
+            &[
+                "add",
+                "note",
+                &format!("due {n}"),
+                "--files",
+                "src/a.rs",
+                "--revisit",
+                "2000-01",
+            ],
+            "",
+        );
+        assert!(ok, "{err}");
+    }
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "my urgent thing",
+            "--files",
+            "src/a.rs",
+            "--to",
+            "hook-test",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    // a budget that fits the to-do but never the flood with it
+    std::fs::write(
+        d.join(".fael/config.toml"),
+        "[budget]\nkickoff_tokens = 30\n",
+    )
+    .unwrap();
+    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+    assert!(ok, "{out}");
+    // the cut line proves the budget bound — and the to-you issue made it
+    assert!(out.contains("over the 30-token budget"), "{out}");
+    assert!(out.contains("my urgent thing (to: hook-test)"), "{out}");
+}
+
+#[test]
 fn session_start_lists_to_me_above_the_count() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
