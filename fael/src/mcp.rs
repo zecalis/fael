@@ -218,8 +218,11 @@ fn bump(a: &Value) -> Result<String, String> {
         &r.cfg,
         &crate::stamp(&r),
         &need(a, "id")?,
-        s(a, "to"),
-        urgent,
+        core::BumpOpts {
+            to: s(a, "to"),
+            urgent,
+            revisit: s(a, "revisit"),
+        },
     )?;
     Ok(done(&row.id, warns))
 }
@@ -258,7 +261,7 @@ fn tools() -> Value {
                 "kind": str_("decision | issue | note, or a kind the repo declares"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),
                 "to": str_("only rows routed to this reader, e.g. ploy"),
-                "revisit": {"type": "boolean", "description": "only rows carrying --revisit (a date kickoff surfaces, or free text)"},
+                "revisit": {"type": ["boolean", "string"], "description": "only rows carrying --revisit: true = any, a string narrows to it (CLI --revisit[=text])"},
                 "limit": {"type": "integer", "minimum": 1, "description": "at most this many ranked rows — a cut list prints next: offset=N, repeat the call with it"},
                 "offset": {"type": "integer", "minimum": 0, "description": "skip this many ranked rows first"},
             }},
@@ -296,13 +299,14 @@ fn tools() -> Value {
         },
         {
             "name": "bump",
-            "description": "Change routing/urgency on an open row as a new version: same text and files, new to/urgent, superseding the old row. Text and files never change through bump.",
+            "description": "Change routing/urgency/revisit on an open row as a new version: same text and files, new to/urgent/revisit, superseding the old row. Text and files never change through bump.",
             "inputSchema": {"type": "object", "required": ["id"], "properties": {
                 "id": str_("row id or a unique prefix, as find shows it"),
                 "to": str_("who has to answer now, e.g. ploy — omit to keep"),
                 "urgent": {"type": "boolean", "description": "move to the back of the urgent queue"},
                 "urgent_before": str_("move just above this row in the urgent queue"),
                 "not_urgent": {"type": "boolean", "description": "leave the urgent queue"},
+                "revisit": str_("a date YYYY-MM[-DD] kickoff surfaces when due, or free text like 'mdl lands' — omit to keep"),
             }},
         },
     ]);

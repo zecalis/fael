@@ -99,3 +99,71 @@ fn mcp_bump_moves_urgent() {
     assert!(hot.get("urgent").is_none(), "{hot}");
     assert_eq!(hot["to"].as_str().unwrap(), "ploy");
 }
+
+#[test]
+fn mcp_bump_sets_revisit() {
+    use std::io::Write;
+    let d = repo();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "revisit row",
+            "--files",
+            "src/a.rs",
+            "--revisit",
+            "2000-01",
+        ],
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let req = |n: u32, name: &str, args: serde_json::Value| {
+        serde_json::json!({"jsonrpc":"2.0","id":n,"method":"tools/call","params":{"name":name,"arguments":args}})
+            .to_string()
+    };
+    let msgs = [
+        req(
+            1,
+            "bump",
+            serde_json::json!({"id": id, "revisit": "2999-01"}),
+        ),
+        // a string narrows like CLI --revisit=<text>
+        req(2, "find", serde_json::json!({"revisit": "2999"})),
+        req(3, "find", serde_json::json!({"revisit": true})),
+    ];
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .arg("mcp")
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .current_dir(&d)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    c.stdin
+        .take()
+        .unwrap()
+        .write_all((msgs.join("\n") + "\n").as_bytes())
+        .unwrap();
+    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
+    let r: Vec<serde_json::Value> = out
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(r.len(), 3, "{out}");
+    for reply in &r {
+        assert_eq!(reply["result"]["isError"], false, "{out}");
+    }
+    let text = |n: usize| r[n]["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text(1).contains("revisit row"), "{}", text(1));
+    assert!(text(2).contains("revisit row"), "{}", text(2));
+    // the CLI sees the new date on the live version (no --all: the
+    // superseded version still carries the old date)
+    let (_, out, _) = fael(&d, &["find", "--json", "--revisit"]);
+    let rows: Vec<serde_json::Value> = out
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["revisit"].as_str().unwrap(), "2999-01");
+}
