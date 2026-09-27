@@ -87,8 +87,15 @@ pub(crate) fn add_row(
     // the queue position resolves against the open issues (`--urgent` = back,
     // `--urgent-before` = just above that row); core rejects non-issues
     row.urgent = core::resolve_urgent(&log, &urgent)?;
-    let (row, path, mut core_warns) =
-        core::add_row(&r.fael, &log, &r.cfg, &st, row, supersedes.as_deref())?;
+    let (row, path, mut core_warns) = core::add_row(
+        &r.fael,
+        r.journal.as_deref(),
+        &log,
+        &r.cfg,
+        &st,
+        row,
+        supersedes.as_deref(),
+    )?;
     warns.append(&mut core_warns);
     Ok((row, path, warns))
 }
@@ -144,6 +151,7 @@ pub(crate) fn bump(
     let log = crate::read(r);
     core::bump_row(
         &r.fael,
+        r.journal.as_deref(),
         &log,
         &r.cfg,
         &crate::stamp(r),

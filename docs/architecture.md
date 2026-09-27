@@ -57,6 +57,8 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
       compact.<ULID>.jsonl     immutable, from `fael compact`
     _import/<ULID>.jsonl       immutable, from `fael import`
   .lock                        not in git — serialises local writers
+<git-common-dir>/fael/log/     the journal — same layout, shared by every
+  <writer>/2026-09.jsonl       worktree of the clone; the commit point of `add`
 ```
 
 - `<writer>` = `<git user.name slug>-<4 hex of sha256(email)>` — a writer is a **logical author, not a machine**: the same person on two machines shares a folder (their appends meet in git via union merge), and two people who share a name do not.
@@ -82,7 +84,13 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
 - A line is committed once its trailing `\n` is written.
 - Local writers are serialised by `File::lock` on `.fael/.lock`.
 - Files are rewritten only with tmp-then-rename, and only when no one writes to them any more.
-- Durability comes from git; rows are not fsynced one by one.
+- Durability comes from the journal, not the tree: `add` writes
+  `<git-common-dir>/fael/log/` first (same line bytes), then `.fael/log` —
+  unless `store = "local"`, which skips the tree so gitignored or public repos
+  carry no memory. A failed tree write is a warning, never a retry (the row is
+  already durable; a retry would file it twice under a new id). Reads union
+  both, tree wins on duplicate ids; journal-only rows tag `@<branch>`.
+- Across clones durability still comes from git; rows are not fsynced one by one.
 
 ## 3. API
 
@@ -126,6 +134,7 @@ Ids are accepted as a unique prefix and printed at the shortest length that stay
 kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
+store = "tracked"             # or "local": journal only, no .fael/log writes (gitignored/public repos)
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter
 find_tokens = 800
@@ -168,7 +177,8 @@ The hook always exits 0. If fael hits an internal error it replies with an empty
 agent ─(MCP add | CLI add | hook)─▶ core.normalize ─▶ core.validate ─✗─▶ error that says how to fix the call
                                                           │✓
                                                           ▼
-                                       lock ─▶ append one line ─▶ unlock      (.fael/log/<writer>/<month>.jsonl)
+                           journal append ─▶ tree append (skipped when store = local)
+                  (<git-common-dir>/fael/log/…)      (.fael/log/<writer>/<month>.jsonl)
 ```
 
 **Push** — the agent reads a file, and the memory for that file comes with it:

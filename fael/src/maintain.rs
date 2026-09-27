@@ -12,6 +12,16 @@ use std::process::ExitCode;
 
 pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     let r = repo()?;
+    // same symlink note as `fael install` (stdout only — `--json` stays pure JSON)
+    if !a.has("json")
+        && matches!(r.cfg.store, core::Store::Tracked)
+        && std::fs::symlink_metadata(&r.fael).is_ok_and(|m| m.file_type().is_symlink())
+    {
+        println!(
+            "note: {} is a symlink — store = \"local\" in .fael/config.toml keeps rows in this clone instead",
+            r.fael.display()
+        );
+    }
     let month = core::current_month();
     let source = crate::hook::ignore_source(&r.root);
     let excluded = source.as_deref().is_some_and(crate::hook::deliberate);

@@ -116,12 +116,14 @@ fn repo_for(a: &Value) -> Result<Repo, String> {
 
 fn find(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    // `branches: true` merges unmerged branches' rows into the working log
+    // `branches: true` merges unmerged branches' rows into the union log
     // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
+    let (base, jtags) = crate::journal::read(&r);
     let (log, branch_of) = if a["branches"].as_bool().unwrap_or(false) {
-        crate::find::branches::with_branches(&r.root, read(&r))
+        let (log, btags) = crate::find::branches::with_branches(&r.root, base);
+        (log, crate::journal::overlay(jtags, btags))
     } else {
-        (read(&r), crate::find::branches::BranchMap::new())
+        (base, jtags)
     };
     // `find {"id": ...}` pulls that row's body by exact id or unique prefix —
     // lists show titles, this is how the body is read on demand
@@ -232,6 +234,7 @@ fn bump(a: &Value) -> Result<String, String> {
     };
     let (row, _, warns) = core::bump_row(
         &r.fael,
+        r.journal.as_deref(),
         &log,
         &r.cfg,
         &crate::stamp(&r),

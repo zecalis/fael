@@ -9,9 +9,11 @@ use fael_core::{self as core, Filter, Log, Row};
 
 pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
-    // `--branches` merges unmerged branches' rows into the working log (HEAD
-    // wins on duplicate ids); rows from elsewhere tag ` @<branch>` on render
-    let (log, branch_of) = working_or_branches(a, super::read(&r), &r.root);
+    // the union read tags journal-only rows with their stamped branch;
+    // `--branches` merges unmerged branches' rows on top of it (HEAD wins on
+    // duplicate ids) and tags those ` @<branch>` on render
+    let (base, jtags) = super::journal::read(&r);
+    let (log, branch_of) = working_or_branches(a, base, jtags, &r.root);
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
     // text search (a text query equalling a unique id prefix means the id)
     if let Some(t) = text
@@ -66,7 +68,8 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
 pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
-    let (log, branch_of) = working_or_branches(a, super::read(&r), &r.root);
+    let (base, jtags) = super::journal::read(&r);
+    let (log, branch_of) = working_or_branches(a, base, jtags, &r.root);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
     let f = Filter {
@@ -101,15 +104,21 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     Ok(())
 }
 
-/// The working log, or the working log plus unmerged branches' rows when
+/// The union log, or the union log plus unmerged branches' rows when
 /// `--branches` is passed (HEAD wins on duplicate ids — a merged-then-listed
 /// row never doubles, never tags). Read/edit push never pass the flag: no git
 /// spawn belongs on the 5 ms push path.
-fn working_or_branches(a: &Args, log: Log, root: &std::path::Path) -> (Log, branches::BranchMap) {
+fn working_or_branches(
+    a: &Args,
+    log: Log,
+    journal: branches::BranchMap,
+    root: &std::path::Path,
+) -> (Log, branches::BranchMap) {
     if a.has("branches") {
-        branches::with_branches(root, log)
+        let (log, btags) = branches::with_branches(root, log);
+        (log, super::journal::overlay(journal, btags))
     } else {
-        (log, branches::BranchMap::new())
+        (log, journal)
     }
 }
 
