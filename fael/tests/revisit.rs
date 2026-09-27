@@ -52,7 +52,21 @@ fn repo() -> PathBuf {
 }
 
 fn revisits(d: &Path) -> Vec<(String, String)> {
-    let (_, out, _) = fael(d, &["find", "--json", "--all", "--revisit"]);
+    revisits_with(d, true)
+}
+
+/// Live versions only — after a bump the superseded version still matches
+/// under `--all`, so bump assertions read here.
+fn live_revisits(d: &Path) -> Vec<(String, String)> {
+    revisits_with(d, false)
+}
+
+fn revisits_with(d: &Path, all: bool) -> Vec<(String, String)> {
+    let mut args = vec!["find", "--json", "--revisit"];
+    if all {
+        args.push("--all");
+    }
+    let (_, out, _) = fael(d, &args);
     out.lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
         .map(|v| {
@@ -101,6 +115,65 @@ fn add_rejects_bare_revisit() {
         &["add", "note", "x", "--files", "src/a.rs", "--revisit"],
     );
     assert!(!ok, "bare --revisit on add must not be filed");
+    assert!(err.contains("--revisit needs a value"), "{err}");
+}
+
+#[test]
+fn bump_moves_revisit_without_supersede() {
+    let d = repo();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "sleeper xyz",
+            "--files",
+            "src/a.rs",
+            "--revisit",
+            "2000-01",
+        ],
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    // the new date replaces the old one on the live version …
+    let (ok, _, err) = fael(&d, &["bump", &id, "--revisit", "2999-01"]);
+    assert!(ok, "{err}");
+    assert_eq!(
+        live_revisits(&d),
+        [("sleeper xyz".into(), "2999-01".into())]
+    );
+    // … so kickoff no longer wakes it, and the old date lists nothing
+    let (ok, out, _) = fael(&d, &["kickoff", "src/b.rs"]);
+    assert!(ok);
+    assert!(!out.contains("sleeper xyz"), "{out}");
+    let (ok, out, _) = fael(&d, &["find", "--revisit=2000"]);
+    assert!(ok);
+    assert!(out.is_empty(), "{out}");
+    // no --revisit keeps the date on the next version
+    let live = {
+        let (_, out, _) = fael(&d, &["find", "--json", "--all", "--revisit"]);
+        out.lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .find(|v| v["text"].as_str() == Some("sleeper xyz"))
+            .and_then(|v| v["id"].as_str().map(String::from))
+            .unwrap()
+    };
+    let (ok, _, err) = fael(&d, &["bump", &live]);
+    assert!(ok, "{err}");
+    assert_eq!(
+        live_revisits(&d),
+        [("sleeper xyz".into(), "2999-01".into())]
+    );
+}
+
+#[test]
+fn bump_rejects_bare_revisit() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["add", "note", "x", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = fael(&d, &["bump", &id, "--revisit"]);
+    assert!(!ok, "bare --revisit on bump must not be filed");
     assert!(err.contains("--revisit needs a value"), "{err}");
 }
 

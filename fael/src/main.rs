@@ -22,7 +22,7 @@ const USAGE: &str = "usage:
        --title = the ≤15-word headline lists show, the body is pulled by id;
        --force files a path that looks like a typo of an existing one)
   fael close <id> \"<why>\"
-  fael bump <id> [--to who] [--urgent|--urgent-before id|--not-urgent]
+  fael bump <id> [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent]
       (same text/files, new version — text and files never change through bump)
   fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M]
       (an exact id or unique prefix pulls that row's body; --full shows every body;
@@ -350,7 +350,7 @@ fn close_row(r: &Repo, id: &str, why: &str) -> Result<(Row, PathBuf, Vec<String>
     core::close_row(&r.fael, &read(r), &r.cfg, &stamp(r), id, why)
 }
 
-/// `fael bump` — same text/files, new `to`/`urgent` (see write::bump).
+/// `fael bump` — same text/files, new `to`/`urgent`/`revisit` (see write::bump).
 fn bump(a: &Args, id: &str) -> Result<(), String> {
     let r = repo()?;
     let (row, path, warns) = write::bump(&r, a, id)?;
