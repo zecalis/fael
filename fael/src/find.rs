@@ -17,7 +17,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     if let Some(t) = text
         && let Ok(row) = core::resolve(&log, t)
     {
-        return show_one(a, &log, row);
+        return show_one(a, &log, row, &branch_of);
     }
     let files = core::normalize_files(&a.files(), &r.cwd, &r.root)?;
     let (limit, offset) = a.paging()?;
@@ -146,11 +146,15 @@ fn show(
 }
 
 /// One row pulled by id: always the body (`render_full`), or the JSON line.
-fn show_one(a: &Args, log: &Log, row: &Row) -> Result<(), String> {
+fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &branches::BranchMap) -> Result<(), String> {
     if a.has("json") {
         println!("{}", row.to_line());
     } else {
-        print!("{}", core::render_full(log, &[row], 10_000));
+        // `--branches` tags a row that only lives on another branch, same as a list
+        print!(
+            "{}",
+            branches::tag(core::render_full(log, &[row], 10_000), log, branch_of)
+        );
     }
     Ok(())
 }

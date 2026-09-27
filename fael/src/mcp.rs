@@ -36,7 +36,7 @@ fn handle(line: &str) -> Option<Value> {
     let params = msg.get("params").cloned().unwrap_or(Value::Null);
     let result = match msg["method"].as_str().unwrap_or("") {
         "initialize" => json!({
-            // ponytail: echo the client's version — the three tools use nothing version-specific
+            // ponytail: echo the client's version — the four tools use nothing version-specific
             "protocolVersion": params["protocolVersion"].as_str().unwrap_or(VERSION),
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "fael", "version": env!("CARGO_PKG_VERSION")},
@@ -127,7 +127,11 @@ fn find(a: &Value) -> Result<String, String> {
     // lists show titles, this is how the body is read on demand
     if let Some(id) = s(a, "id") {
         let row = core::resolve(&log, &id)?;
-        return Ok(core::render_full(&log, &[row], 10_000));
+        return Ok(crate::find::branches::tag(
+            core::render_full(&log, &[row], 10_000),
+            &log,
+            &branch_of,
+        ));
     }
     let files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
     // `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`)
