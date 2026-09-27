@@ -378,3 +378,23 @@ fn urgent_and_bump_round_trip() {
     assert!(b3.get("urgent").is_none(), "{b3}");
     assert_eq!(b3["to"].as_str().unwrap(), "ploy");
 }
+
+#[test]
+fn root_relative_files_from_a_subdir_do_not_double_the_prefix() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let sub = d.join("src");
+    // from `src/`, `src/a.rs` reads as `src/src/a.rs`; `a.rs` must keep meaning src/a.rs
+    let (ok, _, err) = fael(
+        &sub,
+        &["add", "note", "from sub", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(err.contains("resolved from repo root"), "{err}");
+    assert_eq!(row_files(&d, "from sub"), ["src/a.rs"]);
+    let (ok, _, err) = fael(&sub, &["add", "note", "cwd rel", "--files", "a.rs"], "");
+    assert!(ok, "{err}");
+    assert!(!err.contains("resolved from repo root"), "{err}");
+    assert_eq!(row_files(&d, "cwd rel"), ["src/a.rs"]);
+}

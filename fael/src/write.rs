@@ -29,7 +29,7 @@ pub(crate) fn add_row(
     r: &crate::Repo,
     kind: &str,
     text: &str,
-    files: &[String],
+    files_arg: &[String],
     opts: AddOpts,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
     let AddOpts {
@@ -40,18 +40,19 @@ pub(crate) fn add_row(
         supersedes,
         force,
     } = opts;
-    let mut files = core::normalize_files(files, &r.cwd, &r.root)?;
+    let mut files = core::normalize_files(files_arg, &r.cwd, &r.root)?;
+    let mut warns = root_relative(r, files_arg, &mut files);
     let log = crate::read(r);
     if files.is_empty() {
         files = derive(&r.root, &log);
     }
-    let mut warns = check(
+    warns.extend(check(
         &r.root,
         &crate::aliases::load(r, &log, true),
         &files,
         &active_edits(&r.root),
         force,
-    )?;
+    )?);
     let st = crate::stamp(r);
     let mut row = core::Row::new(&st.by, kind, text, files);
     row.key = key;
@@ -70,6 +71,30 @@ pub(crate) fn add_row(
         core::add_row(&r.fael, &log, &r.cfg, &st, row, supersedes.as_deref())?;
     warns.append(&mut core_warns);
     Ok((row, path, warns))
+}
+
+/// `fael add` run from `sub/` with `--files sub/a.rs` (repo-root-relative)
+/// resolves to `sub/sub/a.rs`. When that is missing but the arg read from the
+/// root exists, take the root reading — the cwd reading still wins whenever
+/// it exists, so `--files a.rs` from `sub/` keeps meaning `sub/a.rs`.
+fn root_relative(r: &crate::Repo, args: &[String], files: &mut [String]) -> Vec<String> {
+    let mut warns = vec![];
+    for (arg, f) in args.iter().zip(files.iter_mut()) {
+        if hook::is_anchor(f) || is_glob(f) || r.root.join(&*f).exists() {
+            continue;
+        }
+        if let Ok(v) = core::normalize_files(std::slice::from_ref(arg), &r.root, &r.root)
+            && let Some(alt) = v.into_iter().next()
+            && r.root.join(&alt).exists()
+        {
+            warns.push(format!(
+                "warning: {arg:?} is not under {:?} — resolved from repo root as {alt:?}",
+                r.cwd.strip_prefix(&r.root).unwrap_or(&r.cwd)
+            ));
+            *f = alt;
+        }
+    }
+    warns
 }
 
 /// `fael bump <id>` — change routing/urgency as a new version: same

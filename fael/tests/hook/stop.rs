@@ -128,6 +128,10 @@ fn stop_bug_signal_needs_issue_row() {
     );
     let (ok, out, _) = fael(&d, &["hook", "stop"], &neutral);
     assert!(ok && out.contains("out of sync"), "{out}");
+    // a different phrase in the same session does not block again
+    let again = neutral.replace("are out of sync", "found a bug");
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &again);
+    assert!(ok && out.contains(r#""block":false"#), "{out}");
 
     // an issue row filed in this session clears it — same transcript, fresh
     // state dir, so the allow comes from the row and not from the dedupe
