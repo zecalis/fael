@@ -5,6 +5,7 @@
 
 mod aliases;
 mod find;
+mod help;
 mod hook;
 mod install;
 mod maintain;
@@ -15,35 +16,6 @@ use fael_core::{self as core, Config, Log, Row};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
-
-const USAGE: &str = "usage:
-  fael add <kind> \"<text>\" [--files a,b] [--key k] [--title t] [--to who] [--revisit date|text] [--urgent|--urgent-before id] [--supersedes id] [--force]
-      (no --files = the files this session edited, as the edit hook recorded;
-       --title = the ≤15-word headline lists show, the body is pulled by id;
-       --force files a path that looks like a typo of an existing one)
-  fael close <id> \"<why>\"
-  fael bump <id> [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent]
-      (same text/files, new version — text and files never change through bump)
-  fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M]
-      (an exact id or unique prefix pulls that row's body; --full shows every body;
-       --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;
-       it only sees rows committed to .fael/log on those branches — a repo that
-       gitignores .fael/log gets nothing from it;
-       a cut list prints the exact next call — rerun it with the new --offset)
-  fael keys [glob]
-  fael kickoff [file|anchor] [--branches] [--full] [--limit N] [--offset M]
-  fael mv <old> <new>           record a move git can't see (anchors, uncommitted rewrites)
-  fael hook <stop|session-start|read|edit> [--client c]   stdin in, stdout out; always exits 0
-  fael stats [--json] [--rows]   tokens fael has put into context, per machine
-       (--rows = per-row pushes against open/closed/superseded, flagging noise?)
-  fael doctor [--fix]
-  fael compact [--writer id] [--before yyyy-mm] [--prune]
-  fael import <path> [--map old/=new/]
-  fael mcp                      MCP server on stdio
-  fael install [--client claude|codex|opencode] [--dry-run] [--replace-fapony]
-  fael help | fael --help | fael <cmd> --help
-  fael --version
-  every command takes --json";
 
 fn main() -> ExitCode {
     match run(std::env::args().skip(1).collect()) {
@@ -56,14 +28,15 @@ fn main() -> ExitCode {
 }
 
 fn run(argv: Vec<String>) -> Result<ExitCode, String> {
-    if matches!(argv.as_slice(), [v] if v == "--version" || v == "-V") {
+    if matches!(argv.as_slice(), [v] if v == "--version" || v == "-v" || v == "-V") {
         println!("fael {}", env!("CARGO_PKG_VERSION"));
         return Ok(ExitCode::SUCCESS);
     }
-    // `fael help`, `fael --help`, `fael <cmd> --help` — usage on stdout, exit 0
+    // `fael help`, `fael --help`, `fael -h`, `fael <cmd> --help` — usage on
+    // stdout, exit 0; with a command it shows only that command's section
     if argv.first().is_some_and(|c| c == "help") || argv.iter().any(|x| x == "--help" || x == "-h")
     {
-        println!("{USAGE}");
+        println!("{}", help::for_argv(&argv));
         return Ok(ExitCode::SUCCESS);
     }
     let a = Args::parse(argv)?;
@@ -85,7 +58,19 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("mcp", []) => mcp::serve().map(|()| ExitCode::SUCCESS),
         ("install", []) => install::cmd(a.one("client"), a.has("dry-run"), a.has("replace-fapony"))
             .map(|()| ExitCode::SUCCESS),
-        _ => Err(USAGE.into()),
+        // bare `fael` is a probe, not an error — the usage, on stdout, exit 0
+        ("", []) => {
+            println!("{}", help::USAGE);
+            Ok(ExitCode::SUCCESS)
+        }
+        // a real command with the wrong arity names the command and points
+        // at its own help; anything else names no command at all
+        _ if help::for_command(cmd).is_some() => Err(format!(
+            "rejected: wrong arguments for {cmd:?} — try 'fael {cmd} --help'"
+        )),
+        _ => Err(format!(
+            "rejected: unknown command {cmd:?} — try 'fael --help'"
+        )),
     }
 }
 
@@ -139,7 +124,11 @@ impl Args {
                         .ok_or(format!("--{name} needs a value"))?;
                     a.flags.entry(name).or_default().push(v);
                 }
-                _ => return Err(format!("unknown flag --{name}\n{USAGE}")),
+                _ => {
+                    return Err(format!(
+                        "rejected: unknown flag --{name} — try 'fael --help'"
+                    ));
+                }
             }
         }
         Ok(a)
