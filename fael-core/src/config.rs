@@ -1,6 +1,17 @@
 use crate::ROW_BYTES_MAX;
 use serde::Deserialize;
 
+/// Where `add`/`close`/`bump`/`mv` rows land (PLAN-fael-durable-log chunk 1):
+/// `tracked` writes the tree log (`.fael/log`, the transport) on top of the
+/// journal; `local` writes the journal only — for repos that gitignore `.fael`
+/// or are public, where the tree must carry no memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Store {
+    #[default]
+    Tracked,
+    Local,
+}
+
 /// Per-repo settings from `.fael/config.toml` (every field has a default; see `Config::from_toml`).
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -24,6 +35,10 @@ pub struct Config {
     /// Resolve renamed paths through the L2 alias set (`git log -M` + `fael mv`
     /// rows). `false` returns to pre-resolver matching — the escape hatch.
     pub resolve: bool,
+    /// Tree transport on top of the journal (`tracked`), or journal only
+    /// (`local`, for gitignored or public repos). Ignored without a journal
+    /// (no git): the tree is all there is.
+    pub store: Store,
 }
 
 impl Default for Config {
@@ -38,6 +53,7 @@ impl Default for Config {
             session_decisions: 0,
             warn_row_tokens: 400,
             resolve: true,
+            store: Store::Tracked,
         }
     }
 }
@@ -52,6 +68,7 @@ impl Config {
             kinds: Vec<String>,
             key_domains: Vec<String>,
             resolve: Option<bool>,
+            store: Option<String>,
             budget: Budget,
             warn: Warn,
             limit: Limit,
@@ -76,6 +93,15 @@ impl Config {
         }
         let f: File = toml::from_str(s).map_err(|e| e.to_string())?;
         let d = Config::default();
+        let store = match f.store.as_deref() {
+            None | Some("tracked") => Store::Tracked,
+            Some("local") => Store::Local,
+            Some(v) => {
+                return Err(format!(
+                    "rejected: store = {v:?} — want \"tracked\" or \"local\""
+                ));
+            }
+        };
         Ok(Config {
             kinds: f.kinds,
             key_domains: f.key_domains,
@@ -86,6 +112,7 @@ impl Config {
             session_decisions: f.budget.session_decisions.unwrap_or(d.session_decisions),
             warn_row_tokens: f.warn.row_tokens.unwrap_or(d.warn_row_tokens),
             resolve: f.resolve.unwrap_or(d.resolve),
+            store,
         })
     }
 }

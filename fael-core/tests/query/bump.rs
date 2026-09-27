@@ -17,9 +17,12 @@ fn close_on_a_bumped_id_points_at_the_newest_version() {
     );
     let mut r = Row::new("tester-0000", "issue", "hot", vec!["src/a.rs".into()]);
     r.urgent = Some(1.0);
-    let r = add_row(&dir, &read(&dir), &cfg, &st, r, None).unwrap().0;
+    let r = add_row(&dir, None, &read(&dir), &cfg, &st, r, None)
+        .unwrap()
+        .0;
     let (b, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -33,7 +36,7 @@ fn close_on_a_bumped_id_points_at_the_newest_version() {
     .unwrap();
     assert_eq!(b.urgent, Some(1.0));
     // closing the pre-bump id would leave the live version open
-    let e = close_row(&dir, &read(&dir), &cfg, &st, &r.id, "done").unwrap_err();
+    let e = close_row(&dir, None, &read(&dir), &cfg, &st, &r.id, "done").unwrap_err();
     assert!(
         e.contains(&format!("close the newest version {}", b.id)),
         "{e}"
@@ -55,13 +58,14 @@ fn bump_rewrites_only_the_moved_row() {
         let mut r = Row::new("tester-0000", "issue", text, vec!["src/a.rs".into()]);
         r.key = Some("auth:session".into());
         r.urgent = resolve_urgent(&log, opt).unwrap();
-        add_row(&dir, &log, &cfg, &st, r, None).unwrap().0
+        add_row(&dir, None, &log, &cfg, &st, r, None).unwrap().0
     };
     let a = file("A keeps", &Urgent::End); // 1.0
     let b = file("B moves", &Urgent::End); // 2.0
     // done criteria: bump B --urgent-before A with A=1,B=2 → new B=0.5
     let (b2, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -95,6 +99,7 @@ fn bump_rewrites_only_the_moved_row() {
     // leaving the queue keeps the routing
     let (b3, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -123,9 +128,10 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
     let log = read(&dir);
     let mut d = Row::new("tester-0000", "decision", "locked", vec!["src/a.rs".into()]);
     d.urgent = None;
-    let d = add_row(&dir, &log, &cfg, &st, d, None).unwrap().0;
+    let d = add_row(&dir, None, &log, &cfg, &st, d, None).unwrap().0;
     let e = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -140,6 +146,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
     assert!(e.contains("urgent is for issues"), "{e}");
     let (gone, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -155,6 +162,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
     // the old version is superseded — bump the newer one instead
     let e = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -167,9 +175,10 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
     )
     .unwrap_err();
     assert!(e.contains("already superseded"), "{e}");
-    close_row(&dir, &read(&dir), &cfg, &st, &gone.id, "done").unwrap();
+    close_row(&dir, None, &read(&dir), &cfg, &st, &gone.id, "done").unwrap();
     let e = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,

@@ -171,10 +171,13 @@ fn bump_keeps_sets_and_clears_revisit() {
     };
     let mut r = Row::new("tester-0000", "note", "sleeper", vec!["src/a.rs".into()]);
     r.revisit = Some(PAST.into());
-    let r = add_row(&dir, &read(&dir), &cfg, &st, r, None).unwrap().0;
+    let r = add_row(&dir, None, &read(&dir), &cfg, &st, r, None)
+        .unwrap()
+        .0;
     // absent revisit keeps the old date
     let (b, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -190,6 +193,7 @@ fn bump_keeps_sets_and_clears_revisit() {
     // a value sets it, no supersede round-trip needed
     let (b2, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,
@@ -205,6 +209,7 @@ fn bump_keeps_sets_and_clears_revisit() {
     // blank clears it
     let (b3, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,

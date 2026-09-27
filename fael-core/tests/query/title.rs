@@ -161,9 +161,12 @@ fn bump_keeps_the_title() {
     );
     let mut r = Row::new("tester-0000", "issue", "hot body", vec!["src/a.rs".into()]);
     r.title = Some("hot headline".into());
-    let r = add_row(&dir, &read(&dir), &cfg, &st, r, None).unwrap().0;
+    let r = add_row(&dir, None, &read(&dir), &cfg, &st, r, None)
+        .unwrap()
+        .0;
     let (b, _, _) = bump_row(
         &dir,
+        None,
         &read(&dir),
         &cfg,
         &st,

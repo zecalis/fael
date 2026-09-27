@@ -3,7 +3,7 @@
 
 use super::{Log, is_month};
 use crate::{
-    Config, Row, Stamp, Urgent, UrgentChange, closed, resolve, resolve_urgent, superseded,
+    Config, Row, Stamp, Store, Urgent, UrgentChange, closed, resolve, resolve_urgent, superseded,
     validate, validate_alias, validate_close, warnings,
 };
 use std::fs::{self, OpenOptions};
@@ -90,8 +90,16 @@ pub fn close(fael: &Path, row: &Row, cfg: &Config) -> Result<PathBuf, String> {
 
 /// Resolve `supersedes`, stamp, validate, append — the one add path every adapter (CLI, MCP,
 /// a server) goes through. `row.files` must already be normalised. Returns the non-fatal warnings.
+///
+/// `journal` is the clone-shared journal root (`<git-common-dir>/fael`, resolved
+/// without a spawn on the adapter side; `None` without git). The journal is the
+/// commit point: it is written first and its failure fails the whole write.
+/// The tree follows per `store` — `local` skips it, `tracked` degrades its
+/// failure to a one-line warning (the row is already durable; a retry would
+/// file a second row with a new id).
 pub fn add_row(
     fael: &Path,
+    journal: Option<&Path>,
     log: &Log,
     cfg: &Config,
     stamp: &Stamp,
@@ -102,9 +110,44 @@ pub fn add_row(
         row.supersedes = Some(resolve(log, s)?.id.clone());
     }
     stamp.apply(&mut row);
-    let path = add(fael, &row, cfg)?;
-    let warns = warnings(&row, log, cfg);
+    let (path, mut warns) = write_both(fael, journal, cfg, |d| add(d, &row, cfg))?;
+    warns.extend(warnings(&row, log, cfg));
     Ok((row, path, warns))
+}
+
+/// Journal-first write shared by add/close/mv: `put` writes one validated row
+/// to one root (tree or journal — same line bytes both places). Returns the
+/// path the row landed in (the journal one when the tree is skipped or fails)
+/// plus a warning when a `tracked` tree write fails after the journal commit.
+fn write_both(
+    fael: &Path,
+    journal: Option<&Path>,
+    cfg: &Config,
+    put: impl Fn(&Path) -> Result<PathBuf, String>,
+) -> Result<(PathBuf, Vec<String>), String> {
+    let jpath = match journal {
+        Some(j) => Some(put(j)?),
+        None => None,
+    };
+    // `local` with a journal skips the tree; without one (no git) the tree
+    // is all there is and the write falls through to it
+    if matches!(cfg.store, Store::Local)
+        && let Some(p) = jpath
+    {
+        return Ok((p, vec![]));
+    }
+    match put(fael) {
+        Ok(p) => Ok((p, vec![])),
+        Err(e) => match jpath {
+            Some(p) => Ok((
+                p,
+                vec![format!(
+                    "warning: tree write failed ({e}) — row is in the journal; do not retry"
+                )],
+            )),
+            None => Err(e),
+        },
+    }
 }
 
 /// What `bump_row` changes — bundled so the arg count stays under the lint
@@ -124,6 +167,7 @@ pub struct BumpOpts {
 /// new row for new content.
 pub fn bump_row(
     fael: &Path,
+    journal: Option<&Path>,
     log: &Log,
     cfg: &Config,
     stamp: &Stamp,
@@ -174,12 +218,13 @@ pub fn bump_row(
     row.to = to;
     row.urgent = urgent;
     row.revisit = revisit;
-    add_row(fael, log, cfg, stamp, row, Some(&old.id))
+    add_row(fael, journal, log, cfg, stamp, row, Some(&old.id))
 }
 
 /// Resolve `id`, stamp, validate, append a close row. A row already closed is rejected.
 pub fn close_row(
     fael: &Path,
+    journal: Option<&Path>,
     log: &Log,
     cfg: &Config,
     stamp: &Stamp,
@@ -207,10 +252,9 @@ pub fn close_row(
             target.id
         ));
     }
-    let warns = vec![];
     let mut row = Row::close(&stamp.by, &target.id, why);
     stamp.apply(&mut row);
-    let path = close(fael, &row, cfg)?;
+    let (path, warns) = write_both(fael, journal, cfg, |d| close(d, &row, cfg))?;
     Ok((row, path, warns))
 }
 
@@ -218,6 +262,7 @@ pub fn close_row(
 /// `from`/`to` must already be normalised. Returns the row and its file.
 pub fn mv_row(
     fael: &Path,
+    journal: Option<&Path>,
     cfg: &Config,
     stamp: &Stamp,
     from: &str,
@@ -226,7 +271,7 @@ pub fn mv_row(
     let mut row = Row::moved(&stamp.by, from, to);
     stamp.apply(&mut row);
     validate_alias(&row, cfg)?;
-    let path = append(fael, &row, false)?;
+    let (path, _) = write_both(fael, journal, cfg, |d| append(d, &row, false))?;
     Ok((row, path))
 }
 
