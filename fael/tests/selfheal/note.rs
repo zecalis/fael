@@ -1,6 +1,6 @@
 //! Chunk 3b: repeated notes self-supersede; ambiguity files and lists, never asks.
 
-use super::{fael, open_notes, repo, usage};
+use super::{fael, names, open_notes, repo, usage};
 
 fn add(d: &std::path::Path, text: &str, files: &str) -> (bool, String, String) {
     fael(d, &["add", "note", text, "--files", files], "")
@@ -16,7 +16,7 @@ fn second_overlapping_note_supersedes_first() {
     let (ok, _, err) = add(&d, "second pass", "src/a.rs,src/b.rs");
     assert!(ok, "{err}");
     // the choice is reported, not asked: one info line, no ask counted
-    assert!(err.contains(&format!("superseded {}", first[0])), "{err}");
+    assert!(names(&err, "superseded ", &first[0]), "{err}");
     let open = open_notes(&d);
     assert_eq!(open.len(), 1);
     assert_ne!(open[0], first[0]);

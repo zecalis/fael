@@ -28,6 +28,12 @@ pub fn abbrev(log: &Log) -> usize {
         .max(8)
 }
 
+/// `id` cut to `width` (from [`abbrev`]) — the one way to print an id a user
+/// can paste back into `--supersedes`/`close`: unique now, never hand-sliced.
+pub fn short_id(id: &str, width: usize) -> &str {
+    id.get(..width).unwrap_or(id)
+}
+
 /// What a paged list's cut line needs: the pre-page total, the rows skipped
 /// before this page, and how to print the exact next call from the next
 /// offset. CLI passes `|n| format!("fael find --kind issue --limit 2 --offset {n}")`
@@ -72,7 +78,7 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
     // a shown title that hides part of its body — the agent is told how to read it
     let mut hidden = false;
     for (i, r) in rows.iter().enumerate() {
-        let id = r.id.get(..width).unwrap_or(&r.id);
+        let id = short_id(&r.id, width);
         let mark = if closed.contains(r.id.as_str()) {
             " (closed)"
         } else if superseded.contains(r.id.as_str()) {

@@ -64,6 +64,18 @@ fn repo() -> PathBuf {
     d
 }
 
+/// Did `err` name `id` right after `lead` — as the abbreviated, still-unique
+/// prefix render prints (≥ 8 chars), not the full id or a fixed `[..8]`?
+fn names(err: &str, lead: &str, id: &str) -> bool {
+    err.match_indices(lead).any(|(i, _)| {
+        let tok = err[i + lead.len()..]
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .next()
+            .unwrap_or("");
+        tok.len() >= 8 && tok.len() < id.len() && id.starts_with(tok)
+    })
+}
+
 /// Full ids of the currently listed open notes.
 fn open_notes(d: &Path) -> Vec<String> {
     let (ok, out, err) = fael(d, &["find", "--kind", "note", "--json"], "");

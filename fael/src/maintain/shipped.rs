@@ -43,7 +43,7 @@ pub(super) fn problems(
         let Some(branch) = row.branch().filter(|b| !b.is_empty()) else {
             continue;
         };
-        let short = row.id[..w.min(row.id.len())].to_string();
+        let short = core::short_id(&row.id, w).to_string();
         match decide(prs.get(branch), git.contains(branch), birth_ms(row)) {
             Verdict::Shipped(n) => sure.push(entry(&short, branch, n)),
             Verdict::Maybe(n) => maybe.push(entry(&short, branch, n)),

@@ -17,7 +17,9 @@ mod stale;
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
 pub use push::push;
-pub use render::{Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page};
+pub use render::{
+    Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page, short_id,
+};
 pub use revisit::{due, is_date, row_due, today, waiting, waiting_line, with_due};
 pub use select::{
     Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, freshness, gone, gone_files,

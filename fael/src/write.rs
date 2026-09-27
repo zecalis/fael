@@ -92,6 +92,7 @@ pub(crate) fn add_row(
     let heal = crate::selfheal::heal(
         &log,
         &st,
+        &row.id,
         kind,
         &row.files,
         row.key.as_deref(),
