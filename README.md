@@ -5,16 +5,22 @@
 [![CI](https://github.com/zecalis/fael/actions/workflows/ci.yml/badge.svg)](https://github.com/zecalis/fael/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Every agent on your repo knows what was decided and what's still open — without re-asking, and
-without a context dump.**
+**The secretary for every agent on your team.** Every agent on your repo knows what was decided and
+what's still open — without re-asking, and without a context dump.
 
 One person runs five agents; a team runs fifty. Each one starts from zero: it finds the same flaky
 test, re-asks why that function looks weird, and repeats the mistake the last agent already fixed.
 Memory tools that try to help stuff a summary of everything into context before the agent has said
 what it's about to do — you pay tokens for noise, and the one row that mattered gets averaged away.
 
-fael works the other way round: the agent **can't finish without writing**, and when it opens a
-file it gets **only what was written about that file**. The file it touches is the question.
+fael works the other way round: like a good secretary, it takes the notes nobody else will and hands
+each agent **only what matters for the file in front of it**. The agent **can't finish without
+writing**, and when it opens a file it gets **only what was written about that file**. The file it
+touches is the question.
+
+The team isn't only the people who write code. A PM, QA, EM or tech lead writes a requirement, a
+decision or an assignment once — through their own agent or the CLI — and every dev agent that
+touches that code later gets it, so the next feature doesn't forget what the last one agreed.
 
 fael gives the repo a memory that agents can't skip:
 
@@ -40,6 +46,7 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 | "Why is it like this?" — ask again, guess again | The reason sits next to the file, from the agent that made the call |
 | Agent notices a bug mid-task, then forgets it | It's filed on the spot, and shown to whoever touches that file next |
 | Knowledge stays in one person's chat history | It's in the repo — teammates and their agents get it on `git pull` |
+| A PM's requirement lives in a ticket the agent never opens | `fael add decision … --files src/pay.rs` — it's in front of the agent the moment it opens the file |
 
 ## Install
 
