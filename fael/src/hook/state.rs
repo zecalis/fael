@@ -27,7 +27,6 @@ pub(crate) fn session_key(s: &str) -> String {
 }
 
 /// Keyed by session + worktree so one session across two repos stays apart.
-// ponytail: no cleanup of old sessions — prune by mtime if the dir grows.
 pub(crate) fn edits_path(session: &str, root: &Path) -> PathBuf {
     let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
     state_dir().join("sessions").join(format!("{key}.jsonl"))
@@ -84,6 +83,31 @@ pub(crate) fn head_branch(root: &Path) -> Option<String> {
         .trim()
         .strip_prefix("refs/heads/")
         .map(String::from)
+}
+
+/// Per-session files untouched this long are dead: a resumed session only
+/// loses its seen ids (rows push again) and its start branch (drift stays
+/// silent) — both fail quiet.
+const STALE_SECS: u64 = 30 * 24 * 60 * 60;
+
+/// Drop per-session files older than `STALE_SECS` — without this `sessions/`
+/// grows by a few files per session forever. Called once per session-start;
+/// every error is ignored (the next session tries again).
+pub(crate) fn prune_sessions(dir: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let stale = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age.as_secs() > STALE_SECS);
+        if stale {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
 }
 
 /// Take the stashed risk note, if any — the file is gone after this call.
@@ -156,4 +180,63 @@ pub(crate) fn now_rfc3339() -> Option<String> {
 fn systemtime_to_rfc3339(st: SystemTime) -> Option<String> {
     let ms = st.duration_since(SystemTime::UNIX_EPOCH).ok()?.as_millis() as u64;
     Some(core::rfc3339(ms))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{STALE_SECS, head_branch, prune_sessions};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn prune_drops_only_stale_session_files() {
+        let d = std::env::temp_dir().join(format!("fael-prune-{}", fael_core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let (old, new) = (d.join("a.seen"), d.join("b.seen"));
+        std::fs::write(&old, "x").unwrap();
+        std::fs::write(&new, "x").unwrap();
+        let past = SystemTime::now() - Duration::from_secs(STALE_SECS + 60);
+        std::fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(past)
+            .unwrap();
+        prune_sessions(&d);
+        assert!(!old.exists() && new.exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// CI runs this on Windows too: a worktree's `.git` file with an absolute
+    /// or relative `gitdir:` (git writes `/` there on every OS), and a
+    /// CRLF-ended HEAD, all resolve; a detached HEAD is None.
+    #[test]
+    fn head_branch_reads_dir_and_worktree_file() {
+        let d = std::env::temp_dir().join(format!("fael-head-{}", fael_core::ulid()));
+        let git = d.join("main/.git");
+        std::fs::create_dir_all(&git).unwrap();
+        std::fs::write(git.join("HEAD"), "ref: refs/heads/feat/x\r\n").unwrap();
+        assert_eq!(head_branch(&d.join("main")).as_deref(), Some("feat/x"));
+
+        let wt_git = git.join("worktrees/wt");
+        std::fs::create_dir_all(&wt_git).unwrap();
+        std::fs::write(wt_git.join("HEAD"), "ref: refs/heads/fix/y\n").unwrap();
+        let abs = d.join("abs");
+        std::fs::create_dir_all(&abs).unwrap();
+        let fwd = wt_git.to_string_lossy().replace('\\', "/");
+        std::fs::write(abs.join(".git"), format!("gitdir: {fwd}\n")).unwrap();
+        assert_eq!(head_branch(&abs).as_deref(), Some("fix/y"));
+
+        let rel = d.join("rel");
+        std::fs::create_dir_all(&rel).unwrap();
+        std::fs::write(rel.join(".git"), "gitdir: ../main/.git/worktrees/wt\r\n").unwrap();
+        assert_eq!(head_branch(&rel).as_deref(), Some("fix/y"));
+
+        std::fs::write(
+            wt_git.join("HEAD"),
+            "0123456789abcdef0123456789abcdef01234567\n",
+        )
+        .unwrap();
+        assert_eq!(head_branch(&rel), None);
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
