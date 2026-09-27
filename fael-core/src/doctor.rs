@@ -60,6 +60,15 @@ pub enum Kind {
     /// topics, or long text) — the agent skipped the warning, so `doctor`
     /// repeats it (row-hygiene chunk 10); judged by `fat_reasons`, never new logic
     Fat,
+    /// open notes filed on a branch whose PR merged after the row was born —
+    /// the work landed, so the note is stale (durable-log chunk 2); judged by
+    /// branch name (squash/​rebase drop the sha), never by sha. The row's birth
+    /// comes from its ULID time, the merge time from `mergedAt`.
+    Shipped,
+    /// like `Shipped` but the merge time is unknown (only `git branch
+    /// --merged` says the branch landed, no `mergedAt`) — shown as
+    /// `[Shipped?]` so the reader confirms before closing.
+    ShippedMaybe,
 }
 
 #[derive(Debug, Clone)]

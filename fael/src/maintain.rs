@@ -5,6 +5,7 @@
 mod fat;
 mod merged;
 mod orphan;
+mod shipped;
 
 use crate::{Args, core, repo};
 use std::path::{Path, PathBuf};
@@ -166,6 +167,9 @@ fn open_row_notes(
     // landed branches: merged upstream but still sitting in this clone, so
     // the next reader keeps wondering whether the work is done
     out.extend(merged::problem(root));
+    // shipped notes: open notes filed on a landed branch — the work is done
+    // but the note still pushes (doctor never closes rows itself)
+    out.extend(shipped::problems(log, root));
     // fat rows: the add-time warnings the agent skipped, repeated per row so
     // one topic per row can still be superseded alone
     out.extend(fat::problem(log, cfg));
@@ -193,7 +197,7 @@ fn show(rep: &core::DoctorReport, json: bool) {
             .iter()
             .map(|p| {
                 serde_json::json!({
-                    "kind": format!("{:?}", p.kind).to_lowercase(),
+                    "kind": kind_label(&p.kind).to_lowercase(),
                     "severity": format!("{:?}", p.severity).to_lowercase(),
                     "fixable": p.fixable,
                     "detail": p.detail,
@@ -221,7 +225,17 @@ fn show(rep: &core::DoctorReport, json: bool) {
             "note"
         };
         let fix = if p.fixable { " [--fix]" } else { "" };
-        println!("{sev} [{:?}]{fix}: {}", p.kind, p.detail);
+        println!("{sev} [{}]{fix}: {}", kind_label(&p.kind), p.detail);
+    }
+}
+
+/// The `[Shipped?]` label for the unconfirmed variant — every other kind
+/// renders as its debug name.
+fn kind_label(k: &core::ProblemKind) -> String {
+    if *k == core::ProblemKind::ShippedMaybe {
+        "Shipped?".into()
+    } else {
+        format!("{k:?}")
     }
 }
 
