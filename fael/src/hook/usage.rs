@@ -31,6 +31,15 @@ pub(crate) fn record_usage(client: &str, event: &str, repo: &Path, text: &str, i
     }
 }
 
+/// The log a stats row's repo has now — the tree + journal union the hooks
+/// read, so a `store = "local"` repo (journal only) is not read as empty.
+/// A repo path that no longer resolves falls back to its tree.
+fn repo_log(repo: &str) -> core::Log {
+    crate::repo_at(Path::new(repo))
+        .map(|r| crate::read(&r))
+        .unwrap_or_else(|_| core::read(&Path::new(repo).join(".fael")))
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "predates the lint — split, then drop"
@@ -125,9 +134,7 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
     let mut logs: HashMap<String, core::Log> = HashMap::new();
     let mut outcome: HashMap<String, (usize, usize)> = HashMap::new();
     for (repo, ev, ms) in &blocks {
-        let log = logs
-            .entry(repo.clone())
-            .or_insert_with(|| core::read(&Path::new(repo).join(".fael")));
+        let log = logs.entry(repo.clone()).or_insert_with(|| repo_log(repo));
         let followed = if ev == "stop-bug" {
             log.rows
                 .iter()
@@ -229,9 +236,7 @@ fn row_report(
                 .into_iter()
                 .flatten()
                 .filter_map(|repo| {
-                    let log = logs
-                        .entry(repo.clone())
-                        .or_insert_with(|| core::read(&Path::new(repo).join(".fael")));
+                    let log = logs.entry(repo.clone()).or_insert_with(|| repo_log(repo));
                     let (closed, superseded) = (core::closed(log), core::superseded(log));
                     if closed.contains(id.as_str()) {
                         Some("closed")
