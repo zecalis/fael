@@ -137,7 +137,9 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
             let similar: Vec<&str> = used
                 .iter()
                 .map(|u| u.key.as_str())
-                .filter(|u| (parent(k).is_some() && parent(u) == parent(k)) || levenshtein(u, k) <= 2)
+                .filter(|u| {
+                    (parent(k).is_some() && parent(u) == parent(k)) || levenshtein(u, k) <= 2
+                })
                 .take(5)
                 .collect();
             if !similar.is_empty() {
