@@ -85,6 +85,14 @@ export const Fael = async ({ client, directory }) => {
         await client.session
           .prompt({ path: { id }, body: { parts: [{ type: "text", text: r.reason }] } })
           .catch(() => {});
+      } else if (r.context) {
+        // a non-blocking line (branch drift) has no reason to ride; prompt it
+        // once, and mark the session so the next idle is stop_active and the
+        // warning does not repeat (mirrors the block path's one-shot)
+        blocked.add(id);
+        await client.session
+          .prompt({ path: { id }, body: { parts: [{ type: "text", text: r.context }] } })
+          .catch(() => {});
       }
     },
   };

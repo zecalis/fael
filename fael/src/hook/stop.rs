@@ -28,7 +28,7 @@ pub(crate) fn stop(e: &Event) -> Reply {
             });
         } else {
             r.context = Some(match r.context.take() {
-                // stop sets no context of its own, but stay append-safe
+                // stop's only context is this line, but stay append-safe
                 Some(context) => format!("{context}{line}\n"),
                 None => format!("{line}\n"),
             });
@@ -41,6 +41,12 @@ pub(crate) fn stop(e: &Event) -> Reply {
 /// checked out now. No session, no repo, no baseline file (older sessions),
 /// or an unreadable HEAD = None, silently.
 fn drift_line(e: &Event) -> Option<String> {
+    // `stop_hook_active` = the client already ran this turn's stop hook and is
+    // re-entering (e.g. after the non-blocking warning continued the turn) —
+    // say it once, so a client that surfaces the line cannot loop on it
+    if e.stop_active {
+        return None;
+    }
     let session = e.session.as_deref().filter(|s| !s.is_empty())?;
     let cwd = e
         .cwd
