@@ -4,9 +4,7 @@
 set -eu
 LIMIT=400
 # ponytail: ratchet — path + today's size; delete the line once the file is split
-ALLOW='
-fael/src/main.rs 425
-'
+ALLOW=''
 cd "$(dirname "$0")/.."
 find fael-core/src fael-core/tests fael/src fael/tests -name '*.rs' -exec wc -l {} + |
   ALLOW="$ALLOW" awk -v limit="$LIMIT" '
