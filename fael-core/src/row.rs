@@ -57,12 +57,11 @@ pub struct Row {
 }
 
 impl Row {
-    /// Who this row routes to: the `to` field, falling back to a
-    /// hand-written `to` in `extra` (forward-compat read).
+    /// Who this row routes to: the `to` field. Top-level since chunk 2, so
+    /// a deserialized row never carries it in `extra` — there is no
+    /// fallback to look for.
     pub fn to_who(&self) -> Option<&str> {
-        self.to
-            .as_deref()
-            .or_else(|| self.extra.get("to").and_then(|v| v.as_str()))
+        self.to.as_deref()
     }
 
     /// The branch this row was filed on: `extra.branch`, stamped by the
@@ -80,19 +79,14 @@ impl Row {
             .or_else(|| self.extra.get("revisit").and_then(|v| v.as_str()))
     }
 
-    /// The row's urgent number, if any: the `urgent` field, falling back to a
-    /// hand-written `urgent` in `extra` (a number, or a numeric string).
-    /// Non-finite values read as absent — ranking must stay deterministic.
+    /// The row's urgent number, if any: the `urgent` field. Top-level since
+    /// chunk 3, so a deserialized row never carries it in `extra` — the old
+    /// number/numeric-string fallback could never run (and a hand-written
+    /// `"urgent":"1"` fails Row deserialization outright, skipping the row
+    /// as unreadable). Non-finite values read as absent — ranking must stay
+    /// deterministic.
     pub fn urgent_value(&self) -> Option<f64> {
-        self.urgent
-            .or_else(|| {
-                self.extra.get("urgent").and_then(|v| match v {
-                    Value::Number(n) => n.as_f64(),
-                    Value::String(s) => s.trim().parse().ok(),
-                    _ => None,
-                })
-            })
-            .filter(|u| u.is_finite())
+        self.urgent.filter(|u| u.is_finite())
     }
 
     /// What lists show: the `title` when set, else the first line's first
