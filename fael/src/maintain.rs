@@ -3,7 +3,7 @@
 //! in `fael-core` so a hosted server calls the same entry points.
 
 use crate::{Args, core, repo};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub fn doctor(a: &Args) -> Result<ExitCode, String> {
@@ -90,12 +90,43 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             ),
         });
     }
+    // prose rot: the row's text points at a backticked path with no file
+    // behind it, so the next reader follows a dead pointer
+    let stale = stale_rows(&log, &r.root, &al);
+    if !stale.is_empty() {
+        rep.problems.push(core::Problem {
+            kind: core::ProblemKind::Stale,
+            severity: core::Severity::Info,
+            fixable: false,
+            file: None,
+            detail: format!(
+                "{} open row(s) name a path in backticks that is not on disk — check the text \
+                 still holds, then re-file with `--supersedes` or `fael close` (e.g. {})",
+                stale.len(),
+                stale[..stale.len().min(5)].join("; ")
+            ),
+        });
+    }
     show(&rep, a.has("json"));
     Ok(if rep.errors().count() > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
     })
+}
+
+/// `short-id → dead backticked path(s)` for every open row whose text still
+/// points at a path with no file behind it (row-hygiene chunk 4).
+fn stale_rows(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<String> {
+    core::find(log, &core::Filter::default())
+        .into_iter()
+        .filter_map(|row| {
+            let refs = core::stale_refs(root, row, al);
+            let w = core::abbrev(log);
+            (!refs.is_empty())
+                .then(|| format!("{} → {}", &row.id[..w.min(row.id.len())], refs.join(", ")))
+        })
+        .collect()
 }
 
 fn show(rep: &core::DoctorReport, json: bool) {

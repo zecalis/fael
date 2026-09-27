@@ -35,9 +35,10 @@ pub use log::{
     Log, MONTH_MAX, add, add_row, append, bump_row, close, close_row, mv_row, parse, read,
 };
 pub use query::{
-    Cut, Filter, KeyUse, Urgent, UrgentChange, abbrev, brief, closed, cmp_rows, est_tokens, find,
-    fresh_ts, glob, gone, gone_files, keys, kickoff, page, push, query, ranked, render,
-    render_full, render_full_page, render_page, resolve, resolve_urgent, superseded, warnings,
+    Cut, Filter, KeyUse, Urgent, UrgentChange, abbrev, backtick_paths, brief, closed, cmp_rows,
+    est_tokens, find, fresh_ts, glob, gone, gone_files, keys, kickoff, page, push, query, ranked,
+    render, render_full, render_full_page, render_page, resolve, resolve_urgent, stale_refs,
+    superseded, warnings,
 };
 pub use row::{Row, Stamp};
 pub use validate::{normalize_files, valid_key, validate, validate_alias, validate_close};
