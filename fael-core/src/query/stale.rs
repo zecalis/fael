@@ -6,16 +6,18 @@
 //! Only backticked spans count (a bare word is talk, a backtick is a pointer),
 //! and only spans that look like paths: they hold a `/`, or end in a file
 //! extension whose letters prove it is not a version number (`0.45` is not a
-//! path, `pnpm-workspace.yaml` is). Existence is judged like `gone_files` —
-//! through the alias resolver, so a rename still resolves and never flags.
+//! path, `pnpm-workspace.yaml` is). A `file.rs:88` citation is judged by the
+//! path alone, and a URL (`://`) is never a repo path. Existence is judged like
+//! `gone_files` — through the alias resolver, so a rename still resolves and
+//! never flags.
 
 use crate::Aliases;
 use crate::Row;
 use std::path::Path;
 
 /// Backticked spans of `text` that look like paths (`/` inside, or a trailing
-/// `name.ext`). Multiline spans (fenced code blocks) never count — those are
-/// commands and output, not pointers.
+/// `name.ext`). Multiline spans (fenced code blocks) and URLs never count —
+/// those are commands, output and links, not repo pointers.
 pub fn backtick_paths(text: &str) -> Vec<&str> {
     let mut out = vec![];
     for (i, span) in text.split('`').enumerate() {
@@ -23,7 +25,7 @@ pub fn backtick_paths(text: &str) -> Vec<&str> {
             continue; // outside backticks
         }
         let s = span.trim();
-        if s.is_empty() || s.contains('\n') {
+        if s.is_empty() || s.contains('\n') || s.contains("://") {
             continue;
         }
         if s.contains('/') || has_extension(s) {
@@ -38,16 +40,35 @@ pub fn backtick_paths(text: &str) -> Vec<&str> {
 pub fn stale_refs(root: &Path, row: &Row, al: &Aliases) -> Vec<String> {
     let mut out = vec![];
     for c in backtick_paths(&row.text) {
-        if row.files.iter().any(|f| f == c) {
-            continue;
-        }
         let p = c.strip_prefix('/').unwrap_or(c);
         let p = p.strip_prefix("./").unwrap_or(p);
+        // `file.rs:88` cites a line inside a file — the file is what must exist
+        let p = strip_location(p);
+        if p.is_empty() || row.files.iter().any(|f| f == p) {
+            continue;
+        }
         if al.forward(p).iter().all(|q| !root.join(q).exists()) && !out.contains(&p.to_string()) {
             out.push(p.to_string());
         }
     }
     out
+}
+
+/// `path:line[:col]` cites a location inside a file — only the path before the
+/// trailing run of up to two `:<digits>` groups is what must exist. A
+/// non-numeric tail (a Windows drive, an anchor) is left untouched.
+fn strip_location(p: &str) -> &str {
+    let mut rest = p;
+    for _ in 0..2 {
+        let Some((head, tail)) = rest.rsplit_once(':') else {
+            break;
+        };
+        if tail.is_empty() || !tail.bytes().all(|b| b.is_ascii_digit()) {
+            break;
+        }
+        rest = head;
+    }
+    rest
 }
 
 /// `name.ext` where both sides look like a file, not a version: the name
