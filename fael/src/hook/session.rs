@@ -2,7 +2,7 @@
 //! and the one-line warning when `.fael/log` is gitignored by mistake.
 
 use super::protocol::{Event, Reply, ctx};
-use super::state::{branch_path, head_branch, session_key, state_dir};
+use super::state::{branch_path, head_branch, prune_sessions, session_key, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
@@ -23,6 +23,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         Some(c) => c,
         None => return no(),
     };
+    prune_sessions(&state_dir().join("sessions"));
     // the branch this session started on, for stop's drift warning — written
     // before anything can return, even with no log yet; empty session (no key
     // for the file) and detached HEAD (no branch) record nothing

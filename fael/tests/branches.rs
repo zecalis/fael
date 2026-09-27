@@ -89,6 +89,17 @@ fn find_branches_tags_unmerged_rows_and_plain_find_hides_them() {
     let b_line = out.lines().find(|l| l.contains("row B on main")).unwrap();
     assert!(!b_line.contains('@'), "{b_line}");
 
+    // `find <id> --branches` tags the foreign row too, not only a list
+    let id = a_line
+        .strip_prefix("- [")
+        .and_then(|l| l.split(']').next())
+        .unwrap();
+    let (ok, out, _) = fael(&d, &["find", id, "--branches"]);
+    assert!(
+        ok && out.contains("row A on feat") && out.contains("@feat/x"),
+        "{out}"
+    );
+
     // the read moved nothing: same branch, and nothing outside .fael/
     // touched (find refreshes its rename cache inside .fael/ — that churn
     // predates --branches and is not a checkout)

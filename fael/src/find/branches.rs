@@ -143,13 +143,15 @@ fn batch(wants: &[(String, String, bool)], root: &Path) -> Vec<(String, Vec<u8>,
 /// `(refname, sha)` for branches HEAD does not contain yet — merged branches'
 /// rows are already in the working log, so they need no read. `origin/HEAD`
 /// (a pointer, not a branch) and remote refs pointing at a local tip (a fetch
-/// of our own push) are skipped.
+/// of our own push) are skipped. Local vs remote comes from the full refname,
+/// not from a `/`: a local `feat/x` contains a slash and must still count as
+/// local, or `origin/feat/x` is read a second time.
 fn unmerged_refs(root: &Path) -> Vec<(String, String)> {
     let out = Command::new("git")
         .args([
             "for-each-ref",
             "--no-merged=HEAD",
-            "--format=%(refname:short) %(objectname)",
+            "--format=%(refname) %(refname:short) %(objectname)",
             "refs/heads",
             "refs/remotes",
         ])
@@ -162,20 +164,25 @@ fn unmerged_refs(root: &Path) -> Vec<(String, String)> {
     let mut local_shas = HashSet::new();
     let mut refs = vec![];
     for line in String::from_utf8_lossy(&out.stdout).lines() {
-        let (name, sha) = match line.split_once(' ') {
-            Some((n, s)) if !n.is_empty() && !s.is_empty() => (n.to_string(), s.to_string()),
+        let mut parts = line.splitn(3, ' ');
+        let (full, name, sha) = match (parts.next(), parts.next(), parts.next()) {
+            (Some(f), Some(n), Some(s)) if !f.is_empty() && !n.is_empty() && !s.is_empty() => {
+                (f, n.to_string(), s.to_string())
+            }
             _ => continue,
         };
         if name.ends_with("/HEAD") {
             continue;
         }
-        if !name.contains('/') {
+        let local = full.starts_with("refs/heads/");
+        if local {
             local_shas.insert(sha.clone());
         }
-        refs.push((name, sha));
+        refs.push((local, name, sha));
     }
     refs.into_iter()
-        .filter(|(name, sha)| !name.contains('/') || !local_shas.contains(sha))
+        .filter(|(local, _, sha)| *local || !local_shas.contains(sha))
+        .map(|(_, name, sha)| (name, sha))
         .collect()
 }
 

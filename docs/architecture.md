@@ -3,7 +3,7 @@
 > **Status:** the log format and storage (§2, [format.md](format.md)) are implemented in `fael-core`, and so are
 > `add` `close` `find` `keys` `kickoff` `mv` in the `fael` CLI (`find` and `kickoff` take
 > `--branches` to read unmerged branches without a checkout), `fael mcp`
-> (stdio, 3 tools), `fael hook <stop|session-start|read|edit>` (neutral + claude/codex adapters) with
+> (stdio, 4 tools), `fael hook <stop|session-start|read|edit>` (neutral + claude/codex adapters) with
 > per-machine usage accounting (`fael stats`), `fael install` (Claude Code, Codex, OpenCode),
 > and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11).
 > This page is the contract the code is built against —
@@ -99,7 +99,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 
 | Command | What it does |
 |---|---|
-| `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--urgent\|--urgent-before id] [--supersedes id]` | append a row (`--title` = the ≤15-word headline lists show) |
+| `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--revisit date\|text] [--urgent\|--urgent-before id] [--supersedes id] [--force]` | append a row (`--title` = the ≤15-word headline lists show; `--revisit` = a date `kickoff` surfaces when due, or free text) |
 | `fael close <id> "<why>"` | append a close row |
 | `fael bump <id> [--to who] [--revisit date\|text] [--urgent\|--urgent-before id\|--not-urgent]` | new version of an open row: same text/files, new `to`/`urgent`/`revisit`, superseding the old one |
 | `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--to who] [--all] [--branches] [--full] [--limit N] [--offset M]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies; `--branches` also reads branches not yet merged into HEAD, tagging their rows `@<branch>` without a checkout; a cut list prints the exact next call (`--offset M`) |
@@ -136,13 +136,14 @@ row_tokens = 400
 row_bytes = 10240             # hard cap, never above 10 KiB
 ```
 
-### MCP (3 tools on stdio — each schema is paid for in every session, so the list stays short)
+### MCP (4 tools on stdio — each schema is paid for in every session, so the list stays short)
 
 | Tool | Input | Notes |
 |---|---|---|
-| `find` | `files[]` `text` `key` `kind` `since` `to` `limit` `offset` | read-only, cut to `budget.find_tokens`. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. A cut list prints `next: offset=N` — repeat the call with it |
-| `add` | `kind` `text` `files[]` (required, non-empty) `key?` `to?` `supersedes?` | a bad value is rejected with an error message that says how to fix the call. Its description tells the agent to reuse an anchor `find` already showed rather than invent a new one |
+| `find` | `files[]` `text` `key` `kind` `since` `to` `revisit?` `branches?` `limit` `offset` | read-only, cut to `budget.find_tokens`. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. `branches: true` also reads unmerged branches (rows tagged `@<branch>`). A cut list prints `next: offset=N` — repeat the call with it |
+| `add` | `kind` `text` `files[]` (required, non-empty) `key?` `to?` `title?` `revisit?` `urgent?` `urgent_before?` `supersedes?` `force?` | a bad value is rejected with an error message that says how to fix the call. Its description tells the agent to reuse an anchor `find` already showed rather than invent a new one |
 | `close` | `id` `text` | |
+| `bump` | `id` `to?` `revisit?` `urgent?` `urgent_before?` `not_urgent?` | new version of an open row: same text/files, new routing — text and files never change through bump |
 
 ### Hook protocol
 
