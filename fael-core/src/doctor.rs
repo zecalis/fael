@@ -56,6 +56,10 @@ pub enum Kind {
     /// other session's branch the hard way (row-hygiene chunk 9); judged by
     /// `gh` in `doctor`, never in core
     Merged,
+    /// open rows chunk 3 would have warned about at add time (no key, several
+    /// topics, or long text) — the agent skipped the warning, so `doctor`
+    /// repeats it (row-hygiene chunk 10); judged by `fat_reasons`, never new logic
+    Fat,
 }
 
 #[derive(Debug, Clone)]
