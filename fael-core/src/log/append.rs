@@ -14,8 +14,10 @@ use std::path::{Path, PathBuf};
 pub const MONTH_MAX: u64 = 50 * 1024 * 1024;
 
 /// The open file ends mid-line (no trailing `\n`) — write one before the next
-/// append, or the new row glues onto a torn line. The caller skips empty
-/// files (a backward seek from end fails there); IO errors propagate.
+/// append, or the new row glues onto a torn line. An empty file is an `Err`
+/// (the backward seek fails): `append` checks the length first and propagates
+/// real IO errors; the hook's stop-block file is fail-open, so any `Err` there
+/// just means "no seal".
 /// Shared by `append` and the hook's stop-block file.
 pub fn needs_seal(f: &mut fs::File) -> std::io::Result<bool> {
     let mut last = [0u8];
