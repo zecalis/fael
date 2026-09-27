@@ -1,10 +1,14 @@
 //! The stop event: block the turn when the session did work (edits after
 //! the newest row, or commits when the edit hook saw nothing) but filed no
 //! row — or when the assistant announced a bug with no issue row since.
+//! A bare risk mention never blocks: it joins the work block, or is stashed
+//! for the next push to show once.
 
 use super::markers::{bug_signal_from_transcript, has_bug_marker};
 use super::protocol::{Event, Reply, ctx};
-use super::state::{edits_path, file_birth_ms, now_rfc3339, session_edits, session_key, state_dir};
+use super::state::{
+    edits_path, file_birth_ms, now_rfc3339, risk_path, session_edits, session_key, state_dir,
+};
 use super::usage::record_usage;
 use crate::{core, git};
 use std::path::{Path, PathBuf};
@@ -102,11 +106,14 @@ pub(crate) fn stop(e: &Event) -> Reply {
         }
         _ => None,
     };
+    // an issue filed before the words does not clear them — only one at or
+    // after the match does
+    let match_ms = bug_signal.as_ref().map(|s| s.at_ms).unwrap_or(since_ms);
     let bug_row_since = c
         .log
         .rows
         .iter()
-        .any(|r| r.kind == "issue" && core::ts_ms(&r.ts).is_some_and(|ms| ms >= since_ms));
+        .any(|r| r.kind == "issue" && core::ts_ms(&r.ts).is_some_and(|ms| ms >= match_ms));
     let reason = core::decide_stop(&core::StopFacts {
         stop_active: false,
         edits,
@@ -116,7 +123,17 @@ pub(crate) fn stop(e: &Event) -> Reply {
         bug_signal: bug_signal.clone(),
         bug_row_since,
     });
-    let Some(reason) = reason else { return no() };
+    // a Weak signal with no work block never blocks — stash one line for the
+    // next push in this session (shown once, then deleted), and let through
+    let Some(reason) = reason else {
+        if let Some(sig) = &bug_signal
+            && !sig.strong
+            && !bug_row_since
+        {
+            stash_risk(&c.session, root, &sig.marker);
+        }
+        return no();
+    };
     // once per session per worktree — the second end lets through, as the
     // reason promises; keying on the phrase blocked again per new phrase.
     // A new row opens one more work block, for edits made after it.
@@ -167,6 +184,21 @@ fn walk_jsonl(dir: &Path) -> impl Iterator<Item = PathBuf> {
         }
         None
     })
+}
+
+/// Stash a Weak risk line for the next push in this session — shown once,
+/// then deleted. Empty session = no stash (no push would ever show it).
+fn stash_risk(session: &str, worktree: &Path, marker: &str) {
+    if session.is_empty() {
+        return;
+    }
+    let path = risk_path(session, worktree);
+    if path
+        .parent()
+        .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
+    {
+        let _ = std::fs::write(&path, format!("{marker}\n"));
+    }
 }
 
 /// True when this session already blocked for this worktree + kind — else

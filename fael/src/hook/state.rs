@@ -41,6 +41,21 @@ pub(crate) fn seen_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.seen"))
 }
 
+/// A Weak risk line stashed by stop for the next push — shown once, deleted.
+pub(crate) fn risk_path(session: &str, root: &Path) -> PathBuf {
+    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+    state_dir().join("sessions").join(format!("{key}.risk"))
+}
+
+/// Take the stashed risk note, if any — the file is gone after this call.
+pub(crate) fn take_risk(session: &str, root: &Path) -> Option<String> {
+    let path = risk_path(session, root);
+    let s = std::fs::read_to_string(&path).ok()?;
+    let _ = std::fs::remove_file(&path);
+    let s = s.trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
 /// One `{"path","at"[, "worktree","session"]}` line per edit event, in order —
 /// (path, at ms, worktree, session; None for lines written before those were).
 /// A torn or unreadable line is skipped; any error is an empty list.

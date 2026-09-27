@@ -248,7 +248,10 @@ mod tests {
             ..facts()
         })
         .unwrap();
-        assert!(r.contains("1 file(s) edited") && r.contains("out of sync"), "{r}");
+        assert!(
+            r.contains("1 file(s) edited") && r.contains("out of sync"),
+            "{r}"
+        );
         // an issue since the match quiets the note, not the work
         let r = decide_stop(&StopFacts {
             edits: vec!["src/a.rs".into()],
