@@ -65,6 +65,13 @@ impl Row {
             .or_else(|| self.extra.get("to").and_then(|v| v.as_str()))
     }
 
+    /// The branch this row was filed on: `extra.branch`, stamped by the
+    /// adapter from git (servers leave it absent). Read like `to_who` — the
+    /// branch a row's work belongs to, for the `[Orphan]` doctor check.
+    pub fn branch(&self) -> Option<&str> {
+        self.extra.get("branch").and_then(|v| v.as_str())
+    }
+
     /// When to look at this row again: the `revisit` field, falling back to
     /// a hand-written `revisit` in `extra` (forward-compat read).
     pub fn revisit(&self) -> Option<&str> {

@@ -48,6 +48,10 @@ pub enum Kind {
     /// open rows whose text names a backticked path with no file behind it —
     /// a dead pointer the next reader follows (`files[]` rot stays Gone's)
     Stale,
+    /// open rows filed on a branch whose PR was closed without merge — the
+    /// work likely died with the branch; judged by the `gh` CLI in `doctor`,
+    /// never in core (core never spawns processes)
+    Orphan,
 }
 
 #[derive(Debug, Clone)]
