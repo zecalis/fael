@@ -89,31 +89,9 @@ pub(crate) fn stop(e: &Event) -> Reply {
         vec![]
     };
     // bug rule: a marker in the turn text, or the transcript tail after the
-    // latest user message — with the match timestamp, so only an issue row
-    // at or after the words clears them
-    let bug_signal: Option<core::BugSignal> = match (&e.text, e.session.as_deref()) {
-        (Some(text), _) => has_bug_marker(text).map(|h| core::BugSignal {
-            marker: h.marker,
-            strong: h.strong,
-            at_ms: since_ms,
-        }),
-        (None, Some(t)) if Path::new(t).is_file() => {
-            bug_signal_from_transcript(Path::new(t), since_ms).map(|h| core::BugSignal {
-                marker: h.marker,
-                strong: h.strong,
-                at_ms: h.at_ms,
-            })
-        }
-        _ => None,
-    };
-    // an issue filed before the words does not clear them — only one at or
-    // after the match does
-    let match_ms = bug_signal.as_ref().map(|s| s.at_ms).unwrap_or(since_ms);
-    let bug_row_since = c
-        .log
-        .rows
-        .iter()
-        .any(|r| r.kind == "issue" && core::ts_ms(&r.ts).is_some_and(|ms| ms >= match_ms));
+    // latest user message — cleared only by an issue row at or after the
+    // match, never by one filed before the words
+    let (bug_signal, bug_row_since) = bug_state(e, &c.log, since_ms);
     let reason = core::decide_stop(&core::StopFacts {
         stop_active: false,
         edits,
@@ -157,6 +135,33 @@ pub(crate) fn stop(e: &Event) -> Reply {
         reason: Some(reason),
         context: None,
     }
+}
+
+/// The turn's bug announcement, if any — free text, or the transcript tail
+/// after the latest user message — with whether an issue row at or after the
+/// match already clears it. An issue filed before the words never does.
+fn bug_state(e: &Event, log: &core::Log, since_ms: i64) -> (Option<core::BugSignal>, bool) {
+    let bug_signal: Option<core::BugSignal> = match (&e.text, e.session.as_deref()) {
+        (Some(text), _) => has_bug_marker(text).map(|h| core::BugSignal {
+            marker: h.marker,
+            strong: h.strong,
+            at_ms: since_ms,
+        }),
+        (None, Some(t)) if Path::new(t).is_file() => {
+            bug_signal_from_transcript(Path::new(t), since_ms).map(|h| core::BugSignal {
+                marker: h.marker,
+                strong: h.strong,
+                at_ms: h.at_ms,
+            })
+        }
+        _ => None,
+    };
+    let match_ms = bug_signal.as_ref().map(|s| s.at_ms).unwrap_or(since_ms);
+    let cleared = log
+        .rows
+        .iter()
+        .any(|r| r.kind == "issue" && core::ts_ms(&r.ts).is_some_and(|ms| ms >= match_ms));
+    (bug_signal, cleared)
 }
 
 /// Floor to whole seconds for `git log --since` — flooring can only include

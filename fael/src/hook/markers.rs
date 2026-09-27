@@ -125,12 +125,15 @@ fn strip_quoted(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut in_fence = false;
     for line in text.split_inclusive('\n') {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("```") {
-            in_fence = !in_fence;
+        // a ``` run anywhere opens/closes a fenced block when unpaired on
+        // the line — the marker line itself is never prose worth matching
+        if line.contains("```") {
+            if line.matches("```").count() % 2 == 1 {
+                in_fence = !in_fence;
+            }
             continue;
         }
-        if in_fence || trimmed.starts_with('>') {
+        if in_fence || line.trim_start().starts_with('>') {
             continue;
         }
         out.push_str(&strip_inline_code(line));
@@ -143,7 +146,7 @@ fn strip_inline_code(line: &str) -> String {
     let parts: Vec<&str> = line.split('`').collect();
     let mut out = String::with_capacity(line.len());
     for (i, part) in parts.iter().enumerate() {
-        let tail_after_unpaired = parts.len() % 2 == 0 && i == parts.len() - 1;
+        let tail_after_unpaired = parts.len().is_multiple_of(2) && i == parts.len() - 1;
         if i % 2 == 0 || tail_after_unpaired {
             out.push_str(part);
         }
