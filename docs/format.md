@@ -103,3 +103,16 @@ Reading never fails. Take no lock; for every `*.jsonl` under `log/`:
 - compare `files` after turning `\` into `/` and dropping a leading `./` — legacy rows were not normalised
 
 A row is hidden by default when a close row's `ref` names it, it has a `closed` field, or another row `supersedes` it.
+
+## Versioning
+
+`v` is per row, not per repo — one log holds rows of every version, written by old and new CLIs side by side.
+
+- **Log rows are never migrated.** No tool rewrites a written row to a newer `v`: the log is append-only,
+  in git, union-merged across branches, and teammates on an older CLI keep writing their version.
+  A reader that knows `v2` reads a `v1` row by upcasting it in memory.
+- **Adding an optional field is not a bump.** Old readers keep it (§Readers) — `to` and `urgent` came this way.
+- **Bump `v` only when an old reader would misread a row**: a field changes meaning or type, or a required field
+  is renamed or removed. A new `v` must say how to upcast every older one.
+- **Cache files carry their own `v`** and are rebuilt, never migrated: a reader that sees a cache `v` it doesn't
+  know deletes the cache and rebuilds it from the log and git.
