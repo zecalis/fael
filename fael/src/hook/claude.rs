@@ -86,10 +86,20 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 client,
                 ..Event::default()
             };
-            if let Some(reason) = stop(&e).reason {
+            let r = stop(&e);
+            if let Some(reason) = r.reason {
                 println!(
                     "{}",
                     serde_json::json!({"decision": "block", "reason": reason})
+                );
+            } else if let Some(ctx) = r.context {
+                // a non-blocking line (branch drift) has no `reason` to ride —
+                // Stop accepts additionalContext, so it reaches the agent instead
+                // of dying in a field this adapter never read (review fix)
+                println!(
+                    "{}",
+                    serde_json::json!({"hookSpecificOutput": {
+                        "hookEventName": "Stop", "additionalContext": ctx}})
                 );
             }
             ExitCode::SUCCESS
@@ -98,7 +108,9 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             let p: ClaudeBase = serde_json::from_str(stdin).unwrap_or_default();
             let e = Event {
                 cwd: p.cwd,
-                session: p.session_id,
+                // same key as stop/edit, or session-start's branch baseline lands
+                // under a filename stop never reads (transcript path over session id)
+                session: p.transcript_path.or(p.session_id),
                 client,
                 ..Event::default()
             };
