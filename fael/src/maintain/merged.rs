@@ -35,7 +35,8 @@ pub(super) fn problem(root: &Path) -> Option<core::Problem> {
 }
 
 /// Local branches that are gone upstream (their PR merged) but still sit in
-/// this clone — safe to delete. The current branch and `main` never count.
+/// this clone — safe to delete. The current branch and the default branch
+/// (`origin/HEAD`, else `main`) never count.
 /// One `gh` call total; no `gh`, no auth, or no merged PR → empty, silently.
 fn rows(root: &Path) -> Vec<String> {
     let mut local = vec![];
@@ -51,13 +52,25 @@ fn rows(root: &Path) -> Vec<String> {
         return vec![];
     };
     let current = crate::git(root, &["symbolic-ref", "--short", "-q", "HEAD"]);
+    let default = default_branch(root);
     let mut out: Vec<String> = local
         .into_iter()
         .filter(|b| merged.contains(b))
-        .filter(|b| Some(b) != current.as_ref() && b != "main")
+        .filter(|b| Some(b) != current.as_ref() && *b != default)
         .collect();
     out.sort();
     out
+}
+
+/// The remote's default branch from `origin/HEAD` (set by clone, or
+/// `git remote set-head origin -a`); no remote or no pointer → `main`.
+fn default_branch(root: &Path) -> String {
+    crate::git(
+        root,
+        &["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"],
+    )
+    .and_then(|r| r.strip_prefix("origin/").map(str::to_string))
+    .unwrap_or_else(|| "main".into())
 }
 
 /// Every local branch head, one per line.

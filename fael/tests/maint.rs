@@ -258,6 +258,15 @@ fn doctor_flags_merged_branches() {
     // unparseable answer: skipped silently
     let (ok, out) = doctor(Some("not json"));
     assert!(ok && !out.contains("[Merged]"), "{out}");
+    // the default branch comes from origin/HEAD, not a hardcoded `main`
+    git(&["branch", "develop"]);
+    git(&[
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/develop",
+    ]);
+    let (ok, out) = doctor(Some(r#"[{"headRefName":"develop"}]"#));
+    assert!(ok && !out.contains("[Merged]"), "{out}");
     // no seam: the real gh in a remote-less repo fails -> skipped silently
     let (ok, out) = doctor(None);
     assert!(ok && !out.contains("[Merged]"), "{out}");
