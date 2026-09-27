@@ -83,7 +83,7 @@ pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize
 }
 
 /// The chunk-3 fat-row conditions as reason bodies (no `warning: ` prefix):
-/// a decision with no key, `;`/`·` joining topics, text over `warn.row_tokens`.
+/// a decision with no key, `·`/`;` joining topics, text over `warn.row_tokens`.
 /// `warnings` renders these at add time; `doctor [Fat]` reuses them for open
 /// rows — one function so the two never drift apart.
 pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
@@ -96,10 +96,12 @@ pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
                 .into(),
         );
     }
-    // `;`/`·` join decisions the way `.` joins sentences: two or more
-    // usually means several topics in one row — split it, don't trim it
-    let seps = row.text.chars().filter(|c| matches!(c, ';' | '·')).count();
-    if seps >= 2 {
+    // `·` joins topics — two of them is a list of topics. `;` is also plain
+    // English clause punctuation inside one topic, so it takes three
+    // separators in all before the row reads as several topics
+    let mid = row.text.chars().filter(|&c| c == '·').count();
+    let seps = mid + row.text.chars().filter(|&c| c == ';').count();
+    if mid >= 2 || seps >= 3 {
         r.push(format!(
             "text has {seps} topic separators (; / ·) — one topic per row: split it, \
 each with --key area:topic, so one can be superseded alone"
