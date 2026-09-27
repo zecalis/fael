@@ -34,6 +34,16 @@ Tests that spawn the binary pass `FAEL_STATE_DIR` to the child with `Command::en
 `std::env::set_var` — the env is process-global, so setting it forces every test in the
 binary behind a lock and plain `cargo test` goes serial.
 
+### Tests must build and run on Windows
+
+CI runs the suite on Linux, macOS and Windows. Two rules:
+
+- **No fake binaries on `PATH`.** A shell-script fake needs a shebang and `chmod`, and Windows
+  `CreateProcess` never resolves a `.bat` fake off `PATH`. Stub an external tool through an env
+  seam the code reads instead, the way `FAEL_GH_JSON` stands in for `gh`.
+- **Unix-only APIs gate the whole test.** Anything from `std::os::unix` goes in a test marked
+  `#[cfg(unix)]` (see `fael/tests/install.rs`). Do not gate single lines inside a shared test.
+
 ## Before submitting
 
 The same checks CI runs:
@@ -43,6 +53,14 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 scripts/file-size.sh              # no .rs file over 400 lines
 cargo test --workspace --locked
+```
+
+Also type-check for Windows, so a stray `std::os::unix` fails here instead of in CI.
+It needs no MSVC linker and takes a few seconds:
+
+```bash
+rustup target add x86_64-pc-windows-msvc   # once
+cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings
 ```
 
 - **Conventional commits** — `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ci:`, `chore:`
