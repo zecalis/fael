@@ -100,7 +100,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 |---|---|
 | `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--urgent\|--urgent-before id] [--supersedes id]` | append a row (`--title` = the ≤15-word headline lists show) |
 | `fael close <id> "<why>"` | append a close row |
-| `fael bump <id> [--to who] [--urgent\|--urgent-before id\|--not-urgent]` | new version of an open row: same text/files, new `to`/`urgent`, superseding the old one |
+| `fael bump <id> [--to who] [--revisit date\|text] [--urgent\|--urgent-before id\|--not-urgent]` | new version of an open row: same text/files, new `to`/`urgent`/`revisit`, superseding the old one |
 | `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--to who] [--all] [--full] [--limit N] [--offset M]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies; a cut list prints the exact next call (`--offset M`) |
 | `fael keys [glob]` | list keys, with a count and last use for each — to reuse a key that already exists |
 | `fael mv <old> <new>` | record a move git can't see — an anchor, an uncommitted rewrite, or one file split into several (one old path may point at many new ones). Adds matches only, never hides a row |
