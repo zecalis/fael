@@ -98,7 +98,9 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             let p: ClaudeBase = serde_json::from_str(stdin).unwrap_or_default();
             let e = Event {
                 cwd: p.cwd,
-                session: p.session_id,
+                // same key as stop/edit, or session-start's branch baseline lands
+                // under a filename stop never reads (transcript path over session id)
+                session: p.transcript_path.or(p.session_id),
                 client,
                 ..Event::default()
             };
