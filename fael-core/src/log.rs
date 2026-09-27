@@ -107,6 +107,16 @@ pub(crate) fn dedupe_ids(rows: &mut Vec<Row>) {
     rows.retain(|r| r.id.is_empty() || seen.insert(r.id.clone()));
 }
 
+/// `yyyy-mm`, nothing else — the one predicate behind `month_of` (file
+/// stems), `append` (row timestamps) and the CLI's `--before`.
+pub fn is_month(s: &str) -> bool {
+    s.len() == 7
+        && s.as_bytes()[4] == b'-'
+        && s.bytes()
+            .enumerate()
+            .all(|(i, c)| i == 4 || c.is_ascii_digit())
+}
+
 /// `log/<writer>/<yyyy-mm>[.close].jsonl` → the month; anything else → None
 /// (compact files and imports never match, so they are never rewritten).
 pub(crate) fn month_of(path: &Path) -> Option<String> {
@@ -115,13 +125,7 @@ pub(crate) fn month_of(path: &Path) -> Option<String> {
         .strip_suffix(".jsonl")?
         .strip_suffix(".close")
         .unwrap_or(name.strip_suffix(".jsonl")?);
-    let ok = stem.len() == 7
-        && stem.as_bytes()[4] == b'-'
-        && stem
-            .bytes()
-            .enumerate()
-            .all(|(i, c)| i == 4 || c.is_ascii_digit());
-    ok.then(|| stem.to_string())
+    is_month(stem).then(|| stem.to_string())
 }
 
 /// Keep `.fael/.lock` out of git (format.md §Layout): whoever takes the lock
@@ -336,13 +340,7 @@ pub fn append(fael: &Path, row: &Row, is_close: bool) -> Result<PathBuf, String>
     if by.is_empty() || by.starts_with(['_', '.']) || by.contains(['/', '\\']) {
         return Err(format!("rejected: writer id {by:?} is not a folder name"));
     }
-    let month = row.ts.get(..7).filter(|m| {
-        let b = m.as_bytes();
-        b[4] == b'-'
-            && b.iter()
-                .enumerate()
-                .all(|(i, c)| i == 4 || c.is_ascii_digit())
-    });
+    let month = row.ts.get(..7).filter(|m| is_month(m));
     let Some(month) = month else {
         return Err(format!("rejected: ts {:?} is not RFC 3339", row.ts));
     };

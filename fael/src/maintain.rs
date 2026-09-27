@@ -258,12 +258,7 @@ pub fn compact(a: &Args) -> Result<ExitCode, String> {
 }
 
 fn valid_month(b: &str) -> Result<(), String> {
-    let ok = b.len() == 7
-        && b.as_bytes()[4] == b'-'
-        && b.bytes()
-            .enumerate()
-            .all(|(i, c)| i == 4 || c.is_ascii_digit());
-    if ok {
+    if core::is_month(b) {
         Ok(())
     } else {
         Err(format!(
