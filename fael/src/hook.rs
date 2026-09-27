@@ -9,11 +9,14 @@
 //! `protocol` (neutral Event/Reply + shared ctx), `claude` (client adapters),
 //! `stop` (turn-end work/bug rule), `session` (session-start kickoff),
 //! `push` (read/edit context), `state` (per-machine session files),
-//! `usage` (SPEC §8 accounting + `stats`), `markers` (bug phrases).
+//! `usage` (SPEC §8 accounting + `stats`), `asks` (chunk-3a ask types +
+//! real tokens), `markers` (bug phrases).
 //!
 //! The hook always exits 0. Any internal error is an empty Reply (let the
 //! turn through) — a memory tool must never break the agent's tool call.
 
+mod asks;
+mod askstats;
 mod claude;
 mod markers;
 mod protocol;
@@ -23,6 +26,7 @@ mod state;
 mod stop;
 mod usage;
 
+pub(crate) use asks::{ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp};
 pub(crate) use protocol::cmd;
 pub(crate) use usage::stats;
 

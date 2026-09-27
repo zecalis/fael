@@ -1,6 +1,7 @@
 //! The read/edit push: resolve renames through the L1 cache only (no git
 //! spawn on this path), record the edit, and say each row once per session.
 
+use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
 use super::state::{edits_path, record_edits, seen_path, take_risk};
 use super::usage::record_usage;
@@ -99,7 +100,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         // a stashed risk still gets its one line, even with no rows to join
         if let Some(marker) = risk {
             let context = risk_line(&marker, &files);
-            record_usage(&c.client, event, &c.repo.root, &context, &[]);
+            let meta = hook_meta(&c.session, None, true);
+            record_usage(&c.client, event, &c.repo.root, &context, &[], &meta);
             return Reply {
                 block: false,
                 reason: None,
@@ -133,7 +135,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         Some(marker) => format!("{context}\n{}", risk_line(&marker, &files)),
         None => context,
     };
-    record_usage(&c.client, event, &c.repo.root, &context, &shown);
+    let meta = hook_meta(&c.session, None, true);
+    record_usage(&c.client, event, &c.repo.root, &context, &shown, &meta);
     Reply {
         block: false,
         reason: None,
