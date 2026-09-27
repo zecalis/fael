@@ -98,6 +98,46 @@ fn doctor_fails_without_union_then_fix_repairs() {
 }
 
 #[test]
+fn doctor_flags_stale_backtick_paths() {
+    let d = repo();
+    std::fs::write(d.join("keep.yaml"), "").unwrap();
+    std::fs::write(d.join("src/a.rs"), "").unwrap();
+    // the row files a live file; the backticked pointer is prose, not files[]
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "catalog ใน `keep.yaml`",
+            "--files",
+            "src/a.rs",
+        ],
+    );
+    assert!(ok, "{err}");
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Stale]"), "{out}");
+    // the file goes away, the pointer stays: Stale names the row id
+    std::fs::remove_file(d.join("keep.yaml")).unwrap();
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(
+        out.contains("note [Stale]: 1 open row(s)") && out.contains("→ keep.yaml"),
+        "{out}"
+    );
+    // talk in backticks (no path) never flags
+    fael(
+        &d,
+        &["add", "note", "run `merge=union` after", "--files", "src"],
+    );
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(
+        out.contains("note [Stale]: 1 open row(s)") && !out.contains("merge=union"),
+        "{out}"
+    );
+}
+
+#[test]
 fn doctor_quarantines_a_broken_line() {
     let d = repo();
     let (ok, _, err) = fael(&d, &["add", "decision", "keep me", "--files", "src/a.rs"]);

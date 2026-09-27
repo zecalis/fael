@@ -4,12 +4,13 @@
 //! Thin entry only — the filter type lives here, the verbs in `query/`:
 //! `select` (find/brief/kickoff/push/gone over row sets), `matching` (path and
 //! glob primitives), `render` (token-budgeted markdown), `lookup` (resolve,
-//! keys, query, warnings).
+//! keys, query, warnings), `stale` (backticked paths gone from disk).
 
 mod lookup;
 mod matching;
 mod render;
 mod select;
+mod stale;
 
 pub use lookup::{KeyUse, keys, query, resolve, warnings};
 pub use matching::glob;
@@ -18,6 +19,7 @@ pub use select::{
     Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, gone, gone_files, kickoff, page,
     push, ranked, resolve_urgent, superseded,
 };
+pub use stale::{backtick_paths, stale_refs};
 
 /// What `find` narrows by. Every field is optional; `files` holds normalised refs.
 #[derive(Debug, Default, Clone)]

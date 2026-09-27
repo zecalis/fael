@@ -45,6 +45,9 @@ pub enum Kind {
     /// open rows that still name a file that no longer exists — they push,
     /// but likely describe the repo as it was
     PartGone,
+    /// open rows whose text names a backticked path with no file behind it —
+    /// a dead pointer the next reader follows (`files[]` rot stays Gone's)
+    Stale,
 }
 
 #[derive(Debug, Clone)]
