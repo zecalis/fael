@@ -138,6 +138,67 @@ fn doctor_flags_stale_backtick_paths() {
 }
 
 #[test]
+fn doctor_flags_orphan_branches() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = repo();
+    // file the row on a doomed branch: the stamp comes from git, never flags
+    assert!(
+        Command::new("git")
+            .args(["checkout", "-b", "feat/doomed"])
+            .current_dir(&d)
+            .status()
+            .unwrap()
+            .success()
+    );
+    std::fs::write(d.join("src/a.rs"), "").unwrap();
+    let (ok, _, err) = fael(&d, &["add", "note", "doomed work", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // a fake gh first on PATH: each phase rewrites what it reports
+    let bin = d.join("fakebin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    let script = |body: &str| {
+        std::fs::write(&gh, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    let doctor = || {
+        let path = format!(
+            "{}:{}",
+            bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let o = Command::new(env!("CARGO_BIN_EXE_fael"))
+            .args(["doctor"])
+            .current_dir(&d)
+            .env("PATH", path)
+            .output()
+            .unwrap();
+        (
+            o.status.success(),
+            String::from_utf8_lossy(&o.stdout).into_owned(),
+        )
+    };
+    // the PR closed unmerged: Orphan names the branch (text and json)
+    script("echo '[{\"mergedAt\":null}]'");
+    let (ok, out) = doctor();
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("note [Orphan]: 1 open row(s)") && out.contains("feat/doomed"),
+        "{out}"
+    );
+    // merged after all: silent
+    script("echo '[{\"mergedAt\":\"2026-09-27T04:50:08Z\"}]'");
+    let (ok, out) = doctor();
+    assert!(ok && !out.contains("[Orphan]"), "{out}");
+    // gh failing (no auth, no binary on a bare PATH): skipped silently
+    script("exit 1");
+    let (ok, out) = doctor();
+    assert!(ok && !out.contains("[Orphan]"), "{out}");
+}
+
+#[test]
 fn doctor_quarantines_a_broken_line() {
     let d = repo();
     let (ok, _, err) = fael(&d, &["add", "decision", "keep me", "--files", "src/a.rs"]);

@@ -351,3 +351,35 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
     }
     Ok(ExitCode::SUCCESS)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::pr_all_unmerged;
+
+    #[test]
+    fn orphan_parses_gh_merged_at() {
+        assert_eq!(pr_all_unmerged("[]"), None); // no closed PR: nothing to say
+        assert_eq!(pr_all_unmerged("not json"), None);
+        assert_eq!(pr_all_unmerged("{}"), None);
+        assert_eq!(
+            pr_all_unmerged(r#"[{"mergedAt":null}]"#),
+            Some(true) // closed unmerged: orphan
+        );
+        assert_eq!(
+            pr_all_unmerged(r#"[{"number":1}]"#),
+            Some(true) // key missing entirely: orphan
+        );
+        assert_eq!(
+            pr_all_unmerged(r#"[{"mergedAt":"0001-01-01T00:00:00Z"}]"#),
+            Some(true) // gh zero time: orphan
+        );
+        assert_eq!(
+            pr_all_unmerged(r#"[{"mergedAt":"2026-09-27T04:50:08Z"}]"#),
+            Some(false) // merged: not orphan
+        );
+        assert_eq!(
+            pr_all_unmerged(r#"[{"mergedAt":null},{"mergedAt":"2026-09-27T04:50:08Z"}]"#),
+            Some(false) // one of them landed: not orphan
+        );
+    }
+}
