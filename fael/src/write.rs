@@ -21,6 +21,20 @@ pub(crate) struct AddOpts {
     pub force: bool,
 }
 
+/// `--revisit` on `add`/`bump` always needs a value — bare `--revisit` only
+/// filters on `find`. Shared by the CLI entry and `bump` so the two never
+/// drift apart.
+pub(crate) fn parse_revisit(has: bool, one: Option<String>) -> Result<Option<String>, String> {
+    match (has, one) {
+        (false, _) => Ok(None),
+        (true, Some(v)) => Ok(Some(v)),
+        (true, None) => Err(
+            "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
+                .into(),
+        ),
+    }
+}
+
 /// Normalise files against cwd, then core's add path — shared by the CLI and MCP.
 /// No files: inherit the files this session edited (after the newest row);
 /// still empty without a hook session, and core keeps rejecting that.
@@ -126,16 +140,7 @@ pub(crate) fn bump(
         }
     };
     // bare `--revisit` names no date or text — that only filters on `find`
-    let revisit = match (a.has("revisit"), a.one("revisit")) {
-        (false, _) => None,
-        (true, Some(v)) => Some(v),
-        (true, None) => {
-            return Err(
-                "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
-                    .into(),
-            );
-        }
-    };
+    let revisit = parse_revisit(a.has("revisit"), a.one("revisit"))?;
     let log = crate::read(r);
     core::bump_row(
         &r.fael,
