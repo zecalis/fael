@@ -55,35 +55,11 @@ pub(crate) fn branch_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.branch"))
 }
 
-/// The checked-out branch, read straight from `.git/HEAD` — no git spawn on
-/// this path (read/edit push must stay spawn-free; session-start already
-/// spawns elsewhere, stop only here). A worktree's `.git` is a file pointing
-/// at the real git dir; a raw sha (detached HEAD) is None — unknown, silent.
-pub(crate) fn head_branch(root: &Path) -> Option<String> {
-    let dot = root.join(".git");
-    let head = if dot.is_dir() {
-        dot.join("HEAD")
-    } else {
-        let gitdir = std::fs::read_to_string(&dot)
-            .ok()?
-            .strip_prefix("gitdir:")?
-            .trim()
-            .to_string();
-        let dir = PathBuf::from(&gitdir);
-        let dir = if dir.is_absolute() {
-            dir
-        } else {
-            root.join(dir)
-        };
-        dir.join("HEAD")
-    };
-    let content = std::fs::read_to_string(head).ok()?;
-    content
-        .strip_prefix("ref:")?
-        .trim()
-        .strip_prefix("refs/heads/")
-        .map(String::from)
-}
+/// The checked-out branch, read straight from `<gitdir>/HEAD` — no git spawn
+/// on this path (read/edit push must stay spawn-free; session-start already
+/// spawns elsewhere, stop only here). Lives in `journal` beside the git-dir
+/// traversal the journal root uses too, so the two cannot drift.
+pub(crate) use crate::journal::head_branch;
 
 /// Per-session files untouched this long are dead: a resumed session only
 /// loses its seen ids (rows push again) and its start branch (drift stays

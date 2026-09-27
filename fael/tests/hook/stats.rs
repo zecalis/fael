@@ -145,3 +145,37 @@ fn stats_rows_shows_pushes_status_and_noise() {
         "{out}"
     );
 }
+
+#[test]
+fn stats_rows_sees_local_store_journal_rows() {
+    // store = "local" keeps every row in the journal, never the tree log —
+    // stats must read the same union the hooks do, or every status is unknown
+    let d = repo();
+    let state = d.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "store = \"local\"\n").unwrap();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "decision", "journal only", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    assert!(
+        !d.join(".fael/log").exists(),
+        "local mode must not write the tree log"
+    );
+    let line = format!(
+        r#"{{"ts":"2026-09-26T00:00:00.000Z","repo":{},"client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["{id}"]}}"#,
+        json(&d)
+    );
+    std::fs::write(state.join("usage.jsonl"), format!("{line}\n")).unwrap();
+    let (ok, out, _) = fael_at(&state, &d, &["stats", "--rows"], "");
+    assert!(ok, "{out}");
+    assert!(
+        out.contains(&format!("row {id}: pushed ×1 (open)")),
+        "{out}"
+    );
+}

@@ -3,32 +3,49 @@
 //! point of `add`); the tree (`.fael/log`) is the transport on top of it, so a
 //! deleted branch, a worktree or a gitignore never takes rows with it.
 //!
-//! No spawns for the union itself: the common dir is read off `.git` (a dir,
-//! or the `gitdir:` pointer of a worktree/submodule), never `git rev-parse` —
-//! the read/edit push shares this path and owns a 5 ms ceiling with no spawn
-//! in it. Only the `@branch` tags cost one spawn (the current branch), so
-//! only `find`/`kickoff` take them.
+//! No spawns at all: the common dir and the current branch are read off `.git`
+//! (a dir, or the `gitdir:` pointer of a worktree/submodule), never `git
+//! rev-parse`/`symbolic-ref` — the read/edit push shares this path and owns a
+//! 5 ms ceiling with no spawn in it, so the hooks take the `@branch` tags too.
 
 use crate::find::branches::BranchMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+
+/// This checkout's git dir — `.git` itself in a plain repo, or the `gitdir:`
+/// target of a worktree/submodule's `.git` file. Spawn-free (the read/edit
+/// push path must not fork `git`). `None` when `.git` is missing or unreadable.
+fn git_dir(repo_root: &Path) -> Option<PathBuf> {
+    let dot = repo_root.join(".git");
+    if dot.is_dir() {
+        return Some(dot);
+    }
+    let body = std::fs::read_to_string(&dot).ok()?;
+    let g = body.strip_prefix("gitdir:")?.trim();
+    Some(if Path::new(g).is_absolute() {
+        PathBuf::from(g)
+    } else {
+        repo_root.join(g)
+    })
+}
+
+/// The checked-out branch, read straight from `<gitdir>/HEAD` — no git spawn.
+/// A raw sha (detached HEAD) is `None`; so is a repo without `.git`.
+pub(crate) fn head_branch(repo_root: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(git_dir(repo_root)?.join("HEAD")).ok()?;
+    content
+        .strip_prefix("ref:")?
+        .trim()
+        .strip_prefix("refs/heads/")
+        .map(String::from)
+}
 
 /// `<common>/fael` — the journal root all worktrees of this clone share.
 /// `None` without git (then the tree is all there is) or when `.git` is
 /// unreadable. A linked worktree's pointer ends in `worktrees/<name>`, whose
 /// grandparent is the common dir; anything else (submodule, plain dir) is its own.
 pub(crate) fn root(repo_root: &Path) -> Option<PathBuf> {
-    let dot = repo_root.join(".git");
-    if dot.is_dir() {
-        return Some(dot.join("fael"));
-    }
-    let body = std::fs::read_to_string(&dot).ok()?;
-    let g = body.strip_prefix("gitdir:")?.trim();
-    let g = if Path::new(g).is_absolute() {
-        PathBuf::from(g)
-    } else {
-        repo_root.join(g)
-    };
+    let g = git_dir(repo_root)?;
     let common = if g
         .parent()
         .and_then(|p| p.file_name())
@@ -81,7 +98,7 @@ pub(crate) fn read(r: &crate::Repo) -> (crate::core::Log, BranchMap) {
     if only.is_empty() {
         return (log, BranchMap::new());
     }
-    let cur = crate::git(&r.root, &["symbolic-ref", "--short", "-q", "HEAD"]);
+    let cur = head_branch(&r.root);
     let mut tags = BranchMap::new();
     for row in &log.rows {
         if only.contains(&row.id)

@@ -372,7 +372,9 @@ fn mv(a: &Args, old: &str, new: &str) -> Result<(), String> {
             "rejected: {from} → {to} is already recorded — `fael find --files {to}` shows the rows"
         ));
     }
-    let (row, _) = core::mv_row(&r.fael, r.journal.as_deref(), &r.cfg, &stamp(&r), from, to)?;
+    let (row, _, warns) =
+        core::mv_row(&r.fael, r.journal.as_deref(), &r.cfg, &stamp(&r), from, to)?;
+    warns.iter().for_each(|w| eprintln!("{w}"));
     if a.has("json") {
         println!("{}", row.to_line());
     } else {
