@@ -103,10 +103,11 @@ fn root_relative(r: &crate::Repo, args: &[String], files: &mut [String]) -> Vec<
     warns
 }
 
-/// `fael bump <id>` — change routing/urgency as a new version: same
-/// kind/text/files/key, new `to`/`urgent`, superseding the old row. At most
-/// one of `--urgent` (back of the queue), `--urgent-before <id>` (just above
-/// that row), `--not-urgent` (leave the queue); none keeps the old number.
+/// `fael bump <id>` — change routing/urgency/revisit as a new version: same
+/// kind/text/files/key, new `to`/`urgent`/`revisit`, superseding the old row.
+/// At most one of `--urgent` (back of the queue), `--urgent-before <id>`
+/// (just above that row), `--not-urgent` (leave the queue); none keeps the
+/// old number. Absent `--revisit` keeps the old date/text; a value sets it.
 pub(crate) fn bump(
     r: &crate::Repo,
     a: &crate::Args,
@@ -124,6 +125,17 @@ pub(crate) fn bump(
             );
         }
     };
+    // bare `--revisit` names no date or text — that only filters on `find`
+    let revisit = match (a.has("revisit"), a.one("revisit")) {
+        (false, _) => None,
+        (true, Some(v)) => Some(v),
+        (true, None) => {
+            return Err(
+                "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
+                    .into(),
+            );
+        }
+    };
     let log = crate::read(r);
     core::bump_row(
         &r.fael,
@@ -131,8 +143,11 @@ pub(crate) fn bump(
         &r.cfg,
         &crate::stamp(r),
         id,
-        a.one("to"),
-        urgent,
+        core::BumpOpts {
+            to: a.one("to"),
+            urgent,
+            revisit,
+        },
     )
 }
 
