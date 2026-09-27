@@ -2,6 +2,8 @@
 //! (SPEC §6, §11). Thin adapters: the repo is resolved here, the rules live
 //! in `fael-core` so a hosted server calls the same entry points.
 
+mod orphan;
+
 use crate::{Args, core, repo};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -123,7 +125,7 @@ fn open_row_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core:
     }
     // orphaned branches: open rows filed where the PR died unmerged, so the
     // next reader keeps following work that will never land
-    let orphan = orphan_rows(log);
+    let orphan = orphan::rows(log);
     if !orphan.is_empty() {
         let n: usize = orphan.iter().map(|(_, ids)| ids.len()).sum();
         let eg: Vec<String> = orphan
@@ -158,70 +160,6 @@ fn stale_rows(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<String> {
                 .then(|| format!("{} → {}", &row.id[..w.min(row.id.len())], refs.join(", ")))
         })
         .collect()
-}
-
-/// `branch → short-id(s)` for every branch on open rows whose closed PRs all
-/// went unmerged (row-hygiene chunk 6). One `gh` call per branch; no `gh`,
-/// no auth, or no closed PR for the branch → skipped silently, never an error
-/// (core never spawns processes, so the `gh` half lives here, not in core).
-fn orphan_rows(log: &core::Log) -> Vec<(String, Vec<String>)> {
-    let w = core::abbrev(log);
-    let mut by_branch: std::collections::BTreeMap<String, Vec<String>> =
-        std::collections::BTreeMap::new();
-    for row in core::find(log, &core::Filter::default()) {
-        if let Some(b) = row.branch().filter(|b| !b.is_empty()) {
-            by_branch
-                .entry(b.to_string())
-                .or_default()
-                .push(row.id[..w.min(row.id.len())].to_string());
-        }
-    }
-    by_branch
-        .into_iter()
-        .filter(|(b, _)| pr_closed_unmerged(b).is_some_and(|u| u))
-        .collect()
-}
-
-/// None = unknown (no `gh`, it failed, or no closed PR off this branch);
-/// Some(true) = every closed PR off this branch went unmerged.
-///
-/// `FAEL_GH_JSON` short-circuits the spawn with canned output (tests only —
-/// Windows `CreateProcess` never resolves a `.bat` fake off PATH, and CI
-/// runners ship a real `gh` that answers on its own, so no fake survives
-/// there; cf. `FAEL_STATE_DIR`).
-fn pr_closed_unmerged(branch: &str) -> Option<bool> {
-    if let Ok(fake) = std::env::var("FAEL_GH_JSON") {
-        return pr_all_unmerged(&fake);
-    }
-    let out = std::process::Command::new("gh")
-        .args([
-            "pr", "list", "--state", "closed", "--head", branch, "--json", "mergedAt", "--limit",
-            "100",
-        ])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    pr_all_unmerged(&String::from_utf8_lossy(&out.stdout))
-}
-
-/// Pure half of the above: None on unparseable output or an empty list (no
-/// closed PR → nothing to say), else whether every listed PR is unmerged.
-/// A missing/null `mergedAt` is unmerged; so is gh's zero time `0001-…`.
-fn pr_all_unmerged(json: &str) -> Option<bool> {
-    let ps = serde_json::from_str::<serde_json::Value>(json)
-        .ok()?
-        .as_array()?
-        .clone();
-    if ps.is_empty() {
-        return None;
-    }
-    Some(ps.iter().all(|p| match p.get("mergedAt") {
-        None | Some(serde_json::Value::Null) => true,
-        Some(serde_json::Value::String(s)) => s.starts_with("0001-"),
-        _ => false,
-    }))
 }
 
 fn show(rep: &core::DoctorReport, json: bool) {
@@ -358,36 +296,4 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
         );
     }
     Ok(ExitCode::SUCCESS)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::pr_all_unmerged;
-
-    #[test]
-    fn orphan_parses_gh_merged_at() {
-        assert_eq!(pr_all_unmerged("[]"), None); // no closed PR: nothing to say
-        assert_eq!(pr_all_unmerged("not json"), None);
-        assert_eq!(pr_all_unmerged("{}"), None);
-        assert_eq!(
-            pr_all_unmerged(r#"[{"mergedAt":null}]"#),
-            Some(true) // closed unmerged: orphan
-        );
-        assert_eq!(
-            pr_all_unmerged(r#"[{"number":1}]"#),
-            Some(true) // key missing entirely: orphan
-        );
-        assert_eq!(
-            pr_all_unmerged(r#"[{"mergedAt":"0001-01-01T00:00:00Z"}]"#),
-            Some(true) // gh zero time: orphan
-        );
-        assert_eq!(
-            pr_all_unmerged(r#"[{"mergedAt":"2026-09-27T04:50:08Z"}]"#),
-            Some(false) // merged: not orphan
-        );
-        assert_eq!(
-            pr_all_unmerged(r#"[{"mergedAt":null},{"mergedAt":"2026-09-27T04:50:08Z"}]"#),
-            Some(false) // one of them landed: not orphan
-        );
-    }
 }
