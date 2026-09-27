@@ -161,10 +161,45 @@ fn add_find_close_round_trip() {
         "{out}"
     );
 
-    for flag in ["--version", "-V", "-v"] {
+    for flag in ["--version", "-v"] {
         let (ok, out, _) = fael(&d, &[flag]);
         assert!(ok && out.starts_with("fael "), "{flag}: {out}");
     }
+    // -V is gone: a capital V is an unknown command, not a version flag
+    let (ok, _, err) = fael(&d, &["-V"]);
+    assert!(!ok && err.contains("unknown command"), "{err}");
+}
+
+#[test]
+fn per_command_help_and_short_errors() {
+    let d = repo();
+    // `fael <cmd> --help` shows only that command's section
+    for args in [&["find", "--help"][..], &["find", "-h"][..]] {
+        let (ok, out, err) = fael(&d, args);
+        assert!(ok, "{args:?} {err}");
+        assert!(out.contains("fael find"), "{out}");
+        assert!(!out.contains("fael mv"), "{out}");
+    }
+    // the full help lists every command plus global options and examples
+    for args in [&["--help"][..], &["-h"][..], &["help"][..], &[][..]] {
+        let (ok, out, err) = fael(&d, args);
+        assert!(ok, "{args:?} {err}");
+        assert!(
+            out.contains("commands:")
+                && out.contains("mv <old> <new>")
+                && out.contains("global options:")
+                && out.contains("examples:"),
+            "{out}"
+        );
+    }
+    // an unknown command or flag is one short line pointing at --help,
+    // never a full usage dump on stderr
+    let (ok, _, err) = fael(&d, &["frobnicate"]);
+    assert!(!ok && err.contains("unknown command"), "{err}");
+    assert!(!err.contains("commands:"), "{err}");
+    let (ok, _, err) = fael(&d, &["find", "--nope"]);
+    assert!(!ok && err.contains("unknown flag"), "{err}");
+    assert!(!err.contains("commands:"), "{err}");
 }
 
 #[test]

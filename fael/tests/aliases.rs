@@ -316,11 +316,18 @@ fn mv_file_resolves_doctor_gone() {
 #[test]
 fn help_exits_zero_and_lists_mv() {
     let d = repo();
-    for args in [&["--help"][..], &["help"][..], &["find", "--help"][..]] {
+    for args in [&["--help"][..], &["help"][..]] {
         let (ok, out, err) = fael(&d, args, "");
         assert!(ok, "{args:?} {err}");
-        assert!(out.contains("fael mv"), "{out}");
+        assert!(out.contains("mv <old> <new>"), "{out}");
     }
+    // one command's help shows only that command
+    let (ok, out, err) = fael(&d, &["find", "--help"], "");
+    assert!(ok, "{err}");
+    assert!(
+        out.contains("fael find") && !out.contains("fael mv"),
+        "{out}"
+    );
 }
 
 #[test]
