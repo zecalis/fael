@@ -2,7 +2,7 @@
 //! and the one-line warning when `.fael/log` is gitignored by mistake.
 
 use super::protocol::{Event, Reply, ctx};
-use super::state::{session_key, state_dir};
+use super::state::{branch_path, head_branch, session_key, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
@@ -23,6 +23,20 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         Some(c) => c,
         None => return no(),
     };
+    // the branch this session started on, for stop's drift warning — written
+    // before anything can return, even with no log yet; empty session (no key
+    // for the file) and detached HEAD (no branch) record nothing
+    if !c.session.is_empty()
+        && let Some(branch) = head_branch(&c.repo.root)
+    {
+        let path = branch_path(&c.session, &c.repo.root);
+        if path
+            .parent()
+            .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
+        {
+            let _ = std::fs::write(&path, format!("{branch}\n"));
+        }
+    }
     // once per session: pick up renames committed since the last session, so
     // the read/edit push (which never spawns git) resolves them — and kickoff
     // keeps rows whose files were merely renamed

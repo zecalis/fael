@@ -7,13 +7,64 @@
 use super::markers::{bug_signal_from_transcript, has_bug_marker};
 use super::protocol::{Event, Reply, ctx};
 use super::state::{
-    edits_path, file_birth_ms, now_rfc3339, risk_path, session_edits, session_key, state_dir,
+    branch_path, edits_path, file_birth_ms, head_branch, now_rfc3339, risk_path, session_edits,
+    session_key, state_dir,
 };
 use super::usage::record_usage;
 use crate::{core, git};
 use std::path::{Path, PathBuf};
 
+/// The stop event, plus the branch-drift warning (row-hygiene chunk 9): when
+/// HEAD moved since session-start — another session checked out its own
+/// branch in this same worktree — one line says so. Never blocks, never
+/// fires without a session-start baseline.
 pub(crate) fn stop(e: &Event) -> Reply {
+    let mut r = stop_inner(e);
+    if let Some(line) = drift_line(e) {
+        if r.block {
+            r.reason = Some(match r.reason.take() {
+                Some(reason) => format!("{reason}\n{line}"),
+                None => line,
+            });
+        } else {
+            r.context = Some(match r.context.take() {
+                // stop sets no context of its own, but stay append-safe
+                Some(context) => format!("{context}{line}\n"),
+                None => format!("{line}\n"),
+            });
+        }
+    }
+    r
+}
+
+/// `Some(line)` when the session started on another branch than the one
+/// checked out now. No session, no repo, no baseline file (older sessions),
+/// or an unreadable HEAD = None, silently.
+fn drift_line(e: &Event) -> Option<String> {
+    let session = e.session.as_deref().filter(|s| !s.is_empty())?;
+    let cwd = e
+        .cwd
+        .as_deref()
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())?;
+    let repo = crate::repo_at(&cwd).ok()?;
+    let start = std::fs::read_to_string(branch_path(session, &repo.root))
+        .ok()?
+        .trim()
+        .to_string();
+    if start.is_empty() {
+        return None;
+    }
+    let now = head_branch(&repo.root)?;
+    (start != now).then(|| {
+        format!(
+            "fael: branch changed mid-session ({start} → {now}) — \
+             verify the branch before push or gh pr create"
+        )
+    })
+}
+
+fn stop_inner(e: &Event) -> Reply {
     let no = || Reply {
         block: false,
         reason: None,
