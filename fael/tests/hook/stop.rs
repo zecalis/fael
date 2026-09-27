@@ -123,13 +123,13 @@ fn stop_bug_signal_needs_issue_row() {
 
     // any client: the assistant text arrives in the Event, no transcript needed
     let neutral = format!(
-        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"the schema and the docs are out of sync"}}"#,
+        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"bug confirmed in logout"}}"#,
         json(&d)
     );
     let (ok, out, _) = fael(&d, &["hook", "stop"], &neutral);
-    assert!(ok && out.contains("out of sync"), "{out}");
-    // a different phrase in the same session does not block again
-    let again = neutral.replace("are out of sync", "found a bug");
+    assert!(ok && out.contains("bug confirmed"), "{out}");
+    // a different strong phrase in the same session does not block again
+    let again = neutral.replace("bug confirmed in logout", "I found the bug");
     let (ok, out, _) = fael(&d, &["hook", "stop"], &again);
     assert!(ok && out.contains(r#""block":false"#), "{out}");
 
