@@ -26,7 +26,7 @@ commands:
 global options:
   --json         one JSON row per line, uncut, for programs
   -h, --help     this help — or one command's: fael <command> --help
-  -v, --version  print the version
+  -v, -V, --version  print the version
 
 examples:
   fael add issue \"login loops\" --files src/a.rs
@@ -79,12 +79,13 @@ pub(crate) fn for_command(cmd: &str) -> Option<&'static str> {
     })
 }
 
-/// `fael help` / `fael --help` / `fael <cmd> --help`: the full usage, unless
-/// the first non-flag word names a command — then only that command's section.
+/// `fael help` / `fael --help` / `fael <cmd> --help` / `fael help <cmd>`:
+/// the full usage, unless a non-flag word names a command — then only that
+/// command's section (`help` itself is skipped, so `help find` finds `find`).
 pub(crate) fn for_argv(argv: &[String]) -> String {
     let section = argv
         .iter()
-        .find(|a| !a.starts_with('-'))
+        .find(|a| !a.starts_with('-') && a.as_str() != "help")
         .and_then(|c| for_command(c));
     match section {
         Some(text) => {

@@ -28,7 +28,7 @@ fn main() -> ExitCode {
 }
 
 fn run(argv: Vec<String>) -> Result<ExitCode, String> {
-    if matches!(argv.as_slice(), [v] if v == "--version" || v == "-v") {
+    if matches!(argv.as_slice(), [v] if v == "--version" || v == "-v" || v == "-V") {
         println!("fael {}", env!("CARGO_PKG_VERSION"));
         return Ok(ExitCode::SUCCESS);
     }
@@ -63,7 +63,11 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             println!("{}", help::USAGE);
             Ok(ExitCode::SUCCESS)
         }
-        // anything else names no command — one short line, not the full usage
+        // a real command with the wrong arity names the command and points
+        // at its own help; anything else names no command at all
+        _ if help::for_command(cmd).is_some() => Err(format!(
+            "rejected: wrong arguments for {cmd:?} — try 'fael {cmd} --help'"
+        )),
         _ => Err(format!(
             "rejected: unknown command {cmd:?} — try 'fael --help'"
         )),
