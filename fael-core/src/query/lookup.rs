@@ -137,7 +137,7 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
             let similar: Vec<&str> = used
                 .iter()
                 .map(|u| u.key.as_str())
-                .filter(|u| (parent(k).is_some() && parent(u) == parent(k)) || distance(u, k) <= 2)
+                .filter(|u| (parent(k).is_some() && parent(u) == parent(k)) || levenshtein(u, k) <= 2)
                 .take(5)
                 .collect();
             if !similar.is_empty() {
@@ -172,8 +172,9 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
     w
 }
 
-/// Levenshtein distance over chars.
-fn distance(a: &str, b: &str) -> usize {
+/// Levenshtein distance over chars, std only — shared with the CLI's
+/// did-you-mean (same short inputs, never many).
+pub fn levenshtein(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();
     for (i, ca) in a.chars().enumerate() {
