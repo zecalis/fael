@@ -104,3 +104,24 @@ fn decision_without_key_and_multi_topic_text_warn() {
     r.text = "single topic".into();
     assert!(warnings(&r, &l, &cfg).is_empty());
 }
+
+#[test]
+fn fat_reasons_shared_by_warnings_and_doctor() {
+    let l = log();
+    let cfg = Config::default();
+    // the plan's done criterion: open decision, no key, two separators
+    let mut r = row("D0000000000000000000000017", "decision", &["x"], None);
+    r.text = "a; b; c".into();
+    let f = fat_reasons(&r, &cfg);
+    assert_eq!(f.len(), 2, "{f:?}");
+    assert!(f[0].contains("no --key"), "{f:?}");
+    assert!(f[1].contains("topic separators"), "{f:?}");
+    // warnings renders the same reasons with the prefix, nothing more
+    let w = warnings(&r, &l, &cfg);
+    assert_eq!(w.len(), 2, "{w:?}");
+    assert!(w[0].ends_with(&f[0]) && w[1].ends_with(&f[1]), "{w:?}");
+    // a keyed single-topic decision is lean; notes stay lean too
+    r.key = Some("a:b".into());
+    r.text = "single topic".into();
+    assert!(fat_reasons(&r, &cfg).is_empty());
+}

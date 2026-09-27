@@ -2,6 +2,7 @@
 //! (SPEC §6, §11). Thin adapters: the repo is resolved here, the rules live
 //! in `fael-core` so a hosted server calls the same entry points.
 
+mod fat;
 mod merged;
 mod orphan;
 
@@ -37,7 +38,8 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     // Gone is judged through the resolver: a file that was renamed still
     // exists under its new path, so its rows still push and are not gone.
     let al = crate::aliases::load(&r, &log, true);
-    rep.problems.extend(open_row_notes(&log, &r.root, &al));
+    rep.problems
+        .extend(open_row_notes(&log, &r.root, &al, &r.cfg));
     show(&rep, a.has("json"));
     Ok(if rep.errors().count() > 0 {
         ExitCode::FAILURE
@@ -49,7 +51,12 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
 /// The open-row checks (Gone/PartGone/Stale/Orphan): what the rows still say
 /// versus what the repo (and its PRs) still hold. Split out of `doctor` for
 /// the 100-line rule — the `gh` half of Orphan lives here, never in core.
-fn open_row_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Problem> {
+fn open_row_notes(
+    log: &core::Log,
+    root: &Path,
+    al: &core::Aliases,
+    cfg: &core::Config,
+) -> Vec<core::Problem> {
     let mut out = vec![];
     let gone: Vec<_> = core::find(log, &core::Filter::default())
         .into_iter()
@@ -149,6 +156,9 @@ fn open_row_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core:
     // landed branches: merged upstream but still sitting in this clone, so
     // the next reader keeps wondering whether the work is done
     out.extend(merged::problem(root));
+    // fat rows: the add-time warnings the agent skipped, repeated per row so
+    // one topic per row can still be superseded alone
+    out.extend(fat::problem(log, cfg));
     out
 }
 

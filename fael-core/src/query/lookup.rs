@@ -82,6 +82,43 @@ pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize
     (page, budget, total)
 }
 
+/// The chunk-3 fat-row conditions as reason bodies (no `warning: ` prefix):
+/// a decision with no key, `;`/`·` joining topics, text over `warn.row_tokens`.
+/// `warnings` renders these at add time; `doctor [Fat]` reuses them for open
+/// rows — one function so the two never drift apart.
+pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
+    let mut r = vec![];
+    // a decision with no key is hard to find and to supersede alone —
+    // notes and issues stay keyless without complaint
+    if row.kind == "decision" && row.key.as_deref().is_none_or(|k| k.trim().is_empty()) {
+        r.push(
+            "decision has no --key — add --key area:topic so it can be found and superseded alone"
+                .into(),
+        );
+    }
+    // `;`/`·` join decisions the way `.` joins sentences: two or more
+    // usually means several topics in one row — split it, don't trim it
+    let seps = row.text.chars().filter(|c| matches!(c, ';' | '·')).count();
+    if seps >= 2 {
+        r.push(format!(
+            "text has {seps} topic separators (; / ·) — one topic per row: split it, \
+each with --key area:topic, so one can be superseded alone"
+        ));
+    }
+    // a long row is usually several decisions in one: reversing one then
+    // means superseding them all, so the nudge is to split, not to trim
+    let t = est_tokens(&row.text);
+    let chars = row.text.chars().count();
+    if t > cfg.warn_row_tokens || chars > 600 {
+        r.push(format!(
+            "text is ~{t} tokens (warn at {}), {chars} chars — one topic per row: split it, \
+each with --key area:topic, so one can be superseded alone (every push costs the full text)",
+            cfg.warn_row_tokens
+        ));
+    }
+    r
+}
+
 /// Warnings for a row about to be added — never a reject: a key domain the repo did not declare,
 /// a new key close to an existing one, text over `warn.row_tokens`.
 pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
@@ -111,38 +148,14 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
             }
         }
     }
-    // a decision with no key is hard to find and to supersede alone —
-    // notes and issues stay keyless without complaint
-    if row.kind == "decision" && row.key.as_deref().is_none_or(|k| k.trim().is_empty()) {
-        w.push(
-            "warning: decision has no --key — add --key area:topic so it can be found and superseded alone"
-                .into(),
-        );
-    }
-    // `;`/`·` join decisions the way `.` joins sentences: two or more
-    // usually means several topics in one row — split it, don't trim it
-    let seps = row.text.chars().filter(|c| matches!(c, ';' | '·')).count();
-    if seps >= 2 {
-        w.push(format!(
-            "warning: text has {seps} topic separators (; / ·) — one topic per row: split it, \
-each with --key area:topic, so one can be superseded alone"
-        ));
-    }
-    // a long row is usually several decisions in one: reversing one then
-    // means superseding them all, so the nudge is to split, not to trim
-    let t = est_tokens(&row.text);
-    let chars = row.text.chars().count();
-    if t > cfg.warn_row_tokens || chars > 600 {
-        w.push(format!(
-            "warning: text is ~{t} tokens (warn at {}), {chars} chars — one topic per row: split it, \
-each with --key area:topic, so one can be superseded alone (every push costs the full text)",
-            cfg.warn_row_tokens
-        ));
+    for r in fat_reasons(row, cfg) {
+        w.push(format!("warning: {r}"));
     }
     // lists show the title, bodies are pulled by id — a long untitled row
     // costs its full text on every push. Thai and CJK have no spaces between
     // words, so chars count too.
     let words = row.text.split_whitespace().count();
+    let chars = row.text.chars().count();
     if (words > 60 || chars > 400) && row.title.as_deref().is_none_or(|t| t.trim().is_empty()) {
         w.push(format!(
             "warning: text is {words} words with no title — add --title \"<≤15-word headline>\" so lists stay skimmable"
