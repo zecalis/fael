@@ -68,6 +68,16 @@ fn state(d: &Path) -> PathBuf {
     d.join("state")
 }
 
+fn git(d: &Path, args: &[&str]) -> String {
+    let o = Command::new("git")
+        .args(args)
+        .current_dir(d)
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "git {args:?}");
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
 fn commit(d: &Path, msg: &str) {
     std::fs::write(d.join("src/a.rs"), format!("// {msg}\n")).unwrap();
     assert!(

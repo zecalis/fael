@@ -2,7 +2,7 @@
 //! `Ctx` every event resolves before doing anything else.
 
 use super::{push::push, session::session_start, stop::stop};
-use crate::{Repo, core, read, repo_at};
+use crate::{Repo, core, repo_at};
 use serde::{Deserialize, Serialize};
 use std::io::Read as _;
 use std::path::PathBuf;
@@ -89,6 +89,9 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
 pub(crate) struct Ctx {
     pub(crate) repo: Repo,
     pub(crate) log: core::Log,
+    /// branch tags for journal-only rows (`journal::read`), so the session
+    /// brief and the read/edit push render `@<branch>` like `find` does
+    pub(crate) tags: crate::find::branches::BranchMap,
     pub(crate) client: String,
     pub(crate) session: String,
 }
@@ -101,10 +104,11 @@ pub(crate) fn ctx(e: &Event) -> Option<Ctx> {
         .map(PathBuf::from)
         .or_else(|| std::env::current_dir().ok())?;
     let repo = repo_at(&cwd).ok()?;
-    let log = read(&repo);
+    let (log, tags) = crate::journal::read(&repo);
     Some(Ctx {
         repo,
         log,
+        tags,
         client: e.client.clone().unwrap_or_else(|| "neutral".into()),
         session: e.session.clone().unwrap_or_default(),
     })

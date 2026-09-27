@@ -100,7 +100,11 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         .chain(decisions.iter())
         .copied()
         .collect();
-    let mut body = core::render(&c.log, &shown, c.repo.cfg.kickoff_tokens);
+    let mut body = crate::find::branches::tag(
+        core::render(&c.log, &shown, c.repo.cfg.kickoff_tokens),
+        &c.log,
+        &c.tags,
+    );
     if let Some(line) = count_line(&t) {
         body.push_str(&line);
     }
