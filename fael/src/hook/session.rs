@@ -58,8 +58,28 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         .take(c.repo.cfg.session_decisions)
         .collect()
     };
-    // one render, one budget: to-do first, then decisions, a single cut line
-    let shown: Vec<&core::Row> = t.listed.iter().chain(decisions.iter()).copied().collect();
+    // chunk 5 wakes due revisits in CLI kickoff, but agents walk through
+    // this door instead — due rows list here too, first like kickoff,
+    // minus ids the to-do and decisions already show
+    let due: Vec<&core::Row> = {
+        let (due, _) = core::with_due(&c.log, vec![], &c.repo.root, &al);
+        let shown: std::collections::HashSet<&str> = t
+            .listed
+            .iter()
+            .chain(decisions.iter())
+            .map(|r| r.id.as_str())
+            .collect();
+        due.into_iter()
+            .filter(|r| !shown.contains(r.id.as_str()))
+            .collect()
+    };
+    // one render, one budget: due first, then to-do, then decisions, a single cut line
+    let shown: Vec<&core::Row> = due
+        .iter()
+        .chain(t.listed.iter())
+        .chain(decisions.iter())
+        .copied()
+        .collect();
     let mut body = core::render(&c.log, &shown, c.repo.cfg.kickoff_tokens);
     if let Some(line) = count_line(&t) {
         body.push_str(&line);
