@@ -111,6 +111,23 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
             }
         }
     }
+    // a decision with no key is hard to find and to supersede alone —
+    // notes and issues stay keyless without complaint
+    if row.kind == "decision" && row.key.as_deref().is_none_or(|k| k.trim().is_empty()) {
+        w.push(
+            "warning: decision has no --key — add --key area:topic so it can be found and superseded alone"
+                .into(),
+        );
+    }
+    // `;`/`·` join decisions the way `.` joins sentences: two or more
+    // usually means several topics in one row — split it, don't trim it
+    let seps = row.text.chars().filter(|c| matches!(c, ';' | '·')).count();
+    if seps >= 2 {
+        w.push(format!(
+            "warning: text has {seps} topic separators (; / ·) — one topic per row: split it, \
+each with --key area:topic, so one can be superseded alone"
+        ));
+    }
     // a long row is usually several decisions in one: reversing one then
     // means superseding them all, so the nudge is to split, not to trim
     let t = est_tokens(&row.text);

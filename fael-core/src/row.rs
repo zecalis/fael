@@ -73,10 +73,13 @@ impl Row {
             .filter(|u| u.is_finite())
     }
 
-    /// What lists show: the `title` when set, else the first sentence of
-    /// `text` cut at ~20 words + `…` (old rows never get a title, no backfill).
-    /// A short single-sentence text renders unchanged — no `…` when nothing
-    /// was dropped.
+    /// What lists show: the `title` when set, else the first line's first
+    /// sentence of `text` cut at ~20 words or ~80 chars + `…` (old rows never get a
+    /// title, no backfill). `;`/`·`/`—` join topics the way `.` joins
+    /// sentences, so the auto title is the first topic only — Thai and CJK
+    /// have neither `.` nor spaces to cut on, which is why the char cap
+    /// exists next to the word cap. A short single-topic text renders
+    /// unchanged — no `…` when nothing was dropped.
     pub fn display_title(&self) -> String {
         if let Some(t) = self.title.as_deref() {
             let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -84,17 +87,27 @@ impl Row {
                 return t;
             }
         }
-        let one = self.text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut lines = self.text.lines();
+        let first = lines.next().unwrap_or("");
+        let more_lines = lines.next().is_some();
+        let one = first.split_whitespace().collect::<Vec<_>>().join(" ");
         let end = first_sentence_end(&one);
         let (head, rest) = (&one[..end], one[end..].trim());
-        let words: Vec<&str> = head.split_whitespace().collect();
-        if words.len() > 20 {
+        let first = head.split([';', '·', '—']).next().unwrap_or(head).trim();
+        let first = if first.is_empty() { head.trim() } else { first };
+        let words: Vec<&str> = first.split_whitespace().collect();
+        let mut title = if words.len() > 20 {
             format!("{} …", words[..20].join(" "))
-        } else if rest.is_empty() {
-            head.to_string()
+        } else if rest.is_empty() && !more_lines && first == head.trim() {
+            first.to_string()
         } else {
-            format!("{head} …")
+            format!("{first} …")
+        };
+        if title.chars().count() > 80 {
+            let cut: String = title.chars().take(80).collect();
+            title = format!("{} …", cut.trim_end_matches([' ', '…']));
         }
+        title
     }
 
     /// A fresh v1 add row stamped with a ULID and the current UTC time.

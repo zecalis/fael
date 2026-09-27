@@ -69,3 +69,38 @@ fn add_warnings_never_reject() {
     r.text = "ok".into();
     assert!(warnings(&r, &l, &cfg).is_empty());
 }
+
+#[test]
+fn decision_without_key_and_multi_topic_text_warn() {
+    let l = log();
+    let cfg = Config::default();
+    // the plan's done criterion: decision + no key + "a; b; c" → two warnings
+    let mut r = row("D0000000000000000000000017", "decision", &["x"], None);
+    r.text = "a; b; c".into();
+    let w = warnings(&r, &l, &cfg);
+    assert_eq!(w.len(), 2, "{w:?}");
+    assert!(w[0].contains("no --key"), "{w:?}");
+    assert!(w[1].contains("topic separators"), "{w:?}");
+    // `·` counts too; one separator is still a single topic
+    r.text = "a · b · c".into();
+    assert!(
+        warnings(&r, &l, &cfg).len() == 2,
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+    r.text = "a; b".into();
+    let w = warnings(&r, &l, &cfg);
+    assert_eq!(w.len(), 1, "{w:?}");
+    // `—` joins clauses, not topics — it cuts the auto title but never warns
+    r.text = "a — b — c".into();
+    let w = warnings(&r, &l, &cfg);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("no --key"), "{w:?}");
+    // notes stay keyless without complaint; a key quiets the key warning
+    let mut n = row("N0000000000000000000000018", "note", &["x"], None);
+    n.text = "a; b".into();
+    assert!(warnings(&n, &l, &cfg).is_empty());
+    r.key = Some("plugh:xyzzy".into());
+    r.text = "single topic".into();
+    assert!(warnings(&r, &l, &cfg).is_empty());
+}

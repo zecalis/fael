@@ -100,6 +100,33 @@ fn long_row_warns_to_split_and_unspaced_text_needs_a_title() {
 }
 
 #[test]
+fn auto_title_cuts_at_topic_separator_newline_and_80_chars() {
+    let mut r = row("D0000000000000000000000017", "decision", &["x"], None);
+    // `;`/`·`/`—` join topics the way `.` joins sentences: first topic only
+    r.text = "a; b; c".into();
+    assert_eq!(r.display_title(), "a …");
+    r.text = "ใช้ ก · ใช้ ข · ใช้ ค".into();
+    assert_eq!(r.display_title(), "ใช้ ก …");
+    r.text = "จบแล้ว — รายละเอียดตามมา".into();
+    assert_eq!(r.display_title(), "จบแล้ว …");
+    // the second line never leaks into the title, however short the first is
+    r.text = "หัวข้อ\nรายละเอียดยาว".into();
+    assert_eq!(r.display_title(), "หัวข้อ …");
+    // Thai has no `.` or spaces to cut on: 300 chars → ~80 chars + …
+    r.text = "ก".repeat(300);
+    let t = r.display_title();
+    assert!(t.ends_with(" …"), "{t}");
+    assert!(t.chars().count() <= 82, "{t}");
+    // an explicit title stays verbatim, however long
+    r.title = Some("ก".repeat(300));
+    assert_eq!(r.display_title().chars().count(), 300);
+    // a leading separator with nothing before it falls back to the full head
+    r.title = None;
+    r.text = "; foo".into();
+    assert_eq!(r.display_title(), "; foo");
+}
+
+#[test]
 fn find_text_matches_titles() {
     let mut l = log();
     l.rows.push(titled(
