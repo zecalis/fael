@@ -305,16 +305,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         }
     };
     // bare `--revisit` names no date or text — that only filters on `find`
-    let revisit = match (a.has("revisit"), a.one("revisit")) {
-        (false, _) => None,
-        (true, Some(v)) => Some(v),
-        (true, None) => {
-            return Err(
-                "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
-                    .into(),
-            );
-        }
-    };
+    let revisit = write::parse_revisit(a.has("revisit"), a.one("revisit"))?;
     let (row, path, warns) = write::add_row(
         &r,
         kind,

@@ -21,6 +21,20 @@ pub(crate) struct AddOpts {
     pub force: bool,
 }
 
+/// `--revisit` on `add`/`bump` always needs a value — bare `--revisit` only
+/// filters on `find`. Shared by the CLI entry and `bump` so the two never
+/// drift apart.
+pub(crate) fn parse_revisit(has: bool, one: Option<String>) -> Result<Option<String>, String> {
+    match (has, one) {
+        (false, _) => Ok(None),
+        (true, Some(v)) => Ok(Some(v)),
+        (true, None) => Err(
+            "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
+                .into(),
+        ),
+    }
+}
+
 /// Normalise files against cwd, then core's add path — shared by the CLI and MCP.
 /// No files: inherit the files this session edited (after the newest row);
 /// still empty without a hook session, and core keeps rejecting that.
@@ -126,16 +140,7 @@ pub(crate) fn bump(
         }
     };
     // bare `--revisit` names no date or text — that only filters on `find`
-    let revisit = match (a.has("revisit"), a.one("revisit")) {
-        (false, _) => None,
-        (true, Some(v)) => Some(v),
-        (true, None) => {
-            return Err(
-                "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
-                    .into(),
-            );
-        }
-    };
+    let revisit = parse_revisit(a.has("revisit"), a.one("revisit"))?;
     let log = crate::read(r);
     core::bump_row(
         &r.fael,
@@ -360,35 +365,11 @@ fn sibling_suggest(root: &Path, bad: &str) -> Option<String> {
         if cand == bad {
             continue;
         }
-        let d = distance(bad, &cand);
+        let d = core::levenshtein(bad, &cand);
         if best.as_ref().is_none_or(|(bd, _)| d < *bd) {
             best = Some((d, cand));
         }
     }
     let (d, cand) = best?;
     (d <= 2 && d < bad.chars().count()).then_some(cand)
-}
-
-/// Character Levenshtein, std only — candidates are short paths, never many.
-fn distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    if a.is_empty() {
-        return b.len();
-    }
-    if b.is_empty() {
-        return a.len();
-    }
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    let mut cur = vec![0; b.len() + 1];
-    for (i, &ca) in a.iter().enumerate() {
-        cur[0] = i + 1;
-        for (j, &cb) in b.iter().enumerate() {
-            cur[j + 1] = (prev[j] + usize::from(ca != cb))
-                .min(prev[j + 1] + 1)
-                .min(cur[j] + 1);
-        }
-        std::mem::swap(&mut prev, &mut cur);
-    }
-    prev[b.len()]
 }

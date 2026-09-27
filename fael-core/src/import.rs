@@ -14,7 +14,7 @@
 //! unknown fields — round-trips through `Row::extra` untouched.
 
 use crate::compact::fold;
-use crate::log::{collect_files, dedupe_ids, is_marker, lock, tmp_rename};
+use crate::log::{collect_files, decode_text, dedupe_ids, is_marker, lock, tmp_rename};
 use crate::{CORE_KINDS, Row, anchor, ulid};
 use serde_json::{Map, Value};
 use sha1::{Digest, Sha1};
@@ -49,8 +49,7 @@ pub fn import(fael: &Path, src: &Path, allowed: &[String], opts: &Opts) -> Resul
     for f in &files {
         let name = f.to_string_lossy().into_owned();
         let bytes = std::fs::read(f).map_err(|e| format!("{}: {e}", name))?;
-        let text = String::from_utf8_lossy(&bytes);
-        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        let text = decode_text(&bytes);
         let mut lines: Vec<&str> = text.split('\n').collect();
         lines.pop(); // the torn tail belongs to a live writer, not to us
         let is_close_file = name.ends_with(".close.jsonl");

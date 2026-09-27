@@ -32,14 +32,15 @@ pub use hook::{BugSignal, StopFacts, decide_stop, last_row_ms};
 
 pub use id::{now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, writer_id};
 pub use log::{
-    BumpOpts, Log, MONTH_MAX, add, add_row, append, bump_row, close, close_row, mv_row, parse, read,
+    BumpOpts, Log, MONTH_MAX, add, add_row, append, bump_row, close, close_row, decode_text,
+    is_month, mv_row, needs_seal, parse, read,
 };
 pub use query::{
     Cut, Filter, KeyUse, Urgent, UrgentChange, abbrev, backtick_paths, brief, closed, cmp_rows,
     due, est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone, gone_files, is_date, keys,
-    kickoff, page, push, query, ranked, render, render_full, render_full_page, render_page,
-    resolve, resolve_urgent, row_due, stale_refs, superseded, today, waiting, waiting_line,
-    warnings, with_due,
+    kickoff, levenshtein, page, push, query, ranked, render, render_full, render_full_page,
+    render_page, resolve, resolve_urgent, row_due, stale_refs, superseded, today, waiting,
+    waiting_line, warnings, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{normalize_files, valid_key, validate, validate_alias, validate_close};

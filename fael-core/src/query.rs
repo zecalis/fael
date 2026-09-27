@@ -14,7 +14,7 @@ mod revisit;
 mod select;
 mod stale;
 
-pub use lookup::{KeyUse, fat_reasons, keys, query, resolve, warnings};
+pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
 pub use push::push;
 pub use render::{Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page};
