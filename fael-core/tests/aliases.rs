@@ -116,10 +116,10 @@ fn push_finds_rows_filed_under_the_old_path() {
     // hit too if the rename stayed in src/)
     let renamed = al(&[("src/a.rs", "lib/b.rs")]);
     let q = |f: &str| vec![f.to_string()];
-    assert_eq!(push(&log, &q("lib/b.rs"), &renamed).len(), 1);
-    assert!(push(&log, &q("lib/b.rs"), &Aliases::default()).is_empty());
+    assert_eq!(push(&log, &q("lib/b.rs"), &renamed, false).len(), 1);
+    assert!(push(&log, &q("lib/b.rs"), &Aliases::default(), false).is_empty());
     // the old path still matches too (the log is append-only)
-    assert_eq!(push(&log, &q("src/a.rs"), &renames_chain()).len(), 1);
+    assert_eq!(push(&log, &q("src/a.rs"), &renames_chain(), false).len(), 1);
 }
 
 fn renames_chain() -> Aliases {
@@ -132,7 +132,7 @@ fn push_at_chain_end_finds_the_original_row() {
         rows: vec![row_on("A0000000000000000000000001", &["src/a.rs"])],
         ..Log::default()
     };
-    let got = push(&log, &["src/c.rs".to_string()], &renames_chain());
+    let got = push(&log, &["src/c.rs".to_string()], &renames_chain(), false);
     assert_eq!(got.len(), 1);
     // a zone query for the new directory finds old-dir rows
     let log2 = Log {
@@ -140,7 +140,7 @@ fn push_at_chain_end_finds_the_original_row() {
         ..Log::default()
     };
     let dir = al(&[("src/old/x.rs", "src/new/x.rs")]);
-    assert_eq!(push(&log2, &["src/new".to_string()], &dir).len(), 1);
+    assert_eq!(push(&log2, &["src/new".to_string()], &dir, false).len(), 1);
 }
 
 #[test]
@@ -236,7 +236,13 @@ fn find_and_push_skip_alias_carrier_rows() {
     );
     assert_eq!(all.len(), 1);
     assert_eq!(
-        push(&log, &["doc:b".to_string()], &Aliases::from_log(&log)).len(),
+        push(
+            &log,
+            &["doc:b".to_string()],
+            &Aliases::from_log(&log),
+            false
+        )
+        .len(),
         0
     );
 }

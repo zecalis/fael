@@ -35,7 +35,7 @@ pub(crate) fn record_usage(client: &str, event: &str, repo: &Path, text: &str, i
     clippy::too_many_lines,
     reason = "predates the lint — split, then drop"
 )]
-pub fn stats(json: bool) -> Result<(), String> {
+pub fn stats(json: bool, rows: bool) -> Result<(), String> {
     let path = state_dir().join("usage.jsonl");
     let Ok(s) = std::fs::read_to_string(&path) else {
         println!("fael: no usage recorded yet");
@@ -46,6 +46,9 @@ pub fn stats(json: bool) -> Result<(), String> {
     let mut by_event: HashMap<String, (usize, usize)> = HashMap::new();
     let mut by_client: HashMap<String, (usize, usize)> = HashMap::new();
     let mut by_id: HashMap<String, usize> = HashMap::new();
+    // repos each row id was pushed from — `stats --rows` resolves its
+    // open/closed/superseded state through those repos' logs
+    let mut id_repos: HashMap<String, Vec<String>> = HashMap::new();
     // (repo, "stop-work"|"stop-bug", ms) — checked against each repo's log below
     let mut blocks: Vec<(String, String, i64)> = vec![];
     // benchmark/test repos live in the OS temp dir and would swamp real usage
@@ -104,6 +107,13 @@ pub fn stats(json: bool) -> Result<(), String> {
             .filter_map(|i| i.as_str())
         {
             *by_id.entry(id.into()).or_insert(0) += 1;
+            if let Some(repo) = v["repo"].as_str()
+                && !id_repos
+                    .get(id)
+                    .is_some_and(|rs| rs.iter().any(|r| r == repo))
+            {
+                id_repos.entry(id.into()).or_default().push(repo.into());
+            }
         }
     }
     if n == 0 {
@@ -138,16 +148,22 @@ pub fn stats(json: bool) -> Result<(), String> {
                 .map(|(id, c)| serde_json::json!({"id": id, "pushes": c}))
                 .collect()
         };
-        println!(
-            "{}",
-            serde_json::json!({
-                "events": n, "bytes": bytes, "est_tokens": toks, "skipped_temp": skipped,
-                "by_event": by_event.iter().map(|(k, (c, t))| (k.clone(), serde_json::json!({"events": c, "est_tokens": t}))).collect::<serde_json::Map<String,_>>(),
-                "by_client": by_client.iter().map(|(k, (c, t))| (k.clone(), serde_json::json!({"events": c, "est_tokens": t}))).collect::<serde_json::Map<String,_>>(),
-                "top_rows": top,
-                "stop_blocks": outcome.iter().map(|(k, (b, f))| (k.clone(), serde_json::json!({"blocks": b, "followed_by_row": f}))).collect::<serde_json::Map<String,_>>(),
-            })
-        );
+        let mut obj = serde_json::json!({
+            "events": n, "bytes": bytes, "est_tokens": toks, "skipped_temp": skipped,
+            "by_event": by_event.iter().map(|(k, (c, t))| (k.clone(), serde_json::json!({"events": c, "est_tokens": t}))).collect::<serde_json::Map<String,_>>(),
+            "by_client": by_client.iter().map(|(k, (c, t))| (k.clone(), serde_json::json!({"events": c, "est_tokens": t}))).collect::<serde_json::Map<String,_>>(),
+            "top_rows": top,
+            "stop_blocks": outcome.iter().map(|(k, (b, f))| (k.clone(), serde_json::json!({"blocks": b, "followed_by_row": f}))).collect::<serde_json::Map<String,_>>(),
+        });
+        if rows {
+            obj["rows"] = row_report(&by_id, &id_repos)
+                .into_iter()
+                .map(|(id, pushes, status, noise)| {
+                    serde_json::json!({"id": id, "pushes": pushes, "status": status, "noise": noise})
+                })
+                .collect();
+        }
+        println!("{obj}");
         return Ok(());
     }
     println!(
@@ -175,10 +191,62 @@ pub fn stats(json: bool) -> Result<(), String> {
     for (id, c) in ids.into_iter().take(10) {
         println!("  row {id}: pushed ×{c}");
     }
+    if rows {
+        for (id, pushes, status, noise) in row_report(&by_id, &id_repos) {
+            println!(
+                "  row {id}: pushed ×{pushes} ({status}){}",
+                if noise { " noise?" } else { "" }
+            );
+        }
+    }
     let mut oc: Vec<_> = outcome.iter().collect();
     oc.sort();
     for (k, (b, f)) in oc {
         println!("  {k}: {b} block(s) → {f} followed by a row");
     }
     Ok(())
+}
+
+/// Per-row push report for `stats --rows`: push counts against the row's
+/// current state, most pushed first. `noise?` = pushed ≥ 10 times — the row
+/// keeps eating budget without being resolved, so tighten its `--files`
+/// scope or close it. Statuses come from the repos the row was pushed from;
+/// a repo that is gone (or never had the id) reads `unknown`.
+fn row_report(
+    by_id: &HashMap<String, usize>,
+    id_repos: &HashMap<String, Vec<String>>,
+) -> Vec<(String, usize, String, bool)> {
+    const TOP: usize = 20;
+    const NOISE_PUSHES: usize = 10;
+    let mut ids: Vec<_> = by_id.iter().collect();
+    ids.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+    let mut logs: HashMap<String, core::Log> = HashMap::new();
+    ids.into_iter()
+        .take(TOP)
+        .map(|(id, pushes)| {
+            let status = id_repos
+                .get(id)
+                .into_iter()
+                .flatten()
+                .filter_map(|repo| {
+                    let log = logs
+                        .entry(repo.clone())
+                        .or_insert_with(|| core::read(&Path::new(repo).join(".fael")));
+                    let (closed, superseded) = (core::closed(log), core::superseded(log));
+                    if closed.contains(id.as_str()) {
+                        Some("closed")
+                    } else if superseded.contains(id.as_str()) {
+                        Some("superseded")
+                    } else if log.rows.iter().any(|r| &r.id == id) {
+                        Some("open")
+                    } else {
+                        None
+                    }
+                })
+                .next()
+                .unwrap_or("unknown")
+                .to_string();
+            (id.clone(), *pushes, status, *pushes >= NOISE_PUSHES)
+        })
+        .collect()
 }

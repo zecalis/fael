@@ -346,7 +346,13 @@ fn widened(f: &Filter) -> Filter {
 /// the push — session start is where routing lists. Deterministic: the
 /// same log and query give the same order on any machine. The caller cuts the
 /// result to the push budget with `render`.
-pub fn push<'a>(log: &'a Log, files: &[String], al: &Aliases) -> Vec<&'a Row> {
+///
+/// `no_same_dir` is the read/edit split (PLAN-fael-row-hygiene chunk 2): reads
+/// pass true to drop the same-directory tier — the noisiest one, rows about
+/// neighbouring files — and keep exact file, zone/glob and shared-key hits;
+/// edits pass false to keep it, because a module-level decision matters most
+/// while changing that module.
+pub fn push<'a>(log: &'a Log, files: &[String], al: &Aliases, no_same_dir: bool) -> Vec<&'a Row> {
     let hide: HashSet<&str> = closed(log).union(&superseded(log)).copied().collect();
     let queries: Vec<String> = al.expand_all(
         &files
@@ -373,7 +379,7 @@ pub fn push<'a>(log: &'a Log, files: &[String], al: &Aliases) -> Vec<&'a Row> {
         if queries.iter().any(|q| rf.iter().any(|f| zone(q, f))) {
             return 0;
         }
-        if queries.iter().any(|q| rf.iter().any(|f| same_dir(q, f))) {
+        if !no_same_dir && queries.iter().any(|q| rf.iter().any(|f| same_dir(q, f))) {
             return 1;
         }
         if r.key.as_deref().is_some_and(|k| hit_keys.contains(k)) {

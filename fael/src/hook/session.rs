@@ -81,17 +81,11 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         });
     }
     let Some(context) = context else { return no() };
-    record_usage(
-        &c.client,
-        "session-start",
-        &c.repo.root,
-        &context,
-        &t.listed
-            .iter()
-            .chain(decisions.iter())
-            .map(|r| r.id.clone())
-            .collect::<Vec<_>>(),
-    );
+    // like the read/edit push: usage counts only the ids render actually
+    // said — rows the budget cut off never reached any context
+    let n = context.lines().filter(|l| l.starts_with("- [")).count();
+    let shown: Vec<String> = shown.iter().take(n).map(|r| r.id.clone()).collect();
+    record_usage(&c.client, "session-start", &c.repo.root, &context, &shown);
     Reply {
         block: false,
         reason: None,

@@ -17,13 +17,14 @@ Reply  {"block": bool, "reason"?: str, "context"?: str}
 | When | Call | Send | Do with the Reply |
 |---|---|---|---|
 | session starts | `session-start` | `cwd`, `session` | put `context` in the system prompt / first turn |
-| a file was read | `read` | `cwd`, `files` | append `context` to the tool result |
+| a file was read | `read` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was written | `edit` | `cwd`, `session`, `files` | append `context` to the tool result |
 | the agent is about to end its turn | `stop` | `cwd`, `session`, `text`, `stop_active` | `block` → do not end; send `reason` back to the model as the next message |
 
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript
-  file whose birthtime is the start. **Send the exact same string to `edit` and `stop`**: it keys the
-  session's edit list, and stop blocks when files were edited after the newest row.
+  file whose birthtime is the start. **Send the exact same string to `read`, `edit` and `stop`**: it keys the
+  session's edit list, stop blocks when files were edited after the newest row, and the read/edit push
+  says each row once per session — without it every read re-pushes the same rows at full budget.
 - `files` — absolute, or relative to `cwd`. Paths outside the repo are dropped.
 - `text` — the assistant's text in this session (or at least the last message). The issue rule
   looks for "found a bug", "inconsistent", "might break", and similar; leave it out and fael reads `session` as a Claude transcript.

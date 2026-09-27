@@ -243,6 +243,34 @@ fn install_repoints_mcp_left_on_an_old_fael_binary() {
     assert!(read(&codex).contains("/usr/bin/other"));
 }
 
+/// A hook entry from before `--client` existed is adopted and repointed, not
+/// duplicated — otherwise it keeps firing next to the new one as a
+/// session-less `neutral` event that dedupe never sees (chunk 2).
+#[test]
+fn install_repoints_stale_hook_without_client() {
+    let home = std::env::temp_dir().join(format!("fael-install-{}", fael_core::ulid()));
+    let claude = home.join(".claude/settings.json");
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(
+        &claude,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "/old/fael hook read"}]}]}}"#,
+    )
+    .unwrap();
+    let out = install(&home, &["--client", "claude"]);
+    assert!(out.contains("repointed"), "{out}");
+    let s = read(&claude);
+    assert!(!s.contains("/old/fael"), "{s}");
+    assert!(s.contains("hook read --client claude"), "{s}");
+    // one entry, not old + new side by side
+    assert_eq!(s.matches("hook read").count(), 1, "{s}");
+    // a second run changes nothing
+    let out = install(&home, &["--client", "claude"]);
+    assert!(
+        !out.contains("wrote") && !out.contains("repointed"),
+        "{out}"
+    );
+}
+
 /// Native Windows has no HOME (only USERPROFILE) — install must still find
 /// the home dir. Dry run: nothing is written to the real home. A machine with
 /// no client installed (CI) still fails later with "found no Claude Code",
