@@ -1,7 +1,10 @@
-//! Chunk 3b (PLAN-fael-durable-log): a repeated note on the same writer +
-//! branch + files supersedes the open one itself; several open notes file and
-//! list, never ask. Thin entry only — suites sit next to this file.
+//! Chunk 3b–c (PLAN-fael-durable-log): a repeated note on the same writer +
+//! branch + files supersedes the open one itself, and a caller-supplied key
+//! supersedes the single open row with the same kind + key; several matches
+//! file the row and list what was kept, never asking. Thin entry only —
+//! suites sit next to this file.
 
+mod key;
 mod note;
 
 use std::io::Write;

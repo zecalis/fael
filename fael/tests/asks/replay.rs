@@ -124,10 +124,11 @@ fn replay_key_candidates_file_keyless() {
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
 }
 
-/// R4 — same kind + key, same writer: files a duplicate today; self-heal
-/// (3c) must supersede the old one, asking nothing.
+/// R4 — same kind + key, same writer: (c) supersedes the old one, asking
+/// nothing (the pre-3c baseline filed twice; the count is what changes, not
+/// any ask type).
 #[test]
-fn replay_keyed_duplicate_files_twice() {
+fn replay_keyed_duplicate_supersedes() {
     let d = replay_repo();
     for i in 1..=2 {
         let (ok, _, err) = fael(
@@ -144,10 +145,13 @@ fn replay_keyed_duplicate_files_twice() {
             "",
         );
         assert!(ok, "add {i}: {err}");
+        if i > 1 {
+            assert!(err.contains("superseded"), "add {i}: {err}");
+        }
     }
     let (ok, out, err) = fael(&d, &["find", "--key", "auth:session", "--json"], "");
     assert!(ok, "{err}");
-    assert_eq!(out.lines().filter(|l| !l.trim().is_empty()).count(), 2);
+    assert_eq!(out.lines().filter(|l| !l.trim().is_empty()).count(), 1);
 }
 
 /// R5 — `--supersedes` naming nothing: rejects today; self-heal (3d) must
