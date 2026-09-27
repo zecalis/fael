@@ -205,22 +205,34 @@ pub fn add_row(
     Ok((row, path, warns))
 }
 
-/// Change routing/urgency on an open row as a new version (MVCC-style): the
-/// same kind, title, text, files and key, new `to`/`urgent`, superseding the old row
-/// — the one add path every adapter (CLI, MCP, a server) goes through, so the
-/// old version hides through `superseded()` with no new visibility rule.
-/// `to`: `None` keeps the old value, `Some("")` clears it, anything else sets
-/// it (lowercased — everything identity-like is). Text and files never change
-/// through bump — file a new row for new content.
+/// What `bump_row` changes — bundled so the arg count stays under the lint
+/// (the binary's `AddOpts` does the same for `add_row`). `to`/`revisit`:
+/// `None` keeps the old value, `Some("")` clears it, anything else sets it.
+pub struct BumpOpts {
+    pub to: Option<String>,
+    pub urgent: UrgentChange,
+    pub revisit: Option<String>,
+}
+
+/// Change routing/urgency/revisit on an open row as a new version (MVCC-style):
+/// the same kind, title, text, files and key, new `to`/`urgent`/`revisit`,
+/// superseding the old row — the one add path every adapter (CLI, MCP, a
+/// server) goes through, so the old version hides through `superseded()` with
+/// no new visibility rule. Text and files never change through bump — file a
+/// new row for new content.
 pub fn bump_row(
     fael: &Path,
     log: &Log,
     cfg: &Config,
     stamp: &Stamp,
     id: &str,
-    to: Option<String>,
-    urgent: UrgentChange,
+    opts: BumpOpts,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
+    let BumpOpts {
+        to,
+        urgent,
+        revisit,
+    } = opts;
     let old = resolve(log, id)?.clone();
     if closed(log).contains(old.id.as_str()) {
         return Err(format!(
@@ -247,11 +259,19 @@ pub fn bump_row(
         UrgentChange::Before(t) => resolve_urgent(log, &Urgent::Before(t))?,
         UrgentChange::Remove => None,
     };
+    let revisit = match revisit {
+        None => old.revisit.clone(),
+        Some(v) => {
+            let v = v.trim().to_string();
+            (!v.is_empty()).then_some(v)
+        }
+    };
     let mut row = Row::new(&stamp.by, &old.kind, &old.text, old.files.clone());
     row.key = old.key.clone();
     row.title = old.title.clone();
     row.to = to;
     row.urgent = urgent;
+    row.revisit = revisit;
     add_row(fael, log, cfg, stamp, row, Some(&old.id))
 }
 
