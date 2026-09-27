@@ -43,14 +43,11 @@ pub(crate) fn heal(
         return Ok(h);
     }
     let open = open_rows(log);
-    // ids print at the log's unique width, same as render/doctor, so any of
-    // them pastes straight into `--supersedes` — widened past the row being
-    // added too, which a fast caller may write in the same millisecond
-    let w = open.iter().fold(core::abbrev(log), |w, r| {
-        let same = r.id.bytes().zip(new_id.bytes()).take_while(|(a, b)| a == b);
-        w.max(same.count() + 1)
-    });
-    let id = |r: &core::Row| core::short_id(&r.id, w).to_string();
+    // ids print at their shortest unique prefix, same as render/doctor, so any
+    // of them pastes straight into `--supersedes` — unique against the row
+    // being added too, which a fast caller may write in the same millisecond
+    let w = core::abbrev(log).with(new_id);
+    let id = |r: &core::Row| w.short(&r.id).to_string();
     // (c) the caller's key is the strongest identity: same kind + key, any
     // branch, but only my own row is mine to close. Auto-key (e) must never
     // reach here — guessing a key and then using the guess to close rows is
@@ -72,7 +69,7 @@ pub(crate) fn heal(
                     if !also.is_empty() {
                         h.notes.push(format!(
                             "note {} also overlaps these files — kept open",
-                            id_list(&also, w)
+                            id_list(&also, &w)
                         ));
                     }
                 }
@@ -88,7 +85,7 @@ pub(crate) fn heal(
             many @ [_, ..] => {
                 h.notes.push(format!(
                     "open rows {} already use key {k} — kept all; pass --supersedes <id> to replace one",
-                    id_list(many, w)
+                    id_list(many, &w)
                 ));
                 return Ok(h);
             }
@@ -110,7 +107,7 @@ pub(crate) fn heal(
             }
             many @ [_, ..] => h.notes.push(format!(
                 "open notes {} overlap these files — kept all; pass --supersedes <id> to replace one",
-                id_list(many, w)
+                id_list(many, &w)
             )),
             [] => {}
         }
@@ -155,16 +152,12 @@ fn open_rows(log: &core::Log) -> Vec<&core::Row> {
         .collect()
 }
 
-/// Up to 5 ids at `w` (from `core::abbrev`), then `(+N more)`. Never a fixed
-/// `[..8]`: a ULID's leading characters are its millisecond timestamp, so rows
-/// written in the same second share them and `--supersedes <prefix>` would be
-/// ambiguous — `abbrev` grows the width until every prefix is unique.
-fn id_list(rows: &[&core::Row], w: usize) -> String {
-    let mut s: Vec<&str> = rows
-        .iter()
-        .take(5)
-        .map(|r| core::short_id(&r.id, w))
-        .collect();
+/// Up to 5 ids shortened by `w` (`core::abbrev`), then `(+N more)`. Never a
+/// fixed `[..8]`: a ULID's leading characters are its millisecond timestamp, so
+/// rows written in the same second share them and `--supersedes <prefix>`
+/// would be ambiguous — `Abbrev::short` lengthens a prefix until it is unique.
+fn id_list(rows: &[&core::Row], w: &core::Abbrev) -> String {
+    let mut s: Vec<&str> = rows.iter().take(5).map(|r| w.short(&r.id)).collect();
     s.sort_unstable();
     let mut out = s.join(", ");
     if rows.len() > 5 {

@@ -36,7 +36,7 @@ fn rows(log: &core::Log, cfg: &core::Config) -> Vec<String> {
         .into_iter()
         .filter_map(|row| {
             let rs = core::fat_reasons(row, cfg);
-            (!rs.is_empty()).then(|| format!("{} → {}", core::short_id(&row.id, w), rs[0]))
+            (!rs.is_empty()).then(|| format!("{} → {}", w.short(&row.id), rs[0]))
         })
         .collect()
 }

@@ -78,7 +78,7 @@ fn open_row_notes(
         let eg: Vec<String> = gone
             .iter()
             .take(5)
-            .map(|row| format!("{} → {}", core::short_id(&row.id, w), row.files.join(", ")))
+            .map(|row| format!("{} → {}", w.short(&row.id), row.files.join(", ")))
             .collect();
         out.push(core::Problem {
             kind: core::ProblemKind::Gone,
@@ -101,7 +101,7 @@ fn open_row_notes(
         .filter_map(|row| {
             let g = core::gone_files(root, row, al);
             let w = core::abbrev(log);
-            (!g.is_empty()).then(|| format!("{} → {}", core::short_id(&row.id, w), g.join(", ")))
+            (!g.is_empty()).then(|| format!("{} → {}", w.short(&row.id), g.join(", ")))
         })
         .collect();
     if !part.is_empty() {
@@ -180,8 +180,7 @@ fn stale_rows(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<String> {
         .filter_map(|row| {
             let refs = core::stale_refs(root, row, al);
             let w = core::abbrev(log);
-            (!refs.is_empty())
-                .then(|| format!("{} → {}", core::short_id(&row.id, w), refs.join(", ")))
+            (!refs.is_empty()).then(|| format!("{} → {}", w.short(&row.id), refs.join(", ")))
         })
         .collect()
 }

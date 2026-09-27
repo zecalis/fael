@@ -90,7 +90,6 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         .collect();
     let mut body = crate::find::branches::tag(
         core::render(&c.log, &shown, c.repo.cfg.kickoff_tokens),
-        &c.log,
         &c.tags,
     );
     if let Some(line) = count_line(&t) {

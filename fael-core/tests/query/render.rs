@@ -55,6 +55,38 @@ fn render_shows_urgent_before_to() {
 fn est_tokens_counts_thai_per_char() {
     assert_eq!(est_tokens("abcdefgh"), 2);
     assert_eq!(est_tokens("ไทย"), 3);
+    // a ULID prefix tokenizes ~2 chars/token, not 4 — ids ride on every row
+    assert_eq!(est_tokens("01M3J6HV"), 4);
+    assert_eq!(est_tokens("- [01M3J6HV] a"), 2 + 4);
+    // plain caps or plain digits are words/numbers, not ids
+    assert_eq!(est_tokens("README 20260927"), 4);
+}
+
+#[test]
+fn abbrev_is_per_row_not_log_wide() {
+    let mut l = log();
+    l.rows.clear();
+    for id in [
+        "01M3J6HV00000000000000000A", // same-ms pair: needs 11 chars
+        "01M3J6HV00100000000000000B",
+        "01M3K0000000000000000000AA", // alone: stays at the 8-char floor
+    ] {
+        l.rows.push(Row {
+            id: id.into(),
+            ..Row::default()
+        });
+    }
+    let ab = abbrev(&l);
+    assert_eq!(ab.short("01M3J6HV00000000000000000A"), "01M3J6HV000");
+    assert_eq!(ab.short("01M3J6HV00100000000000000B"), "01M3J6HV001");
+    assert_eq!(ab.short("01M3K0000000000000000000AA"), "01M3K000");
+    // a row about to be written counts too
+    let ab = abbrev(&l).with("01M3K0000900000000000000ZZ");
+    assert_eq!(ab.short("01M3K0000000000000000000AA"), "01M3K00000");
+    // every printed prefix resolves back to its row
+    for r in &l.rows {
+        assert_eq!(resolve(&l, abbrev(&l).short(&r.id)).unwrap().id, r.id);
+    }
 }
 
 #[test]

@@ -18,7 +18,7 @@ pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warning
 pub use matching::glob;
 pub use push::push;
 pub use render::{
-    Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page, short_id,
+    Abbrev, Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page,
 };
 pub use revisit::{due, is_date, row_due, today, waiting, waiting_line, with_due};
 pub use select::{
