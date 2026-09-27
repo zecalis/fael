@@ -11,6 +11,7 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
+mod selfheal;
 mod write;
 
 use fael_core::{self as core, Config, Log, Row};
@@ -19,10 +20,21 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
-    match run(std::env::args().skip(1).collect()) {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    // usage event for rejects, so they join their command's warnings
+    let event = argv
+        .first()
+        .filter(|c| c.bytes().all(|b| b.is_ascii_alphabetic() || b == b'-'))
+        .map(String::as_str)
+        .unwrap_or("cli")
+        .to_string();
+    match run(argv) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("{e}");
+            // every reject costs the agent a round — one choke point, so no
+            // command records its own rejects and nothing double-counts
+            hook::record_cli_reject(&event, &e);
             ExitCode::FAILURE
         }
     }
@@ -321,6 +333,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         },
     )?;
     warns.iter().for_each(|w| eprintln!("{w}"));
+    hook::record_asks("cli", hook::ASK_WARN, "add", Some(&r.root), &warns);
     written(a, &r, &row, &path);
     Ok(())
 }
@@ -329,6 +342,7 @@ fn close(a: &Args, id: &str, why: &str) -> Result<(), String> {
     let r = repo()?;
     let (row, path, warns) = close_row(&r, id, why)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
+    hook::record_asks("cli", hook::ASK_WARN, "close", Some(&r.root), &warns);
     written(a, &r, &row, &path);
     Ok(())
 }
@@ -350,6 +364,7 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
     let r = repo()?;
     let (row, path, warns) = write::bump(&r, a, id)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
+    hook::record_asks("cli", hook::ASK_WARN, "bump", Some(&r.root), &warns);
     written(a, &r, &row, &path);
     Ok(())
 }
@@ -375,6 +390,7 @@ fn mv(a: &Args, old: &str, new: &str) -> Result<(), String> {
     let (row, _, warns) =
         core::mv_row(&r.fael, r.journal.as_deref(), &r.cfg, &stamp(&r), from, to)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
+    hook::record_asks("cli", hook::ASK_WARN, "mv", Some(&r.root), &warns);
     if a.has("json") {
         println!("{}", row.to_line());
     } else {

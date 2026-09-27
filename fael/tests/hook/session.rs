@@ -142,6 +142,7 @@ fn session_start_decisions_opt_in() {
 fn session_start_wakes_due_revisits() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
     let input = format!(r#"{{"cwd":{}}}"#, json(&d));
     let add = |text: &str, extra: &[&str]| {
         let mut args = vec!["add", "note", text, "--files", "src/a.rs"];
@@ -150,7 +151,22 @@ fn session_start_wakes_due_revisits() {
         assert!(ok, "{err}");
     };
     add("sleeping row", &["--revisit", "2000-01"]);
-    add("future row", &["--revisit", "2999-01"]);
+    // another file: same-files repeats self-supersede now (chunk 3b), and
+    // this fixture needs two open rows, not one replacing the other
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "future row",
+            "--files",
+            "src/b.rs",
+            "--revisit",
+            "2999-01",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
     // due but all files gone: buried, like kickoff buries it (separate
     // call — the helper pins --files src/a.rs, and repeated --files merge)
     let (ok, _, err) = fael(
@@ -190,10 +206,17 @@ fn session_start_wakes_due_revisits() {
 #[test]
 fn session_start_todo_survives_a_flood_of_due() {
     let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    for f in ["src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"] {
+        std::fs::write(d.join(f), format!("// {f}\n")).unwrap();
+    }
     let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    // monthly revisits all come due at once — more rows than any budget fits
-    for n in ["one", "two", "three", "four"] {
+    // monthly revisits all come due at once — more rows than any budget fits.
+    // one file each: same-files repeats self-supersede now (chunk 3b), and
+    // this fixture needs four open rows, not one replacing the rest
+    for (n, f) in ["one", "two", "three", "four"]
+        .iter()
+        .zip(["src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"])
+    {
         let (ok, _, err) = fael(
             &d,
             &[
@@ -201,7 +224,7 @@ fn session_start_todo_survives_a_flood_of_due() {
                 "note",
                 &format!("due {n}"),
                 "--files",
-                "src/a.rs",
+                f,
                 "--revisit",
                 "2000-01",
             ],

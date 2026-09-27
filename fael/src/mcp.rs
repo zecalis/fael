@@ -3,6 +3,7 @@
 //! Tool failures come back as `isError` results so the agent reads the fix; only protocol
 //! faults are JSON-RPC errors.
 
+use crate::hook::{ASK_REJECT, ASK_WARN, record_asks, record_mcp};
 use crate::{Repo, aliases, close_row, core, read, repo, repo_at, write::AddOpts, write::add_row};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
@@ -76,7 +77,7 @@ fn s(a: &Value, k: &str) -> Option<String> {
 }
 
 fn need(a: &Value, k: &str) -> Result<String, String> {
-    s(a, k).ok_or(format!("{k} is required"))
+    s(a, k).ok_or(format!("rejected: {k} is required — pass it in arguments"))
 }
 
 fn files(a: &Value) -> Vec<String> {
@@ -114,11 +115,22 @@ fn repo_for(a: &Value) -> Result<Repo, String> {
     repo()
 }
 
+/// The MCP tool schemas as served on `tools/list` — `stats` sizes the same
+/// string for the per-session constants, so the number it shows is the number
+/// the agent actually pays.
+pub(crate) fn schema_json() -> String {
+    serde_json::to_string(&tools()).unwrap_or_default()
+}
+
 fn find(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
+    find_inner(a, &r).inspect_err(|e| record_mcp(&r.root, "mcp-find", ASK_REJECT, e))
+}
+
+fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
     // `branches: true` merges unmerged branches' rows into the union log
     // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
-    let (base, jtags) = crate::journal::read(&r);
+    let (base, jtags) = crate::journal::read(r);
     let (log, branch_of) = if a["branches"].as_bool().unwrap_or(false) {
         let (log, btags) = crate::find::branches::with_branches(&r.root, base);
         (log, crate::journal::overlay(jtags, btags))
@@ -144,7 +156,7 @@ fn find(a: &Value) -> Result<String, String> {
     };
     let f = core::Filter {
         text: s(a, "text"),
-        files: aliases::load(&r, &log, true).expand_all(&files),
+        files: aliases::load(r, &log, true).expand_all(&files),
         key: s(a, "key"),
         kind: s(a, "kind"),
         since: s(a, "since"),
@@ -186,8 +198,21 @@ fn find(a: &Value) -> Result<String, String> {
 
 fn add(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
+    match add_inner(a, &r) {
+        Err(e) => {
+            record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
+            Err(e)
+        }
+        Ok((text, warns)) => {
+            record_asks("mcp", ASK_WARN, "mcp-add", Some(&r.root), &warns);
+            Ok(text)
+        }
+    }
+}
+
+fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let (row, _, warns) = add_row(
-        &r,
+        r,
         &need(a, "kind")?,
         &need(a, "text")?,
         &files(a),
@@ -201,7 +226,7 @@ fn add(a: &Value) -> Result<String, String> {
             force: a["force"].as_bool().unwrap_or(false),
         },
     )?;
-    Ok(done(&row.id, warns))
+    Ok((done(&row.id, &warns), warns))
 }
 
 /// `add --urgent` over MCP: `urgent` files at the back of the queue,
@@ -214,13 +239,29 @@ fn urgent_ask(a: &Value) -> Result<core::Urgent, String> {
         (false, None) => Ok(core::Urgent::Unset),
         (true, None) => Ok(core::Urgent::End),
         (false, Some(t)) => Ok(core::Urgent::Before(t)),
-        (true, Some(_)) => Err("urgent and urgent_before pick one".into()),
+        (true, Some(_)) => Err(
+            "rejected: urgent and urgent_before pick one — the queue takes a single position"
+                .into(),
+        ),
     }
 }
 
 fn bump(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    let log = read(&r);
+    match bump_inner(a, &r) {
+        Err(e) => {
+            record_mcp(&r.root, "mcp-bump", ASK_REJECT, &e);
+            Err(e)
+        }
+        Ok((text, warns)) => {
+            record_asks("mcp", ASK_WARN, "mcp-bump", Some(&r.root), &warns);
+            Ok(text)
+        }
+    }
+}
+
+fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
+    let log = read(r);
     let urgent = match (
         a["urgent"].as_bool().unwrap_or(false),
         s(a, "urgent_before"),
@@ -230,14 +271,14 @@ fn bump(a: &Value) -> Result<String, String> {
         (true, None, false) => core::UrgentChange::End,
         (false, Some(t), false) => core::UrgentChange::Before(t),
         (false, None, true) => core::UrgentChange::Remove,
-        _ => return Err("urgent, urgent_before and not_urgent pick one".into()),
+        _ => return Err("rejected: urgent, urgent_before and not_urgent pick one — the queue takes a single position".into()),
     };
     let (row, _, warns) = core::bump_row(
         &r.fael,
         r.journal.as_deref(),
         &log,
         &r.cfg,
-        &crate::stamp(&r),
+        &crate::stamp(r),
         &need(a, "id")?,
         core::BumpOpts {
             to: s(a, "to"),
@@ -245,18 +286,26 @@ fn bump(a: &Value) -> Result<String, String> {
             revisit: s(a, "revisit"),
         },
     )?;
-    Ok(done(&row.id, warns))
+    Ok((done(&row.id, &warns), warns))
 }
 
 fn close(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    let (row, _, warns) = close_row(&r, &need(a, "id")?, &need(a, "text")?)?;
-    Ok(done(&row.id, warns))
+    match close_row(&r, &need(a, "id")?, &need(a, "text")?) {
+        Err(e) => {
+            record_mcp(&r.root, "mcp-close", ASK_REJECT, &e);
+            Err(e)
+        }
+        Ok((row, _, warns)) => {
+            record_asks("mcp", ASK_WARN, "mcp-close", Some(&r.root), &warns);
+            Ok(done(&row.id, &warns))
+        }
+    }
 }
 
-fn done(id: &str, warns: Vec<String>) -> String {
+fn done(id: &str, warns: &[String]) -> String {
     std::iter::once(format!("recorded {id}"))
-        .chain(warns)
+        .chain(warns.iter().cloned())
         .collect::<Vec<_>>()
         .join("\n")
 }

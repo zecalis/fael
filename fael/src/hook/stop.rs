@@ -4,6 +4,7 @@
 //! A bare risk mention never blocks: it joins the work block, or is stashed
 //! for the next push to show once.
 
+use super::asks::{ASK_BLOCK, hook_meta};
 use super::markers::{bug_signal_from_transcript, has_bug_marker};
 use super::protocol::{Event, Reply, ctx};
 use super::state::{
@@ -189,7 +190,14 @@ fn stop_inner(e: &Event) -> Reply {
     } else {
         "stop-work"
     };
-    record_usage(&c.client, event, root, &reason, &[]);
+    record_usage(
+        &c.client,
+        event,
+        root,
+        &reason,
+        &[],
+        &hook_meta(&c.session, Some(ASK_BLOCK), true),
+    );
     Reply {
         block: true,
         reason: Some(reason),

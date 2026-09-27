@@ -1,6 +1,7 @@
 //! The session-start event: kickoff rows for the repo plus the report line,
 //! and the one-line warning when `.fael/log` is gitignored by mistake.
 
+use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
 use super::state::{branch_path, head_branch, prune_sessions, session_key, state_dir};
 use super::usage::record_usage;
@@ -24,20 +25,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         None => return no(),
     };
     prune_sessions(&state_dir().join("sessions"));
-    // the branch this session started on, for stop's drift warning — written
-    // before anything can return, even with no log yet; empty session (no key
-    // for the file) and detached HEAD (no branch) record nothing
-    if !c.session.is_empty()
-        && let Some(branch) = head_branch(&c.repo.root)
-    {
-        let path = branch_path(&c.session, &c.repo.root);
-        if path
-            .parent()
-            .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
-        {
-            let _ = std::fs::write(&path, format!("{branch}\n"));
-        }
-    }
+    record_start_branch(&c.session, &c.repo.root);
     // once per session: pick up renames committed since the last session, so
     // the read/edit push (which never spawns git) resolves them — and kickoff
     // keeps rows whose files were merely renamed
@@ -129,11 +117,37 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // said — rows the budget cut off never reached any context
     let n = context.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = shown.iter().take(n).map(|r| r.id.clone()).collect();
-    record_usage(&c.client, "session-start", &c.repo.root, &context, &shown);
+    // the session just began — no round completed yet, so no real tokens
+    let meta = hook_meta(&c.session, None, false);
+    record_usage(
+        &c.client,
+        "session-start",
+        &c.repo.root,
+        &context,
+        &shown,
+        &meta,
+    );
     Reply {
         block: false,
         reason: None,
         context: Some(context),
+    }
+}
+
+/// The branch this session started on, for stop's drift warning — written
+/// before anything can return, even with no log yet; empty session (no key
+/// for the file) and detached HEAD (no branch) record nothing.
+fn record_start_branch(session: &str, root: &Path) {
+    if !session.is_empty()
+        && let Some(branch) = head_branch(root)
+    {
+        let path = branch_path(session, root);
+        if path
+            .parent()
+            .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
+        {
+            let _ = std::fs::write(&path, format!("{branch}\n"));
+        }
     }
 }
 
