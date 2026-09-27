@@ -2,10 +2,18 @@
 //! spawn on this path), record the edit, and say each row once per session.
 
 use super::protocol::{Event, Reply, ctx};
-use super::state::{edits_path, record_edits, seen_path};
+use super::state::{edits_path, record_edits, seen_path, take_risk};
 use super::usage::record_usage;
 use crate::{aliases, core};
 use std::collections::HashSet;
+
+/// The stashed Weak-signal line: one line, shown on the next push only.
+fn risk_line(marker: &str, files: &[String]) -> String {
+    format!(
+        "fael note: this session mentioned a possible problem (\"{marker}\") — file an issue if it holds up: fael add issue \"<what is at risk>\" --files {}",
+        files.join(",")
+    )
+}
 
 /// A `scheme:ref` anchor (opaque, never a filesystem path) — the same rule
 /// core uses: a scheme of ≥ 2 lower chars before the first `:`.
@@ -83,7 +91,21 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         let old: HashSet<&str> = old.lines().collect();
         rows.retain(|r| !old.contains(r.id.as_str()));
     }
+    // a stashed Weak risk is taken here — shown once, whether or not rows join it
+    let risk = (!c.session.is_empty())
+        .then(|| take_risk(&c.session, &c.repo.root))
+        .flatten();
     if rows.is_empty() {
+        // a stashed risk still gets its one line, even with no rows to join
+        if let Some(marker) = risk {
+            let context = risk_line(&marker, &files);
+            record_usage(&c.client, event, &c.repo.root, &context, &[]);
+            return Reply {
+                block: false,
+                reason: None,
+                context: Some(context),
+            };
+        }
         return no();
     }
     let body = core::render(&c.log, &rows, c.repo.cfg.push_tokens);
@@ -103,6 +125,10 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
             .and_then(|mut f| f.write_all(out.as_bytes()));
     }
     let context = format!("fael mem for {}:\n{body}", files.join(", "));
+    let context = match risk {
+        Some(marker) => format!("{context}\n{}", risk_line(&marker, &files)),
+        None => context,
+    };
     record_usage(&c.client, event, &c.repo.root, &context, &shown);
     Reply {
         block: false,

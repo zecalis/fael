@@ -9,6 +9,7 @@ mod clients;
 mod session;
 mod stats;
 mod stop;
+mod stop_risk;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
