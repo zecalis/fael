@@ -1,0 +1,152 @@
+//! `find --branches` (row-hygiene chunk 9) through the real binary: rows on
+//! an unmerged branch read without a checkout, tagged ` @<branch>`, gone
+//! from the plain `find`, and untagged-once after the merge.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+fn git(d: &Path, args: &[&str]) {
+    assert!(
+        Command::new("git")
+            .args(args)
+            .current_dir(d)
+            .status()
+            .unwrap()
+            .success(),
+        "git {args:?}"
+    );
+}
+
+fn git_out(d: &Path, args: &[&str]) -> String {
+    let o = Command::new("git")
+        .args(args)
+        .current_dir(d)
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "git {args:?}");
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    (o.status.success(), s(&o.stdout), s(&o.stderr))
+}
+
+fn repo() -> PathBuf {
+    let d = std::env::temp_dir().join(format!("fael-branches-{}", fael_core::ulid()));
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    git(&d, &["init", "-q"]);
+    git(&d, &["config", "user.name", "Branch Test"]);
+    git(&d, &["config", "user.email", "branch@example.com"]);
+    git(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    d
+}
+
+/// `main` holds row B, `feat/x` (unmerged) holds row A — both committed, so
+/// the branch tips carry their rows. Returns the main branch name.
+fn main_and_feat(d: &Path) -> String {
+    let main = git_out(d, &["symbolic-ref", "--short", "HEAD"]);
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, _, err) = fael(d, &["add", "note", "row B on main", "--files", "src/b.rs"]);
+    assert!(ok, "{err}");
+    git(d, &["add", "-A"]);
+    git(d, &["commit", "-qm", "rows B"]);
+    git(d, &["checkout", "-qb", "feat/x"]);
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(d, &["add", "note", "row A on feat", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    git(d, &["add", "-A"]);
+    git(d, &["commit", "-qm", "rows A"]);
+    git(d, &["checkout", "-q", &main]);
+    main
+}
+
+#[test]
+fn find_branches_tags_unmerged_rows_and_plain_find_hides_them() {
+    let d = repo();
+    let main = main_and_feat(&d);
+
+    // plain find: only the working branch's row
+    let (ok, out, _) = fael(&d, &["find"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("row B on main"), "{out}");
+    assert!(!out.contains("row A on feat"), "{out}");
+
+    // --branches: both, the foreign row tagged once, the local row untagged
+    let (ok, out, _) = fael(&d, &["find", "--branches"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("row B on main"), "{out}");
+    assert!(out.contains("row A on feat"), "{out}");
+    assert_eq!(out.matches("row A on feat").count(), 1, "{out}");
+    assert_eq!(out.matches("row B on main").count(), 1, "{out}");
+    let a_line = out.lines().find(|l| l.contains("row A on feat")).unwrap();
+    assert!(a_line.ends_with("@feat/x"), "{a_line}");
+    let b_line = out.lines().find(|l| l.contains("row B on main")).unwrap();
+    assert!(!b_line.contains('@'), "{b_line}");
+
+    // the read moved nothing: same branch, and nothing outside .fael/
+    // touched (find refreshes its rename cache inside .fael/ — that churn
+    // predates --branches and is not a checkout)
+    assert_eq!(git_out(&d, &["symbolic-ref", "--short", "HEAD"]), main);
+    let dirty = git_out(&d, &["status", "--porcelain", "--untracked-files=no"]);
+    assert!(dirty.lines().all(|l| l.contains(".fael/")), "{dirty}");
+
+    // kickoff --branches sees the foreign row too (its file must exist —
+    // kickoff drops rows whose files are all gone)
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, _) = fael(&d, &["kickoff", "--branches"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("row A on feat"), "{out}");
+    let a_line = out.lines().find(|l| l.contains("row A on feat")).unwrap();
+    assert!(a_line.ends_with("@feat/x"), "{a_line}");
+}
+
+#[test]
+fn find_branches_after_merge_shows_each_row_once_untagged() {
+    let d = repo();
+    main_and_feat(&d);
+    git(&d, &["add", "-A"]);
+    git(&d, &["merge", "-q", "--no-edit", "feat/x"]);
+
+    // merged: the row is in HEAD now — listed once, with no branch tag, and
+    // the merged branch no longer counts as a foreign source
+    for args in [&["find"][..], &["find", "--branches"]] {
+        let (ok, out, _) = fael(&d, args);
+        assert!(ok, "{out:?}");
+        assert!(out.contains("row A on feat"), "{out}");
+        assert_eq!(out.matches("row A on feat").count(), 1, "{out}");
+        assert!(!out.contains("@feat/x"), "{out}");
+    }
+}
+
+#[test]
+fn mcp_find_branches_tags_like_cli() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let d = repo();
+    main_and_feat(&d);
+
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .arg("mcp")
+        .current_dir(&d)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let call = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "find", "arguments": {"branches": true}}});
+    c.stdin
+        .take()
+        .unwrap()
+        .write_all((call.to_string() + "\n").as_bytes())
+        .unwrap();
+    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
+    assert!(out.contains("row A on feat"), "{out}");
+    assert!(out.contains("@feat/x"), "{out}");
+    assert!(out.contains("row B on main"), "{out}");
+}

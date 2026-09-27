@@ -2,12 +2,16 @@
 //! Moved out of main.rs (file-size ratchet) — no logic of its own beyond the
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
+pub(crate) mod branches;
+
 use super::{Args, aliases};
 use fael_core::{self as core, Filter, Log, Row};
 
 pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
-    let log = super::read(&r);
+    // `--branches` merges unmerged branches' rows into the working log (HEAD
+    // wins on duplicate ids); rows from elsewhere tag ` @<branch>` on render
+    let (log, branch_of) = working_or_branches(a, super::read(&r), &r.root);
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
     // text search (a text query equalling a unique id prefix means the id)
     if let Some(t) = text
@@ -46,6 +50,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             offset,
             next: &|n| format!("{base} --offset {n}"),
         },
+        &branch_of,
     )?;
     // --all in JSON: also the close rows naming a shown row, so a consumer can tell closed from open
     if a.has("json") && f.all {
@@ -61,7 +66,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
 pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
-    let log = super::read(&r);
+    let (log, branch_of) = working_or_branches(a, super::read(&r), &r.root);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
     let f = Filter {
@@ -83,6 +88,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
             offset,
             next: &|n| format!("{base} --offset {n}"),
         },
+        &branch_of,
     )?;
     // free-text revisits never list — one count line points at them
     // (due dates list in full above, so they need no line)
@@ -95,15 +101,46 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     Ok(())
 }
 
-fn show(a: &Args, log: &Log, rows: &[&Row], budget: usize, cut: core::Cut) -> Result<(), String> {
+/// The working log, or the working log plus unmerged branches' rows when
+/// `--branches` is passed (HEAD wins on duplicate ids — a merged-then-listed
+/// row never doubles, never tags). Read/edit push never pass the flag: no git
+/// spawn belongs on the 5 ms push path.
+fn working_or_branches(a: &Args, log: Log, root: &std::path::Path) -> (Log, branches::BranchMap) {
+    if a.has("branches") {
+        branches::with_branches(root, log)
+    } else {
+        (log, branches::BranchMap::new())
+    }
+}
+
+fn show(
+    a: &Args,
+    log: &Log,
+    rows: &[&Row],
+    budget: usize,
+    cut: core::Cut,
+    branch_of: &branches::BranchMap,
+) -> Result<(), String> {
     if rows.is_empty() {
         eprintln!("fael: no rows match");
     } else if a.has("json") {
+        // JSON stays the row shape (consumers dedupe by id) — the branch tag
+        // is a list-display feature, like titles
         rows.iter().for_each(|r| println!("{}", r.to_line()));
     } else if a.has("full") {
-        print!("{}", core::render_full_page(log, rows, budget, cut));
+        print!(
+            "{}",
+            branches::tag(
+                core::render_full_page(log, rows, budget, cut),
+                log,
+                branch_of
+            )
+        );
     } else {
-        print!("{}", core::render_page(log, rows, budget, cut));
+        print!(
+            "{}",
+            branches::tag(core::render_page(log, rows, budget, cut), log, branch_of)
+        );
     }
     Ok(())
 }
@@ -178,6 +215,11 @@ impl Args {
             if self.has("all") {
                 s.push_str(" --all");
             }
+        }
+        // `--branches` replays on both find and kickoff — the cut line keeps
+        // the branch rows across pages instead of silently dropping them
+        if self.has("branches") {
+            s.push_str(" --branches");
         }
         if self.has("full") {
             s.push_str(" --full");
