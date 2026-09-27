@@ -318,6 +318,7 @@ pub fn freshness<'a>(root: &'a Path, al: &'a Aliases) -> impl Fn(&Row) -> i64 + 
             .fold(row_ms, i64::max)
     }
 }
+
 /// What a session opens with (`fael kickoff`, the session-start hook): the brief minus
 /// rows whose files are gone, open issues first, then everything else by how fresh it is —
 /// the newer of the row itself and the last change to any of its files. So an old decision
