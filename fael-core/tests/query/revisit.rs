@@ -144,8 +144,17 @@ fn find_revisit_filters_any_or_substring() {
 
 #[test]
 fn waiting_counts_free_text_only() {
-    let l = log();
-    assert_eq!(ids(&waiting(&l)), ["13"]);
+    let r = root();
+    let mut l = log();
+    // free text on gone files counts nowhere: kickoff drops the row, so the
+    // count must not point at it
+    l.rows.push(dated(
+        "D0000000000000000000000014",
+        "note",
+        &["src/gone.rs"],
+        "someday",
+    ));
+    assert_eq!(ids(&waiting(&l, &r, &Aliases::default())), ["13"]);
     assert!(waiting_line(1).contains("1 row waiting on revisit"));
     assert!(waiting_line(2).contains("2 rows waiting on revisit"));
     assert!(waiting_line(1).contains("fael find --revisit"));

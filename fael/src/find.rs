@@ -87,7 +87,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     // free-text revisits never list — one count line points at them
     // (due dates list in full above, so they need no line)
     if !a.has("json") && offset == 0 {
-        let n = core::waiting(&log).len();
+        let n = core::waiting(&log, &r.root, &al).len();
         if n > 0 {
             print!("{}", core::waiting_line(n));
         }
