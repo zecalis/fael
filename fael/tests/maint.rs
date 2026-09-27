@@ -139,7 +139,6 @@ fn doctor_flags_stale_backtick_paths() {
 
 #[test]
 fn doctor_flags_orphan_branches() {
-    use std::os::unix::fs::PermissionsExt;
     let d = repo();
     // file the row on a doomed branch: the stamp comes from git, never flags
     assert!(
@@ -155,18 +154,40 @@ fn doctor_flags_orphan_branches() {
     assert!(ok, "{err}");
     let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
     assert!(ok);
-    // a fake gh first on PATH: each phase rewrites what it reports
+    // a fake gh first on PATH: each phase rewrites what it reports. Windows
+    // has no shebang/chmod, so the fake is batch there (gh.bat resolves
+    // through PATHEXT) and shell everywhere else.
     let bin = d.join("fakebin");
     std::fs::create_dir_all(&bin).unwrap();
+    #[cfg(windows)]
+    let gh = bin.join("gh.bat");
+    #[cfg(not(windows))]
     let gh = bin.join("gh");
     let script = |body: &str| {
-        std::fs::write(&gh, format!("#!/bin/sh\n{body}\n")).unwrap();
-        std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        #[cfg(windows)]
+        std::fs::write(&gh, format!("@echo off\r\n{body}\r\n")).unwrap();
+        #[cfg(not(windows))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(&gh, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
     };
+    // batch echo prints its quotes, so only the shell half single-quotes
+    #[cfg(windows)]
+    let say = |json: &str| format!("echo {json}");
+    #[cfg(not(windows))]
+    let say = |json: &str| format!("echo '{json}'");
+    #[cfg(windows)]
+    let fail = "exit /b 1";
+    #[cfg(not(windows))]
+    let fail = "exit 1";
     let doctor = || {
+        let sep = if cfg!(windows) { ";" } else { ":" };
         let path = format!(
-            "{}:{}",
+            "{}{}{}",
             bin.display(),
+            sep,
             std::env::var("PATH").unwrap_or_default()
         );
         let o = Command::new(env!("CARGO_BIN_EXE_fael"))
@@ -181,7 +202,7 @@ fn doctor_flags_orphan_branches() {
         )
     };
     // the PR closed unmerged: Orphan names the branch (text and json)
-    script("echo '[{\"mergedAt\":null}]'");
+    script(&say(r#"[{"mergedAt":null}]"#));
     let (ok, out) = doctor();
     assert!(ok, "{out}");
     assert!(
@@ -189,11 +210,11 @@ fn doctor_flags_orphan_branches() {
         "{out}"
     );
     // merged after all: silent
-    script("echo '[{\"mergedAt\":\"2026-09-27T04:50:08Z\"}]'");
+    script(&say(r#"[{"mergedAt":"2026-09-27T04:50:08Z"}]"#));
     let (ok, out) = doctor();
     assert!(ok && !out.contains("[Orphan]"), "{out}");
     // gh failing (no auth, no binary on a bare PATH): skipped silently
-    script("exit 1");
+    script(fail);
     let (ok, out) = doctor();
     assert!(ok && !out.contains("[Orphan]"), "{out}");
 }
