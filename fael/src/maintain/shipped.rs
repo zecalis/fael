@@ -21,9 +21,45 @@ enum Verdict {
     No,
 }
 
+/// One open note that sits on a landed branch. Keeps the full id (for
+/// `doctor --json`) and the PR number (for the `--fix` close text) — the
+/// abbreviated examples in `detail` are for the human eye only.
+struct Landed {
+    id: String,
+    short: String,
+    branch: String,
+    number: Option<u64>,
+}
+
+impl Landed {
+    /// `short-id (branch #N): fael close …` — the close command names the PR
+    /// when its number is known, plain `shipped` when it is not.
+    fn example(&self) -> String {
+        match self.number {
+            Some(n) => format!(
+                "{} ({} #{n}): `fael close {} \"shipped in #{n}\"`",
+                self.short, self.branch, self.short
+            ),
+            None => format!(
+                "{} ({}): `fael close {} \"shipped\"`",
+                self.short, self.branch, self.short
+            ),
+        }
+    }
+
+    /// The `why` `--fix` passes to `fael close` for this note.
+    fn close_text(&self) -> String {
+        match self.number {
+            Some(n) => format!("shipped in #{n}"),
+            None => "shipped".into(),
+        }
+    }
+}
+
 /// The `[Shipped]` + `[Shipped?]` doctor problems, if any open note sits on a
 /// landed branch — kept here (not in `maintain.rs`) so `open_row_notes` stays
-/// under the 100-line function cap.
+/// under the 100-line function cap. `[Shipped]` carries the close actions
+/// `doctor --fix` applies (and so reads `[--fix]`); `[Shipped?]` never does.
 pub(super) fn problems(
     log: &core::Log,
     root: &Path,
@@ -33,8 +69,8 @@ pub(super) fn problems(
     if prs.is_empty() && git.is_empty() {
         return vec![];
     }
-    let mut sure: Vec<String> = vec![];
-    let mut maybe: Vec<String> = vec![];
+    let mut sure: Vec<Landed> = vec![];
+    let mut maybe: Vec<Landed> = vec![];
     let w = core::abbrev(log);
     for row in core::find(log, &core::Filter::default()) {
         if row.kind != "note" {
@@ -43,52 +79,51 @@ pub(super) fn problems(
         let Some(branch) = row.branch().filter(|b| !b.is_empty()) else {
             continue;
         };
-        let short = w.short(&row.id).to_string();
+        let landed = |n| Landed {
+            id: row.id.clone(),
+            short: w.short(&row.id).to_string(),
+            branch: branch.to_string(),
+            number: n,
+        };
         match decide(prs.get(branch), git.contains(branch), birth_ms(row)) {
-            Verdict::Shipped(n) => sure.push(entry(&short, branch, n)),
-            Verdict::Maybe(n) => maybe.push(entry(&short, branch, n)),
+            Verdict::Shipped(n) => sure.push(landed(n)),
+            Verdict::Maybe(n) => maybe.push(landed(n)),
             Verdict::No => {}
         }
     }
     let mut out = vec![];
     if !sure.is_empty() {
-        out.push(core::Problem {
-            kind: core::ProblemKind::Shipped,
-            severity: core::Severity::Info,
-            fixable: false,
-            file: None,
-            detail: format!(
-                "{} open note(s) already landed with their branch — \
-                 close them (e.g. {})",
-                sure.len(),
-                sure[..sure.len().min(5)].join("; ")
-            ),
-        });
+        let eg: Vec<String> = sure.iter().take(5).map(Landed::example).collect();
+        let closes: Vec<(String, String)> = sure
+            .iter()
+            .map(|l| (l.id.clone(), l.close_text()))
+            .collect();
+        out.push(
+            core::Problem::info(
+                core::ProblemKind::Shipped,
+                format!(
+                    "{} open note(s) already landed with their branch — \
+                     close them (e.g. {})",
+                    sure.len(),
+                    eg.join("; ")
+                ),
+            )
+            .with_closes(closes),
+        );
     }
     if !maybe.is_empty() {
-        out.push(core::Problem {
-            kind: core::ProblemKind::ShippedMaybe,
-            severity: core::Severity::Info,
-            fixable: false,
-            file: None,
-            detail: format!(
+        let eg: Vec<String> = maybe.iter().take(5).map(Landed::example).collect();
+        out.push(core::Problem::info(
+            core::ProblemKind::ShippedMaybe,
+            format!(
                 "{} open note(s) on branch(es) that look merged but have no \
                  merge time to confirm — check, then `fael close` (e.g. {})",
                 maybe.len(),
-                maybe[..maybe.len().min(5)].join("; ")
+                eg.join("; ")
             ),
-        });
+        ));
     }
     out
-}
-
-/// `short-id (branch #N): `fael close …`` — the close text names the PR when
-/// its number is known, plain `shipped` when it is not.
-fn entry(short: &str, branch: &str, number: Option<u64>) -> String {
-    match number {
-        Some(n) => format!("{short} ({branch} #{n}): `fael close {short} \"shipped in #{n}\"`"),
-        None => format!("{short} ({branch}): `fael close {short} \"shipped\"`"),
-    }
 }
 
 /// Pure half of `problems`: the earliest PR merged at/after the row's birth

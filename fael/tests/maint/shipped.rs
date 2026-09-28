@@ -35,9 +35,9 @@ fn pin_main(d: &Path) {
 /// `fael doctor` with canned `gh pr list --state merged` output through
 /// `FAEL_GH_MERGED_JSON` (same reason as orphan's `FAEL_GH_JSON`: no
 /// shell/batch fake survives Windows or real-gh runners).
-fn doctor(d: &Path, gh_json: &str) -> (bool, String) {
+fn doctor_args(d: &Path, gh_json: &str, args: &[&str]) -> (bool, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
-    c.args(["doctor"]).current_dir(d);
+    c.args(args).current_dir(d);
     state_env(&mut c, d);
     c.env("FAEL_GH_MERGED_JSON", gh_json);
     let o = c.output().unwrap();
@@ -45,6 +45,10 @@ fn doctor(d: &Path, gh_json: &str) -> (bool, String) {
         o.status.success(),
         String::from_utf8_lossy(&o.stdout).into_owned(),
     )
+}
+
+fn doctor(d: &Path, gh_json: &str) -> (bool, String) {
+    doctor_args(d, gh_json, &["doctor"])
 }
 
 /// A note plus a decision filed on `branch` (the stamp comes from git).
@@ -75,7 +79,7 @@ fn doctor_flags_shipped_notes() {
     );
     assert!(ok, "{out}");
     assert!(
-        out.contains("note [Shipped]: 1 open note(s)")
+        out.contains("note [Shipped] [--fix]: 1 open note(s)")
             && out.contains("feat/shipped-work")
             && out.contains("shipped in #43")
             && out.contains("fael close"),
@@ -93,6 +97,31 @@ fn doctor_flags_shipped_notes() {
     // unparseable answer: skipped silently
     let (ok, out) = doctor(&d, "not json");
     assert!(ok && !out.contains("[Shipped"), "{out}");
+}
+
+#[test]
+fn doctor_fix_closes_shipped_notes() {
+    let d = repo();
+    let fixture =
+        r#"[{"headRefName":"feat/shipped-work","mergedAt":"2099-01-01T00:00:00Z","number":43}]"#;
+    file_rows(&d, "feat/shipped-work");
+    // same evidence as the report, but --fix applies the mechanical close
+    let (ok, out) = doctor_args(&d, fixture, &["doctor", "--fix"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("fixed: closed") && out.contains("shipped in #43"),
+        "{out}"
+    );
+    // closed now: no [Shipped] on the next doctor, with or without the gh answer
+    let (ok, out) = doctor(&d, fixture);
+    assert!(ok && !out.contains("[Shipped"), "{out}");
+    let (ok, out) = doctor(&d, "[]");
+    assert!(ok && !out.contains("[Shipped"), "{out}");
+    // the note is closed (no longer open); the decision beside it is untouched
+    let (_, out, _) = fael(&d, &["find", "--kind", "note"]);
+    assert!(!out.contains("landed work"), "{out}");
+    let (_, out, _) = fael(&d, &["find", "--kind", "decision"]);
+    assert!(out.contains("landed choice"), "{out}");
 }
 
 #[test]

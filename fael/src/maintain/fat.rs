@@ -17,9 +17,10 @@ use crate::core;
 /// so anything born before it never got an auto-key or auto-supersede.
 pub(super) const LEGACY_CUTOFF_MS: u64 = 1_790_553_600_000;
 
-/// One fat row: `short-id → first fat reason`, plus its birth for the
-/// legacy split (`None` = unknowable, counted as legacy).
-type FatRow = (String, Option<u64>);
+/// One fat row: `(full id, short-id → first fat reason, birth)`. The birth
+/// feeds the legacy split (`None` = unknowable, counted as legacy); the full
+/// id rides to `doctor --json` for the cleanup pass.
+type FatRow = (String, String, Option<u64>);
 
 /// The `[Fat]` doctor problem, if any open row is fat — kept here (not in
 /// `maintain.rs`) so `open_row_notes` stays under the 100-line function cap.
@@ -34,24 +35,24 @@ pub(super) fn problem(log: &core::Log, cfg: &core::Config, expand: bool) -> Opti
         return Some(fat_problem(&fat, None, true));
     }
     let (new, legacy): (Vec<&FatRow>, Vec<&FatRow>) =
-        fat.iter().partition(|(_, birth)| !is_legacy(*birth));
+        fat.iter().partition(|(_, _, birth)| !is_legacy(*birth));
     if legacy.is_empty() {
         return Some(fat_problem(&fat, None, false));
     }
     if new.is_empty() {
         return Some(legacy_problem(legacy.len()));
     }
-    let listed: Vec<(String, Option<u64>)> =
-        new.into_iter().map(|(s, b)| (s.clone(), *b)).collect();
+    let listed: Vec<FatRow> = new.into_iter().cloned().collect();
     Some(fat_problem(&listed, Some(legacy.len()), false))
 }
 
 /// One `[Fat]` problem. `full` lists every fat row — the `--fat` cleanup pass
 /// exists to enumerate them all, so it must not drop any; otherwise the detail
 /// skims with up to 5 examples. The optional `legacy` suffix collapses
-/// pre-self-heal rows when old and new rows share the output.
+/// pre-self-heal rows when old and new rows share the output. `ids` carries
+/// every row behind the line, so `--json` never hides one.
 fn fat_problem(fat: &[FatRow], legacy: Option<usize>, full: bool) -> core::Problem {
-    let shown: Vec<&str> = fat.iter().map(|(s, _)| s.as_str()).collect();
+    let shown: Vec<&str> = fat.iter().map(|(_, s, _)| s.as_str()).collect();
     let n = if full {
         shown.len()
     } else {
@@ -68,24 +69,16 @@ fn fat_problem(fat: &[FatRow], legacy: Option<usize>, full: bool) -> core::Probl
             " · {n} legacy rows — fael doctor --fat --json for a one-time pass"
         ));
     }
-    core::Problem {
-        kind: core::ProblemKind::Fat,
-        severity: core::Severity::Info,
-        fixable: false,
-        file: None,
-        detail,
-    }
+    core::Problem::info(core::ProblemKind::Fat, detail)
+        .with_ids(fat.iter().map(|(id, _, _)| id.clone()).collect())
 }
 
 /// The collapsed legacy line: no ids, just the count and the cleanup pass.
 fn legacy_problem(n: usize) -> core::Problem {
-    core::Problem {
-        kind: core::ProblemKind::Fat,
-        severity: core::Severity::Info,
-        fixable: false,
-        file: None,
-        detail: format!("{n} legacy rows — fael doctor --fat --json for a one-time pass"),
-    }
+    core::Problem::info(
+        core::ProblemKind::Fat,
+        format!("{n} legacy rows — fael doctor --fat --json for a one-time pass"),
+    )
 }
 
 /// A row is legacy when its birth predates self-heal — or when its birth is
@@ -101,15 +94,21 @@ fn birth_ms(row: &core::Row) -> Option<u64> {
     core::ulid_ms(&row.id).or_else(|| core::ts_ms(&row.ts).and_then(|t| u64::try_from(t).ok()))
 }
 
-/// `(short-id → first fat reason, birth)` for every open row `fat_reasons`
-/// flags — closed rows never count (`find` hides them by default).
+/// `(full id, short-id → first fat reason, birth)` for every open row
+/// `fat_reasons` flags — closed rows never count (`find` hides them by default).
 fn rows(log: &core::Log, cfg: &core::Config) -> Vec<FatRow> {
     let w = core::abbrev(log);
     core::find(log, &core::Filter::default())
         .into_iter()
         .filter_map(|row| {
             let rs = core::fat_reasons(row, cfg);
-            (!rs.is_empty()).then(|| (format!("{} → {}", w.short(&row.id), rs[0]), birth_ms(row)))
+            (!rs.is_empty()).then(|| {
+                (
+                    row.id.clone(),
+                    format!("{} → {}", w.short(&row.id), rs[0]),
+                    birth_ms(row),
+                )
+            })
         })
         .collect()
 }
@@ -231,6 +230,20 @@ mod tests {
             .filter(|r| g.detail.contains(w.short(&r.id)))
             .count();
         assert_eq!(named, 5, "{}", g.detail);
+    }
+
+    #[test]
+    fn ids_ride_on_the_fat_problem() {
+        let l = fat_log(3);
+        let p = problem(&l, &crate::core::Config::default(), true).unwrap();
+        assert_eq!(p.ids.len(), l.rows.len());
+        for r in &l.rows {
+            assert!(p.ids.contains(&r.id), "missing {} in {:?}", r.id, p.ids);
+        }
+        // the collapsed legacy line carries no ids (the pass that expands it does)
+        let legacy = legacy_only();
+        let collapsed = problem(&legacy, &crate::core::Config::default(), false).unwrap();
+        assert!(collapsed.ids.is_empty());
     }
 
     #[test]

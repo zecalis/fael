@@ -5,12 +5,12 @@
 
 use crate::core;
 
-/// `branch → short-id(s)` for every branch on open rows whose PRs all closed
-/// unmerged — a live open PR off the branch is not orphan (review finding).
-/// One `gh` call per branch; no `gh`, no auth, or no PR for the branch →
-/// skipped silently, never an error.
+/// `branch → full row id(s)` for every branch on open rows whose PRs all
+/// closed unmerged — a live open PR off the branch is not orphan (review
+/// finding). One `gh` call per branch; no `gh`, no auth, or no PR for the
+/// branch → skipped silently, never an error. Full ids (not the abbreviated
+/// examples) ride to `doctor --json` so a cleanup agent can act on them.
 pub(super) fn rows(log: &core::Log) -> Vec<(String, Vec<String>)> {
-    let w = core::abbrev(log);
     let mut by_branch: std::collections::BTreeMap<String, Vec<String>> =
         std::collections::BTreeMap::new();
     for row in core::find(log, &core::Filter::default()) {
@@ -18,7 +18,7 @@ pub(super) fn rows(log: &core::Log) -> Vec<(String, Vec<String>)> {
             by_branch
                 .entry(b.to_string())
                 .or_default()
-                .push(w.short(&row.id).to_string());
+                .push(row.id.clone());
         }
     }
     by_branch

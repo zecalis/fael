@@ -81,6 +81,15 @@ pub struct Problem {
     /// content repairs by it instead of parsing `detail`.
     pub file: Option<PathBuf>,
     pub detail: String,
+    /// Full row ids this problem is about, in the same order as the examples
+    /// in `detail` — empty when the problem is not about rows. `--json`
+    /// prints them so a cleanup agent can act (`fael close <id>`) without
+    /// re-deriving the detector outside fael (01M3M2ZV).
+    pub ids: Vec<String>,
+    /// `--fix` close actions for the adapter: `(row id, close text)`. Only the
+    /// confirmed `[Shipped]` notes fill this — `[Shipped?]` never does, and
+    /// core never closes a row itself (the adapter owns the `gh` evidence).
+    pub closes: Vec<(String, String)>,
 }
 
 impl Problem {
@@ -91,17 +100,37 @@ impl Problem {
             fixable,
             file,
             detail,
+            ids: vec![],
+            closes: vec![],
         }
     }
 
-    fn info(kind: Kind, detail: String) -> Problem {
+    pub fn info(kind: Kind, detail: String) -> Problem {
         Problem {
             kind,
             severity: Severity::Info,
             fixable: false,
             file: None,
             detail,
+            ids: vec![],
+            closes: vec![],
         }
+    }
+
+    /// Attach the full row ids `detail` only sketches (`--json` prints them).
+    pub fn with_ids(mut self, ids: Vec<String>) -> Problem {
+        self.ids = ids;
+        self
+    }
+
+    /// Attach the mechanical close actions `--fix` may take (`[Shipped]`).
+    /// A problem with close actions is by definition `fixable` (the adapter
+    /// applies them), and its `ids` are the rows being closed.
+    pub fn with_closes(mut self, closes: Vec<(String, String)>) -> Problem {
+        self.fixable = !closes.is_empty();
+        self.ids = closes.iter().map(|(id, _)| id.clone()).collect();
+        self.closes = closes;
+        self
     }
 }
 

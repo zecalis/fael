@@ -108,6 +108,34 @@ fn doctor_flags_stale_backtick_paths() {
 }
 
 #[test]
+fn doctor_json_lists_full_row_ids() {
+    let d = repo();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "on a gone file",
+            "--files",
+            "src/deleted.rs",
+        ],
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    // `--json` carries the full id (not just the abbreviated example in detail)
+    // (exit may be 1 — no union line yet is an unrelated error)
+    let (_, out, _) = fael(&d, &["doctor", "--json"]);
+    let ps: Vec<serde_json::Value> = serde_json::from_str(out.trim()).unwrap();
+    let gone = ps.iter().find(|p| p["kind"] == "gone").expect("gone");
+    assert_eq!(gone["ids"], serde_json::json!([id]), "{gone}");
+    // the id is actionable: closing it clears the problem
+    let (ok, _, err) = fael(&d, &["close", &id, "moved"]);
+    assert!(ok, "{err}");
+    let (_, out, _) = fael(&d, &["doctor", "--json"]);
+    assert!(!out.contains("\"gone\""), "{out}");
+}
+
+#[test]
 fn doctor_quarantines_a_broken_line() {
     let d = repo();
     let (ok, _, err) = fael(&d, &["add", "decision", "keep me", "--files", "src/a.rs"]);
