@@ -36,12 +36,13 @@ pub use log::{
     is_month, mv_row, needs_seal, parse, read,
 };
 pub use query::{
-    Abbrev, Background, Bucket, Cut, Filter, Focus, KeyUse, PUSH_BACKGROUND, PlanFocus, PushPolicy,
-    Selection, Urgent, UrgentChange, abbrev, backtick_paths, brief, bucket, closed, cmp_rows, due,
-    est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone, gone_files, is_date, keys,
-    kickoff, levenshtein, page, push, push_tiered, query, ranked, render, render_full,
-    render_full_page, render_page, resolve, resolve_urgent, row_due, select, stale_refs,
-    superseded, today, waiting, waiting_line, warnings, with_due,
+    Abbrev, Background, Bucket, Cut, Filter, Focus, KeyUse, PUSH_BACKGROUND, PlanCandidate,
+    PlanFact, PlanResolution, PlanSource, PushPolicy, Selection, Urgent, UrgentChange, abbrev,
+    backtick_paths, brief, bucket, closed, cmp_rows, due, est_tokens, fat_reasons, find, fresh_ts,
+    freshness, glob, gone, gone_files, is_date, keys, kickoff, levenshtein, open_plans, page, push,
+    push_tiered, query, ranked, render, render_full, render_full_page, render_page, resolve,
+    resolve_plan, resolve_urgent, row_due, select, stale_refs, superseded, today, waiting,
+    waiting_line, warnings, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{normalize_files, valid_key, validate, validate_alias, validate_close};

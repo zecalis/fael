@@ -70,6 +70,19 @@ don't know `moved` must skip the row entirely (never show it, never count it as 
 row without `files`); readers that do expand queries through it like a git rename. Never
 edited or deleted — a wrong alias is fixed by moving back, not by rewriting.
 
+### Plan keys
+
+Planning rides the existing `key` and `files` fields — no new field, no format bump:
+
+- `plan:<name>` — the anchor a `PLAN-<name>.md` path widens a kickoff filter to (plan name
+  lowercased; see `plan_anchor`). `files` still holds the real code files the row is about.
+- `plan:<name>:chunk-<n>` — one chunk's row (a handoff note). The `n` is a plain number.
+
+An **open plan** is a name with at least one open `plan:<name>:chunk-<n>` row; its **active
+chunk** is the highest open `n`. Readers resolve which plan a session is inside from these
+rows plus the session branch (and, later, a declared intent) — never from a `status:` field:
+`.fapony/` is not read by fael, and the log is the only truth.
+
 ## Writers
 
 **Write contract ≠ read contract.** Writers v1 must follow every rule below; readers must accept anything

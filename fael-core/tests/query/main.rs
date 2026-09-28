@@ -4,13 +4,15 @@
 //! `select` (find/brief/push/gone/kickoff/`to`), `render` (render/tokens),//! `paging` (limit/offset page + cut line), `lookup` (resolve/keys/warnings/glob),
 //! `urgent` (queue/6-step rank), `bump` (MVCC-style new versions),
 //! `title` (title/body split, `--title` fallback,
-//! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`).
+//! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
+//! `focus` (push buckets + row cap), `plan` (open plans + resolution).
 //! The shared builders live here.
 
 mod bump;
 mod focus;
 mod lookup;
 mod paging;
+mod plan;
 mod render;
 mod revisit;
 mod select;
