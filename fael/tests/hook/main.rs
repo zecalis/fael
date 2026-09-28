@@ -33,33 +33,29 @@ fn fael_env(
     stdin: &str,
     envs: &[(&str, &str)],
 ) -> (bool, String, String) {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
-    c.args(args)
-        .current_dir(dir)
-        .env("FAEL_STATE_DIR", state(dir));
-    for (k, v) in envs {
-        c.env(k, v);
-    }
-    if !stdin.is_empty() {
-        c.stdin(Stdio::piped());
-    }
-    let mut c = c
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    if !stdin.is_empty() {
-        c.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
-    }
-    let o = c.wait_with_output().unwrap();
-    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
-    (o.status.success(), s(&o.stdout), s(&o.stderr))
+    fael_at_env(&state(dir), dir, args, stdin, envs)
 }
 
 /// `fael` with an explicit state dir — for tests that switch to a fresh one.
 fn fael_at(state: &Path, dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
+    fael_at_env(state, dir, args, stdin, &[])
+}
+
+/// `fael` with an explicit state dir AND extra env — for tests that need
+/// both (e.g. a child `TMPDIR` to place the temp-dir boundary somewhere the
+/// test controls).
+fn fael_at_env(
+    state: &Path,
+    dir: &Path,
+    args: &[&str],
+    stdin: &str,
+    envs: &[(&str, &str)],
+) -> (bool, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
     c.args(args).current_dir(dir).env("FAEL_STATE_DIR", state);
+    for (k, v) in envs {
+        c.env(k, v);
+    }
     if !stdin.is_empty() {
         c.stdin(Stdio::piped());
     }
