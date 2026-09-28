@@ -18,7 +18,7 @@ mod selfheal;
 mod session;
 mod write;
 
-use fael_core::{self as core, Config, Log, Row};
+use fael_core::{self as core, Config, Log};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -339,23 +339,11 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
 /// `fael close` — an issue that is fixed, a note that is done.
 fn close(a: &Args, id: &str, why: &str) -> Result<(), String> {
     let r = repo()?;
-    let (row, path, warns) = close_row(&r, id, why)?;
+    let (row, path, warns) = write::close_row(&r, id, why)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "close", Some(&r.root), &warns);
     batch::written(a, &r, &row, &path);
     Ok(())
-}
-
-fn close_row(r: &Repo, id: &str, why: &str) -> Result<(Row, PathBuf, Vec<String>), String> {
-    core::close_row(
-        &r.fael,
-        r.journal.as_deref(),
-        &read(r),
-        &r.cfg,
-        &stamp(r),
-        id,
-        why,
-    )
 }
 
 /// `fael bump` — same text/files, new `to`/`urgent`/`revisit` (see write::bump).

@@ -4,10 +4,12 @@
 //!
 //! Thin entry only — the suites sit next to this file:
 //! `derive` (session-derive), `paths` (path evidence + warnings),
-//! `urgent` (urgent queue + bump round trip).
+//! `refs` (id citations with no row behind them), `urgent` (urgent queue +
+//! bump round trip).
 
 mod derive;
 mod paths;
+mod refs;
 mod urgent;
 
 use std::io::Write;

@@ -4,9 +4,9 @@
 //! spawn per call, and never on the read/edit push path (callers are the
 //! write path and `doctor`).
 //!
-//! Chunk-0 wires this with no callers — `fael` behaves identically. The
-//! `allow(dead_code)` goes away when chunk-1 (`resolve_wide`) and chunk-2
-//! (`phantoms`) wire their callers.
+//! Chunk-0 wires this with no callers — `fael` behaves identically; chunk-2
+//! wires `phantoms` from the write path. The `allow(dead_code)` on
+//! `resolve_wide` goes away when chunk-1 wires its caller.
 
 use super::Repo;
 use super::find::branches::{BranchMap, with_branches};
@@ -47,7 +47,6 @@ fn wide_of(log: &core::Log, tok: &str) -> Wide {
 /// caller already resolved (the row being written, its supersede target):
 /// a token they prefix-match is not a citation. One `with_branches` call
 /// per call, only when the union pass found a `Missing`.
-#[allow(dead_code)]
 pub(crate) fn phantoms(r: &Repo, log: &core::Log, text: &str, skip: &[&str]) -> Vec<String> {
     let mut missing: Vec<&str> = vec![];
     for tok in core::id_tokens(text) {
