@@ -1,8 +1,39 @@
 //! `doctor` for log health: union setup, gone/part-gone notes, stale
-//! backtick pointers, and quarantine of broken lines.
+//! backtick pointers, phantom id citations, and quarantine of broken lines.
 
 use super::{fael, repo};
 use std::path::PathBuf;
+
+/// `add` a row of `kind` on its own file; returns the new id (stdout's first token).
+fn add(d: &std::path::Path, kind: &str, name: &str, text: &str) -> String {
+    std::fs::write(d.join(name), "").unwrap();
+    let (ok, out, err) = fael(d, &["add", kind, text, "--files", name]);
+    assert!(ok, "{err}");
+    out.split_whitespace().next().unwrap().to_string()
+}
+
+/// Flip the id's last char to another valid Crockford char: an id-shaped
+/// token no row owns, so it is `Missing`, never `Many`.
+fn phantom_of(id: &str) -> String {
+    let mut f = id.to_string();
+    let last = if f.ends_with('A') { 'B' } else { 'A' };
+    f.pop();
+    f.push(last);
+    assert!(fael_core::looks_like_id(&f), "{f}");
+    f
+}
+
+fn git(d: &std::path::Path, args: &[&str]) {
+    assert!(
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(d)
+            .status()
+            .unwrap()
+            .success(),
+        "git {args:?}"
+    );
+}
 
 #[test]
 fn doctor_fails_without_union_then_fix_repairs() {
@@ -105,6 +136,129 @@ fn doctor_flags_stale_backtick_paths() {
         out.contains("note [Stale]: 1 open row(s)") && !out.contains("merge=union"),
         "{out}"
     );
+}
+
+#[test]
+fn doctor_flags_open_row_citing_fake_id() {
+    let d = repo();
+    let id = add(&d, "note", "src/a.rs", "keeper row");
+    let fake = phantom_of(&id);
+    let citer = add(&d, "note", "src/b.rs", &format!("see {fake} for context"));
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // info only: exit stays 0, but the dead citation is named
+    let (ok, out, _) = fael(&d, &["doctor"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("note [Phantom]: 1 reference(s)") && out.contains(&fake),
+        "{out}"
+    );
+    assert!(out.contains("compact --prune"), "{out}");
+    // `--json` carries the citing row's full id under a lowercase label
+    let (_, out, _) = fael(&d, &["doctor", "--json"]);
+    let ps: Vec<serde_json::Value> = serde_json::from_str(out.trim()).unwrap();
+    let ph = ps.iter().find(|p| p["kind"] == "phantom").expect("phantom");
+    assert_eq!(ph["severity"], serde_json::json!("info"));
+    assert_eq!(ph["fixable"], serde_json::json!(false));
+    assert!(ph["detail"].as_str().unwrap().contains(&fake), "{ph}");
+    assert_eq!(ph["ids"], serde_json::json!([citer]), "{ph}");
+}
+
+#[test]
+fn doctor_flags_close_reason_citing_fake_id() {
+    let d = repo();
+    let seed = add(&d, "note", "src/a.rs", "keeper row");
+    let fake = phantom_of(&seed);
+    let target = add(&d, "issue", "src/b.rs", "broken thing");
+    let (ok, _, err) = fael(&d, &["close", &target, &format!("fixed, see {fake}")]);
+    assert!(ok, "{err}");
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // the fake lives in close text, not in any open row — still Phantom
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(
+        out.contains("note [Phantom]: 1 reference(s)") && out.contains(&fake),
+        "{out}"
+    );
+}
+
+#[test]
+fn doctor_stays_clean_for_real_ambiguous_and_closed_citations() {
+    let d = repo();
+    let keeper = add(&d, "note", "src/a.rs", "keeper row");
+    let fake = phantom_of(&keeper);
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // a real id resolves: silent
+    add(&d, "note", "src/b.rs", &format!("follows up {keeper}"));
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Phantom]"), "{out}");
+    // an abbreviation that decayed as the log grew exists: silent, never missing
+    let mut ids: Vec<String> = vec![];
+    let mut prefix = String::new();
+    for i in 0..10 {
+        ids.push(add(
+            &d,
+            "note",
+            &format!("src/f{i}.rs"),
+            &format!("row {i}"),
+        ));
+        if let Some(other) = ids[..ids.len() - 1]
+            .iter()
+            .find(|o| o[..8] == ids[ids.len() - 1][..8])
+        {
+            prefix = other[..8].to_string();
+            break;
+        }
+    }
+    assert!(!prefix.is_empty(), "no shared 8-char prefix in {ids:?}");
+    add(&d, "note", "src/g.rs", &format!("cites {prefix} here"));
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Phantom]"), "{out}");
+    // a closed row's own text went quiet with the row: only close texts
+    // and open rows are scanned, so closing clears the citation
+    let target = add(&d, "issue", "src/h.rs", &format!("broken, see {fake}"));
+    let (ok, _, err) = fael(&d, &["close", &target, "really fixed"]);
+    assert!(ok, "{err}");
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Phantom]"), "{out}");
+}
+
+#[test]
+fn doctor_ignores_id_only_on_another_clone_branch() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(&d, &["add", "note", "row on main", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-qm", "rows"]);
+
+    // another clone: its own journal, so the union here never sees its rows
+    let other = d.join("other");
+    git(
+        &d,
+        &["clone", "-q", d.to_str().unwrap(), other.to_str().unwrap()],
+    );
+    git(&other, &["config", "user.name", "Other Clone"]);
+    git(&other, &["config", "user.email", "o@example.com"]);
+    git(&other, &["checkout", "-qb", "feat/y"]);
+    std::fs::write(other.join("src/c.rs"), "// c\n").unwrap();
+    let (ok, out, err) = fael(
+        &other,
+        &["add", "note", "row C on feat", "--files", "src/c.rs"],
+    );
+    assert!(ok, "{err}");
+    let cid = out.split_whitespace().next().unwrap().to_string();
+    git(&other, &["add", "-A"]);
+    git(&other, &["commit", "-qm", "rows C"]);
+    git(&other, &["push", "-q", "origin", "feat/y"]);
+
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // the union has no such row — only the branch escalation clears it
+    add(&d, "note", "src/d.rs", &format!("ref {cid} for context"));
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Phantom]"), "{out}");
 }
 
 #[test]

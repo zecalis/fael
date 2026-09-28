@@ -92,6 +92,26 @@ fn ref_state_close_row_id_is_not_missing() {
 }
 
 #[test]
+fn phantom_refs_reports_only_tokens_with_no_row() {
+    let log = log();
+    assert_eq!(
+        phantom_refs(&log, "see 01ZZZZ9999 here"),
+        vec!["01ZZZZ9999"]
+    );
+    // real id, unique prefix, ambiguous prefix, close-row id: all resolve
+    assert!(phantom_refs(&log, "follows 01BBBB11111111111111111111").is_empty());
+    assert!(phantom_refs(&log, "follows 01BBBB1111").is_empty());
+    assert!(phantom_refs(&log, "cites 01AAAA0000 here").is_empty());
+    assert!(phantom_refs(&log, "fixed per 01CCCC22222222222222222222").is_empty());
+    // punctuation trims, plain words and short numbers never count
+    assert_eq!(
+        phantom_refs(&log, "(01ZZZZ9999), and 0123 words"),
+        vec!["01ZZZZ9999"]
+    );
+    assert!(phantom_refs(&log, "plain words 0123 supersedes").is_empty());
+}
+
+#[test]
 fn id_tokens_trims_punctuation_ignores_words_collapses_dupes() {
     assert_eq!(
         id_tokens("see (01ABCDEFGH), and 01ABCDEFGH again"),
