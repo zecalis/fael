@@ -26,8 +26,9 @@ pub struct Focus {
     pub keys: HashSet<String>,
 }
 
-/// The active plan chunk — found via `Config::plan_dirs` in chunk 3; the
-/// shape lives here so `bucket` stays pure.
+/// The active plan chunk — `plan:<name>:chunk-<n>` rows on the session
+/// branch; `path` is the hook's to resolve (`Config::plan_dirs`), since core
+/// never reads files, so it arrives `None`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanFocus {
     pub name: String,
@@ -52,10 +53,44 @@ impl Focus {
             .collect();
         Focus {
             branch: Some(branch.to_string()),
-            plan: None,
+            plan: plan_from_rows(branch, rows),
             keys,
         }
     }
+}
+
+/// `plan:<name>:chunk-<n>` → name and chunk. The key shape PLAN-fael-push-focus
+/// chunk 3 reads: a plan name is one segment, the chunk the last one.
+fn plan_chunk(key: &str) -> Option<(&str, u32)> {
+    let (name, chunk) = key.strip_prefix("plan:")?.rsplit_once(":chunk-")?;
+    if name.is_empty() {
+        return None;
+    }
+    Some((name, chunk.parse().ok()?))
+}
+
+/// The active plan: the **newest** open row filed on `branch` keyed
+/// `plan:<name>:chunk-<n>` — newest by `id`, the same order the rest of the
+/// read path ranks recency by (never the clock). Pure, so `path` is `None`
+/// here: session start resolves it against `Config::plan_dirs`.
+fn plan_from_rows(branch: &str, rows: &[&Row]) -> Option<PlanFocus> {
+    let mut best: Option<(String, u32, &str)> = None;
+    for r in rows {
+        if r.branch() != Some(branch) {
+            continue;
+        }
+        let Some((name, chunk)) = r.key.as_deref().and_then(plan_chunk) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|(_, _, id)| r.id.as_str() > *id) {
+            best = Some((name.to_string(), chunk, r.id.as_str()));
+        }
+    }
+    best.map(|(name, chunk, _)| PlanFocus {
+        name,
+        chunk,
+        path: None,
+    })
 }
 
 /// Where one gathered row lands: Now shows first (budget still caps), File

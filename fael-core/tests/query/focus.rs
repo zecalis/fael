@@ -105,6 +105,71 @@ fn bucket_focus_signals_are_now() {
 }
 
 #[test]
+fn focus_takes_the_newest_plan_chunk_on_the_branch() {
+    // the newest plan-keyed row wins (by id, never the clock), a plan row on
+    // another branch never does, and core resolves no path
+    let mut newer = row(
+        "A0000000000000000000000031",
+        "note",
+        &["src/a.rs"],
+        Some("plan:foo:chunk-3"),
+    );
+    newer.extra.insert("branch".into(), "feat/x".into());
+    let mut older = row(
+        "A0000000000000000000000030",
+        "note",
+        &["src/a.rs"],
+        Some("plan:foo:chunk-2"),
+    );
+    older.extra.insert("branch".into(), "feat/x".into());
+    let mut other = row(
+        "A0000000000000000000000032",
+        "note",
+        &["src/a.rs"],
+        Some("plan:bar:chunk-9"),
+    );
+    other.extra.insert("branch".into(), "other".into());
+    // newest first in the slice: id order decides, not encounter order
+    let rows = [&newer, &other, &older];
+    let f = Focus::from_rows(Some("feat/x"), &rows);
+    let plan = f.plan.expect("active plan");
+    assert_eq!((plan.name.as_str(), plan.chunk), ("foo", 3));
+    assert!(plan.path.is_none(), "core never reads a file");
+    assert!(f.keys.contains("plan:foo:chunk-3"));
+    // another branch's plan row, and no branch at all: no plan
+    assert!(Focus::from_rows(Some("main"), &rows).plan.is_none());
+    assert!(Focus::from_rows(None, &rows).plan.is_none());
+}
+
+#[test]
+fn focus_ignores_keys_that_are_not_a_plan_chunk() {
+    let mut r = row(
+        "A0000000000000000000000033",
+        "note",
+        &["src/a.rs"],
+        Some("plan:foo"),
+    );
+    r.extra.insert("branch".into(), "feat/x".into());
+    assert!(Focus::from_rows(Some("feat/x"), &[&r]).plan.is_none());
+    let mut r = row(
+        "A0000000000000000000000034",
+        "note",
+        &["src/a.rs"],
+        Some("plan:foo:chunk-x"),
+    );
+    r.extra.insert("branch".into(), "feat/x".into());
+    assert!(Focus::from_rows(Some("feat/x"), &[&r]).plan.is_none());
+    let mut r = row(
+        "A0000000000000000000000035",
+        "note",
+        &["src/a.rs"],
+        Some("plan::chunk-1"),
+    );
+    r.extra.insert("branch".into(), "feat/x".into());
+    assert!(Focus::from_rows(Some("feat/x"), &[&r]).plan.is_none());
+}
+
+#[test]
 fn select_caps_rows_issues_first() {
     let mut l = log();
     // 6 tier-0 decisions on the same file (11 is superseded, 10 closed —

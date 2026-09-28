@@ -41,7 +41,13 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // one pass over the open rows: the Focus keys the branch rows carry, and
     // the to-do's issues — `find` hides closed and superseded either way
     let all: Vec<&core::Row> = core::find(&c.log, &core::Filter::default());
-    focus::write(&c.session, &c.repo.root, branch.as_deref(), &all);
+    let focus = focus::write(
+        &c.session,
+        &c.repo.root,
+        branch.as_deref(),
+        &all,
+        &c.repo.cfg.plan_dirs,
+    );
     let open: Vec<&core::Row> = all.iter().copied().filter(|r| r.kind == "issue").collect();
     let t = todo(open, &reader);
     let decisions: Vec<_> = if c.repo.cfg.session_decisions == 0 {
@@ -94,11 +100,14 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     if let Some(line) = count_line(&t) {
         body.push_str(&line);
     }
+    // the active plan, first line: which plan this session is inside and
+    // where it lives — no plan row on this branch, no line
+    let plan = plan_line(focus.plan.as_ref());
     let adopted = c.repo.fael.join("log").is_dir();
-    let mut context = match (body.is_empty(), adopted) {
+    let mut context = match (body.is_empty() && plan.is_empty(), adopted) {
         (true, false) => None,
         (true, true) => Some(format!("{ISSUE_LINE}\n")),
-        (false, _) => Some(format!("{body}{ISSUE_LINE}\n")),
+        (false, _) => Some(format!("{plan}{body}{ISSUE_LINE}\n")),
     };
     // SPEC §11: the cheap check — one line, only when there is a problem.
     // Skipped while no log exists yet: warning about an empty missing log is
@@ -216,6 +225,20 @@ fn count_line(t: &Todo) -> Option<String> {
         "fael: {} — fael find --kind issue (MCP find kind=issue); each also pushes when you touch its file\n",
         parts.join(" · ")
     ))
+}
+
+/// The active plan's one line (PLAN-fael-push-focus chunk 3): the newest
+/// open row on the start branch keyed `plan:<name>:chunk-N`, with the path
+/// session start resolved through `Config::plan_dirs` — no file, no arrow;
+/// no plan row at all, no line.
+fn plan_line(plan: Option<&core::PlanFocus>) -> String {
+    match plan {
+        None => String::new(),
+        Some(p) => match &p.path {
+            Some(path) => format!("active plan: {} chunk-{} → {path}\n", p.name, p.chunk),
+            None => format!("active plan: {} chunk-{}\n", p.name, p.chunk),
+        },
+    }
 }
 
 /// `git check-ignore` is ~8 of session-start's ~10 ms, so its answer is cached
