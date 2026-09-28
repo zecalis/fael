@@ -9,13 +9,12 @@
 //! (`phantoms`) wire their callers.
 
 use super::Repo;
-use super::find::branches::with_branches;
+use super::find::branches::{BranchMap, with_branches};
 use fael_core::{self as core};
 
 /// Owned union-then-branches answer. Owned rows — the merged `Log` moves
 /// with the answer, so nothing borrows it (the plan's `Result<…>` sketch
 /// cannot borrow from a moved log).
-#[allow(dead_code)]
 pub(crate) enum Wide {
     One(Box<core::Row>),
     Many(Vec<core::Row>),
@@ -23,19 +22,18 @@ pub(crate) enum Wide {
 }
 
 /// `One`/`Many` straight from the union; only a union `Missing` pays for
-/// one `with_branches` call and is re-checked against the merged log.
-#[allow(dead_code)]
-pub(crate) fn resolve_wide(r: &Repo, log: core::Log, tok: &str) -> (core::Log, Wide) {
+/// one `with_branches` call and is re-checked against the merged log. The
+/// branch map tags escalated rows on display (empty on a union hit).
+pub(crate) fn resolve_wide(r: &Repo, log: core::Log, tok: &str) -> (core::Log, Wide, BranchMap) {
     if !matches!(core::ref_state(&log, tok), core::Ref::Missing) {
         let wide = wide_of(&log, tok);
-        return (log, wide);
+        return (log, wide, BranchMap::new());
     }
-    let (log, _) = with_branches(&r.root, log);
+    let (log, btags) = with_branches(&r.root, log);
     let wide = wide_of(&log, tok);
-    (log, wide)
+    (log, wide, btags)
 }
 
-#[allow(dead_code)]
 fn wide_of(log: &core::Log, tok: &str) -> Wide {
     match core::ref_state(log, tok) {
         core::Ref::One(row) => Wide::One(Box::new(row.clone())),

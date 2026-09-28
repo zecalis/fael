@@ -23,10 +23,10 @@ pub(crate) fn tools() -> Value {
             "description": "Project memory: past decisions, issues, notes. No args = the session brief. Start of task, before touching a file.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
-                "id": str_("exact id or prefix — lists show titles, this pulls the body"),
+                "id": str_("exact id or prefix, pulls the body — id-shaped with no row rejects; pass it as text for a literal search"),
                 "full": {"type": "boolean", "description": "bodies under titles"},
                 "files": files("paths, dirs, globs, anchors like doc:pricing — rows on any"),
-                "text": str_("substring of the row text"),
+                "text": str_("substring of the row text — also the literal search for an id-shaped string"),
                 "key": str_("key glob, e.g. auth:*"),
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),

@@ -35,8 +35,11 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "find",
         "search rows",
-        "fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M]
-    (an exact id or unique prefix pulls that row's body; --full shows every body;
+        "fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--text query]
+    (an exact id or unique prefix pulls that row's body; an id-shaped query is
+     never a text search — it rejects when no row owns it, naming the rows
+     that only mention it; --text forces a literal text search;
+     --full shows every body;
      --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;
      it only sees rows committed to .fael/log on those branches — a repo that
      gitignores .fael/log gets nothing from it;
