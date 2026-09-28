@@ -39,10 +39,6 @@ pub struct Config {
     /// single-topic-looking row the token estimate still reads as cheap
     /// (was the hardcoded 600 in `fat_reasons`).
     pub warn_row_chars: usize,
-    /// Directories holding `PLAN-<name>.md` files, in lookup order
-    /// (PLAN-fael-push-focus chunk 3). The first `<dir>/PLAN-<name>.md` that
-    /// exists is the active plan's path; `[]` = the plan line names no file.
-    pub plan_dirs: Vec<String>,
     /// Resolve renamed paths through the L2 alias set (`git log -M` + `fael mv`
     /// rows). `false` returns to pre-resolver matching — the escape hatch.
     pub resolve: bool,
@@ -65,7 +61,6 @@ impl Default for Config {
             session_decisions: 0,
             warn_row_tokens: 400,
             warn_row_chars: 600,
-            plan_dirs: vec![".fapony/plan".into()],
             resolve: true,
             store: Store::Tracked,
         }
@@ -81,7 +76,6 @@ impl Config {
         struct File {
             kinds: Vec<String>,
             key_domains: Vec<String>,
-            plan_dirs: Option<Vec<String>>,
             resolve: Option<bool>,
             store: Option<String>,
             budget: Budget,
@@ -130,7 +124,6 @@ impl Config {
             session_decisions: f.budget.session_decisions.unwrap_or(d.session_decisions),
             warn_row_tokens: f.warn.row_tokens.unwrap_or(d.warn_row_tokens),
             warn_row_chars: f.warn.row_chars.unwrap_or(d.warn_row_chars),
-            plan_dirs: f.plan_dirs.unwrap_or(d.plan_dirs),
             resolve: f.resolve.unwrap_or(d.resolve),
             store,
         })

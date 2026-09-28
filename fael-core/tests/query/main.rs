@@ -5,14 +5,13 @@
 //! `urgent` (queue/6-step rank), `bump` (MVCC-style new versions),
 //! `title` (title/body split, `--title` fallback,
 //! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
-//! `focus` (push buckets + row cap), `plan` (open plans + resolution).
+//! `focus` (push buckets + row cap).
 //! The shared builders live here.
 
 mod bump;
 mod focus;
 mod lookup;
 mod paging;
-mod plan;
 mod render;
 mod revisit;
 mod select;

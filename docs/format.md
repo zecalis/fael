@@ -78,10 +78,10 @@ Planning rides the existing `key` and `files` fields — no new field, no format
   lowercased; see `plan_anchor`). `files` still holds the real code files the row is about.
 - `plan:<name>:chunk-<n>` — one chunk's row (a handoff note). The `n` is a plain number.
 
-An **open plan** is a name with at least one open `plan:<name>:chunk-<n>` row; its **active
-chunk** is the highest open `n`. Readers resolve which plan a session is inside from these
-rows plus the session branch (and, later, a declared intent) — never from a `status:` field:
-`.fapony/` is not read by fael, and the log is the only truth.
+These are a **fapony convention**, not fael semantics: fael stores and matches them like any
+other anchor or key, and never infers from them which plan a session is inside — a session's
+intent is not a fact the shared log can answer. The workflow tool that knows the plan asks for
+its rows itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`).
 
 ## Writers
 
