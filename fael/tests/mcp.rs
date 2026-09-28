@@ -31,6 +31,10 @@ fn main_and_worktree() -> (PathBuf, PathBuf) {
 }
 
 fn mcp(dir: &Path, calls: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    mcp_tool(dir, "add", calls)
+}
+
+fn mcp_tool(dir: &Path, tool: &str, calls: &[serde_json::Value]) -> Vec<serde_json::Value> {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("mcp")
         .env("FAEL_STATE_DIR", dir.join("../state"))
@@ -45,7 +49,7 @@ fn mcp(dir: &Path, calls: &[serde_json::Value]) -> Vec<serde_json::Value> {
         .enumerate()
         .map(|(i, a)| {
             serde_json::json!({"jsonrpc": "2.0", "id": i, "method": "tools/call",
-                "params": {"name": "add", "arguments": a}})
+                "params": {"name": tool, "arguments": a}})
             .to_string()
         })
         .collect();
@@ -120,4 +124,65 @@ fn add_rows_batch_partial() {
         "{log}"
     );
     assert!(!log.contains("bad kind row"), "{log}");
+}
+
+/// Issue 01M3HMYS: MCP `find` gains the CLI's `by` and `all` filters.
+#[test]
+fn find_filters_by_writer_and_includes_closed() {
+    let (_, wt) = main_and_worktree();
+    // a second file, so the two notes do not auto-supersede each other
+    std::fs::write(wt.join("src/b.rs"), "// b\n").unwrap();
+    mcp_tool(
+        &wt,
+        "add",
+        &[
+            serde_json::json!({"kind": "note", "text": "keeper row one", "files": ["src/a.rs"]}),
+            serde_json::json!({"kind": "note", "text": "keeper row two", "files": ["src/b.rs"]}),
+        ],
+    );
+    let raw = texts(&wt);
+    let writer = raw
+        .split("\"by\":\"")
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap()
+        .to_string();
+    let id = raw
+        .lines()
+        .find(|l| l.contains("keeper row two"))
+        .unwrap()
+        .split("\"id\":\"")
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap()
+        .to_string();
+    mcp_tool(
+        &wt,
+        "close",
+        &[serde_json::json!({"id": id, "text": "done"})],
+    );
+    let find = |args: serde_json::Value| {
+        let r = mcp_tool(&wt, "find", &[args]);
+        r[0]["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    // closed rows stay hidden without `all`, and show with it
+    let open = find(serde_json::json!({"text": "keeper row"}));
+    assert!(
+        open.contains("keeper row one") && !open.contains("keeper row two"),
+        "{open}"
+    );
+    let all = find(serde_json::json!({"text": "keeper row", "all": true}));
+    assert!(all.contains("keeper row two"), "{all}");
+    // `by` narrows to this writer; a bogus writer matches nothing
+    let mine = find(serde_json::json!({"by": writer}));
+    assert!(mine.contains("keeper row one"), "{mine}");
+    let none = find(serde_json::json!({"by": "no-such-writer"}));
+    assert_eq!(none.trim(), "no rows match", "{none}");
 }
