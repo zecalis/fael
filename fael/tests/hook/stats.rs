@@ -61,7 +61,9 @@ fn push_usage_counts_only_rendered_rows() {
     assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "read"], &input);
-    assert!(ok && out.contains("budget"), "{out}");
+    // chunk 1 (push-focus): the budget cut surfaces as the omitted line with
+    // the exact next call, not render's budget line
+    assert!(ok && out.contains("more about this file"), "{out}");
     let reply: serde_json::Value = serde_json::from_str(&out).unwrap();
     let context = reply["context"].as_str().unwrap();
     let rendered = context.lines().filter(|l| l.starts_with("- [")).count();
@@ -70,14 +72,19 @@ fn push_usage_counts_only_rendered_rows() {
     let usage = std::fs::read_to_string(d.join("state/usage.jsonl")).unwrap();
     let v: serde_json::Value = serde_json::from_str(usage.lines().last().unwrap()).unwrap();
     assert_eq!(v["ids"].as_array().unwrap().len(), rendered, "{v}");
-    // the full budget back: an edit pushes the same-dir neighbour
+    // the full budget back: an edit still counts the same-dir neighbour in
+    // the omitted line (push-focus chunk 1: same-dir decisions are
+    // Background — counted, never rendered)
     std::fs::write(
         d.join(".fael/config.toml"),
         "[budget]\npush_tokens = 10000\n",
     )
     .unwrap();
     let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
-    assert!(ok && out.contains("neighbour choice"), "{out}");
+    assert!(
+        ok && out.contains("… +1 more about this file — fael find --files src/a.rs"),
+        "{out}"
+    );
 }
 
 #[test]

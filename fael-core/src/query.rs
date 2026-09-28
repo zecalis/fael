@@ -4,8 +4,10 @@
 //! Thin entry only — the filter type lives here, the verbs in `query/`:
 //! `select` (find/brief/kickoff/push/gone over row sets), `matching` (path and
 //! glob primitives), `render` (token-budgeted markdown), `lookup` (resolve,
-//! keys, query, warnings), `stale` (backticked paths gone from disk).
+//! keys, query, warnings), `stale` (backticked paths gone from disk),
+//! `focus` (push buckets + row cap).
 
+mod focus;
 mod lookup;
 mod matching;
 mod push;
@@ -14,9 +16,12 @@ mod revisit;
 mod select;
 mod stale;
 
+pub use focus::{
+    Background, Bucket, Focus, PUSH_BACKGROUND, PlanFocus, PushPolicy, Selection, bucket, select,
+};
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
-pub use push::push;
+pub use push::{push, push_tiered};
 pub use render::{
     Abbrev, Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page,
 };

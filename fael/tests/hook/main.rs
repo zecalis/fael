@@ -3,9 +3,11 @@
 //!
 //! Thin entry only — the suites sit next to this file:
 //! `stop` (turn-end blocks), `session` (session-start + read push),
-//! `clients` (codex/claude shapes), `stats` (usage accounting).
+//! `clients` (codex/claude shapes), `stats` (usage accounting),
+//! `push_cap` (read-push row cap + omitted line).
 
 mod clients;
+mod push_cap;
 mod session;
 mod stats;
 mod stop;
