@@ -15,7 +15,7 @@
 
 use crate::compact::fold;
 use crate::log::{collect_files, decode_text, dedupe_ids, is_marker, lock, tmp_rename};
-use crate::{CORE_KINDS, Row, anchor, ulid};
+use crate::{CORE_KINDS, Row, Store, anchor, ulid};
 use serde_json::{Map, Value};
 use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
@@ -37,10 +37,22 @@ pub struct Report {
     pub warnings: Vec<String>,
 }
 
-/// Merge `src` into this repo's `.fael/log/_import/`. `allowed` is the repo's
-/// extra kinds (`Config::kinds`) — a legacy kind outside core + allowed
-/// becomes a `note` keeping the original in `legacy_kind`.
-pub fn import(fael: &Path, src: &Path, allowed: &[String], opts: &Opts) -> Result<Report, String> {
+/// Merge `src` into this clone's `_import/`. `allowed` is the repo's extra
+/// kinds (`Config::kinds`) — a legacy kind outside core + allowed becomes a
+/// `note` keeping the original in `legacy_kind`.
+///
+/// Like every other write, the journal is the commit point: the rows land
+/// there first (`journal`, when the clone has one) and in the tree unless
+/// `store` is `local`, so a deleted branch cannot take an import with it
+/// (01M3HQHJ2).
+pub fn import(
+    fael: &Path,
+    journal: Option<&Path>,
+    store: Store,
+    src: &Path,
+    allowed: &[String],
+    opts: &Opts,
+) -> Result<Report, String> {
     let _guard = lock(fael)?;
     let files = sources(src)?;
     let (mut adds, mut closes) = (vec![], vec![]);
@@ -91,28 +103,42 @@ pub fn import(fael: &Path, src: &Path, allowed: &[String], opts: &Opts) -> Resul
         .filter(|c| !resolved.contains(c.id.as_str()))
         .collect();
 
-    let dir = fael.join("log").join("_import");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let stamp = ulid();
-    let mut paths = vec![];
     let mut body = String::new();
     for r in &adds {
         body.push_str(&r.to_line());
         body.push('\n');
     }
-    let out = dir.join(format!("{stamp}.jsonl"));
-    tmp_rename(&out, body.as_bytes())?;
-    paths.push(out);
+    let mut cbody = String::new();
+    for c in &carried {
+        cbody.push_str(&c.to_line());
+        cbody.push('\n');
+    }
+    let close = (!carried.is_empty()).then_some(cbody.as_str());
     let carried_n = carried.len();
-    if !carried.is_empty() {
-        let mut cbody = String::new();
-        for c in &carried {
-            cbody.push_str(&c.to_line());
-            cbody.push('\n');
+
+    let mut paths = vec![];
+    // journal first — the commit point, so a deleted branch cannot take the
+    // imported rows with it
+    if let Some(j) = journal.filter(|j| *j != fael) {
+        let dir = j.join("log").join("_import");
+        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        paths.extend(write_import(&dir, &stamp, &body, close)?);
+    }
+    // tree next, unless `local` already committed to the journal only
+    if !(store == Store::Local && journal.is_some()) {
+        let dir = fael.join("log").join("_import");
+        let written = std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("{}: {e}", dir.display()))
+            .and_then(|_| write_import(&dir, &stamp, &body, close));
+        match written {
+            Ok(ps) => paths.extend(ps),
+            // the rows are already durable; a retry would import a second copy
+            Err(e) if journal.is_some() => warnings.push(format!(
+                "warning: tree write failed ({e}) — rows are in the journal; do not retry"
+            )),
+            Err(e) => return Err(e),
         }
-        let cout = dir.join(format!("{stamp}.close.jsonl"));
-        tmp_rename(&cout, cbody.as_bytes())?;
-        paths.push(cout);
     }
     Ok(Report {
         adds: adds.len(),
@@ -122,6 +148,25 @@ pub fn import(fael: &Path, src: &Path, allowed: &[String], opts: &Opts) -> Resul
         paths,
         warnings,
     })
+}
+
+/// Write the import body (and its carried-close companion) into one root's
+/// `_import/`, returning the paths written.
+fn write_import(
+    dir: &Path,
+    stamp: &str,
+    body: &str,
+    close: Option<&str>,
+) -> Result<Vec<PathBuf>, String> {
+    let out = dir.join(format!("{stamp}.jsonl"));
+    tmp_rename(&out, body.as_bytes())?;
+    let mut paths = vec![out];
+    if let Some(cbody) = close {
+        let cout = dir.join(format!("{stamp}.close.jsonl"));
+        tmp_rename(&cout, cbody.as_bytes())?;
+        paths.push(cout);
+    }
+    Ok(paths)
 }
 
 /// `src` is a file (one log), a `.fael/log` dir, a repo root, or a legacy

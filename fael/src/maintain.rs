@@ -247,7 +247,14 @@ pub fn compact(a: &Args) -> Result<ExitCode, String> {
     // prune judges "gone" through the resolver, so the aliases are loaded
     // the same way kickoff loads them (refresh = pick up latest renames)
     let al = crate::aliases::load(&r, &crate::read(&r), true);
-    let rep = core::compact(&r.fael, &r.root, &opts, &core::current_month(), &al)?;
+    let rep = core::compact(
+        &r.fael,
+        r.journal.as_deref(),
+        &r.root,
+        &opts,
+        &core::current_month(),
+        &al,
+    )?;
     if a.has("json") {
         let ws: Vec<_> = rep
             .writers
@@ -298,7 +305,14 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
     }
     let sp = PathBuf::from(src);
     let sp = if sp.is_absolute() { sp } else { r.cwd.join(sp) };
-    let rep = core::import(&r.fael, &sp, &r.cfg.kinds, &core::ImportOpts { maps })?;
+    let rep = core::import(
+        &r.fael,
+        r.journal.as_deref(),
+        r.cfg.store,
+        &sp,
+        &r.cfg.kinds,
+        &core::ImportOpts { maps },
+    )?;
     for w in &rep.warnings {
         eprintln!("{w}");
     }
