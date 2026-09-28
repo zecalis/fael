@@ -122,6 +122,53 @@ fn edit_hides_same_dir_neighbour_but_names_the_dir_call() {
 }
 
 #[test]
+fn budget_cut_names_the_dir_call_for_a_same_dir_now_row() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    for i in 0..6 {
+        let (ok, _, err) = fael(
+            &d,
+            &[
+                "add",
+                "issue",
+                &format!("aaaa issue number {i} on the main file with some words"),
+                "--files",
+                "src/a.rs",
+            ],
+            "",
+        );
+        assert!(ok, "{err}");
+    }
+    // an issue on the neighbour file is same-dir (tier 1) and Now — the budget
+    // cuts it, so its count line must name the directory call, not the file call
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "NEIGHBOUR issue on b.rs",
+            "--files",
+            "src/b.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    std::fs::write(d.join(".fael/config.toml"), "[budget]\npush_tokens = 150\n").unwrap();
+    let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
+    assert!(ok, "{out}");
+    // the budget cut a tier-1 row: the dir call reaches it, `--files <f>` does not
+    assert!(
+        out.contains("… +1 more in src/ — fael find --files src/"),
+        "{out}"
+    );
+    assert!(!out.contains("more about this file"), "{out}");
+    let (ok, found, _) = fael(&d, &["find", "--files", "src/"], "");
+    assert!(ok && found.contains("NEIGHBOUR"), "{found}");
+}
+
+#[test]
 fn read_push_names_the_key_call_for_shared_key_rows() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();

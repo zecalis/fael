@@ -80,24 +80,63 @@ pub struct PushPolicy {
 pub const PUSH_BACKGROUND: Background = Background::CountLine;
 
 /// What `select` did, split into classes that each have one exact next call:
-/// `omitted` rows (the row cap and token budget cut them — `fael find --files
-/// <f>` returns them), `background_dirs` hidden same-dir rows (`fael find
-/// --files <dir>/`), and `background_keys` hidden shared-key rows, key ->
-/// count (`fael find --key <k>`).
+/// `omitted` rows (the row cap cut tier-0 rows — `fael find --files <f>`
+/// returns them), `background_dirs` same-dir rows hidden by the policy
+/// (`fael find --files <dir>/`), and `background_keys` shared-key rows, key ->
+/// count (`fael find --key <k>`). The token budget cuts later, at render, so
+/// the tier of every shown row travels along (`tiers`) — see `hidden`.
 #[derive(Debug)]
 pub struct Selection<'a> {
     pub shown: Vec<&'a Row>,
+    /// L1 tier of each `shown` row, parallel — the budget cut needs it: a
+    /// same-dir or shared-key row the token budget cut is not reachable by
+    /// `fael find --files <f>`.
+    tiers: Vec<usize>,
     pub omitted: usize,
     pub background_dirs: usize,
     pub background_keys: Vec<(String, usize)>,
 }
 
+/// The rows that did not render, split by the exact `fael find` call that
+/// reaches each.
+#[derive(Debug, Default)]
+pub struct Hidden {
+    pub file: usize,
+    pub dirs: usize,
+    pub keys: Vec<(String, usize)>,
+}
+
 impl Selection<'_> {
-    /// How many rows `fael find --files <f>` returns beyond what rendered: the
-    /// row cap cut plus the rows the token budget cut. `rendered` is the row
-    /// count render actually printed.
+    /// The rows hidden after render printed `rendered` of `shown`: the cap cut
+    /// (`omitted`) plus the token-budget cut (`shown[rendered..]`), each routed
+    /// by its L1 tier — tier 0 to `fael find --files <f>`, tier 1 to
+    /// `fael find --files <dir>/`, tier 2 to `fael find --key <k>`. A
+    /// budget-cut Now row (an issue on a same-dir file, a shared-key row) is
+    /// not reachable by `--files <f>`, which is why the tier travels with it.
+    pub fn hidden(&self, rendered: usize) -> Hidden {
+        let mut h = Hidden {
+            file: self.omitted,
+            dirs: self.background_dirs,
+            keys: self.background_keys.clone(),
+        };
+        for (r, t) in self.shown.iter().zip(&self.tiers).skip(rendered) {
+            match t {
+                2 => match r.key.clone() {
+                    Some(k) => bump_key(&mut h.keys, k),
+                    None => h.dirs += 1,
+                },
+                1 => h.dirs += 1,
+                _ => h.file += 1,
+            }
+        }
+        h
+    }
+
+    /// How many rows `fael find --files <f>` reaches beyond what rendered —
+    /// the tier-0 budget cut plus the cap cut. `rendered` is the row count
+    /// render actually printed.
     pub fn findable_after(&self, rendered: usize) -> usize {
-        self.omitted + self.shown.len().saturating_sub(rendered)
+        self.hidden(rendered).file
     }
 }
 
@@ -141,21 +180,23 @@ pub fn select<'a>(
     policy: &PushPolicy,
 ) -> Selection<'a> {
     if policy.max_rows == 0 {
+        let (shown, tiers) = rows.into_iter().unzip();
         return Selection {
-            shown: rows.into_iter().map(|(r, _)| r).collect(),
+            shown,
+            tiers,
             omitted: 0,
             background_dirs: 0,
             background_keys: Vec::new(),
         };
     }
-    let mut now: Vec<&Row> = vec![];
-    let mut file: Vec<&Row> = vec![];
+    let mut now: Vec<(&Row, usize)> = vec![];
+    let mut file: Vec<(&Row, usize)> = vec![];
     let mut background_dirs = 0usize;
     let mut background_keys: Vec<(String, usize)> = vec![];
     for (r, t) in rows {
         match bucket(r, t, focus) {
-            Bucket::Now => now.push(r),
-            Bucket::File => file.push(r),
+            Bucket::Now => now.push((r, t)),
+            Bucket::File => file.push((r, t)),
             Bucket::Background => match policy.background {
                 // tier 2 is a shared key; tier 1 (or a keyless row) a neighbour
                 Background::CountLine => match t {
@@ -169,12 +210,13 @@ pub fn select<'a>(
         }
     }
     // Now rows always show; the cap only limits how much of File joins them.
-    let mut shown = now;
-    let room = policy.max_rows.saturating_sub(shown.len());
+    let room = policy.max_rows.saturating_sub(now.len());
     let omitted = file.len().saturating_sub(room);
-    shown.extend(file.into_iter().take(room));
+    now.extend(file.into_iter().take(room));
+    let (shown, tiers) = now.into_iter().unzip();
     Selection {
         shown,
+        tiers,
         omitted,
         background_dirs,
         background_keys,
