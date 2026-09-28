@@ -1,4 +1,5 @@
-//! `fael mcp` — MCP over stdio: newline-delimited JSON-RPC 2.0, four tools (find · add · close · bump).
+//! `fael mcp` — MCP over stdio: newline-delimited JSON-RPC 2.0, three listed tools (find · add · close).
+//! `bump` is CLI-first: unlisted to save schema tokens every session, still answered for clients that call it.
 //! Blocking std I/O, one request at a time — no async runtime on this path (PLAN §4).
 //! Tool failures come back as `isError` results so the agent reads the fix; only protocol
 //! faults are JSON-RPC errors.
@@ -37,7 +38,7 @@ fn handle(line: &str) -> Option<Value> {
     let params = msg.get("params").cloned().unwrap_or(Value::Null);
     let result = match msg["method"].as_str().unwrap_or("") {
         "initialize" => json!({
-            // ponytail: echo the client's version — the four tools use nothing version-specific
+            // ponytail: echo the client's version — the tools use nothing version-specific
             "protocolVersion": params["protocolVersion"].as_str().unwrap_or(VERSION),
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "fael", "version": env!("CARGO_PKG_VERSION")},
@@ -61,9 +62,7 @@ fn call(p: &Value) -> Value {
         "add" => add(args),
         "close" => close(args),
         "bump" => bump(args),
-        n => Err(format!(
-            "unknown tool {n} — fael has find, add, close, bump"
-        )),
+        n => Err(format!("unknown tool {n} — fael has find, add, close")),
     };
     let (text, is_error) = match res {
         Ok(t) => (t, false),
@@ -305,7 +304,7 @@ fn tools() -> Value {
     let str_ = |d: &str| json!({"type": "string", "description": d});
     let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
     let cwd = str_(
-        "absolute path of the checkout this call is about — pass it when working in a git worktree other than the session's cwd, or rows land in the wrong one",
+        "checkout path, if not the session's cwd (another worktree) — else rows land in the wrong one",
     );
     let mut t = json!([
         {
@@ -314,7 +313,7 @@ fn tools() -> Value {
     Call it at the start of a task and before touching a file. No arguments = the session brief.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
-                "id": str_("this row's body by exact id or unique prefix — lists show titles, this pulls the body"),
+                "id": str_("row id or unique prefix — pulls its body"),
                 "full": {"type": "boolean", "description": "show every row's body under its title"},
                 "files": files("repo-relative paths, directories, globs, or anchors like doc:pricing — rows on any of them"),
                 "text": str_("case-insensitive substring of the row text"),
@@ -322,8 +321,8 @@ fn tools() -> Value {
                 "kind": str_("decision | issue | note, or a kind the repo declares"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),
                 "to": str_("only rows routed to this reader, e.g. ploy"),
-                "revisit": {"type": ["boolean", "string"], "description": "only rows carrying --revisit: true = any, a string narrows to it (CLI --revisit[=text])"},
-                "branches": {"type": "boolean", "description": "also read branches not yet merged into HEAD, tagging their rows @<branch> — never checks anything out"},
+                "revisit": {"type": ["boolean", "string"], "description": "only rows with a revisit: true = any, a string narrows it"},
+                "branches": {"type": "boolean", "description": "also read unmerged branches, rows tagged @<branch>"},
                 "limit": {"type": "integer", "minimum": 1, "description": "at most this many ranked rows — a cut list prints next: offset=N, repeat the call with it"},
                 "offset": {"type": "integer", "minimum": 0, "description": "skip this many ranked rows first"},
             }},
@@ -333,8 +332,6 @@ fn tools() -> Value {
             "description": "Record something the next session must know: a decision and why, a bug (kind issue), \
     or state a later session needs (note). One standalone sentence or two — it is read months later with no chat. \
     files must name what it is about; reuse a path or anchor that find already showed instead of inventing a new one. \
-    files may be omitted when this session edited files (the hook recorded them) — they are filled in; otherwise files is required. \
-    title is the ≤15-word headline lists show, text is the detail pulled by id — set title when text tops ~60 words. \
     Saw something broken, inconsistent or likely to break? Add it as kind issue right there — do not wait for the end of the task.",
             "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
                 "kind": str_("decision | issue | note, or a kind the repo declares"),
@@ -344,31 +341,19 @@ fn tools() -> Value {
                     "description": "repo-relative paths, or anchors scheme:ref (doc:pricing, customer:acme) for things that are not files — omit to use this session's edited files"},
                 "key": str_("optional colon key, e.g. auth:session"),
                 "to": str_("who has to answer, e.g. ploy — routed to them at their session start"),
-                "revisit": str_("a date YYYY-MM[-DD] kickoff surfaces when due, or free text like 'mdl lands'"),
+                "revisit": str_("YYYY-MM[-DD] surfaced when due, or free text like 'mdl lands'"),
                 "urgent": {"type": "boolean", "description": "file at the back of the urgent queue (issues only)"},
-                "urgent_before": str_("file just above this row in the urgent queue — one of urgent / urgent_before at most"),
+                "urgent_before": str_("file just above this row in the urgent queue"),
                 "supersedes": str_("id of the row this one replaces"),
-                "force": {"type": "boolean", "description": "file a path that looks like a typo of an existing file (a file not created yet)"},
+                "force": {"type": "boolean", "description": "allow a path that looks like a typo (file not created yet)"},
             }},
         },
         {
             "name": "close",
-            "description": "Close a row that no longer holds — an issue that is fixed, a note that is done.",
+            "description": "Close a row that no longer holds — an issue that is fixed, a note that is done. Close it as soon as it is, so stale rows stop cluttering every brief.",
             "inputSchema": {"type": "object", "required": ["id", "text"], "properties": {
                 "id": str_("row id or a unique prefix, as find shows it"),
                 "text": str_("why it is closed, e.g. fixed in <sha>"),
-            }},
-        },
-        {
-            "name": "bump",
-            "description": "Change routing/urgency/revisit on an open row as a new version: same text and files, new to/urgent/revisit, superseding the old row. Text and files never change through bump.",
-            "inputSchema": {"type": "object", "required": ["id"], "properties": {
-                "id": str_("row id or a unique prefix, as find shows it"),
-                "to": str_("who has to answer now, e.g. ploy — omit to keep"),
-                "urgent": {"type": "boolean", "description": "move to the back of the urgent queue"},
-                "urgent_before": str_("move just above this row in the urgent queue"),
-                "not_urgent": {"type": "boolean", "description": "leave the urgent queue"},
-                "revisit": str_("a date YYYY-MM[-DD] kickoff surfaces when due, or free text like 'mdl lands' — omit to keep"),
             }},
         },
     ]);

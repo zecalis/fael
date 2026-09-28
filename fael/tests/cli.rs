@@ -222,7 +222,7 @@ fn mcp_round_trip() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["find", "add", "close", "bump"]);
+    assert_eq!(names, ["find", "add", "close"]);
     assert_eq!(r[2]["result"]["isError"], true);
     assert!(
         r[2]["result"]["content"][0]["text"]

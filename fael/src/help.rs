@@ -94,7 +94,7 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "mcp",
         "MCP server on stdio",
         "fael mcp
-    (serve add/close/find/bump over stdio for MCP clients)",
+    (serve find/add/close over stdio for MCP clients)",
     ),
     (
         "install",
