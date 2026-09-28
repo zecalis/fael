@@ -12,6 +12,7 @@ mod bump;
 mod focus;
 mod lookup;
 mod paging;
+mod refs;
 mod render;
 mod revisit;
 mod select;

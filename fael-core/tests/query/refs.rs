@@ -1,0 +1,105 @@
+//! Id-reference contract (PLAN-fael-id-refs chunk-0): `looks_like_id` shape,
+//! union-scope existence (`ref_state`), prose tokenising (`id_tokens`) —
+//! against an in-memory `Log`. No behavior change: nothing here touches
+//! `resolve`, text search or the write path.
+
+use fael_core::*;
+
+fn row(id: &str) -> Row {
+    Row {
+        id: id.into(),
+        ts: "2026-09-20T00:00:00Z".into(),
+        kind: "note".into(),
+        text: format!("text of {id}"),
+        files: vec!["src/a.rs".into()],
+        ..Row::default()
+    }
+}
+
+fn log() -> Log {
+    Log {
+        rows: vec![
+            row("01AAAA00000000000000000001"),
+            row("01AAAA00000000000000000002"),
+            row("01BBBB11111111111111111111"),
+        ],
+        closes: vec![Row {
+            id: "01CCCC22222222222222222222".into(),
+            reference: Some("01BBBB11111111111111111111".into()),
+            text: "fixed".into(),
+            ..Row::default()
+        }],
+        warnings: vec![],
+    }
+}
+
+#[test]
+fn looks_like_id_accepts_full_ulid_and_prefix() {
+    assert!(looks_like_id("01M3M8Y8000000000000000000"));
+    assert!(looks_like_id("01M3M8Y8"));
+    assert!(looks_like_id("01m3m8y8")); // case-insensitive
+}
+
+#[test]
+fn looks_like_id_rejects_non_shapes() {
+    assert!(!looks_like_id("01M3M8Y")); // 7 chars — never a printed prefix
+    assert!(!looks_like_id("0123")); // prose number, not something fael printed
+    assert!(!looks_like_id("02M3M8Y800")); // wrong prefix
+    assert!(!looks_like_id("01M3M8Y8IXXXXXXXXXXXXXXXXX")); // I excluded
+    assert!(!looks_like_id("01M3M8Y8LXXXXXXXXXXXXXXXX")); // L excluded
+    assert!(!looks_like_id("01M3M8Y8OXXXXXXXXXXXXXXXX")); // O excluded
+    assert!(!looks_like_id("01M3M8Y8UXXXXXXXXXXXXXXXX")); // U excluded
+    assert!(!looks_like_id("01M3M8Y800000000000000000000")); // 27 chars
+}
+
+#[test]
+fn ref_state_exact_and_unique_prefix_are_one() {
+    let log = log();
+    assert!(matches!(
+        ref_state(&log, "01BBBB11111111111111111111"),
+        Ref::One(r) if r.id == "01BBBB11111111111111111111"
+    ));
+    assert!(matches!(
+        ref_state(&log, "01BBBB1111"),
+        Ref::One(r) if r.id == "01BBBB11111111111111111111"
+    ));
+}
+
+#[test]
+fn ref_state_shared_prefix_is_many_never_missing() {
+    let log = log();
+    match ref_state(&log, "01AAAA0000") {
+        Ref::Many(rows) => assert_eq!(rows.len(), 2),
+        _ => panic!("shared prefix must be Many"),
+    }
+}
+
+#[test]
+fn ref_state_absent_is_missing() {
+    let log = log();
+    assert!(matches!(ref_state(&log, "01ZZZZ9999"), Ref::Missing));
+    assert!(matches!(ref_state(&log, ""), Ref::Missing));
+}
+
+#[test]
+fn ref_state_close_row_id_is_not_missing() {
+    let log = log();
+    assert!(matches!(
+        ref_state(&log, "01CCCC22222222222222222222"),
+        Ref::One(_)
+    ));
+    assert!(matches!(ref_state(&log, "01CCCC2222"), Ref::One(_)));
+}
+
+#[test]
+fn id_tokens_trims_punctuation_ignores_words_collapses_dupes() {
+    assert_eq!(
+        id_tokens("see (01ABCDEFGH), and 01ABCDEFGH again"),
+        vec!["01ABCDEFGH"]
+    );
+    assert_eq!(id_tokens("plain words 0123 supersedes"), Vec::<&str>::new());
+    assert_eq!(
+        id_tokens("01AAAA0000 01BBBB1111"),
+        vec!["01AAAA0000", "01BBBB1111"]
+    );
+}
