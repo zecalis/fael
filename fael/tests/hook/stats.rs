@@ -1,16 +1,23 @@
 //! Usage accounting: temp-dir repos are skipped unless the state dir is
 //! scratch too.
 
-use super::{fael, fael_at, json, repo};
+use super::{fael, fael_at, fael_at_env, json, repo};
 use std::path::Path;
 
 #[test]
 fn stats_skips_temp_repos_unless_state_is_scratch_too() {
     // a real state dir (outside the OS temp dir) drops usage from temp-dir
-    // benchmark repos (01M3CRR6A)
+    // benchmark repos (01M3CRR6A). The child gets its own TMPDIR so the
+    // premise holds in a temp clone too — a checkout inside the OS temp dir
+    // would put the state (target/tmp) in it: with TMPDIR the boundary is
+    // the scratch dir, so the state reads as real and the benchmark repo as
+    // scratch, whichever side of the OS temp dir the checkout lives on.
+    let scratch = std::env::temp_dir().join(format!("fael-stats-scratch-{}", fael_core::ulid()));
+    std::fs::create_dir_all(&scratch).unwrap();
+    let scratch = scratch.to_string_lossy().into_owned();
     let state = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("stats-{}", fael_core::ulid()));
     std::fs::create_dir_all(&state).unwrap();
-    let tmp_repo = std::env::temp_dir().join("faelbench.x");
+    let tmp_repo = Path::new(&scratch).join("faelbench.x");
     let line = |repo: &Path| {
         format!(
             r#"{{"ts":"2026-09-26T00:00:00.000Z","repo":{},"client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["A"]}}"#,
@@ -22,7 +29,13 @@ fn stats_skips_temp_repos_unless_state_is_scratch_too() {
         format!("{}\n{}\n", line(&tmp_repo), line(Path::new("/work/real"))),
     )
     .unwrap();
-    let (ok, out, _) = fael_at(&state, &state, &["stats", "--json"], "");
+    let (ok, out, _) = fael_at_env(
+        &state,
+        &state,
+        &["stats", "--json"],
+        "",
+        &[("TMPDIR", scratch.as_str())],
+    );
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(ok && v["events"] == 1 && v["skipped_temp"] == 1, "{out}");
 }
