@@ -3,7 +3,7 @@
 > **Status:** the log format and storage (§2, [format.md](format.md)) are implemented in `fael-core`, and so are
 > `add` `close` `find` `keys` `kickoff` `mv` in the `fael` CLI (`find` and `kickoff` take
 > `--branches` to read unmerged branches without a checkout), `fael mcp`
-> (stdio, 4 tools), `fael hook <stop|session-start|read|edit>` (neutral + claude/codex adapters) with
+> (stdio, 3 tools), `fael hook <stop|session-start|read|edit>` (neutral + claude/codex adapters) with
 > per-machine usage accounting (`fael stats`), `fael install` (Claude Code, Codex, OpenCode),
 > and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11).
 > This page is the contract the code is built against —
@@ -147,14 +147,15 @@ row_tokens = 400
 row_bytes = 10240             # hard cap, never above 10 KiB
 ```
 
-### MCP (4 tools on stdio — each schema is paid for in every session, so the list stays short)
+### MCP (3 tools on stdio — each schema is paid for in every session, so the list stays short)
 
 | Tool | Input | Notes |
 |---|---|---|
 | `find` | `files[]` `text` `key` `kind` `since` `to` `revisit?` `branches?` `limit` `offset` | read-only, cut to `budget.find_tokens`. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. `branches: true` also reads unmerged branches (rows tagged `@<branch>`). A cut list prints `next: offset=N` — repeat the call with it |
 | `add` | `kind` `text` `files[]` (required, non-empty) `key?` `to?` `title?` `revisit?` `urgent?` `urgent_before?` `supersedes?` `force?` `rows[]?` | a bad value is rejected with an error message that says how to fix the call. Its description tells the agent to reuse an anchor `find` already showed rather than invent a new one. `rows` batches many rows in one call — a bad row reports alone while the rest save |
 | `close` | `id` `text` | |
-| `bump` | `id` `to?` `revisit?` `urgent?` `urgent_before?` `not_urgent?` | new version of an open row: same text/files, new routing — text and files never change through bump |
+
+`bump` is CLI-only (`fael bump`): re-routing a row is rare and mostly a human call, so its schema is not paid in every session. The server still answers a `bump` call from a client that sends one.
 
 ### Hook protocol
 
@@ -182,7 +183,7 @@ agent ─(MCP add | CLI add | hook)─▶ core.normalize ─▶ core.validate �
                   (<git-common-dir>/fael/log/…)      (.fael/log/<writer>/<month>.jsonl)
 ```
 
-The write path self-heals before it validates (`fael/src/selfheal.rs`): `core.validate` sees one row and no log, so filling an absent `--supersedes` — from `Supersedes <id>` in the text, from a repeat on the same files, or from the same kind + key of the caller's own row — and adopting the one key the row's files already carry happen here, where the log is readable. Each choice is reported in one info line, which is not an ask. Several candidates file the row and name what was kept: fael never picks and never rejects for it.
+The write path self-heals before it validates (`fael/src/selfheal.rs`): `core.validate` sees one row and no log, so filling an absent `--supersedes` — from `Supersedes <id>` in the text, from a repeat on the same files, or from the same kind + key of the caller's own row — and adopting the one key the row's files already carry happen here, where the log is readable. An `issue` is a finding, not a topic: a key may hold several, so a key match supersedes an issue only when it is the same finding re-filed (same words, a shared file), and a distinct issue sharing the key is kept and named. Each choice is reported in one info line, which is not an ask. Several candidates file the row and name what was kept: fael never picks and never rejects for it.
 
 **Push** — the agent reads a file, and the memory for that file comes with it:
 ```

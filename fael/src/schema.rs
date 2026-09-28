@@ -14,7 +14,7 @@ pub(crate) fn schema_json() -> String {
 pub(crate) fn tools() -> Value {
     let str_ = |d: &str| json!({"type": "string", "description": d});
     let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
-    // chunk 6d: one short sentence — it repeats on every tool, so every word is paid four times
+    // chunk 6d: one short sentence — it repeats on every tool, so every word is paid three times
     let cwd =
         str_("repo this call is about — pass when outside the session cwd, or rows land wrong");
     let mut t = json!([
@@ -63,18 +63,6 @@ pub(crate) fn tools() -> Value {
             "inputSchema": {"type": "object", "required": ["id"], "properties": {
                 "id": str_("id or prefix, as find showed"),
                 "text": str_("why, e.g. fixed in <sha>"),
-            }},
-        },
-        {
-            "name": "bump",
-            "description": "New version of an open row with new routing — text and files never change.",
-            "inputSchema": {"type": "object", "required": ["id"], "properties": {
-                "id": str_("id or prefix, as find showed"),
-                "to": str_("who answers now — omit to keep"),
-                "urgent": {"type": "boolean", "description": "to the back of the queue"},
-                "urgent_before": str_("just above that row"),
-                "not_urgent": {"type": "boolean", "description": "leave the queue"},
-                "revisit": str_("date or text — omit to keep"),
             }},
         },
     ]);

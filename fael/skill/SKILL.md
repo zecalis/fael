@@ -22,6 +22,8 @@ goes to the next one. Rows live in `.fael/log/` and travel with the repo.
 - Self-heal: a repeat on the same files or key supersedes the open row itself,
   `Supersedes <id>` in the text fills `--supersedes`, and the one key those
   files already carry is reused — pass `--key` only to open a new topic.
+  An `issue` reuses a key freely (a key holds several findings); it supersedes
+  only the same finding re-filed, so file each distinct bug as its own row.
 - Long body? `--title "<≤15-word headline>"` — lists show the title, the body is pulled by id (`fael find <id>`)
 
 Each row is read months later with no chat: one or two standalone sentences.

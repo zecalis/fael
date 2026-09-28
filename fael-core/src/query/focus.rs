@@ -60,16 +60,38 @@ pub struct PushPolicy {
 /// D2 — background rows never render: one count line with the exact next call.
 pub const PUSH_BACKGROUND: Background = Background::CountLine;
 
-/// What `select` cut: the rows to render, plus how many never render (the
-/// same-dir / shared-key tiers and the tier-0 rows past the cap).
+/// What `select` did, split into classes that each have one exact next call:
+/// `omitted` rows (the row cap and token budget cut them — `fael find --files
+/// <f>` returns them), `background_dirs` hidden same-dir rows (`fael find
+/// --files <dir>/`), and `background_keys` hidden shared-key rows, key ->
+/// count (`fael find --key <k>`).
 #[derive(Debug)]
 pub struct Selection<'a> {
     pub shown: Vec<&'a Row>,
     pub omitted: usize,
+    pub background_dirs: usize,
+    pub background_keys: Vec<(String, usize)>,
+}
+
+impl Selection<'_> {
+    /// How many rows `fael find --files <f>` returns beyond what rendered: the
+    /// row cap cut plus the rows the token budget cut. `rendered` is the row
+    /// count render actually printed.
+    pub fn findable_after(&self, rendered: usize) -> usize {
+        self.omitted + self.shown.len().saturating_sub(rendered)
+    }
 }
 
 fn plan_key(p: &PlanFocus) -> String {
     format!("plan:{}:chunk-{}", p.name, p.chunk)
+}
+
+/// Count one key in encounter order — deterministic: same log, same order.
+fn bump_key(keys: &mut Vec<(String, usize)>, key: String) {
+    match keys.iter().position(|(k, _)| *k == key) {
+        Some(i) => keys[i].1 += 1,
+        None => keys.push((key, 1)),
+    }
 }
 
 /// Bucket one gathered row. `tier` is L1's match (0 exact file/zone, 1
@@ -93,33 +115,55 @@ pub fn bucket(r: &Row, tier: usize, focus: &Focus) -> Bucket {
     }
 }
 
-/// Cut tiered L1 rows to what the push renders. The input stays in L1's
-/// `cmp_rows` order — Now rows move ahead of File, Background only counts —
-/// so with `Focus::default()` this is today's order, capped. `max_rows = 0`
-/// skips the row cap (token budget only); Background never shows either way.
+/// Cut tiered L1 rows to what the push renders. `max_rows = 0` is no cap —
+/// nothing is suppressed and L1's own order stands (today's push, token budget
+/// only). Otherwise Now rows move ahead of File and always render (only the
+/// token budget caps them, at render); the row cap eats the File tail after
+/// them. Background rows never render — each class is counted by the exact
+/// call that reaches it: same-dir rows by the query's directory, shared-key
+/// rows by their key.
 pub fn select<'a>(
     rows: Vec<(&'a Row, usize)>,
     focus: &Focus,
     policy: &PushPolicy,
 ) -> Selection<'a> {
-    let mut shown: Vec<&Row> = vec![];
+    if policy.max_rows == 0 {
+        return Selection {
+            shown: rows.into_iter().map(|(r, _)| r).collect(),
+            omitted: 0,
+            background_dirs: 0,
+            background_keys: Vec::new(),
+        };
+    }
+    let mut now: Vec<&Row> = vec![];
     let mut file: Vec<&Row> = vec![];
-    let mut bg = 0usize;
+    let mut background_dirs = 0usize;
+    let mut background_keys: Vec<(String, usize)> = vec![];
     for (r, t) in rows {
-        match (bucket(r, t, focus), policy.background) {
-            (Bucket::Now, _) => shown.push(r),
-            (Bucket::File, _) => file.push(r),
-            (Bucket::Background, Background::CountLine) => bg += 1,
+        match bucket(r, t, focus) {
+            Bucket::Now => now.push(r),
+            Bucket::File => file.push(r),
+            Bucket::Background => match policy.background {
+                // tier 2 is a shared key; tier 1 (or a keyless row) a neighbour
+                Background::CountLine => match t {
+                    2 => match r.key.clone() {
+                        Some(k) => bump_key(&mut background_keys, k),
+                        None => background_dirs += 1,
+                    },
+                    _ => background_dirs += 1,
+                },
+            },
         }
     }
-    // Now first, then File — the cap eats the File tail before any Now row.
-    shown.extend(file);
-    let total = shown.len() + bg;
-    if policy.max_rows > 0 && shown.len() > policy.max_rows {
-        shown.truncate(policy.max_rows);
-    }
+    // Now rows always show; the cap only limits how much of File joins them.
+    let mut shown = now;
+    let room = policy.max_rows.saturating_sub(shown.len());
+    let omitted = file.len().saturating_sub(room);
+    shown.extend(file.into_iter().take(room));
     Selection {
-        omitted: total - shown.len(),
         shown,
+        omitted,
+        background_dirs,
+        background_keys,
     }
 }

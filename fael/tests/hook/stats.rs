@@ -72,9 +72,9 @@ fn push_usage_counts_only_rendered_rows() {
     let usage = std::fs::read_to_string(d.join("state/usage.jsonl")).unwrap();
     let v: serde_json::Value = serde_json::from_str(usage.lines().last().unwrap()).unwrap();
     assert_eq!(v["ids"].as_array().unwrap().len(), rendered, "{v}");
-    // the full budget back: an edit still counts the same-dir neighbour in
-    // the omitted line (push-focus chunk 1: same-dir decisions are
-    // Background — counted, never rendered)
+    // the full budget back: an edit hides the same-dir neighbour but names
+    // the exact call that reaches it (push-focus chunk 1 + review fix:
+    // same-dir is Background, counted by the directory call)
     std::fs::write(
         d.join(".fael/config.toml"),
         "[budget]\npush_tokens = 10000\n",
@@ -82,7 +82,7 @@ fn push_usage_counts_only_rendered_rows() {
     .unwrap();
     let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
     assert!(
-        ok && out.contains("… +1 more about this file — fael find --files src/a.rs"),
+        ok && out.contains("… +1 more in src/ — fael find --files src/"),
         "{out}"
     );
 }

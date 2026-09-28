@@ -1,7 +1,7 @@
 //! Session-start kickoff + gitignore warning, and the read push (each row
 //! once per session).
 
-use super::{fael, git, json, repo};
+use super::{fael, json, repo};
 
 #[test]
 fn session_start_and_read_push() {
@@ -354,37 +354,4 @@ fn session_start_lists_mine_then_hot_urgent() {
         out.find("5 open issues").unwrap(),
     );
     assert!(mine < hot && hot < count, "{out}");
-}
-
-#[test]
-fn hook_rows_carry_their_branch_tag() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "a"]);
-    let main = git(&d, &["symbolic-ref", "--short", "HEAD"]);
-    // a note filed on another branch, then that branch deleted — the journal
-    // keeps it, and the read push must tag it like `find` does (§5)
-    git(&d, &["switch", "-qc", "feat/x"]);
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "note",
-            "row from another branch",
-            "--files",
-            "src/a.rs",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "rows"]);
-    git(&d, &["switch", "-q", &main]);
-    git(&d, &["branch", "-D", "feat/x"]);
-
-    let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
-    let (ok, out, _) = fael(&d, &["hook", "read"], &input);
-    assert!(ok && out.contains("row from another branch"), "{out}");
-    assert!(out.contains("@feat/x"), "{out}");
 }

@@ -38,57 +38,83 @@ pub struct Report {
     pub writers: Vec<WriterReport>,
 }
 
-/// Rewrite eligible months. `month` is the current UTC `yyyy-mm` (injected so
-/// tests don't depend on the clock); `root` is only read for `--prune`
-/// existence checks, resolved through `al` so a merely renamed file never
-/// counts as gone. Errors when a source file has lines `read` would skip —
-/// run `fael doctor --fix` first, so no byte is ever dropped silently.
+/// Rewrite eligible months across every storage root (`fael`, the tree, plus
+/// `journal` when the clone has one). Eligible = a writer's `<yyyy-mm>` files
+/// older than the current month (and older than `--before`); never
+/// `compact.*` or `_import/*` (immutable).
+///
+/// The roots are read as one log: rows and closes are unioned (tree wins on a
+/// duplicate id) and folded and pruned once, then the same bytes go to every
+/// root that held a source file — so a close that lived only in the journal
+/// still folds, and a row `--prune` dropped cannot resurface through the union.
+/// Each close folds into its row as `"closed":{"id","ts","by","text"}` — the
+/// one place a row carries its own status — rows sort by id, sources are
+/// deleted after the rewrite lands.
+///
+/// `month` is the current UTC `yyyy-mm` (injected so tests don't depend on the
+/// clock); `root` is only read for `--prune` existence checks, resolved through
+/// `al` so a merely renamed file never counts as gone. Errors when a source
+/// file has lines `read` would skip — run `fael doctor --fix` first, so no byte
+/// is ever dropped silently.
 #[expect(
     clippy::too_many_lines,
     reason = "predates the lint — split, then drop"
 )]
 pub fn compact(
     fael: &Path,
+    journal: Option<&Path>,
     root: &Path,
     opts: &Opts,
     month: &str,
     al: &crate::Aliases,
 ) -> Result<Report, String> {
-    let _guard = lock(fael)?;
-    let log = fael.join("log");
-    // writer → eligible month files (sorted); writers filtered by --writer
-    let mut by_writer: HashMap<String, Vec<PathBuf>> = HashMap::new();
-    for f in collect_files(&log) {
-        if f.extension().is_none_or(|x| x != "jsonl") {
-            continue;
+    // tree first, so its row wins the union when both roots hold the same id
+    let stores: Vec<&Path> = match journal {
+        Some(j) if j != fael => vec![fael, j],
+        _ => vec![fael],
+    };
+    let mut _guards = Vec::new();
+    for s in &stores {
+        _guards.push(lock(s)?);
+    }
+    // writer → (store index, eligible source file)
+    let mut by_writer: HashMap<String, Vec<(usize, PathBuf)>> = HashMap::new();
+    for (i, store) in stores.iter().enumerate() {
+        let log = store.join("log");
+        for f in collect_files(&log) {
+            if f.extension().is_none_or(|x| x != "jsonl") {
+                continue;
+            }
+            let Some(m) = month_of(&f) else { continue };
+            if m.as_str() >= month {
+                continue; // the current month (and any clock-skew future one) stays append-only
+            }
+            if opts
+                .before
+                .as_ref()
+                .is_some_and(|b| m.as_str() >= b.as_str())
+            {
+                continue;
+            }
+            let Ok(rel) = f.strip_prefix(&log) else {
+                continue;
+            };
+            let mut parts = rel.components();
+            let (Some(w), Some(_)) = (parts.next(), parts.next()) else {
+                continue;
+            };
+            if parts.next().is_some() {
+                continue; // only direct children of a writer folder
+            }
+            let writer = w.as_os_str().to_string_lossy().into_owned();
+            if writer.starts_with('_') || writer.starts_with('.') {
+                continue;
+            }
+            if opts.writer.as_ref().is_some_and(|w| *w != writer) {
+                continue;
+            }
+            by_writer.entry(writer).or_default().push((i, f));
         }
-        let Some(m) = month_of(&f) else { continue };
-        if m.as_str() >= month {
-            continue; // the current month (and any clock-skew future one) stays append-only
-        }
-        if opts
-            .before
-            .as_ref()
-            .is_some_and(|b| m.as_str() >= b.as_str())
-        {
-            continue;
-        }
-        let rel = f.strip_prefix(&log).map_err(|e| e.to_string())?;
-        let mut parts = rel.components();
-        let (Some(w), Some(_)) = (parts.next(), parts.next()) else {
-            continue;
-        };
-        if parts.next().is_some() {
-            continue; // only direct children of a writer folder
-        }
-        let writer = w.as_os_str().to_string_lossy().into_owned();
-        if writer.starts_with('_') || writer.starts_with('.') {
-            continue;
-        }
-        if opts.writer.as_ref().is_some_and(|w| *w != writer) {
-            continue;
-        }
-        by_writer.entry(writer).or_default().push(f);
     }
     if by_writer.is_empty() {
         return Err(
@@ -99,8 +125,9 @@ pub fn compact(
     writers.sort();
     let mut report = Report::default();
     for writer in writers {
-        let files = &by_writer[&writer];
-        let (mut rows, mut closes) = load(files)?;
+        let entries = &by_writer[&writer];
+        let paths: Vec<PathBuf> = entries.iter().map(|(_, f)| f.clone()).collect();
+        let (mut rows, mut closes) = load(&paths)?;
         dedupe_ids(&mut rows);
         dedupe_ids(&mut closes);
         let folded = fold(&mut rows, &closes);
@@ -117,31 +144,36 @@ pub fn compact(
         };
         rows.sort_by(|a, b| a.id.cmp(&b.id));
         let stamp = ulid();
-        let dir = log.join(&writer);
         let mut body = String::new();
         for r in &rows {
             body.push_str(&r.to_line());
             body.push('\n');
         }
-        let out = dir.join(format!("compact.{stamp}.jsonl"));
-        tmp_rename(&out, body.as_bytes())?;
-        let carried_n = carried.len();
-        if !carried.is_empty() {
-            let mut cbody = String::new();
-            for c in &carried {
-                cbody.push_str(&c.to_line());
-                cbody.push('\n');
+        let mut cbody = String::new();
+        for c in &carried {
+            cbody.push_str(&c.to_line());
+            cbody.push('\n');
+        }
+        // every root that held one of these rows gets the same folded bytes
+        let mut held: Vec<usize> = entries.iter().map(|(i, _)| *i).collect();
+        held.sort_unstable();
+        held.dedup();
+        for i in held {
+            let dir = stores[i].join("log").join(&writer);
+            std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            tmp_rename(&dir.join(format!("compact.{stamp}.jsonl")), body.as_bytes())?;
+            if !carried.is_empty() {
+                tmp_rename(
+                    &dir.join(format!("compact.{stamp}.close.jsonl")),
+                    cbody.as_bytes(),
+                )?;
             }
-            tmp_rename(
-                &dir.join(format!("compact.{stamp}.close.jsonl")),
-                cbody.as_bytes(),
-            )?;
         }
         let mut deleted = vec![];
-        for f in files {
+        for (i, f) in entries {
             std::fs::remove_file(f).map_err(|e| format!("{}: {e}", f.display()))?;
             deleted.push(
-                f.strip_prefix(fael)
+                f.strip_prefix(stores[*i])
                     .unwrap_or(f)
                     .to_string_lossy()
                     .replace('\\', "/"),
@@ -152,7 +184,7 @@ pub fn compact(
             rows: rows.len(),
             folded: folded.len(),
             pruned,
-            carried: carried_n,
+            carried: carried.len(),
             deleted,
         });
     }

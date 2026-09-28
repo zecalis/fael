@@ -198,3 +198,55 @@ fn mcp_add_single_key_supersedes() {
     assert_eq!(open_rows(&d).len(), 1);
     assert!(usage(&d).is_empty(), "self-heal info is no ask");
 }
+
+/// An issue is a finding, not a topic: a chunk key can hold several, so a
+/// different issue must not be swallowed by the key alone (issue 01M3KCJ5Y).
+#[test]
+fn distinct_issues_on_one_key_both_stay_open() {
+    let d = repo();
+    let (ok, out, err) = add(&d, "issue", "broken counter", "src/a.rs", "plan:x:chunk-1");
+    assert!(ok, "{err}");
+    let first = out.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = add(&d, "issue", "stale cache", "src/b.rs", "plan:x:chunk-1");
+    assert!(ok, "{err}");
+    assert!(!err.contains("superseded"), "{err}");
+    assert!(
+        err.contains("kept open") && err.contains("plan:x:chunk-1"),
+        "{err}"
+    );
+    let open = open_rows(&d);
+    assert_eq!(open.len(), 2, "{open:?}");
+    assert!(open.contains(&first), "{open:?}");
+    assert!(usage(&d).is_empty(), "the kept-open line is info, no ask");
+}
+
+/// Same key and same file but different words are still two findings.
+#[test]
+fn two_issues_same_key_same_file_different_words_both_stay() {
+    let d = repo();
+    let (ok, _, err) = add(&d, "issue", "broken counter", "src/a.rs", "plan:x:chunk-1");
+    assert!(ok, "{err}");
+    let (ok, _, err) = add(&d, "issue", "stale cache", "src/a.rs", "plan:x:chunk-1");
+    assert!(ok, "{err}");
+    assert!(!err.contains("superseded"), "{err}");
+    assert_eq!(open_rows(&d).len(), 2);
+}
+
+/// The same finding re-filed (same words, a shared file) still supersedes.
+#[test]
+fn refiled_issue_with_the_same_words_and_a_shared_file_supersedes() {
+    let d = repo();
+    let (ok, out, err) = add(&d, "issue", "broken counter", "src/a.rs", "plan:x:chunk-1");
+    assert!(ok, "{err}");
+    let first = out.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = add(
+        &d,
+        "issue",
+        "broken counter",
+        "src/a.rs,src/b.rs",
+        "plan:x:chunk-1",
+    );
+    assert!(ok, "{err}");
+    assert!(names(&err, "superseded ", &first), "{err}");
+    assert_eq!(open_rows(&d).len(), 1);
+}

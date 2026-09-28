@@ -13,6 +13,7 @@ mod session;
 mod stats;
 mod stop;
 mod stop_risk;
+mod tags;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

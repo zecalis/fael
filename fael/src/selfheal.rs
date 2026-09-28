@@ -2,12 +2,14 @@
 //! the log before it asks the agent. (b) a repeated note on the same writer +
 //! branch + files supersedes the open one itself; (c) a caller-supplied key is
 //! the stronger identity — the single open row with the same kind + key +
-//! writer supersedes too; (d) a `Supersedes <id>` the flag left off sets it,
-//! and a flag that resolves to nothing is rescued by the text when the text
-//! names exactly one open row; (e) the one key these files already carry
-//! becomes the row's key. The Stop-hook debt pattern (a row every turn, nothing
-//! closing the old one) can no longer pile up, and a row filed where a topic
-//! already lives carries that topic's identity. CLI and MCP share
+//! writer supersedes too, except an `issue`, which is a finding rather than a
+//! topic: a key may hold several, so an issue only replaces the same finding
+//! re-filed (same words, a shared file); (d) a `Supersedes <id>` the flag left
+//! off sets it, and a flag that resolves to nothing is rescued by the text when
+//! the text names exactly one open row; (e) the one key these files already
+//! carry becomes the row's key. The Stop-hook debt pattern (a row every turn,
+//! nothing closing the old one) can no longer pile up, and a row filed where a
+//! topic already lives carries that topic's identity. CLI and MCP share
 //! `write::add_row`, so both behave the same.
 //! Every automatic choice is reported in one info line — info, not a warning,
 //! so it never counts as an ask. When several rows match or the rules
@@ -118,10 +120,13 @@ pub(crate) fn heal(
 }
 
 /// (c) The caller's key is the strongest identity: same kind + key, any
-/// branch, but only my own row is mine to close. `None` — no key on the row,
-/// or no open row carrying that kind + key — lets `heal` fall through to (b).
-/// Auto-key (e) never reaches here: it runs after `heal`, so a key the caller
-/// did not write can't close a row.
+/// branch, but only my own row is mine to close. An `issue` is a finding, not
+/// a topic — a key may hold several — so an issue candidate must also be the
+/// same finding (same words, a shared file); a distinct issue sharing the key
+/// is kept and named, never swallowed. `None` — no key on the row, or no open
+/// row carrying that kind + key — lets `heal` fall through to (b). Auto-key
+/// (e) never reaches here: it runs after `heal`, so a key the caller did not
+/// write can't close a row.
 fn by_key(
     st: &core::Stamp,
     row: &core::Row,
@@ -134,7 +139,25 @@ fn by_key(
         notes: vec![],
     };
     let short = |r: &core::Row| w.short(&r.id).to_string();
-    match key_hits(open, &row.kind, k).as_slice() {
+    let all = key_hits(open, &row.kind, k);
+    let hits: Vec<&core::Row> = if row.kind == "issue" {
+        all.iter().copied().filter(|r| same_issue(r, row)).collect()
+    } else {
+        all.clone()
+    };
+    if hits.is_empty() {
+        // only reachable for an issue: `all` was non-empty but every row is a
+        // different finding, so name what stays open and supersede nothing
+        if !all.is_empty() {
+            h.notes.push(format!(
+                "open issue {} uses key {k} — kept open (a different finding)",
+                id_list(&all, w)
+            ));
+            return Some(h);
+        }
+        return None;
+    }
+    match hits.as_slice() {
         [one] if one.by == st.by => {
             let target = one.id.clone();
             h.supersedes = Some(target.clone());
@@ -165,6 +188,18 @@ fn by_key(
         }
         [] => None,
     }
+}
+
+/// (c) for an `issue`: the same finding re-filed — same words and a shared
+/// file. Two distinct issues on one topic (a plan chunk, an area) share the
+/// key but not their text, so neither may disappear.
+fn same_issue(a: &core::Row, b: &core::Row) -> bool {
+    norm_text(&a.text) == norm_text(&b.text) && a.files.iter().any(|f| b.files.contains(f))
+}
+
+/// Whitespace-collapsed text, so a re-wrap does not read as a new finding.
+fn norm_text(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// The one key open rows on these files already use — chunk 3e, and only when

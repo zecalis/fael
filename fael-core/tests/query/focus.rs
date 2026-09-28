@@ -139,15 +139,61 @@ fn select_caps_rows_issues_first() {
 #[test]
 fn select_zero_means_token_budget_only() {
     let mut l = log();
-    // a same-dir decision: Background whatever the cap
+    // a same-dir decision: Background only while the cap is on
     l.rows.push(row(
         "D0000000000000000000000026",
         "decision",
         &["src/c.rs"],
         None,
     ));
-    // no row cap: every Now + File row shows, Background still never does
+    // no row cap: L1's own order stands, every row renders, nothing hidden
     let sel = select(query(&l, "src/a.rs", false), &Focus::default(), &policy(0));
+    assert_eq!(ids(&sel.shown), ["14", "13", "26"]);
+    assert_eq!(sel.findable_after(3), 0);
+    assert_eq!(sel.background_dirs, 0);
+    assert!(sel.background_keys.is_empty());
+}
+
+#[test]
+fn select_counts_background_by_exact_call() {
+    let mut l = log();
+    // a same-dir decision (tier 1) and a decision on another dir sharing the
+    // exact hit's key (tier 2) — both hidden, each with its own exact call
+    l.rows.push(row(
+        "D0000000000000000000000026",
+        "decision",
+        &["src/c.rs"],
+        None,
+    ));
+    l.rows.push(row(
+        "D0000000000000000000000027",
+        "decision",
+        &["lib/z.rs"],
+        Some("auth:session"),
+    ));
+    let sel = select(query(&l, "src/a.rs", false), &Focus::default(), &policy(5));
+    // the same-dir issue 13 is still Now and shows; 14 the tier-0 File row
     assert_eq!(ids(&sel.shown), ["13", "14"]);
+    assert_eq!(sel.omitted, 0);
+    assert_eq!(sel.background_dirs, 1);
+    assert_eq!(sel.background_keys, [("auth:session".to_string(), 1)]);
+}
+
+#[test]
+fn select_never_cuts_now_rows() {
+    let mut l = log();
+    for d in ["30", "31", "32", "33", "34", "35"] {
+        l.rows.push(row(
+            &format!("E00000000000000000000000{d}"),
+            "issue",
+            &["src/a.rs"],
+            None,
+        ));
+    }
+    let sel = select(query(&l, "src/a.rs", false), &Focus::default(), &policy(5));
+    // 7 open issues (6 new + 13) exceed the cap: every one shows, the cap
+    // only limits the File ring, so the tier-0 decision 14 is the one cut
+    assert_eq!(sel.shown.len(), 7);
+    assert!(sel.shown.iter().all(|r| r.kind == "issue"));
     assert_eq!(sel.omitted, 1);
 }

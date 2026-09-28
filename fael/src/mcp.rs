@@ -1,4 +1,5 @@
-//! `fael mcp` — MCP over stdio: newline-delimited JSON-RPC 2.0, four tools (find · add · close · bump).
+//! `fael mcp` — MCP over stdio: newline-delimited JSON-RPC 2.0, three listed tools (find · add · close).
+//! `bump` is CLI-first: unlisted to save schema tokens every session, still answered for clients that call it.
 //! Blocking std I/O, one request at a time — no async runtime on this path (PLAN §4).
 //! Tool failures come back as `isError` results so the agent reads the fix; only protocol
 //! faults are JSON-RPC errors.
@@ -37,7 +38,7 @@ fn handle(line: &str) -> Option<Value> {
     let params = msg.get("params").cloned().unwrap_or(Value::Null);
     let result = match msg["method"].as_str().unwrap_or("") {
         "initialize" => json!({
-            // ponytail: echo the client's version — the four tools use nothing version-specific
+            // ponytail: echo the client's version — the tools use nothing version-specific
             "protocolVersion": params["protocolVersion"].as_str().unwrap_or(VERSION),
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "fael", "version": env!("CARGO_PKG_VERSION")},
@@ -61,9 +62,7 @@ fn call(p: &Value) -> Value {
         "add" => add(args),
         "close" => close(args),
         "bump" => bump(args),
-        n => Err(format!(
-            "unknown tool {n} — fael has find, add, close, bump"
-        )),
+        n => Err(format!("unknown tool {n} — fael has find, add, close")),
     };
     let (text, is_error) = match res {
         Ok(t) => (t, false),

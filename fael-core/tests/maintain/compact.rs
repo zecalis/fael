@@ -45,6 +45,7 @@ fn compact_folds_sorts_and_deletes_past_months() {
     );
     let rep = compact(
         &fael,
+        None,
         &r,
         &CompactOpts::default(),
         MONTH,
@@ -95,6 +96,7 @@ fn compact_nothing_eligible_is_an_error() {
     );
     let e = compact(
         &fael,
+        None,
         &r,
         &CompactOpts::default(),
         MONTH,
@@ -131,6 +133,7 @@ fn compact_before_and_writer_filter() {
     );
     let rep = compact(
         &fael,
+        None,
         &r,
         &CompactOpts {
             before: Some("2026-08".into()),
@@ -145,6 +148,7 @@ fn compact_before_and_writer_filter() {
     assert!(month_file(&fael, "a-0000", "2026-08", false).exists());
     let rep = compact(
         &fael,
+        None,
         &r,
         &CompactOpts {
             writer: Some("a-0000".into()),
@@ -192,6 +196,7 @@ fn compact_prune_drops_only_closed_rows_whose_files_are_all_gone() {
     );
     let rep = compact(
         &fael,
+        None,
         &r,
         &CompactOpts {
             prune: true,
@@ -233,6 +238,7 @@ fn compact_prune_keeps_closed_rows_whose_files_were_renamed() {
     let al = Aliases::from_pairs(vec![("old.rs".to_string(), "new.rs".to_string())]);
     let rep = compact(
         &fael,
+        None,
         &r,
         &CompactOpts {
             prune: true,
@@ -263,6 +269,7 @@ fn compact_refuses_dirty_sources() {
     );
     let e = compact(
         &fael,
+        None,
         &r,
         &CompactOpts::default(),
         MONTH,
@@ -286,6 +293,7 @@ fn compact_carries_closes_with_no_target() {
     );
     let rep = compact(
         &fael,
+        None,
         &r,
         &CompactOpts::default(),
         MONTH,
