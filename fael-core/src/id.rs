@@ -63,12 +63,20 @@ fn crockford_val(c: char) -> Option<u8> {
 }
 
 /// An id-shaped token (PLAN-fael-id-refs contract): 8..=26 chars, starting
-/// `01`, every char Crockford base32 (no I L O U, either case). 8 is the
-/// floor because `Abbrev::short` never prints fewer — a shorter token is
-/// prose (e.g. `0123`), not something fael ever printed.
+/// `0`, every char Crockford base32 (no I L O U, either case). 8 is the floor
+/// because `Abbrev::short` never prints fewer — a shorter token is prose
+/// (e.g. `0123`), not something fael ever printed. The first char is `0`
+/// because a 128-bit ULID keeps its top two bits zero: it only reaches `1`
+/// when the 48-bit ms passes 2^45, ~year 3084. (An earlier `01`-only check
+/// stopped recognising every id from 2039 on, when the second char turns
+/// `2` — the guard silently disabled itself.)
+///
+/// Legacy fapony `mug…` ids are outside this shape: `resolve` still finds them
+/// by exact id/prefix, but prose scanning ignores their shape (short lowercase
+/// runs would flag ordinary words as phantoms).
 pub fn looks_like_id(tok: &str) -> bool {
     (8..=26).contains(&tok.len())
-        && tok.as_bytes().starts_with(b"01")
+        && tok.as_bytes().first() == Some(&b'0')
         && tok.chars().all(|c| crockford_val(c).is_some())
 }
 /// present: the stop hook anchors recency at a transcript birthtime with ms

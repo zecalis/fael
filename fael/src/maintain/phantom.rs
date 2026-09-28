@@ -12,6 +12,15 @@ use crate::core;
 use crate::find::branches::with_branches;
 use std::path::Path;
 
+/// The prose a row shows: its title (every list) plus its text (the body).
+/// A citation in either is a dead citation to the reader.
+fn prose(row: &core::Row) -> String {
+    match row.title.as_deref() {
+        Some(t) if !t.is_empty() => format!("{t} {}", row.text),
+        _ => row.text.clone(),
+    }
+}
+
 /// The `[Phantom]` doctor problem, if any open row or close text cites an
 /// id with no row behind it — kept here (not in `rows.rs`) so `files_notes`
 /// stays under the 100-line function cap.
@@ -21,7 +30,7 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
     // compacted rows. A closed row's own text is never scanned.
     let mut cands: Vec<(String, String)> = vec![];
     for row in core::find(log, &core::Filter::default()) {
-        for tok in core::phantom_refs(log, &row.text) {
+        for tok in core::phantom_refs(log, &prose(row)) {
             cands.push((row.id.clone(), tok));
         }
     }

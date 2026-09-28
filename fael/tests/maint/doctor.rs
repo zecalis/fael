@@ -165,6 +165,35 @@ fn doctor_flags_open_row_citing_fake_id() {
 }
 
 #[test]
+fn doctor_flags_fake_id_in_a_row_title() {
+    let d = repo();
+    let seed = add(&d, "note", "src/a.rs", "keeper row");
+    let fake = phantom_of(&seed);
+    std::fs::write(d.join("src/b.rs"), "").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "no id in the body",
+            "--title",
+            &format!("fixed by {fake}"),
+            "--files",
+            "src/b.rs",
+        ],
+    );
+    assert!(ok, "{err}");
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // a citation in the title is as visible as one in the text
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(
+        out.contains("note [Phantom]: 1 reference(s)") && out.contains(&fake),
+        "{out}"
+    );
+}
+
+#[test]
 fn doctor_flags_close_reason_citing_fake_id() {
     let d = repo();
     let seed = add(&d, "note", "src/a.rs", "keeper row");

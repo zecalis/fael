@@ -38,13 +38,16 @@ fn looks_like_id_accepts_full_ulid_and_prefix() {
     assert!(looks_like_id("01M3M8Y8000000000000000000"));
     assert!(looks_like_id("01M3M8Y8"));
     assert!(looks_like_id("01m3m8y8")); // case-insensitive
+    // the second char encodes ms: a 2039-era id starts `02`, still a ULID
+    assert!(looks_like_id("02M3M8Y800"));
 }
 
 #[test]
 fn looks_like_id_rejects_non_shapes() {
     assert!(!looks_like_id("01M3M8Y")); // 7 chars — never a printed prefix
     assert!(!looks_like_id("0123")); // prose number, not something fael printed
-    assert!(!looks_like_id("02M3M8Y800")); // wrong prefix
+    assert!(!looks_like_id("12M3M8Y800")); // first char is 0 until ~year 3084
+    assert!(!looks_like_id("M3M8Y80000")); // not a leading 0
     assert!(!looks_like_id("01M3M8Y8IXXXXXXXXXXXXXXXXX")); // I excluded
     assert!(!looks_like_id("01M3M8Y8LXXXXXXXXXXXXXXXX")); // L excluded
     assert!(!looks_like_id("01M3M8Y8OXXXXXXXXXXXXXXXX")); // O excluded
@@ -91,6 +94,32 @@ fn ref_state_close_row_id_is_not_missing() {
     assert!(matches!(ref_state(&log, "01CCCC2222"), Ref::One(_)));
 }
 
+/// A close row's own id shares the prefix of an open row's id: the row wins —
+/// `abbrev()` prints only the rows, so the printed prefix must stay `One`, not
+/// turn `Many` because a close row echoes in the wider existence scope.
+#[test]
+fn ref_state_row_wins_over_a_close_row_collision() {
+    let log = Log {
+        rows: vec![row("01DDDD00000000000000000001")],
+        closes: vec![Row {
+            id: "01DDDD00000000000000000002".into(),
+            reference: Some("01DDDD00000000000000000001".into()),
+            text: "fixed".into(),
+            ..Row::default()
+        }],
+        warnings: vec![],
+    };
+    assert!(matches!(
+        ref_state(&log, "01DDDD00"),
+        Ref::One(r) if r.id == "01DDDD00000000000000000001"
+    ));
+    // the close-only id still exists on its own
+    assert!(matches!(
+        ref_state(&log, "01DDDD00000000000000000002"),
+        Ref::One(_)
+    ));
+}
+
 #[test]
 fn phantom_refs_reports_only_tokens_with_no_row() {
     let log = log();
@@ -109,6 +138,19 @@ fn phantom_refs_reports_only_tokens_with_no_row() {
         vec!["01ZZZZ9999"]
     );
     assert!(phantom_refs(&log, "plain words 0123 supersedes").is_empty());
+}
+
+/// Legacy non-ULID ids (fapony-era `mug…`) are outside `looks_like_id`, so
+/// prose scanning ignores them, but `ref_state` still resolves one that
+/// exists — the documented exemption (PLAN-fael-id-refs §2).
+#[test]
+fn legacy_non_ulid_ids_resolve_but_are_not_scanned() {
+    let mut log = log();
+    log.rows.push(row("mugcitsh"));
+    assert!(matches!(ref_state(&log, "mugcitsh"), Ref::One(_)));
+    assert!(!looks_like_id("mugcitsh"));
+    // a fake legacy id is invisible to the scanner, by design
+    assert!(phantom_refs(&log, "see mugzzzzz here").is_empty());
 }
 
 #[test]

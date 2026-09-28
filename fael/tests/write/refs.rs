@@ -76,6 +76,32 @@ fn add_citing_fake_id_warns_but_writes() {
 }
 
 #[test]
+fn add_citing_fake_id_in_title_warns_but_writes() {
+    let d = repo();
+    let id = add(&d, "a.rs", "keeper row");
+    let fake = phantom_of(&id);
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "no id in the body",
+            "--title",
+            &format!("fixed by {fake}"),
+            "--files",
+            "src/b.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(
+        err.contains(&format!("no row with id {fake}")) && err.contains(LINE),
+        "{err}"
+    );
+}
+
+#[test]
 fn add_citing_real_id_stays_silent() {
     let d = repo();
     let id = add(&d, "a.rs", "keeper row");
@@ -94,7 +120,6 @@ fn add_citing_real_id_stays_silent() {
     assert!(ok, "{err}");
     assert!(!err.contains("no row with id"), "{err}");
 }
-
 #[test]
 fn close_reason_citing_fake_id_warns_but_closes() {
     let d = repo();
