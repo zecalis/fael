@@ -61,6 +61,16 @@ fn crockford_val(c: char) -> Option<u8> {
         _ => None,
     }
 }
+
+/// An id-shaped token (PLAN-fael-id-refs contract): 8..=26 chars, starting
+/// `01`, every char Crockford base32 (no I L O U, either case). 8 is the
+/// floor because `Abbrev::short` never prints fewer — a shorter token is
+/// prose (e.g. `0123`), not something fael ever printed.
+pub fn looks_like_id(tok: &str) -> bool {
+    (8..=26).contains(&tok.len())
+        && tok.as_bytes().starts_with(b"01")
+        && tok.chars().all(|c| crockford_val(c).is_some())
+}
 /// present: the stop hook anchors recency at a transcript birthtime with ms
 /// precision, and a whole-second row filed just before the session start
 /// would otherwise read as newer.

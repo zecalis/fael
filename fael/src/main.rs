@@ -12,6 +12,7 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
+mod refs;
 mod schema;
 mod selfheal;
 mod session;

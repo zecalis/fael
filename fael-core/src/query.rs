@@ -11,6 +11,7 @@ mod focus;
 mod lookup;
 mod matching;
 mod push;
+mod refs;
 mod render;
 mod revisit;
 mod select;
@@ -22,6 +23,7 @@ pub use focus::{
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
 pub use push::{push, push_tiered};
+pub use refs::{Ref, id_tokens, ref_state};
 pub use render::{
     Abbrev, Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page,
 };

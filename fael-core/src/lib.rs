@@ -30,18 +30,20 @@ pub use doctor::{
 
 pub use hook::{BugSignal, StopFacts, decide_stop, last_row_ms};
 
-pub use id::{now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id};
+pub use id::{
+    looks_like_id, now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id,
+};
 pub use log::{
     BumpOpts, Log, MONTH_MAX, add, add_row, append, bump_row, close, close_row, decode_text,
     is_month, mv_row, needs_seal, parse, read,
 };
 pub use query::{
     Abbrev, Background, Bucket, Cut, Filter, Focus, Hidden, KeyUse, PUSH_BACKGROUND, PushPolicy,
-    Selection, Urgent, UrgentChange, abbrev, backtick_paths, brief, bucket, closed, cmp_rows, due,
-    est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone, gone_files, is_date, keys,
-    kickoff, levenshtein, page, push, push_tiered, query, ranked, render, render_full,
-    render_full_page, render_page, resolve, resolve_urgent, row_due, select, stale_refs,
-    superseded, today, waiting, waiting_line, warnings, with_due,
+    Ref, Selection, Urgent, UrgentChange, abbrev, backtick_paths, brief, bucket, closed, cmp_rows,
+    due, est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone, gone_files, id_tokens,
+    is_date, keys, kickoff, levenshtein, page, push, push_tiered, query, ranked, ref_state, render,
+    render_full, render_full_page, render_page, resolve, resolve_urgent, row_due, select,
+    stale_refs, superseded, today, waiting, waiting_line, warnings, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{normalize_files, valid_key, validate, validate_alias, validate_close};
