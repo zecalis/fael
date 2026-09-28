@@ -39,6 +39,7 @@ pub fn scan(fael: &Path, root: &Path, log_ignored: bool, month: &str) -> Report 
     let mut ids: HashMap<String, usize> = HashMap::new();
     let mut no_files = 0usize;
     let mut no_files_example = String::new();
+    let mut no_files_ids: Vec<String> = vec![];
     for f in &files {
         scan_file(
             f,
@@ -46,26 +47,33 @@ pub fn scan(fael: &Path, root: &Path, log_ignored: bool, month: &str) -> Report 
             &mut ids,
             &mut no_files,
             &mut no_files_example,
+            &mut no_files_ids,
             month,
         );
     }
     let mut dupes: Vec<(&String, &usize)> = ids.iter().filter(|(_, n)| **n > 1).collect();
     dupes.sort();
     for (id, n) in dupes {
-        r.problems.push(Problem::error(
-            Kind::Duplicate,
-            false,
-            None,
-            format!("id {id} appears {n}× — read dedupes it, `fael compact` rewrites it away"),
-        ));
+        r.problems.push(
+            Problem::error(
+                Kind::Duplicate,
+                false,
+                None,
+                format!("id {id} appears {n}× — read dedupes it, `fael compact` rewrites it away"),
+            )
+            .with_ids(vec![id.clone()]),
+        );
     }
     if no_files > 0 {
-        r.problems.push(Problem::info(
-            Kind::NoFiles,
-            format!(
-                "{no_files} row(s) without `files` (legacy) — read fine, ranked last, never invented; e.g. {no_files_example}"
-            ),
-        ));
+        r.problems.push(
+            Problem::info(
+                Kind::NoFiles,
+                format!(
+                    "{no_files} row(s) without `files` (legacy) — read fine, ranked last, never invented; e.g. {no_files_example}"
+                ),
+            )
+            .with_ids(no_files_ids),
+        );
     }
     // the cause of leftover conflict markers: without union every merge conflicts
     let attrs = root.join(".gitattributes");
@@ -107,6 +115,7 @@ fn scan_file(
     ids: &mut HashMap<String, usize>,
     no_files: &mut usize,
     no_files_example: &mut String,
+    no_files_ids: &mut Vec<String>,
     month: &str,
 ) {
     let name = path.to_string_lossy().into_owned();
@@ -157,6 +166,7 @@ fn scan_file(
                     && !is_alias_row(&row)
                 {
                     *no_files += 1;
+                    no_files_ids.push(row.id.clone());
                     if no_files_example.is_empty() {
                         *no_files_example = format!("{}:{}", name, i + 1);
                     }

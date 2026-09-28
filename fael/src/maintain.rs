@@ -5,10 +5,11 @@
 mod fat;
 mod merged;
 mod orphan;
+mod rows;
 mod shipped;
 
 use crate::{Args, core, repo};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub fn doctor(a: &Args) -> Result<ExitCode, String> {
@@ -30,27 +31,34 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     if a.has("fix") {
         let before = core::doctor_scan(&r.fael, &r.root, ignored, &month);
         for action in core::doctor_fix(&r.fael, &r.root, &before)? {
-            println!("fixed: {action}");
+            say(a.has("json"), &format!("fixed: {action}"));
         }
     }
     let mut rep = core::doctor_scan(&r.fael, &r.root, ignored, &month);
     if excluded {
-        rep.problems.push(core::Problem {
-            kind: core::ProblemKind::Ignored,
-            severity: core::Severity::Info,
-            fixable: false,
-            file: None,
-            detail: ".fael/log is kept local by .git/info/exclude — taken as deliberate; \
-                     move the pattern to .gitignore if it is not"
+        rep.problems.push(core::Problem::info(
+            core::ProblemKind::Ignored,
+            ".fael/log is kept local by .git/info/exclude — taken as deliberate; \
+             move the pattern to .gitignore if it is not"
                 .into(),
-        });
+        ));
     }
     let log = crate::read(&r);
     // Gone is judged through the resolver: a file that was renamed still
     // exists under its new path, so its rows still push and are not gone.
     let al = crate::aliases::load(&r, &log, true);
-    rep.problems
-        .extend(open_row_notes(&log, &r.root, &al, &r.cfg, a.has("fat")));
+    rep.problems.extend(rows::open_row_notes(
+        &log,
+        &r.root,
+        &al,
+        &r.cfg,
+        a.has("fat"),
+    ));
+    // `--fix` also closes the confirmed `[Shipped]` notes — the adapter half
+    // (core never runs `gh`, so it can never take this action itself).
+    if a.has("fix") {
+        fix_shipped(&r, &mut rep, a.has("json"));
+    }
     show(&rep, a.has("json"));
     Ok(if rep.errors().count() > 0 {
         ExitCode::FAILURE
@@ -59,132 +67,41 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     })
 }
 
-/// The open-row checks (Gone/PartGone/Stale/Orphan): what the rows still say
-/// versus what the repo (and its PRs) still hold. Split out of `doctor` for
-/// the 100-line rule — the `gh` half of Orphan lives here, never in core.
-fn open_row_notes(
-    log: &core::Log,
-    root: &Path,
-    al: &core::Aliases,
-    cfg: &core::Config,
-    expand_fat: bool,
-) -> Vec<core::Problem> {
-    let mut out = vec![];
-    let gone: Vec<_> = core::find(log, &core::Filter::default())
-        .into_iter()
-        .filter(|row| core::gone(root, row, al))
-        .collect();
-    if !gone.is_empty() {
-        let w = core::abbrev(log);
-        let eg: Vec<String> = gone
-            .iter()
-            .take(5)
-            .map(|row| format!("{} → {}", w.short(&row.id), row.files.join(", ")))
-            .collect();
-        out.push(core::Problem {
-            kind: core::ProblemKind::Gone,
-            severity: core::Severity::Info,
-            fixable: false,
-            file: None,
-            detail: format!(
-                "{} open row(s) name only files that no longer exist, so they never push — \
-                 re-file them on the new path or `fael close` them (e.g. {})",
-                gone.len(),
-                eg.join("; ")
-            ),
-        });
+/// The adapter half of `doctor --fix`: close the confirmed `[Shipped]` notes,
+/// then drop them from the report so a second `doctor` reads clean. `[Shipped?]`
+/// never carries close actions (its merge time is unknown), and a close that
+/// fails (a concurrent close, a bump) leaves its row in place.
+fn fix_shipped(r: &crate::Repo, rep: &mut core::DoctorReport, json: bool) {
+    for p in rep
+        .problems
+        .iter_mut()
+        .filter(|p| p.kind == core::ProblemKind::Shipped)
+    {
+        let mut left = vec![];
+        for (id, text) in p.closes.drain(..) {
+            match crate::close_row(r, &id, &text) {
+                Ok((row, _, _)) => say(json, &format!("fixed: closed {} — {text}", row.id)),
+                Err(e) => {
+                    eprintln!("skip: {e}");
+                    left.push((id, text));
+                }
+            }
+        }
+        p.closes = left;
+        p.ids = p.closes.iter().map(|(id, _)| id.clone()).collect();
     }
-    // some files gone, some left: the row still pushes, but it likely describes
-    // the repo as it was (a tool swapped out, a config file removed)
-    let part: Vec<String> = core::find(log, &core::Filter::default())
-        .into_iter()
-        .filter(|row| !core::gone(root, row, al))
-        .filter_map(|row| {
-            let g = core::gone_files(root, row, al);
-            let w = core::abbrev(log);
-            (!g.is_empty()).then(|| format!("{} → {}", w.short(&row.id), g.join(", ")))
-        })
-        .collect();
-    if !part.is_empty() {
-        out.push(core::Problem {
-            kind: core::ProblemKind::PartGone,
-            severity: core::Severity::Info,
-            fixable: false,
-            file: None,
-            detail: format!(
-                "{} open row(s) still name a file that no longer exists — check the text still \
-                 holds, then re-file with `--supersedes` or `fael close` (e.g. {})",
-                part.len(),
-                part[..part.len().min(5)].join("; ")
-            ),
-        });
-    }
-    // prose rot: the row's text points at a backticked path with no file
-    // behind it, so the next reader follows a dead pointer
-    let stale = stale_rows(log, root, al);
-    if !stale.is_empty() {
-        out.push(core::Problem {
-            kind: core::ProblemKind::Stale,
-            severity: core::Severity::Info,
-            fixable: false,
-            file: None,
-            detail: format!(
-                "{} open row(s) name a path in backticks that is not on disk — check the text \
-                 still holds, then re-file with `--supersedes` or `fael close` (e.g. {})",
-                stale.len(),
-                stale[..stale.len().min(5)].join("; ")
-            ),
-        });
-    }
-    // orphaned branches: open rows filed where the PR died unmerged, so the
-    // next reader keeps following work that will never land
-    let orphan = orphan::rows(log);
-    if !orphan.is_empty() {
-        let n: usize = orphan.iter().map(|(_, ids)| ids.len()).sum();
-        let eg: Vec<String> = orphan
-            .iter()
-            .take(5)
-            .map(|(b, ids)| format!("{b} → {}", ids.join(", ")))
-            .collect();
-        out.push(core::Problem {
-            kind: core::ProblemKind::Orphan,
-            severity: core::Severity::Info,
-            fixable: false,
-            file: None,
-            detail: format!(
-                "{n} open row(s) filed on branch(es) whose PR was closed without merge — \
-                 the work likely died with the branch; re-file with `--supersedes` or `fael close` (e.g. {})",
-                eg.join("; ")
-            ),
-        });
-    }
-    // one `gh pr list --state merged` call feeds both checks: `[Merged]` uses
-    // the branch set, `[Shipped]` the mergedAt/number per branch
-    let prs = merged::merged_prs(root).unwrap_or_default();
-    // landed branches: merged upstream but still sitting in this clone, so
-    // the next reader keeps wondering whether the work is done
-    out.extend(merged::problem(root, &prs));
-    // shipped notes: open notes filed on a landed branch — the work is done
-    // but the note still pushes (doctor never closes rows itself)
-    out.extend(shipped::problems(log, root, &prs));
-    // fat rows: the add-time warnings the agent skipped, repeated per row so
-    // one topic per row can still be superseded alone; pre-self-heal legacy
-    // rows stay collapsed to one line unless `--fat` asks for the full list
-    out.extend(fat::problem(log, cfg, expand_fat));
-    out
+    rep.problems
+        .retain(|p| p.kind != core::ProblemKind::Shipped || !p.closes.is_empty());
 }
 
-/// `short-id → dead backticked path(s)` for every open row whose text still
-/// points at a path with no file behind it (row-hygiene chunk 4).
-fn stale_rows(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<String> {
-    core::find(log, &core::Filter::default())
-        .into_iter()
-        .filter_map(|row| {
-            let refs = core::stale_refs(root, row, al);
-            let w = core::abbrev(log);
-            (!refs.is_empty()).then(|| format!("{} → {}", w.short(&row.id), refs.join(", ")))
-        })
-        .collect()
+/// A `--fix` action line. `--json` must stay pure JSON on stdout, so the
+/// diagnostics move to stderr there (same for the core content fixes).
+fn say(json: bool, line: &str) {
+    if json {
+        eprintln!("{line}");
+    } else {
+        println!("{line}");
+    }
 }
 
 fn show(rep: &core::DoctorReport, json: bool) {
@@ -197,6 +114,7 @@ fn show(rep: &core::DoctorReport, json: bool) {
                     "kind": kind_label(&p.kind).to_lowercase(),
                     "severity": format!("{:?}", p.severity).to_lowercase(),
                     "fixable": p.fixable,
+                    "ids": p.ids,
                     "detail": p.detail,
                 })
             })

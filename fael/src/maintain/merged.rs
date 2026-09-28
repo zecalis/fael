@@ -29,12 +29,9 @@ pub(super) fn problem(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Option
     if landed.is_empty() {
         return None;
     }
-    Some(core::Problem {
-        kind: core::ProblemKind::Merged,
-        severity: core::Severity::Info,
-        fixable: false,
-        file: None,
-        detail: format!(
+    Some(core::Problem::info(
+        core::ProblemKind::Merged,
+        format!(
             "{} local branch(es) already merged upstream but still exist — \
              safe to delete (e.g. {})",
             landed.len(),
@@ -44,7 +41,7 @@ pub(super) fn problem(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Option
                 .collect::<Vec<_>>()
                 .join("; ")
         ),
-    })
+    ))
 }
 
 /// Local branches that are gone upstream (their PR merged) but still sit in
