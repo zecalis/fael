@@ -85,9 +85,11 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "fael doctor [--fix] [--fat]
      (check the log and the repo for problems; --fix repairs what it can, including
       closing the confirmed [Shipped] notes; [Phantom] flags citations of ids
-      with no row behind them; --json prints each problem's full row
-     ids for a cleanup pass; --fat lists every fat row, including pre-self-heal
-     legacy rows that stay collapsed to one line by default)",
+      with no row behind them — in rows, in close reasons and in the prose of
+      every *.md in the repo (fenced code skipped); --json prints each
+      problem's full row ids for a cleanup pass; --fat lists every fat row,
+      including pre-self-heal legacy rows that stay collapsed to one line by
+      default)",
     ),
     (
         "compact",

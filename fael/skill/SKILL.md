@@ -27,7 +27,8 @@ goes to the next one. Rows live in `.fael/log/` and travel with the repo.
 - Long body? `--title "<≤15-word headline>"` — lists show the title, the body is pulled by id (`fael find <id>`)
 - An id needs a row behind it — never type one from memory. Verified only
   after this session's `fael find <id>` printed it as `- [<id>]`, else find
-  by key/text first. `doctor [Phantom]` flags cites with no row.
+  by key/text first. `doctor [Phantom]` flags cites with no row — in rows, in
+  close reasons, and in the prose of every `*.md` in the repo (fences skipped).
 
 Each row is read months later with no chat: one or two standalone sentences.
 `--files` is required — name the paths (or anchors like `doc:pricing`) it is about;
