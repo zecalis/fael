@@ -50,7 +50,7 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     // exists under its new path, so its rows still push and are not gone.
     let al = crate::aliases::load(&r, &log, true);
     rep.problems
-        .extend(open_row_notes(&log, &r.root, &al, &r.cfg));
+        .extend(open_row_notes(&log, &r.root, &al, &r.cfg, a.has("fat")));
     show(&rep, a.has("json"));
     Ok(if rep.errors().count() > 0 {
         ExitCode::FAILURE
@@ -67,6 +67,7 @@ fn open_row_notes(
     root: &Path,
     al: &core::Aliases,
     cfg: &core::Config,
+    expand_fat: bool,
 ) -> Vec<core::Problem> {
     let mut out = vec![];
     let gone: Vec<_> = core::find(log, &core::Filter::default())
@@ -167,8 +168,9 @@ fn open_row_notes(
     // but the note still pushes (doctor never closes rows itself)
     out.extend(shipped::problems(log, root, &prs));
     // fat rows: the add-time warnings the agent skipped, repeated per row so
-    // one topic per row can still be superseded alone
-    out.extend(fat::problem(log, cfg));
+    // one topic per row can still be superseded alone; pre-self-heal legacy
+    // rows stay collapsed to one line unless `--fat` asks for the full list
+    out.extend(fat::problem(log, cfg, expand_fat));
     out
 }
 

@@ -77,8 +77,10 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "doctor",
         "check the log; --fix repairs what it can",
-        "fael doctor [--fix]
-    (check the log and the repo for problems; --fix repairs what it can)",
+        "fael doctor [--fix] [--fat]
+    (check the log and the repo for problems; --fix repairs what it can;
+     --fat lists every fat row, including pre-self-heal legacy rows that
+     stay collapsed to one line by default)",
     ),
     (
         "compact",

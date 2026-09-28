@@ -77,3 +77,65 @@ fn doctor_flags_fat_rows_and_ignores_closed_ones() {
     let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(ok && !out.contains("[Fat]"), "{out}");
 }
+
+#[test]
+fn doctor_collapses_legacy_fat_rows_until_fat_flag() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "").unwrap();
+    // one new fat row through the real write path
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "decision", "a; b; c; d", "--files", "src/a.rs"],
+    );
+    assert!(ok, "{err}");
+    let new_id = out.split_whitespace().next().unwrap().to_string();
+    // one pre-self-heal fat row: a 2023 ULID appended straight to the tree
+    // log (the journal copy never exists, so the union still sees it once)
+    let wdir = std::fs::read_dir(d.join(".fael/log"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let logs: Vec<PathBuf> = std::fs::read_dir(&wdir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(logs.len(), 1);
+    let legacy_id = fael_core::ulid_at(1_700_000_000_000);
+    let mut s = std::fs::read_to_string(&logs[0]).unwrap();
+    s.push_str(&format!(
+        "{{\"v\":1,\"id\":\"{legacy_id}\",\"ts\":\"2023-11-14T22:13:20Z\",\"by\":\"t-0000\",\
+         \"kind\":\"decision\",\"text\":\"legacy; fat; row; here\",\"files\":[\"src/a.rs\"]}}\n"
+    ));
+    std::fs::write(&logs[0], s).unwrap();
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // default: the new row lists, the legacy row collapses to one line
+    let (ok, out, _) = fael(&d, &["doctor"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains(&new_id[..8])
+            && out.contains("1 legacy rows — fael doctor --fat --json")
+            && !out.contains(&legacy_id[..8]),
+        "{out}"
+    );
+    // --fat: the one-time pass lists every fat row, legacy included
+    let (ok, out, _) = fael(&d, &["doctor", "--fat"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("note [Fat]: 2 open row(s)")
+            && out.contains(&new_id[..8])
+            && out.contains(&legacy_id[..8]),
+        "{out}"
+    );
+    // --fat --json stays pure JSON and still expands the legacy row
+    let (ok, out, _) = fael(&d, &["doctor", "--fat", "--json"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.trim_start().starts_with('[')
+            && out.contains(&legacy_id[..8])
+            && out.contains(&new_id[..8]),
+        "{out}"
+    );
+}

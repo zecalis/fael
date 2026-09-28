@@ -137,7 +137,7 @@ impl Args {
             }
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "replace-fapony" | "fix" | "prune"
-                | "urgent" | "not-urgent" | "full" | "rows" | "branches" => {
+                | "urgent" | "not-urgent" | "full" | "rows" | "branches" | "fat" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
