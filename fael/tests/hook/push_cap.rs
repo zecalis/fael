@@ -1,6 +1,7 @@
 //! Read-push row cap (PLAN-fael-push-focus chunk 1): at most
-//! `budget.push_rows` rows push, an open issue always shows, and one omitted
-//! line names the exact `fael find --files …` next call.
+//! `budget.push_rows` rows push, an open issue always shows, and the hidden
+//! rows are counted by the exact call that reaches each class — the file, the
+//! query's directory (same-dir), or the key (shared key).
 
 use super::{fael, json, repo};
 use std::path::Path;
@@ -96,4 +97,72 @@ fn read_push_zero_rows_means_budget_only() {
     assert!(ok, "{out}");
     assert_eq!(shown(&out), 16, "{out}");
     assert!(!out.contains("more about this file"), "{out}");
+}
+
+#[test]
+fn edit_hides_same_dir_neighbour_but_names_the_dir_call() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    for (text, f) in [("on a", "src/a.rs"), ("neighbour", "src/b.rs")] {
+        let (ok, _, err) = fael(&d, &["add", "decision", text, "--files", f], "");
+        assert!(ok, "{err}");
+    }
+    let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
+    assert!(ok, "{out}");
+    // the neighbour never renders, but the line names the exact call that does
+    assert!(!out.contains("neighbour"), "{out}");
+    assert!(
+        out.contains("… +1 more in src/ — fael find --files src/"),
+        "{out}"
+    );
+    let (ok, found, _) = fael(&d, &["find", "--files", "src/"], "");
+    assert!(ok && found.contains("neighbour"), "{found}");
+}
+
+#[test]
+fn read_push_names_the_key_call_for_shared_key_rows() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    // an exact hit on src/a.rs, and another file sharing its key (tier 2).
+    // Different kinds, or self-heal would supersede one on the shared key.
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "on a",
+            "--files",
+            "src/a.rs",
+            "--key",
+            "auth:session",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "decision",
+            "elsewhere",
+            "--files",
+            "lib/z.rs",
+            "--key",
+            "auth:session",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "read"], &input);
+    assert!(ok, "{out}");
+    assert!(!out.contains("elsewhere"), "{out}");
+    assert!(
+        out.contains("… +1 more with #auth:session — fael find --key auth:session"),
+        "{out}"
+    );
+    let (ok, found, _) = fael(&d, &["find", "--key", "auth:session"], "");
+    assert!(ok && found.contains("elsewhere"), "{found}");
 }

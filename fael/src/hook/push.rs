@@ -17,43 +17,77 @@ fn risk_line(marker: &str, files: &[String]) -> String {
     )
 }
 
-/// The omitted line (§7): what the cap and budget cut, plus the exact next
-/// call. Render's own budget line stays for find — the push swaps its cut
-/// line for this one.
-fn omitted_line(omitted: usize, files: &[String]) -> String {
-    let what = if files.len() == 1 {
-        "this file"
-    } else {
-        "these files"
-    };
-    format!(
-        "… +{omitted} more about {what} — fael find --files {}",
-        crate::find::quoted(&files.join(","))
-    )
+/// The directory calls that reach the hidden same-dir ring: every distinct
+/// parent of the queried files, each with a trailing `/` (a directory query).
+/// `None` when no file sits in a directory (root-level files).
+fn dirs_arg(files: &[String]) -> Option<String> {
+    let mut dirs: Vec<&str> = files
+        .iter()
+        .filter_map(|f| f.rsplit_once('/').map(|(d, _)| d))
+        .collect();
+    dirs.sort_unstable();
+    dirs.dedup();
+    (!dirs.is_empty()).then(|| {
+        dirs.iter()
+            .map(|d| format!("{d}/"))
+            .collect::<Vec<_>>()
+            .join(",")
+    })
+}
+
+/// The count lines under the rendered rows — one per class, each naming the
+/// exact call that reaches it: the row cap and token budget cut (the file),
+/// the hidden same-dir ring (the query's directory), and each hidden key.
+/// `rendered` is how many rows render actually said.
+fn counts(sel: &core::Selection, rendered: usize, files: &[String]) -> Vec<String> {
+    let mut out = vec![];
+    let findable = sel.findable_after(rendered);
+    if findable > 0 {
+        let what = if files.len() == 1 {
+            "this file"
+        } else {
+            "these files"
+        };
+        out.push(format!(
+            "… +{findable} more about {what} — fael find --files {}",
+            crate::find::quoted(&files.join(","))
+        ));
+    }
+    if sel.background_dirs > 0
+        && let Some(dirs) = dirs_arg(files)
+    {
+        out.push(format!(
+            "… +{} more in {dirs} — fael find --files {}",
+            sel.background_dirs,
+            crate::find::quoted(&dirs)
+        ));
+    }
+    for (key, n) in &sel.background_keys {
+        out.push(format!(
+            "… +{n} more with #{key} — fael find --key {}",
+            crate::find::quoted(key)
+        ));
+    }
+    out
 }
 
 /// Render the selected rows with the token budget — the hard cap after the
-/// row cap — swapping render's budget cut line for the omitted line: what
-/// the cap and the budget cut, plus the exact next call (render itself is
-/// untouched, so find keeps its own cut line). Returns the tagged body and
-/// how many rows were actually said (usage counts only those).
+/// row cap — swapping render's budget cut line for the count lines above
+/// (render itself is untouched, so find keeps its own cut line). Returns the
+/// tagged body and how many rows were actually said (usage counts only those).
 fn cut_body(
     body: String,
-    shown: usize,
-    omitted_select: usize,
+    sel: &core::Selection,
     files: &[String],
     tags: &crate::find::branches::BranchMap,
 ) -> (String, usize) {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
-    let omitted = omitted_select + shown.saturating_sub(n);
     let mut lines: Vec<String> = body
         .lines()
         .filter(|l| !l.starts_with("… +"))
         .map(str::to_string)
         .collect();
-    if omitted > 0 {
-        lines.push(omitted_line(omitted, files));
-    }
+    lines.extend(counts(sel, n, files));
     (crate::find::branches::tag(lines.join("\n") + "\n", tags), n)
 }
 
@@ -141,12 +175,11 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
     let sel = core::select(tiered, &core::Focus::default(), &policy);
-    let rows = sel.shown;
     // a stashed Weak risk is taken here — shown once, whether or not rows join it
     let risk = (!c.session.is_empty())
         .then(|| take_risk(&c.session, &c.repo.root))
         .flatten();
-    if rows.is_empty() {
+    if sel.shown.is_empty() {
         // a stashed risk still gets its one line, even with no rows to join
         if let Some(marker) = risk {
             let context = risk_line(&marker, &files);
@@ -161,15 +194,14 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         return no();
     }
     let (body, n) = cut_body(
-        core::render(&c.log, &rows, policy.budget),
-        rows.len(),
-        sel.omitted,
+        core::render(&c.log, &sel.shown, policy.budget),
+        &sel,
         &files,
         &c.tags,
     );
     // usage counts only what was actually said — ids cut off never reached
     // any context, so stats must not count them
-    let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
+    let shown: Vec<String> = sel.shown.iter().take(n).map(|r| r.id.clone()).collect();
     if let Some(p) = &seen {
         // only what fit the budget was said; the cut rows may push on a later read
         let out: String = shown.iter().map(|id| format!("{id}\n")).collect();
