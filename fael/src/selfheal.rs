@@ -55,9 +55,11 @@ pub(crate) fn heal(
             return Ok(h);
         }
         // (d) broken-flag rescue: the caller asked to supersede something the
-        // id does not name, so the text may — exactly one open row or the
-        // original reject stands (0 or several: R5/R6)
-        if let [one] = text_targets(log, &open, &row.text, false).as_slice() {
+        // id does not name, so the text may — an id after a "supersede*" word,
+        // exactly one open row, or the original reject stands (0 or several:
+        // R5/R6). The word still leads the id (§6d): a text that only mentions
+        // a row in passing must not close it, flag broken or not
+        if let [one] = text_targets(log, &open, &row.text).as_slice() {
             h.supersedes = Some(one.id.clone());
             h.notes.push(format!(
                 "--supersedes {f:?} matched nothing; used {} from the text",
@@ -68,7 +70,7 @@ pub(crate) fn heal(
     }
     // (d) the text says what this row supersedes but the flag was left off:
     // an id after a "supersede*" word, never an id merely mentioned in passing
-    match text_targets(log, &open, &row.text, true).as_slice() {
+    match text_targets(log, &open, &row.text).as_slice() {
         [one] => {
             let target = one.id.clone();
             h.supersedes = Some(target.clone());
@@ -182,20 +184,14 @@ pub(crate) fn auto_key(log: &core::Log, files: &[String]) -> Option<String> {
     }
 }
 
-/// Open rows the text points at. `keyword` narrows the scan to ids after a
-/// "supersede*" word: with no flag, an id merely mentioned ("see 01A… for
-/// context") must never supersede. Without it — the broken-flag rescue — any
-/// open id counts, because the caller already asked to supersede something and
-/// the text is what is left. Ids of rows already closed or superseded are not
-/// targets (§6d): naming them changes nothing.
-fn text_targets<'a>(
-    log: &'a core::Log,
-    open: &[&'a core::Row],
-    text: &str,
-    keyword: bool,
-) -> Vec<&'a core::Row> {
+/// Open rows the text names after a "supersede*" word. The word still leads
+/// the id in the broken-flag rescue — the caller asked to supersede something,
+/// but a text that only mentions a row in passing ("see 01A… for context")
+/// must not close it (§6d). Ids of rows already closed or superseded are not
+/// targets either: naming them changes nothing.
+fn text_targets<'a>(log: &'a core::Log, open: &[&'a core::Row], text: &str) -> Vec<&'a core::Row> {
     let mut out: Vec<&core::Row> = vec![];
-    let mut armed = !keyword;
+    let mut armed = false;
     for tok in text.split_whitespace() {
         let t = tok.trim_matches(|c: char| !c.is_alphanumeric());
         if t.is_empty() {

@@ -167,6 +167,33 @@ fn a_broken_flag_with_no_text_target_still_rejects() {
     assert_eq!(u[0]["ask"], "reject", "{u:?}");
 }
 
+/// The rescue honors §6d's merely-mentioned rule: a broken flag plus a text
+/// that names no row after a "supersede" word stays a reject, so a passing
+/// reference is never closed just because the flag was wrong.
+#[test]
+fn a_broken_flag_with_a_mention_but_no_word_still_rejects() {
+    let d = repo();
+    let first = seed(&d, "first pass", "src/a.rs");
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            &format!("context lives in {first}, retry"),
+            "--files",
+            "src/b.rs",
+            "--supersedes",
+            "nope-no-row",
+        ],
+        "",
+    );
+    assert!(!ok && err.contains("rejected: no row with id"), "{err}");
+    assert_eq!(open_notes(&d), vec![first], "the mention did not close it");
+    let u = usage(&d);
+    assert_eq!(u.len(), 1, "{u:?}");
+    assert_eq!(u[0]["ask"], "reject", "{u:?}");
+}
+
 /// More than one candidate: which row did the agent mean? It has to say, so
 /// the original reject stands rather than fael picking one.
 #[test]
