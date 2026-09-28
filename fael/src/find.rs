@@ -216,15 +216,16 @@ pub(crate) fn reject_missing(log: &Log, tok: &str) -> String {
     m
 }
 
-/// Short ids of rows whose text merely mentions `tok` (open rows, then close
-/// reasons), capped at 5. Case-insensitive — ids match that way too.
+/// Short ids of rows whose text or title merely mentions `tok` (open rows,
+/// then close reasons), capped at 5. Case-insensitive — ids match that way too.
 fn mentioned(log: &Log, tok: &str) -> Vec<String> {
     let ab = core::abbrev(log);
     let needle = tok.to_lowercase();
+    let names = |s: Option<&str>| s.is_some_and(|s| s.to_lowercase().contains(&needle));
     log.rows
         .iter()
         .chain(log.closes.iter())
-        .filter(|r| r.text.to_lowercase().contains(&needle))
+        .filter(|r| names(Some(&r.text)) || names(r.title.as_deref()))
         .map(|r| ab.short(&r.id).to_string())
         .take(5)
         .collect()

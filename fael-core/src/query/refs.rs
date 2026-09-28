@@ -15,26 +15,35 @@ pub enum Ref<'a> {
     Missing,
 }
 
-/// Existence by exact id or case-insensitive prefix over `log.rows` then
-/// `log.closes`. Empty tokens never match (like `resolve`'s guard).
+/// Existence by exact id or case-insensitive prefix. `log.rows` decide first:
+/// the abbreviation `abbrev()` prints and `resolve()` matches reach only the
+/// rows, so a close row must never turn a row's unique prefix into `Many` —
+/// that would make `find` reject an id it just printed. Only when no row
+/// matches do the closes answer, so a close row's own id still exists
+/// (`One`/`Many`), never `Missing`. Empty tokens never match.
 pub fn ref_state<'a>(log: &'a Log, tok: &str) -> Ref<'a> {
     if tok.is_empty() {
         return Ref::Missing;
     }
-    let mut hits: Vec<&Row> = vec![];
-    for r in log.rows.iter().chain(log.closes.iter()) {
-        if r.id
-            .get(..tok.len())
-            .is_some_and(|p| p.eq_ignore_ascii_case(tok))
-        {
-            hits.push(r);
-        }
+    let mut hits = prefix_hits(&log.rows, tok);
+    if hits.is_empty() {
+        hits = prefix_hits(&log.closes, tok);
     }
     match hits.len() {
         0 => Ref::Missing,
         1 => Ref::One(hits[0]),
         _ => Ref::Many(hits),
     }
+}
+
+/// Rows whose id is `tok` or starts with it (case-insensitive).
+fn prefix_hits<'a>(rows: &'a [Row], tok: &str) -> Vec<&'a Row> {
+    rows.iter()
+        .filter(|r| {
+            r.id.get(..tok.len())
+                .is_some_and(|p| p.eq_ignore_ascii_case(tok))
+        })
+        .collect()
 }
 
 /// Id-shaped tokens in prose, deduped (case-insensitively), in order. Split

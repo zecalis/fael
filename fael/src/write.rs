@@ -98,7 +98,13 @@ pub(crate) fn add_row(
     if let Some(s) = heal.supersedes.as_deref() {
         skip.push(s);
     }
-    warns.extend(phantom_lines(r, &log, &row.text, &skip));
+    warns.extend(phantom_lines(
+        r,
+        &log,
+        row.title.as_deref(),
+        &row.text,
+        &skip,
+    ));
     // (e) auto-key: the one key these files already carry. After `heal` on
     // purpose — a key fael guessed must never close a row through (c)
     if row.key.is_none()
@@ -175,11 +181,19 @@ fn root_relative(r: &crate::Repo, args: &[String], files: &mut [String]) -> Vec<
 }
 
 /// Id citations with no row behind them (PLAN-fael-id-refs chunk 2) — one
-/// info line per id, never a reject. No `warning:` prefix on purpose: lines
-/// without it pass through `record_asks`/`record_mcp` uncounted, like the
-/// self-heal notes.
-fn phantom_lines(r: &crate::Repo, log: &core::Log, text: &str, skip: &[&str]) -> Vec<String> {
-    crate::refs::phantoms(r, log, text, skip)
+/// info line per id, never a reject. The title is prose a reader sees in
+/// every list, so a citation there counts too. No `warning:` prefix on
+/// purpose: lines without it pass through `record_asks`/`record_mcp`
+/// uncounted, like the self-heal notes.
+fn phantom_lines(
+    r: &crate::Repo,
+    log: &core::Log,
+    title: Option<&str>,
+    text: &str,
+    skip: &[&str],
+) -> Vec<String> {
+    let prose = [title.unwrap_or(""), text].join(" ");
+    crate::refs::phantoms(r, log, &prose, skip)
         .into_iter()
         .map(|tok| format!("no row with id {tok} — cited in the text; copy ids from fael find"))
         .collect()
@@ -194,7 +208,7 @@ pub(crate) fn close_row(
     why: &str,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
     let log = crate::read(r);
-    let mut warns = phantom_lines(r, &log, why, &[id]);
+    let mut warns = phantom_lines(r, &log, None, why, &[id]);
     let (row, path, mut core_warns) = core::close_row(
         &r.fael,
         r.journal.as_deref(),

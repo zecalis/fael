@@ -152,6 +152,60 @@ fn non_id_shaped_query_stays_text_search() {
 }
 
 #[test]
+fn printed_abbreviation_resolves_despite_a_close_row_collision() {
+    let d = repo();
+    // a close row's own id shares the open row's 8-char prefix — fael prints
+    // `01AAAA00` for the open row, so finding by that printed id must not
+    // reject as ambiguous (ref_state prefers rows; abbrev/resolve see rows only)
+    std::fs::create_dir_all(d.join(".fael/log/t")).unwrap();
+    std::fs::write(
+        d.join(".fael/log/t/2026-09.jsonl"),
+        "{\"v\":1,\"id\":\"01AAAA00000000000000000001\",\"ts\":\"2026-09-01T00:00:00.000Z\",\
+         \"by\":\"t\",\"kind\":\"note\",\"text\":\"open keeper\",\"files\":[\"src/a.rs\"]}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join(".fael/log/t/2026-09.close.jsonl"),
+        "{\"v\":1,\"id\":\"01AAAA00000000000000000002\",\"ts\":\"2026-09-01T00:00:00.010Z\",\
+         \"by\":\"t\",\"kind\":\"close\",\"text\":\"fixed\",\
+         \"reference\":\"01AAAA00000000000000000001\",\"files\":[]}\n",
+    )
+    .unwrap();
+    let (ok, out, err) = fael(&d, &["find", "01AAAA00000000000000000001"]);
+    assert!(ok && out.contains("[01AAAA00]"), "{err}{out}");
+    let (ok, out, err) = fael(&d, &["find", "01AAAA00"]);
+    assert!(ok && out.contains("open keeper"), "{err}{out}");
+}
+
+#[test]
+fn fake_id_in_a_title_is_named_as_a_mention() {
+    let d = repo();
+    let id = add(&d, "a.rs", "context row");
+    let fake = phantom_of(&id);
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "no id in the body",
+            "--title",
+            &format!("fixed by {fake}"),
+            "--files",
+            "src/b.rs",
+        ],
+    );
+    assert!(ok, "{err}");
+    let citing = out.split_whitespace().next().unwrap();
+    let (ok, out, err) = fael(&d, &["find", &fake]);
+    assert!(!ok, "{out}");
+    assert!(
+        err.contains("mentioned (not owned) by:") && err.contains(&citing[..8]),
+        "{err}"
+    );
+}
+
+#[test]
 fn id_only_on_another_clones_unmerged_branch_is_found() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
