@@ -27,6 +27,9 @@ pub struct Config {
     pub find_tokens: usize,
     /// Token budget for the read/edit hook push.
     pub push_tokens: usize,
+    /// At most this many rows per read/edit push (PLAN-fael-push-focus
+    /// chunk 1). 0 = no row cap, token budget only.
+    pub push_rows: usize,
     /// How many of the freshest open decisions session-start lists above the
     /// count line (PLAN-fael-direction chunk 1). 0 = count line only.
     pub session_decisions: usize,
@@ -50,6 +53,7 @@ impl Default for Config {
             kickoff_tokens: 800,
             find_tokens: 800,
             push_tokens: 800,
+            push_rows: 5,
             session_decisions: 0,
             warn_row_tokens: 400,
             resolve: true,
@@ -79,6 +83,7 @@ impl Config {
             kickoff_tokens: Option<usize>,
             find_tokens: Option<usize>,
             push_tokens: Option<usize>,
+            push_rows: Option<usize>,
             session_decisions: Option<usize>,
         }
         #[derive(Deserialize, Default)]
@@ -109,6 +114,7 @@ impl Config {
             kickoff_tokens: f.budget.kickoff_tokens.unwrap_or(d.kickoff_tokens),
             find_tokens: f.budget.find_tokens.unwrap_or(d.find_tokens),
             push_tokens: f.budget.push_tokens.unwrap_or(d.push_tokens),
+            push_rows: f.budget.push_rows.unwrap_or(d.push_rows),
             session_decisions: f.budget.session_decisions.unwrap_or(d.session_decisions),
             warn_row_tokens: f.warn.row_tokens.unwrap_or(d.warn_row_tokens),
             resolve: f.resolve.unwrap_or(d.resolve),

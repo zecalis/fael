@@ -13,15 +13,26 @@ use std::collections::HashSet;
 /// renamed since still pushes at the new path. The read/edit path never
 /// computes reader identity (no git spawn there), so `to` does not reorder
 /// the push — session start is where routing lists. Deterministic: the
-/// same log and query give the same order on any machine. The caller cuts the
-/// result to the push budget with `render`.
+/// same log and query give the same order on any machine. The hook push cuts
+/// the tiered result to the row cap with `select`, then to the push budget
+/// with `render`.
 ///
 /// `no_same_dir` is the read/edit split (PLAN-fael-row-hygiene chunk 2): reads
 /// pass true to drop the same-directory tier — the noisiest one, rows about
 /// neighbouring files — and keep exact file, zone/glob and shared-key hits;
 /// edits pass false to keep it, because a module-level decision matters most
 /// while changing that module.
-pub fn push<'a>(log: &'a Log, files: &[String], al: &Aliases, no_same_dir: bool) -> Vec<&'a Row> {
+///
+/// `push_tiered` is `push` plus L1's match tier per row (0 exact file/zone,
+/// 1 same-dir, 2 shared key) — what L3 `bucket` ranks on. Same gather and
+/// order as `push`; chunk 1 exposes the tier so `select` can keep same-dir
+/// and shared-key rows in Background even under the row cap.
+pub fn push_tiered<'a>(
+    log: &'a Log,
+    files: &[String],
+    al: &Aliases,
+    no_same_dir: bool,
+) -> Vec<(&'a Row, usize)> {
     let hide: HashSet<&str> = super::closed(log)
         .union(&super::superseded(log))
         .copied()
@@ -64,5 +75,20 @@ pub fn push<'a>(log: &'a Log, files: &[String], al: &Aliases, no_same_dir: bool)
         .iter()
         .filter(|r| !hide.contains(r.id.as_str()) && !is_alias_row(r) && tier(r) < 3)
         .collect();
-    super::ranked(out, None, tier, super::fresh_ts)
+    let mut keyed: Vec<(&Row, usize, i64)> = out
+        .into_iter()
+        .map(|r| (r, tier(r), super::fresh_ts(r)))
+        .collect();
+    keyed.sort_by(|a, b| super::cmp_rows(a.0, b.0, None, a.1, b.1, a.2, b.2));
+    keyed.into_iter().map(|(r, t, _)| (r, t)).collect()
+}
+
+/// The read/edit push: same rows as `push_tiered`, tiers dropped. Kept for
+/// callers that only render (find-shaped paths); the hook push uses
+/// `push_tiered` + `select` so the row cap applies.
+pub fn push<'a>(log: &'a Log, files: &[String], al: &Aliases, no_same_dir: bool) -> Vec<&'a Row> {
+    push_tiered(log, files, al, no_same_dir)
+        .into_iter()
+        .map(|(r, _)| r)
+        .collect()
 }

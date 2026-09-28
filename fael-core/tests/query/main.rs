@@ -8,6 +8,7 @@
 //! The shared builders live here.
 
 mod bump;
+mod focus;
 mod lookup;
 mod paging;
 mod render;
