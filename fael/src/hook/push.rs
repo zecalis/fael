@@ -36,33 +36,36 @@ fn dirs_arg(files: &[String]) -> Option<String> {
 }
 
 /// The count lines under the rendered rows — one per class, each naming the
-/// exact call that reaches it: the row cap and token budget cut (the file),
-/// the hidden same-dir ring (the query's directory), and each hidden key.
-/// `rendered` is how many rows render actually said.
+/// exact call that reaches it: tier-0 cuts by the file (the row cap and the
+/// budget cut), the same-dir ring by the query's directory, and each hidden
+/// key. `rendered` is how many rows render actually said. `hidden` routes the
+/// budget cut by each row's L1 tier too, so a budget-cut same-dir or
+/// shared-key row (a Now row the cap never touched) names the right call.
 fn counts(sel: &core::Selection, rendered: usize, files: &[String]) -> Vec<String> {
     let mut out = vec![];
-    let findable = sel.findable_after(rendered);
-    if findable > 0 {
+    let hidden = sel.hidden(rendered);
+    if hidden.file > 0 {
         let what = if files.len() == 1 {
             "this file"
         } else {
             "these files"
         };
         out.push(format!(
-            "… +{findable} more about {what} — fael find --files {}",
+            "… +{} more about {what} — fael find --files {}",
+            hidden.file,
             crate::find::quoted(&files.join(","))
         ));
     }
-    if sel.background_dirs > 0
+    if hidden.dirs > 0
         && let Some(dirs) = dirs_arg(files)
     {
         out.push(format!(
             "… +{} more in {dirs} — fael find --files {}",
-            sel.background_dirs,
+            hidden.dirs,
             crate::find::quoted(&dirs)
         ));
     }
-    for (key, n) in &sel.background_keys {
+    for (key, n) in &hidden.keys {
         out.push(format!(
             "… +{n} more with #{key} — fael find --key {}",
             crate::find::quoted(key)

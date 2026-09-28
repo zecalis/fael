@@ -209,6 +209,31 @@ fn select_counts_background_by_exact_call() {
 }
 
 #[test]
+fn hidden_routes_the_budget_cut_by_tier() {
+    let mut l = log();
+    // a same-dir (tier 1) and a shared-key (tier 2) issue: both are Now, so the
+    // row cap never cuts them — only the token budget can, and each must still
+    // name its own find call (the dir / the key), never `--files <f>`
+    l.rows.push(row(
+        "D0000000000000000000000026",
+        "issue",
+        &["src/c.rs"],
+        None,
+    ));
+    l.rows.push(row(
+        "D0000000000000000000000027",
+        "issue",
+        &["lib/z.rs"],
+        Some("auth:session"),
+    ));
+    let sel = select(query(&l, "src/a.rs", false), &Focus::default(), &policy(5));
+    // render said the first row only; the rest were cut by the budget
+    let h = sel.hidden(1);
+    assert_eq!(h.dirs, 1, "the same-dir issue needs the dir call: {h:?}");
+    assert_eq!(h.keys, [("auth:session".to_string(), 1)]);
+}
+
+#[test]
 fn select_never_cuts_now_rows() {
     let mut l = log();
     for d in ["30", "31", "32", "33", "34", "35"] {
