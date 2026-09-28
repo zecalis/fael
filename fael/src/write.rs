@@ -109,7 +109,100 @@ pub(crate) fn add_row(
         heal.supersedes.as_deref(),
     )?;
     warns.append(&mut core_warns);
+    if let Some(w) = english_warn(row.title.as_deref(), &row.text) {
+        warns.push(w);
+    }
+    // chunk 6e: the id just filed is already in this session's context — mark
+    // it seen so the next push does not repeat it
+    hook::note_seen(&hook_session(&r.root), &r.root, &[&row.id]);
     Ok((row, path, warns))
+}
+
+/// Chunk 6f: rows stay English (Thai ≈ 1 char/token, English ≈ 4 chars/token).
+/// Never a reject — one reject costs a whole round — one `warning:` line in
+/// the same call instead (counted as `warning` in stats). Symbols (→, ≤) are
+/// not alphabetic; accented Latin (é) passes.
+fn english_warn(title: Option<&str>, text: &str) -> Option<String> {
+    let foreign = |c: char| c.is_alphabetic() && !is_latin(c);
+    if text.chars().any(foreign) || title.is_some_and(|t| t.chars().any(foreign)) {
+        Some("warning: row not in English — write rows in English from now on".into())
+    } else {
+        None
+    }
+}
+
+/// Latin letters incl. accented ranges — everything `is_alphabetic` accepts
+/// outside these (Thai, CJK, Arabic, Cyrillic, …) counts as non-English.
+fn is_latin(c: char) -> bool {
+    c.is_ascii_alphabetic() || matches!(c, 'À'..='ſ' | 'ƀ'..='ɏ' | 'Ḁ'..='ỿ')
+}
+
+/// Chunk 6e: the hook session string behind this call — the same key the push
+/// reads. Resolved like `derive()`: the recorded session equal to
+/// `$CLAUDE_CODE_SESSION_ID` or its stem; else the raw value (clients that key
+/// by it directly); empty = outside any hook session, seen-ids stay off.
+pub(crate) fn hook_session(root: &Path) -> String {
+    let env = std::env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
+    if env.is_empty() {
+        return String::new();
+    }
+    for s in active_sessions(root).into_iter().flatten() {
+        if let Some(rec) = s.3
+            && (rec == env || Path::new(&rec).file_stem().is_some_and(|f| *f == *env))
+        {
+            return rec;
+        }
+    }
+    env
+}
+
+/// Chunk 6b: one batch row (`fael add --json -`, MCP `rows: [...]`) parsed to
+/// the same parts as a single add — shared so CLI and MCP never drift.
+pub(crate) struct BatchRow {
+    pub kind: String,
+    pub text: String,
+    pub files: Vec<String>,
+    pub opts: AddOpts,
+}
+
+pub(crate) fn batch_row(v: &serde_json::Value) -> Result<BatchRow, String> {
+    let one = |k: &str| v[k].as_str().filter(|s| !s.is_empty()).map(String::from);
+    let (kind, text) = match (one("kind"), one("text")) {
+        (Some(k), Some(t)) => (k, t),
+        _ => return Err("rejected: each row needs kind and text".into()),
+    };
+    let files = v["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(String::from)
+        .collect();
+    let urgent = match (v["urgent"].as_bool().unwrap_or(false), one("urgent_before")) {
+        (false, None) => core::Urgent::Unset,
+        (true, None) => core::Urgent::End,
+        (false, Some(t)) => core::Urgent::Before(t),
+        (true, Some(_)) => {
+            return Err(
+                "rejected: urgent and urgent_before pick one — the queue takes a single position"
+                    .into(),
+            );
+        }
+    };
+    Ok(BatchRow {
+        kind,
+        text,
+        files,
+        opts: AddOpts {
+            key: one("key"),
+            to: one("to"),
+            title: one("title"),
+            revisit: one("revisit"),
+            urgent,
+            supersedes: one("supersedes"),
+            force: v["force"].as_bool().unwrap_or(false),
+        },
+    })
 }
 
 /// `fael add` run from `sub/` with `--files sub/a.rs` (repo-root-relative)

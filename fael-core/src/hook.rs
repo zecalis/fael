@@ -51,14 +51,21 @@ pub fn decide_stop(f: &StopFacts) -> Option<String> {
     // lost when the room closes, whatever else the turn did). Only a Strong
     // signal blocks — a Weak one joins the work block below, or the adapter
     // stashes it for the next push when there is nothing to join.
+    // Chunk 6c: the command carries the actual files — runnable as printed, no
+    // `find` first (falls back to the placeholder only with no edit signal).
     if let Some(sig) = &f.bug_signal
         && sig.strong
         && !f.bug_row_since
     {
+        let files = if f.edits.is_empty() {
+            "<files>".to_string()
+        } else {
+            f.edits.join(",")
+        };
         return Some(format!(
             "This turn reported a problem (\"{}\") but no issue row exists for this session.\n\
-                 Record it before ending: fael add issue \"<what is broken or at risk>\" --files <files>\n\
-                 Already filed, or not a problem? End the turn again — this fires once per session.",
+             Record it before ending: fael add issue \"<what is broken or at risk>\" --files {files}\n\
+             Already filed, or not a problem? End the turn again — this fires once per session.",
             sig.marker
         ));
     }
@@ -100,6 +107,10 @@ pub fn decide_stop(f: &StopFacts) -> Option<String> {
             "Also, this turn mentioned a possible problem (\"{}\") — file an issue too if it holds up: fael add issue \"<what is at risk>\" --files {files}",
             sig.marker
         ));
+        // chunk 6c: two rows to file — one batch call instead of two turns
+        out.push(
+            "Filing both? Batch them: fael add --json - < rows.json (a JSON array of rows)".into(),
+        );
     }
     out.push("Nothing worth recording? End the turn again — this fires once per session.".into());
     Some(out.join("\n"))

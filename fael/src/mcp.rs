@@ -124,10 +124,21 @@ pub(crate) fn schema_json() -> String {
 
 fn find(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    find_inner(a, &r).inspect_err(|e| record_mcp(&r.root, "mcp-find", ASK_REJECT, e))
+    match find_inner(a, &r) {
+        Err(e) => {
+            record_mcp(&r.root, "mcp-find", ASK_REJECT, &e);
+            Err(e)
+        }
+        Ok((text, shown)) => {
+            // chunk 6e: ids just shown are already in this session's context
+            let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
+            crate::hook::note_seen(&crate::write::hook_session(&r.root), &r.root, &ids);
+            Ok(text)
+        }
+    }
 }
 
-fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
+fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // `branches: true` merges unmerged branches' rows into the union log
     // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
     let (base, jtags) = crate::journal::read(r);
@@ -141,10 +152,9 @@ fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
     // lists show titles, this is how the body is read on demand
     if let Some(id) = s(a, "id") {
         let row = core::resolve(&log, &id)?;
-        return Ok(crate::find::branches::tag(
-            core::render_full(&log, &[row], 10_000),
-            &branch_of,
-        ));
+        let shown = row.id.clone();
+        let text = crate::find::branches::tag(core::render_full(&log, &[row], 10_000), &branch_of);
+        return Ok((text, vec![shown]));
     }
     let files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
     // `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`)
@@ -178,13 +188,17 @@ fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
         offset: f.offset,
         next: &|n| format!("offset={n}"),
     };
-    Ok(if rows.is_empty() {
+    // only what fit the budget was said — like the push, count the shown lines
+    let text = if rows.is_empty() {
         "no rows match".into()
     } else if a["full"].as_bool().unwrap_or(false) {
         crate::find::branches::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
     } else {
         crate::find::branches::tag(core::render_page(&log, &rows, budget, cut), &branch_of)
-    })
+    };
+    let n = text.lines().filter(|l| l.starts_with("- [")).count();
+    let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
+    Ok((text, shown))
 }
 
 fn add(a: &Value) -> Result<String, String> {
@@ -202,6 +216,45 @@ fn add(a: &Value) -> Result<String, String> {
 }
 
 fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
+    // chunk 6b: `rows: [...]` files many rows in one call — each runs the same
+    // validate + self-heal as a single add; a bad row reports alone, the rest save
+    if let Some(rows) = a["rows"].as_array() {
+        if rows.is_empty() {
+            return Err("rejected: rows is empty — pass at least one row".into());
+        }
+        let mut out = vec![];
+        let mut warns = vec![];
+        for (i, v) in rows.iter().enumerate() {
+            let b = crate::write::batch_row(v).map_err(|e| row_err(e, i))?;
+            match add_row(
+                r,
+                &b.kind,
+                &b.text,
+                &b.files,
+                AddOpts {
+                    key: b.opts.key,
+                    to: b.opts.to,
+                    title: b.opts.title,
+                    revisit: b.opts.revisit,
+                    urgent: b.opts.urgent,
+                    supersedes: b.opts.supersedes,
+                    force: b.opts.force,
+                },
+            ) {
+                Ok((row, _, w)) => {
+                    out.push(format!("recorded {}", row.id));
+                    warns.extend(w);
+                }
+                Err(e) => {
+                    let e = format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "));
+                    record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
+                    out.push(e);
+                }
+            }
+        }
+        // chunk 6e rides inside write::add_row — the saved ids are already seen
+        return Ok((out.join("\n"), warns));
+    }
     let (row, _, warns) = add_row(
         r,
         &need(a, "kind")?,
@@ -218,6 +271,10 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         },
     )?;
     Ok((done(&row.id, &warns), warns))
+}
+
+fn row_err(e: String, i: usize) -> String {
+    format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "))
 }
 
 /// `add --urgent` over MCP: `urgent` files at the back of the queue,
@@ -304,71 +361,67 @@ fn done(id: &str, warns: &[String]) -> String {
 fn tools() -> Value {
     let str_ = |d: &str| json!({"type": "string", "description": d});
     let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
-    let cwd = str_(
-        "absolute path of the checkout this call is about — pass it when working in a git worktree other than the session's cwd, or rows land in the wrong one",
-    );
+    // chunk 6d: one short sentence — it repeats on every tool, so every word is paid four times
+    let cwd =
+        str_("repo this call is about — pass when outside the session cwd, or rows land wrong");
     let mut t = json!([
         {
             "name": "find",
-            "description": "Read this project's memory: decisions, open issues and notes left by earlier sessions and teammates. \
-    Call it at the start of a task and before touching a file. No arguments = the session brief.",
+            "description": "Project memory: past decisions, issues, notes. No args = the session brief. Start of task, before touching a file.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
-                "id": str_("this row's body by exact id or unique prefix — lists show titles, this pulls the body"),
-                "full": {"type": "boolean", "description": "show every row's body under its title"},
-                "files": files("repo-relative paths, directories, globs, or anchors like doc:pricing — rows on any of them"),
-                "text": str_("case-insensitive substring of the row text"),
+                "id": str_("exact id or prefix — lists show titles, this pulls the body"),
+                "full": {"type": "boolean", "description": "bodies under titles"},
+                "files": files("paths, dirs, globs, anchors like doc:pricing — rows on any"),
+                "text": str_("substring of the row text"),
                 "key": str_("key glob, e.g. auth:*"),
-                "kind": str_("decision | issue | note, or a kind the repo declares"),
+                "kind": str_("decision | issue | note, or a repo kind"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),
-                "to": str_("only rows routed to this reader, e.g. ploy"),
-                "revisit": {"type": ["boolean", "string"], "description": "only rows carrying --revisit: true = any, a string narrows to it (CLI --revisit[=text])"},
-                "branches": {"type": "boolean", "description": "also read branches not yet merged into HEAD, tagging their rows @<branch> — never checks anything out"},
-                "limit": {"type": "integer", "minimum": 1, "description": "at most this many ranked rows — a cut list prints next: offset=N, repeat the call with it"},
-                "offset": {"type": "integer", "minimum": 0, "description": "skip this many ranked rows first"},
+                "to": str_("rows routed to someone, e.g. ploy"),
+                "revisit": {"type": ["boolean", "string"], "description": "true = any revisit, a string narrows it"},
+                "branches": {"type": "boolean", "description": "unmerged branches too, tagged @branch, no checkout"},
+                "limit": {"type": "integer", "minimum": 1, "description": "max rows; a cut prints next: offset=N"},
+                "offset": {"type": "integer", "minimum": 0, "description": "skip this many first"},
             }},
         },
         {
             "name": "add",
-            "description": "Record something the next session must know: a decision and why, a bug (kind issue), \
-    or state a later session needs (note). One standalone sentence or two — it is read months later with no chat. \
-    files must name what it is about; reuse a path or anchor that find already showed instead of inventing a new one. \
-    files may be omitted when this session edited files (the hook recorded them) — they are filled in; otherwise files is required. \
-    title is the ≤15-word headline lists show, text is the detail pulled by id — set title when text tops ~60 words. \
-    Saw something broken, inconsistent or likely to break? Add it as kind issue right there — do not wait for the end of the task.",
+            "description": "File what the next session needs — a decision and why, a bug (kind issue), or state it needs (note). Same message as your next tool call, never its own turn. English rows; reuse an anchor find showed, never invent one. rows[] files many at once.",
             "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
-                "kind": str_("decision | issue | note, or a kind the repo declares"),
+                "kind": str_("decision | issue | note, or a repo kind"),
                 "text": str_("what happened and why, standalone"),
-                "title": str_("≤15-word headline lists show; the body is pulled by id — set it when text tops ~60 words"),
+                "title": str_("≤15-word list headline — set it past ~60 words"),
                 "files": {"type": "array", "items": {"type": "string"},
-                    "description": "repo-relative paths, or anchors scheme:ref (doc:pricing, customer:acme) for things that are not files — omit to use this session's edited files"},
+                    "description": "paths or scheme:ref anchors — omit for this session's edited files"},
+                "rows": {"type": "array", "items": {"type": "object"},
+                    "description": "batch [{kind, text, files, ...}] — a bad row reports alone, the rest save"},
                 "key": str_("optional colon key, e.g. auth:session"),
-                "to": str_("who has to answer, e.g. ploy — routed to them at their session start"),
-                "revisit": str_("a date YYYY-MM[-DD] kickoff surfaces when due, or free text like 'mdl lands'"),
-                "urgent": {"type": "boolean", "description": "file at the back of the urgent queue (issues only)"},
-                "urgent_before": str_("file just above this row in the urgent queue — one of urgent / urgent_before at most"),
-                "supersedes": str_("id of the row this one replaces"),
-                "force": {"type": "boolean", "description": "file a path that looks like a typo of an existing file (a file not created yet)"},
+                "to": str_("who answers, e.g. ploy"),
+                "revisit": str_("date YYYY-MM[-DD] or free text"),
+                "urgent": {"type": "boolean", "description": "back of the urgent queue (issues)"},
+                "urgent_before": str_("above that row — one of urgent / urgent_before"),
+                "supersedes": str_("id this replaces"),
+                "force": {"type": "boolean", "description": "allow a typo-lookalike path"},
             }},
         },
         {
             "name": "close",
-            "description": "Close a row that no longer holds — an issue that is fixed, a note that is done.",
+            "description": "Close a fixed issue or done note.",
             "inputSchema": {"type": "object", "required": ["id", "text"], "properties": {
-                "id": str_("row id or a unique prefix, as find shows it"),
-                "text": str_("why it is closed, e.g. fixed in <sha>"),
+                "id": str_("id or prefix, as find showed"),
+                "text": str_("why, e.g. fixed in <sha>"),
             }},
         },
         {
             "name": "bump",
-            "description": "Change routing/urgency/revisit on an open row as a new version: same text and files, new to/urgent/revisit, superseding the old row. Text and files never change through bump.",
+            "description": "New version of an open row with new routing — text and files never change.",
             "inputSchema": {"type": "object", "required": ["id"], "properties": {
-                "id": str_("row id or a unique prefix, as find shows it"),
-                "to": str_("who has to answer now, e.g. ploy — omit to keep"),
-                "urgent": {"type": "boolean", "description": "move to the back of the urgent queue"},
-                "urgent_before": str_("move just above this row in the urgent queue"),
-                "not_urgent": {"type": "boolean", "description": "leave the urgent queue"},
-                "revisit": str_("a date YYYY-MM[-DD] kickoff surfaces when due, or free text like 'mdl lands' — omit to keep"),
+                "id": str_("id or prefix, as find showed"),
+                "to": str_("who answers now — omit to keep"),
+                "urgent": {"type": "boolean", "description": "to the back of the queue"},
+                "urgent_before": str_("just above that row"),
+                "not_urgent": {"type": "boolean", "description": "leave the queue"},
+                "revisit": str_("date or text — omit to keep"),
             }},
         },
     ]);

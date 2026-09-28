@@ -7,6 +7,9 @@ description: This repo's memory — decisions, open issues and notes earlier ses
 
 # fael — the repo's memory
 
+Write rows in English — title, key and body. The dev reads them through you, in their language.
+Add it in the same message as your next tool call or final edit — never as a turn of its own.
+
 What earlier agents saw comes back when you touch the same file. What you see
 goes to the next one. Rows live in `.fael/log/` and travel with the repo.
 

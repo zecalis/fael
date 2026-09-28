@@ -42,7 +42,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
     // the cut line reprints this call with the next offset — same flags, no guessing
     let base = a.page_base("find", text.map(String::as_str), limit);
-    show(
+    let shown = show(
         a,
         &log,
         &rows,
@@ -54,12 +54,18 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         },
         &branch_of,
     )?;
+    // chunk 6e: ids just shown for these files are already in this session's
+    // context — the next push skips them instead of repeating them
+    if !files.is_empty() {
+        let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
+        super::hook::note_seen(&super::write::hook_session(&r.root), &r.root, &ids);
+    }
     // --all in JSON: also the close rows naming a shown row, so a consumer can tell closed from open
     if a.has("json") && f.all {
-        let shown: std::collections::HashSet<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        let open: std::collections::HashSet<&str> = rows.iter().map(|r| r.id.as_str()).collect();
         log.closes
             .iter()
-            .filter(|c| c.reference.as_deref().is_some_and(|id| shown.contains(id)))
+            .filter(|c| c.reference.as_deref().is_some_and(|id| open.contains(id)))
             .for_each(|c| println!("{}", c.to_line()));
     }
     Ok(())
@@ -81,7 +87,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     // kickoff ranks the full set itself, so it pages after — same helper as query()
     let (rows, total) = core::page(core::kickoff(&log, &f, &r.root, &al), limit, offset);
     let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
-    show(
+    let _ = show(
         a,
         &log,
         &rows,
@@ -129,25 +135,27 @@ fn show(
     budget: usize,
     cut: core::Cut,
     branch_of: &branches::BranchMap,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     if rows.is_empty() {
         eprintln!("fael: no rows match");
-    } else if a.has("json") {
+        return Ok(vec![]);
+    }
+    if a.has("json") {
         // JSON stays the row shape (consumers dedupe by id) — the branch tag
         // is a list-display feature, like titles
         rows.iter().for_each(|r| println!("{}", r.to_line()));
-    } else if a.has("full") {
-        print!(
-            "{}",
-            branches::tag(core::render_full_page(log, rows, budget, cut), branch_of)
-        );
-    } else {
-        print!(
-            "{}",
-            branches::tag(core::render_page(log, rows, budget, cut), branch_of)
-        );
+        return Ok(rows.iter().map(|r| r.id.clone()).collect());
     }
-    Ok(())
+    // only what fit the budget was said — like the push, the cut rows may come
+    // on a later read, so seen-ids take just the shown lines
+    let out = if a.has("full") {
+        branches::tag(core::render_full_page(log, rows, budget, cut), branch_of)
+    } else {
+        branches::tag(core::render_page(log, rows, budget, cut), branch_of)
+    };
+    let n = out.lines().filter(|l| l.starts_with("- [")).count();
+    print!("{out}");
+    Ok(rows.iter().take(n).map(|r| r.id.clone()).collect())
 }
 
 /// One row pulled by id: always the body (`render_full`), or the JSON line.

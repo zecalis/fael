@@ -5,8 +5,9 @@ use crate::{Log, Row};
 /// An id-like run (≥ 6 chars of `0-9A-Z` mixing digits and letters — a ULID
 /// prefix) costs ~1 token per 2 chars: tokenizers split random base32 far
 /// finer than prose, and ids ride on every pushed row.
-// ponytail: uncalibrated — ASCII ≈ 4 bytes/token, anything else (Thai) ≈ 1 char/token;
-// calibrate against o200k + Claude count_tokens (SPEC §8, §12) and publish the error
+// est is the anchor unit (like USD with an exchange table): ASCII ≈ 4 bytes/token,
+// anything else (Thai) ≈ 1 char/token — see the est → Claude 5 / Haiku 4.5 / o200k
+// rates in docs/architecture.md §5; clients with `usage` get `real_tokens` instead
 pub fn est_tokens(s: &str) -> usize {
     let (mut ascii, mut other, mut ids) = (0usize, 0usize, 0usize);
     let mut run = String::new();
