@@ -41,7 +41,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // one pass over the open rows: the Focus keys the branch rows carry, and
     // the to-do's issues — `find` hides closed and superseded either way
     let all: Vec<&core::Row> = core::find(&c.log, &core::Filter::default());
-    let focus = focus::write(&c.session, &c.repo.root, branch.as_deref(), &all);
+    focus::write(&c.session, &c.repo.root, branch.as_deref(), &all);
     let open: Vec<&core::Row> = all.iter().copied().filter(|r| r.kind == "issue").collect();
     let t = todo(open, &reader);
     let decisions: Vec<_> = if c.repo.cfg.session_decisions == 0 {
@@ -94,14 +94,11 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     if let Some(line) = count_line(&t) {
         body.push_str(&line);
     }
-    // the active plan, first line: which plan this session is inside and
-    // where it lives — unresolved or no plan at all, no line
-    let plan = plan_line(&focus.plan, &c.repo.root, &c.repo.cfg.plan_dirs);
     let adopted = c.repo.fael.join("log").is_dir();
-    let mut context = match (body.is_empty() && plan.is_empty(), adopted) {
+    let mut context = match (body.is_empty(), adopted) {
         (true, false) => None,
         (true, true) => Some(format!("{ISSUE_LINE}\n")),
-        (false, _) => Some(format!("{plan}{body}{ISSUE_LINE}\n")),
+        (false, _) => Some(format!("{body}{ISSUE_LINE}\n")),
     };
     // SPEC §11: the cheap check — one line, only when there is a problem.
     // Skipped while no log exists yet: warning about an empty missing log is
@@ -219,34 +216,6 @@ fn count_line(t: &Todo) -> Option<String> {
         "fael: {} — fael find --kind issue (MCP find kind=issue); each also pushes when you touch its file\n",
         parts.join(" · ")
     ))
-}
-
-/// The active plan's one line, resolved from facts + intent (PLAN-fael-plan-focus
-/// chunk 1). `Active` names the plan and its highest open chunk, with the path
-/// session start resolves through `Config::plan_dirs` (no file, no arrow);
-/// `Ambiguous` names every candidate and the exact next call, and puts no plan
-/// in Now; `None` prints nothing.
-fn plan_line(plan: &core::PlanResolution, root: &Path, dirs: &[String]) -> String {
-    match plan {
-        core::PlanResolution::None => String::new(),
-        core::PlanResolution::Active { name, chunk, .. } => {
-            let arrow = focus::plan_path(root, dirs, name)
-                .map(|p| format!(" → {p}"))
-                .unwrap_or_default();
-            match chunk {
-                Some(n) => format!("active plan: {name} chunk-{n}{arrow}\n"),
-                None => format!("active plan: {name} (no open chunk){arrow}\n"),
-            }
-        }
-        core::PlanResolution::Ambiguous { candidates } => {
-            let list = candidates
-                .iter()
-                .map(|c| format!("{} chunk-{}", c.name, c.chunk))
-                .collect::<Vec<_>>()
-                .join(" · ");
-            format!("active plan: ? — {} open: {list}\n", candidates.len())
-        }
-    }
 }
 
 /// `git check-ignore` is ~8 of session-start's ~10 ms, so its answer is cached

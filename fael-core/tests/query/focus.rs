@@ -1,6 +1,5 @@
 //! Push buckets + row cap (PLAN-fael-push-focus chunk 1): `bucket` puts each
-//! gathered row in Now | File | Background, `select` cuts to `max_rows`. Plan
-//! resolution lives in `plan.rs`.
+//! gathered row in Now | File | Background, `select` cuts to `max_rows`.
 
 use super::{ids, log, row};
 use fael_core::*;
@@ -55,7 +54,7 @@ fn bucket_focus_signals_are_now() {
     );
     // no focus, tier 1: Background
     assert_eq!(bucket(&dec, 1, &Focus::default()), Bucket::Background);
-    // my open key, the session branch, the active plan chunk: Now
+    // my open key, the session branch: Now
     let mut keys = HashSet::new();
     keys.insert("auth:session".to_string());
     assert_eq!(
@@ -82,42 +81,56 @@ fn bucket_focus_signals_are_now() {
         ),
         Bucket::Now
     );
-    let planned = row(
+    // a plan-keyed row filed on another branch is no signal: fael never infers
+    // the session's plan (PLAN-fael-plan-focus) — fapony asks for its keys
+    let mut planned = row(
         "A0000000000000000000000024",
         "note",
         &["src/a.rs"],
         Some("plan:foo:chunk-3"),
     );
-    let active = Focus {
-        plan: PlanResolution::Active {
-            name: "foo".into(),
-            chunk: Some(3),
-            source: PlanSource::Branch,
-        },
-        ..Focus::default()
-    };
-    assert_eq!(bucket(&planned, 1, &active), Bucket::Now);
-    // a plan row is Now only for `Active { chunk: Some(n) }` — ambiguous or
-    // chunk-less never pulls it out of Background
-    let ambiguous = Focus {
-        plan: PlanResolution::Ambiguous {
-            candidates: vec![PlanCandidate {
-                name: "foo".into(),
-                chunk: 3,
-            }],
-        },
-        ..Focus::default()
-    };
-    assert_eq!(bucket(&planned, 1, &ambiguous), Bucket::Background);
-    let no_chunk = Focus {
-        plan: PlanResolution::Active {
-            name: "foo".into(),
-            chunk: None,
-            source: PlanSource::Declared,
-        },
-        ..Focus::default()
-    };
-    assert_eq!(bucket(&planned, 1, &no_chunk), Bucket::Background);
+    planned
+        .extra
+        .insert("branch".to_string(), "feat/old".into());
+    let rows = [&planned];
+    assert_eq!(
+        bucket(&planned, 1, &Focus::from_rows(Some("feat/x"), &rows)),
+        Bucket::Background
+    );
+}
+
+#[test]
+fn focus_keys_stay_on_the_session_branch() {
+    // a plan key is an ordinary key: Now only when this branch filed it
+    let mut mine = row(
+        "A0000000000000000000000031",
+        "note",
+        &["src/a.rs"],
+        Some("plan:foo:chunk-3"),
+    );
+    mine.extra.insert("branch".into(), "feat/x".into());
+    let mut other = row(
+        "A0000000000000000000000032",
+        "note",
+        &["src/a.rs"],
+        Some("plan:bar:chunk-9"),
+    );
+    other.extra.insert("branch".into(), "other".into());
+    let rows = [&mine, &other];
+    let f = Focus::from_rows(Some("feat/x"), &rows);
+    assert!(f.keys.contains("plan:foo:chunk-3"));
+    assert!(!f.keys.contains("plan:bar:chunk-9"));
+    // no branch at all: no focus
+    assert!(Focus::from_rows(None, &rows).keys.is_empty());
+}
+
+#[test]
+fn focus_file_from_an_older_fael_still_reads() {
+    // #60/#61 wrote a `plan` field — dropping it must not reset the Focus
+    let old = r#"{"branch":"feat/x","plan":{"name":"foo","chunk":3,"path":null},"keys":["a:b"]}"#;
+    let f: Focus = serde_json::from_str(old).expect("old focus file parses");
+    assert_eq!(f.branch.as_deref(), Some("feat/x"));
+    assert!(f.keys.contains("a:b"));
 }
 
 #[test]

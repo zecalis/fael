@@ -17,8 +17,7 @@ mod select;
 mod stale;
 
 pub use focus::{
-    Background, Bucket, Focus, PUSH_BACKGROUND, PlanCandidate, PlanFact, PlanResolution,
-    PlanSource, PushPolicy, Selection, bucket, open_plans, resolve_plan, select,
+    Background, Bucket, Focus, PUSH_BACKGROUND, PushPolicy, Selection, bucket, select,
 };
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
