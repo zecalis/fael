@@ -4,6 +4,7 @@
 //! add/close/find over stdio (see mcp.rs).
 
 mod aliases;
+mod batch;
 mod find;
 mod help;
 mod hook;
@@ -11,7 +12,9 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
+mod schema;
 mod selfheal;
+mod session;
 mod write;
 
 use fael_core::{self as core, Config, Log, Row};
@@ -62,6 +65,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     let rest = a.pos.get(1..).unwrap_or_default();
     match (cmd, rest) {
         ("add", [kind, text]) => add(&a, kind, text).map(|()| ExitCode::SUCCESS),
+        // chunk 6b: `fael add --json -` reads a JSON array of rows from stdin
+        ("add", [dash]) if dash == "-" && a.has("json") => batch::batch_add(),
         ("close", [id, why]) => close(&a, id, why).map(|()| ExitCode::SUCCESS),
         ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
         ("find", [] | [_]) => find::find(&a, rest.first()).map(|()| ExitCode::SUCCESS),
@@ -296,15 +301,6 @@ fn stamp(r: &Repo) -> core::Stamp {
     }
 }
 
-fn written(a: &Args, r: &Repo, row: &Row, path: &Path) {
-    if a.has("json") {
-        println!("{}", row.to_line());
-    } else {
-        let rel = path.strip_prefix(&r.root).unwrap_or(path);
-        println!("{} → {}", row.id, rel.display());
-    }
-}
-
 fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     let r = repo()?;
     let urgent = match (a.has("urgent"), a.one("urgent-before")) {
@@ -334,16 +330,17 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     )?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "add", Some(&r.root), &warns);
-    written(a, &r, &row, &path);
+    batch::written(a, &r, &row, &path);
     Ok(())
 }
 
+/// `fael close` — an issue that is fixed, a note that is done.
 fn close(a: &Args, id: &str, why: &str) -> Result<(), String> {
     let r = repo()?;
     let (row, path, warns) = close_row(&r, id, why)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "close", Some(&r.root), &warns);
-    written(a, &r, &row, &path);
+    batch::written(a, &r, &row, &path);
     Ok(())
 }
 
@@ -365,7 +362,7 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
     let (row, path, warns) = write::bump(&r, a, id)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "bump", Some(&r.root), &warns);
-    written(a, &r, &row, &path);
+    batch::written(a, &r, &row, &path);
     Ok(())
 }
 

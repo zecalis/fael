@@ -44,7 +44,7 @@ fn handle(line: &str) -> Option<Value> {
             "serverInfo": {"name": "fael", "version": env!("CARGO_PKG_VERSION")},
         }),
         "ping" => json!({}),
-        "tools/list" => json!({"tools": tools()}),
+        "tools/list" => json!({"tools": crate::schema::tools()}),
         "tools/call" => call(&params),
         m => return Some(error(id, -32601, &format!("method not found: {m}"))),
     };
@@ -114,19 +114,23 @@ fn repo_for(a: &Value) -> Result<Repo, String> {
     repo()
 }
 
-/// The MCP tool schemas as served on `tools/list` — `stats` sizes the same
-/// string for the per-session constants, so the number it shows is the number
-/// the agent actually pays.
-pub(crate) fn schema_json() -> String {
-    serde_json::to_string(&tools()).unwrap_or_default()
-}
-
 fn find(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    find_inner(a, &r).inspect_err(|e| record_mcp(&r.root, "mcp-find", ASK_REJECT, e))
+    match find_inner(a, &r) {
+        Err(e) => {
+            record_mcp(&r.root, "mcp-find", ASK_REJECT, &e);
+            Err(e)
+        }
+        Ok((text, shown)) => {
+            // chunk 6e: ids just shown are already in this session's context
+            let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
+            crate::hook::note_seen(&crate::session::hook_session(&r.root), &r.root, &ids);
+            Ok(text)
+        }
+    }
 }
 
-fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
+fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // `branches: true` merges unmerged branches' rows into the union log
     // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
     let (base, jtags) = crate::journal::read(r);
@@ -140,10 +144,9 @@ fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
     // lists show titles, this is how the body is read on demand
     if let Some(id) = s(a, "id") {
         let row = core::resolve(&log, &id)?;
-        return Ok(crate::find::branches::tag(
-            core::render_full(&log, &[row], 10_000),
-            &branch_of,
-        ));
+        let shown = row.id.clone();
+        let text = crate::find::branches::tag(core::render_full(&log, &[row], 10_000), &branch_of);
+        return Ok((text, vec![shown]));
     }
     let files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
     // `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`)
@@ -177,13 +180,17 @@ fn find_inner(a: &Value, r: &Repo) -> Result<String, String> {
         offset: f.offset,
         next: &|n| format!("offset={n}"),
     };
-    Ok(if rows.is_empty() {
+    // only what fit the budget was said — like the push, count the shown lines
+    let text = if rows.is_empty() {
         "no rows match".into()
     } else if a["full"].as_bool().unwrap_or(false) {
         crate::find::branches::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
     } else {
         crate::find::branches::tag(core::render_page(&log, &rows, budget, cut), &branch_of)
-    })
+    };
+    let n = text.lines().filter(|l| l.starts_with("- [")).count();
+    let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
+    Ok((text, shown))
 }
 
 fn add(a: &Value) -> Result<String, String> {
@@ -201,6 +208,54 @@ fn add(a: &Value) -> Result<String, String> {
 }
 
 fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
+    // chunk 6b: `rows: [...]` files many rows in one call — each runs the same
+    // validate + self-heal as a single add; a bad row reports alone, the rest save
+    if let Some(rows) = a["rows"].as_array() {
+        if rows.is_empty() {
+            return Err("rejected: rows is empty — pass at least one row".into());
+        }
+        let mut out = vec![];
+        let mut warns = vec![];
+        let mut failed = 0;
+        for (i, v) in rows.iter().enumerate() {
+            let b = crate::batch::batch_row(v).map_err(|e| row_err(e, i))?;
+            match add_row(
+                r,
+                &b.kind,
+                &b.text,
+                &b.files,
+                AddOpts {
+                    key: b.opts.key,
+                    to: b.opts.to,
+                    title: b.opts.title,
+                    revisit: b.opts.revisit,
+                    urgent: b.opts.urgent,
+                    supersedes: b.opts.supersedes,
+                    force: b.opts.force,
+                },
+            ) {
+                Ok((row, _, w)) => {
+                    out.push(format!("recorded {}", row.id));
+                    warns.extend(w);
+                }
+                Err(e) => {
+                    failed += 1;
+                    let e = format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "));
+                    record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
+                    out.push(e);
+                }
+            }
+        }
+        // like the CLI batch: any rejection turns the call into an error —
+        // the saved rows stay saved, their warnings ride along
+        if failed > 0 {
+            record_asks("mcp", ASK_WARN, "mcp-add", Some(&r.root), &warns);
+            out.extend(warns);
+            return Err(out.join("\n"));
+        }
+        // chunk 6e rides inside write::add_row — the saved ids are already seen
+        return Ok((out.join("\n"), warns));
+    }
     let (row, _, warns) = add_row(
         r,
         &need(a, "kind")?,
@@ -217,6 +272,10 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         },
     )?;
     Ok((done(&row.id, &warns), warns))
+}
+
+fn row_err(e: String, i: usize) -> String {
+    format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "))
 }
 
 /// `add --urgent` over MCP: `urgent` files at the back of the queue,
@@ -298,67 +357,4 @@ fn done(id: &str, warns: &[String]) -> String {
         .chain(warns.iter().cloned())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn tools() -> Value {
-    let str_ = |d: &str| json!({"type": "string", "description": d});
-    let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
-    let cwd = str_(
-        "checkout path, if not the session's cwd (another worktree) — else rows land in the wrong one",
-    );
-    let mut t = json!([
-        {
-            "name": "find",
-            "description": "Read this project's memory: decisions, open issues and notes left by earlier sessions and teammates. \
-    Call it at the start of a task and before touching a file. No arguments = the session brief.",
-            "annotations": {"readOnlyHint": true},
-            "inputSchema": {"type": "object", "properties": {
-                "id": str_("row id or unique prefix — pulls its body"),
-                "full": {"type": "boolean", "description": "show every row's body under its title"},
-                "files": files("repo-relative paths, directories, globs, or anchors like doc:pricing — rows on any of them"),
-                "text": str_("case-insensitive substring of the row text"),
-                "key": str_("key glob, e.g. auth:*"),
-                "kind": str_("decision | issue | note, or a kind the repo declares"),
-                "since": str_("yyyy-mm or yyyy-mm-dd"),
-                "to": str_("only rows routed to this reader, e.g. ploy"),
-                "revisit": {"type": ["boolean", "string"], "description": "only rows with a revisit: true = any, a string narrows it"},
-                "branches": {"type": "boolean", "description": "also read unmerged branches, rows tagged @<branch>"},
-                "limit": {"type": "integer", "minimum": 1, "description": "at most this many ranked rows — a cut list prints next: offset=N, repeat the call with it"},
-                "offset": {"type": "integer", "minimum": 0, "description": "skip this many ranked rows first"},
-            }},
-        },
-        {
-            "name": "add",
-            "description": "Record something the next session must know: a decision and why, a bug (kind issue), \
-    or state a later session needs (note). One standalone sentence or two — it is read months later with no chat. \
-    files must name what it is about; reuse a path or anchor that find already showed instead of inventing a new one. \
-    Saw something broken, inconsistent or likely to break? Add it as kind issue right there — do not wait for the end of the task.",
-            "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
-                "kind": str_("decision | issue | note, or a kind the repo declares"),
-                "text": str_("what happened and why, standalone"),
-                "title": str_("≤15-word headline lists show; the body is pulled by id — set it when text tops ~60 words"),
-                "files": {"type": "array", "items": {"type": "string"},
-                    "description": "repo-relative paths, or anchors scheme:ref (doc:pricing, customer:acme) for things that are not files — omit to use this session's edited files"},
-                "key": str_("optional colon key, e.g. auth:session"),
-                "to": str_("who has to answer, e.g. ploy — routed to them at their session start"),
-                "revisit": str_("YYYY-MM[-DD] surfaced when due, or free text like 'mdl lands'"),
-                "urgent": {"type": "boolean", "description": "file at the back of the urgent queue (issues only)"},
-                "urgent_before": str_("file just above this row in the urgent queue"),
-                "supersedes": str_("id of the row this one replaces"),
-                "force": {"type": "boolean", "description": "allow a path that looks like a typo (file not created yet)"},
-            }},
-        },
-        {
-            "name": "close",
-            "description": "Close a row that no longer holds — an issue that is fixed, a note that is done. Close it as soon as it is, so stale rows stop cluttering every brief.",
-            "inputSchema": {"type": "object", "required": ["id", "text"], "properties": {
-                "id": str_("row id or a unique prefix, as find shows it"),
-                "text": str_("why it is closed, e.g. fixed in <sha>"),
-            }},
-        },
-    ]);
-    for tool in t.as_array_mut().unwrap() {
-        tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
-    }
-    t
 }

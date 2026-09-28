@@ -107,7 +107,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 
 | Command | What it does |
 |---|---|
-| `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--revisit date\|text] [--urgent\|--urgent-before id] [--supersedes id] [--force]` | append a row (`--title` = the ≤15-word headline lists show; `--revisit` = a date `kickoff` surfaces when due, or free text; self-heal first — a repeat on the same files or key supersedes the open row, `Supersedes <id>` in the text fills `--supersedes`, and the one key on these files is reused, each said in one info line) |
+| `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--revisit date\|text] [--urgent\|--urgent-before id] [--supersedes id] [--force] [--json]` | append a row (`--title` = the ≤15-word headline lists show; `--revisit` = a date `kickoff` surfaces when due, or free text; self-heal first — a repeat on the same files or key supersedes the open row, `Supersedes <id>` in the text fills `--supersedes`, and the one key on these files is reused, each said in one info line; batch many at once — `rows: [...]` over MCP, `fael add --json -` with a JSON array on stdin over CLI, a bad row reports alone while the rest save) |
 | `fael close <id> "<why>"` | append a close row |
 | `fael bump <id> [--to who] [--revisit date\|text] [--urgent\|--urgent-before id\|--not-urgent]` | new version of an open row: same text/files, new `to`/`urgent`/`revisit`, superseding the old one |
 | `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies; `--branches` also reads branches not yet merged into HEAD, tagging their rows `@<branch>` without a checkout; a cut list prints the exact next call (`--offset M`) |
@@ -152,7 +152,7 @@ row_bytes = 10240             # hard cap, never above 10 KiB
 | Tool | Input | Notes |
 |---|---|---|
 | `find` | `files[]` `text` `key` `kind` `since` `to` `revisit?` `branches?` `limit` `offset` | read-only, cut to `budget.find_tokens`. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. `branches: true` also reads unmerged branches (rows tagged `@<branch>`). A cut list prints `next: offset=N` — repeat the call with it |
-| `add` | `kind` `text` `files[]` (required, non-empty) `key?` `to?` `title?` `revisit?` `urgent?` `urgent_before?` `supersedes?` `force?` | a bad value is rejected with an error message that says how to fix the call. Its description tells the agent to reuse an anchor `find` already showed rather than invent a new one |
+| `add` | `kind` `text` `files[]` (required, non-empty) `key?` `to?` `title?` `revisit?` `urgent?` `urgent_before?` `supersedes?` `force?` `rows[]?` | a bad value is rejected with an error message that says how to fix the call. Its description tells the agent to reuse an anchor `find` already showed rather than invent a new one. `rows` batches many rows in one call — a bad row reports alone while the rest save |
 | `close` | `id` `text` | |
 
 `bump` is CLI-only (`fael bump`): re-routing a row is rare and mostly a human call, so its schema is not paid in every session. The server still answers a `bump` call from a client that sends one.
@@ -228,7 +228,15 @@ Tokens are the unit of value, and they are spent when reading, not when storing.
 
 - Storage is JSON, so any tool can parse it and it merges cleanly in git.
 - What an agent is shown (kickoff, push, `find`) is one markdown line per row: `- [id] kind #key text → files`. On real rows this adds 18.5% on top of the text, against 42.6% for raw JSON and 17.7% for TOON. The text is most of the size, so the savings come from choosing fewer rows, not from the format.
-- Every output is cut to a token budget (configurable per repo). The estimate is computed at read time and never stored, because every model's tokenizer counts differently. The estimator is calibrated in tests against real tokenizers, and its error is published.
+- Every output is cut to a token budget (configurable per repo). The estimate is computed at read time and never stored, because every model's tokenizer counts differently. `est_tokens` stays the anchor unit (ASCII ≈ 4 bytes/token, non-ASCII ≈ 1 char/token) — a ruler, not a scale; convert with the frozen exchange table below — no per-model config, no formula tuning.
+
+  | model | EN (× est) | TH (× est) |
+  |---|---|---|
+  | Claude 5 (Opus 5.5 / Sonnet 5, same tokenizer) | × 1.56 | × 1.05 |
+  | Claude Haiku 4.5 | × 1.16 | × 1.01 |
+  | o200k (tiktoken, offline) | × ~1.06 (est tracks within ±20%) | mixed rows track; pure-Thai est is the upper bound (~2.4× over o200k) |
+
+  Measured 2026-09-28 via `count_tokens` over every row in the log (271 EN + 2 TH-mixed + 10 pure-Thai plan lines as proxies, framing overhead subtracted); Sonnet 5 and Opus 5.5 returned identical counts. Frozen 2026-09-28, not maintained — newer numbers come free from `real_tokens`, never from re-running this table.
 - Every injection is recorded per machine (`~/.local/state/fael/usage.jsonl`, never in git), so `fael stats` shows fael's real cost in context. This is **local telemetry, not memory**: it may be lost, is never read to answer a query, and a failure to write it never fails a command. `.fael/` is the only semantic state.
 - A row longer than about 400 estimated tokens triggers a warning when it is written, because it is paid for every time it is pushed. The hard limit is 10 KiB per row.
 

@@ -40,6 +40,24 @@ pub(crate) fn seen_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.seen"))
 }
 
+/// Chunk 6e: ids this session already holds in context — just filed by `add`
+/// or just shown by `find --files`. The next push skips them instead of
+/// repeating them. Empty session or ids = no-op (MCP outside a hook session).
+pub(crate) fn note_seen(session: &str, root: &Path, ids: &[&str]) {
+    if session.is_empty() || ids.is_empty() {
+        return;
+    }
+    let p = seen_path(session, root);
+    use std::io::Write;
+    let out: String = ids.iter().map(|id| format!("{id}\n")).collect();
+    let _ = std::fs::create_dir_all(p.parent().unwrap_or(root));
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&p)
+        .and_then(|mut f| f.write_all(out.as_bytes()));
+}
+
 /// A Weak risk line stashed by stop for the next push — shown once, deleted.
 pub(crate) fn risk_path(session: &str, root: &Path) -> PathBuf {
     let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));

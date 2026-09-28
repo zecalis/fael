@@ -34,4 +34,4 @@ pub(crate) use usage::stats;
 // `maintain` asks where the gitignore rule comes from.
 pub(crate) use push::is_anchor;
 pub(crate) use session::{deliberate, ignore_source};
-pub(crate) use state::{Edit, session_edits, state_dir};
+pub(crate) use state::{Edit, note_seen, session_edits, state_dir};
