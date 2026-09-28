@@ -212,6 +212,45 @@ fn doctor_flags_close_reason_citing_fake_id() {
 }
 
 #[test]
+fn doctor_flags_phantom_id_in_markdown() {
+    let d = repo();
+    let seed = add(&d, "note", "src/a.rs", "keeper row");
+    let fake = phantom_of(&seed);
+    // a dead citation written in a plan file — named with the line it sits on
+    std::fs::write(
+        d.join("PLAN-x.md"),
+        format!("# x\n\nsee {fake} for the steps\n"),
+    )
+    .unwrap();
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    let (ok, out, _) = fael(&d, &["doctor"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("note [Phantom]: 1 reference(s) to ids with no row in markdown")
+            && out.contains(&format!("PLAN-x.md:3 → {fake}")),
+        "{out}"
+    );
+    // no row owns a doc citation: --json carries an empty ids list
+    let (_, out, _) = fael(&d, &["doctor", "--json"]);
+    let ps: Vec<serde_json::Value> = serde_json::from_str(out.trim()).unwrap();
+    let ph = ps.iter().find(|p| p["kind"] == "phantom").expect("phantom");
+    assert_eq!(ph["ids"], serde_json::json!([]), "{ph}");
+    // the same id inside a fenced block is an example, never a citation
+    std::fs::write(
+        d.join("PLAN-x.md"),
+        format!("# x\n\n```json\n{{\"id\":\"{fake}\"}}\n```\n"),
+    )
+    .unwrap();
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Phantom]"), "{out}");
+    // and a live id in prose stays quiet
+    std::fs::write(d.join("PLAN-x.md"), format!("# x\n\nsee {seed}\n")).unwrap();
+    let (_, out, _) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Phantom]"), "{out}");
+}
+
+#[test]
 fn doctor_stays_clean_for_real_ambiguous_and_closed_citations() {
     let d = repo();
     let keeper = add(&d, "note", "src/a.rs", "keeper row");

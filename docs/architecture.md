@@ -119,7 +119,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael install [--client c] [--dry-run] [--replace-fapony]` | detect installed clients and wire MCP, hooks and skill into each one; `--replace-fapony` takes out fapony's Stop/session-start hooks and MCP (opt-in: they are user scope and still serve repos without `.fael/`) |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
-| `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass |
+| `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`) |
 | `fael stats [--json] [--rows]` | how many bytes and tokens fael has put into agents' context |
 
 `--files` in `find` matches a row's `files[]` only — exactly, as a directory (a zone), or by glob; an anchor's ref
@@ -249,6 +249,8 @@ Tokens are the unit of value, and they are spent when reading, not when storing.
 ## 6. Self-healing
 
 Reading never fails: broken lines, leftover merge-conflict markers, duplicate ids, CRLF and BOM are all handled in memory. Writing seals a torn last line before it appends. `fael doctor` reports problems, and `--fix` repairs them with tmp-then-rename. Bad lines go to `.fael/quarantine/`, so no byte is ever deleted.
+
+`doctor` reads prose as well as bytes: open rows, close reasons and every `*.md` under the repo (outside `.git`/`target`/`node_modules`) are checked for citations of ids with no row behind them — `[Phantom]`, the dead citation the next reader takes as confirmation. Fenced code blocks are skipped there: a ULID inside a fence is an example, never a citation.
 
 ## 7. Non-goals
 

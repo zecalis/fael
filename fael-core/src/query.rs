@@ -5,11 +5,12 @@
 //! `select` (find/brief/kickoff/push/gone over row sets), `matching` (path and
 //! glob primitives), `render` (token-budgeted markdown), `lookup` (resolve,
 //! keys, query, warnings), `stale` (backticked paths gone from disk),
-//! `focus` (push buckets + row cap).
+//! `md` (id citations in markdown prose), `focus` (push buckets + row cap).
 
 mod focus;
 mod lookup;
 mod matching;
+mod md;
 mod push;
 mod refs;
 mod render;
@@ -22,6 +23,7 @@ pub use focus::{
 };
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
+pub use md::phantom_md_refs;
 pub use push::{push, push_tiered};
 pub use refs::{Ref, id_tokens, phantom_refs, ref_state};
 pub use render::{

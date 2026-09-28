@@ -114,11 +114,10 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
             .with_ids(stale.iter().map(|(id, _)| id.clone()).collect()),
         );
     }
-    // id rot: prose cites an id with no row behind it (id-refs chunk 3) —
-    // open rows and close texts only; a closed row's own text stays quiet
-    if let Some(p) = phantom::problem(log, root) {
-        out.push(p);
-    }
+    // id rot: prose — in open rows, close texts and any `*.md` under the repo
+    // — cites an id with no row behind it (id-refs chunk 3 + ids:doctor-plans);
+    // a closed row's own text stays quiet
+    out.extend(phantom::problems(log, root));
     out
 }
 
