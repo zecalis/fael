@@ -192,6 +192,9 @@ client ─(read event)─▶ adapter.parse ─▶ core.find(files) ─▶ rank �
 Ranking: an exact file match beats the same directory, which beats the same key. Open `issue` and `decision` rows go first, then newer before older by `id`. Text matching is plain substring.
 Ranking is **deterministic**: the same log, query and budget give the same output on any machine and any day — recency comes from `id` order, never from the clock, and ties break by `id`. No fuzzy, BM25 or semantic ranking.
 
+Rows are then bucketed by the session **Focus** — the start branch plus the keys of the open rows filed on it, written once at session start to
+`~/.local/state/fael/sessions/<session+worktree>.focus.json`: **Now** (an open issue, an urgent row, a row on the session branch or sharing one of those keys) always renders, **File** (the queried file) fills the row cap next, **Background** (same directory, shared key) never renders — each hidden class gets one count line naming the exact `fael find` call that reaches it. The push only reads that file: no git spawn, one small read. No session, no file or an unparsable file is `Focus::default()` — the ranking above, capped at `budget.push_rows`.
+
 **Enforce** — the agent tries to end a turn:
 ```
 client ─(edit event)─▶ append {"path","at"} to ~/.local/state/fael/sessions/<session+worktree>.jsonl
@@ -211,7 +214,8 @@ Edits, not commits, are the primary signal: many agents are told never to commit
 
 **Session start:**
 ```
-client ─(session-start)─▶ open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
+client ─(session-start)─▶ write focus.json (start branch + the keys of the rows filed on it)
+                        ─▶ open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
 
 **Across branches** (one branch per person or per agent):

@@ -1,16 +1,21 @@
-//! L3 rank + L4 select for the read/edit push (PLAN-fael-push-focus chunk
-//! 1): bucket each gathered row into Now | File | Background, then cut to
-//! the row cap. Pure — no git spawn, no file reads; chunk 2 builds the
-//! Focus at session start and the push only reads it.
+//! L2 build + L3 rank + L4 select for the read/edit push (PLAN-fael-push-focus):
+//! `Focus::from_rows` turns the session's start branch and its open rows into
+//! what the push ranks against, `bucket` lands each row in Now | File |
+//! Background, `select` cuts to the row cap. Pure — no git spawn, no file
+//! reads: the hook builds the Focus at session start (`hook/focus.rs`) and
+//! the push only reads it back.
 
 use crate::Row;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// What the session works on: the start branch, the active plan chunk, and
-/// the keys of my open rows on this branch. Chunk 2 builds it; the push
-/// with no session state uses `Focus::default()` — no branch, no plan, no
-/// keys — which keeps today's order and only adds the row cap.
-#[derive(Debug, Default, Clone)]
+/// the keys of the open rows filed on that branch. Built at session start
+/// (git is allowed there) and read back from the session state by the push;
+/// with no session state `Focus::default()` — no branch, no plan, no keys —
+/// keeps today's order and only adds the row cap.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Focus {
     /// the branch the session started on (`row.branch() == focus.branch`
     /// rows are Now)
@@ -23,11 +28,34 @@ pub struct Focus {
 
 /// The active plan chunk — found via `Config::plan_dirs` in chunk 3; the
 /// shape lives here so `bucket` stays pure.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanFocus {
     pub name: String,
     pub chunk: u32,
     pub path: Option<String>,
+}
+
+impl Focus {
+    /// L2 build, pure: the start branch plus the keys of the open rows filed
+    /// on it — `rows` arrives already open (closed and superseded filtered by
+    /// the caller, as `find` does), so this only reads `branch` and `key`.
+    /// No branch (detached HEAD, no session) = `Focus::default()` — today's
+    /// order, only the row cap applies.
+    pub fn from_rows(branch: Option<&str>, rows: &[&Row]) -> Focus {
+        let Some(branch) = branch else {
+            return Focus::default();
+        };
+        let keys = rows
+            .iter()
+            .filter(|r| r.branch() == Some(branch))
+            .filter_map(|r| r.key.clone())
+            .collect();
+        Focus {
+            branch: Some(branch.to_string()),
+            plan: None,
+            keys,
+        }
+    }
 }
 
 /// Where one gathered row lands: Now shows first (budget still caps), File

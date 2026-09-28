@@ -8,7 +8,8 @@
 //! Thin entry only — the events live in `hook/`:
 //! `protocol` (neutral Event/Reply + shared ctx), `claude` (client adapters),
 //! `stop` (turn-end work/bug rule), `session` (session-start kickoff),
-//! `push` (read/edit context), `state` (per-machine session files),
+//! `push` (read/edit context), `focus` (session Focus written at start and
+//! read by the push), `state` (per-machine session files),
 //! `usage` (SPEC §8 accounting + `stats`), `asks` (chunk-3a ask types +
 //! real tokens), `markers` (bug phrases).
 //!
@@ -18,6 +19,7 @@
 mod asks;
 mod askstats;
 mod claude;
+mod focus;
 mod markers;
 mod protocol;
 mod push;
