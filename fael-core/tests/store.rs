@@ -58,6 +58,14 @@ fn store_parses_tracked_default_local_and_rejects_the_rest() {
 }
 
 #[test]
+fn a_retired_plan_dirs_field_still_parses() {
+    // PLAN-fael-plan-focus dropped the active plan line; configs written for
+    // it keep loading instead of failing every command
+    let c = Config::from_toml("plan_dirs = [\"docs/plans\"]\nstore = \"local\"").unwrap();
+    assert!(matches!(c.store, Store::Local));
+}
+
+#[test]
 fn tracked_writes_journal_and_tree_with_the_same_bytes() {
     let d = tmp("both");
     let fael = d.join(".fael");
