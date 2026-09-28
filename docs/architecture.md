@@ -218,7 +218,7 @@ Edits, not commits, are the primary signal: many agents are told never to commit
 client ─(session-start)─▶ write focus.json (start branch + the keys of the rows filed on it + the active plan)
                         ─▶ active plan: <name> chunk-N → <path> · open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
-The active plan is the newest open row on the start branch keyed `plan:<name>:chunk-N`; its path is the first `plan_dirs/PLAN-<name>.md` that exists (no file = the line, no arrow). No such row = no line.
+The active plan is the newest open row keyed `plan:<name>:chunk-N`, whichever branch filed it — a chunk is worked on a fresh branch, so its plan rows sit on the branch before it —; its path is the first `plan_dirs/PLAN-<name>.md` that exists (no file = the line, no arrow). No such row = no line.
 
 **Across branches** (one branch per person or per agent):
 ```

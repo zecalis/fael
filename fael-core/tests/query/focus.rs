@@ -105,25 +105,27 @@ fn bucket_focus_signals_are_now() {
 }
 
 #[test]
-fn focus_takes_the_newest_plan_chunk_on_the_branch() {
-    // the newest plan-keyed row wins (by id, never the clock), a plan row on
-    // another branch never does, and core resolves no path
+fn focus_takes_the_newest_plan_chunk_whatever_its_branch() {
+    // the newest plan-keyed row wins (by id, never the clock), whichever
+    // branch filed it — a chunk starts a fresh branch, so the previous
+    // chunk's row is the one that carries the plan (issue 01M3M35H) — and
+    // core resolves no path
     let mut newer = row(
-        "A0000000000000000000000031",
+        "A0000000000000000000000032",
         "note",
         &["src/a.rs"],
         Some("plan:foo:chunk-3"),
     );
     newer.extra.insert("branch".into(), "feat/x".into());
     let mut older = row(
-        "A0000000000000000000000030",
+        "A0000000000000000000000031",
         "note",
         &["src/a.rs"],
         Some("plan:foo:chunk-2"),
     );
     older.extra.insert("branch".into(), "feat/x".into());
     let mut other = row(
-        "A0000000000000000000000032",
+        "A0000000000000000000000030",
         "note",
         &["src/a.rs"],
         Some("plan:bar:chunk-9"),
@@ -136,8 +138,23 @@ fn focus_takes_the_newest_plan_chunk_on_the_branch() {
     assert_eq!((plan.name.as_str(), plan.chunk), ("foo", 3));
     assert!(plan.path.is_none(), "core never reads a file");
     assert!(f.keys.contains("plan:foo:chunk-3"));
-    // another branch's plan row, and no branch at all: no plan
-    assert!(Focus::from_rows(Some("main"), &rows).plan.is_none());
+    // keys stay scoped to the session branch — only the plan crosses it
+    assert!(!f.keys.contains("plan:bar:chunk-9"));
+    // the newest plan row was filed on another branch: still the active plan
+    let branch_other = Focus::from_rows(Some("feat/x"), &[&other]);
+    assert_eq!(
+        (
+            branch_other
+                .plan
+                .as_ref()
+                .expect("active plan")
+                .name
+                .as_str(),
+            branch_other.plan.as_ref().expect("active plan").chunk
+        ),
+        ("bar", 9)
+    );
+    // no branch at all: no focus, no plan
     assert!(Focus::from_rows(None, &rows).plan.is_none());
 }
 

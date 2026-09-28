@@ -20,15 +20,16 @@ pub struct Focus {
     /// the branch the session started on (`row.branch() == focus.branch`
     /// rows are Now)
     pub branch: Option<String>,
-    /// the active plan chunk (`plan:<name>:chunk-<n>` rows are Now)
+    /// the active plan chunk (`plan:<name>:chunk-<n>` rows are Now, whatever
+    /// branch they were filed on)
     pub plan: Option<PlanFocus>,
     /// keys of my open rows on this branch (those rows are Now)
     pub keys: HashSet<String>,
 }
 
-/// The active plan chunk — `plan:<name>:chunk-<n>` rows on the session
-/// branch; `path` is the hook's to resolve (`Config::plan_dirs`), since core
-/// never reads files, so it arrives `None`.
+/// The active plan chunk — `plan:<name>:chunk-<n>` rows anywhere in the log;
+/// `path` is the hook's to resolve (`Config::plan_dirs`), since core never
+/// reads files, so it arrives `None`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanFocus {
     pub name: String,
@@ -40,6 +41,8 @@ impl Focus {
     /// L2 build, pure: the start branch plus the keys of the open rows filed
     /// on it — `rows` arrives already open (closed and superseded filtered by
     /// the caller, as `find` does), so this only reads `branch` and `key`.
+    /// The active plan is picked across the whole slice: every chunk starts a
+    /// fresh branch, so a plan row filed on an earlier one is still active.
     /// No branch (detached HEAD, no session) = `Focus::default()` — today's
     /// order, only the row cap applies.
     pub fn from_rows(branch: Option<&str>, rows: &[&Row]) -> Focus {
@@ -53,7 +56,7 @@ impl Focus {
             .collect();
         Focus {
             branch: Some(branch.to_string()),
-            plan: plan_from_rows(branch, rows),
+            plan: plan_from_rows(rows),
             keys,
         }
     }
@@ -69,16 +72,17 @@ fn plan_chunk(key: &str) -> Option<(&str, u32)> {
     Some((name, chunk.parse().ok()?))
 }
 
-/// The active plan: the **newest** open row filed on `branch` keyed
-/// `plan:<name>:chunk-<n>` — newest by `id`, the same order the rest of the
-/// read path ranks recency by (never the clock). Pure, so `path` is `None`
-/// here: session start resolves it against `Config::plan_dirs`.
-fn plan_from_rows(branch: &str, rows: &[&Row]) -> Option<PlanFocus> {
+/// The active plan: the **newest** open row keyed `plan:<name>:chunk-<n>` —
+/// newest by `id`, the same order the rest of the read path ranks recency by
+/// (never the clock), and **whatever branch it was filed on**: a chunk is
+/// worked on a fresh branch, so the newest plan row on the session branch is
+/// none until the second session of that chunk, and the `active plan:` line
+/// would stay silent exactly where it is needed (issue 01M3M35H). Pure, so
+/// `path` is `None` here: session start resolves it against
+/// `Config::plan_dirs`.
+fn plan_from_rows(rows: &[&Row]) -> Option<PlanFocus> {
     let mut best: Option<(String, u32, &str)> = None;
     for r in rows {
-        if r.branch() != Some(branch) {
-            continue;
-        }
         let Some((name, chunk)) = r.key.as_deref().and_then(plan_chunk) else {
             continue;
         };
