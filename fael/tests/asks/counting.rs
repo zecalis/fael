@@ -93,6 +93,28 @@ fn reject_mcp_counts_with_tool_event() {
 }
 
 #[test]
+fn phantom_info_line_counts_nothing() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    // the write path says the cited id has no row — an info line, not a
+    // warning ask (PLAN-fael-id-refs chunk-2: no `warning:` prefix on purpose)
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "see 01DEFACED01 for context",
+            "--files",
+            "src/a.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(err.contains("no row with id 01DEFACED01"), "{err}");
+    assert!(usage(&d).is_empty());
+}
+
+#[test]
 fn stats_text_shows_asks_and_constants() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();

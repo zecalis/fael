@@ -91,6 +91,14 @@ pub(crate) fn add_row(
     // the text names, supersedes itself — same path for CLI and MCP
     let heal = crate::selfheal::heal(&log, &st, &row, supersedes.as_deref())?;
     warns.extend(heal.notes);
+    // id-refs chunk 2: prose citing an id with no row behind it says so —
+    // one info line per id, never a reject. Skips the row itself and its
+    // supersede target (a caller flag may name either verbatim).
+    let mut skip = vec![row.id.as_str()];
+    if let Some(s) = heal.supersedes.as_deref() {
+        skip.push(s);
+    }
+    warns.extend(phantom_lines(r, &log, &row.text, &skip));
     // (e) auto-key: the one key these files already carry. After `heal` on
     // purpose — a key fael guessed must never close a row through (c)
     if row.key.is_none()
@@ -160,6 +168,40 @@ fn root_relative(r: &crate::Repo, args: &[String], files: &mut [String]) -> Vec<
         }
     }
     warns
+}
+
+/// Id citations with no row behind them (PLAN-fael-id-refs chunk 2) — one
+/// info line per id, never a reject. No `warning:` prefix on purpose: lines
+/// without it pass through `record_asks`/`record_mcp` uncounted, like the
+/// self-heal notes.
+fn phantom_lines(r: &crate::Repo, log: &core::Log, text: &str, skip: &[&str]) -> Vec<String> {
+    crate::refs::phantoms(r, log, text, skip)
+        .into_iter()
+        .map(|tok| format!("no row with id {tok} — cited in the text; copy ids from fael find"))
+        .collect()
+}
+
+/// `fael close` — resolve the target, stamp, append the close row. The reason
+/// is scanned like `add_row`'s text (skipping the target); the row closes
+/// regardless of what the scan finds.
+pub(crate) fn close_row(
+    r: &crate::Repo,
+    id: &str,
+    why: &str,
+) -> Result<(core::Row, PathBuf, Vec<String>), String> {
+    let log = crate::read(r);
+    let mut warns = phantom_lines(r, &log, why, &[id]);
+    let (row, path, mut core_warns) = core::close_row(
+        &r.fael,
+        r.journal.as_deref(),
+        &log,
+        &r.cfg,
+        &crate::stamp(r),
+        id,
+        why,
+    )?;
+    warns.append(&mut core_warns);
+    Ok((row, path, warns))
 }
 
 /// `fael bump <id>` — change routing/urgency/revisit as a new version: same

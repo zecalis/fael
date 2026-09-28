@@ -5,7 +5,9 @@
 //! faults are JSON-RPC errors.
 
 use crate::hook::{ASK_REJECT, ASK_WARN, record_asks, record_mcp};
-use crate::{Repo, aliases, close_row, core, read, repo, repo_at, write::AddOpts, write::add_row};
+use crate::{
+    Repo, aliases, core, read, repo, repo_at, write::AddOpts, write::add_row, write::close_row,
+};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
