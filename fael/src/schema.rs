@@ -87,8 +87,12 @@ pub(crate) fn tools() -> Value {
 #[cfg(test)]
 mod tests {
     /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6400 bytes
-    /// combined (measured 6351 on 2026-09-28; the ≥40% cut retargeted to ≥15%
+    /// combined (measured 6383 on 2026-09-28; the ≥40% cut retargeted to ≥15%
     /// + this ceiling by owner decision — PLAN-fael-durable-log §3).
+    ///
+    /// Line endings are normalized first: `include_str!` reads the checkout,
+    /// and a CRLF checkout (Windows) would add one byte per line without any
+    /// content growing. The ceiling guards content, so measure canonical LF.
     ///
     /// English text, so −bytes = −tokens with no recount.
     const SKILL: &str = include_str!("../skill/SKILL.md");
@@ -96,7 +100,7 @@ mod tests {
 
     #[test]
     fn constants_stay_small() {
-        let total = SKILL.len() + super::schema_json().len();
+        let total = SKILL.replace("\r\n", "\n").len() + super::schema_json().len();
         assert!(
             total <= 6400,
             "constants {total} B exceed the 6400 B ceiling — trim, don't grow"
