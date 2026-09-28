@@ -2,9 +2,11 @@
 //! one writer, one branch, a fixed command sequence from the real cases — the
 //! 5-note debt of `fix/cli-version-short-flag` (01M3HH57S), `Supersedes <id>`
 //! in text without the flag (01M3HH57V), multi-adds on files with one / many /
-//! no key — plus the reject and warning paths. Run BEFORE self-heal (3b–e);
-//! the per-type counts below are the baseline the plan records under §3.
-//! After 3b–e the same file re-runs: no ask type may rise, rejects must fall.
+//! no key — plus the reject and warning paths. Run before self-heal (3b–e) as
+//! the baseline, and re-run unchanged after it: no ask type may rise and
+//! rejects must fall. Post-3d/3e totals, same sequence — reject 4 (R6 ×1, R7
+//! ×3) · warning 1 (R8) · stop-block 1 (R9) · repeat 0, against the recorded
+//! baseline of reject 5 · warning 1 · stop-block 1 · repeat 0.
 
 use super::{fael, json, repo, stats_json};
 
@@ -58,10 +60,10 @@ fn replay_debt_sequence_files_five_open_notes() {
 }
 
 /// R2 — `Supersedes <id>` in text, no flag (01M3HH57V): disjoint files, so
-/// (b) stays out. Files today, the old row stays open; self-heal (3d) must
-/// supersede it from the text, still asking nothing.
+/// (b) stays out. The text sets the supersede itself — one open row at the
+/// end, still no ask.
 #[test]
-fn replay_supersede_in_text_leaves_old_open() {
+fn replay_supersede_in_text_closes_the_old_one() {
     let d = replay_repo();
     let (ok, out, err) = fael(
         &d,
@@ -82,16 +84,18 @@ fn replay_supersede_in_text_leaves_old_open() {
         "",
     );
     assert!(ok, "{err}");
-    assert_eq!(open_notes(&d), 2);
+    assert!(err.contains("id in the text"), "{err}");
+    assert_eq!(open_notes(&d), 1);
     let v = stats_json(&d);
     assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
 }
 
-/// R3 — multi-adds on files with one / many / no key: all file keyless
-/// today; self-heal (3e) must key the single-candidate one, asking nothing.
+/// R3 — multi-adds on files with one / many / no key: the one-candidate
+/// follow-up takes that key, the many- and no-candidate ones stay keyless,
+/// asking nothing either way.
 #[test]
-fn replay_key_candidates_file_keyless() {
+fn replay_key_candidates_are_adopted_or_left_alone() {
     let d = replay_repo();
     // keys share no parent and sit far apart — no similar-key warning fires
     for (f, key) in [
@@ -110,15 +114,27 @@ fn replay_key_candidates_file_keyless() {
     for f in ["src/c.rs", "src/b.rs", "src/a.rs"] {
         let (ok, _, err) = fael(&d, &["add", "note", "follow-up", "--files", f], "");
         assert!(ok, "{err}");
+        if f == "src/c.rs" {
+            assert!(err.contains("key auth:session"), "{err}");
+        } else {
+            assert!(!err.contains(" — the only key"), "{err}");
+        }
     }
+    // one candidate adopted: the seed plus the follow-up carry it now
     let (ok, out, err) = fael(&d, &["find", "--files", "src/c.rs", "--json"], "");
     assert!(ok, "{err}");
-    // today the follow-up files keyless: exactly one row carries the key
     let keyed = out
         .lines()
         .filter(|l| l.contains("\"key\":\"auth:session\""))
         .count();
-    assert_eq!(keyed, 1, "{out}");
+    assert_eq!(keyed, 2, "{out}");
+    // two candidates choose nothing, and no candidate means no key
+    for f in ["src/b.rs", "src/a.rs"] {
+        let (ok, out, err) = fael(&d, &["find", "--files", f, "--json"], "");
+        assert!(ok, "{err}");
+        let follow = out.lines().find(|l| l.contains("follow-up")).unwrap();
+        assert!(!follow.contains("\"key\":\""), "{follow}");
+    }
     let v = stats_json(&d);
     assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
@@ -154,26 +170,37 @@ fn replay_keyed_duplicate_supersedes() {
     assert_eq!(out.lines().filter(|l| !l.trim().is_empty()).count(), 1);
 }
 
-/// R5 — `--supersedes` naming nothing: rejects today; self-heal (3d) must
-/// rescue it when the text names exactly one open row.
+/// R5 — `--supersedes` naming nothing (01M3HH57V's shape): the flag is
+/// rescued by the text when the text names exactly one open row, so this ask
+/// is gone. The text naming nothing stays a reject — pinned in
+/// `fael/tests/selfheal/text.rs`, outside this suite, so the replay totals
+/// keep falling rather than carrying both halves of the same rule.
 #[test]
-fn replay_unknown_supersedes_rejects() {
+fn replay_unknown_supersedes_rescued_from_the_text() {
     let d = replay_repo();
+    let (ok, out, err) = fael(&d, &["add", "note", "seed", "--files", "src/a.rs"], "");
+    assert!(ok, "{err}");
+    let seed = out.split_whitespace().next().unwrap().to_string();
     let (ok, _, err) = fael(
         &d,
         &[
             "add",
             "note",
-            "retry",
+            &format!("second pass. Supersedes {seed}"),
             "--files",
-            "src/a.rs",
+            "src/b.rs",
             "--supersedes",
             "nope-no-row",
         ],
         "",
     );
-    assert!(!ok && err.contains("rejected: no row with id"), "{err}");
-    assert_eq!(stats_json(&d)["asks"]["reject"]["events"], 1);
+    assert!(ok, "{err}");
+    assert!(
+        err.contains("matched nothing") && err.contains(&seed[..8]),
+        "{err}"
+    );
+    assert_eq!(open_notes(&d), 1);
+    assert_eq!(stats_json(&d)["asks"]["reject"]["events"], 0);
 }
 
 /// R6 — an ambiguous `--supersedes` prefix: rejects today with the

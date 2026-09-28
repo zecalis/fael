@@ -1,11 +1,14 @@
-//! Chunk 3b–c (PLAN-fael-durable-log): a repeated note on the same writer +
-//! branch + files supersedes the open one itself, and a caller-supplied key
-//! supersedes the single open row with the same kind + key; several matches
-//! file the row and list what was kept, never asking. Thin entry only —
-//! suites sit next to this file.
+//! Chunk 3b–e (PLAN-fael-durable-log): a repeated note on the same writer +
+//! branch + files supersedes the open one itself, a caller-supplied key
+//! supersedes the single open row with the same kind + key, the text sets or
+//! rescues `--supersedes`, and the one key these files already carry is
+//! reused — several matches file the row and list what was kept, never
+//! asking. Thin entry only — suites sit next to this file.
 
+mod autokey;
 mod key;
 mod note;
+mod text;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -95,4 +98,37 @@ fn usage(d: &Path) -> Vec<serde_json::Value> {
         .lines()
         .filter_map(|l| serde_json::from_str(l).ok())
         .collect()
+}
+
+/// One `add` over MCP; returns (isError, text). Every suite runs the same
+/// self-heal through here too — CLI and MCP share `write::add_row`, and this
+/// is what proves it.
+fn mcp_add(d: &Path, args: serde_json::Value) -> (bool, String) {
+    let root = d.ancestors().find(|p| p.join(".git").exists()).unwrap();
+    let call = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "add", "arguments": args}})
+    .to_string();
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .arg("mcp")
+        .env("FAEL_STATE_DIR", root.join("state"))
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .current_dir(d)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    c.stdin
+        .take()
+        .unwrap()
+        .write_all((call + "\n").as_bytes())
+        .unwrap();
+    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
+    let v: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+    (
+        v["result"]["isError"] == true,
+        v["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+    )
 }

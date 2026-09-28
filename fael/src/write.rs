@@ -87,18 +87,18 @@ pub(crate) fn add_row(
     // the queue position resolves against the open issues (`--urgent` = back,
     // `--urgent-before` = just above that row); core rejects non-issues
     row.urgent = core::resolve_urgent(&log, &urgent)?;
-    // self-heal (chunks 3b–c): a repeated note, or one whose caller key already
-    // names an open row, supersedes itself — same path for CLI and MCP
-    let heal = crate::selfheal::heal(
-        &log,
-        &st,
-        &row.id,
-        kind,
-        &row.files,
-        row.key.as_deref(),
-        supersedes.as_deref(),
-    )?;
+    // self-heal (chunks 3b–d): a repeat on these files or this key, or an id
+    // the text names, supersedes itself — same path for CLI and MCP
+    let heal = crate::selfheal::heal(&log, &st, &row, supersedes.as_deref())?;
     warns.extend(heal.notes);
+    // (e) auto-key: the one key these files already carry. After `heal` on
+    // purpose — a key fael guessed must never close a row through (c)
+    if row.key.is_none()
+        && let Some(k) = crate::selfheal::auto_key(&log, &row.files)
+    {
+        warns.push(format!("key {k} — the only key on these files"));
+        row.key = Some(k);
+    }
     let (row, path, mut core_warns) = core::add_row(
         &r.fael,
         r.journal.as_deref(),
