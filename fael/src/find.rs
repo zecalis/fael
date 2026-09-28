@@ -13,18 +13,36 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // `--branches` merges unmerged branches' rows on top of it (HEAD wins on
     // duplicate ids) and tags those ` @<branch>` on render
     let (base, jtags) = super::journal::read(&r);
+    // an id-shaped query is an id lookup, never text — unless `--text`
+    // forces a literal text search (the escape hatch for the old fallback)
+    let forced = a.one("text");
+    if forced.is_none()
+        && let Some(t) = text
+        && core::looks_like_id(t)
+    {
+        let (log, wide, btags) = super::refs::resolve_wide(&r, base, t);
+        return match wide {
+            super::refs::Wide::One(row) => {
+                show_one(a, &log, &row, &super::journal::overlay(jtags, btags))
+            }
+            super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
+            super::refs::Wide::Missing => Err(reject_missing(&log, t)),
+        };
+    }
     let (log, branch_of) = working_or_branches(a, base, jtags, &r.root);
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
     // text search (a text query equalling a unique id prefix means the id)
-    if let Some(t) = text
+    if forced.is_none()
+        && let Some(t) = text
         && let Ok(row) = core::resolve(&log, t)
     {
         return show_one(a, &log, row, &branch_of);
     }
+    let query = forced.as_ref().or(text);
     let files = core::normalize_files(&a.files(), &r.cwd, &r.root)?;
     let (limit, offset) = a.paging()?;
     let f = Filter {
-        text: text.cloned(),
+        text: query.cloned(),
         files: aliases::load(&r, &log, true).expand_all(&files),
         key: a.one("key"),
         kind: a.one("kind"),
@@ -41,7 +59,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     };
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
     // the cut line reprints this call with the next offset — same flags, no guessing
-    let base = a.page_base("find", text.map(String::as_str), limit);
+    let base = a.page_base("find", query.map(String::as_str), limit);
     let shown = show(
         a,
         &log,
@@ -172,6 +190,46 @@ fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &branches::BranchMap) -> 
     Ok(())
 }
 
+/// An id-shaped query matching ≥2 rows: an abbreviation that decayed as the
+/// log grew — it exists, only ambiguous. Same wording as `core::resolve`.
+pub(crate) fn reject_many(tok: &str, rows: &[Row]) -> String {
+    format!(
+        "rejected: id {tok:?} matches {} rows ({}) — use more characters",
+        rows.len(),
+        rows.iter()
+            .take(5)
+            .map(|r| r.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// An id-shaped query with no row behind it (union and unmerged branches):
+/// the reject, plus up to 5 rows that only mention the string — a text hit
+/// is not the row existing.
+pub(crate) fn reject_missing(log: &Log, tok: &str) -> String {
+    let mut m = format!("rejected: no row with id {tok:?} — copy the id from fael find");
+    let who = mentioned(log, tok);
+    if !who.is_empty() {
+        m.push_str(&format!("\nmentioned (not owned) by: {}", who.join(", ")));
+    }
+    m
+}
+
+/// Short ids of rows whose text merely mentions `tok` (open rows, then close
+/// reasons), capped at 5. Case-insensitive — ids match that way too.
+fn mentioned(log: &Log, tok: &str) -> Vec<String> {
+    let ab = core::abbrev(log);
+    let needle = tok.to_lowercase();
+    log.rows
+        .iter()
+        .chain(log.closes.iter())
+        .filter(|r| r.text.to_lowercase().contains(&needle))
+        .map(|r| ab.short(&r.id).to_string())
+        .take(5)
+        .collect()
+}
+
 pub(crate) fn keys(a: &Args, pattern: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
     let log = super::read(&r);
@@ -216,6 +274,10 @@ impl Args {
             let fs = self.files();
             if !fs.is_empty() {
                 s.push_str(&format!(" --files {}", quoted(&fs.join(","))));
+            }
+            // `--text` replays as the flag — the positional alone would id-match
+            if let Some(t) = self.one("text") {
+                s.push_str(&format!(" --text {}", quoted(&t)));
             }
             for f in ["key", "kind", "since", "by", "to"] {
                 if let Some(v) = self.one(f) {

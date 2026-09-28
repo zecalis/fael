@@ -5,7 +5,7 @@
 //! processes). Every row-based note carries the full ids a cleanup agent
 //! needs (`doctor --json` prints them) — not just the abbreviated examples.
 
-use super::{fat, merged, orphan, shipped};
+use super::{fat, merged, orphan, phantom, shipped};
 use crate::core;
 use std::path::Path;
 
@@ -113,6 +113,11 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
             )
             .with_ids(stale.iter().map(|(id, _)| id.clone()).collect()),
         );
+    }
+    // id rot: prose cites an id with no row behind it (id-refs chunk 3) —
+    // open rows and close texts only; a closed row's own text stays quiet
+    if let Some(p) = phantom::problem(log, root) {
+        out.push(p);
     }
     out
 }

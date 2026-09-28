@@ -35,7 +35,9 @@ pub(crate) fn is_marker(line: &str) -> bool {
 }
 
 /// Everything under `.fael/log/`, deduped by id (first by file order wins).
-#[derive(Debug, Default)]
+/// `Clone` is for the binary's branch escalation (`fael/src/refs.rs`), which
+/// merges unmerged branches into a copy — never the caller's log.
+#[derive(Debug, Default, Clone)]
 pub struct Log {
     pub rows: Vec<Row>,
     pub closes: Vec<Row>,

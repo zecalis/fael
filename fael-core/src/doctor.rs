@@ -48,6 +48,11 @@ pub enum Kind {
     /// open rows whose text names a backticked path with no file behind it —
     /// a dead pointer the next reader follows (`files[]` rot stays Gone's)
     Stale,
+    /// open rows — or close reasons — whose text cites an id-shaped token
+    /// with no row behind it: a dead citation the next reader takes as
+    /// confirmation (`files[]` rot stays Gone's, backticked paths stay
+    /// Stale's; ambiguous prefixes resolve, so they never count)
+    Phantom,
     /// open rows filed on a branch whose PR was closed without merge — the
     /// work likely died with the branch; judged by the `gh` CLI in `doctor`,
     /// never in core (core never spawns processes)

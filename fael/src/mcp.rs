@@ -5,7 +5,9 @@
 //! faults are JSON-RPC errors.
 
 use crate::hook::{ASK_REJECT, ASK_WARN, record_asks, record_mcp};
-use crate::{Repo, aliases, close_row, core, read, repo, repo_at, write::AddOpts, write::add_row};
+use crate::{
+    Repo, aliases, core, read, repo, repo_at, write::AddOpts, write::add_row, write::close_row,
+};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -134,14 +136,35 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // `branches: true` merges unmerged branches' rows into the union log
     // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
     let (base, jtags) = crate::journal::read(r);
+    // `find {"id": ...}` pulls that row's body — an id-shaped query is an id
+    // lookup, never text (same messages as the CLI); pass it as `text` for a
+    // literal text search
+    if let Some(id) = s(a, "id")
+        && core::looks_like_id(&id)
+    {
+        let (log, wide, btags) = crate::refs::resolve_wide(r, base, &id);
+        let branch_of = crate::journal::overlay(jtags, btags);
+        return match wide {
+            crate::refs::Wide::One(row) => {
+                let shown = row.id.clone();
+                let text = crate::find::branches::tag(
+                    core::render_full(&log, &[row.as_ref()], 10_000),
+                    &branch_of,
+                );
+                Ok((text, vec![shown]))
+            }
+            crate::refs::Wide::Many(rows) => Err(crate::find::reject_many(&id, &rows)),
+            crate::refs::Wide::Missing => Err(crate::find::reject_missing(&log, &id)),
+        };
+    }
     let (log, branch_of) = if a["branches"].as_bool().unwrap_or(false) {
         let (log, btags) = crate::find::branches::with_branches(&r.root, base);
         (log, crate::journal::overlay(jtags, btags))
     } else {
         (base, jtags)
     };
-    // `find {"id": ...}` pulls that row's body by exact id or unique prefix —
-    // lists show titles, this is how the body is read on demand
+    // a non-id-shaped `id` keeps the old prefix shortcut: an exact id or
+    // unique prefix pulls that row's body, else the call is rejected
     if let Some(id) = s(a, "id") {
         let row = core::resolve(&log, &id)?;
         let shown = row.id.clone();
