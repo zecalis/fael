@@ -193,3 +193,91 @@ fn unknown_store_is_rejected() {
     assert!(!ok);
     assert!(err.contains("tracked") && err.contains("local"), "{err}");
 }
+
+fn past_row(id: &str, text: &str, file: &str) -> String {
+    format!(
+        r#"{{"v":1,"id":"{id}","ts":"2000-01-01T00:00:00.000Z","by":"test-user-","kind":"note","text":"{text}","files":["{file}"]}}"#
+    )
+}
+
+fn close_row(id: &str, target: &str) -> String {
+    format!(
+        r#"{{"v":1,"id":"{id}","ts":"2000-01-02T00:00:00.000Z","by":"test-user-","ref":"{target}","text":"done"}}"#
+    )
+}
+
+/// compact must rewrite the journal too, reading both roots as one log:
+/// a `--prune`d row cannot resurface through the union, and a close that
+/// lives only in the journal still folds (01M3HQHJ2).
+#[test]
+fn compact_rewrites_both_roots_without_resurrection() {
+    let d = repo("journal-compact");
+    std::fs::write(d.join("here.rs"), "x").unwrap();
+    let rows = format!(
+        "{}\n{}\n{}\n",
+        past_row("A0000000000000000000000001", "pruned gone", "gone.rs"),
+        past_row("A0000000000000000000000002", "kept closed", "here.rs"),
+        past_row("A0000000000000000000000003", "kept open", "here.rs"),
+    );
+    let r1 = close_row("C0000000000000000000000001", "A0000000000000000000000001");
+    let r2 = close_row("C0000000000000000000000002", "A0000000000000000000000002");
+    let tree = d.join(".fael/log/test-user-");
+    let jrnl = journal_log(&d).join("test-user-");
+    for dir in [&tree, &jrnl] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("2000-01.jsonl"), &rows).unwrap();
+    }
+    std::fs::write(tree.join("2000-01.close.jsonl"), format!("{r1}\n")).unwrap();
+    // the close for the kept row lives only in the journal (a failed tree write)
+    std::fs::write(jrnl.join("2000-01.close.jsonl"), format!("{r1}\n{r2}\n")).unwrap();
+
+    let (ok, out, err) = fael(&d, &["compact", "--prune"]);
+    assert!(ok, "{err} {out}");
+    // past-month sources are gone from both roots
+    assert!(!tree.join("2000-01.jsonl").exists());
+    assert!(!jrnl.join("2000-01.jsonl").exists());
+    // the pruned row stays gone — the journal does not resurrect it
+    let (_, all, _) = fael(&d, &["find", "--all"]);
+    assert!(!all.contains("pruned gone"), "{all}");
+    // the journal-only close folded: hidden by default, listed with --all
+    let (_, open, _) = fael(&d, &["find"]);
+    assert!(!open.contains("kept closed"), "{open}");
+    assert!(open.contains("kept open"), "{open}");
+    assert!(all.contains("kept closed"), "{all}");
+}
+
+/// An import lands in the journal first, so a deleted branch cannot take it.
+#[test]
+fn imported_rows_survive_branch_deletion() {
+    let d = repo("journal-import");
+    let main = git_out(&d, &["symbolic-ref", "--short", "HEAD"]);
+    git(&d, &["checkout", "-qb", "feat/import-x"]);
+    let src = d.join("old-memory");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(
+        src.join("log.jsonl"),
+        r#"{"ts":"2026-01-01T00:00:00Z","agent":"delamind","id":"muft0001","kind":"decision","text":"imported survives","files":["src/a.rs"],"v":2}"#
+            .to_string()
+            + "\n",
+    )
+    .unwrap();
+    let (ok, _, err) = fael(&d, &["import", src.to_str().unwrap()]);
+    assert!(ok, "{err}");
+    let jimp = journal_log(&d).join("_import");
+    let has = std::fs::read_dir(&jimp)
+        .map(|rd| {
+            rd.flatten()
+                .any(|e| e.path().extension().is_some_and(|x| x == "jsonl"))
+        })
+        .unwrap_or(false);
+    assert!(has, "import must reach the journal: {jimp:?}");
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-qm", "imported"]);
+    git(&d, &["checkout", "-q", &main]);
+    git(&d, &["branch", "-D", "feat/import-x"]);
+
+    // the tree no longer holds it; the journal does
+    let (ok, out, _) = fael(&d, &["find"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("imported survives"), "{out}");
+}

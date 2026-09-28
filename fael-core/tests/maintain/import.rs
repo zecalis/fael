@@ -25,7 +25,15 @@ fn fapony_legacy_mapping() {
         r#"{"ts":"2026-01-04T00:00:00Z","agent":"delamind","id":"muft0008","kind":"note","text":"anchor stays","files":["doc:pricing"],"v":2}"#.to_string(),
     ];
     fs::write(src.join("log.delamind.jsonl"), lines.join("\n") + "\n").unwrap();
-    let rep = import(&fael, &src, &[], &ImportOpts::default()).unwrap();
+    let rep = import(
+        &fael,
+        None,
+        Store::Tracked,
+        &src,
+        &[],
+        &ImportOpts::default(),
+    )
+    .unwrap();
     assert_eq!(
         (rep.adds, rep.folded, rep.carried, rep.skipped),
         (6, 1, 1, 0),
@@ -55,7 +63,15 @@ fn fapony_legacy_mapping() {
     assert!(nofiles.files.is_empty()); // kept as-is, read-valid
     assert_eq!(by_id("muft0008").files, vec!["doc:pricing"]);
     // importing twice is safe — dedupe by id
-    let rep2 = import(&fael, &src, &[], &ImportOpts::default()).unwrap();
+    let rep2 = import(
+        &fael,
+        None,
+        Store::Tracked,
+        &src,
+        &[],
+        &ImportOpts::default(),
+    )
+    .unwrap();
     assert_eq!(rep2.adds, 6);
     assert_eq!(read(&fael).rows.len(), log.rows.len());
 }
@@ -73,6 +89,8 @@ fn import_map_rewrites_prefixes_not_anchors() {
     .unwrap();
     let rep = import(
         &fael,
+        None,
+        Store::Tracked,
         &src,
         &[],
         &ImportOpts {
@@ -103,7 +121,7 @@ fn import_spec_fills_empty_files() {
     let opts = ImportOpts {
         maps: vec![("old/".into(), "new/".into())],
     };
-    import(&fael, &src, &[], &opts).unwrap();
+    import(&fael, None, Store::Tracked, &src, &[], &opts).unwrap();
     let rows = read(&fael).rows;
     let files = |id: &str| rows.iter().find(|r| r.id == id).unwrap().files.clone();
     assert_eq!(files("mus00001"), vec!["new/PLAN-x.md"]);
@@ -131,7 +149,15 @@ fn import_native_fael_log() {
         line.clone() + "\n",
     )
     .unwrap();
-    let rep = import(&fael, &other, &[], &ImportOpts::default()).unwrap();
+    let rep = import(
+        &fael,
+        None,
+        Store::Tracked,
+        &other,
+        &[],
+        &ImportOpts::default(),
+    )
+    .unwrap();
     assert_eq!((rep.adds, rep.skipped), (1, 0));
     assert_eq!(read(&fael).rows.len(), 1);
 }
@@ -165,7 +191,15 @@ fn import_350_legacy_rows_drops_nothing() {
         ));
     }
     fs::write(src.join("log.jsonl"), lines.join("\n") + "\n").unwrap();
-    let rep = import(&fael, &src, &[], &ImportOpts::default()).unwrap();
+    let rep = import(
+        &fael,
+        None,
+        Store::Tracked,
+        &src,
+        &[],
+        &ImportOpts::default(),
+    )
+    .unwrap();
     assert_eq!(rep.skipped, 0, "{:?}", rep.warnings);
     assert_eq!(rep.adds + rep.folded + rep.carried, lines.len(), "{rep:?}");
     assert_eq!(rep.folded, 2);
