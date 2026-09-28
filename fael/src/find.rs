@@ -58,7 +58,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // context — the next push skips them instead of repeating them
     if !files.is_empty() {
         let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
-        super::hook::note_seen(&super::write::hook_session(&r.root), &r.root, &ids);
+        super::hook::note_seen(&super::session::hook_session(&r.root), &r.root, &ids);
     }
     // --all in JSON: also the close rows naming a shown row, so a consumer can tell closed from open
     if a.has("json") && f.all {

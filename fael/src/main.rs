@@ -4,6 +4,7 @@
 //! add/close/find over stdio (see mcp.rs).
 
 mod aliases;
+mod batch;
 mod find;
 mod help;
 mod hook;
@@ -11,7 +12,9 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
+mod schema;
 mod selfheal;
+mod session;
 mod write;
 
 use fael_core::{self as core, Config, Log, Row};
@@ -63,7 +66,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     match (cmd, rest) {
         ("add", [kind, text]) => add(&a, kind, text).map(|()| ExitCode::SUCCESS),
         // chunk 6b: `fael add --json -` reads a JSON array of rows from stdin
-        ("add", [dash]) if dash == "-" && a.has("json") => batch_add(),
+        ("add", [dash]) if dash == "-" && a.has("json") => batch::batch_add(),
         ("close", [id, why]) => close(&a, id, why).map(|()| ExitCode::SUCCESS),
         ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
         ("find", [] | [_]) => find::find(&a, rest.first()).map(|()| ExitCode::SUCCESS),
@@ -298,15 +301,6 @@ fn stamp(r: &Repo) -> core::Stamp {
     }
 }
 
-fn written(a: &Args, r: &Repo, row: &Row, path: &Path) {
-    if a.has("json") {
-        println!("{}", row.to_line());
-    } else {
-        let rel = path.strip_prefix(&r.root).unwrap_or(path);
-        println!("{} → {}", row.id, rel.display());
-    }
-}
-
 fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     let r = repo()?;
     let urgent = match (a.has("urgent"), a.one("urgent-before")) {
@@ -336,69 +330,17 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     )?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "add", Some(&r.root), &warns);
-    written(a, &r, &row, &path);
+    batch::written(a, &r, &row, &path);
     Ok(())
 }
 
-/// Chunk 6b: batch add — a JSON array on stdin, one object per row
-/// (`{kind, text, files[], key?, to?, title?, revisit?, urgent?,
-/// urgent_before?, supersedes?, force?}`). Every row runs the same
-/// validate + self-heal as a single add; a rejected row reports alone while
-/// the rest still save (never all-or-nothing, so no resending the batch).
-/// Exit is failure when any row rejected — the saved ones stay saved.
-fn batch_add() -> Result<ExitCode, String> {
-    use std::io::Read;
-    let mut stdin = String::new();
-    std::io::stdin()
-        .read_to_string(&mut stdin)
-        .map_err(|e| format!("rejected: cannot read stdin: {e}"))?;
-    let items: Vec<serde_json::Value> = serde_json::from_str(&stdin)
-        .map_err(|e| format!("rejected: stdin is not a JSON array of rows: {e}"))?;
-    if items.is_empty() {
-        return Err("rejected: nothing to add — stdin held an empty array".into());
-    }
-    if !items.iter().all(|v| v.is_object()) {
-        return Err("rejected: stdin must be a JSON array of row objects".into());
-    }
-    let r = repo()?;
-    let mut failed = 0;
-    for (i, v) in items.iter().enumerate() {
-        let parsed = write::batch_row(v);
-        let res = parsed.and_then(|b| {
-            write::add_row(&r, &b.kind, &b.text, &b.files, b.opts)
-                .map_err(|e| e.trim_start_matches("rejected: ").to_string())
-        });
-        match res {
-            Ok((row, _path, warns)) => {
-                warns.iter().for_each(|w| eprintln!("{w}"));
-                hook::record_asks("cli", hook::ASK_WARN, "add", Some(&r.root), &warns);
-                // batch rides `--json`: one JSON row per line, like single add
-                println!("{}", row.to_line());
-            }
-            Err(e) => {
-                failed += 1;
-                let e = format!("rejected: row {i}: {e}");
-                println!("{e}");
-                hook::record_cli_reject("add", &e);
-            }
-        }
-    }
-    if failed > 0 {
-        Err(format!(
-            "rejected: {failed} of {} rows rejected — the rest saved",
-            items.len()
-        ))
-    } else {
-        Ok(ExitCode::SUCCESS)
-    }
-}
-
+/// `fael close` — an issue that is fixed, a note that is done.
 fn close(a: &Args, id: &str, why: &str) -> Result<(), String> {
     let r = repo()?;
     let (row, path, warns) = close_row(&r, id, why)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "close", Some(&r.root), &warns);
-    written(a, &r, &row, &path);
+    batch::written(a, &r, &row, &path);
     Ok(())
 }
 
@@ -420,7 +362,7 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
     let (row, path, warns) = write::bump(&r, a, id)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "bump", Some(&r.root), &warns);
-    written(a, &r, &row, &path);
+    batch::written(a, &r, &row, &path);
     Ok(())
 }
 

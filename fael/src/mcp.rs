@@ -43,7 +43,7 @@ fn handle(line: &str) -> Option<Value> {
             "serverInfo": {"name": "fael", "version": env!("CARGO_PKG_VERSION")},
         }),
         "ping" => json!({}),
-        "tools/list" => json!({"tools": tools()}),
+        "tools/list" => json!({"tools": crate::schema::tools()}),
         "tools/call" => call(&params),
         m => return Some(error(id, -32601, &format!("method not found: {m}"))),
     };
@@ -115,13 +115,6 @@ fn repo_for(a: &Value) -> Result<Repo, String> {
     repo()
 }
 
-/// The MCP tool schemas as served on `tools/list` — `stats` sizes the same
-/// string for the per-session constants, so the number it shows is the number
-/// the agent actually pays.
-pub(crate) fn schema_json() -> String {
-    serde_json::to_string(&tools()).unwrap_or_default()
-}
-
 fn find(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
     match find_inner(a, &r) {
@@ -132,7 +125,7 @@ fn find(a: &Value) -> Result<String, String> {
         Ok((text, shown)) => {
             // chunk 6e: ids just shown are already in this session's context
             let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
-            crate::hook::note_seen(&crate::write::hook_session(&r.root), &r.root, &ids);
+            crate::hook::note_seen(&crate::session::hook_session(&r.root), &r.root, &ids);
             Ok(text)
         }
     }
@@ -224,8 +217,9 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         }
         let mut out = vec![];
         let mut warns = vec![];
+        let mut failed = 0;
         for (i, v) in rows.iter().enumerate() {
-            let b = crate::write::batch_row(v).map_err(|e| row_err(e, i))?;
+            let b = crate::batch::batch_row(v).map_err(|e| row_err(e, i))?;
             match add_row(
                 r,
                 &b.kind,
@@ -246,11 +240,19 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                     warns.extend(w);
                 }
                 Err(e) => {
+                    failed += 1;
                     let e = format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "));
                     record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
                     out.push(e);
                 }
             }
+        }
+        // like the CLI batch: any rejection turns the call into an error —
+        // the saved rows stay saved, their warnings ride along
+        if failed > 0 {
+            record_asks("mcp", ASK_WARN, "mcp-add", Some(&r.root), &warns);
+            out.extend(warns);
+            return Err(out.join("\n"));
         }
         // chunk 6e rides inside write::add_row — the saved ids are already seen
         return Ok((out.join("\n"), warns));
@@ -356,77 +358,4 @@ fn done(id: &str, warns: &[String]) -> String {
         .chain(warns.iter().cloned())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn tools() -> Value {
-    let str_ = |d: &str| json!({"type": "string", "description": d});
-    let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
-    // chunk 6d: one short sentence — it repeats on every tool, so every word is paid four times
-    let cwd =
-        str_("repo this call is about — pass when outside the session cwd, or rows land wrong");
-    let mut t = json!([
-        {
-            "name": "find",
-            "description": "Project memory: past decisions, issues, notes. No args = the session brief. Start of task, before touching a file.",
-            "annotations": {"readOnlyHint": true},
-            "inputSchema": {"type": "object", "properties": {
-                "id": str_("exact id or prefix — lists show titles, this pulls the body"),
-                "full": {"type": "boolean", "description": "bodies under titles"},
-                "files": files("paths, dirs, globs, anchors like doc:pricing — rows on any"),
-                "text": str_("substring of the row text"),
-                "key": str_("key glob, e.g. auth:*"),
-                "kind": str_("decision | issue | note, or a repo kind"),
-                "since": str_("yyyy-mm or yyyy-mm-dd"),
-                "to": str_("rows routed to someone, e.g. ploy"),
-                "revisit": {"type": ["boolean", "string"], "description": "true = any revisit, a string narrows it"},
-                "branches": {"type": "boolean", "description": "unmerged branches too, tagged @branch, no checkout"},
-                "limit": {"type": "integer", "minimum": 1, "description": "max rows; a cut prints next: offset=N"},
-                "offset": {"type": "integer", "minimum": 0, "description": "skip this many first"},
-            }},
-        },
-        {
-            "name": "add",
-            "description": "File what the next session needs — a decision and why, a bug (kind issue), or state it needs (note). Same message as your next tool call, never its own turn. English rows; reuse an anchor find showed, never invent one. rows[] files many at once.",
-            "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
-                "kind": str_("decision | issue | note, or a repo kind"),
-                "text": str_("what happened and why, standalone"),
-                "title": str_("≤15-word list headline — set it past ~60 words"),
-                "files": {"type": "array", "items": {"type": "string"},
-                    "description": "paths or scheme:ref anchors — omit for this session's edited files"},
-                "rows": {"type": "array", "items": {"type": "object"},
-                    "description": "batch [{kind, text, files, ...}] — a bad row reports alone, the rest save"},
-                "key": str_("optional colon key, e.g. auth:session"),
-                "to": str_("who answers, e.g. ploy"),
-                "revisit": str_("date YYYY-MM[-DD] or free text"),
-                "urgent": {"type": "boolean", "description": "back of the urgent queue (issues)"},
-                "urgent_before": str_("above that row — one of urgent / urgent_before"),
-                "supersedes": str_("id this replaces"),
-                "force": {"type": "boolean", "description": "allow a typo-lookalike path"},
-            }},
-        },
-        {
-            "name": "close",
-            "description": "Close a fixed issue or done note.",
-            "inputSchema": {"type": "object", "required": ["id", "text"], "properties": {
-                "id": str_("id or prefix, as find showed"),
-                "text": str_("why, e.g. fixed in <sha>"),
-            }},
-        },
-        {
-            "name": "bump",
-            "description": "New version of an open row with new routing — text and files never change.",
-            "inputSchema": {"type": "object", "required": ["id"], "properties": {
-                "id": str_("id or prefix, as find showed"),
-                "to": str_("who answers now — omit to keep"),
-                "urgent": {"type": "boolean", "description": "to the back of the queue"},
-                "urgent_before": str_("just above that row"),
-                "not_urgent": {"type": "boolean", "description": "leave the queue"},
-                "revisit": str_("date or text — omit to keep"),
-            }},
-        },
-    ]);
-    for tool in t.as_array_mut().unwrap() {
-        tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
-    }
-    t
 }

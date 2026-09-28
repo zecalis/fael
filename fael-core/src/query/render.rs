@@ -5,9 +5,17 @@ use crate::{Log, Row};
 /// An id-like run (≥ 6 chars of `0-9A-Z` mixing digits and letters — a ULID
 /// prefix) costs ~1 token per 2 chars: tokenizers split random base32 far
 /// finer than prose, and ids ride on every pushed row.
-// est is the anchor unit (like USD with an exchange table): ASCII ≈ 4 bytes/token,
-// anything else (Thai) ≈ 1 char/token — see the est → Claude 5 / Haiku 4.5 / o200k
-// rates in docs/architecture.md §5; clients with `usage` get `real_tokens` instead
+// Chunk-6 token rule (PLAN-fael-durable-log §6.3): `est_tokens` is the ruler,
+// not the scale. The three divisors below are frozen — changing one moves the
+// chunk-6 baseline and every budget, so new model numbers arrive only as free
+// `real_tokens` (chunk 3a), never as formula edits. No per-language tables:
+// every non-Latin alphabet reads ≈ 1 char/token already.
+// est is the anchor unit (like USD with an exchange table) — see the est →
+// Claude 5 / Haiku 4.5 / o200k rates in docs/architecture.md §5 (frozen
+// 2026-09-28, not maintained); clients with `usage` get `real_tokens` instead.
+const ASCII_BYTES_PER_TOKEN: usize = 4;
+const OTHER_CHARS_PER_TOKEN: usize = 1;
+const ID_CHARS_PER_TOKEN: usize = 2;
 pub fn est_tokens(s: &str) -> usize {
     let (mut ascii, mut other, mut ids) = (0usize, 0usize, 0usize);
     let mut run = String::new();
@@ -17,7 +25,7 @@ pub fn est_tokens(s: &str) -> usize {
             && b.iter().any(u8::is_ascii_digit)
             && b.iter().any(u8::is_ascii_uppercase);
         if id_like {
-            *ids += b.len().div_ceil(2);
+            *ids += b.len().div_ceil(ID_CHARS_PER_TOKEN);
         } else {
             *ascii += b.len();
         }
@@ -36,7 +44,7 @@ pub fn est_tokens(s: &str) -> usize {
         }
     }
     flush(&mut run, &mut ascii, &mut ids);
-    ascii.div_ceil(4) + other + ids
+    ascii.div_ceil(ASCII_BYTES_PER_TOKEN) + other.div_ceil(OTHER_CHARS_PER_TOKEN) + ids
 }
 
 /// Per-row shortest unique id prefix (≥ 8), git-style: a row is only as long

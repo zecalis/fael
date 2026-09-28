@@ -131,7 +131,7 @@ pub(crate) fn record_ask(client: &str, ask: &str, event: &str, repo: Option<&Pat
 /// ceiling test pins these; stats shows them so the cut is verifiable.
 pub(crate) fn constants() -> (usize, usize, usize, usize) {
     const SKILL: &str = include_str!("../../skill/SKILL.md");
-    let schema = crate::mcp::schema_json();
+    let schema = crate::schema::schema_json();
     (
         SKILL.len(),
         core::est_tokens(SKILL),
