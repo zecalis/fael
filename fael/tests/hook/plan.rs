@@ -247,6 +247,8 @@ fn two_open_plans_are_ambiguous_and_leave_now_empty() {
     assert!(out.contains("active plan: ? — 2 open:"), "{out}");
     assert!(out.contains("alpha chunk-1"), "{out}");
     assert!(out.contains("beta chunk-1"), "{out}");
+    // no setter exists yet, so the line must not advertise one
+    assert!(!out.contains("fael focus"), "{out}");
     // neither plan row is Now: the fresher decision leads, the alpha note
     // does not jump ahead through the plan key
     let out = read(&d, "two-plans");

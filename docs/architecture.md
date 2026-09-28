@@ -220,12 +220,12 @@ client ─(session-start)─▶ write focus.json (start branch + the keys of the
                         ─▶ active plan: <name> chunk-N → <path> · open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
 
-**Plan resolution** (PLAN-fael-plan-focus) separates **facts** from **intent**. L1 `open_plans` reads the open `plan:<name>:chunk-<n>` rows into per-plan facts (name, open chunks, branches) — pure, from the log. L2 intent is local to a branch (`<git-common-dir>/fael/focus.json`, chunk 2) — never written to the log. L3 `resolve_plan` is pure and picks, in order:
+**Plan resolution** (PLAN-fael-plan-focus) separates **facts** from **intent**. L1 `open_plans` reads the open `plan:<name>:chunk-<n>` rows into per-plan facts (name, open chunks, branches) — pure, from the log. L2 intent — a per-branch declaration (`fael focus`) — is a parameter of `resolve_plan`; nothing sets it yet (no store, no CLI — **deferred by decision**), so session start passes `None` and rule 1 below never fires. L3 `resolve_plan` is pure and picks, in order:
 
 1. a **declared** intent for this branch → `Active` whatever the facts say, chunk = the plan's highest open chunk (`None` if it has none);
 2. else exactly one plan has an open row filed on this branch → `Active` / branch;
 3. else the log holds exactly one open plan → `Active` / only;
-4. else more than one open plan → `Ambiguous` (`active plan: ? — N open: … — fael focus plan:<name>`), which puts **no** plan in Now;
+4. else more than one open plan → `Ambiguous` (`active plan: ? — N open: …`), which puts **no** plan in Now and advertises no command (the setter does not exist yet);
 5. no open plan → no line.
 
 The chunk is the **highest open** chunk number, never the newest row by id (a later row fixing an earlier chunk must not move the pointer back). The path is the first `plan_dirs/PLAN-<name>.md` that exists — session start resolves it for the line; core never reads files. No branch (detached HEAD, no session) = `Focus::default()`.

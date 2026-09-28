@@ -244,10 +244,7 @@ fn plan_line(plan: &core::PlanResolution, root: &Path, dirs: &[String]) -> Strin
                 .map(|c| format!("{} chunk-{}", c.name, c.chunk))
                 .collect::<Vec<_>>()
                 .join(" · ");
-            format!(
-                "active plan: ? — {} open: {list} — fael focus plan:<name>\n",
-                candidates.len()
-            )
+            format!("active plan: ? — {} open: {list}\n", candidates.len())
         }
     }
 }
