@@ -39,7 +39,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "add",
-            "description": "File what the next session needs — a decision and why, a bug (kind issue), or state it needs (note). Add it in the same message as your next tool call or final edit — never as a turn of its own. English rows; reuse an anchor find showed, never invent one. rows[] files many at once.",
+            "description": "File what the next session needs — a decision and why, a bug (kind issue), or state it needs (note). Add it in the same message as your next tool call or final edit — never as a turn of its own. Write rows in English — title, key and body. The dev reads them through you, in their language. Reuse an anchor find showed, never invent one. rows[] files many at once.",
             "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "text": str_("what happened and why, standalone"),
@@ -75,8 +75,9 @@ pub(crate) fn tools() -> Value {
 #[cfg(test)]
 mod tests {
     /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6400 bytes
-    /// combined (measured 6383 on 2026-09-28; the ≥40% cut retargeted to ≥15%
-    /// + this ceiling by owner decision — PLAN-fael-durable-log §3).
+    /// combined (measured 5909 on 2026-09-28 — SKILL 2515 + schema 3394;
+    /// the ≥40% cut retargeted to ≥15% + this ceiling by owner decision —
+    /// PLAN-fael-durable-log §3).
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
