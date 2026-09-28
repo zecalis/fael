@@ -35,6 +35,10 @@ pub struct Config {
     pub session_decisions: usize,
     /// Warn when a row's text is estimated over this many tokens.
     pub warn_row_tokens: usize,
+    /// Warn when a row's text is over this many characters — catches a long
+    /// single-topic-looking row the token estimate still reads as cheap
+    /// (was the hardcoded 600 in `fat_reasons`).
+    pub warn_row_chars: usize,
     /// Directories holding `PLAN-<name>.md` files, in lookup order
     /// (PLAN-fael-push-focus chunk 3). The first `<dir>/PLAN-<name>.md` that
     /// exists is the active plan's path; `[]` = the plan line names no file.
@@ -60,6 +64,7 @@ impl Default for Config {
             push_rows: 5,
             session_decisions: 0,
             warn_row_tokens: 400,
+            warn_row_chars: 600,
             plan_dirs: vec![".fapony/plan".into()],
             resolve: true,
             store: Store::Tracked,
@@ -96,6 +101,7 @@ impl Config {
         #[serde(default)]
         struct Warn {
             row_tokens: Option<usize>,
+            row_chars: Option<usize>,
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
@@ -123,6 +129,7 @@ impl Config {
             push_rows: f.budget.push_rows.unwrap_or(d.push_rows),
             session_decisions: f.budget.session_decisions.unwrap_or(d.session_decisions),
             warn_row_tokens: f.warn.row_tokens.unwrap_or(d.warn_row_tokens),
+            warn_row_chars: f.warn.row_chars.unwrap_or(d.warn_row_chars),
             plan_dirs: f.plan_dirs.unwrap_or(d.plan_dirs),
             resolve: f.resolve.unwrap_or(d.resolve),
             store,

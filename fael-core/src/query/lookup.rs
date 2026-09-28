@@ -111,11 +111,23 @@ each with --key area:topic, so one can be superseded alone"
     // means superseding them all, so the nudge is to split, not to trim
     let t = est_tokens(&row.text);
     let chars = row.text.chars().count();
-    if t > cfg.warn_row_tokens || chars > 600 {
+    let (over_t, over_c) = (t > cfg.warn_row_tokens, chars > cfg.warn_row_chars);
+    if over_t || over_c {
+        // name the limit that actually tripped — a row can pass the token
+        // estimate yet run long, and blaming the token limit reads as a false
+        // alarm the agent learns to ignore
+        let limit = match (over_t, over_c) {
+            (true, true) => format!(
+                "~{t} tokens (warn at {}) and {chars} chars (warn at {})",
+                cfg.warn_row_tokens, cfg.warn_row_chars
+            ),
+            (true, false) => format!("~{t} tokens (warn at {})", cfg.warn_row_tokens),
+            (false, true) => format!("{chars} chars (warn at {})", cfg.warn_row_chars),
+            (false, false) => unreachable!(),
+        };
         r.push(format!(
-            "text is ~{t} tokens (warn at {}), {chars} chars — one topic per row: split it, \
-each with --key area:topic, so one can be superseded alone (every push costs the full text)",
-            cfg.warn_row_tokens
+            "text is {limit} — one topic per row: split it, each with --key area:topic, \
+             so one can be superseded alone (every push costs the full text)"
         ));
     }
     r

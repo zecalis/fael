@@ -144,6 +144,7 @@ push_rows = 5               # at most this many rows per push (0 = token budget 
 session_decisions = 0         # session-start lists this many freshest open decisions above the count line
 [warn]
 row_tokens = 400
+row_chars = 600               # a single-topic-looking row can still run long
 [limit]
 row_bytes = 10240             # hard cap, never above 10 KiB
 ```
@@ -152,7 +153,7 @@ row_bytes = 10240             # hard cap, never above 10 KiB
 
 | Tool | Input | Notes |
 |---|---|---|
-| `find` | `files[]` `text` `key` `kind` `since` `to` `revisit?` `branches?` `limit` `offset` | read-only, cut to `budget.find_tokens`. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. `branches: true` also reads unmerged branches (rows tagged `@<branch>`). A cut list prints `next: offset=N` — repeat the call with it |
+| `find` | `files[]` `text` `key` `kind` `since` `to` `by?` `all?` `revisit?` `branches?` `limit` `offset` | read-only, cut to `budget.find_tokens`. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. `branches: true` also reads unmerged branches (rows tagged `@<branch>`). A cut list prints `next: offset=N` — repeat the call with it |
 | `add` | `kind` `text` `files[]` (required, non-empty) `key?` `to?` `title?` `revisit?` `urgent?` `urgent_before?` `supersedes?` `force?` `rows[]?` | a bad value is rejected with an error message that says how to fix the call. Its description tells the agent to reuse an anchor `find` already showed rather than invent a new one. `rows` batches many rows in one call — a bad row reports alone while the rest save |
 | `close` | `id` `text` | |
 

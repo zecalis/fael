@@ -31,6 +31,8 @@ pub(crate) fn tools() -> Value {
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),
                 "to": str_("rows routed to someone, e.g. ploy"),
+                "by": str_("writer who filed the row, e.g. ploy"),
+                "all": {"type": "boolean", "description": "closed and superseded rows too"},
                 "revisit": {"type": ["boolean", "string"], "description": "true = any revisit, a string narrows it"},
                 "branches": {"type": "boolean", "description": "unmerged branches too, tagged @branch, no checkout"},
                 "limit": {"type": "integer", "minimum": 1, "description": "max rows; a cut prints next: offset=N"},

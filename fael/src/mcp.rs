@@ -161,8 +161,10 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         key: s(a, "key"),
         kind: s(a, "kind"),
         since: s(a, "since"),
+        by: s(a, "by"),
         to: s(a, "to").map(|t| t.trim().to_lowercase()),
         revisit,
+        all: a["all"].as_bool().unwrap_or(false),
         limit: match a["limit"].as_u64() {
             Some(0) => {
                 return Err("rejected: limit 0 shows nothing — drop it or give 1 or more".into());
@@ -170,7 +172,6 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             n => n.map(|n| n as usize),
         },
         offset: a["offset"].as_u64().unwrap_or(0) as usize,
-        ..core::Filter::default()
     };
     // same rows as the CLI: query() pages after ranking, the cut line names
     // the next offset to repeat the call with

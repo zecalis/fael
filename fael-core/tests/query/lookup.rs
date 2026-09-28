@@ -135,3 +135,28 @@ fn fat_reasons_shared_by_warnings_and_doctor() {
     r.text = "single topic".into();
     assert!(fat_reasons(&r, &cfg).is_empty());
 }
+
+#[test]
+fn fat_warning_names_the_limit_that_tripped() {
+    let cfg = Config::default(); // tokens 400 · chars 600
+    let mut r = row("D0000000000000000000000017", "note", &["x"], Some("a:b"));
+    // 649 chars of plain English: ~162 tokens (under 400) but over 600 chars
+    r.text = "word ".repeat(130).trim_end().into();
+    assert_eq!(r.text.chars().count(), 649);
+    let f = fat_reasons(&r, &cfg);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert!(f[0].contains("chars (warn at 600)"), "{f:?}");
+    assert!(!f[0].contains("tokens (warn at"), "{f:?}");
+    // over both limits names both
+    let tight = Config {
+        warn_row_tokens: 3,
+        warn_row_chars: 10,
+        ..Config::default()
+    };
+    let f = fat_reasons(&r, &tight);
+    assert!(f[0].contains("tokens (warn at 3) and"), "{f:?}");
+    assert!(f[0].contains("chars (warn at 10)"), "{f:?}");
+    // under both limits: silent
+    r.text = "short one".into();
+    assert!(fat_reasons(&r, &cfg).is_empty());
+}
