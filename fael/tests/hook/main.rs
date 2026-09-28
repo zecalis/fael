@@ -8,6 +8,7 @@
 
 mod clients;
 mod push_cap;
+mod seen;
 mod session;
 mod stats;
 mod stop;
@@ -19,6 +20,37 @@ use std::process::{Command, Stdio};
 
 fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
     fael_at(&state(dir), dir, args, stdin)
+}
+
+/// `fael` with extra env — for tests that file rows inside a hook session
+/// (`CLAUDE_CODE_SESSION_ID`), which plain `fael` never sets.
+fn fael_env(
+    dir: &Path,
+    args: &[&str],
+    stdin: &str,
+    envs: &[(&str, &str)],
+) -> (bool, String, String) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
+    c.args(args)
+        .current_dir(dir)
+        .env("FAEL_STATE_DIR", state(dir));
+    for (k, v) in envs {
+        c.env(k, v);
+    }
+    if !stdin.is_empty() {
+        c.stdin(Stdio::piped());
+    }
+    let mut c = c
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    if !stdin.is_empty() {
+        c.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    }
+    let o = c.wait_with_output().unwrap();
+    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    (o.status.success(), s(&o.stdout), s(&o.stderr))
 }
 
 /// `fael` with an explicit state dir — for tests that switch to a fresh one.

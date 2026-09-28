@@ -95,3 +95,29 @@ fn add_lands_in_the_worktree_the_call_names() {
     // the absolute path is stored repo-relative, like any other
     assert!(w.contains(r#""src/a.rs""#), "{w}");
 }
+
+/// Chunk 6b over MCP: `rows: [...]` with one bad row — it reports alone
+/// (`rejected: row 1:`), the rest save, the call is an error.
+#[test]
+fn add_rows_batch_partial() {
+    let (_, wt) = main_and_worktree();
+    let r = mcp(
+        &wt,
+        &[serde_json::json!({"rows": [
+            {"kind": "note", "text": "first mcp batch row", "files": ["src/a.rs"]},
+            {"kind": "nope", "text": "bad kind row", "files": ["src/a.rs"]},
+            {"kind": "issue", "text": "third mcp batch row", "files": ["src/a.rs"]},
+        ]})],
+    );
+    assert_eq!(r.len(), 1);
+    let body = r[0]["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(r[0]["result"]["isError"] == true, "{body}");
+    assert!(body.contains("recorded"), "{body}");
+    assert!(body.contains("rejected: row 1:"), "{body}");
+    let log = texts(&wt);
+    assert!(
+        log.contains("first mcp batch row") && log.contains("third mcp batch row"),
+        "{log}"
+    );
+    assert!(!log.contains("bad kind row"), "{log}");
+}

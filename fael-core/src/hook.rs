@@ -275,6 +275,45 @@ mod tests {
     }
 
     #[test]
+    fn bug_block_prefills_the_actual_files() {
+        let strong = || BugSignal {
+            marker: "found a bug".into(),
+            strong: true,
+            at_ms: 0,
+        };
+        // chunk 6c: the command carries the edited files — runnable as
+        // printed, no `find` first to learn them
+        let r = decide_stop(&StopFacts {
+            commits: vec![],
+            edits: vec!["src/a.rs".into(), "src/b.rs".into(), "src/c.rs".into()],
+            bug_signal: Some(strong()),
+            ..facts()
+        })
+        .unwrap();
+        assert!(
+            r.contains("--files src/a.rs,src/b.rs,src/c.rs") && !r.contains("<files>"),
+            "{r}"
+        );
+    }
+
+    #[test]
+    fn work_plus_weak_shows_the_batch_form() {
+        let weak = || BugSignal {
+            marker: "out of sync".into(),
+            strong: false,
+            at_ms: 0,
+        };
+        // chunk 6c: two rows to file — one batch call, not two turns
+        let r = decide_stop(&StopFacts {
+            edits: vec!["src/a.rs".into()],
+            bug_signal: Some(weak()),
+            ..facts()
+        })
+        .unwrap();
+        assert!(r.contains("fael add --json -"), "{r}");
+    }
+
+    #[test]
     fn new_row_compares_ms_not_seconds() {
         let mut log = Log::default();
         let mut r = Row::new("t-0000", "note", "x", vec!["a.rs".into()]);
