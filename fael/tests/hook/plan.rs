@@ -1,7 +1,8 @@
-//! The active plan (PLAN-fael-push-focus chunk 3): session-start prints one
-//! `active plan:` line built from the newest plan-keyed row on the start
-//! branch, pointing at the first `plan_dirs/PLAN-<name>.md` that exists —
-//! and that row tops the push. No plan row, no line.
+//! The active plan (PLAN-fael-plan-focus chunk 1): session-start resolves it
+//! from the open `plan:<name>:chunk-<n>` rows and the start branch — one plan
+//! on the branch, or a single open plan anywhere, is `Active` and points at the
+//! first `plan_dirs/PLAN-<name>.md` that exists; more than one is `?` and puts
+//! no plan in Now. No plan row, no line.
 
 use super::{fael, git, json, repo};
 use std::path::{Path, PathBuf};
@@ -86,10 +87,11 @@ fn active_plan_line_points_at_the_plan_file() {
         out.contains("active plan: foo chunk-3 → .fapony/plan/PLAN-foo.md"),
         "{out}"
     );
-    // the same Focus the push ranks with carries the resolved path
+    // the same Focus the push ranks with carries the resolution (no path —
+    // session start resolves the path for the line only)
     let body = std::fs::read_to_string(focus_file(&d)).unwrap();
     assert!(
-        body.contains(r#""plan":{"name":"foo","chunk":3,"path":".fapony/plan/PLAN-foo.md"}"#),
+        body.contains(r#""plan":{"Active":{"name":"foo","chunk":3,"source":"Branch"}}"#),
         "{body}"
     );
     // the plan row tops the push — ahead of the fresher tier-0 decision
@@ -130,8 +132,8 @@ fn plan_row_without_a_file_says_the_chunk_anyway() {
 #[test]
 fn plan_row_filed_on_an_earlier_branch_still_carries_the_plan() {
     // a chunk is worked on a fresh branch, so its plan rows sit on the
-    // previous one — the line and the Now bucket must not depend on the
-    // session branch (issue 01M3M35H)
+    // previous one (issue 01M3M35H) — with a single open plan, "only"
+    // resolves it even though the session branch carries no plan row
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     std::fs::create_dir_all(d.join(".fapony/plan")).unwrap();
@@ -178,7 +180,7 @@ fn no_plan_row_no_line() {
     assert!(!out.contains("active plan:"), "{out}");
     assert!(out.contains("1 open issue"), "{out}");
     let body = std::fs::read_to_string(focus_file(&d)).unwrap();
-    assert!(body.contains(r#""plan":null"#), "{body}");
+    assert!(body.contains(r#""plan":"None""#), "{body}");
 }
 
 #[test]
@@ -198,4 +200,59 @@ fn plan_dirs_config_decides_where_the_plan_lives() {
         out.contains("active plan: foo chunk-3 → docs/plans/PLAN-foo.md"),
         "{out}"
     );
+}
+
+#[test]
+fn two_open_plans_are_ambiguous_and_leave_now_empty() {
+    // two open plans, neither filed on the session branch: the log cannot
+    // choose, so the line says `?` and no plan row enters Now
+    // (PLAN-fael-plan-focus chunk 1)
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    std::fs::create_dir_all(d.join(".fapony/plan")).unwrap();
+    for name in ["alpha", "beta"] {
+        std::fs::write(d.join(format!(".fapony/plan/PLAN-{name}.md")), "# plan\n").unwrap();
+    }
+    for (text, file, key) in [
+        ("alpha handoff", "src/a.rs", "plan:alpha:chunk-1"),
+        ("beta handoff", "src/b.rs", "plan:beta:chunk-1"),
+    ] {
+        let (ok, _, err) = fael(
+            &d,
+            &["add", "note", text, "--files", file, "--key", key],
+            "",
+        );
+        assert!(ok, "{err}");
+    }
+    // a fresher tier-0 decision on src/a.rs — only it can lead while the plan
+    // is ambiguous; a Now plan row would jump ahead of it
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "decision",
+            "fresher decision",
+            "--files",
+            "src/a.rs",
+            "--key",
+            "db:migrate",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    // a fresh branch carries neither plan row
+    git(&d, &["checkout", "-q", "-b", "feat/fresh"]);
+    let out = session_start(&d, "two-plans");
+    assert!(out.contains("active plan: ? — 2 open:"), "{out}");
+    assert!(out.contains("alpha chunk-1"), "{out}");
+    assert!(out.contains("beta chunk-1"), "{out}");
+    // neither plan row is Now: the fresher decision leads, the alpha note
+    // does not jump ahead through the plan key
+    let out = read(&d, "two-plans");
+    let dec = out
+        .find("fresher decision")
+        .unwrap_or_else(|| panic!("{out}"));
+    let alpha = out.find("alpha handoff").unwrap_or_else(|| panic!("{out}"));
+    assert!(dec < alpha, "ambiguous plan must not lead the push: {out}");
 }

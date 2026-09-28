@@ -1,5 +1,6 @@
 //! Push buckets + row cap (PLAN-fael-push-focus chunk 1): `bucket` puts each
-//! gathered row in Now | File | Background, `select` cuts to `max_rows`.
+//! gathered row in Now | File | Background, `select` cuts to `max_rows`. Plan
+//! resolution lives in `plan.rs`.
 
 use super::{ids, log, row};
 use fael_core::*;
@@ -87,103 +88,36 @@ fn bucket_focus_signals_are_now() {
         &["src/a.rs"],
         Some("plan:foo:chunk-3"),
     );
-    assert_eq!(
-        bucket(
-            &planned,
-            1,
-            &Focus {
-                plan: Some(PlanFocus {
-                    name: "foo".into(),
-                    chunk: 3,
-                    path: None,
-                }),
-                ..Focus::default()
-            }
-        ),
-        Bucket::Now
-    );
-}
-
-#[test]
-fn focus_takes_the_newest_plan_chunk_whatever_its_branch() {
-    // the newest plan-keyed row wins (by id, never the clock), whichever
-    // branch filed it — a chunk starts a fresh branch, so the previous
-    // chunk's row is the one that carries the plan (issue 01M3M35H) — and
-    // core resolves no path
-    let mut newer = row(
-        "A0000000000000000000000032",
-        "note",
-        &["src/a.rs"],
-        Some("plan:foo:chunk-3"),
-    );
-    newer.extra.insert("branch".into(), "feat/x".into());
-    let mut older = row(
-        "A0000000000000000000000031",
-        "note",
-        &["src/a.rs"],
-        Some("plan:foo:chunk-2"),
-    );
-    older.extra.insert("branch".into(), "feat/x".into());
-    let mut other = row(
-        "A0000000000000000000000030",
-        "note",
-        &["src/a.rs"],
-        Some("plan:bar:chunk-9"),
-    );
-    other.extra.insert("branch".into(), "other".into());
-    // newest first in the slice: id order decides, not encounter order
-    let rows = [&newer, &other, &older];
-    let f = Focus::from_rows(Some("feat/x"), &rows);
-    let plan = f.plan.expect("active plan");
-    assert_eq!((plan.name.as_str(), plan.chunk), ("foo", 3));
-    assert!(plan.path.is_none(), "core never reads a file");
-    assert!(f.keys.contains("plan:foo:chunk-3"));
-    // keys stay scoped to the session branch — only the plan crosses it
-    assert!(!f.keys.contains("plan:bar:chunk-9"));
-    // the newest plan row was filed on another branch: still the active plan
-    let branch_other = Focus::from_rows(Some("feat/x"), &[&other]);
-    assert_eq!(
-        (
-            branch_other
-                .plan
-                .as_ref()
-                .expect("active plan")
-                .name
-                .as_str(),
-            branch_other.plan.as_ref().expect("active plan").chunk
-        ),
-        ("bar", 9)
-    );
-    // no branch at all: no focus, no plan
-    assert!(Focus::from_rows(None, &rows).plan.is_none());
-}
-
-#[test]
-fn focus_ignores_keys_that_are_not_a_plan_chunk() {
-    let mut r = row(
-        "A0000000000000000000000033",
-        "note",
-        &["src/a.rs"],
-        Some("plan:foo"),
-    );
-    r.extra.insert("branch".into(), "feat/x".into());
-    assert!(Focus::from_rows(Some("feat/x"), &[&r]).plan.is_none());
-    let mut r = row(
-        "A0000000000000000000000034",
-        "note",
-        &["src/a.rs"],
-        Some("plan:foo:chunk-x"),
-    );
-    r.extra.insert("branch".into(), "feat/x".into());
-    assert!(Focus::from_rows(Some("feat/x"), &[&r]).plan.is_none());
-    let mut r = row(
-        "A0000000000000000000000035",
-        "note",
-        &["src/a.rs"],
-        Some("plan::chunk-1"),
-    );
-    r.extra.insert("branch".into(), "feat/x".into());
-    assert!(Focus::from_rows(Some("feat/x"), &[&r]).plan.is_none());
+    let active = Focus {
+        plan: PlanResolution::Active {
+            name: "foo".into(),
+            chunk: Some(3),
+            source: PlanSource::Branch,
+        },
+        ..Focus::default()
+    };
+    assert_eq!(bucket(&planned, 1, &active), Bucket::Now);
+    // a plan row is Now only for `Active { chunk: Some(n) }` — ambiguous or
+    // chunk-less never pulls it out of Background
+    let ambiguous = Focus {
+        plan: PlanResolution::Ambiguous {
+            candidates: vec![PlanCandidate {
+                name: "foo".into(),
+                chunk: 3,
+            }],
+        },
+        ..Focus::default()
+    };
+    assert_eq!(bucket(&planned, 1, &ambiguous), Bucket::Background);
+    let no_chunk = Focus {
+        plan: PlanResolution::Active {
+            name: "foo".into(),
+            chunk: None,
+            source: PlanSource::Declared,
+        },
+        ..Focus::default()
+    };
+    assert_eq!(bucket(&planned, 1, &no_chunk), Bucket::Background);
 }
 
 #[test]

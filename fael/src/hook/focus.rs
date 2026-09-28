@@ -2,9 +2,10 @@
 //! git is allowed there — and written beside the seen file. The read/edit
 //! push only reads it: no git spawn on the 5 ms path, and a missing or
 //! unparsable file falls back to `Focus::default()` (today's order, only the
-//! row cap). Core owns the shape and the pure build (`Focus::from_rows`);
-//! this module is the file — and the active plan's path, the one other thing
-//! session start may read from disk (`Config::plan_dirs`).
+//! row cap). Core owns the shape and the pure build (`Focus::from_rows`,
+//! `open_plans` + `resolve_plan` for the plan); this module is the file — and
+//! the active plan's path, the one other thing session start may read from
+//! disk (`Config::plan_dirs`).
 
 use super::state::{session_key, state_dir};
 use crate::core;
@@ -21,7 +22,7 @@ pub(crate) fn path(session: &str, root: &Path) -> PathBuf {
 }
 
 /// Build the session Focus (start branch, the keys of the open rows filed on
-/// it, and the active plan chunk) and write it. An empty session has no key
+/// it, and the resolved active plan) and write it. An empty session has no key
 /// to write under — MCP and CLI calls outside a hook session build nothing —
 /// and a detached HEAD builds `Focus::default()`, which reads back the same
 /// as no file at all. Returns what was built, so session-start can say the
@@ -31,12 +32,11 @@ pub(crate) fn write(
     root: &Path,
     branch: Option<&str>,
     rows: &[&core::Row],
-    plan_dirs: &[String],
 ) -> core::Focus {
+    let facts = core::open_plans(rows);
     let mut focus = core::Focus::from_rows(branch, rows);
-    if let Some(plan) = focus.plan.as_mut() {
-        plan.path = plan_path(root, plan_dirs, &plan.name);
-    }
+    // chunk 1 passes no intent — declared intent arrives in chunk 2
+    focus.plan = core::resolve_plan(&facts, branch, None);
     if session.is_empty() {
         return focus;
     }
@@ -58,7 +58,7 @@ pub(crate) fn write(
 /// Relative dirs keep their spelling (`.fapony/plan/PLAN-x.md`), absolute
 /// ones their own. Files are read here, at session start — the push never
 /// resolves a path, it only reads the Focus this wrote.
-fn plan_path(root: &Path, dirs: &[String], name: &str) -> Option<String> {
+pub(crate) fn plan_path(root: &Path, dirs: &[String], name: &str) -> Option<String> {
     let file = format!("PLAN-{name}.md");
     dirs.iter().find_map(|d| {
         let dir = Path::new(d);

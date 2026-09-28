@@ -1,15 +1,17 @@
 //! L2 build + L3 rank + L4 select for the read/edit push (PLAN-fael-push-focus):
-//! `Focus::from_rows` turns the session's start branch and its open rows into
-//! what the push ranks against, `bucket` lands each row in Now | File |
-//! Background, `select` cuts to the row cap. Pure — no git spawn, no file
-//! reads: the hook builds the Focus at session start (`hook/focus.rs`) and
-//! the push only reads it back.
+//! `open_plans` reads the open `plan:<name>:chunk-<n>` rows into L1 facts,
+//! `resolve_plan` turns facts + the session branch + a declared intent into the
+//! active plan (PLAN-fael-plan-focus), `Focus::from_rows` turns the start branch
+//! and its open rows into what the push ranks against, `bucket` lands each row
+//! in Now | File | Background, `select` cuts to the row cap. Pure — no git
+//! spawn, no file reads: the hook builds the Focus at session start
+//! (`hook/focus.rs`) and the push only reads it back.
 
 use crate::Row;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-/// What the session works on: the start branch, the active plan chunk, and
+/// What the session works on: the start branch, the resolved active plan, and
 /// the keys of the open rows filed on that branch. Built at session start
 /// (git is allowed there) and read back from the session state by the push;
 /// with no session state `Focus::default()` — no branch, no plan, no keys —
@@ -20,31 +22,63 @@ pub struct Focus {
     /// the branch the session started on (`row.branch() == focus.branch`
     /// rows are Now)
     pub branch: Option<String>,
-    /// the active plan chunk (`plan:<name>:chunk-<n>` rows are Now, whatever
-    /// branch they were filed on)
-    pub plan: Option<PlanFocus>,
+    /// the active plan resolution (PLAN-fael-plan-focus); only
+    /// `Active { chunk: Some(n) }` puts the `plan:<name>:chunk-<n>` row in Now
+    pub plan: PlanResolution,
     /// keys of my open rows on this branch (those rows are Now)
     pub keys: HashSet<String>,
 }
 
-/// The active plan chunk — `plan:<name>:chunk-<n>` rows anywhere in the log;
-/// `path` is the hook's to resolve (`Config::plan_dirs`), since core never
-/// reads files, so it arrives `None`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlanFocus {
+/// L1 fact: one plan still carrying an open `plan:<name>:chunk-<n>` row.
+/// `chunks` holds every open chunk number, `branches` every branch that filed
+/// one. Built pure from the open rows — the intent (which plan this branch
+/// means) is not a fact and never lands here (PLAN-fael-plan-focus invariant 4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanFact {
+    pub name: String,
+    pub chunks: BTreeSet<u32>,
+    pub branches: BTreeSet<String>,
+}
+
+/// Where an `Active` plan came from — declared intent outranks inference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlanSource {
+    Declared,
+    Branch,
+    Only,
+}
+
+/// One plan the log cannot choose between — name plus its highest open chunk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlanCandidate {
     pub name: String,
     pub chunk: u32,
-    pub path: Option<String>,
+}
+
+/// L3 output: which plan (if any) this session is inside. `Ambiguous` is a real
+/// answer — the log holds more than one open plan and no intent breaks the tie,
+/// so no plan enters Now (invariant 3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum PlanResolution {
+    Active {
+        name: String,
+        chunk: Option<u32>,
+        source: PlanSource,
+    },
+    Ambiguous {
+        candidates: Vec<PlanCandidate>,
+    },
+    #[default]
+    None,
 }
 
 impl Focus {
     /// L2 build, pure: the start branch plus the keys of the open rows filed
     /// on it — `rows` arrives already open (closed and superseded filtered by
-    /// the caller, as `find` does), so this only reads `branch` and `key`.
-    /// The active plan is picked across the whole slice: every chunk starts a
-    /// fresh branch, so a plan row filed on an earlier one is still active.
-    /// No branch (detached HEAD, no session) = `Focus::default()` — today's
-    /// order, only the row cap applies.
+    /// the caller, as `find` does), so this only reads `branch` and `key`. The
+    /// active plan is not inferred here: callers set `plan` with `resolve_plan`
+    /// (there is no intent without a branch). No branch (detached HEAD, no
+    /// session) = `Focus::default()` — today's order, only the row cap applies.
     pub fn from_rows(branch: Option<&str>, rows: &[&Row]) -> Focus {
         let Some(branch) = branch else {
             return Focus::default();
@@ -56,14 +90,15 @@ impl Focus {
             .collect();
         Focus {
             branch: Some(branch.to_string()),
-            plan: plan_from_rows(rows),
+            plan: PlanResolution::None,
             keys,
         }
     }
 }
 
-/// `plan:<name>:chunk-<n>` → name and chunk. The key shape PLAN-fael-push-focus
-/// chunk 3 reads: a plan name is one segment, the chunk the last one.
+/// `plan:<name>:chunk-<n>` → name and chunk. The key shape is the
+/// `plan:<name>` anchor plus the chunk (docs/format.md): a plan name is one
+/// segment, the chunk the last one.
 fn plan_chunk(key: &str) -> Option<(&str, u32)> {
     let (name, chunk) = key.strip_prefix("plan:")?.rsplit_once(":chunk-")?;
     if name.is_empty() {
@@ -72,29 +107,102 @@ fn plan_chunk(key: &str) -> Option<(&str, u32)> {
     Some((name, chunk.parse().ok()?))
 }
 
-/// The active plan: the **newest** open row keyed `plan:<name>:chunk-<n>` —
-/// newest by `id`, the same order the rest of the read path ranks recency by
-/// (never the clock), and **whatever branch it was filed on**: a chunk is
-/// worked on a fresh branch, so the newest plan row on the session branch is
-/// none until the second session of that chunk, and the `active plan:` line
-/// would stay silent exactly where it is needed (issue 01M3M35H). Pure, so
-/// `path` is `None` here: session start resolves it against
-/// `Config::plan_dirs`.
-fn plan_from_rows(rows: &[&Row]) -> Option<PlanFocus> {
-    let mut best: Option<(String, u32, &str)> = None;
+/// L1, pure: the plans with at least one open `plan:<name>:chunk-<n>` row.
+/// `rows` arrives already open (closed and superseded filtered by the caller,
+/// as `find` does). A plan is one name; its open chunks and the branches that
+/// filed them accumulate. Sorted by name, so the result is deterministic.
+pub fn open_plans(rows: &[&Row]) -> Vec<PlanFact> {
+    let mut by_name: BTreeMap<String, PlanFact> = BTreeMap::new();
     for r in rows {
         let Some((name, chunk)) = r.key.as_deref().and_then(plan_chunk) else {
             continue;
         };
-        if best.as_ref().is_none_or(|(_, _, id)| r.id.as_str() > *id) {
-            best = Some((name.to_string(), chunk, r.id.as_str()));
+        let fact = by_name.entry(name.to_string()).or_insert_with(|| PlanFact {
+            name: name.to_string(),
+            chunks: BTreeSet::new(),
+            branches: BTreeSet::new(),
+        });
+        fact.chunks.insert(chunk);
+        if let Some(b) = r.branch() {
+            fact.branches.insert(b.to_string());
         }
     }
-    best.map(|(name, chunk, _)| PlanFocus {
-        name,
-        chunk,
-        path: None,
-    })
+    by_name.into_values().collect()
+}
+
+/// The highest open chunk of a plan — never the newest row by id: a row filed
+/// later to fix an earlier chunk's data must not move the pointer backwards.
+fn highest(fact: &PlanFact) -> Option<u32> {
+    fact.chunks.iter().next_back().copied()
+}
+
+/// Sorted candidates for an `Ambiguous` answer — deterministic, never "newest".
+fn candidates(facts: &[&PlanFact]) -> Vec<PlanCandidate> {
+    let mut out: Vec<PlanCandidate> = facts
+        .iter()
+        .map(|f| PlanCandidate {
+            name: f.name.clone(),
+            chunk: highest(f).unwrap_or(0),
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// L3, pure — no I/O, no mutation, no guess (PLAN-fael-plan-focus invariant 5).
+/// Order:
+/// 1. **declared** — `intent` names a plan: `Active` whatever the facts say,
+///    `chunk = None` when the plan has no open chunk;
+/// 2. **branch** — exactly one plan has an open row filed on this branch:
+///    `Active`; more than one: `Ambiguous`;
+/// 3. **only** — the whole log holds exactly one open plan: `Active`;
+/// 4. more than one: `Ambiguous`; none: `None`.
+///
+/// No branch (detached HEAD, no session) = `None`.
+pub fn resolve_plan(
+    facts: &[PlanFact],
+    branch: Option<&str>,
+    intent: Option<&str>,
+) -> PlanResolution {
+    if let Some(name) = intent {
+        let chunk = facts.iter().find(|f| f.name == name).and_then(highest);
+        return PlanResolution::Active {
+            name: name.to_string(),
+            chunk,
+            source: PlanSource::Declared,
+        };
+    }
+    let Some(branch) = branch else {
+        return PlanResolution::None;
+    };
+    let on_branch: Vec<&PlanFact> = facts
+        .iter()
+        .filter(|f| f.branches.contains(branch))
+        .collect();
+    match on_branch.len() {
+        1 => {
+            let f = on_branch[0];
+            PlanResolution::Active {
+                name: f.name.clone(),
+                chunk: highest(f),
+                source: PlanSource::Branch,
+            }
+        }
+        0 => match facts.len() {
+            0 => PlanResolution::None,
+            1 => PlanResolution::Active {
+                name: facts[0].name.clone(),
+                chunk: highest(&facts[0]),
+                source: PlanSource::Only,
+            },
+            _ => PlanResolution::Ambiguous {
+                candidates: candidates(&facts.iter().collect::<Vec<_>>()),
+            },
+        },
+        _ => PlanResolution::Ambiguous {
+            candidates: candidates(&on_branch),
+        },
+    }
 }
 
 /// Where one gathered row lands: Now shows first (budget still caps), File
@@ -149,8 +257,8 @@ impl Selection<'_> {
     }
 }
 
-fn plan_key(p: &PlanFocus) -> String {
-    format!("plan:{}:chunk-{}", p.name, p.chunk)
+fn plan_key(name: &str, chunk: u32) -> String {
+    format!("plan:{name}:chunk-{chunk}")
 }
 
 /// Count one key in encounter order — deterministic: same log, same order.
@@ -167,7 +275,11 @@ fn bump_key(keys: &mut Vec<(String, usize)>, key: String) {
 /// the existing `cmp_rows` order holds — no second ranking.
 pub fn bucket(r: &Row, tier: usize, focus: &Focus) -> Bucket {
     let now_key = r.key.as_deref().is_some_and(|k| {
-        focus.keys.contains(k) || focus.plan.as_ref().is_some_and(|p| k == plan_key(p))
+        focus.keys.contains(k)
+            || matches!(
+                &focus.plan,
+                PlanResolution::Active { name, chunk: Some(n), .. } if k == plan_key(name, *n)
+            )
     });
     let now_branch = r
         .branch()
