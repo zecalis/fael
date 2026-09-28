@@ -31,30 +31,37 @@ pub(super) fn problem(log: &core::Log, cfg: &core::Config, expand: bool) -> Opti
         return None;
     }
     if expand {
-        return Some(fat_problem(&fat, None));
+        return Some(fat_problem(&fat, None, true));
     }
     let (new, legacy): (Vec<&FatRow>, Vec<&FatRow>) =
         fat.iter().partition(|(_, birth)| !is_legacy(*birth));
     if legacy.is_empty() {
-        return Some(fat_problem(&fat, None));
+        return Some(fat_problem(&fat, None, false));
     }
     if new.is_empty() {
         return Some(legacy_problem(legacy.len()));
     }
     let listed: Vec<(String, Option<u64>)> =
         new.into_iter().map(|(s, b)| (s.clone(), *b)).collect();
-    Some(fat_problem(&listed, Some(legacy.len())))
+    Some(fat_problem(&listed, Some(legacy.len()), false))
 }
 
-/// One `[Fat]` problem listing each fat row (up to 5 examples), with an
-/// optional collapsed legacy suffix when old and new rows share the output.
-fn fat_problem(fat: &[FatRow], legacy: Option<usize>) -> core::Problem {
+/// One `[Fat]` problem. `full` lists every fat row — the `--fat` cleanup pass
+/// exists to enumerate them all, so it must not drop any; otherwise the detail
+/// skims with up to 5 examples. The optional `legacy` suffix collapses
+/// pre-self-heal rows when old and new rows share the output.
+fn fat_problem(fat: &[FatRow], legacy: Option<usize>, full: bool) -> core::Problem {
     let shown: Vec<&str> = fat.iter().map(|(s, _)| s.as_str()).collect();
+    let n = if full {
+        shown.len()
+    } else {
+        shown.len().min(5)
+    };
     let mut detail = format!(
         "{} open row(s) carry no key, several topics, or long text — split them so one can \
          be superseded alone (e.g. {})",
         fat.len(),
-        shown[..shown.len().min(5)].join("; ")
+        shown[..n].join("; ")
     );
     if let Some(n) = legacy {
         detail.push_str(&format!(
@@ -181,6 +188,49 @@ mod tests {
         assert!(p.detail.contains("2 open row(s)"), "{}", p.detail);
         assert!(p.detail.contains(&l.rows[0].id[..8]), "{}", p.detail);
         assert!(p.detail.contains(&l.rows[1].id[..8]), "{}", p.detail);
+    }
+
+    /// `n` new (post-cutoff) fat decisions, each its own millisecond so their
+    /// abbreviated ids differ.
+    fn fat_log(n: usize) -> crate::core::Log {
+        crate::core::Log {
+            rows: (0..n)
+                .map(|i| crate::core::Row {
+                    id: crate::core::ulid_at(LEGACY_CUTOFF_MS + 1 + i as u64 * 1000),
+                    ts: "2026-10-01T00:00:00Z".into(),
+                    by: "t-0000".into(),
+                    kind: "decision".into(),
+                    text: "new fat decision".into(),
+                    files: vec!["src/a.rs".into()],
+                    ..crate::core::Row::default()
+                })
+                .collect(),
+            ..crate::core::Log::default()
+        }
+    }
+
+    #[test]
+    fn expand_lists_every_row_past_the_five_example_cap() {
+        let l = fat_log(7);
+        let w = crate::core::abbrev(&l);
+        let p = problem(&l, &crate::core::Config::default(), true).unwrap();
+        assert!(p.detail.contains("7 open row(s)"), "{}", p.detail);
+        for r in &l.rows {
+            assert!(
+                p.detail.contains(w.short(&r.id)),
+                "missing {} in {}",
+                r.id,
+                p.detail
+            );
+        }
+        // without `--fat` the same repo skims with five examples
+        let g = problem(&l, &crate::core::Config::default(), false).unwrap();
+        let named = l
+            .rows
+            .iter()
+            .filter(|r| g.detail.contains(w.short(&r.id)))
+            .count();
+        assert_eq!(named, 5, "{}", g.detail);
     }
 
     #[test]
