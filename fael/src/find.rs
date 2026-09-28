@@ -242,7 +242,7 @@ impl Args {
 
 /// Quote only when the shell would need it — `--kind issue` stays bare, a
 /// glob (`--key auth:*`) or `$x` is single-quoted so the shell passes it as-is.
-fn quoted(s: &str) -> String {
+pub(crate) fn quoted(s: &str) -> String {
     if s.chars()
         .all(|c| c.is_alphanumeric() || "-_./:,@+=".contains(c))
     {
