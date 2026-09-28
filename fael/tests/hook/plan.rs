@@ -128,6 +128,43 @@ fn plan_row_without_a_file_says_the_chunk_anyway() {
 }
 
 #[test]
+fn plan_row_filed_on_an_earlier_branch_still_carries_the_plan() {
+    // a chunk is worked on a fresh branch, so its plan rows sit on the
+    // previous one — the line and the Now bucket must not depend on the
+    // session branch (issue 01M3M35H)
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::create_dir_all(d.join(".fapony/plan")).unwrap();
+    std::fs::write(d.join(".fapony/plan/PLAN-foo.md"), "# foo\n").unwrap();
+    for (kind, text, key) in [
+        ("decision", "fresher tier-0 decision", "db:migrate"),
+        ("note", "chunk 3 handoff", "plan:foo:chunk-3"),
+    ] {
+        let (ok, _, err) = fael(
+            &d,
+            &["add", kind, text, "--files", "src/a.rs", "--key", key],
+            "",
+        );
+        assert!(ok, "{err}");
+    }
+    // the session starts on a branch no plan row was filed on
+    git(&d, &["checkout", "-q", "-b", "feat/chunk-4"]);
+    let out = session_start(&d, "plan-5");
+    assert!(
+        out.contains("active plan: foo chunk-3 → .fapony/plan/PLAN-foo.md"),
+        "{out}"
+    );
+    let out = read(&d, "plan-5");
+    let plan_row = out
+        .find("chunk 3 handoff")
+        .unwrap_or_else(|| panic!("{out}"));
+    let tier0 = out
+        .find("fresher tier-0 decision")
+        .unwrap_or_else(|| panic!("{out}"));
+    assert!(plan_row < tier0, "the plan row tops the push: {out}");
+}
+
+#[test]
 fn no_plan_row_no_line() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();

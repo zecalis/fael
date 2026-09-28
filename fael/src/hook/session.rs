@@ -101,7 +101,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         body.push_str(&line);
     }
     // the active plan, first line: which plan this session is inside and
-    // where it lives — no plan row on this branch, no line
+    // where it lives — no plan row at all, no line
     let plan = plan_line(focus.plan.as_ref());
     let adopted = c.repo.fael.join("log").is_dir();
     let mut context = match (body.is_empty() && plan.is_empty(), adopted) {
@@ -228,9 +228,10 @@ fn count_line(t: &Todo) -> Option<String> {
 }
 
 /// The active plan's one line (PLAN-fael-push-focus chunk 3): the newest
-/// open row on the start branch keyed `plan:<name>:chunk-N`, with the path
-/// session start resolved through `Config::plan_dirs` — no file, no arrow;
-/// no plan row at all, no line.
+/// open row keyed `plan:<name>:chunk-N` — whichever branch filed it, a
+/// chunk starts a fresh branch — with the path session start resolved
+/// through `Config::plan_dirs` — no file, no arrow; no plan row at all, no
+/// line.
 fn plan_line(plan: Option<&core::PlanFocus>) -> String {
     match plan {
         None => String::new(),
