@@ -57,9 +57,12 @@ fn tail_bytes(path: &Path, n: u64) -> Option<String> {
     let mut f = std::fs::File::open(path).ok()?;
     let len = f.metadata().ok()?.len();
     f.seek(SeekFrom::Start(len.saturating_sub(n))).ok()?;
-    let mut s = String::new();
-    f.read_to_string(&mut s).ok()?;
-    Some(s)
+    // read bytes, then decode lossily: read_to_string errors when the cut
+    // lands inside a multibyte char (routine with Thai), which would drop
+    // every usage line in the tail — markers.rs:225 does the same job this way
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
 /// Ask counts in fixed order (reject, stop-block, warning): (count, bytes).
@@ -258,6 +261,24 @@ mod tests {
         );
         assert!(transcript_usage(dir.join("missing.jsonl").to_str().unwrap()).is_none());
         assert!(transcript_usage("").is_none());
+    }
+
+    #[test]
+    fn transcript_tail_cut_mid_multibyte_still_reads_usage() {
+        let dir = std::env::temp_dir().join(format!("fael-asks-{}", crate::core::ulid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("transcript.jsonl");
+        // >64 KiB of Thai (3 bytes each) so the 64 KiB tail starts inside a
+        // char — read_to_string would fail on the partial char and read None
+        let mut s = "ก".repeat(70_000 / 3);
+        s.push('\n');
+        s.push_str(&usage_line(7, 0, 0, 1));
+        s.push('\n');
+        std::fs::write(&p, s).unwrap();
+        assert_eq!(
+            transcript_usage(p.to_str().unwrap()).map(|t| t.input_tokens),
+            Some(7)
+        );
     }
 
     #[test]

@@ -14,6 +14,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (no --files = the files this session edited, as the edit hook recorded;
      --title = the ≤15-word headline lists show, the body is pulled by id;
      --force files a path that looks like a typo of an existing one;
+     a repeat on these files or key, \"Supersedes <id>\" in the text, and the
+     only key on these files are filled in for you;
      text that starts with - goes after --: fael add note --files a.rs -- \"-h\")",
     ),
     (

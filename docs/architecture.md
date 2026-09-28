@@ -107,7 +107,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 
 | Command | What it does |
 |---|---|
-| `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--revisit date\|text] [--urgent\|--urgent-before id] [--supersedes id] [--force]` | append a row (`--title` = the ≤15-word headline lists show; `--revisit` = a date `kickoff` surfaces when due, or free text) |
+| `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--revisit date\|text] [--urgent\|--urgent-before id] [--supersedes id] [--force]` | append a row (`--title` = the ≤15-word headline lists show; `--revisit` = a date `kickoff` surfaces when due, or free text; self-heal first — a repeat on the same files or key supersedes the open row, `Supersedes <id>` in the text fills `--supersedes`, and the one key on these files is reused, each said in one info line) |
 | `fael close <id> "<why>"` | append a close row |
 | `fael bump <id> [--to who] [--revisit date\|text] [--urgent\|--urgent-before id\|--not-urgent]` | new version of an open row: same text/files, new `to`/`urgent`/`revisit`, superseding the old one |
 | `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies; `--branches` also reads branches not yet merged into HEAD, tagging their rows `@<branch>` without a checkout; a cut list prints the exact next call (`--offset M`) |
@@ -180,6 +180,8 @@ agent ─(MCP add | CLI add | hook)─▶ core.normalize ─▶ core.validate �
                            journal append ─▶ tree append (skipped when store = local)
                   (<git-common-dir>/fael/log/…)      (.fael/log/<writer>/<month>.jsonl)
 ```
+
+The write path self-heals before it validates (`fael/src/selfheal.rs`): `core.validate` sees one row and no log, so filling an absent `--supersedes` — from `Supersedes <id>` in the text, from a repeat on the same files, or from the same kind + key of the caller's own row — and adopting the one key the row's files already carry happen here, where the log is readable. Each choice is reported in one info line, which is not an ask. Several candidates file the row and name what was kept: fael never picks and never rejects for it.
 
 **Push** — the agent reads a file, and the memory for that file comes with it:
 ```

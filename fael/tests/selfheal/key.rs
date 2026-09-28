@@ -2,10 +2,9 @@
 //! row with the same kind + key (any branch, same writer) supersedes itself;
 //! another writer's row, or several matches, is kept and listed, never asked.
 
-use super::{fael, names, repo, usage};
-use std::io::Write;
+use super::{fael, mcp_add, names, repo, usage};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 fn add(d: &Path, kind: &str, text: &str, files: &str, key: &str) -> (bool, String, String) {
     fael(d, &["add", kind, text, "--files", files, "--key", key], "")
@@ -20,37 +19,6 @@ fn open_rows(d: &Path) -> Vec<String> {
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
         .filter_map(|v| v["id"].as_str().map(String::from))
         .collect()
-}
-
-/// One `add` over MCP; returns (isError, text).
-fn mcp_add(d: &Path, args: serde_json::Value) -> (bool, String) {
-    let root = d.ancestors().find(|p| p.join(".git").exists()).unwrap();
-    let call = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-        "params": {"name": "add", "arguments": args}})
-    .to_string();
-    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
-        .arg("mcp")
-        .env("FAEL_STATE_DIR", root.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID")
-        .current_dir(d)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    c.stdin
-        .take()
-        .unwrap()
-        .write_all((call + "\n").as_bytes())
-        .unwrap();
-    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
-    let v: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
-    (
-        v["result"]["isError"] == true,
-        v["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-    )
 }
 
 #[test]
