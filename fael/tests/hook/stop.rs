@@ -159,6 +159,65 @@ fn stop_bug_signal_needs_issue_row() {
 }
 
 #[test]
+fn stop_strong_bug_with_edits_blocks_once_with_runnable_command() {
+    // plan chunk 6c replay: three edited files + a reported problem in one
+    // turn → exactly one block, and the command printed in it runs verbatim.
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let t = transcript(&d, "t.jsonl");
+    for f in ["src/a.rs", "src/b.rs", "src/c.rs"] {
+        std::fs::write(d.join(f), "// work\n").unwrap();
+        let edit = format!(
+            r#"{{"cwd":{},"transcript_path":{},"tool_input":{{"file_path":{}}}}}"#,
+            json(&d),
+            json(&t),
+            json(&d.join(f))
+        );
+        assert!(fael(&d, &["hook", "edit", "--client", "claude"], &edit).0);
+    }
+    std::fs::write(
+        &t,
+        r#"{"message":{"role":"assistant","content":[{"type":"text","text":"I found a bug in login"}]}}"#,
+    )
+    .unwrap();
+    let input = format!(r#"{{"cwd":{},"transcript_path":{}}}"#, json(&d), json(&t));
+    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
+    assert!(ok, "hook must always exit 0");
+    assert!(out.contains(r#""decision":"block""#), "{out}");
+    // one block — no work block plus a second issue block
+    assert_eq!(out.matches("fael add").count(), 1, "{out}");
+    assert!(
+        out.contains(
+            "fael add issue \\\"<what is broken or at risk>\\\" --files src/a.rs,src/b.rs,src/c.rs"
+        ),
+        "{out}"
+    );
+
+    // the printed command runs verbatim (placeholder included) and files it
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "<what is broken or at risk>",
+            "--files",
+            "src/a.rs,src/b.rs,src/c.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+
+    // the filed issue clears the block — no second block with no new work
+    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
+    assert!(ok && !out.contains("block"), "{out}");
+}
+
+#[test]
 fn stop_fails_open() {
     let d = repo();
     // garbage in, no repoadopted log, already-fired hook — all allow, all exit 0
