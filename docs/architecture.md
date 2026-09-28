@@ -119,7 +119,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael install [--client c] [--dry-run] [--replace-fapony]` | detect installed clients and wire MCP, hooks and skill into each one; `--replace-fapony` takes out fapony's Stop/session-start hooks and MCP (opt-in: they are user scope and still serve repos without `.fael/`) |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
-| `fael doctor [--fix]` | find and repair damaged logs — `--fix` moves bad lines to quarantine, it never deletes them |
+| `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine, it never deletes them |
 | `fael stats [--json] [--rows]` | how many bytes and tokens fael has put into agents' context |
 
 `--files` in `find` matches a row's `files[]` only — exactly, as a directory (a zone), or by glob; an anchor's ref
