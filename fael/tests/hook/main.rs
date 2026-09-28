@@ -5,10 +5,12 @@
 //! `stop` (turn-end blocks), `session` (session-start + read push),
 //! `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `push_cap` (read-push row cap + omitted line),
-//! `focus` (session Focus: focus.json written at start, read by the push).
+//! `focus` (session Focus: focus.json written at start, read by the push),
+//! `plan` (active plan: the session-start line, its path, the Now bucket).
 
 mod clients;
 mod focus;
+mod plan;
 mod push_cap;
 mod seen;
 mod session;

@@ -134,6 +134,7 @@ Ids are accepted as a unique prefix and printed at the shortest length that stay
 kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
+plan_dirs = [".fapony/plan"]  # where PLAN-<name>.md lives, in lookup order — the active plan line (§4)
 store = "tracked"             # or "local": journal only, no .fael/log writes (gitignored/public repos)
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter
@@ -192,8 +193,8 @@ client ─(read event)─▶ adapter.parse ─▶ core.find(files) ─▶ rank �
 Ranking: an exact file match beats the same directory, which beats the same key. Open `issue` and `decision` rows go first, then newer before older by `id`. Text matching is plain substring.
 Ranking is **deterministic**: the same log, query and budget give the same output on any machine and any day — recency comes from `id` order, never from the clock, and ties break by `id`. No fuzzy, BM25 or semantic ranking.
 
-Rows are then bucketed by the session **Focus** — the start branch plus the keys of the open rows filed on it, written once at session start to
-`~/.local/state/fael/sessions/<session+worktree>.focus.json`: **Now** (an open issue, an urgent row, a row on the session branch or sharing one of those keys) always renders, **File** (the queried file) fills the row cap next, **Background** (same directory, shared key) never renders — each hidden class gets one count line naming the exact `fael find` call that reaches it. The push only reads that file: no git spawn, one small read. No session, no file or an unparsable file is `Focus::default()` — the ranking above, capped at `budget.push_rows`.
+Rows are then bucketed by the session **Focus** — the start branch, the keys of the open rows filed on it, and the active plan chunk (§4), written once at session start to
+`~/.local/state/fael/sessions/<session+worktree>.focus.json`: **Now** (an open issue, an urgent row, a row on the session branch, sharing one of those keys, or keyed to the active plan chunk) always renders, **File** (the queried file) fills the row cap next, **Background** (same directory, shared key) never renders — each hidden class gets one count line naming the exact `fael find` call that reaches it. The push only reads that file: no git spawn, one small read. No session, no file or an unparsable file is `Focus::default()` — the ranking above, capped at `budget.push_rows`.
 
 **Enforce** — the agent tries to end a turn:
 ```
@@ -214,9 +215,10 @@ Edits, not commits, are the primary signal: many agents are told never to commit
 
 **Session start:**
 ```
-client ─(session-start)─▶ write focus.json (start branch + the keys of the rows filed on it)
-                        ─▶ open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
+client ─(session-start)─▶ write focus.json (start branch + the keys of the rows filed on it + the active plan)
+                        ─▶ active plan: <name> chunk-N → <path> · open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
+The active plan is the newest open row on the start branch keyed `plan:<name>:chunk-N`; its path is the first `plan_dirs/PLAN-<name>.md` that exists (no file = the line, no arrow). No such row = no line.
 
 **Across branches** (one branch per person or per agent):
 ```
