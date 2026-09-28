@@ -142,7 +142,8 @@ impl Args {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
-                | "before" | "map" | "to" | "title" | "urgent-before" | "limit" | "offset" => {
+                | "before" | "map" | "to" | "title" | "urgent-before" | "limit" | "offset"
+                | "text" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("--{name} needs a value"))?;
