@@ -164,6 +164,9 @@ pub fn resolve_plan(
     branch: Option<&str>,
     intent: Option<&str>,
 ) -> PlanResolution {
+    let Some(branch) = branch else {
+        return PlanResolution::None;
+    };
     if let Some(name) = intent {
         let chunk = facts.iter().find(|f| f.name == name).and_then(highest);
         return PlanResolution::Active {
@@ -171,9 +174,6 @@ pub fn resolve_plan(
             chunk,
             source: PlanSource::Declared,
         };
-    }
-    let Some(branch) = branch else {
-        return PlanResolution::None;
     };
     let on_branch: Vec<&PlanFact> = facts
         .iter()

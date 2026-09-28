@@ -175,6 +175,12 @@ fn resolve_matches_the_matrix() {
         resolve_plan(&facts(&[("a", 1, "b")]), None, None),
         PlanResolution::None
     );
+    // no branch at all: none, even with a declared intent (detached HEAD
+    // has no branch to bind it to)
+    assert_eq!(
+        resolve_plan(&facts(&[("a", 1, "b")]), None, Some("a")),
+        PlanResolution::None
+    );
 }
 
 #[test]
