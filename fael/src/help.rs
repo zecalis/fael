@@ -36,10 +36,12 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "find",
         "search rows",
         "fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--text query]
-    (an exact id or unique prefix pulls that row's body; an id-shaped query is
-     never a text search — it rejects when no row owns it, naming the rows
-     that only mention it; --text forces a literal text search;
-     --full shows every body;
+     (an exact id or unique prefix pulls that row's body; an id-shaped query is
+      never a text search — it rejects when no row owns it, naming the rows
+      that only mention it; --text forces a literal text search;
+      an id counts as verified only after fael find printed it as - [<id>] —
+      never type one from memory;
+      --full shows every body;
      --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;
      it only sees rows committed to .fael/log on those branches — a repo that
      gitignores .fael/log gets nothing from it;
@@ -81,8 +83,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "doctor",
         "check the log; --fix repairs what it can",
         "fael doctor [--fix] [--fat]
-    (check the log and the repo for problems; --fix repairs what it can, including
-     closing the confirmed [Shipped] notes; --json prints each problem's full row
+     (check the log and the repo for problems; --fix repairs what it can, including
+      closing the confirmed [Shipped] notes; [Phantom] flags citations of ids
+      with no row behind them; --json prints each problem's full row
      ids for a cleanup pass; --fat lists every fat row, including pre-self-heal
      legacy rows that stay collapsed to one line by default)",
     ),

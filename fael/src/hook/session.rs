@@ -15,6 +15,12 @@ use std::path::{Path, PathBuf};
 const ISSUE_LINE: &str = "- fael: saw something broken, inconsistent or likely to break? \
 `fael add issue \"<what>\" --files <path>` right there — do not wait for the end of the task";
 
+/// The id rule (ids:integrity) — an id typed from memory once survived end to
+/// end, "verified" by a find that only matched text. Same rule in the
+/// installed skill and `fael find --help`.
+const ID_LINE: &str = "- fael: never type an id from memory — verified only after \
+this session's `fael find <id>` printed it as `- [<id>]`, else look it up by key/text first";
+
 pub(crate) fn session_start(e: &Event) -> Reply {
     let no = || Reply {
         block: false,
@@ -97,8 +103,8 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let adopted = c.repo.fael.join("log").is_dir();
     let mut context = match (body.is_empty(), adopted) {
         (true, false) => None,
-        (true, true) => Some(format!("{ISSUE_LINE}\n")),
-        (false, _) => Some(format!("{body}{ISSUE_LINE}\n")),
+        (true, true) => Some(format!("{ISSUE_LINE}\n{ID_LINE}\n")),
+        (false, _) => Some(format!("{body}{ISSUE_LINE}\n{ID_LINE}\n")),
     };
     // SPEC §11: the cheap check — one line, only when there is a problem.
     // Skipped while no log exists yet: warning about an empty missing log is

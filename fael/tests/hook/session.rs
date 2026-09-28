@@ -355,3 +355,25 @@ fn session_start_lists_mine_then_hot_urgent() {
     );
     assert!(mine < hot && hot < count, "{out}");
 }
+
+/// PLAN-fael-id-refs chunk-4 (ids:integrity): the agent rule ships in the
+/// session-start text and in the help — an id is verified only after find
+/// printed it, never typed from memory.
+#[test]
+fn session_start_states_the_id_rule() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "issue", "login loops", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+    assert!(ok && out.contains("never type an id from memory"), "{out}");
+    let (ok, out, _) = fael(&d, &["find", "--help"], "");
+    assert!(ok && out.contains("never type one from memory"), "{out}");
+    let (ok, out, _) = fael(&d, &["doctor", "--help"], "");
+    assert!(ok && out.contains("[Phantom]"), "{out}");
+}
