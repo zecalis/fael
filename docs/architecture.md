@@ -182,7 +182,7 @@ agent ─(MCP add | CLI add | hook)─▶ core.normalize ─▶ core.validate �
                   (<git-common-dir>/fael/log/…)      (.fael/log/<writer>/<month>.jsonl)
 ```
 
-The write path self-heals before it validates (`fael/src/selfheal.rs`): `core.validate` sees one row and no log, so filling an absent `--supersedes` — from `Supersedes <id>` in the text, from a repeat on the same files, or from the same kind + key of the caller's own row — and adopting the one key the row's files already carry happen here, where the log is readable. Each choice is reported in one info line, which is not an ask. Several candidates file the row and name what was kept: fael never picks and never rejects for it.
+The write path self-heals before it validates (`fael/src/selfheal.rs`): `core.validate` sees one row and no log, so filling an absent `--supersedes` — from `Supersedes <id>` in the text, from a repeat on the same files, or from the same kind + key of the caller's own row — and adopting the one key the row's files already carry happen here, where the log is readable. An `issue` is a finding, not a topic: a key may hold several, so a key match supersedes an issue only when it is the same finding re-filed (same words, a shared file), and a distinct issue sharing the key is kept and named. Each choice is reported in one info line, which is not an ask. Several candidates file the row and name what was kept: fael never picks and never rejects for it.
 
 **Push** — the agent reads a file, and the memory for that file comes with it:
 ```
