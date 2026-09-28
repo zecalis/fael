@@ -192,7 +192,7 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
         }
     }
     let after_block: usize = outcome.values().map(|(_, f)| f).sum();
-    let (thai_total, thai_rows) = askstats::thai_share(&logs);
+    let (row_total, foreign_rows) = askstats::non_english_share(&logs);
     let (samples, avg_in, avg_cc, avg_cr, avg_out) = askstats::post_block_cost(&kept);
     let (sk_b, sk_e, sc_b, sc_e) = asks::constants();
     let since_day = if since == i64::MAX {
@@ -222,7 +222,7 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
             "repeat_blocks": repeat,
             "constants": {"skill_bytes": sk_b, "skill_est": sk_e, "mcp_schema_bytes": sc_b, "mcp_schema_est": sc_e},
             "rounds": {"after_block": after_block, "rows_added": rows_added, "since": since_day},
-            "thai_rows": {"rows": thai_total, "thai": thai_rows},
+            "non_english_rows": {"rows": row_total, "non_english": foreign_rows},
         });
         if samples > 0 {
             obj["real_tokens"] = serde_json::json!({"post_block_rounds": samples,
@@ -300,8 +300,8 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
             "  rounds: ~{after_block} row(s) took their own round after a block, of {rows_added} added since {since_day}"
         );
     }
-    if thai_total > 0 {
-        println!("  rows with Thai: {thai_rows} of {thai_total}");
+    if row_total > 0 {
+        println!("  rows not in English: {foreign_rows} of {row_total}");
     }
     if samples > 0 {
         println!(

@@ -124,12 +124,16 @@ pub(crate) fn add_row(
 /// from now on` (PLAN-fael-durable-log §6.3f), counted as `warning` in stats.
 /// Symbols (→, ≤) are not alphabetic; accented Latin (é) passes.
 fn english_warn(title: Option<&str>, text: &str) -> Option<String> {
-    let foreign = |c: char| c.is_alphabetic() && !is_latin(c);
-    if text.chars().any(foreign) || title.is_some_and(|t| t.chars().any(foreign)) {
+    if non_english(text) || title.is_some_and(non_english) {
         Some("row not in English — write rows in English from now on".into())
     } else {
         None
     }
+}
+
+/// Any letter outside Latin — the one detector for the add warning and `fael stats`.
+pub(crate) fn non_english(s: &str) -> bool {
+    s.chars().any(|c| c.is_alphabetic() && !is_latin(c))
 }
 
 /// Latin letters incl. accented ranges — everything `is_alphabetic` accepts

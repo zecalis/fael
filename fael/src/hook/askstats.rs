@@ -131,27 +131,26 @@ pub(crate) fn added_since(log: &core::Log, since_ms: i64) -> usize {
         .count()
 }
 
-/// (rows, rows with Thai): one global dedup by id — repos in one clone share
-/// the journal, so the same row must not count twice. Thai = U+0E00–U+0E7F in
-/// title or text; the chunk-6 detector is wider, this is the baseline share.
-pub(crate) fn thai_share(logs: &HashMap<String, core::Log>) -> (usize, usize) {
-    fn thai(s: &str) -> bool {
-        s.chars().any(|c| ('\u{0E00}'..='\u{0E7F}').contains(&c))
-    }
+/// (rows, rows not in English): one global dedup by id — repos in one clone
+/// share the journal, so the same row must not count twice. Same detector as
+/// the add-time warning (`write::non_english`), title or text.
+pub(crate) fn non_english_share(logs: &HashMap<String, core::Log>) -> (usize, usize) {
     let mut seen = HashSet::new();
-    let (mut n, mut thai_n) = (0usize, 0usize);
+    let (mut n, mut foreign) = (0usize, 0usize);
     for log in logs.values() {
         for r in &log.rows {
             if !seen.insert(r.id.as_str()) {
                 continue;
             }
             n += 1;
-            if thai(&r.text) || r.title.as_deref().is_some_and(thai) {
-                thai_n += 1;
+            if crate::write::non_english(&r.text)
+                || r.title.as_deref().is_some_and(crate::write::non_english)
+            {
+                foreign += 1;
             }
         }
     }
-    (n, thai_n)
+    (n, foreign)
 }
 
 /// Mean real-token cost of the round after a stop-block: each block attributes
