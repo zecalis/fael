@@ -148,11 +148,12 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
             &files,
         );
     }
-    // L1 gather, then L3/L4 rank + select — `Focus::default()` is today's
-    // order, capped (chunk 2 reads the session Focus here). The read/edit
-    // push resolves renames through the L1 cache only — no git spawn on
-    // this path (one spawn is ~9 ms against a 5 ms ceiling).
-    // `session-start` refreshes the cache once per session instead.
+    // L1 gather (renames resolve through the L1 cache only), then L3/L4 rank
+    // + select against the session Focus: one small file read, no git spawn
+    // on this path (one spawn is ~9 ms against a 5 ms ceiling) — session-start
+    // builds the Focus file and refreshes that cache once per session. No
+    // session, no file, a bad file: `Focus::default()` is today's order,
+    // capped.
     // reads skip the same-directory tier (chunk 2: the noisiest tier — rows
     // about neighbouring files); edits keep it, a module decision matters
     // most while changing that module.
@@ -174,7 +175,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         let old: HashSet<&str> = old.lines().collect();
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
-    let sel = core::select(tiered, &core::Focus::default(), &policy);
+    let focus = super::focus::read(&c.session, &c.repo.root);
+    let sel = core::select(tiered, &focus, &policy);
     // a stashed Weak risk is taken here — shown once, whether or not rows join it
     let risk = (!c.session.is_empty())
         .then(|| take_risk(&c.session, &c.repo.root))

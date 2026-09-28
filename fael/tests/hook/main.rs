@@ -4,9 +4,11 @@
 //! Thin entry only — the suites sit next to this file:
 //! `stop` (turn-end blocks), `session` (session-start + read push),
 //! `clients` (codex/claude shapes), `stats` (usage accounting),
-//! `push_cap` (read-push row cap + omitted line).
+//! `push_cap` (read-push row cap + omitted line),
+//! `focus` (session Focus: focus.json written at start, read by the push).
 
 mod clients;
+mod focus;
 mod push_cap;
 mod seen;
 mod session;
