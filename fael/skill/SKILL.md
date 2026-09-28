@@ -16,6 +16,9 @@ goes to the next one. Rows live in `.fael/log/` and travel with the repo.
 - `fael add decision "<what was chosen, and why>" --files a,b` — something agreed that git and code do not say
 - `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "fixed in <sha>"` — an issue that is fixed, a note that is done
+- Self-heal: a repeat on the same files or key supersedes the open row itself,
+  `Supersedes <id>` in the text fills `--supersedes`, and the one key those
+  files already carry is reused — pass `--key` only to open a new topic.
 - Long body? `--title "<≤15-word headline>"` — lists show the title, the body is pulled by id (`fael find <id>`)
 
 Each row is read months later with no chat: one or two standalone sentences.
