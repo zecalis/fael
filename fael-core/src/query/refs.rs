@@ -53,3 +53,15 @@ pub fn id_tokens(text: &str) -> Vec<&str> {
     }
     out
 }
+
+/// Id-shaped tokens in `text` with no row behind them (union scope only):
+/// `Missing` via `ref_state` — `One`/`Many` resolve, so real and ambiguous
+/// citations never report. Pure, no spawn; the binary re-checks candidates
+/// against unmerged branches once before reporting.
+pub fn phantom_refs(log: &Log, text: &str) -> Vec<String> {
+    id_tokens(text)
+        .into_iter()
+        .filter(|tok| matches!(ref_state(log, tok), Ref::Missing))
+        .map(String::from)
+        .collect()
+}
