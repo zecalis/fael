@@ -13,6 +13,7 @@ mod doctor;
 mod hook;
 mod id;
 mod import;
+pub mod lang;
 mod log;
 mod query;
 mod row;
@@ -33,6 +34,7 @@ pub use hook::{BugSignal, StopFacts, decide_stop, last_row_ms};
 pub use id::{
     looks_like_id, now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id,
 };
+pub use lang::{Hit, Lang, by_name, marker_hit, row_language_check};
 pub use log::{
     BumpOpts, Log, MONTH_MAX, add, add_row, append, bump_row, close, close_row, decode_text,
     is_month, mv_row, needs_seal, parse, read,
