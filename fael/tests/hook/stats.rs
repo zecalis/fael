@@ -167,6 +167,35 @@ fn stats_rows_shows_pushes_status_and_noise() {
 }
 
 #[test]
+fn stats_counts_rows_not_in_english() {
+    // PLAN-fael-languages chunk 2: the aggregate line reads "rows not in
+    // English" (never "rows with Thai") and shares the core english script
+    let d = repo();
+    let state = d.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    for text in ["kept choice", "บันทึกหลัง merge"] {
+        let (ok, _, err) = fael(&d, &["add", "decision", text, "--files", "src/a.rs"], "");
+        assert!(ok, "{err}");
+    }
+    let line = format!(
+        r#"{{"ts":"2026-09-26T00:00:00.000Z","repo":{},"client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":[]}}"#,
+        json(&d)
+    );
+    std::fs::write(state.join("usage.jsonl"), format!("{line}\n")).unwrap();
+    let (ok, out, _) = fael_at(&state, &d, &["stats"], "");
+    assert!(ok, "{out}");
+    assert!(out.contains("rows not in English: 1 of 2"), "{out}");
+    assert!(!out.contains("rows with Thai"), "{out}");
+    let (ok, out, _) = fael_at(&state, &d, &["stats", "--json"], "");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(
+        ok && v["non_english_rows"] == serde_json::json!({"rows": 2, "non_english": 1}),
+        "{out}"
+    );
+}
+
+#[test]
 fn stats_rows_sees_local_store_journal_rows() {
     // store = "local" keeps every row in the journal, never the tree log —
     // stats must read the same union the hooks do, or every status is unknown

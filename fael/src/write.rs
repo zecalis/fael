@@ -123,37 +123,16 @@ pub(crate) fn add_row(
         heal.supersedes.as_deref(),
     )?;
     warns.append(&mut core_warns);
-    if let Some(w) = english_warn(row.title.as_deref(), &row.text) {
+    // PLAN-fael-languages chunk 2: the row-language warning lives in core
+    // (`lang::row_language_check` behind `[lang] rows`) — never a reject, one
+    // warning line; under the default the string is byte-identical to the old one.
+    if let Some(w) = core::row_language_check(&r.cfg, row.title.as_deref(), &row.text) {
         warns.push(w);
     }
     // chunk 6e: the id just filed is already in this session's context — mark
     // it seen so the next push does not repeat it
     hook::note_seen(&crate::session::hook_session(&r.root), &r.root, &[&row.id]);
     Ok((row, path, warns))
-}
-
-/// Chunk 6f: rows stay English (Thai ≈ 1 char/token, English ≈ 4 chars/token).
-/// Never a reject — one reject costs a whole round — one warning line in
-/// the same call instead, exactly `row not in English — write rows in English
-/// from now on` (PLAN-fael-durable-log §6.3f), counted as `warning` in stats.
-/// Symbols (→, ≤) are not alphabetic; accented Latin (é) passes.
-fn english_warn(title: Option<&str>, text: &str) -> Option<String> {
-    if non_english(text) || title.is_some_and(non_english) {
-        Some("row not in English — write rows in English from now on".into())
-    } else {
-        None
-    }
-}
-
-/// Any letter outside Latin — the one detector for the add warning and `fael stats`.
-pub(crate) fn non_english(s: &str) -> bool {
-    s.chars().any(|c| c.is_alphabetic() && !is_latin(c))
-}
-
-/// Latin letters incl. accented ranges — everything `is_alphabetic` accepts
-/// outside these (Thai, CJK, Arabic, Cyrillic, …) counts as non-English.
-fn is_latin(c: char) -> bool {
-    c.is_ascii_alphabetic() || matches!(c, 'À'..='ſ' | 'ƀ'..='ɏ' | 'Ḁ'..='ỿ')
 }
 
 /// `fael add` run from `sub/` with `--files sub/a.rs` (repo-root-relative)

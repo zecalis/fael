@@ -132,25 +132,32 @@ pub(crate) fn added_since(log: &core::Log, since_ms: i64) -> usize {
 }
 
 /// (rows, rows not in English): one global dedup by id — repos in one clone
-/// share the journal, so the same row must not count twice. Same detector as
-/// the add-time warning (`write::non_english`), title or text.
+/// share the journal, so the same row must not count twice. Same script as
+/// the add-time warning's default (`core::lang` english pack): a letter
+/// outside it in the title or text counts. Per-repo `[lang] rows` is not
+/// consulted — one aggregate number needs one ruler.
 pub(crate) fn non_english_share(logs: &HashMap<String, core::Log>) -> (usize, usize) {
+    let Some(en) = core::lang::by_name("english") else {
+        return (0, 0);
+    };
+    let foreign = |s: &str| {
+        s.chars()
+            .any(|c| c.is_alphabetic() && !en.script.iter().any(|r| r.contains(&c)))
+    };
     let mut seen = HashSet::new();
-    let (mut n, mut foreign) = (0usize, 0usize);
+    let (mut n, mut foreign_rows) = (0usize, 0usize);
     for log in logs.values() {
         for r in &log.rows {
             if !seen.insert(r.id.as_str()) {
                 continue;
             }
             n += 1;
-            if crate::write::non_english(&r.text)
-                || r.title.as_deref().is_some_and(crate::write::non_english)
-            {
-                foreign += 1;
+            if foreign(&r.text) || r.title.as_deref().is_some_and(foreign) {
+                foreign_rows += 1;
             }
         }
     }
-    (n, foreign)
+    (n, foreign_rows)
 }
 
 /// Mean real-token cost of the round after a stop-block: each block attributes

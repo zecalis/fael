@@ -33,6 +33,10 @@ pub(super) fn open_row_notes(
     // one topic per row can still be superseded alone; pre-self-heal legacy
     // rows stay collapsed to one line unless `--fat` asks for the full list
     out.extend(fat::problem(log, cfg, expand_fat));
+    // rows not in the accepted `[lang] rows` scripts: the add-time warning
+    // repeated as one batch, so a translate pass can supersede them all
+    // (`fael add --json -`) — closed/superseded rows never appear
+    out.extend(not_english_note(log, cfg));
     out
 }
 
@@ -150,6 +154,41 @@ fn branch_notes(log: &core::Log) -> Vec<core::Problem> {
         )
         .with_ids(ids),
     ]
+}
+
+/// `(full id, short-id → files)` for every open row whose title or text
+/// carries a letter outside every accepted `[lang] rows` script — the same
+/// `lang::row_language_check` the add path warns with, so doctor repeats the
+/// skipped warning as one batch with the full ids a translate pass needs.
+fn not_english_note(log: &core::Log, cfg: &core::Config) -> Option<core::Problem> {
+    let hits: Vec<(String, String)> = core::find(log, &core::Filter::default())
+        .into_iter()
+        .filter(|row| core::row_language_check(cfg, row.title.as_deref(), &row.text).is_some())
+        .map(|row| {
+            let w = core::abbrev(log);
+            (
+                row.id.clone(),
+                format!("{} → {}", w.short(&row.id), row.files.join(", ")),
+            )
+        })
+        .collect();
+    if hits.is_empty() {
+        return None;
+    }
+    let langs = cfg.lang_rows.join("/");
+    let eg: Vec<&str> = hits.iter().take(5).map(|(_, e)| e.as_str()).collect();
+    Some(
+        core::Problem::info(
+            core::ProblemKind::NotEnglish,
+            format!(
+                "{} open row(s) are not in {langs} — translate and re-file with \
+                 `fael add --supersedes <id>` (e.g. {})",
+                hits.len(),
+                eg.join("; ")
+            ),
+        )
+        .with_ids(hits.iter().map(|(id, _)| id.clone()).collect()),
+    )
 }
 
 /// `(full id, short-id → dead backticked path(s))` for every open row whose
