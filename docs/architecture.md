@@ -117,6 +117,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael hook <event> [--client c]` | hook entry point (see below) |
 | `fael mcp` | MCP server on stdio |
 | `fael install [--client c] [--dry-run] [--replace-fapony]` | detect installed clients and wire MCP, hooks and skill into each one; `--replace-fapony` takes out fapony's Stop/session-start hooks and MCP (opt-in: they are user scope and still serve repos without `.fael/`) |
+| `fael upgrade [--client c] [--dry-run] [--yes] [--replace-fapony]` | `install` that looks first: lists what is out of date, counts it, asks `[y/N]` before writing (`--yes` or no terminal skips the question; `update` is an alias) |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
 | `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it) |

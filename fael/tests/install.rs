@@ -4,8 +4,12 @@ use std::path::Path;
 use std::process::Command;
 
 fn install(home: &Path, args: &[&str]) -> String {
+    run(home, "install", args)
+}
+
+fn run(home: &Path, cmd: &str, args: &[&str]) -> String {
     let o = Command::new(env!("CARGO_BIN_EXE_fael"))
-        .arg("install")
+        .arg(cmd)
         .args(args)
         .env("HOME", home)
         // fael on PATH (install refuses without it), no claude CLI: MCP is printed, not run
@@ -306,4 +310,27 @@ fn install_without_home_env_falls_back_to_os_home() {
         .unwrap();
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(!err.to_lowercase().contains("home"), "{err}");
+}
+
+#[test]
+fn upgrade_summarises_then_settles() {
+    let home = std::env::temp_dir().join(format!("fael-upgrade-{}", fael_core::ulid()));
+    std::fs::create_dir_all(home.join(".codex")).unwrap();
+    let dry = run(&home, "upgrade", &["--dry-run"]);
+    assert!(
+        dry.contains("pending — `fael upgrade` applies them"),
+        "{dry}"
+    );
+    assert!(!home.join(".codex/hooks.json").exists(), "{dry}");
+    // no terminal here, so `update` cannot ask and applies
+    let done = run(&home, "update", &[]);
+    assert!(
+        done.contains("applied") && done.contains("trust the new hooks"),
+        "{done}"
+    );
+    assert!(home.join(".codex/hooks.json").exists(), "{done}");
+    let again = run(&home, "upgrade", &[]);
+    assert!(again.contains("up to date — nothing to change"), "{again}");
+    // "hooks.json" in a path also holds "/hooks" — match the note itself
+    assert!(!again.contains("trust the new hooks"), "{again}");
 }

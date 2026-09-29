@@ -32,8 +32,12 @@ pub(crate) fn claude_mcp(c: &Ctx) {
         Some(out) if !points_at_fael(&out) => println!(
             "  ! an MCP server named fael points elsewhere — left alone; `{remove}` and rerun"
         ),
-        Some(_) if c.dry => println!("  would run: {remove} && {add}"),
+        Some(_) if c.dry => {
+            c.changed.set(c.changed.get() + 1);
+            println!("  would run: {remove} && {add}");
+        }
         Some(_) => {
+            c.changed.set(c.changed.get() + 1);
             let ok = [
                 &["mcp", "remove", "fael", "-s", "user"][..],
                 &["mcp", "add", "fael", "-s", "user", "--", &c.exe, "mcp"],
@@ -54,8 +58,12 @@ pub(crate) fn claude_mcp(c: &Ctx) {
                 }
             );
         }
-        None if c.dry => println!("  would run: {add}"),
+        None if c.dry => {
+            c.changed.set(c.changed.get() + 1);
+            println!("  would run: {add}");
+        }
         None => {
+            c.changed.set(c.changed.get() + 1);
             let ok = Command::new("claude")
                 .args(["mcp", "add", "fael", "-s", "user", "--", &c.exe, "mcp"])
                 .status()
@@ -74,8 +82,10 @@ pub(crate) fn claude_mcp(c: &Ctx) {
         if !c.replace {
             println!("  ! MCP fapony is still set — --replace-fapony removes it");
         } else if c.dry {
+            c.changed.set(c.changed.get() + 1);
             println!("  would run: claude mcp remove fapony -s user");
         } else {
+            c.changed.set(c.changed.get() + 1);
             let ok = Command::new("claude")
                 .args(["mcp", "remove", "fapony", "-s", "user"])
                 .status()

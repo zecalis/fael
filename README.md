@@ -68,6 +68,7 @@ irm https://github.com/zecalis/fael/releases/latest/download/fael-installer.ps1 
 
 ```bash
 fael install              # finds Claude Code, Codex and OpenCode; adds hooks, MCP server and a skill
+fael upgrade              # show what is out of date, ask, then update (alias: update)
 fael install --dry-run    # show what would change, write nothing
 ```
 

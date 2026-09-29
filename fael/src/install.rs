@@ -1,4 +1,5 @@
 //! `fael install [--client claude|codex|opencode] [--dry-run] [--replace-fapony]`
+//! `fael upgrade|update` = the same, but looks first and asks before writing.
 //! Wires MCP + hooks + skill into every client found on this machine.
 //! Idempotent: an entry already pointing at this binary stays, one pointing at
 //! another fael binary is repointed, anything that is not fael's is never touched.
@@ -15,6 +16,8 @@ mod codex;
 mod hooks;
 mod opencode;
 
+use std::cell::Cell;
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 const SKILL: &str = include_str!("../skill/SKILL.md");
@@ -44,10 +47,13 @@ pub(crate) struct Ctx {
     pub(crate) exe: String,
     pub(crate) dry: bool,
     pub(crate) replace: bool,
+    /// things this pass wrote — or, dry, would write; the summary counts them
+    pub(crate) changed: Cell<u32>,
 }
 
 impl Ctx {
     pub(crate) fn say(&self, what: &str, path: &Path) {
+        self.changed.set(self.changed.get() + 1);
         let verb = if self.dry { "would write" } else { "wrote" };
         println!("  {verb} {what} → {}", path.display());
     }
@@ -76,7 +82,7 @@ impl Ctx {
     }
 }
 
-pub fn cmd(client: Option<String>, dry: bool, replace: bool) -> Result<(), String> {
+pub fn cmd(client: Option<String>, dry: bool, replace: bool, ask: bool) -> Result<(), String> {
     let home = crate::home().ok_or("fael install: cannot find the home directory")?;
     // Configs never use current_exe(): under npx that is a disposable cache dir.
     // ponytail: resolved from PATH now, so PATH at hook time must find it too
@@ -85,12 +91,14 @@ pub fn cmd(client: Option<String>, dry: bool, replace: bool) -> Result<(), Strin
         None if dry => "fael".into(),
         None => return Err("fael install: fael is not on PATH, so the hooks could not run it — install it first: brew install zecalis/tap/fael, npm i -g @zecalis/fael or cargo install fael".into()),
     };
-    let c = Ctx {
-        home,
-        exe,
+    let ctx = |dry| Ctx {
+        home: home.clone(),
+        exe: exe.clone(),
         dry,
         replace,
+        changed: Cell::new(0),
     };
+    let c = ctx(dry || ask);
     let found = |name: &str| match name {
         "claude" => c.home.join(".claude").is_dir() || on_path("claude"),
         "codex" => c.home.join(".codex").is_dir(),
@@ -111,14 +119,44 @@ pub fn cmd(client: Option<String>, dry: bool, replace: bool) -> Result<(), Strin
     if dry {
         println!("dry run — nothing is written");
     }
+    run(&c, &targets)?;
+    let n = c.changed.get();
+    if n == 0 {
+        println!("\nup to date — nothing to change");
+    } else if dry {
+        println!("\n{n} change(s) pending — `fael upgrade` applies them");
+    } else if ask {
+        // the first pass was a look; a pipe or script cannot answer, so it applies
+        if std::io::stdin().is_terminal() {
+            print!("\napply {n} change(s)? [y/N] ");
+            let _ = std::io::stdout().flush();
+            let mut line = String::new();
+            let _ = std::io::stdin().lock().read_line(&mut line);
+            if !line.trim().eq_ignore_ascii_case("y") {
+                println!("nothing written");
+                return Ok(());
+            }
+        }
+        println!();
+        let w = ctx(false);
+        run(&w, &targets)?;
+        println!("\n{} change(s) applied", w.changed.get());
+    } else {
+        println!("\n{n} change(s) applied");
+    }
+    note_symlink();
+    Ok(())
+}
+
+fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {
     let mut skills = vec![];
     for t in targets {
         println!("{t}");
-        match t {
+        match *t {
             "claude" => {
-                claude::claude_mcp(&c);
+                claude::claude_mcp(c);
                 hooks::hooks_json(
-                    &c,
+                    c,
                     &c.home.join(".claude/settings.json"),
                     "claude",
                     CLAUDE_HOOKS,
@@ -126,13 +164,17 @@ pub fn cmd(client: Option<String>, dry: bool, replace: bool) -> Result<(), Strin
                 skills.push(c.home.join(".claude/skills/fael/SKILL.md"));
             }
             "codex" => {
-                codex::codex_mcp(&c)?;
-                hooks::hooks_json(&c, &c.home.join(".codex/hooks.json"), "codex", CODEX_HOOKS)?;
-                println!("  trust the new hooks in Codex with /hooks before they run");
+                codex::codex_mcp(c)?;
+                let before = c.changed.get();
+                hooks::hooks_json(c, &c.home.join(".codex/hooks.json"), "codex", CODEX_HOOKS)?;
+                // only a changed hook file needs a fresh trust
+                if c.changed.get() > before {
+                    println!("  trust the new hooks in Codex with /hooks before they run");
+                }
                 skills.push(c.home.join(".agents/skills/fael/SKILL.md"));
             }
             _ => {
-                opencode::opencode(&c)?;
+                opencode::opencode(c)?;
                 // OpenCode reads ~/.claude/skills too
                 skills.push(c.home.join(".claude/skills/fael/SKILL.md"));
             }
@@ -141,10 +183,14 @@ pub fn cmd(client: Option<String>, dry: bool, replace: bool) -> Result<(), Strin
     skills.sort();
     skills.dedup();
     for s in skills {
-        skill(&c, &s)?;
+        skill(c, &s)?;
     }
-    // worktrees that share one `.fael/` through a symlink (like this repo's)
-    // keep rows per worktree no longer — `local` holds them in the clone instead
+    Ok(())
+}
+
+/// worktrees that share one `.fael/` through a symlink (like this repo's)
+/// keep rows per worktree no longer — `local` holds them in the clone instead
+fn note_symlink() {
     if let Ok(r) = crate::repo()
         && matches!(r.cfg.store, crate::core::Store::Tracked)
         && std::fs::symlink_metadata(&r.fael).is_ok_and(|m| m.file_type().is_symlink())
@@ -154,7 +200,6 @@ pub fn cmd(client: Option<String>, dry: bool, replace: bool) -> Result<(), Strin
             r.fael.display()
         );
     }
-    Ok(())
 }
 
 /// The command client configs call: bare `fael`, except when PATH's `fael` is
@@ -200,8 +245,7 @@ fn skill(c: &Ctx, path: &Path) -> Result<(), String> {
         }
         _ => {
             c.write(path, SKILL)?;
-            let verb = if c.dry { "would write" } else { "wrote" };
-            println!("{verb} skill → {}", path.display());
+            c.say("skill", path);
         }
     }
     Ok(())
