@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 
 /// The stop event, plus the branch-drift warning (row-hygiene chunk 9): when
 /// HEAD moved since session-start — another session checked out its own
-/// branch in this same worktree — one line says so. Never blocks, never
-/// fires without a session-start baseline.
+/// branch in this same worktree — one line says so, once per session. Never
+/// blocks, never fires without a session-start baseline.
 pub(crate) fn stop(e: &Event) -> Reply {
     let mut r = stop_inner(e);
     if let Some(line) = drift_line(e) {
@@ -39,8 +39,9 @@ pub(crate) fn stop(e: &Event) -> Reply {
 }
 
 /// `Some(line)` when the session started on another branch than the one
-/// checked out now. No session, no repo, no baseline file (older sessions),
-/// or an unreadable HEAD = None, silently.
+/// checked out now, and this session has not been told yet. No session, no
+/// repo, no baseline file (older sessions), an unreadable HEAD, or a line
+/// already shown this session = None, silently.
 fn drift_line(e: &Event) -> Option<String> {
     // `stop_hook_active` = the client already ran this turn's stop hook and is
     // re-entering (e.g. after the non-blocking warning continued the turn) —
@@ -63,12 +64,20 @@ fn drift_line(e: &Event) -> Option<String> {
         return None;
     }
     let now = head_branch(&repo.root)?;
-    (start != now).then(|| {
-        format!(
-            "fael: branch changed mid-session ({start} → {now}) — \
-             verify the branch before push or gh pr create"
-        )
-    })
+    if start == now {
+        return None;
+    }
+    // once per session per worktree: a client whose stop_active flag is one-shot
+    // (opencode consumes it on the warning turn, then sends false again after a
+    // turn with no block) would otherwise re-fire the same line every turn —
+    // remember it fired, the same way a block is remembered
+    if stop_blocked_before(session, &repo.root.to_string_lossy(), "drift") {
+        return None;
+    }
+    Some(format!(
+        "fael: branch changed mid-session ({start} → {now}) — \
+         verify the branch before push or gh pr create"
+    ))
 }
 
 fn stop_inner(e: &Event) -> Reply {
@@ -283,8 +292,9 @@ fn stash_risk(session: &str, worktree: &Path, marker: &str) {
     }
 }
 
-/// True when this session already blocked for this worktree + kind — else
-/// record the block and return false. Empty session = no dedupe (block).
+/// True when this session already fired this worktree + kind — else record it
+/// and return false. Backs the work/bug block dedupe and the once-per-session
+/// branch-drift line ("drift"). Empty session = no dedupe (fire).
 fn stop_blocked_before(session: &str, worktree: &str, kind: &str) -> bool {
     if session.is_empty() {
         return false;

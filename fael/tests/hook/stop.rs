@@ -306,6 +306,12 @@ fn stop_warns_when_branch_changes_mid_session() {
         "{out}"
     );
 
+    // once per session: a client that never sends stop_active (or sends it
+    // false after a no-op turn) must not be re-warned on the next stop
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &stop);
+    assert!(ok && out.contains(r#""block":false"#), "{out}");
+    assert!(!out.contains("branch changed"), "{out}");
+
     // same branch as session-start: silent (a fresh session baselines here)
     let start = format!(r#"{{"cwd":{},"session":"drift-2"}}"#, json(&d));
     let (ok, _, _) = fael(&d, &["hook", "session-start"], &start);
