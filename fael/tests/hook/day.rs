@@ -143,11 +143,16 @@ fn day_text_prints_and_honours_tz_offset() {
     let state = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("stats-day-text-{}", fael_core::ulid()));
     std::fs::create_dir_all(&state).unwrap();
-    let day = &fael_core::rfc3339(fael_core::now_ms() as u64)[..10];
+    // "Today" is evaluated in the offset zone, so derive the expected date
+    // there — a UTC date may already be yesterday in +07:00 (flake ~7h/day).
+    let plus7_ms: u64 = 7 * 3600 * 1000;
+    let local_day = fael_core::rfc3339(fael_core::now_ms() as u64 + plus7_ms)[..10].to_string();
+    // Midday in the offset zone: safely inside the expected local day.
+    let ts = format!("{local_day}T05:00:00.000Z"); // 05:00Z = 12:00+07:00
     std::fs::write(
         state.join("usage.jsonl"),
         format!(
-            r#"{{"ts":"{day}T10:00:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["A"]}}"#
+            r#"{{"ts":"{ts}","repo":"/work/real","client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["A"]}}"#
         ),
     )
     .unwrap();
@@ -160,7 +165,7 @@ fn day_text_prints_and_honours_tz_offset() {
     );
     assert!(ok, "{err}");
     assert!(
-        out.starts_with(&format!("fael today ({day} +07:00):")),
+        out.starts_with(&format!("fael today ({local_day} +07:00):")),
         "{out}"
     );
     assert!(out.contains("health:"), "{out}");

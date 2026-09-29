@@ -18,6 +18,7 @@ mod log;
 mod query;
 mod row;
 pub mod stats;
+pub mod sync;
 mod validate;
 
 pub use aliases::{Aliases, is_alias_row, is_carrier_row};
