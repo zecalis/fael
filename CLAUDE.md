@@ -1,1 +1,1 @@
-../fael/CLAUDE.md
+@AGENTS.md
