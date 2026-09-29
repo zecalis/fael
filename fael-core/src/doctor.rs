@@ -9,14 +9,17 @@
 //! rows without `files` → never invent files) stays report-only.
 //!
 //! Thin entry only — the report types live here, the verbs in `doctor/`:
-//! `scan` (read-only check) and `fix` (repairs under the lock).
+//! `scan` (read-only check), `fix` (repairs under the lock) and `precision`
+//! (per-rule self-heal precision from restore labels, over a `Log`).
 
 mod fix;
+mod precision;
 mod scan;
 
 use std::path::PathBuf;
 
 pub use fix::{current_month, fix};
+pub use precision::precision;
 pub use scan::scan;
 
 /// Only `Error` fails `doctor`; `Info` is reported and never fails `--fix`.
@@ -86,6 +89,13 @@ pub enum Kind {
     /// batch can supersede them all (PLAN-fael-languages chunk 2); judged by
     /// `lang::row_language_check`, never new logic
     NotEnglish,
+    /// per-rule self-heal precision from restore labels
+    /// (PLAN-fael-selfheal-restore chunk 3): a `restores` row labels the edge
+    /// it reverts as wrong, an explicit re-supersede after it as right;
+    /// re-adds the healer files alone never label, edges never restored are
+    /// not counted, pre-verdict edges (no `decision_source`) are skipped.
+    /// Info-only, shown only when at least one label lands.
+    Precision,
 }
 
 #[derive(Debug, Clone)]

@@ -71,6 +71,35 @@ fn raw_edge_still_names_target_for_old_readers() {
 }
 
 #[test]
+fn restored_label_marks_reopened_row_until_hidden_again() {
+    let l = log_restored();
+    let out = render(&l, &find(&l, &Filter::default()), 10_000);
+    assert!(out.contains("(restored)"), "{out}");
+    // a still-active second edge keeps hiding B: superseded wins over restored
+    let mut l2 = l.clone();
+    let mut sup2 = row(C, "note", &["src/a.rs"], Some("auth:session"));
+    sup2.supersedes = Some(B.into());
+    l2.rows.push(sup2);
+    let all = Filter {
+        all: true,
+        ..Filter::default()
+    };
+    let out = render(&l2, &find(&l2, &all), 10_000);
+    assert!(
+        out.contains("(superseded)") && !out.contains("(restored)"),
+        "{out}"
+    );
+    // a close wins over both: the row left every list through closing
+    let mut l3 = log_restored();
+    l3.closes = vec![Row::close("me", B, "done")];
+    let out = render(&l3, &find(&l3, &all), 10_000);
+    assert!(
+        out.contains("(closed)") && !out.contains("(restored)"),
+        "{out}"
+    );
+}
+
+#[test]
 fn restore_text_names_both_ends_in_full_no_phantom() {
     let l = log_restored();
     let back = &l.rows[2];

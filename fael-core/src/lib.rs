@@ -27,7 +27,7 @@ pub use import::{Opts as ImportOpts, Report as ImportReport, import};
 
 pub use doctor::{
     Kind as ProblemKind, Problem, Report as DoctorReport, Severity, current_month,
-    fix as doctor_fix, scan as doctor_scan,
+    fix as doctor_fix, precision as doctor_precision, scan as doctor_scan,
 };
 
 pub use hook::{BugSignal, StopFacts, decide_stop, last_row_ms};
@@ -46,7 +46,7 @@ pub use query::{
     due, est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone, gone_files, id_tokens,
     is_date, keys, kickoff, levenshtein, page, phantom_md_refs, phantom_refs, push, push_tiered,
     query, ranked, ref_state, render, render_full, render_full_page, render_page, resolve,
-    resolve_urgent, reverted, row_due, select, stale_refs, superseded, today, waiting,
+    resolve_urgent, restored, reverted, row_due, select, stale_refs, superseded, today, waiting,
     waiting_line, warnings, with_due,
 };
 pub use row::{Row, Stamp};

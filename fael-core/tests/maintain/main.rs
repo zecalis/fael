@@ -7,5 +7,6 @@
 mod common;
 mod compact;
 mod doctor_fix;
+mod doctor_precision;
 mod doctor_scan;
 mod import;
