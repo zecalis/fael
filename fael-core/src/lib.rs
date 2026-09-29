@@ -19,7 +19,7 @@ mod query;
 mod row;
 mod validate;
 
-pub use aliases::{Aliases, is_alias_row};
+pub use aliases::{Aliases, is_alias_row, is_carrier_row};
 pub use compact::{Opts as CompactOpts, Report as CompactReport, WriterReport, compact};
 pub use config::{Config, Store};
 pub use import::{Opts as ImportOpts, Report as ImportReport, import};

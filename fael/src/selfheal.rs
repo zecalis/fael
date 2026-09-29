@@ -23,9 +23,13 @@
 //! decision reversible.
 //!
 //! Thin entry only — observation lives in `evidence` (Evidence, Candidate),
-//! the temporary legacy-order decider in `decide` (Verdict), the byte-identical
-//! renderer in `render` (Heal). Public paths never change — callers keep
-//! `crate::selfheal::{heal, auto_key}`.
+//! the Explicit > Identity > Heuristic policy table in `decide` (Eligibility,
+//! Verdict), the byte-identical renderer in `render` (Heal). Chunk 2's five
+//! invariants live as generated unit tests in `property`. Public paths never
+//! change — callers keep `crate::selfheal::{heal, auto_key}`.
+
+#[cfg(test)]
+mod property;
 
 mod decide;
 mod evidence;

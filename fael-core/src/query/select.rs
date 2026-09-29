@@ -1,6 +1,6 @@
 use super::Filter;
 use super::matching::{file_match, glob, is_md, lenient};
-use crate::{Aliases, Log, Row, anchor, is_alias_row, resolve, to_matches};
+use crate::{Aliases, Log, Row, anchor, is_alias_row, is_carrier_row, resolve, to_matches};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::Path;
@@ -223,6 +223,7 @@ pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
         .filter(|r| {
             !hide.contains(r.id.as_str())
                 && !is_alias_row(r)
+                && !is_carrier_row(r)
                 && f.kind.as_ref().is_none_or(|k| &r.kind == k)
                 && f.by.as_ref().is_none_or(|b| &r.by == b)
                 && f.to

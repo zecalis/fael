@@ -111,6 +111,11 @@ Reading never fails. Take no lock; for every `*.jsonl` under `log/`:
 - skip a line that isn't a JSON object, or whose known fields have the wrong type, and report `file:line`
 - **keep every field and kind you don't know**, and write them back unchanged — readers are forward-compatible and lossless
 - skip a row with a `moved` object you don't understand — it's an alias carrier, not a result
+- a row with no `kind` and no `files` is a carrier, never a result — it moves
+  no finding and holds no topic, so lists show nothing for it and counts skip
+  it. A legacy row without `files` still carries a `kind` and stays a result;
+  close rows ride the `.close.jsonl` stream, not the row stream, and still
+  hide the rows they name
 - drop duplicate `id`s, keeping the first in path order (a union merge duplicates lines)
 - a row without `files` (legacy) is valid to read
 - compare `files` after turning `\` into `/` and dropping a leading `./` — legacy rows were not normalised

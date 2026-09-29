@@ -8,6 +8,7 @@
 mod autokey;
 mod key;
 mod note;
+mod policy;
 mod text;
 
 use std::io::Write;
