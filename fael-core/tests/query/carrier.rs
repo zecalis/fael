@@ -37,3 +37,25 @@ fn carrier_is_never_a_result_legacy_stays() {
     };
     assert_eq!(ids(&find(&l, &all)), ["22", "21"]);
 }
+
+/// The carrier rule is a reader contract, not a `find` filter: a keyed
+/// carrier must not push either (it shares a key with a real row on the file,
+/// which would otherwise land it at tier 2).
+#[test]
+fn push_skips_a_keyed_carrier() {
+    let present = row(
+        "C0000000000000000000000021",
+        "note",
+        &["src/a.rs"],
+        Some("k:a"),
+    );
+    let mut carrier = carrier("C0000000000000000000000024");
+    carrier.key = Some("k:a".into());
+    let l = Log {
+        rows: vec![present, carrier],
+        ..Log::default()
+    };
+    let pushed = push_tiered(&l, &["src/a.rs".to_string()], &Aliases::default(), true);
+    let rows: Vec<&Row> = pushed.iter().map(|(r, _)| *r).collect();
+    assert_eq!(ids(&rows), ["21"]);
+}
