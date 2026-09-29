@@ -73,7 +73,8 @@ naming.
 
 ### repo-id
 
-- Computed from `git rev-list --max-parents=0 --all`, taking the minimum SHA.
+- Computed from `git rev-list --max-parents=0 --all --not --glob=refs/fael/*`, taking the minimum SHA.
+  `refs/fael/*` is excluded so sync's own parentless commits can never shift the id afterwards.
   Every clone of the same repo (any branch set that contains history) derives
   the same id, including repos with two root commits.
 - Cached at the first sync in `git config fael.repoid` so the value never
