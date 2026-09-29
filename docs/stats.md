@@ -47,13 +47,56 @@ shape is a breaking change: ship the reader first.
 | `real_tokens` | object, else absent | mean cost of the round after a stop-block: `post_block_rounds`, `avg_input`, `avg_cache_create`, `avg_cache_read`, `avg_output` |
 | `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
 
-`null` never appears: an absent `real_tokens` means no post-block round had
-transcript `usage` (not zero tokens), and an absent `rows` means `--rows`
-was not passed (not zero pushes). A zero `share`-like value is always a
-measured zero, never "unknown" — chunk 3's `DayView` keeps the same rule
-(`null` = unknown, see its section when it lands).
+`null` never appears in `Stats`: an absent `real_tokens` means no post-block
+round had transcript `usage` (not zero tokens), and an absent `rows` means
+`--rows` was not passed (not zero pushes). A zero `share`-like value is always
+a measured zero, never "unknown" — `DayView` keeps the same rule (`null` =
+unknown, see its section below).
+
+## Fields (`fael stats --day --json`)
+
+`fael stats --day` prints one local day as `fael-core::stats::DayView` — the
+same struct the desktop popover reads over IPC (PLAN-fael-desktop chunk 4),
+so the CLI and the app cannot disagree. Pure: `now`, the timezone offset and
+the loaded logs are parameters; the caller reads the environment
+(`FAEL_TZ_OFFSET` like `+07:00` wins over the machine zone) and the clock.
+No state dir → zeros with `repos: []`, exit 0.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `schema` | u32 | contract version of **this** shape, currently `1` (`DAY_SCHEMA`, versioned apart from `Stats`) |
+| `day` | `YYYY-MM-DD` | the local day `now` falls in |
+| `tz_offset` | `±hh:mm` | the offset used (`+00:00` for UTC) |
+| `all` | object | the five panels + `timeline` over every repo |
+| `repos` | `[{repo, …panels}]` | per repo with activity today, path-sorted |
+
+Each panel (identical shape under `all` and inside `repos[]`):
+
+| Panel | Field | Type | Meaning |
+|---|---|---|---|
+| Delivered | `rows` | u32 | usage pushes carrying ≥1 id today (per push, not distinct ids) |
+| | `by_client` | map client → u32 | pushes per client |
+| | `last` | `[{id, title, file}]` × ≤5 | newest pushed rows; `title`/`file` from the repo's log, `""`/id when the repo is gone |
+| Light on context | `fael_tokens` | u32 | sum of `est_tokens` today |
+| | `session_tokens` | u64 | summed input-side `real_tokens` (in + cache-create + cache-read) of rows that measured |
+| | `share` | f64, else `null` | `fael_tokens / session_tokens` — `null` when nothing measured (or the sum is 0): shown as `—`, never estimated |
+| Memory | `added` | map kind → u32 | log rows **filed today** by kind (carriers and alias rows excluded) |
+| | `closed` | u32 | close rows filed today |
+| | `open_issues` | u32 | current open issues (not day-scoped) |
+| | `superseded` | u32 | current rows hidden by an active supersede edge |
+| For you | — | object, else `null` | `null` when no writer is set (hidden, never guessed); else `rows`, `from` (map writer → u32), `urgent`, `revisit_due` over open rows routed to the viewer |
+| Health | `ignored_blocks` | u32 | today's `stop-*` events with no following row |
+| | `stale_issues` | u32 | open issues older than 14 days |
+| Timeline | `bucket_min` | u32 | `15` — bucket size, 96 buckets per day |
+| | `delivered` | [u32] × 96 | pushes per 15-minute bucket of the local day |
+| | `fael_tokens` | [u32] × 96 | `est_tokens` per bucket |
+
+All-repos vs per-repo: `context` and `timeline` recompute over the union (so
+`share` is exact, not averaged); `delivered.rows`/`by_client` and the log
+panels are summed; `delivered.last` is newest-first across repos.
 
 ## Changelog
 
 - `1` (2026-09-29): first frozen shape. `schema` key added; everything else
   byte-identical to the pre-core output.
+- `DayView: 1` (2026-09-29): first frozen day shape (`fael stats --day --json`).

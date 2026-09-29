@@ -8,6 +8,8 @@ use crate::ts_ms;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use super::metrics::real_in;
+
 /// One stop-hook block row: did a memory row follow it? The session joins a
 /// block to the round after it; row times come from the repo logs in
 /// `aggregate`, never from here.
@@ -16,6 +18,18 @@ pub struct StopBlock {
     pub event: String,
     pub ms: i64,
     pub session: String,
+}
+
+/// One usage event with the day view's fields — the caller filters by day.
+/// `real_input` is the round's input-side real tokens (in + cache-create +
+/// cache-read) when the row carried transcript `usage`; `None` = unmeasured.
+pub struct UsageRow {
+    pub ms: i64,
+    pub repo: String,
+    pub client: String,
+    pub toks: usize,
+    pub ids: Vec<String>,
+    pub real_input: Option<u64>,
 }
 
 /// Everything `aggregate` needs, straight from the usage text.
@@ -33,6 +47,8 @@ pub struct Parsed {
     pub blocks: Vec<StopBlock>,
     /// Kept rows feed the ask metrics in `aggregate`.
     pub kept: Vec<serde_json::Value>,
+    /// Per-event rows feed the day view in `day`.
+    pub rows: Vec<UsageRow>,
     /// First usage ts per repo — the "rows added since" denominator.
     pub first_seen: HashMap<String, i64>,
 }
@@ -69,6 +85,7 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
         id_repos: HashMap::new(),
         blocks: vec![],
         kept: vec![],
+        rows: vec![],
         first_seen: HashMap::new(),
     };
     let in_tmp = |q: &Path| {
@@ -105,6 +122,14 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
                     session: v["session"].as_str().unwrap_or("").to_string(),
                 });
             }
+            p.rows.push(UsageRow {
+                ms,
+                repo: repo.to_string(),
+                client: cl.clone(),
+                toks: t,
+                ids: ids_of(&v),
+                real_input: real_in(&v).map(|q| q[0] + q[1] + q[2]),
+            });
         }
         count(&mut p.by_event, ev, t);
         count(&mut p.by_client, cl, t);
@@ -127,6 +152,17 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
         p.kept.push(v);
     }
     p
+}
+
+/// Ids one usage event handed to the agent — shared by the push counts
+/// above and the day view's delivered panel, so the two cannot drift.
+fn ids_of(v: &serde_json::Value) -> Vec<String> {
+    v["ids"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|i| i.as_str().map(str::to_string))
+        .collect()
 }
 
 fn count(into: &mut HashMap<String, (usize, usize)>, key: String, toks: usize) {

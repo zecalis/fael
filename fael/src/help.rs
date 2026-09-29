@@ -85,9 +85,11 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "stats",
         "tokens fael has put into context",
-        "fael stats [--json] [--rows]
+        "fael stats [--json] [--rows] [--day]
     (tokens fael has put into context, per machine;
-     --rows = per-row pushes against open/closed/superseded, flagging noise?)",
+     --rows = per-row pushes against open/closed/superseded, flagging noise?;
+     --day = today's panels per repo and summed (local day: FAEL_TZ_OFFSET
+     like +07:00 wins, else the machine zone); --day --json prints DayView)",
     ),
     (
         "doctor",

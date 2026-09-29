@@ -52,14 +52,9 @@ fn repo_log(repo: &str) -> core::Log {
         .unwrap_or_else(|_| core::read(&Path::new(repo).join(".fael")))
 }
 
-pub fn stats(json: bool, rows: bool) -> Result<(), String> {
+pub fn stats(json: bool, rows: bool, day_view: bool) -> Result<(), String> {
     let path = state_dir().join("usage.jsonl");
     let s = std::fs::read_to_string(&path).unwrap_or_default();
-    // without `--json` an empty log is one friendly line, not a table of zeros
-    if s.trim().is_empty() && !json {
-        println!("fael: no usage recorded yet");
-        return Ok(());
-    }
     // benchmark/test repos live in the OS temp dir (01M3CRR6A) — the boundary
     // rides in as a parameter, so core stays pure
     let tmp = [
@@ -67,6 +62,14 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
         std::env::temp_dir().canonicalize().unwrap_or_default(),
     ];
     let parsed = core::stats::parse(&s, &path, &tmp);
+    if day_view {
+        return day(json, &parsed);
+    }
+    // without `--json` an empty log is one friendly line, not a table of zeros
+    if s.trim().is_empty() && !json {
+        println!("fael: no usage recorded yet");
+        return Ok(());
+    }
     if parsed.n == 0 && !json {
         println!(
             "fael: no usage recorded yet ({} from temp repos skipped)",
@@ -94,6 +97,151 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// One local day out of usage + logs (`fael stats --day [--json]`): the same
+/// `DayView` struct the desktop popover reads over Tauri IPC, printed here
+/// so the numbers can be checked against real data before the app exists.
+fn day(json: bool, parsed: &core::stats::Parsed) -> Result<(), String> {
+    // finding repos and reading journals stays with the caller (CLI or app);
+    // core joins the loaded logs, never the filesystem
+    let mut logs: HashMap<String, core::Log> = HashMap::new();
+    for repo in parsed.repos() {
+        logs.entry(repo.to_string())
+            .or_insert_with(|| repo_log(repo));
+    }
+    let me = crate::repo().ok().map(|r| crate::writer(&r));
+    let view = core::stats::day(
+        parsed,
+        &logs,
+        me.as_deref(),
+        core::now_ms() as i64,
+        local_tz_offset_min(),
+    );
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&view).map_err(|e| e.to_string())?
+        );
+        return Ok(());
+    }
+    print_day(&view);
+    Ok(())
+}
+
+/// Minutes east of UTC for the day view: `FAEL_TZ_OFFSET` (`+07:00`,
+/// `+0700`, `+7`, `Z`) wins so tests and servers pin the day; otherwise the
+/// machine's `date +%z` (unix); UTC last.
+fn local_tz_offset_min() -> i32 {
+    if let Ok(s) = std::env::var("FAEL_TZ_OFFSET")
+        && let Some(m) = parse_tz_offset(&s)
+    {
+        return m;
+    }
+    #[cfg(unix)]
+    if let Ok(o) = std::process::Command::new("date").arg("+%z").output()
+        && let Some(m) = parse_tz_offset(String::from_utf8_lossy(&o.stdout).trim())
+    {
+        return m;
+    }
+    0
+}
+
+fn parse_tz_offset(s: &str) -> Option<i32> {
+    let s = s.trim();
+    if s.eq_ignore_ascii_case("z") {
+        return Some(0);
+    }
+    let (sign, rest) = match s.strip_prefix('+') {
+        Some(r) => (1, r),
+        None => (-1, s.strip_prefix('-')?),
+    };
+    let (h, m) = match rest.split_once(':') {
+        Some((h, m)) => (h, m),
+        None if rest.len() <= 2 => (rest, "0"),
+        None => rest.split_at(rest.len() - 2),
+    };
+    let (h, m): (i32, i32) = (h.parse().ok()?, m.parse().ok()?);
+    (m < 60).then_some(sign * (h * 60 + m))
+}
+
+/// The human `fael stats --day` text — format only, every number from core.
+fn print_day(v: &core::stats::DayView) {
+    let a = &v.all;
+    let share = a
+        .context
+        .share
+        .map(|s| format!("{:.2}%", s * 100.0))
+        .unwrap_or("—".to_string());
+    println!(
+        "fael today ({} {}): {} rows delivered · {} fael tokens · share {}",
+        v.day, v.tz_offset, a.delivered.rows, a.context.fael_tokens, share
+    );
+    let mut cl: Vec<_> = a.delivered.by_client.iter().collect();
+    cl.sort_by_key(|x| std::cmp::Reverse(x.1));
+    let cls: Vec<String> = cl.iter().map(|(k, c)| format!("{k} ×{c}")).collect();
+    println!(
+        "  delivered: {}{}",
+        a.delivered.rows,
+        short_list(&cls, " (", ")")
+    );
+    for l in &a.delivered.last {
+        println!("  last: {} → {}", l.title, l.file);
+    }
+    println!(
+        "  context: {} fael / {} session",
+        a.context.fael_tokens, a.context.session_tokens
+    );
+    let mut kinds: Vec<_> = a.memory.added.iter().collect();
+    kinds.sort_by_key(|x| std::cmp::Reverse(x.1));
+    let adds: Vec<String> = kinds.iter().map(|(k, c)| format!("{k} ×{c}")).collect();
+    println!(
+        "  memory: {} · closed ×{} · open issues ×{} · superseded ×{}",
+        if adds.is_empty() {
+            "no rows added".to_string()
+        } else {
+            format!("+{}", adds.join(" +"))
+        },
+        a.memory.closed,
+        a.memory.open_issues,
+        a.memory.superseded
+    );
+    match &a.for_you {
+        Some(f) => {
+            let mut from: Vec<_> = f.from.iter().collect();
+            from.sort_by_key(|x| std::cmp::Reverse(x.1));
+            let fs: Vec<String> = from.iter().map(|(k, c)| format!("{k} ×{c}")).collect();
+            println!(
+                "  for you: {} rows{} · urgent ×{} · revisit due ×{}",
+                f.rows,
+                short_list(&fs, " from ", ""),
+                f.urgent,
+                f.revisit_due
+            );
+        }
+        None => println!("  for you: hidden (no writer set)"),
+    }
+    println!(
+        "  health: {} ignored block(s) · {} stale issue(s)",
+        a.health.ignored_blocks, a.health.stale_issues
+    );
+    for r in &v.repos {
+        println!(
+            "  repo {}: {} delivered · {} fael tokens · +{} rows",
+            r.repo,
+            r.panels.delivered.rows,
+            r.panels.context.fael_tokens,
+            r.panels.memory.added.values().sum::<usize>(),
+        );
+    }
+}
+
+/// `items` joined after `pre` before `post` — nothing at all when empty.
+fn short_list(items: &[String], pre: &str, post: &str) -> String {
+    if items.is_empty() {
+        String::new()
+    } else {
+        format!("{pre}{}{post}", items.join(", "))
+    }
+}
 /// The human `fael stats` text — format only, every number comes from core.
 fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
     println!(

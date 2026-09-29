@@ -2,6 +2,11 @@
 //! and each field's type. A shape change fails here first — then update this
 //! list, `docs/stats.md` (changelog), and `STATS_SCHEMA` iff a field was
 //! removed, renamed, retyped or redefined (additions never bump the number).
+//!
+//! Thin entry only — the suites sit next to this file: the chunk-2 `Stats`
+//! shape above, `day` (PLAN-fael-sync chunk 3: `DayView` edges + shape).
+
+mod day;
 
 use fael_core::Config;
 use fael_core::stats::{aggregate, parse};

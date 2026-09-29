@@ -246,7 +246,9 @@ fn real_avg(
     })
 }
 
-fn block_followed(log: &Log, b: &StopBlock) -> bool {
+/// Did a memory row follow a stop-hook block? Shared with the day view's
+/// health panel (`stop-bug` wants a following `issue`, the rest any row).
+pub(super) fn block_followed(log: &Log, b: &StopBlock) -> bool {
     if b.event == "stop-bug" {
         // did an issue row follow a bug block? (anyone's row counts)
         log.rows
