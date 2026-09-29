@@ -18,6 +18,7 @@ mod restore;
 mod schema;
 mod selfheal;
 mod session;
+mod sync;
 mod write;
 
 use fael_core::{self as core, Config, Log};
@@ -86,6 +87,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
+        ("sync", []) => sync::sync(&repo()?, &a).map(|()| ExitCode::SUCCESS),
         ("mcp", []) => mcp::serve().map(|()| ExitCode::SUCCESS),
         ("install" | "upgrade" | "update", []) => {
             // `install` keeps writing without a question; upgrade/update ask first

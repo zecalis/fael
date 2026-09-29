@@ -78,6 +78,9 @@ A feature must never:
 | **adapters** | turn each client's input/output into core calls | one client each · never the rules — paths go through `core.normalize`, never an adapter's own cleanup |
 
 Adding a client touches only an adapter. Changing a rule touches only core. Changing the format is a spec change.
+`fael sync` is adapter-side transport, not storage: it reads the journal through core and carries it in
+`refs/fael/<repo-id>/<writer>` (or a future cloud transport) — the row format never changes in transit
+([sync-format.md](sync-format.md)).
 
 ## 2. Storage
 
@@ -125,6 +128,11 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
   already durable; a retry would file it twice under a new id). Reads union
   both, tree wins on duplicate ids; journal-only rows tag `@<branch>`.
 - Across clones durability still comes from git; rows are not fsynced one by one.
+- Across clones and machines journals travel through `fael sync`: each writer's
+  journal is pushed to `refs/fael/<repo-id>/<writer>` on a remote (any git URL
+  in `git config fael.remote`, never committed) and every writer's ref is
+  ingested back by id-union. The working tree and checked-out branches are
+  never touched; the full contract is [sync-format.md](sync-format.md).
 
 ## 3. API
 
@@ -155,6 +163,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael upgrade [--client c] [--dry-run] [--yes] [--replace-fapony]` | `install` that looks first: lists what is out of date, counts it, asks `[y/N]` before writing (`--yes` or no terminal skips the question; `update` is an alias) |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
+| `fael sync [--remote url]` | push this writer's journal to `refs/fael/<repo-id>/<writer>` on the remote and ingest every writer's ref back (`--remote` wins, else `git config fael.remote`) |
 | `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it) |
 | `fael stats [--json] [--rows] [--day]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed) |
 

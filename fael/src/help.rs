@@ -116,6 +116,14 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (import rows from a fapony log; --map rewrites a path prefix, repeatable)",
     ),
     (
+        "sync",
+        "push and ingest writer journals",
+        "fael sync [--remote url]
+    (push this writer's journal to refs/fael/<repo-id>/<writer> on the remote
+     and ingest every writer's ref back; --remote wins, else git config
+     fael.remote; set it with: git config fael.remote <url>)",
+    ),
+    (
         "mcp",
         "MCP server on stdio",
         "fael mcp

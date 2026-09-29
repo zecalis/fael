@@ -49,7 +49,7 @@ impl Args {
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
                 | "before" | "map" | "to" | "title" | "urgent-before" | "limit" | "offset"
-                | "text" | "edge" => {
+                | "text" | "edge" | "remote" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("--{name} needs a value"))?;
