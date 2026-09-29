@@ -116,11 +116,11 @@ pub fn add_row(
     Ok((row, path, warns))
 }
 
-/// Journal-first write shared by add/close/mv: `put` writes one validated row
+/// Journal-first write shared by add/close/mv/restore: `put` writes one validated row
 /// to one root (tree or journal — same line bytes both places). Returns the
 /// path the row landed in (the journal one when the tree is skipped or fails)
 /// plus a warning when a `tracked` tree write fails after the journal commit.
-fn write_both(
+pub(crate) fn write_both(
     fael: &Path,
     journal: Option<&Path>,
     cfg: &Config,

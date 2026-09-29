@@ -7,6 +7,8 @@
 //! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
 //! `focus` (push buckets + row cap).
 //! `carrier` (no-kind-no-files rows never list, legacy stays).
+//! `restore` (superseded = edges minus reverted; restore rows are carriers;
+//! old readers over-hide by the raw edge).
 //! The shared builders live here.
 
 mod anchor;
@@ -18,6 +20,7 @@ mod md;
 mod paging;
 mod refs;
 mod render;
+mod restore;
 mod revisit;
 mod select;
 mod stale;

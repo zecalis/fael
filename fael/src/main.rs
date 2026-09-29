@@ -13,6 +13,7 @@ mod journal;
 mod maintain;
 mod mcp;
 mod refs;
+mod restore;
 mod schema;
 mod selfheal;
 mod session;
@@ -76,6 +77,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("mv", [old, new]) => mv(&a, old, new).map(|()| ExitCode::SUCCESS),
+        ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
+            .map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
         ("stats", []) => hook::stats(a.has("json"), a.has("rows")).map(|()| ExitCode::SUCCESS),
         ("doctor", []) => maintain::doctor(&a),
@@ -154,7 +157,7 @@ impl Args {
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
                 | "before" | "map" | "to" | "title" | "urgent-before" | "limit" | "offset"
-                | "text" => {
+                | "text" | "edge" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("--{name} needs a value"))?;

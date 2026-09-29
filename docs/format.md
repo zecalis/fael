@@ -120,9 +120,15 @@ Reading never fails. Take no lock; for every `*.jsonl` under `log/`:
 - a row without `files` (legacy) is valid to read
 - compare `files` after turning `\` into `/` and dropping a leading `./` — legacy rows were not normalised
 
-A row is hidden by default when a close row's `ref` names it, it has a `closed` field, or another row `supersedes` it.
+A row is hidden by default when a close row's `ref` names it, it has a `closed` field, or another row `supersedes` it — minus the edges a restore row reverted (see below).
 
 Closing a row that supersedes others also closes the rows it names — one close row per version. Each is a plain close row, so an older reader hides the whole chain exactly as this rule says; the marker itself is never erased.
+
+## Restore
+
+`fael restore` reverts one supersede edge without rewriting anything: it appends a restore event row carrying `restores` (the superseding row's id — one row supersedes at most one row, so the superseder names the edge), no `kind`, no `files`, and a text naming both ends in full (`<B> restored — supersede by <A> reverted`). Readers hide `superseded()` = all supersede edges minus the reverted ones, so the restored row opens again unless another still-active edge names it. Restoring an already-open row, or an already-reverted edge, writes nothing. After a restore both ends are open at once — the next `add` re-runs the self-heal policy over both, so a same-kind add on their key holds until an agent picks one with `--supersedes`; it never silently re-hides the restored row.
+
+No `v` bump — the degrade is intended, in two layers. Readers at or after the carrier rule above never list the restore row at all (a carrier, never a result). Readers older than that do list it, but its text reads as information, not garbage; and they keep hiding the restored row (over-hide) until upgraded — a bump could not teach them the subtraction anyway.
 
 ## Versioning
 

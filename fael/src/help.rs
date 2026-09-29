@@ -67,6 +67,15 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      git; appends an alias row, the log stays append-only, nothing is rewritten)",
     ),
     (
+        "restore",
+        "revert a supersede edge",
+        "fael restore [<id>] [--edge id]
+    (revert a supersede edge with an event row — the row keeps its id and opens
+     again; <id> reopens that row when one edge still hides it, --edge names
+     the superseding row when several do; an already-open row or an
+     already-reverted edge is info, never an error)",
+    ),
+    (
         "hook",
         "stdin in, stdout out; always exits 0",
         "fael hook <event> [--client c]

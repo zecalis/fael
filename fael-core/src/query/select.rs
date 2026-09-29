@@ -21,12 +21,30 @@ pub fn closed(log: &Log) -> HashSet<&str> {
     h
 }
 
-/// Ids some newer row names in `supersedes`.
-pub fn superseded(log: &Log) -> HashSet<&str> {
+/// Supersede edges a restore row reverted, by superseder id — one row
+/// supersedes at most one row, so the superseder names the edge (`restores`).
+pub fn reverted(log: &Log) -> HashSet<&str> {
     log.rows
         .iter()
-        .filter_map(|r| r.supersedes.as_deref())
+        .filter_map(|r| r.restores.as_deref())
         .collect()
+}
+
+/// Ids some newer row names in `supersedes`, minus the reverted edges: a
+/// restored row is open again unless another still-active edge names it.
+/// The one reader for hiding (find, push, doctor, hook) — an old reader that
+/// subtracts nothing keeps hiding the restored row (over-hide, intended).
+pub fn superseded(log: &Log) -> HashSet<&str> {
+    let rev = reverted(log);
+    let mut out = HashSet::new();
+    for r in &log.rows {
+        if let Some(t) = r.supersedes.as_deref()
+            && !rev.contains(r.id.as_str())
+        {
+            out.insert(t);
+        }
+    }
+    out
 }
 
 /// What `add --urgent` asks for: `Unset` = not urgent, `End` = back of the

@@ -2,7 +2,7 @@
 //! first. Moved out of select.rs (file-size ratchet) — no logic of its own.
 
 use super::matching::{lenient, same_dir, zone};
-use crate::{Aliases, Log, Row, is_alias_row};
+use crate::{Aliases, Log, Row, is_alias_row, is_carrier_row};
 use std::collections::HashSet;
 
 /// The read/edit push: rows about `files`, ranked so the most actionable comes
@@ -73,7 +73,9 @@ pub fn push_tiered<'a>(
     let out: Vec<&Row> = log
         .rows
         .iter()
-        .filter(|r| !hide.contains(r.id.as_str()) && !is_alias_row(r) && tier(r) < 3)
+        .filter(|r| {
+            !hide.contains(r.id.as_str()) && !is_alias_row(r) && !is_carrier_row(r) && tier(r) < 3
+        })
         .collect();
     let mut keyed: Vec<(&Row, usize, i64)> = out
         .into_iter()

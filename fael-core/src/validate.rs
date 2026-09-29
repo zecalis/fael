@@ -103,6 +103,36 @@ pub fn validate_alias(row: &Row, cfg: &Config) -> Result<(), String> {
     check_common(row, cfg)
 }
 
+/// Check a restore (`restores`) row before it is written — what `fael
+/// restore` appends. A carrier by design: no kind, no files, closes nothing,
+/// and it names exactly one supersede edge by its superseder. Whether that
+/// edge exists and is still active is decided against the log in `restore_row`,
+/// not here.
+pub fn validate_restore(row: &Row, cfg: &Config) -> Result<(), String> {
+    if !row.kind.is_empty() {
+        return Err(
+            "rejected: a restore row carries no kind — it only reverts a supersede edge".into(),
+        );
+    }
+    if !row.files.is_empty() {
+        return Err(
+            "rejected: a restore row carries no files — it only reverts a supersede edge".into(),
+        );
+    }
+    if row.reference.is_some() {
+        return Err(
+            "rejected: a restore row closes nothing — it only reverts a supersede edge".into(),
+        );
+    }
+    if row.restores.as_deref().is_none_or(|e| e.trim().is_empty()) {
+        return Err(
+            "rejected: restore needs the id of the superseding row — write it with `fael restore <id>` (`--edge` picks the edge)"
+                .into(),
+        );
+    }
+    check_common(row, cfg)
+}
+
 fn check_common(row: &Row, cfg: &Config) -> Result<(), String> {
     if row.text.trim().is_empty() {
         return Err("rejected: text is required — write it so it stands alone months later".into());

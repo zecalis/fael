@@ -2,15 +2,18 @@
 //! Reads never fail and take no lock; appends hold `.fael/.lock` and write one whole line.
 //!
 //! Thin entry only — the read side stays here, the write side lives in
-//! `append` (locking, add/bump/close/mv). Public paths never change —
-//! `fael_core::…` and `crate::log::…` resolve as before.
+//! `append` (locking, add/bump/close/mv) and `restore` (reverting a supersede
+//! edge). Public paths never change — `fael_core::…` and `crate::log::…`
+//! resolve as before.
 
 mod append;
+mod restore;
 
 pub use append::{
     BumpOpts, MONTH_MAX, add, add_row, append, bump_row, close, close_row, mv_row, needs_seal,
 };
-pub(crate) use append::{lock, tmp_rename};
+pub(crate) use append::{lock, tmp_rename, write_both};
+pub use restore::{Restored, restore_row};
 
 use crate::Row;
 use std::collections::HashSet;
