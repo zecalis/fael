@@ -35,18 +35,24 @@ pub(crate) fn parse_revisit(has: bool, one: Option<String>) -> Result<Option<Str
     }
 }
 
-/// Normalise files against cwd, then core's add path — shared by the CLI and MCP.
-/// No files: inherit the files this session edited (after the newest row);
-/// still empty without a hook session, and core keeps rejecting that.
-/// Every entry is checked against evidence (disk · renames · session edits ·
-/// git status) before the row is written.
-pub(crate) fn add_row(
+/// A row built, healed and validated — everything short of the write. Shared
+/// by `add_row` and dry runs, so a preview can never drift from the real add.
+pub(crate) struct Pending {
+    pub row: core::Row,
+    pub evaluated: crate::selfheal::Evaluated,
+    pub warns: Vec<String>,
+}
+
+/// Build + heal + validate without writing (normalise · check · self-heal ·
+/// provenance · id scan). Dry runs stop here, so the previewed Verdict is
+/// the one `add_row` would act on.
+pub(crate) fn prepare(
     r: &crate::Repo,
     kind: &str,
     text: &str,
     files_arg: &[String],
     opts: AddOpts,
-) -> Result<(core::Row, PathBuf, Vec<String>), String> {
+) -> Result<(Pending, core::Stamp, core::Log), String> {
     let AddOpts {
         key,
         to,
@@ -88,18 +94,18 @@ pub(crate) fn add_row(
     // `--urgent-before` = just above that row); core rejects non-issues
     row.urgent = core::resolve_urgent(&log, &urgent)?;
     // self-heal (chunks 3b–d): a repeat on these files or this key, or an id
-    // the text names, supersedes itself — same path for CLI and MCP
-    let heal = crate::selfheal::heal(&log, &st, &row, supersedes.as_deref(), r.cfg.cross_key)?;
-    warns.extend(heal.notes);
+    // the text names, supersedes itself — one shared Verdict for the real
+    // add, `add --dry-run` and MCP `dry_run`
+    let evaluated =
+        crate::selfheal::evaluate(&log, &st, &row, supersedes.as_deref(), r.cfg.cross_key);
+    warns.extend(evaluated.heal.notes.clone());
     // verdict chunk 3: provenance for restore — which rule filed `supersedes`
-    if let Some(s) = heal.source {
-        row.decision_source = Some(s);
-    }
+    row.decision_source = evaluated.heal.source.clone();
     // id-refs chunk 2: prose citing an id with no row behind it says so —
     // one info line per id, never a reject. Skips the row itself and its
     // supersede target (a caller flag may name either verbatim).
     let mut skip = vec![row.id.as_str()];
-    if let Some(s) = heal.supersedes.as_deref() {
+    if let Some(s) = evaluated.heal.supersedes.as_deref() {
         skip.push(s);
     }
     warns.extend(phantom_lines(
@@ -117,14 +123,32 @@ pub(crate) fn add_row(
         warns.push(format!("key {k} — the only key on these files"));
         row.key = Some(k);
     }
+    let out = Pending {
+        row,
+        evaluated,
+        warns,
+    };
+    Ok((out, st, log))
+}
+
+/// Core's add path over `prepare`'s build — shared by the CLI and MCP.
+pub(crate) fn add_row(
+    r: &crate::Repo,
+    kind: &str,
+    text: &str,
+    files_arg: &[String],
+    opts: AddOpts,
+) -> Result<(core::Row, PathBuf, Vec<String>), String> {
+    let (pending, st, log) = prepare(r, kind, text, files_arg, opts)?;
+    let mut warns = pending.warns;
     let (row, path, mut core_warns) = core::add_row(
         &r.fael,
         r.journal.as_deref(),
         &log,
         &r.cfg,
         &st,
-        row,
-        heal.supersedes.as_deref(),
+        pending.row,
+        pending.evaluated.heal.supersedes.as_deref(),
     )?;
     warns.append(&mut core_warns);
     // PLAN-fael-languages chunk 2: the row-language warning lives in core
@@ -249,12 +273,10 @@ pub(crate) fn bump(
 /// silently, in order: anchor · glob · on disk · rename-resolvable · in this
 /// session's edits · in git status (shell-made files the edit hook never saw).
 ///
-/// A path with no evidence is rejected only when it is almost surely a typo:
-/// a same-directory file on disk within edit distance 2. Anything else is
-/// filed anyway with a warning — rows about deleted or not-yet-created files
-/// are legitimate (kickoff and doctor, not the write path, judge those).
-/// A planned file can sit one char from a real one (`b.rs` next to `a.rs`),
-/// so `force` turns the rejection into a warning.
+/// A path with no evidence is rejected only when almost surely a typo (a
+/// same-directory file within edit distance 2); anything else files with a
+/// warning — deleted or not-yet-created files are legitimate rows. `force`
+/// turns the rejection into a warning.
 pub(crate) fn check(
     root: &Path,
     al: &core::Aliases,

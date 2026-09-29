@@ -68,7 +68,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     match (cmd, rest) {
         ("add", [kind, text]) => add(&a, kind, text).map(|()| ExitCode::SUCCESS),
         // chunk 6b: `fael add --json -` reads a JSON array of rows from stdin
-        ("add", [dash]) if dash == "-" && a.has("json") => batch::batch_add(),
+        ("add", [dash]) if dash == "-" && a.has("json") => batch::batch_add(&a),
         ("close", rest) if rest.len() >= 2 => {
             batch::batch_close(&a, &rest[..rest.len() - 1], &rest[rest.len() - 1])
         }
@@ -329,21 +329,27 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     };
     // bare `--revisit` names no date or text — that only filters on `find`
     let revisit = write::parse_revisit(a.has("revisit"), a.one("revisit"))?;
-    let (row, path, warns) = write::add_row(
-        &r,
-        kind,
-        text,
-        &a.files(),
-        write::AddOpts {
-            key: a.one("key"),
-            to: a.one("to"),
-            title: a.one("title"),
-            revisit,
-            urgent,
-            supersedes: a.one("supersedes"),
-            force: a.has("force"),
-        },
-    )?;
+    let opts = write::AddOpts {
+        key: a.one("key"),
+        to: a.one("to"),
+        title: a.one("title"),
+        revisit,
+        urgent,
+        supersedes: a.one("supersedes"),
+        force: a.has("force"),
+    };
+    // `--dry-run` prints the Verdict the real add would act on and writes
+    // nothing — same `prepare` as the real add, so the two can never disagree
+    if a.has("dry-run") {
+        let (p, _, _) = write::prepare(&r, kind, text, &a.files(), opts)?;
+        p.warns.iter().for_each(|w| eprintln!("{w}"));
+        println!(
+            "{}",
+            crate::selfheal::verdict_text(&p.evaluated, a.has("json"))
+        );
+        return Ok(());
+    }
+    let (row, path, warns) = write::add_row(&r, kind, text, &a.files(), opts)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "add", Some(&r.root), &warns);
     batch::written(a, &r, &row, &path);

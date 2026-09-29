@@ -73,6 +73,48 @@ pub(crate) struct Candidate<'a> {
     pub evidence: Evidence,
 }
 
+/// Variant names for the dry-run JSON — the shape of the evidence, never the
+/// full structs (agents pay per byte on that path).
+impl KeyRel {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            KeyRel::Same => "Same",
+            KeyRel::Differ { .. } => "Differ",
+            KeyRel::OnlyNew { .. } => "OnlyNew",
+            KeyRel::OnlyOld { .. } => "OnlyOld",
+            KeyRel::Neither => "Neither",
+        }
+    }
+}
+
+impl Rel {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Rel::Same => "Same",
+            Rel::Other => "Other",
+        }
+    }
+}
+
+impl TextRel {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            TextRel::Same => "Same",
+            TextRel::Differ => "Differ",
+        }
+    }
+}
+
+impl NameRel {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            NameRel::AfterSupersede => "AfterSupersede",
+            NameRel::Mentioned => "Mentioned",
+            NameRel::No => "No",
+        }
+    }
+}
+
 /// Observe every open row: one Candidate each, no decision yet.
 pub(crate) fn observe<'a>(
     log: &'a core::Log,

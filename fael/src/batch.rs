@@ -22,7 +22,12 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
 /// validate + self-heal as a single add; a rejected row reports alone while
 /// the rest still save (never all-or-nothing, so no resending the batch).
 /// Exit is failure when any row rejected — the saved ones stay saved.
-pub(crate) fn batch_add() -> Result<ExitCode, String> {
+pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
+    if a.has("dry-run") {
+        return Err(
+            "rejected: --dry-run takes one row — drop --json - and pass <kind> \"<text>\"".into(),
+        );
+    }
     use std::io::Read;
     let mut stdin = String::new();
     std::io::stdin()

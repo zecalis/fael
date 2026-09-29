@@ -57,6 +57,7 @@ pub(crate) fn tools() -> Value {
                 "urgent_before": str_("above that row — one of urgent / urgent_before"),
                 "supersedes": str_("id this replaces"),
                 "force": {"type": "boolean", "description": "allow a typo-lookalike path"},
+                "dry_run": {"type": "boolean"},
             }},
         },
         {
