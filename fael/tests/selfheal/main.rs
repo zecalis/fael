@@ -6,6 +6,7 @@
 //! asking. Thin entry only — suites sit next to this file.
 
 mod autokey;
+mod corpus;
 mod key;
 mod note;
 mod policy;

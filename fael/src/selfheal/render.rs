@@ -1,17 +1,20 @@
 //! Renderer: Verdict → Heal (chunk 1 of PLAN-fael-selfheal-verdict).
 //!
 //! Every string below is byte-identical to what the if-chain printed —
-//! chunk 1 separates the words from the decision without changing one byte.
-//! Chunk 3 may add ActWarn lines here; the Verdict carries what to print.
+//! chunk 1 separated the words from the decision without changing one byte.
+//! Chunk 3 wraps cross-key acts in `CrossKey`: the inner lines print as one
+//! `warning:` line, as info, or not at all, per `[selfheal] cross_key` — the
+//! "also kept" trailer always stays info, so one add counts at most one ask.
 
 use super::decide::Verdict;
 use crate::core;
 
 /// What self-heal decided: the supersedes value core should resolve (a
-/// caller's flag only when it resolves to nothing — (d) then replaces it)
-/// plus info lines.
+/// caller's flag only when it resolves to nothing — (d) then replaces it),
+/// the provenance `write` stamps as `decision_source`, plus info lines.
 pub(crate) struct Heal {
     pub supersedes: Option<String>,
+    pub source: Option<String>,
     pub notes: Vec<String>,
 }
 
@@ -21,16 +24,19 @@ pub(crate) fn render(
     st: &core::Stamp,
     w: &core::Abbrev,
     flag: Option<&str>,
+    cross: core::CrossKey,
 ) -> Heal {
     let short = |id: &str| w.short(id).to_string();
     let k = row.key.as_deref().unwrap_or_default();
     match v {
         Verdict::FlagPassthrough | Verdict::FlagUnresolved => Heal {
             supersedes: flag.map(String::from),
+            source: None,
             notes: vec![],
         },
         Verdict::FlagRescued { target } => Heal {
             supersedes: Some(target.clone()),
+            source: None,
             notes: vec![format!(
                 "--supersedes {:?} matched nothing; used {} from the text",
                 flag.unwrap_or_default(),
@@ -42,11 +48,13 @@ pub(crate) fn render(
             also_line(also, w, &mut notes);
             Heal {
                 supersedes: Some(target.clone()),
+                source: None,
                 notes,
             }
         }
         Verdict::TextHold { targets } => Heal {
             supersedes: None,
+            source: None,
             notes: vec![format!(
                 "open rows {} are named in the text — kept all; pass --supersedes <id> to replace one",
                 id_list(targets, w)
@@ -61,11 +69,13 @@ pub(crate) fn render(
             also_line(also, w, &mut notes);
             Heal {
                 supersedes: Some(target.clone()),
+                source: None,
                 notes,
             }
         }
         Verdict::KeyIssueKept { targets } => Heal {
             supersedes: None,
+            source: None,
             notes: vec![format!(
                 "open issue {} uses key {k} — kept open (a different finding)",
                 id_list(targets, w)
@@ -73,6 +83,7 @@ pub(crate) fn render(
         },
         Verdict::KeyOtherWriter { target } => Heal {
             supersedes: None,
+            source: None,
             notes: vec![format!(
                 "open {} {} uses key {k} (another writer) — kept open",
                 row.kind,
@@ -81,6 +92,7 @@ pub(crate) fn render(
         },
         Verdict::KeyMany { targets } => Heal {
             supersedes: None,
+            source: None,
             notes: vec![format!(
                 "open rows {} already use key {k} — kept all; pass --supersedes <id> to replace one",
                 id_list(targets, w)
@@ -88,6 +100,7 @@ pub(crate) fn render(
         },
         Verdict::FilesAct { target } => Heal {
             supersedes: Some(target.clone()),
+            source: None,
             notes: vec![match &st.branch {
                 Some(b) => format!(
                     "superseded {} (open note, same branch {b}, same files)",
@@ -98,16 +111,38 @@ pub(crate) fn render(
         },
         Verdict::FilesMany { targets } => Heal {
             supersedes: None,
+            source: None,
             notes: vec![format!(
                 "open notes {} overlap these files — kept all; pass --supersedes <id> to replace one",
                 id_list(targets, w)
             )],
         },
+        Verdict::CrossKey { inner, old, new } => {
+            expose(render(inner, row, st, w, flag, cross), old, new, cross)
+        }
         Verdict::Noop => Heal {
             supersedes: None,
+            source: None,
             notes: vec![],
         },
     }
+}
+
+/// Cross-key exposure (chunk 3): the inner act stands under every mode —
+/// Warn prefixes its first line as the one `warning:` of this add (the
+/// also-kept trailer stays info, so one add counts at most one ask), Info
+/// keeps the lines, Off clears them.
+fn expose(mut h: Heal, old: &str, new: &str, cross: core::CrossKey) -> Heal {
+    match cross {
+        core::CrossKey::Warn => {
+            if let Some(first) = h.notes.first_mut() {
+                *first = format!("warning: {first} — key {old} → {new}");
+            }
+        }
+        core::CrossKey::Info => {}
+        core::CrossKey::Off => h.notes.clear(),
+    }
+    h
 }
 
 /// The "also overlaps" trailer after an act on a note — absent when no other

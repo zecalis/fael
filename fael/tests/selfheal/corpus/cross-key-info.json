@@ -1,0 +1,15 @@
+{
+  "name": "cross-key act under cross_key=info stays info",
+  "config": "[selfheal]\ncross_key = \"info\"\n",
+  "seed": [
+    {"kind": "note", "text": "first pass", "files": ["src/a.rs"], "key": "auth:session"}
+  ],
+  "add": {"kind": "note", "text": "second pass", "files": ["src/a.rs"], "key": "billing:invoice"},
+  "expect": {
+    "supersedes_seed": 0,
+    "warning_lines": 0,
+    "info_contains": ["superseded"],
+    "usage_warnings": 0,
+    "decision_source": "heuristic:files:cross-key"
+  }
+}

@@ -22,6 +22,18 @@
 //! can justify, exposes the evidence when it can't, and makes every automatic
 //! decision reversible.
 //!
+//! Chunk 3 (ActWarn + provenance): an act whose target's key differs from the
+//! new row's is a cross-key act — it still acts (a move, not a conflict;
+//! holding would pile notes back into the Stop-hook debt above), but the key
+//! is the weakest evidence, so `[selfheal] cross_key` picks the exposure:
+//! `warn` (default) prints the act as one `warning:` line, which the existing
+//! gate counts as an ask on CLI/MCP/batch; `info` keeps the info line;
+//! `off` acts silently. Same-key acts stay info. Every act stamps
+//! `decision_source` (`explicit:text`, `identity:key`, `heuristic:files`,
+//! each with `:cross-key` when the key moved, `caller:flag` for a resolving
+//! flag) so restore can trace an edge back to its cause; older rows read as
+//! `unknown` and are never backfilled.
+//!
 //! Thin entry only — observation lives in `evidence` (Evidence, Candidate),
 //! the Explicit > Identity > Heuristic policy table in `decide` (Eligibility,
 //! Verdict), the byte-identical renderer in `render` (Heal). Chunk 2's five
