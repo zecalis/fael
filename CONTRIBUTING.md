@@ -34,6 +34,9 @@ Tests that spawn the binary pass `FAEL_STATE_DIR` to the child with `Command::en
 `std::env::set_var` — the env is process-global, so setting it forces every test in the
 binary behind a lock and plain `cargo test` goes serial.
 
+For a manual run, `FAEL_DIR=<scratch>` redirects the whole log (tree and journal) so a wrong
+cwd cannot write into a shared `.fael`; `FAEL_STATE_DIR` only moves usage stats.
+
 ### Tests must build and run on Windows
 
 CI runs the suite on Linux, macOS and Windows. Two rules:
