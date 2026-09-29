@@ -117,6 +117,8 @@ Reading never fails. Take no lock; for every `*.jsonl` under `log/`:
 
 A row is hidden by default when a close row's `ref` names it, it has a `closed` field, or another row `supersedes` it.
 
+Closing a row that supersedes others also closes the rows it names — one close row per version. Each is a plain close row, so an older reader hides the whole chain exactly as this rule says; the marker itself is never erased.
+
 ## Versioning
 
 `v` is per row, not per repo — one log holds rows of every version, written by old and new CLIs side by side.
