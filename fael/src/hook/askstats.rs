@@ -1,11 +1,8 @@
 //! Ask metrics over usage.jsonl (PLAN-fael-durable-log chunk 3a): the read
-//! half of `asks` — transcript token recovery plus the counts `stats` shows.
-//! Recording lives in `asks`; nothing here ever writes.
+//! half of `asks` — transcript token recovery. Aggregation lives in
+//! `fael-core::stats`; recording lives in `asks`; nothing here ever writes.
 
-use super::asks::{ASK_BLOCK, ASK_REJECT, ASK_WARN};
-use crate::core;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Real tokens of one assistant round, straight from the transcript's `usage`
@@ -65,160 +62,9 @@ fn tail_bytes(path: &Path, n: u64) -> Option<String> {
     Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
-/// Ask counts in fixed order (reject, stop-block, warning): (count, bytes).
-/// Plain pushes carry no `ask` and never count here.
-pub(crate) fn ask_totals(rows: &[serde_json::Value]) -> Vec<(&'static str, usize, u64)> {
-    [ASK_REJECT, ASK_BLOCK, ASK_WARN]
-        .into_iter()
-        .map(|ask| {
-            let (mut n, mut b) = (0usize, 0u64);
-            for r in rows {
-                if r.get("ask").and_then(|a| a.as_str()) == Some(ask) {
-                    n += 1;
-                    b += r
-                        .get("bytes")
-                        .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(0);
-                }
-            }
-            (ask, n, b)
-        })
-        .collect()
-}
-
-/// Repeat stop-blocks: a block that follows another block in the same session
-/// with no row filed between them — the agent paid for a round and still had
-/// nothing to show. Needs the session on the rows (hooks only); session-less
-/// rows never count. Row times come from the repo logs; rows by anyone count
-/// (per-session attribution would need `session` on rows).
-pub(crate) fn repeat_blocks(
-    blocks: &[(String, String, i64, String)],
-    logs: &HashMap<String, core::Log>,
-) -> usize {
-    let mut by_session: HashMap<&str, Vec<(i64, &str)>> = HashMap::new();
-    for (repo, _, ms, session) in blocks {
-        if !session.is_empty() {
-            by_session.entry(session).or_default().push((*ms, repo));
-        }
-    }
-    let mut repeat = 0usize;
-    for times in by_session.values() {
-        let mut ts: Vec<(i64, &str)> = times.clone();
-        ts.sort();
-        for w in ts.windows(2) {
-            let [(prev, _), (cur, repo)] = w else {
-                continue;
-            };
-            let gap_has_row = logs.get(*repo).is_some_and(|log| {
-                log.rows
-                    .iter()
-                    .any(|r| core::ts_ms(&r.ts).is_some_and(|t| t > *prev && t <= *cur))
-            });
-            if !gap_has_row {
-                repeat += 1;
-            }
-        }
-    }
-    repeat
-}
-
-/// Rows filed at or after `since_ms` — the denominator for "rows that took
-/// their own round after a block vs rows that rode along".
-pub(crate) fn added_since(log: &core::Log, since_ms: i64) -> usize {
-    log.rows
-        .iter()
-        .filter(|r| core::ts_ms(&r.ts).is_some_and(|t| t >= since_ms))
-        .count()
-}
-
-/// (rows, rows outside the accepted `[lang] rows` scripts): one global dedup
-/// by id — repos in one clone share the journal, so the same row must not
-/// count twice. The same core detector the add-time warning and doctor use
-/// (`core::row_language_check`), judged with the running repo's accepted
-/// scripts — one aggregate number needs one ruler, and this is the repo's.
-/// Under the default `rows = ["english"]` the count is byte-identical to the
-/// old English-only one; an empty `rows` counts nothing.
-pub(crate) fn non_english_share(
-    logs: &HashMap<String, core::Log>,
-    cfg: &core::Config,
-) -> (usize, usize) {
-    let mut seen = HashSet::new();
-    let (mut n, mut foreign_rows) = (0usize, 0usize);
-    for log in logs.values() {
-        for r in &log.rows {
-            if !seen.insert(r.id.as_str()) {
-                continue;
-            }
-            n += 1;
-            if core::row_language_check(cfg, r.title.as_deref(), &r.text).is_some() {
-                foreign_rows += 1;
-            }
-        }
-    }
-    (n, foreign_rows)
-}
-
-/// Mean real-token cost of the round after a stop-block: each block attributes
-/// the next same-session usage row that carries `real_tokens` (the round its
-/// block caused — "the cost of the round following a block", never "tokens
-/// fael used"). Returns (samples, avg input, avg cache-create, avg cache-read,
-/// avg output); zero samples when no transcript had `usage`.
-pub(crate) fn post_block_cost(rows: &[serde_json::Value]) -> (usize, u64, u64, u64, u64) {
-    let mut ev: Vec<(i64, &str, bool, Option<RealTokens>)> = vec![];
-    for r in rows {
-        let (Some(ts), Some(session)) = (
-            r.get("ts").and_then(|t| t.as_str()).and_then(core::ts_ms),
-            r.get("session").and_then(|s| s.as_str()),
-        ) else {
-            continue;
-        };
-        if session.is_empty() {
-            continue;
-        }
-        ev.push((
-            ts,
-            session,
-            r.get("ask").and_then(|a| a.as_str()) == Some(ASK_BLOCK),
-            real_in(r),
-        ));
-    }
-    ev.sort_by_key(|e| e.0);
-    let mut pending: HashMap<&str, bool> = HashMap::new();
-    let (mut n, mut sums) = (0usize, [0u64; 4]);
-    for (_, session, block, real) in ev {
-        if block {
-            pending.insert(session, true);
-        } else if let Some(t) = real
-            && pending.remove(session).is_some()
-        {
-            n += 1;
-            sums[0] += t.input_tokens;
-            sums[1] += t.cache_creation_input_tokens;
-            sums[2] += t.cache_read_input_tokens;
-            sums[3] += t.output_tokens;
-        }
-    }
-    if n == 0 {
-        return (0, 0, 0, 0, 0);
-    }
-    let avg = |i: usize| sums[i] / n as u64;
-    (n, avg(0), avg(1), avg(2), avg(3))
-}
-
-/// A usage row's `real_tokens`, when the hook found transcript `usage`.
-fn real_in(r: &serde_json::Value) -> Option<RealTokens> {
-    let u = r.get("real_tokens")?;
-    Some(RealTokens {
-        input_tokens: u.get("input_tokens")?.as_u64()?,
-        cache_creation_input_tokens: usage_part(u, "cache_creation_input_tokens"),
-        cache_read_input_tokens: usage_part(u, "cache_read_input_tokens"),
-        output_tokens: usage_part(u, "output_tokens"),
-    })
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{RealTokens, post_block_cost, transcript_usage, usage_in_line};
+    use super::{RealTokens, transcript_usage, usage_in_line};
 
     fn usage_line(input: u64, create: u64, read: u64, output: u64) -> String {
         serde_json::json!({
@@ -283,29 +129,5 @@ mod tests {
             transcript_usage(p.to_str().unwrap()).map(|t| t.input_tokens),
             Some(7)
         );
-    }
-
-    #[test]
-    fn post_block_cost_joins_block_to_next_real() {
-        let row = |ts: &str, ask: &str, session: &str, real: bool| {
-            let mut v = serde_json::json!({"ts": ts, "session": session, "ask": ask});
-            if real {
-                v["real_tokens"] = serde_json::json!({"input_tokens": 1000,
-                    "cache_creation_input_tokens": 2000, "cache_read_input_tokens": 3000,
-                    "output_tokens": 100});
-            }
-            v
-        };
-        let rows = vec![
-            row("2026-09-28T00:00:01Z", "stop-block", "s1", false),
-            row("2026-09-28T00:00:02Z", "", "s1", true),
-            row("2026-09-28T00:00:03Z", "stop-block", "s1", false),
-            row("2026-09-28T00:00:04Z", "", "s1", false),
-            row("2026-09-28T00:00:05Z", "stop-block", "s2", false),
-        ];
-        // one sample: the first block's next real row; the dangling blocks
-        // (no later real row, other session) contribute nothing
-        assert_eq!(post_block_cost(&rows), (1, 1000, 2000, 3000, 100));
-        assert_eq!(post_block_cost(&[]), (0, 0, 0, 0, 0));
     }
 }

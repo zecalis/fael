@@ -2,20 +2,13 @@
 //! data): session edit lists, seen ids, stop-block dedupe, usage — plus the
 //! tiny std-only time helpers the hook path uses instead of chrono.
 
-use crate::{core, home};
+use crate::core;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-pub(crate) fn state_dir() -> PathBuf {
-    if let Ok(d) = std::env::var("FAEL_STATE_DIR")
-        && !d.is_empty()
-    {
-        return PathBuf::from(d);
-    }
-    home()
-        .unwrap_or_else(|| ".".into())
-        .join(".local/state/fael")
-}
+/// Per-machine state dir — owned by `fael-core::stats`, re-exported here so
+/// every hook path keeps spelling `state_dir()`.
+pub(crate) use crate::core::stats::state_dir;
 
 /// Opaque filename for a session id or transcript path (paths are long).
 pub(crate) fn session_key(s: &str) -> String {

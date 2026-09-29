@@ -4,6 +4,7 @@
 //! Thin entry only — the suites sit next to this file:
 //! `stop` (turn-end blocks), `stop_lang` ([lang] marker/rows packs),
 //! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
+//! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
 //! `push_cap` (read-push row cap + omitted line),
 //! `focus` (session Focus: focus.json written at start, read by the push).
 
@@ -13,6 +14,7 @@ mod push_cap;
 mod seen;
 mod session;
 mod stats;
+mod stats_golden;
 mod stop;
 mod stop_lang;
 mod stop_risk;

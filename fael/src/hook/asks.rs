@@ -10,9 +10,7 @@ use super::state::{now_rfc3339, state_dir};
 use crate::core;
 use std::path::Path;
 
-pub(crate) const ASK_REJECT: &str = "reject";
-pub(crate) const ASK_BLOCK: &str = "stop-block";
-pub(crate) const ASK_WARN: &str = "warning";
+pub(crate) use crate::core::stats::{ASK_BLOCK, ASK_REJECT, ASK_WARN};
 
 /// Optional half of a usage row: what kind of ask this was (absent on plain
 /// pushes), the session it belongs to (absent outside hooks), and the real
@@ -134,12 +132,17 @@ pub(crate) fn record_ask(client: &str, ask: &str, event: &str, repo: Option<&Pat
 /// Bytes the agent pays every session before saying anything: the bundled
 /// SKILL.md plus the MCP tool schemas — both local, no fetch. The chunk-6
 /// ceiling test pins these; stats shows them so the cut is verifiable.
+///
+/// SKILL.md is normalised to LF before measuring so the count is identical
+/// on every checkout — Windows git autocrlf would otherwise inflate it
+/// (CRLF) vs LF checkouts and break the stats golden tests there.
 pub(crate) fn constants() -> (usize, usize, usize, usize) {
     const SKILL: &str = include_str!("../../skill/SKILL.md");
+    let skill = SKILL.replace("\r\n", "\n");
     let schema = crate::schema::schema_json();
     (
-        SKILL.len(),
-        core::est_tokens(SKILL),
+        skill.len(),
+        core::est_tokens(&skill),
         schema.len(),
         core::est_tokens(&schema),
     )

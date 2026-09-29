@@ -17,6 +17,7 @@ pub mod lang;
 mod log;
 mod query;
 mod row;
+pub mod stats;
 mod validate;
 
 pub use aliases::{Aliases, is_alias_row, is_carrier_row};
