@@ -8,6 +8,7 @@
 //! `focus` (push buckets + row cap).
 //! The shared builders live here.
 
+mod anchor;
 mod bump;
 mod focus;
 mod lookup;
