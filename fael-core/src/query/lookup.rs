@@ -148,11 +148,17 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
         let used = keys(log, None);
         if !used.iter().any(|u| &u.key == k) {
             let parent = |s: &str| s.rsplit_once(':').map(|(p, _)| p.to_string());
+            // share a parent only when both keys go at least three levels
+            // deep: with two-level area:topic keys the parent is the bare
+            // domain, which would warn every new topic under it — domain
+            // reuse is the key_domains check above, topic typos are
+            // levenshtein's job
+            let deep = |s: &str| s.split(':').count() >= 3;
             let similar: Vec<&str> = used
                 .iter()
                 .map(|u| u.key.as_str())
                 .filter(|u| {
-                    (parent(k).is_some() && parent(u) == parent(k)) || levenshtein(u, k) <= 2
+                    (deep(u) && deep(k) && parent(u) == parent(k)) || levenshtein(u, k) <= 2
                 })
                 .take(5)
                 .collect();

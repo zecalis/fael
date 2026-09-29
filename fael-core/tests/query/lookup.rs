@@ -71,6 +71,46 @@ fn add_warnings_never_reject() {
 }
 
 #[test]
+fn similar_keys_parent_match_needs_three_segments() {
+    let mut l = log();
+    l.rows.push(row(
+        "C0000000000000000000000016",
+        "decision",
+        &["x"],
+        Some("vela:docs"),
+    ));
+    let cfg = Config::default();
+    let mut r = row("D0000000000000000000000017", "decision", &["x"], None);
+    // same domain, different topic: two-level keys share only the bare
+    // domain, which is not similarity — the domain check owns that layer
+    r.key = Some("vela:docs-plan".into());
+    assert!(warnings(&r, &l, &cfg).is_empty());
+    // a typo in the topic still warns through levenshtein
+    r.key = Some("vela:docx".into());
+    assert!(
+        warnings(&r, &l, &cfg)[0].contains("similar keys exist: vela:docs"),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+    // mixed depths share nothing through the parent clause either
+    r.key = Some("vela:other:x".into());
+    assert!(warnings(&r, &l, &cfg).is_empty());
+    // three-segment siblings still match by parent
+    l.rows.push(row(
+        "C0000000000000000000000017",
+        "decision",
+        &["x"],
+        Some("docs:plan:chunk-1"),
+    ));
+    r.key = Some("docs:plan:chunk-2".into());
+    assert!(
+        warnings(&r, &l, &cfg)[0].contains("similar keys exist: docs:plan:chunk-1"),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+}
+
+#[test]
 fn decision_without_key_and_multi_topic_text_warn() {
     let l = log();
     let cfg = Config::default();
