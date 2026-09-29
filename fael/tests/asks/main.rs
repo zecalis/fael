@@ -6,6 +6,7 @@
 //! and warning paths. Thin entry only — suites sit next to this file.
 
 mod blocks;
+mod concurrent;
 mod counting;
 mod replay;
 
