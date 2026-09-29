@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 /// plus one torn line. Counts: read x2, edit x1, claude x2, codex x1,
 // A x2, B x2.
 fn golden_state() -> PathBuf {
-    let state = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("stats-golden-{}", fael_core::ulid()));
+    let state =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("stats-golden-{}", fael_core::ulid()));
     std::fs::create_dir_all(&state).unwrap();
     let rows = [
         r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["A"]}"#,
@@ -25,7 +26,10 @@ fn golden_state() -> PathBuf {
 
 /// The state path moves per run — pin everything after it, byte for byte.
 fn normalize(out: &str, state: &Path) -> String {
-    out.replace(&state.join("usage.jsonl").to_string_lossy().into_owned(), "<STATE>/usage.jsonl")
+    out.replace(
+        &state.join("usage.jsonl").to_string_lossy().into_owned(),
+        "<STATE>/usage.jsonl",
+    )
 }
 
 // Constants below mirror SKILL.md + the MCP schema (asks.rs `constants`).
@@ -74,6 +78,7 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         v,
         serde_json::json!({
+            "schema": 1,
             "events": 3, "bytes": 60, "est_tokens": 15, "skipped_temp": 0,
             "by_event": {"read": {"events": 2, "est_tokens": 8}, "edit": {"events": 1, "est_tokens": 7}},
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
@@ -108,7 +113,8 @@ fn stats_json_rows_matches_golden_values() {
 
 #[test]
 fn stats_empty_matches_golden() {
-    let state = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("stats-golden-empty-{}", fael_core::ulid()));
+    let state = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("stats-golden-empty-{}", fael_core::ulid()));
     std::fs::create_dir_all(&state).unwrap();
     std::fs::write(state.join("usage.jsonl"), "").unwrap();
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"));
@@ -119,5 +125,9 @@ fn stats_empty_matches_golden() {
     assert!(ok);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["events"], 0, "{out}");
-    assert_eq!(v["rounds"], serde_json::json!({"after_block": 0, "rows_added": 0, "since": ""}), "{out}");
+    assert_eq!(
+        v["rounds"],
+        serde_json::json!({"after_block": 0, "rows_added": 0, "since": ""}),
+        "{out}"
+    );
 }

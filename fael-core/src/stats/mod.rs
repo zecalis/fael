@@ -11,8 +11,8 @@ mod metrics;
 mod parse;
 
 pub use aggregate::{
-    AskCount, BlockOutcome, Constants, Count, NonEnglish, RealAvg, Rounds, RowStatus, Stats,
-    TopRow, aggregate,
+    AskCount, BlockOutcome, Constants, Count, NonEnglish, RealAvg, Rounds, RowStatus, STATS_SCHEMA,
+    Stats, TopRow, aggregate,
 };
 pub use metrics::ASK_ORDER;
 pub use parse::{Parsed, StopBlock, parse};

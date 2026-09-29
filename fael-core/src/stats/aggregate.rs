@@ -32,6 +32,11 @@ pub struct AskCount {
     pub bytes: u64,
 }
 
+/// Schema of the `Stats` JSON shape below. Bump it only when a field is
+/// removed, renamed, retyped or redefined — adding a field never bumps
+/// (readers skip unknown keys), it just gets a `docs/stats.md` changelog line.
+pub const STATS_SCHEMA: u32 = 1;
+
 /// Bytes the agent pays every session before saying anything — measured by
 /// the caller (CLI), never estimated here.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -87,6 +92,7 @@ pub struct RowStatus {
 /// the desktop app and any outside reader share the shape by construction.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Stats {
+    pub schema: u32,
     pub events: usize,
     pub bytes: usize,
     pub est_tokens: usize,
@@ -143,6 +149,7 @@ pub fn aggregate(
     let mut top: Vec<(&String, &usize)> = parsed.by_id.iter().collect();
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     Stats {
+        schema: STATS_SCHEMA,
         events: parsed.n,
         bytes: parsed.bytes,
         est_tokens: parsed.toks,
