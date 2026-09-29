@@ -6,6 +6,7 @@ use crate::{
     Config, Row, Stamp, Store, Urgent, UrgentChange, closed, resolve, resolve_urgent, superseded,
     validate, validate_alias, validate_close, warnings,
 };
+use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -222,6 +223,17 @@ pub fn bump_row(
 }
 
 /// Resolve `id`, stamp, validate, append a close row. A row already closed is rejected.
+///
+/// Closing the newest version of a bumped chain also closes every version it
+/// supersedes — one close row each, oldest first, the requested row last. A
+/// supersede marker hides a row for good (format.md §Readers), so without the
+/// chain-close the older versions would stay hidden with no close row while the
+/// newest one is closed: the whole chain unreachable through `fael close`.
+///
+/// The reverse guard is relaxed to match: a superseded `id` is closable when
+/// its newest version is already closed (the old "close the newest version"
+/// reject no longer applies — it *is* closed). Still a normal close row, so
+/// every older reader hides it exactly as before.
 pub fn close_row(
     fael: &Path,
     journal: Option<&Path>,
@@ -237,25 +249,81 @@ pub fn close_row(
         return Err(format!("rejected: {} is already closed", target.id));
     }
     // bump makes id churn routine: closing the hidden old version would leave
-    // the live one open, so point at the newest version instead
+    // the live one open, so point at the newest version instead — unless that
+    // newest version is itself closed, which is the trap this path repairs
     if superseded(log).contains(target.id.as_str()) {
-        let mut newest = target.id.as_str();
-        while let Some(n) = log
-            .rows
-            .iter()
-            .find(|r| r.supersedes.as_deref() == Some(newest))
-        {
-            newest = &n.id;
+        let newest = newest_version(log, target.id.as_str());
+        if !closed(log).contains(newest) {
+            return Err(format!(
+                "rejected: {} is superseded — close the newest version {newest}",
+                target.id
+            ));
         }
-        return Err(format!(
-            "rejected: {} is superseded — close the newest version {newest}",
-            target.id
-        ));
     }
-    let mut row = Row::close(&stamp.by, &target.id, why);
-    stamp.apply(&mut row);
-    let (path, warns) = write_both(fael, journal, cfg, |d| close(d, &row, cfg))?;
-    Ok((row, path, warns))
+    let mut paths = vec![];
+    let mut warns = vec![];
+    let mut last: Option<Row> = None;
+    // oldest first, the requested row last (its id is the chain's last entry):
+    // an interrupt leaves the chain's newest version open and visible, so
+    // re-running the same close repairs it
+    for r in chain_versions(log, target.id.as_str()) {
+        if closed(log).contains(r.as_str()) {
+            continue;
+        }
+        let mut row = Row::close(&stamp.by, &r, why);
+        stamp.apply(&mut row);
+        let (p, mut w) = write_both(fael, journal, cfg, |d| close(d, &row, cfg))?;
+        paths.push(p);
+        warns.append(&mut w);
+        last = Some(row);
+    }
+    Ok((
+        last.expect("the requested row is never already closed here"),
+        paths.pop().expect("at least one close row lands"),
+        warns,
+    ))
+}
+
+/// The versions a close of `id` must cover, oldest first and `id` last — the
+/// `supersedes` chain through `id`. A row is one version with one `supersedes`
+/// (`Option`), so a chain is a straight line; the guard tolerates a hand-edited
+/// log that cycles, stopping after each id once.
+fn chain_versions(log: &Log, id: &str) -> Vec<String> {
+    let mut cur = id.to_string();
+    let mut seen = HashSet::from([cur.clone()]);
+    let mut out = vec![cur.clone()];
+    while let Some(prev) = log
+        .rows
+        .iter()
+        .find(|r| r.id == cur)
+        .and_then(|r| r.supersedes.clone())
+    {
+        if !seen.insert(prev.clone()) {
+            break;
+        }
+        cur = prev;
+        out.push(cur.clone());
+    }
+    out.reverse();
+    out
+}
+
+/// The live end of a chain: `id` when nothing supersedes it, else the newest
+/// version reachable through supersede rows (cycle-tolerant like `chain_versions`).
+fn newest_version<'a>(log: &'a Log, id: &'a str) -> &'a str {
+    let mut newest = id;
+    let mut seen = HashSet::from([newest]);
+    while let Some(n) = log
+        .rows
+        .iter()
+        .find(|r| r.supersedes.as_deref() == Some(newest))
+    {
+        if !seen.insert(n.id.as_str()) {
+            break;
+        }
+        newest = n.id.as_str();
+    }
+    newest
 }
 
 /// Build, stamp, validate and append an alias row (`fael mv <old> <new>`).

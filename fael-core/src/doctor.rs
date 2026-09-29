@@ -48,6 +48,13 @@ pub enum Kind {
     /// open rows whose text names a backticked path with no file behind it —
     /// a dead pointer the next reader follows (`files[]` rot stays Gone's)
     Stale,
+    /// rows hidden only by a `supersedes` marker whose newest version is
+    /// already closed — the trap a pre-chain-close binary leaves when it closes
+    /// the newest version alone: the old versions stay hidden with no close row
+    /// and no command reached them. Closing the newest version now closes the
+    /// chain, so this reports legacy rows; `fael close <id>` on each repairs
+    /// them (the relaxed guard lets it through once the head is closed).
+    Superseded,
     /// open rows — or close reasons — whose text cites an id-shaped token
     /// with no row behind it: a dead citation the next reader takes as
     /// confirmation (`files[]` rot stays Gone's, backticked paths stay

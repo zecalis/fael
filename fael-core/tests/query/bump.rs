@@ -44,6 +44,118 @@ fn close_on_a_bumped_id_points_at_the_newest_version() {
 }
 
 #[test]
+fn closing_the_newest_version_closes_the_chain_it_supersedes() {
+    let dir = std::env::temp_dir().join(format!("fael-close-chain-{}", ulid()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cfg = Config::default();
+    let st = Stamp {
+        by: "tester-0000".into(),
+        branch: None,
+        sha: None,
+    };
+    let bump = |id: &str| {
+        bump_row(
+            &dir,
+            None,
+            &read(&dir),
+            &cfg,
+            &st,
+            id,
+            BumpOpts {
+                to: None,
+                urgent: UrgentChange::Keep,
+                revisit: None,
+            },
+        )
+        .unwrap()
+        .0
+    };
+    let a = add_row(
+        &dir,
+        None,
+        &read(&dir),
+        &cfg,
+        &st,
+        Row::new("tester-0000", "issue", "hot", vec!["src/a.rs".into()]),
+        None,
+    )
+    .unwrap()
+    .0;
+    let b = bump(&a.id);
+    let c = bump(&b.id);
+    // closing C closes A and B too — each gets its own close row, oldest first
+    let (row, _, _) = close_row(&dir, None, &read(&dir), &cfg, &st, &c.id, "done").unwrap();
+    assert_eq!(row.reference.as_deref(), Some(c.id.as_str()));
+    let l = read(&dir);
+    let closed = closed(&l);
+    for id in [&a.id, &b.id, &c.id] {
+        assert!(closed.contains(id.as_str()), "{id} not closed: {closed:?}");
+    }
+    // every version left the default list; `--all` still shows them marked closed
+    assert!(find(&l, &Filter::default()).is_empty());
+    let all: Vec<&Row> = find(
+        &l,
+        &Filter {
+            all: true,
+            ..Filter::default()
+        },
+    );
+    for id in [&a.id, &b.id, &c.id] {
+        assert!(all.iter().any(|r| &r.id == id), "{id} gone from --all");
+    }
+}
+
+#[test]
+fn closing_a_superseded_row_past_its_closed_head_repairs_a_stuck_chain() {
+    let dir = std::env::temp_dir().join(format!("fael-close-stuck-{}", ulid()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cfg = Config::default();
+    let st = Stamp {
+        by: "tester-0000".into(),
+        branch: None,
+        sha: None,
+    };
+    // the trap as it existed before the chain-close: A bumped to B, B closed
+    // alone (an old binary appended just that one close row), so A sits hidden
+    // with no close row and no command reached it
+    let a = add_row(
+        &dir,
+        None,
+        &read(&dir),
+        &cfg,
+        &st,
+        Row::new("tester-0000", "issue", "hot", vec!["src/a.rs".into()]),
+        None,
+    )
+    .unwrap()
+    .0;
+    let b = bump_row(
+        &dir,
+        None,
+        &read(&dir),
+        &cfg,
+        &st,
+        &a.id,
+        BumpOpts {
+            to: None,
+            urgent: UrgentChange::Keep,
+            revisit: None,
+        },
+    )
+    .unwrap()
+    .0;
+    let old_close = Row::close(&st.by, &b.id, "done");
+    fael_core::close(&dir, &old_close, &cfg).unwrap();
+    // the head is closed, so the old "close the newest version" reject no
+    // longer holds: closing A directly now repairs the stuck chain
+    close_row(&dir, None, &read(&dir), &cfg, &st, &a.id, "done").unwrap();
+    let l = read(&dir);
+    let closed = closed(&l);
+    assert!(closed.contains(a.id.as_str()), "{closed:?}");
+    assert!(closed.contains(b.id.as_str()), "{closed:?}");
+}
+
+#[test]
 fn bump_rewrites_only_the_moved_row() {
     let dir = std::env::temp_dir().join(format!("fael-bump-{}", ulid()));
     std::fs::create_dir_all(&dir).unwrap();

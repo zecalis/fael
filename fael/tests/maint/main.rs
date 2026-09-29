@@ -12,6 +12,7 @@ mod doctor;
 mod import;
 mod notenglish;
 mod shipped;
+mod superseded;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

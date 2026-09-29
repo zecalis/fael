@@ -7,6 +7,7 @@
 
 use super::{fat, merged, orphan, phantom, shipped};
 use crate::core;
+use std::collections::HashSet;
 use std::path::Path;
 
 /// Every open-row note `doctor` shows: what the rows still say versus what
@@ -20,6 +21,9 @@ pub(super) fn open_row_notes(
 ) -> Vec<core::Problem> {
     let mut out = files_notes(log, root, al);
     out.extend(branch_notes(log));
+    // a supersede marker whose newest version is already closed: the whole
+    // chain is hidden with no close row — a pre-chain-close binary's trap
+    out.extend(superseded_note(log));
     // one `gh pr list --state merged` call feeds both checks: `[Merged]` uses
     // the branch set, `[Shipped]` the mergedAt/number per branch
     let prs = merged::merged_prs(root).unwrap_or_default();
@@ -92,7 +96,7 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
                 core::ProblemKind::PartGone,
                 format!(
                     "{} open row(s) still name a file that no longer exists — check the text still \
-                     holds, then re-file with `--supersedes` or `fael close` (e.g. {})",
+                     holds, then re-file with `--supersedes` or `fael close <id>` (e.g. {})",
                     part.len(),
                     eg.join("; ")
                 ),
@@ -110,7 +114,7 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
                 core::ProblemKind::Stale,
                 format!(
                     "{} open row(s) name a path in backticks that is not on disk — check the text \
-                     still holds, then re-file with `--supersedes` or `fael close` (e.g. {})",
+                     still holds, then re-file with `--supersedes` or `fael close <id>` (e.g. {})",
                     stale.len(),
                     eg.join("; ")
                 ),
@@ -148,12 +152,81 @@ fn branch_notes(log: &core::Log) -> Vec<core::Problem> {
             core::ProblemKind::Orphan,
             format!(
                 "{n} open row(s) filed on branch(es) whose PR was closed without merge — \
-                 the work likely died with the branch; re-file with `--supersedes` or `fael close` (e.g. {})",
+                 the work likely died with the branch; re-file with `--supersedes` or `fael close <id>` (e.g. {})",
                 eg.join("; ")
             ),
         )
         .with_ids(ids),
     ]
+}
+
+/// `[Superseded]`: rows hidden only by another row's `supersedes` marker whose
+/// newest version is already closed — the whole chain is unreachable (no close
+/// row on the old versions, and `fael close` on the newest one is "already
+/// closed"). A pre-chain-close binary's trap; `fael close <id>` on each old
+/// version repairs it (the relaxed guard lets it through once the head is
+/// closed). This is the one note whose fix is `fael close`, never `--supersedes`:
+/// re-filing would only grow another chain.
+fn superseded_note(log: &core::Log) -> Option<core::Problem> {
+    let closed = core::closed(log);
+    let sup = core::superseded(log);
+    let hidden: Vec<&core::Row> = log
+        .rows
+        .iter()
+        .filter(|r| sup.contains(r.id.as_str()) && !closed.contains(r.id.as_str()))
+        .collect();
+    if hidden.is_empty() {
+        return None;
+    }
+    let w = core::abbrev(log);
+    // the row that supersedes this one — kept only when its entire forward
+    // chain is closed, so a live newer version is never called stuck
+    let head_closed = |id: &str| {
+        let mut newest = id;
+        let mut seen = HashSet::from([newest]);
+        while let Some(n) = log
+            .rows
+            .iter()
+            .find(|r| r.supersedes.as_deref() == Some(newest))
+        {
+            if !seen.insert(n.id.as_str()) {
+                break;
+            }
+            newest = n.id.as_str();
+        }
+        closed.contains(newest)
+    };
+    let stuck: Vec<&core::Row> = hidden
+        .iter()
+        .copied()
+        .filter(|r| head_closed(r.id.as_str()))
+        .collect();
+    if stuck.is_empty() {
+        return None;
+    }
+    let eg: Vec<String> = stuck
+        .iter()
+        .take(5)
+        .map(|r| {
+            format!(
+                "{} → `fael close {} \"superseded\"`",
+                w.short(&r.id),
+                w.short(&r.id)
+            )
+        })
+        .collect();
+    Some(
+        core::Problem::info(
+            core::ProblemKind::Superseded,
+            format!(
+                "{} row(s) are hidden only by a supersede marker whose newest version is already \
+                 closed — close them to finish the chain (e.g. {})",
+                stuck.len(),
+                eg.join("; ")
+            ),
+        )
+        .with_ids(stuck.iter().map(|r| r.id.clone()).collect()),
+    )
 }
 
 /// `(full id, short-id → files)` for every open row whose title or text

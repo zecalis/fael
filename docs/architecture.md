@@ -108,7 +108,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | Command | What it does |
 |---|---|
 | `fael add <kind> "<text>" --files a,b [--key k] [--title t] [--to who] [--revisit date\|text] [--urgent\|--urgent-before id] [--supersedes id] [--force] [--json]` | append a row (`--title` = the ≤15-word headline lists show; `--revisit` = a date `kickoff` surfaces when due, or free text; self-heal first — a repeat on the same files or key supersedes the open row, `Supersedes <id>` in the text fills `--supersedes`, and the one key on these files is reused, each said in one info line; batch many at once — `rows: [...]` over MCP, `fael add --json -` with a JSON array on stdin over CLI, a bad row reports alone while the rest save) |
-| `fael close <id> "<why>"` | append a close row |
+| `fael close <id> "<why>"` | append a close row; a row that supersedes others closes the whole chain it names (oldest first), and closing an old version is allowed once its newest one is already closed |
 | `fael bump <id> [--to who] [--revisit date\|text] [--urgent\|--urgent-before id\|--not-urgent]` | new version of an open row: same text/files, new `to`/`urgent`/`revisit`, superseding the old one |
 | `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--text query]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies; an id-shaped query is never a text search — it rejects when no row owns it, naming the rows that only mention it; `--text` forces a literal text search; `--branches` also reads branches not yet merged into HEAD, tagging their rows `@<branch>` without a checkout; a cut list prints the exact next call (`--offset M`) |
 | `fael keys [glob]` | list keys, with a count and last use for each — to reuse a key that already exists |
@@ -119,7 +119,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael install [--client c] [--dry-run] [--replace-fapony]` | detect installed clients and wire MCP, hooks and skill into each one; `--replace-fapony` takes out fapony's Stop/session-start hooks and MCP (opt-in: they are user scope and still serve repos without `.fael/`) |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
-| `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`) |
+| `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it) |
 | `fael stats [--json] [--rows]` | how many bytes and tokens fael has put into agents' context |
 
 `--files` in `find` matches a row's `files[]` only — exactly, as a directory (a zone), or by glob; an anchor's ref
