@@ -82,6 +82,13 @@ pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize
     (page, budget, total)
 }
 
+/// Chars per clause below which `;`-separated chunks read as a topic list
+/// rather than prose sentences: three-plus separators warn only while the
+/// row stays short (`chars < seps * CHARS_PER_CLAUSE`). Calibrated against
+/// real ledger rows (604–949 chars, 3–5 seps, all single-topic, all silent).
+/// Char-based so Thai/CJK (no spaces) judge by the same ruler as English.
+const CHARS_PER_CLAUSE: usize = 100;
+
 /// The chunk-3 fat-row conditions as reason bodies (no `warning: ` prefix):
 /// a decision with no key, `·`/`;` joining topics, doc paths with no
 /// anchor, text over `warn.row_tokens`.
@@ -105,7 +112,7 @@ pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
     // `;` per char before it stops being prose
     let mid = row.text.chars().filter(|&c| c == '·').count();
     let seps = mid + row.text.chars().filter(|&c| c == ';').count();
-    if mid >= 2 || (seps >= 3 && chars < seps * 100) {
+    if mid >= 2 || (seps >= 3 && chars < seps * CHARS_PER_CLAUSE) {
         r.push(format!(
             "text has {seps} topic separators (; / ·) — one topic per row: split it, \
 each with --key area:topic, so one can be superseded alone"

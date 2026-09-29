@@ -251,6 +251,7 @@ Tokens are the unit of value, and they are spent when reading, not when storing.
   Measured 2026-09-28 via `count_tokens` over every row in the log (271 EN + 2 TH-mixed + 10 pure-Thai plan lines as proxies, framing overhead subtracted); Sonnet 5 and Opus 5.5 returned identical counts. Frozen 2026-09-28, not maintained — newer numbers come free from `real_tokens`, never from re-running this table.
 - Every injection is recorded per machine (`~/.local/state/fael/usage.jsonl`, never in git), so `fael stats` shows fael's real cost in context. This is **local telemetry, not memory**: it may be lost, is never read to answer a query, and a failure to write it never fails a command. `.fael/` is the only semantic state.
 - A row longer than about 400 estimated tokens triggers a warning when it is written, because it is paid for every time it is pushed. The hard limit is 10 KiB per row.
+- The similar-key warning matches by parent only at ≥ 3 segments (`a:b:c` vs `a:b:d`); 2-level keys (`a:b` vs `a:c`) rely on levenshtein ≤ 2. This is an intentional trade-off, not a gap: with 2-level keys the shared parent is the bare domain, so a parent match would warn every new topic under it (domain reuse is the `key_domains` check instead), and a mixed-depth pair (`a:b` vs `a:b:c`) stays silent unless it is a typo away.
 
 ## 6. Self-healing
 
