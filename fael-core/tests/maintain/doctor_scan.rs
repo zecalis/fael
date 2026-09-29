@@ -54,6 +54,30 @@ fn machine_readable_ids_ride_on_the_problem() {
 }
 
 #[test]
+fn restore_row_is_no_problem() {
+    // a restore event row is a carrier by design — doctor must not flag it
+    // as NoFiles (or anything else)
+    let r = root();
+    let fael = fael_of(&r);
+    let a = "A0000000000000000000000011";
+    let b = "A0000000000000000000000012";
+    let mut sup = row(b, "note", &["a.rs"]);
+    sup.supersedes = Some(a.into());
+    let mut back = Row::restored("tester-0000", b, a);
+    back.ts = "2026-07-02T00:00:00.000Z".into();
+    write_lines(
+        &month_file(&fael, "tester-0000", "2026-07", false),
+        &[
+            row(a, "note", &["a.rs"]).to_line(),
+            sup.to_line(),
+            back.to_line(),
+        ],
+    );
+    let rep = doctor_scan(&fael, &r, false, MONTH);
+    assert!(rep.problems.is_empty(), "{rep:?}");
+}
+
+#[test]
 fn missing_union_and_ignored() {
     let r = tmp(); // no .gitattributes here
     let fael = fael_of(&r);

@@ -32,7 +32,7 @@ pub use render::{
 pub use revisit::{due, is_date, row_due, today, waiting, waiting_line, with_due};
 pub use select::{
     Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, freshness, gone, gone_files,
-    kickoff, page, ranked, resolve_urgent, superseded,
+    kickoff, page, ranked, resolve_urgent, reverted, superseded,
 };
 pub use stale::{backtick_paths, stale_refs};
 

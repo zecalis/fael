@@ -59,6 +59,14 @@ pub struct Row {
     /// `to`, same compat: old readers keep it in `extra`, no `v` bump.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decision_source: Option<String>,
+    /// The supersede edge this row reverts (PLAN-fael-selfheal-restore chunk
+    /// 1): the superseder's id — one row supersedes at most one row, so the
+    /// superseder names the edge. Set only on restore event rows (no kind, no
+    /// files): readers subtract these edges in `superseded()`. Absent reads
+    /// as "reverts nothing". Top-level like `to`, same compat: old readers
+    /// keep it in `extra`, no `v` bump.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restores: Option<String>,
     #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
     #[serde(flatten)]
@@ -179,6 +187,23 @@ impl Row {
                 "moved".to_string(),
                 serde_json::json!({"from": from, "to": to}),
             )]),
+            ..Row::default()
+        }
+    }
+
+    /// A fresh v1 restore row reverting edge `edge → target` (`fael restore`).
+    /// Carries no kind and no files — a carrier, never a result (format.md
+    /// §Readers). Readers that predate the carrier rule still list it, so
+    /// `text` names both ends in full: informative degrade, not garbage.
+    pub fn restored(by: &str, edge: &str, target: &str) -> Row {
+        let ms = now_ms();
+        Row {
+            v: Some(1),
+            id: ulid_at(ms),
+            ts: rfc3339(ms),
+            by: by.into(),
+            text: format!("{target} restored — supersede by {edge} reverted"),
+            restores: Some(edge.into()),
             ..Row::default()
         }
     }

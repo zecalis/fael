@@ -36,8 +36,8 @@ pub use id::{
 };
 pub use lang::{Hit, Lang, by_name, marker_hit, row_language_check};
 pub use log::{
-    BumpOpts, Log, MONTH_MAX, add, add_row, append, bump_row, close, close_row, decode_text,
-    is_month, mv_row, needs_seal, parse, read,
+    BumpOpts, Log, MONTH_MAX, Restored, add, add_row, append, bump_row, close, close_row,
+    decode_text, is_month, mv_row, needs_seal, parse, read, restore_row,
 };
 pub use query::{
     Abbrev, Background, Bucket, Cut, Filter, Focus, Hidden, KeyUse, PUSH_BACKGROUND, PushPolicy,
@@ -45,11 +45,13 @@ pub use query::{
     due, est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone, gone_files, id_tokens,
     is_date, keys, kickoff, levenshtein, page, phantom_md_refs, phantom_refs, push, push_tiered,
     query, ranked, ref_state, render, render_full, render_full_page, render_page, resolve,
-    resolve_urgent, row_due, select, stale_refs, superseded, today, waiting, waiting_line,
-    warnings, with_due,
+    resolve_urgent, reverted, row_due, select, stale_refs, superseded, today, waiting,
+    waiting_line, warnings, with_due,
 };
 pub use row::{Row, Stamp};
-pub use validate::{normalize_files, valid_key, validate, validate_alias, validate_close};
+pub use validate::{
+    normalize_files, valid_key, validate, validate_alias, validate_close, validate_restore,
+};
 
 /// Core kinds with fixed meaning; a repo adds more through `Config::kinds`.
 pub const CORE_KINDS: [&str; 3] = ["decision", "issue", "note"];
