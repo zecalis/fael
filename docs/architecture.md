@@ -5,7 +5,8 @@
 > `--branches` to read unmerged branches without a checkout), `fael mcp`
 > (stdio, 3 tools), `fael hook <stop|session-start|read|edit>` (neutral + claude/codex adapters) with
 > per-machine usage accounting (`fael stats`), `fael install` (Claude Code, Codex, OpenCode),
-> and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11).
+> and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11) ·
+> `fael purge` (delete a leaked row for good — the one deliberate exception to the append-only log).
 > This page is the contract the code is built against —
 > when code and this page disagree, fix one of them in the same commit.
 
@@ -148,6 +149,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael keys [glob]` | list keys, with a count and last use for each — to reuse a key that already exists |
 | `fael mv <old> <new>` | record a move git can't see — an anchor, an uncommitted rewrite, or one file split into several (one old path may point at many new ones). Adds matches only, never hides a row |
 | `fael restore [<id>] [--edge id]` | revert a supersede edge with an event row — the row keeps its id and opens again; `--edge` names the superseding row when several edges still hide it; an already-open row or an already-reverted edge is info, never an error |
+| `fael purge <id>` | permanently remove a leaked test row or a mistake: the row and its close events go from every month file, tree and journal; refused when another row supersedes or restores it, when the id names a close event, or when it lives in an immutable compact file; copies already synced elsewhere return on the next sync |
 | `fael kickoff [anchor] [--branches] [--full] [--limit N] [--offset M]` | the session brief: urgent first, then issues, decisions, notes by freshness (newer of the row and its files' last change); rows whose files are all gone are left out |
 | `fael hook <event> [--client c]` | hook entry point (see below) |
 | `fael mcp` | MCP server on stdio |

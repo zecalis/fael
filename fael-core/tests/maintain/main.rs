@@ -10,3 +10,4 @@ mod doctor_fix;
 mod doctor_precision;
 mod doctor_scan;
 mod import;
+mod purge;

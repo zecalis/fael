@@ -13,6 +13,7 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
+mod purge;
 mod refs;
 mod restore;
 mod schema;
@@ -79,6 +80,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("mv", [old, new]) => mv(&a, old, new).map(|()| ExitCode::SUCCESS),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
+        ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
         ("stats", []) => {
             hook::stats(a.has("json"), a.has("rows"), a.has("day")).map(|()| ExitCode::SUCCESS)
