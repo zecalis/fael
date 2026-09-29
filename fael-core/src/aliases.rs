@@ -224,3 +224,13 @@ fn under_parent(cur: &str, n: &str, o: &str) -> Option<String> {
 pub fn is_alias_row(r: &crate::Row) -> bool {
     r.extra.contains_key("moved")
 }
+
+/// A carrier row (no kind, no files) is never a result — it moves no finding
+/// and holds no topic, so lists show nothing for it (format.md §Readers).
+/// A legacy row without `files` still carries a `kind` and stays a result;
+/// close rows ride the `.close.jsonl` stream, not the row stream, and still
+/// hide what they name. Moved rows are carriers too — this rule is the
+/// general one, `moved` the match old readers already know.
+pub fn is_carrier_row(r: &crate::Row) -> bool {
+    r.kind.is_empty() && r.files.is_empty()
+}

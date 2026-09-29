@@ -6,10 +6,12 @@
 //! `title` (title/body split, `--title` fallback,
 //! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
 //! `focus` (push buckets + row cap).
+//! `carrier` (no-kind-no-files rows never list, legacy stays).
 //! The shared builders live here.
 
 mod anchor;
 mod bump;
+mod carrier;
 mod focus;
 mod lookup;
 mod md;
