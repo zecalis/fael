@@ -247,3 +247,47 @@ fn fat_warning_names_the_limit_that_tripped() {
     r.text = "short one".into();
     assert!(fat_reasons(&r, &cfg).is_empty());
 }
+
+#[test]
+fn long_single_topic_row_still_warns() {
+    let cfg = Config::default(); // tokens 400 · chars 1200
+    let mut r = row("D0000000000000000000000017", "note", &["x"], Some("a:b"));
+    // 1300 chars, no separators: one topic but over the chars limit —
+    // the 1200 guess must still fire, not just stay silent on short rows
+    r.text = "word ".repeat(260).trim_end().into();
+    assert!(r.text.chars().count() > 1200, "{}", r.text.chars().count());
+    assert!(!r.text.contains(';') && !r.text.contains('·'));
+    let f = fat_reasons(&r, &cfg);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert!(f[0].contains("chars (warn at 1200)"), "{f:?}");
+}
+
+#[test]
+fn separator_density_applies_to_thai() {
+    let cfg = Config::default();
+    let mut r = row(
+        "D0000000000000000000000017",
+        "decision",
+        &["x"],
+        Some("k:v"),
+    );
+    // short Thai row with three `;` reads as a topic list — same ruler as English
+    r.text = "บันทึกเรื่องก; บันทึกเรื่องข; บันทึกเรื่องค; บันทึกเรื่องง".into();
+    assert!(r.text.chars().count() < 3 * 100);
+    assert!(
+        fat_reasons(&r, &cfg)[0].contains("topic separators"),
+        "{:?}",
+        fat_reasons(&r, &cfg)
+    );
+    // long Thai clauses are prose too — no split nudge
+    let clause = "ประโยคภาษาไทยที่ยาวมาก ".repeat(20).trim_end().to_string();
+    r.text = format!("{clause}; {clause}; {clause}; {clause}");
+    assert!(r.text.chars().count() > 4 * 100);
+    assert!(
+        fat_reasons(&r, &cfg)
+            .iter()
+            .all(|f| !f.contains("topic separators")),
+        "{:?}",
+        fat_reasons(&r, &cfg)
+    );
+}
