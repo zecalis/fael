@@ -159,6 +159,17 @@ each with --key area:topic, so one can be superseded alone"
     r
 }
 
+/// The stem of a `plan:<name>:chunk-<n>`-shaped key (format.md §Plan
+/// keys): `Some("plan:<name>")` when the last segment is `chunk-<digits>`,
+/// else `None`. Per-chunk rows are sequential by convention — chunk-1 vs
+/// chunk-3 is the next handoff, not a typo — so `warnings` never reports
+/// two keys with the same stem as similar.
+fn chunk_stem(k: &str) -> Option<&str> {
+    let (stem, tail) = k.rsplit_once(':')?;
+    let n = tail.strip_prefix("chunk-")?;
+    (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(stem)
+}
+
 /// Warnings for a row about to be added — never a reject: a key domain the repo did not declare,
 /// a new key close to an existing one, text over `warn.row_tokens`.
 pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
@@ -184,6 +195,14 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
                 .iter()
                 .map(|u| u.key.as_str())
                 .filter(|u| {
+                    // same-stem chunk keys are sequential handoffs, not typos:
+                    // suggesting reuse here fires on every chunk and teaches
+                    // agents to ignore the warning
+                    if let (Some(a), Some(b)) = (chunk_stem(u), chunk_stem(k))
+                        && a == b
+                    {
+                        return false;
+                    }
                     (deep(u) && deep(k) && parent(u) == parent(k)) || levenshtein(u, k) <= 2
                 })
                 .take(5)

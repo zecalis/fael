@@ -100,11 +100,69 @@ fn similar_keys_parent_match_needs_three_segments() {
         "C0000000000000000000000017",
         "decision",
         &["x"],
-        Some("docs:plan:chunk-1"),
+        Some("docs:plan:alpha"),
     ));
-    r.key = Some("docs:plan:chunk-2".into());
+    r.key = Some("docs:plan:beta".into());
     assert!(
-        warnings(&r, &l, &cfg)[0].contains("similar keys exist: docs:plan:chunk-1"),
+        warnings(&r, &l, &cfg)[0].contains("similar keys exist: docs:plan:alpha"),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+}
+
+#[test]
+fn chunk_sibling_keys_never_warn() {
+    // plan:<name>:chunk-<n> rows are sequential handoffs (format.md §Plan
+    // keys) — suggesting reuse here fires on every chunk and teaches agents
+    // to ignore the warning
+    let mut l = log();
+    l.rows.push(row(
+        "C0000000000000000000000016",
+        "note",
+        &["x"],
+        Some("plan:fael-selfheal-verdict:chunk-3"),
+    ));
+    l.rows.push(row(
+        "C0000000000000000000000017",
+        "note",
+        &["x"],
+        Some("plan:fael-selfheal-verdict:chunk-4"),
+    ));
+    let cfg = Config::default();
+    let mut r = row("D0000000000000000000000017", "note", &["x"], None);
+    // a new chunk under the same plan: silent — both the parent clause and
+    // levenshtein (chunk-1 vs chunk-3 is distance 1) are suppressed
+    r.key = Some("plan:fael-selfheal-verdict:chunk-1".into());
+    assert!(
+        warnings(&r, &l, &cfg).is_empty(),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+    // multi-digit chunk numbers are the same sequence
+    r.key = Some("plan:fael-selfheal-verdict:chunk-10".into());
+    assert!(
+        warnings(&r, &l, &cfg).is_empty(),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+    // a non-chunk sibling under the same parent still warns
+    r.key = Some("plan:fael-selfheal-verdict:retro".into());
+    assert!(
+        warnings(&r, &l, &cfg)[0].contains("similar keys exist"),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+    // the same chunk suffix under a different plan is unrelated — silent
+    r.key = Some("plan:other-plan:chunk-1".into());
+    assert!(
+        warnings(&r, &l, &cfg).is_empty(),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+    // a near-typo of a chunk key still warns through levenshtein
+    r.key = Some("plan:fael-selfheal-verdict:chunk-3x".into());
+    assert!(
+        warnings(&r, &l, &cfg)[0].contains("similar keys exist"),
         "{:?}",
         warnings(&r, &l, &cfg)
     );
