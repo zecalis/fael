@@ -1,0 +1,4 @@
+# The agent instructions are the product contract — changes need the maintainer's review.
+# (Requires "Require review from Code Owners" on the protected branch.)
+/AGENTS.md @delamind
+/CLAUDE.md @delamind
