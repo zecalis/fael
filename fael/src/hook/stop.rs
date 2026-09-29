@@ -8,79 +8,17 @@ use super::asks::{ASK_BLOCK, hook_meta};
 use super::markers::{bug_signal_from_transcript, has_bug_marker};
 use super::protocol::{Event, Reply, ctx};
 use super::state::{
-    branch_path, edits_path, file_birth_ms, head_branch, now_rfc3339, risk_path, session_edits,
-    session_key, state_dir,
+    edits_path, file_birth_ms, now_rfc3339, risk_path, session_edits, session_key, state_dir,
 };
 use super::usage::record_usage;
 use crate::{core, git};
 use std::path::{Path, PathBuf};
 
-/// The stop event, plus the branch-drift warning (row-hygiene chunk 9): when
-/// HEAD moved since session-start — another session checked out its own
-/// branch in this same worktree — one line says so, once per session. Never
-/// blocks, never fires without a session-start baseline.
+/// The stop event: block the turn when the session did work (edits after the
+/// newest row, or commits when the edit hook saw nothing) but filed no row, or
+/// when it announced a bug with no issue row since. `stop_active` from the
+/// client guards the re-entry after a block.
 pub(crate) fn stop(e: &Event) -> Reply {
-    let mut r = stop_inner(e);
-    if let Some(line) = drift_line(e) {
-        if r.block {
-            r.reason = Some(match r.reason.take() {
-                Some(reason) => format!("{reason}\n{line}"),
-                None => line,
-            });
-        } else {
-            r.context = Some(match r.context.take() {
-                // stop's only context is this line, but stay append-safe
-                Some(context) => format!("{context}{line}\n"),
-                None => format!("{line}\n"),
-            });
-        }
-    }
-    r
-}
-
-/// `Some(line)` when the session started on another branch than the one
-/// checked out now, and this session has not been told yet. No session, no
-/// repo, no baseline file (older sessions), an unreadable HEAD, or a line
-/// already shown this session = None, silently.
-fn drift_line(e: &Event) -> Option<String> {
-    // `stop_hook_active` = the client already ran this turn's stop hook and is
-    // re-entering (e.g. after the non-blocking warning continued the turn) —
-    // say it once, so a client that surfaces the line cannot loop on it
-    if e.stop_active {
-        return None;
-    }
-    let session = e.session.as_deref().filter(|s| !s.is_empty())?;
-    let cwd = e
-        .cwd
-        .as_deref()
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_dir().ok())?;
-    let repo = crate::repo_at(&cwd).ok()?;
-    let start = std::fs::read_to_string(branch_path(session, &repo.root))
-        .ok()?
-        .trim()
-        .to_string();
-    if start.is_empty() {
-        return None;
-    }
-    let now = head_branch(&repo.root)?;
-    if start == now {
-        return None;
-    }
-    // once per session per worktree: a client whose stop_active flag is one-shot
-    // (opencode consumes it on the warning turn, then sends false again after a
-    // turn with no block) would otherwise re-fire the same line every turn —
-    // remember it fired, the same way a block is remembered
-    if stop_blocked_before(session, &repo.root.to_string_lossy(), "drift") {
-        return None;
-    }
-    Some(format!(
-        "fael: branch changed mid-session ({start} → {now}) — \
-         verify the branch before push or gh pr create"
-    ))
-}
-
-fn stop_inner(e: &Event) -> Reply {
     let no = || Reply {
         block: false,
         reason: None,
@@ -292,9 +230,8 @@ fn stash_risk(session: &str, worktree: &Path, marker: &str) {
     }
 }
 
-/// True when this session already fired this worktree + kind — else record it
-/// and return false. Backs the work/bug block dedupe and the once-per-session
-/// branch-drift line ("drift"). Empty session = no dedupe (fire).
+/// True when this session already blocked for this worktree + kind — else
+/// record the block and return false. Empty session = no dedupe (block).
 fn stop_blocked_before(session: &str, worktree: &str, kind: &str) -> bool {
     if session.is_empty() {
         return false;

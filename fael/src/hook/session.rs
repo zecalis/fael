@@ -4,7 +4,7 @@
 use super::asks::hook_meta;
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
-use super::state::{branch_path, head_branch, prune_sessions, session_key, state_dir};
+use super::state::{head_branch, prune_sessions, session_key, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
@@ -32,7 +32,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         None => return no(),
     };
     prune_sessions(&state_dir().join("sessions"));
-    let branch = record_start_branch(&c.session, &c.repo.root);
+    let branch = start_branch(&c.session, &c.repo.root);
     // once per session: pick up renames committed since the last session, so
     // the read/edit push (which never spawns git) resolves them — and kickoff
     // keeps rows whose files were merely renamed
@@ -139,23 +139,13 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     }
 }
 
-/// The branch this session started on, for stop's drift warning and for the
-/// session Focus — written before anything can return, even with no log yet;
-/// empty session (no key for the file) and detached HEAD (no branch) record
-/// nothing and build no Focus.
-fn record_start_branch(session: &str, root: &Path) -> Option<String> {
+/// The branch this session started on, for the session Focus. Empty session
+/// (no key for the Focus file) and detached HEAD (no branch) build no Focus.
+fn start_branch(session: &str, root: &Path) -> Option<String> {
     if session.is_empty() {
         return None;
     }
-    let branch = head_branch(root)?;
-    let path = branch_path(session, root);
-    if path
-        .parent()
-        .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
-    {
-        let _ = std::fs::write(&path, format!("{branch}\n"));
-    }
-    Some(branch)
+    head_branch(root)
 }
 
 /// Open issues grouped for session start: mine (`to` = reader, the reader's

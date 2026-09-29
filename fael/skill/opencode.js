@@ -59,7 +59,10 @@ export const Fael = async ({ client, directory }) => {
       if (r.context) output.output += `\n\n${r.context}`;
     },
 
-    // OpenCode has no Stop hook: on idle, a block becomes a prompt back
+    // OpenCode has no Stop hook: on idle, a block becomes a prompt back. A
+    // non-blocking stop context has no mid-turn channel here — prompting it
+    // would start a turn the user cannot cancel with Esc — so it is dropped
+    // rather than re-prompted.
     event: async ({ event }) => {
       if (event.type !== "session.idle") return;
       const id = event.properties?.sessionID;
@@ -84,14 +87,6 @@ export const Fael = async ({ client, directory }) => {
         blocked.add(id);
         await client.session
           .prompt({ path: { id }, body: { parts: [{ type: "text", text: r.reason }] } })
-          .catch(() => {});
-      } else if (r.context) {
-        // a non-blocking line (branch drift) has no reason to ride; prompt it
-        // once, and mark the session so the next idle is stop_active and the
-        // warning does not repeat (mirrors the block path's one-shot)
-        blocked.add(id);
-        await client.session
-          .prompt({ path: { id }, body: { parts: [{ type: "text", text: r.context }] } })
           .catch(() => {});
       }
     },

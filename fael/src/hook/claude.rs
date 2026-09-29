@@ -92,15 +92,6 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                     "{}",
                     serde_json::json!({"decision": "block", "reason": reason})
                 );
-            } else if let Some(ctx) = r.context {
-                // a non-blocking line (branch drift) has no `reason` to ride —
-                // Stop accepts additionalContext, so it reaches the agent instead
-                // of dying in a field this adapter never read (review fix)
-                println!(
-                    "{}",
-                    serde_json::json!({"hookSpecificOutput": {
-                        "hookEventName": "Stop", "additionalContext": ctx}})
-                );
             }
             ExitCode::SUCCESS
         }
