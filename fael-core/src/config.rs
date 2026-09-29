@@ -46,6 +46,12 @@ pub struct Config {
     /// (`local`, for gitignored or public repos). Ignored without a journal
     /// (no git): the tree is all there is.
     pub store: Store,
+    /// Stop-hook phrase packs behind `[lang] marker` (PLAN-fael-languages).
+    /// Default english+thai; empty switches the bug rule off entirely.
+    pub lang_marker: Vec<String>,
+    /// Accepted row-writing languages behind `[lang] rows` — a row with a
+    /// letter outside every accepted script warns once, never rejects.
+    pub lang_rows: Vec<String>,
 }
 
 impl Default for Config {
@@ -63,6 +69,8 @@ impl Default for Config {
             warn_row_chars: 1200,
             resolve: true,
             store: Store::Tracked,
+            lang_marker: vec!["english".into(), "thai".into()],
+            lang_rows: vec!["english".into()],
         }
     }
 }
@@ -81,6 +89,7 @@ impl Config {
             budget: Budget,
             warn: Warn,
             limit: Limit,
+            lang: Lang,
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
@@ -101,6 +110,12 @@ impl Config {
         #[serde(default)]
         struct Limit {
             row_bytes: Option<usize>,
+        }
+        #[derive(Deserialize, Default)]
+        #[serde(default)]
+        struct Lang {
+            marker: Option<Vec<String>>,
+            rows: Option<Vec<String>>,
         }
         let f: File = toml::from_str(s).map_err(|e| e.to_string())?;
         let d = Config::default();
@@ -126,6 +141,23 @@ impl Config {
             warn_row_chars: f.warn.row_chars.unwrap_or(d.warn_row_chars),
             resolve: f.resolve.unwrap_or(d.resolve),
             store,
+            lang_marker: check_lang("marker", f.lang.marker.unwrap_or(d.lang_marker))?,
+            lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
         })
     }
+}
+
+/// Reject an unknown `[lang]` pack name — silently matching nothing would
+/// leave the hook blind, worse than an error. Same reject style as `store`;
+/// keep the want-list in sync with `lang::by_name`.
+fn check_lang(key: &str, names: Vec<String>) -> Result<Vec<String>, String> {
+    for n in &names {
+        if crate::lang::by_name(n).is_none() {
+            return Err(format!(
+                "rejected: [lang] {key} = {n:?} — want english|thai \
+                 (add a pack in fael-core/src/lang.rs or file an issue)"
+            ));
+        }
+    }
+    Ok(names)
 }
