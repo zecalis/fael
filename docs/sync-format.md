@@ -32,9 +32,14 @@ Local journal path → ref tree path, per writer:
 - The tree is **flat**: `meta.json` plus `<yyyy-mm>.jsonl` / `<yyyy-mm>.close.jsonl`
   at the ref root. There is no `<writer>/` level inside the tree — the ref
   already is the writer namespace.
-- File bytes are the journal bytes exactly: same UTF-8, LF, one JSON object per
-  line, same month split (month from `ts`, UTC), closes in `.close.jsonl`.
-  `compact.*` / `_import` / `quarantine` / `cache` files never travel.
+- Every row the reader sees travels, and the tree is the exact inverse of the
+  reader's split: add rows go to `<yyyy-mm>.jsonl`, close rows to
+  `<yyyy-mm>.close.jsonl`, month from `ts` (UTC). Bytes are the row's
+  `format.md` §Rows bytes, one JSON object per line, LF. This holds for rows
+  stored in `compact.*` or `_import/*` locally too — they are re-split by
+  their own `ts` month, and those file *names* never appear in the tree.
+  `quarantine/` (lines doctor removed) and `cache/` (not `.jsonl`) are not
+  rows and are never read.
 - Readers apply [`format.md`](format.md) §Readers to every fetched file:
   torn tail ignored, bad lines skipped with `file:line`, unknown fields kept,
   duplicate `id`s dropped (first in path order wins).
