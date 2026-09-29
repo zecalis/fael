@@ -161,6 +161,15 @@ fn default_rows_warn_byte_identical() {
 }
 
 #[test]
+fn empty_rows_switches_the_warning_off() {
+    // `rows = []` mirrors `marker = []`: no accepted script would otherwise
+    // make every letter foreign and garble the message
+    let c = cfg(&[]);
+    assert_eq!(row_language_check(&c, Some("หัวข้อไทย"), "stale notes"), None);
+    assert_eq!(row_language_check(&c, None, "stale notes"), None);
+}
+
+#[test]
 fn thai_rows_pass_when_allowed_cjk_still_warns() {
     let c = cfg(&["english", "thai"]);
     assert_eq!(

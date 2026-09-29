@@ -169,7 +169,7 @@ fn stats_rows_shows_pushes_status_and_noise() {
 #[test]
 fn stats_counts_rows_not_in_english() {
     // PLAN-fael-languages chunk 2: the aggregate line reads "rows not in
-    // English" (never "rows with Thai") and shares the core english script
+    // English" (never "rows with Thai") and shares the core detector
     let d = repo();
     let state = d.join("state");
     std::fs::create_dir_all(&state).unwrap();
@@ -193,6 +193,37 @@ fn stats_counts_rows_not_in_english() {
         ok && v["non_english_rows"] == serde_json::json!({"rows": 2, "non_english": 1}),
         "{out}"
     );
+}
+
+#[test]
+fn stats_rows_follows_lang_rows_so_doctor_agrees() {
+    // PLAN-fael-languages: stats reads the running repo's `[lang] rows` with
+    // the same detector as `doctor [NotEnglish]`, so a Thai-accepting repo
+    // counts no foreign rows (the two tools cannot disagree)
+    let d = repo();
+    let state = d.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(
+        d.join(".fael/config.toml"),
+        "[lang]\nrows = [\"english\", \"thai\"]\n",
+    )
+    .unwrap();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    for text in ["kept choice", "บันทึกหลัง merge"] {
+        let (ok, _, err) = fael(&d, &["add", "decision", text, "--files", "src/a.rs"], "");
+        assert!(ok, "{err}");
+    }
+    let line = format!(
+        r#"{{"ts":"2026-09-26T00:00:00.000Z","repo":{},"client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":[]}}"#,
+        json(&d)
+    );
+    std::fs::write(state.join("usage.jsonl"), format!("{line}\n")).unwrap();
+    let (ok, out, _) = fael_at(&state, &d, &["stats"], "");
+    assert!(ok, "{out}");
+    assert!(out.contains("rows not in english/thai: 0 of 2"), "{out}");
+    let (_, doctor, _) = fael_at(&state, &d, &["doctor"], "");
+    assert!(!doctor.contains("[NotEnglish]"), "{doctor}");
 }
 
 #[test]
