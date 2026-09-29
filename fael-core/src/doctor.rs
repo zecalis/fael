@@ -74,6 +74,11 @@ pub enum Kind {
     /// --merged` says the branch landed, no `mergedAt`) — shown as
     /// `[Shipped?]` so the reader confirms before closing.
     ShippedMaybe,
+    /// open rows with a letter outside every accepted `[lang] rows` script —
+    /// the add-time warning the agent skipped, repeated here so one translate
+    /// batch can supersede them all (PLAN-fael-languages chunk 2); judged by
+    /// `lang::row_language_check`, never new logic
+    NotEnglish,
 }
 
 #[derive(Debug, Clone)]

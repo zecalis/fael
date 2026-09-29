@@ -149,7 +149,7 @@ fn stop_inner(e: &Event) -> Reply {
     // bug rule: a marker in the turn text, or the transcript tail after the
     // latest user message — cleared only by an issue row at or after the
     // match, never by one filed before the words
-    let (bug_signal, bug_row_since) = bug_state(e, &c.log, since_ms);
+    let (bug_signal, bug_row_since) = bug_state(e, &c.log, since_ms, &c.repo.cfg);
     let reason = core::decide_stop(&core::StopFacts {
         stop_active: false,
         edits,
@@ -208,15 +208,21 @@ fn stop_inner(e: &Event) -> Reply {
 /// The turn's bug announcement, if any — free text, or the transcript tail
 /// after the latest user message — with whether an issue row at or after the
 /// match already clears it. An issue filed before the words never does.
-fn bug_state(e: &Event, log: &core::Log, since_ms: i64) -> (Option<core::BugSignal>, bool) {
+/// Phrases come from the repo's `[lang] marker` packs (PLAN-fael-languages).
+fn bug_state(
+    e: &Event,
+    log: &core::Log,
+    since_ms: i64,
+    cfg: &core::Config,
+) -> (Option<core::BugSignal>, bool) {
     let bug_signal: Option<core::BugSignal> = match (&e.text, e.session.as_deref()) {
-        (Some(text), _) => has_bug_marker(text).map(|h| core::BugSignal {
+        (Some(text), _) => has_bug_marker(text, cfg).map(|h| core::BugSignal {
             marker: h.marker,
             strong: h.strong,
             at_ms: since_ms,
         }),
         (None, Some(t)) if Path::new(t).is_file() => {
-            bug_signal_from_transcript(Path::new(t), since_ms).map(|h| core::BugSignal {
+            bug_signal_from_transcript(Path::new(t), since_ms, cfg).map(|h| core::BugSignal {
                 marker: h.marker,
                 strong: h.strong,
                 at_ms: h.at_ms,

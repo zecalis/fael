@@ -166,8 +166,13 @@ pub fn marker_hit(text: &str, packs: &[&Lang], negations_extra: &[&str]) -> Opti
 /// reject — one reject costs a whole round — one warning line instead.
 /// Under the default `rows = ["english"]` the string is byte-identical to
 /// the old hardcoded one. Symbols (→, ≤) are not alphabetic; accented
-/// Latin (é) is in the english script.
+/// Latin (é) is in the english script. An empty `rows` switches the check
+/// off, mirroring `marker = []` — no accepted script would otherwise make
+/// every letter foreign and garble the message.
 pub fn row_language_check(cfg: &Config, title: Option<&str>, text: &str) -> Option<String> {
+    if cfg.lang_rows.is_empty() {
+        return None;
+    }
     let packs: Vec<&Lang> = cfg.lang_rows.iter().filter_map(|n| by_name(n)).collect();
     let foreign = |s: &str| {
         s.chars()

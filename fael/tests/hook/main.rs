@@ -2,8 +2,8 @@
 //! own `FAEL_STATE_DIR` through `Command::env`, so the tests run in parallel.
 //!
 //! Thin entry only — the suites sit next to this file:
-//! `stop` (turn-end blocks), `session` (session-start + read push),
-//! `clients` (codex/claude shapes), `stats` (usage accounting),
+//! `stop` (turn-end blocks), `stop_lang` ([lang] marker/rows packs),
+//! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `push_cap` (read-push row cap + omitted line),
 //! `focus` (session Focus: focus.json written at start, read by the push).
 
@@ -14,6 +14,7 @@ mod seen;
 mod session;
 mod stats;
 mod stop;
+mod stop_lang;
 mod stop_risk;
 mod tags;
 

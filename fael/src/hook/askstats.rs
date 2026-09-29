@@ -131,26 +131,31 @@ pub(crate) fn added_since(log: &core::Log, since_ms: i64) -> usize {
         .count()
 }
 
-/// (rows, rows not in English): one global dedup by id — repos in one clone
-/// share the journal, so the same row must not count twice. Same detector as
-/// the add-time warning (`write::non_english`), title or text.
-pub(crate) fn non_english_share(logs: &HashMap<String, core::Log>) -> (usize, usize) {
+/// (rows, rows outside the accepted `[lang] rows` scripts): one global dedup
+/// by id — repos in one clone share the journal, so the same row must not
+/// count twice. The same core detector the add-time warning and doctor use
+/// (`core::row_language_check`), judged with the running repo's accepted
+/// scripts — one aggregate number needs one ruler, and this is the repo's.
+/// Under the default `rows = ["english"]` the count is byte-identical to the
+/// old English-only one; an empty `rows` counts nothing.
+pub(crate) fn non_english_share(
+    logs: &HashMap<String, core::Log>,
+    cfg: &core::Config,
+) -> (usize, usize) {
     let mut seen = HashSet::new();
-    let (mut n, mut foreign) = (0usize, 0usize);
+    let (mut n, mut foreign_rows) = (0usize, 0usize);
     for log in logs.values() {
         for r in &log.rows {
             if !seen.insert(r.id.as_str()) {
                 continue;
             }
             n += 1;
-            if crate::write::non_english(&r.text)
-                || r.title.as_deref().is_some_and(crate::write::non_english)
-            {
-                foreign += 1;
+            if core::row_language_check(cfg, r.title.as_deref(), &r.text).is_some() {
+                foreign_rows += 1;
             }
         }
     }
-    (n, foreign)
+    (n, foreign_rows)
 }
 
 /// Mean real-token cost of the round after a stop-block: each block attributes

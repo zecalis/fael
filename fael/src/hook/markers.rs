@@ -1,59 +1,10 @@
-//! Bug markers (port of fapony's bug-markers.ts, std only): the phrases in
-//! the assistant's text that make the stop hook ask for an issue row.
+//! Bug markers behind `.fael/config.toml` `[lang]` (PLAN-fael-languages
+//! chunk 2): every phrase lives in a `core::lang` pack, so this adapter only
+//! reads the transcript tail and calls `core::lang::marker_hit` with the
+//! packs the repo selected. `marker = []` switches the bug rule off entirely.
 
 use crate::core;
 use std::path::Path;
-
-/// Free-text announcement phrases, never symptom words — a false fire costs a
-/// Stop-hook block. Ported without a regex crate to keep the hook path std +
-/// serde_json only; the behaviour matches on the common phrases.
-const BUG_PHRASES_LATIN: [&str; 12] = [
-    "found a bug",
-    "found the bug",
-    "found bug",
-    "found a real bug",
-    "found the real bug",
-    "this is a bug",
-    "that is a bug",
-    "it is a bug",
-    "it's a bug",
-    "bug confirmed",
-    "confirmed bug",
-    "confirmed a bug",
-];
-
-/// Thai phrases are caseless — they match in the lowercased haystack too.
-const BUG_PHRASES_THAI: [&str; 5] = ["เจอบั๊ก", "พบว่าเป็นบั๊ก", "เจอว่าเป็นบั๊ก", "บั๊กที่เจอ", "บั๊กที่พบ"];
-
-const NEGATIONS: [&str; 7] = ["ไม่", "จะ", "ถ้า", "อาจ", "not", "no", "if"];
-
-/// Problems short of a confirmed bug — something inconsistent, or expected to
-/// break. Reporting these on the spot is the point (an agent has no reason to
-/// stay quiet), so a false fire is the accepted cost: one block per session.
-/// "might"/"อาจ" are the claim here, not a negation — only a flat denial
-/// ("no mismatch", "ไม่มีความเสี่ยง") cancels.
-const RISK_PHRASES: [&str; 18] = [
-    "inconsistent",
-    "inconsistency",
-    "mismatch",
-    "doesn't match",
-    "does not match",
-    "out of sync",
-    "might break",
-    "could break",
-    "will break",
-    "likely to break",
-    "ไม่ตรงกัน",
-    "ไม่สอดคล้อง",
-    "ขัดแย้งกัน",
-    "อาจพัง",
-    "น่าจะพัง",
-    "อาจมีปัญหา",
-    "น่าจะมีปัญหา",
-    "มีความเสี่ยง",
-];
-
-const RISK_NEGATIONS: [&str; 3] = ["ไม่", "not", "no"];
 
 /// A matched marker: Strong = a confirmed-bug announcement (blocks without
 /// an issue row), Weak = a risk/inconsistency mention (one-line note only,
@@ -72,140 +23,23 @@ pub(crate) struct TranscriptHit {
     pub(crate) at_ms: i64,
 }
 
-/// The matched marker, or `None`. Code fences, `inline code` and `>` quotes
-/// are dropped first — a phrase describing code is not a problem report.
-/// Every match is checked against a negation window so "ไม่พบบั๊กใหม่
-/// แต่เจอบั๊กที่ X" still fires on the second. The search runs on the
-/// lowercased text throughout, so byte indices always belong to the string
-/// they slice.
-pub(crate) fn has_bug_marker(text: &str) -> Option<BugHit> {
-    let lower = strip_quoted(text).to_lowercase();
-    // phrase lists
-    for p in BUG_PHRASES_LATIN.into_iter().chain(BUG_PHRASES_THAI) {
-        if let Some(i) = lower.find(p)
-            && !negated(&lower, i, &NEGATIONS)
-        {
-            return Some(BugHit {
-                marker: lower[i..i + p.len()].to_string(),
-                strong: true,
-            });
-        }
-    }
-    for p in RISK_PHRASES {
-        if let Some(i) = lower.find(p)
-            && !negated(&lower, i, &RISK_NEGATIONS)
-        {
-            return Some(BugHit {
-                marker: p.to_string(),
-                strong: false,
-            });
-        }
-    }
-    // `bug…:` — "**Bug (cause…):**" (same line, optional paren group)
-    let mut from = 0;
-    while let Some(i) = lower[from..].find("bug") {
-        let i = from + i;
-        if word_boundary(&lower, i, 3)
-            && colon_after(&lower, i + 3)
-            && !negated(&lower, i, &NEGATIONS)
-        {
-            return Some(BugHit {
-                marker: "bug:".to_string(),
-                strong: true,
-            });
-        }
-        from = i + 3;
-    }
-    None
+/// The packs behind `cfg.lang_marker`, in repo order — unknown names never
+/// reach here (`Config::from_toml` rejects them), so this filters defensively.
+fn packs(cfg: &core::Config) -> Vec<&'static core::lang::Lang> {
+    cfg.lang_marker
+        .iter()
+        .filter_map(|n| core::lang::by_name(n))
+        .collect()
 }
 
-/// Drop fenced code blocks, `inline code` spans and `>` quote lines — what is
-/// left is the assistant's own prose, the only part that can report a problem.
-fn strip_quoted(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut in_fence = false;
-    for line in text.split_inclusive('\n') {
-        // a ``` run anywhere opens/closes a fenced block when unpaired on
-        // the line — the marker line itself is never prose worth matching
-        if line.contains("```") {
-            if line.matches("```").count() % 2 == 1 {
-                in_fence = !in_fence;
-            }
-            continue;
-        }
-        if in_fence || line.trim_start().starts_with('>') {
-            continue;
-        }
-        out.push_str(&strip_inline_code(line));
-    }
-    out
-}
-
-/// Drop `code` spans on one line; the tail after an unpaired tick is prose.
-fn strip_inline_code(line: &str) -> String {
-    let parts: Vec<&str> = line.split('`').collect();
-    let mut out = String::with_capacity(line.len());
-    for (i, part) in parts.iter().enumerate() {
-        let tail_after_unpaired = parts.len().is_multiple_of(2) && i == parts.len() - 1;
-        if i % 2 == 0 || tail_after_unpaired {
-            out.push_str(part);
-        }
-    }
-    out
-}
-
-fn word_boundary(s: &str, i: usize, len: usize) -> bool {
-    let b = s.as_bytes();
-    let left = i == 0 || !b[i - 1].is_ascii_alphanumeric();
-    let right = b.get(i + len).is_none_or(|c| !c.is_ascii_alphanumeric());
-    left && right
-}
-
-fn colon_after(s: &str, mut i: usize) -> bool {
-    let b = s.as_bytes();
-    while b.get(i).is_some_and(|c| *c == b' ' || *c == b'\t') {
-        i += 1;
-    }
-    if b.get(i) == Some(&b'(') {
-        // skip to the closing paren on this line
-        while let Some(c) = b.get(i) {
-            i += 1;
-            if *c == b')' {
-                break;
-            }
-            if *c == b'\n' {
-                return false;
-            }
-        }
-        while b.get(i).is_some_and(|c| *c == b' ' || *c == b'\t') {
-            i += 1;
-        }
-    }
-    // a colon before the line ends
-    s[i..]
-        .split('\n')
-        .next()
-        .is_some_and(|l| l.trim_end().ends_with(':'))
-}
-
-/// The ~15 chars before the match end in a negation word.
-fn negated(lower: &str, i: usize, negations: &[&str]) -> bool {
-    let before: String = lower[..i]
-        .chars()
-        .rev()
-        .take(15)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect();
-    let t = before.trim_end().to_lowercase();
-    negations.iter().any(|n| {
-        t.ends_with(n)
-            && (n.chars().all(|c| !c.is_ascii_alphabetic())
-                || t[..t.len() - n.len()]
-                    .chars()
-                    .last()
-                    .is_none_or(|c| !c.is_alphabetic()))
+/// The matched marker, or `None` — `core::lang::marker_hit` with this repo's
+/// packs. Matching semantics (quote stripping, negation window, the `bug…:`
+/// rule) live in core; the phrase unit tests moved to
+/// `fael-core/tests/lang.rs` with them.
+pub(crate) fn has_bug_marker(text: &str, cfg: &core::Config) -> Option<BugHit> {
+    core::lang::marker_hit(text, &packs(cfg), &[]).map(|h| BugHit {
+        marker: h.marker,
+        strong: h.strong,
     })
 }
 
@@ -234,7 +68,11 @@ fn read_tail(path: &Path) -> Option<String> {
 /// lines after the latest user message (a plan written an hour ago must not
 /// block this turn). Returns the match with its line timestamp (fallback:
 /// the session start, when the line carries none).
-pub(crate) fn bug_signal_from_transcript(path: &Path, since_ms: i64) -> Option<TranscriptHit> {
+pub(crate) fn bug_signal_from_transcript(
+    path: &Path,
+    since_ms: i64,
+    cfg: &core::Config,
+) -> Option<TranscriptHit> {
     let text = read_tail(path)?;
     // (is_user, line ms, text blocks) in file order
     let mut msgs: Vec<(bool, i64, Vec<String>)> = vec![];
@@ -276,7 +114,7 @@ pub(crate) fn bug_signal_from_transcript(path: &Path, since_ms: i64) -> Option<T
         .unwrap_or(0);
     for (_, at_ms, texts) in msgs.iter().skip(after).filter(|m| !m.0) {
         for t in texts {
-            if let Some(hit) = has_bug_marker(t) {
+            if let Some(hit) = has_bug_marker(t, cfg) {
                 return Some(TranscriptHit {
                     marker: hit.marker,
                     strong: hit.strong,
@@ -286,55 +124,4 @@ pub(crate) fn bug_signal_from_transcript(path: &Path, since_ms: i64) -> Option<T
         }
     }
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::has_bug_marker;
-
-    #[test]
-    fn strong_blocks_weak_notes() {
-        let hit = has_bug_marker("I found a bug in login").unwrap();
-        assert!(hit.strong, "{}", hit.marker);
-        let hit = has_bug_marker("doc กับโค้ดไม่ตรงกัน").unwrap();
-        assert!(!hit.strong, "{}", hit.marker);
-    }
-
-    #[test]
-    fn quoted_code_never_signals() {
-        for quiet in [
-            "```\nI found a bug in login\n```",
-            "run `found a bug` to reproduce",
-            "> I found a bug in login",
-            "> doc กับโค้ดไม่ตรงกัน",
-            "```\nconfig and schema are out of sync\n```",
-        ] {
-            assert!(has_bug_marker(quiet).is_none(), "{quiet}");
-        }
-        // prose around code still fires
-        let hit = has_bug_marker("looks off:\n```\nlet x = 1;\n```\nI found a bug below").unwrap();
-        assert!(hit.strong, "{}", hit.marker);
-    }
-
-    #[test]
-    fn markers_catch_bugs_and_risks_not_denials() {
-        for hit in [
-            "I found a bug in login",
-            "doc กับโค้ดไม่ตรงกัน",
-            "config and schema are out of sync",
-            "this might break the importer",
-            "ตรงนี้อาจมีปัญหาตอน merge",
-        ] {
-            assert!(has_bug_marker(hit).is_some(), "{hit}");
-        }
-        for miss in [
-            "no bug found",
-            "no mismatch left",
-            "ไม่มีความเสี่ยง",
-            "ถ้าเจอบั๊กให้บอก",
-            "all tests pass",
-        ] {
-            assert!(has_bug_marker(miss).is_none(), "{miss}");
-        }
-    }
 }

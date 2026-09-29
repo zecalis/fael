@@ -192,7 +192,11 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
         }
     }
     let after_block: usize = outcome.values().map(|(_, f)| f).sum();
-    let (row_total, foreign_rows) = askstats::non_english_share(&logs);
+    // the running repo's accepted row languages judge the aggregate with the
+    // same core detector the add-time warning and `doctor [NotEnglish]` use,
+    // so the two agree on the same repo; a broken/absent config = defaults
+    let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
+    let (row_total, foreign_rows) = askstats::non_english_share(&logs, &cfg);
     let (samples, avg_in, avg_cc, avg_cr, avg_out) = askstats::post_block_cost(&kept);
     let (sk_b, sk_e, sc_b, sc_e) = asks::constants();
     let since_day = if since == i64::MAX {
@@ -300,8 +304,14 @@ pub fn stats(json: bool, rows: bool) -> Result<(), String> {
             "  rounds: ~{after_block} row(s) took their own round after a block, of {rows_added} added since {since_day}"
         );
     }
-    if row_total > 0 {
-        println!("  rows not in English: {foreign_rows} of {row_total}");
+    if row_total > 0 && !cfg.lang_rows.is_empty() {
+        let langs = cfg.lang_rows.join("/");
+        let label = if langs == "english" {
+            "English".to_string()
+        } else {
+            langs
+        };
+        println!("  rows not in {label}: {foreign_rows} of {row_total}");
     }
     if samples > 0 {
         println!(

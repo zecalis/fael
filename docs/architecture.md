@@ -146,6 +146,9 @@ row_tokens = 400
 row_chars = 1200              # a single-topic-looking row can still run long
 [limit]
 row_bytes = 10240             # hard cap, never above 10 KiB
+[lang]
+marker = ["english", "thai"]  # Stop-hook phrase packs (default); [] switches the bug rule off
+rows = ["english"]            # accepted row-writing languages; anything else warns once, never rejects ([] switches the check off)
 ```
 
 ### MCP (3 tools on stdio — each schema is paid for in every session, so the list stays short)
@@ -212,6 +215,7 @@ client ─(stop event)─▶ edits recorded this session?
                         (or commits) and the exact command, --files prefilled
 ```
 Edits, not commits, are the primary signal: many agents are told never to commit, and a commit-only rule never fires for them. Git is only the fallback for edits the hook never saw (a shell `sed`, a heredoc). Measuring from the newest row, not the session start, keeps a row filed early from covering hours of work after it; a new row reopens one more block. The edit list is per-machine runtime state, never in `.fael/`. The `session` string sent with `edit` must equal the one sent with `stop`.
+A bug announcement blocks only without an issue row since the words — and the phrases that count as one come from the `[lang] marker` packs (`english` + `thai` by default, `marker = []` switches the rule off), never from hardcoded lists.
 
 **Session start:**
 ```
@@ -251,6 +255,7 @@ Tokens are the unit of value, and they are spent when reading, not when storing.
 Reading never fails: broken lines, leftover merge-conflict markers, duplicate ids, CRLF and BOM are all handled in memory. Writing seals a torn last line before it appends. `fael doctor` reports problems, and `--fix` repairs them with tmp-then-rename. Bad lines go to `.fael/quarantine/`, so no byte is ever deleted.
 
 `doctor` reads prose as well as bytes: open rows, close reasons and every `*.md` under the repo (outside `.git`/`target`/`node_modules`) are checked for citations of ids with no row behind them — `[Phantom]`, the dead citation the next reader takes as confirmation. Fenced code blocks are skipped there: a ULID inside a fence is an example, never a citation.
+Open rows with a letter outside every accepted `[lang] rows` script report as one `[NotEnglish]` batch (info, never `--fix`ed) with the full ids a translate pass supersedes (`fael add --supersedes <id>`, batched over `fael add --json -`); `fael stats` counts the same rows with the same detector against the running repo's accepted scripts (`rows not in English` under the default, never `rows with Thai`).
 
 ## 7. Non-goals
 

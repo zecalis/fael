@@ -51,6 +51,7 @@ pub struct Config {
     pub lang_marker: Vec<String>,
     /// Accepted row-writing languages behind `[lang] rows` — a row with a
     /// letter outside every accepted script warns once, never rejects.
+    /// Empty switches the check off (mirrors `lang_marker = []`).
     pub lang_rows: Vec<String>,
 }
 
