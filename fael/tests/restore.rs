@@ -148,6 +148,21 @@ fn restore_reopens_and_is_idempotent() {
 }
 
 #[test]
+fn close_superseder_after_restore_keeps_target_open() {
+    // closing the row whose supersede edge was reverted must not sweep the
+    // restored row into the close chain — a reverted edge hides nothing
+    let d = repo();
+    let (a, b) = superseded_pair(&d);
+    let (ok, _, err) = fael(&d, &["restore", &a], "");
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&d, &["close", &b, "done"], "");
+    assert!(ok, "{err}");
+    let (ok, out, err) = fael(&d, &["find", "--json", "--files", "src/a.rs"], "");
+    assert!(ok, "{err}");
+    assert!(lists(&out, &a), "A stays open after closing B: {out}");
+}
+
+#[test]
 fn restore_names_edge_when_two_hide() {
     let d = repo();
     let (a, b) = superseded_pair(&d);
