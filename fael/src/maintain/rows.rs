@@ -24,6 +24,11 @@ pub(super) fn open_row_notes(
     // a supersede marker whose newest version is already closed: the whole
     // chain is hidden with no close row — a pre-chain-close binary's trap
     out.extend(superseded_note(log));
+    // per-rule self-heal precision from restore labels — shown only when a
+    // label lands (re-adds alone never count); the judging lives in core
+    if let Some(p) = core::doctor_precision(log) {
+        out.push(p);
+    }
     // one `gh pr list --state merged` call feeds both checks: `[Merged]` uses
     // the branch set, `[Shipped]` the mergedAt/number per branch
     let prs = merged::merged_prs(root).unwrap_or_default();

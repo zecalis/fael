@@ -1,5 +1,6 @@
-use super::{closed, superseded};
+use super::{closed, reverted, superseded};
 use crate::{Log, Row};
+use std::collections::HashSet;
 
 /// Estimated tokens — derived at read time, never stored (every model's tokenizer differs).
 /// An id-like run (≥ 6 chars of `0-9A-Z` mixing digits and letters — a ULID
@@ -45,6 +46,22 @@ pub fn est_tokens(s: &str) -> usize {
     }
     flush(&mut run, &mut ascii, &mut ids);
     ascii.div_ceil(ASCII_BYTES_PER_TOKEN) + other.div_ceil(OTHER_CHARS_PER_TOKEN) + ids
+}
+
+/// Targets of reverted supersede edges that are open again — the restore
+/// label `find` shows (PLAN-fael-selfheal-restore chunk 3). A target still
+/// named by another active edge, or closed since, is not listed: the
+/// `(superseded)` / `(closed)` mark wins there, and `doctor` judges the edge,
+/// never this set.
+pub fn restored(log: &Log) -> HashSet<&str> {
+    let rev = reverted(log);
+    let (hide_closed, hide_sup) = (closed(log), superseded(log));
+    log.rows
+        .iter()
+        .filter(|r| rev.contains(r.id.as_str()))
+        .filter_map(|r| r.supersedes.as_deref())
+        .filter(|t| !hide_closed.contains(t) && !hide_sup.contains(t))
+        .collect()
 }
 
 /// Per-row shortest unique id prefix (≥ 8), git-style: a row is only as long
@@ -137,6 +154,7 @@ pub fn render_full_page(log: &Log, rows: &[&Row], budget: usize, cut: Cut) -> St
 fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option<Cut>) -> String {
     let ab = abbrev(log);
     let (closed, superseded) = (closed(log), superseded(log));
+    let restored = restored(log);
     let mut out = String::new();
     let mut used = 0;
     let mut cut_budget = false;
@@ -148,6 +166,8 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
             " (closed)"
         } else if superseded.contains(r.id.as_str()) {
             " (superseded)"
+        } else if restored.contains(r.id.as_str()) {
+            " (restored)"
         } else {
             ""
         };

@@ -1,6 +1,6 @@
 //! `fael restore` through the real binary: reopening by target or by edge,
-//! idempotency (a repeat writes nothing), rejects, a clean doctor after, and
-//! the intended B+A-open → next-add-Holds behaviour (format.md §Restore).
+//! idempotency (a repeat writes nothing), rejects, doctor precision after,
+//! and the intended B+A-open → next-add-Holds behaviour (format.md §Restore).
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -212,18 +212,23 @@ fn restore_unknown_and_edgeless_reject() {
 }
 
 #[test]
-fn doctor_clean_after_restore() {
+fn doctor_reports_precision_after_restore() {
     let d = repo();
     let (a, _) = superseded_pair(&d);
     let (ok, _, err) = fael(&d, &["restore", &a], "");
     assert!(ok, "{err}");
-    // the throwaway repo has no union line yet — fix that, then the log
-    // itself (including the restore row) must report nothing
+    // the throwaway repo has no union line yet — fix that, then the only
+    // note left is the restore label's per-rule precision (info-only, exit 0)
     let (ok, out, err) = fael(&d, &["doctor", "--fix"], "");
     assert!(ok, "{out} {err}");
     let (ok, out, err) = fael(&d, &["doctor"], "");
     assert!(ok, "{err}");
-    assert!(out.contains("clean"), "{out}");
+    assert!(out.contains("[Precision]"), "{out}");
+    assert!(out.contains("caller:flag 0/1 correct"), "{out}");
+    // the re-opened row carries its label in find too
+    let (ok, out, _) = fael(&d, &["find", "--files", "src/a.rs"], "");
+    assert!(ok);
+    assert!(out.contains("(restored)"), "{out}");
 }
 
 #[test]
