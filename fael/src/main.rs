@@ -68,7 +68,9 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("add", [kind, text]) => add(&a, kind, text).map(|()| ExitCode::SUCCESS),
         // chunk 6b: `fael add --json -` reads a JSON array of rows from stdin
         ("add", [dash]) if dash == "-" && a.has("json") => batch::batch_add(),
-        ("close", [id, why]) => close(&a, id, why).map(|()| ExitCode::SUCCESS),
+        ("close", rest) if rest.len() >= 2 => {
+            batch::batch_close(&a, &rest[..rest.len() - 1], &rest[rest.len() - 1])
+        }
         ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
         ("find", [] | [_]) => find::find(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
@@ -332,16 +334,6 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     )?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "add", Some(&r.root), &warns);
-    batch::written(a, &r, &row, &path);
-    Ok(())
-}
-
-/// `fael close` — an issue that is fixed, a note that is done.
-fn close(a: &Args, id: &str, why: &str) -> Result<(), String> {
-    let r = repo()?;
-    let (row, path, warns) = write::close_row(&r, id, why)?;
-    warns.iter().for_each(|w| eprintln!("{w}"));
-    hook::record_asks("cli", hook::ASK_WARN, "close", Some(&r.root), &warns);
     batch::written(a, &r, &row, &path);
     Ok(())
 }
