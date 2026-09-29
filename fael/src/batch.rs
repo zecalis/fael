@@ -69,6 +69,43 @@ pub(crate) fn batch_add() -> Result<ExitCode, String> {
     }
 }
 
+/// Batch close — `fael close a b "why"` closes each id with the same reason;
+/// a bad id reports alone while the rest save (never all-or-nothing, like
+/// batch add above). A single id keeps the old behaviour byte for byte: the
+/// original error returns unchanged, so `already closed` still lands on stderr.
+pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<ExitCode, String> {
+    let r = crate::repo()?;
+    let (mut failed, mut first) = (0, String::new());
+    for id in ids {
+        match write::close_row(&r, id, why) {
+            Ok((row, path, warns)) => {
+                warns.iter().for_each(|w| eprintln!("{w}"));
+                record_asks("cli", ASK_WARN, "close", Some(&r.root), &warns);
+                written(a, &r, &row, &path);
+            }
+            Err(e) => {
+                failed += 1;
+                if first.is_empty() {
+                    first = e.clone();
+                }
+                let e = format!("rejected: {id}: {}", e.trim_start_matches("rejected: "));
+                println!("{e}");
+                record_cli_reject("close", &e);
+            }
+        }
+    }
+    if failed == 0 {
+        Ok(ExitCode::SUCCESS)
+    } else if ids.len() == 1 {
+        Err(first)
+    } else {
+        Err(format!(
+            "rejected: {failed} of {} closes rejected — the rest saved",
+            ids.len()
+        ))
+    }
+}
+
 /// Chunk 6b: one batch row (`fael add --json -`, MCP `rows: [...]`) parsed to
 /// the same parts as a single add — shared so CLI and MCP never drift.
 pub(crate) struct BatchRow {
