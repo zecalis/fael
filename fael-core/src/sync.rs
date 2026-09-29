@@ -62,34 +62,30 @@ pub struct TreeFile {
     pub body: String,
 }
 
-/// Group rows into flat-tree files: `meta.json` first, then one
-/// `<yyyy-mm>.jsonl` per month plus a `<yyyy-mm>.close.jsonl` companion when a
-/// close row (a row with `ref` set) names that month. Month comes from `ts`
-/// (UTC), exactly like the local `<writer>/<yyyy-mm>.jsonl` split; row bytes
-/// are `Row::to_line`, order kept.
+/// Group the journal into flat-tree files: `meta.json` first, then one
+/// `<yyyy-mm>.jsonl` per month of add rows plus a `<yyyy-mm>.close.jsonl`
+/// companion per month of close rows. Month comes from `ts` (UTC), exactly
+/// like the local `<writer>/<yyyy-mm>.jsonl` split; row bytes are
+/// `Row::to_line`, order kept.
 ///
-/// Feed only `<yyyy-mm>[.close].jsonl` rows — `compact.*`, `_import`,
-/// `quarantine` and `cache` files never travel (docs/sync-format.md), so the
-/// caller selects the files and this function only groups their rows. Rows
-/// whose `ts` has no `yyyy-mm` prefix are skipped: the local append path
-/// rejects them, so a journal never holds one.
-pub fn tree_files(meta: &Meta, rows: &[Row]) -> Vec<TreeFile> {
+/// `rows` and `closes` are the reader's two streams (`.jsonl` vs
+/// `.close.jsonl`, [`crate::Log`]) — pass them separately so the tree is the
+/// exact inverse of the filename split a reader applies: a close without a
+/// `ref` still rides `.close.jsonl`, and an add row with a stray `ref` stays
+/// in the month file. Feed every reader-visible row whatever file it came
+/// from — `compact.*` and `_import/*` rows travel here re-split by their own
+/// `ts` month, and those file names never reach the tree; `quarantine/` and
+/// `cache/` are not rows and are never read. Rows whose `ts` has no `yyyy-mm`
+/// prefix are skipped: the local append path rejects them, so a journal never
+/// holds one.
+pub fn tree_files(meta: &Meta, rows: &[Row], closes: &[Row]) -> Vec<TreeFile> {
     let mut out = vec![TreeFile {
         path: "meta.json".into(),
         body: meta.to_json(),
     }];
     let mut months: BTreeMap<String, (Vec<&Row>, Vec<&Row>)> = BTreeMap::new();
-    for r in rows {
-        let Some(month) = r.ts.get(..7).filter(|m| is_month(m)) else {
-            continue;
-        };
-        let slot = months.entry(month.to_string()).or_default();
-        if r.reference.is_some() {
-            slot.1.push(r);
-        } else {
-            slot.0.push(r);
-        }
-    }
+    group(rows, false, &mut months);
+    group(closes, true, &mut months);
     for (month, (rows, closes)) in &months {
         if !rows.is_empty() {
             out.push(TreeFile {
@@ -109,7 +105,8 @@ pub fn tree_files(meta: &Meta, rows: &[Row]) -> Vec<TreeFile> {
 
 /// Fetched rows missing locally — what ingest appends through the normal
 /// write path. Dedupe by `id` is the only mechanism: first occurrence wins,
-/// rows already local (or id-less) fall away.
+/// rows already local (or id-less) fall away. Call once per stream (add rows,
+/// then close rows) so the two dedupe separately, exactly as the reader does.
 pub fn missing(fetched: &[Row], local: &[Row]) -> Vec<Row> {
     let seen: HashSet<&str> = local
         .iter()
@@ -128,7 +125,8 @@ pub fn missing(fetched: &[Row], local: &[Row]) -> Vec<Row> {
 }
 
 /// The merged journal both sides converge on: local rows in order, then the
-/// fetched rows missing locally. What a push commits after re-fetching.
+/// fetched rows missing locally. What a push commits after re-fetching — call
+/// once for add rows and once for close rows, then [`tree_files`] the two.
 pub fn union(fetched: &[Row], local: &[Row]) -> Vec<Row> {
     let mut out = local.to_vec();
     out.extend(missing(fetched, local));
@@ -160,6 +158,26 @@ fn lines(rows: &[&Row]) -> String {
         body.push('\n');
     }
     body
+}
+
+/// File the rows of one stream into their `ts` month, order kept. `is_close`
+/// picks the close companion bucket; rows without a `yyyy-mm` `ts` are skipped.
+fn group<'a>(
+    src: &'a [Row],
+    is_close: bool,
+    months: &mut BTreeMap<String, (Vec<&'a Row>, Vec<&'a Row>)>,
+) {
+    for r in src {
+        let Some(month) = r.ts.get(..7).filter(|m| is_month(m)) else {
+            continue;
+        };
+        let slot = months.entry(month.to_string()).or_default();
+        if is_close {
+            slot.1.push(r);
+        } else {
+            slot.0.push(r);
+        }
+    }
 }
 
 /// One ref path component: non-empty, no `/` (a writer owns exactly one ref,
@@ -228,17 +246,17 @@ mod tests {
                 None,
             ),
             row(
-                "01J8ZQ3K400000000000000003",
-                "2026-09-17T10:00:00.000Z",
-                Some("01J8ZQ3K400000000000000001"),
-            ),
-            row(
                 "01J8ZQ3K400000000000000004",
                 "2026-10-01T10:00:00.000Z",
                 None,
             ),
         ];
-        let files = tree_files(&meta(), &rows);
+        let closes = vec![row(
+            "01J8ZQ3K400000000000000003",
+            "2026-09-17T10:00:00.000Z",
+            Some("01J8ZQ3K400000000000000001"),
+        )];
+        let files = tree_files(&meta(), &rows, &closes);
         let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
         assert_eq!(
             paths,
@@ -256,11 +274,35 @@ mod tests {
             parse(f.body.as_bytes(), &f.path, &mut back, &mut warns);
         }
         assert!(warns.is_empty(), "{warns:?}");
-        let mut want: Vec<String> = rows.iter().map(|r| r.to_line()).collect();
+        let mut want: Vec<String> = rows.iter().chain(&closes).map(|r| r.to_line()).collect();
         let mut got: Vec<String> = back.iter().map(|r| r.to_line()).collect();
         want.sort();
         got.sort();
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn stream_split_follows_the_reader_not_the_ref_field() {
+        // a ref-less close (an import can carry one) still rides .close.jsonl
+        let mut no_ref = row(
+            "01J8ZQ3K400000000000000021",
+            "2026-09-15T10:00:00.000Z",
+            None,
+        );
+        no_ref.kind.clear();
+        no_ref.files.clear();
+        // an add row with a stray `ref` stays in the month file
+        let mut stray = row(
+            "01J8ZQ3K400000000000000022",
+            "2026-09-15T10:00:00.000Z",
+            None,
+        );
+        stray.reference = Some("01J8ZQ3K400000000000000021".into());
+        let files = tree_files(&meta(), &[stray], &[no_ref]);
+        let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, ["meta.json", "2026-09.jsonl", "2026-09.close.jsonl"]);
+        assert!(files[1].body.contains("01J8ZQ3K400000000000000022"));
+        assert!(files[2].body.contains("01J8ZQ3K400000000000000021"));
     }
 
     #[test]
@@ -284,7 +326,7 @@ mod tests {
         restored.kind.clear();
         restored.files.clear();
         restored.restores = Some("01J8ZQ3K400000000000000011".into());
-        let files = tree_files(&meta(), &[moved, restored]);
+        let files = tree_files(&meta(), &[moved, restored], &[]);
         assert_eq!(files.len(), 2); // meta.json + one month file, no .close file
         assert_eq!(files[1].path, "2026-09.jsonl");
     }
