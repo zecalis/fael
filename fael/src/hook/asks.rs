@@ -10,9 +10,7 @@ use super::state::{now_rfc3339, state_dir};
 use crate::core;
 use std::path::Path;
 
-pub(crate) const ASK_REJECT: &str = "reject";
-pub(crate) const ASK_BLOCK: &str = "stop-block";
-pub(crate) const ASK_WARN: &str = "warning";
+pub(crate) use crate::core::stats::{ASK_BLOCK, ASK_REJECT, ASK_WARN};
 
 /// Optional half of a usage row: what kind of ask this was (absent on plain
 /// pushes), the session it belongs to (absent outside hooks), and the real
