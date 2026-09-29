@@ -20,6 +20,40 @@ Three ideas carry the whole design:
 
 ---
 
+## 0. Product invariant
+
+Fael maintains the **team's shared memory of work** — not a personal notebook, not a
+generic AI memory store, and not a process or git guard.
+
+The unit of value is work context:
+
+```
+task (its `key`) → decision → evidence → outcome → closure
+```
+
+Fael resolves, reconciles, or self-heals **deterministic** context before asking an agent
+to reason again; when it cannot decide, it exposes the evidence and never guesses (§6).
+The goal is not to store more memory — it is to make existing work memory useful with
+**fewer agent rounds**.
+
+A feature ships only if it does at least one of these **and** gives nothing back:
+
+- preserves work context
+- recovers or repairs context
+- retrieves the right task context
+- reduces repeated agent work
+- improves team reuse or coordination
+
+A feature must never:
+
+- start a new agent turn, or re-prompt on idle, for anything but the block that
+  enforces capture — an informational line must ride existing context or be dropped,
+  never become a prompt the user cannot cancel
+- add a daemon or a server the local binary must babysit (§7)
+- guess when the log is ambiguous
+- police the developer's process — worktree, branch, or git flow. Fael maintains the
+  memory of work, never how the work is done.
+
 ## 1. Parts
 
 ```
