@@ -1,6 +1,6 @@
 use super::Filter;
 use super::{est_tokens, glob};
-use crate::{Config, Log, Row};
+use crate::{Config, Log, Row, anchor};
 use std::collections::HashMap;
 
 /// A row by exact id or a unique prefix (like a git sha, case-insensitive).
@@ -83,7 +83,8 @@ pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize
 }
 
 /// The chunk-3 fat-row conditions as reason bodies (no `warning: ` prefix):
-/// a decision with no key, `·`/`;` joining topics, text over `warn.row_tokens`.
+/// a decision with no key, `·`/`;` joining topics, doc paths with no
+/// anchor, text over `warn.row_tokens`.
 /// `warnings` renders these at add time; `doctor [Fat]` reuses them for open
 /// rows — one function so the two never drift apart.
 pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
@@ -109,6 +110,22 @@ pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
             "text has {seps} topic separators (; / ·) — one topic per row: split it, \
 each with --key area:topic, so one can be superseded alone"
         ));
+    }
+    // a row whose real files are all docs and carries no anchor leaves
+    // kickoff the day the docs move or go (`gone` keeps anchors, never
+    // paths — see gone_files): nudge to name the code it is about, or an
+    // anchor that never moves
+    let real: Vec<&str> = row
+        .files
+        .iter()
+        .map(String::as_str)
+        .filter(|f| anchor(f).is_none())
+        .collect();
+    if !real.is_empty() && row.files.len() == real.len() && real.iter().all(|f| f.ends_with(".md"))
+    {
+        r.push(
+            "files name only *.md docs and no anchor — this row leaves kickoff when the docs move or go; add the code it is about, or an anchor (doc:<name>)".into(),
+        );
     }
     // a long row is usually several decisions in one: reversing one then
     // means superseding them all, so the nudge is to split, not to trim

@@ -204,6 +204,26 @@ fn separators_warn_by_density_not_count() {
 }
 
 #[test]
+fn docs_only_without_anchor_warns() {
+    let l = log();
+    let cfg = Config::default();
+    let mk = |files: &[&str]| {
+        let mut r = row("D0000000000000000000000017", "note", files, Some("k:v"));
+        r.text = "about a doc".into();
+        r
+    };
+    let w = warnings(&mk(&["spec/x.md", "notes/y.md"]), &l, &cfg);
+    assert!(w[0].contains("only *.md docs"), "{w:?}");
+    // a code file beside the docs is a lasting foothold — silent
+    assert!(warnings(&mk(&["src/a.rs", "spec/x.md"]), &l, &cfg).is_empty());
+    // an anchor never goes, so it anchors the row by itself too
+    assert!(warnings(&mk(&["spec/x.md", "doc:pricing"]), &l, &cfg).is_empty());
+    assert!(warnings(&mk(&["doc:pricing"]), &l, &cfg).is_empty());
+    // nothing to judge on an empty file list
+    assert!(warnings(&mk(&[]), &l, &cfg).is_empty());
+}
+
+#[test]
 fn fat_warning_names_the_limit_that_tripped() {
     let cfg = Config::default(); // tokens 400 · chars 1200
     let mut r = row("D0000000000000000000000017", "note", &["x"], Some("a:b"));

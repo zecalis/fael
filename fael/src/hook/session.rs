@@ -61,6 +61,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
             },
             &c.repo.root,
             &al,
+            &c.repo.cfg.anchor_prefixes,
         )
         .into_iter()
         .take(c.repo.cfg.session_decisions)

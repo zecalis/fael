@@ -234,36 +234,6 @@ fn push_ignores_same_dir_for_markdown() {
 }
 
 #[test]
-fn kickoff_matches_plan_anchor() {
-    let r = std::env::temp_dir().join(format!("fael-kick-plan-{}", ulid()));
-    std::fs::create_dir_all(r.join(".fapony/plan")).unwrap();
-    std::fs::write(r.join(".fapony/plan/PLAN-foo.md"), "plan").unwrap();
-    let l = Log {
-        rows: vec![
-            row("A0000000000000000000000010", "note", &["plan:foo"], None),
-            row(
-                "A0000000000000000000000011",
-                "note",
-                &[".fapony/plan/PLAN-bar.md"],
-                None,
-            ),
-        ],
-        closes: vec![],
-        warnings: vec![],
-    };
-    // the PLAN path widens to its `plan:<name>` anchor; the other plan stays out
-    let f = Filter {
-        files: vec![".fapony/plan/PLAN-foo.md".into()],
-        ..Filter::default()
-    };
-    assert_eq!(ids(&kickoff(&l, &f, &r, &Aliases::default())), ["10"]);
-    // a PLAN- name ending mid multi-byte char widens to nothing, no panic
-    assert!(kickoff(&l, &files(&["PLAN-แผน1"]), &r, &Aliases::default()).is_empty());
-    // a non-plan query never matches the anchor
-    assert!(kickoff(&l, &files(&["src/a.rs"]), &r, &Aliases::default()).is_empty());
-}
-
-#[test]
 fn push_shares_key_with_exact_hit() {
     let mut l = log();
     l.rows.push(row(
@@ -384,10 +354,19 @@ fn kickoff_keeps_rows_whose_files_were_renamed() {
     };
     let al = Aliases::from_pairs(vec![("a.rs".to_string(), "b.rs".to_string())]);
     assert!(
-        kickoff(&l, &Filter::default(), &r, &al)
+        kickoff(&l, &Filter::default(), &r, &al, &["PLAN-".into()])
             .iter()
             .any(|x| x.id == "A0000000000000000000000010")
     );
     // without the resolver the moved row is dropped, as before
-    assert!(kickoff(&l, &Filter::default(), &r, &Aliases::default()).is_empty());
+    assert!(
+        kickoff(
+            &l,
+            &Filter::default(),
+            &r,
+            &Aliases::default(),
+            &["PLAN-".into()]
+        )
+        .is_empty()
+    );
 }

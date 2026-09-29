@@ -279,22 +279,39 @@ pub fn brief<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
     find(log, f)
 }
 
-/// A `PLAN-<name>.md` path also names the `plan:<name>` anchor, so planning
-/// rows filed under the anchor (not a guessed code file) surface on
-/// `fael kickoff <planDir>/PLAN-<name>.md` (PLAN-fael-direction chunk 6).
-/// The anchor ref is lowercased — everything identity-like is.
-fn plan_anchor(file: &str) -> Option<String> {
+/// A `<PREFIX><name>.md` path also names the `<prefix>:<name>` anchor, so
+/// rows filed under the anchor (not a guessed code file) surface on a
+/// kickoff of the doc (`PLAN-<name>.md` → `plan:<name>` is the
+/// long-standing default, PLAN-fael-direction chunk 6). The anchor ref is
+/// lowercased — everything identity-like is. Which prefixes count is config
+/// (`[anchor] prefixes`, default `PLAN-`): fael itself knows no workflow.
+/// A matched prefix that is not markdown decides too — a non-doc never
+/// widens, it does not fall through to the next prefix.
+fn plan_anchor(file: &str, prefixes: &[String]) -> Option<String> {
     let base = file.rsplit('/').next().unwrap_or(file);
-    let stem = base.strip_prefix("PLAN-")?;
-    if !is_md(stem) {
-        return None;
+    for pre in prefixes {
+        let Some(stem) = base.strip_prefix(pre.as_str()) else {
+            continue;
+        };
+        if !is_md(stem) {
+            return None;
+        }
+        // `.md` is ASCII, so `len - 3` is a char boundary here
+        let name = &stem[..stem.len() - 3];
+        if name.is_empty() {
+            return None;
+        }
+        let scheme: String = pre
+            .to_lowercase()
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect();
+        if scheme.is_empty() {
+            return None;
+        }
+        return Some(format!("{scheme}:{}", name.to_lowercase()));
     }
-    // `.md` is ASCII, so `len - 3` is a char boundary here
-    let name = &stem[..stem.len() - 3];
-    if name.is_empty() {
-        return None;
-    }
-    Some(format!("plan:{}", name.to_lowercase()))
+    None
 }
 
 /// How fresh a row is: the newer of the row itself and the last change to
@@ -323,14 +340,21 @@ pub fn freshness<'a>(root: &'a Path, al: &'a Aliases) -> impl Fn(&Row) -> i64 + 
 /// rows whose files are gone, open issues first, then everything else by how fresh it is —
 /// the newer of the row itself and the last change to any of its files. So an old decision
 /// about a file nobody touches sinks, and one about the file changed yesterday rises.
-/// A PLAN path widens the filter with its `plan:<name>` anchor (see `plan_anchor`).
+/// A doc path whose name matches a configured prefix widens the filter
+/// with its anchor (see `plan_anchor`).
 // ponytail: file mtime is the "current work" signal — no git spawn on session start; a fresh
 // clone or checkout resets mtimes, then the order falls back to roughly newest-row first.
-pub fn kickoff<'a>(log: &'a Log, f: &Filter, root: &Path, al: &Aliases) -> Vec<&'a Row> {
+pub fn kickoff<'a>(
+    log: &'a Log,
+    f: &Filter,
+    root: &Path,
+    al: &Aliases,
+    prefixes: &[String],
+) -> Vec<&'a Row> {
     // a reference, so both halves below share it without a move
     let fresh = freshness(root, al);
     let fresh = &fresh;
-    let rows: Vec<&Row> = find(log, &widened(f))
+    let rows: Vec<&Row> = find(log, &widened(f, prefixes))
         .into_iter()
         .filter(|r| !gone(root, r, al))
         .collect();
@@ -343,11 +367,11 @@ pub fn kickoff<'a>(log: &'a Log, f: &Filter, root: &Path, al: &Aliases) -> Vec<&
         .collect()
 }
 
-/// Widen a kickoff filter with `plan:<name>` anchors (see `plan_anchor`).
-fn widened(f: &Filter) -> Filter {
+/// Widen a kickoff filter with `<prefix>:<name>` anchors (see `plan_anchor`).
+fn widened(f: &Filter, prefixes: &[String]) -> Filter {
     let mut out = f.clone();
     for file in &f.files {
-        if let Some(a) = plan_anchor(file)
+        if let Some(a) = plan_anchor(file, prefixes)
             && !out.files.iter().any(|q| q == &a)
         {
             out.files.push(a);

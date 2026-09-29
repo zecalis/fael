@@ -21,6 +21,11 @@ pub struct Config {
     pub row_bytes: usize,
     /// Allowed first segments of `key`; empty = any. Outside it is a warning, never a reject.
     pub key_domains: Vec<String>,
+    /// Which `<PREFIX><name>.md` filenames widen kickoff to a
+    /// `<prefix>:<name>` anchor (`PLAN-` → `plan:`, so another team's
+    /// `HANDOFF-*.md` maps to `handoff:*`). Empty matches nothing; the
+    /// default keeps the long-standing `PLAN-` behaviour.
+    pub anchor_prefixes: Vec<String>,
     /// Token budget for the session brief (`kickoff`, `find` with no filter).
     pub kickoff_tokens: usize,
     /// Token budget for `find` output.
@@ -61,6 +66,7 @@ impl Default for Config {
             kinds: vec![],
             row_bytes: ROW_BYTES_MAX,
             key_domains: vec![],
+            anchor_prefixes: vec!["PLAN-".into()],
             kickoff_tokens: 800,
             find_tokens: 800,
             push_tokens: 800,
@@ -85,6 +91,7 @@ impl Config {
         struct File {
             kinds: Vec<String>,
             key_domains: Vec<String>,
+            anchor: Anchor,
             resolve: Option<bool>,
             store: Option<String>,
             budget: Budget,
@@ -114,6 +121,11 @@ impl Config {
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
+        struct Anchor {
+            prefixes: Option<Vec<String>>,
+        }
+        #[derive(Deserialize, Default)]
+        #[serde(default)]
         struct Lang {
             marker: Option<Vec<String>>,
             rows: Option<Vec<String>>,
@@ -132,6 +144,7 @@ impl Config {
         Ok(Config {
             kinds: f.kinds,
             key_domains: f.key_domains,
+            anchor_prefixes: f.anchor.prefixes.unwrap_or(d.anchor_prefixes),
             row_bytes: f.limit.row_bytes.unwrap_or(d.row_bytes),
             kickoff_tokens: f.budget.kickoff_tokens.unwrap_or(d.kickoff_tokens),
             find_tokens: f.budget.find_tokens.unwrap_or(d.find_tokens),

@@ -87,12 +87,24 @@ fn kickoff_pins_due_first_and_wakes_outside_the_filter() {
     // 10 is due under another path, so it wakes up first; the future date
     // and the free text stay out of a scoped kickoff
     assert_eq!(
-        ids(&kickoff(&l, &scoped, &r, &Aliases::default())),
+        ids(&kickoff(
+            &l,
+            &scoped,
+            &r,
+            &Aliases::default(),
+            &["PLAN-".into()]
+        )),
         ["10", "11"]
     );
     // unscoped: due first, then the rest ranked (issue 11, then notes)
     assert_eq!(
-        ids(&kickoff(&l, &Filter::default(), &r, &Aliases::default())),
+        ids(&kickoff(
+            &l,
+            &Filter::default(),
+            &r,
+            &Aliases::default(),
+            &["PLAN-".into()]
+        )),
         ["10", "11", "13", "12"]
     );
 }
@@ -110,9 +122,15 @@ fn kickoff_hides_closed_due_rows() {
     l.closes
         .push(Row::close("t-0000", "D0000000000000000000000014", "done"));
     assert!(
-        !kickoff(&l, &Filter::default(), &r, &Aliases::default())
-            .iter()
-            .any(|row| row.id.ends_with("14"))
+        !kickoff(
+            &l,
+            &Filter::default(),
+            &r,
+            &Aliases::default(),
+            &["PLAN-".into()]
+        )
+        .iter()
+        .any(|row| row.id.ends_with("14"))
     );
 }
 
