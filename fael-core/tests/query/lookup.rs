@@ -71,6 +71,46 @@ fn add_warnings_never_reject() {
 }
 
 #[test]
+fn similar_keys_parent_match_needs_three_segments() {
+    let mut l = log();
+    l.rows.push(row(
+        "C0000000000000000000000016",
+        "decision",
+        &["x"],
+        Some("vela:docs"),
+    ));
+    let cfg = Config::default();
+    let mut r = row("D0000000000000000000000017", "decision", &["x"], None);
+    // same domain, different topic: two-level keys share only the bare
+    // domain, which is not similarity — the domain check owns that layer
+    r.key = Some("vela:docs-plan".into());
+    assert!(warnings(&r, &l, &cfg).is_empty());
+    // a typo in the topic still warns through levenshtein
+    r.key = Some("vela:docx".into());
+    assert!(
+        warnings(&r, &l, &cfg)[0].contains("similar keys exist: vela:docs"),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+    // mixed depths share nothing through the parent clause either
+    r.key = Some("vela:other:x".into());
+    assert!(warnings(&r, &l, &cfg).is_empty());
+    // three-segment siblings still match by parent
+    l.rows.push(row(
+        "C0000000000000000000000017",
+        "decision",
+        &["x"],
+        Some("docs:plan:chunk-1"),
+    ));
+    r.key = Some("docs:plan:chunk-2".into());
+    assert!(
+        warnings(&r, &l, &cfg)[0].contains("similar keys exist: docs:plan:chunk-1"),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
+}
+
+#[test]
 fn decision_without_key_and_multi_topic_text_warn() {
     let l = log();
     let cfg = Config::default();
@@ -137,15 +177,42 @@ fn fat_reasons_shared_by_warnings_and_doctor() {
 }
 
 #[test]
+fn separators_warn_by_density_not_count() {
+    let cfg = Config::default();
+    let mut r = row(
+        "D0000000000000000000000017",
+        "decision",
+        &["x"],
+        Some("k:v"),
+    );
+    // a long single-topic row carries its `;` as prose — each clause is a
+    // sentence of its own, no split nudge
+    let clause = "word ".repeat(50).trim_end().to_string();
+    r.text = format!("{clause}; {clause}; {clause}; {clause}");
+    assert!(
+        fat_reasons(&r, &cfg).is_empty(),
+        "{:?}",
+        fat_reasons(&r, &cfg)
+    );
+    // the same three separators in a short row read as a list of topics
+    r.text = "a; b; c; d".into();
+    assert!(
+        fat_reasons(&r, &cfg)[0].contains("topic separators"),
+        "{:?}",
+        fat_reasons(&r, &cfg)
+    );
+}
+
+#[test]
 fn fat_warning_names_the_limit_that_tripped() {
-    let cfg = Config::default(); // tokens 400 · chars 600
+    let cfg = Config::default(); // tokens 400 · chars 1200
     let mut r = row("D0000000000000000000000017", "note", &["x"], Some("a:b"));
-    // 649 chars of plain English: ~162 tokens (under 400) but over 600 chars
-    r.text = "word ".repeat(130).trim_end().into();
-    assert_eq!(r.text.chars().count(), 649);
+    // 1299 chars of plain English: ~325 tokens (under 400) but over 1200 chars
+    r.text = "word ".repeat(260).trim_end().into();
+    assert_eq!(r.text.chars().count(), 1299);
     let f = fat_reasons(&r, &cfg);
     assert_eq!(f.len(), 1, "{f:?}");
-    assert!(f[0].contains("chars (warn at 600)"), "{f:?}");
+    assert!(f[0].contains("chars (warn at 1200)"), "{f:?}");
     assert!(!f[0].contains("tokens (warn at"), "{f:?}");
     // over both limits names both
     let tight = Config {
