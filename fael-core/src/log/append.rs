@@ -3,8 +3,8 @@
 
 use super::{Log, is_month};
 use crate::{
-    Config, Row, Stamp, Store, Urgent, UrgentChange, closed, resolve, resolve_urgent, superseded,
-    validate, validate_alias, validate_close, warnings,
+    Config, Row, Stamp, Store, Urgent, UrgentChange, closed, resolve, resolve_urgent, reverted,
+    superseded, validate, validate_alias, validate_close, warnings,
 };
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -285,10 +285,11 @@ pub fn close_row(
 }
 
 /// The versions a close of `id` must cover, oldest first and `id` last — the
-/// `supersedes` chain through `id`. A row is one version with one `supersedes`
-/// (`Option`), so a chain is a straight line; the guard tolerates a hand-edited
-/// log that cycles, stopping after each id once.
+/// `supersedes` chain through `id` (cycle-tolerant on a hand-edited log). A
+/// reverted edge is skipped, so the row a restore reopened is never swept into
+/// a close of the superseder above it.
 fn chain_versions(log: &Log, id: &str) -> Vec<String> {
+    let rev = reverted(log);
     let mut cur = id.to_string();
     let mut seen = HashSet::from([cur.clone()]);
     let mut out = vec![cur.clone()];
@@ -298,7 +299,7 @@ fn chain_versions(log: &Log, id: &str) -> Vec<String> {
         .find(|r| r.id == cur)
         .and_then(|r| r.supersedes.clone())
     {
-        if !seen.insert(prev.clone()) {
+        if rev.contains(cur.as_str()) || !seen.insert(prev.clone()) {
             break;
         }
         cur = prev;
