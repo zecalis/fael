@@ -248,9 +248,11 @@ pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
     let root = find(".git")
         .or_else(|| find(".fael"))
         .unwrap_or_else(|| cwd.clone());
-    let fael = root.join(".fael");
+    // FAEL_DIR: scratch log (tree only, no journal) — see CONTRIBUTING.
+    let scratch = std::env::var_os("FAEL_DIR").filter(|d| !d.is_empty());
+    let journal = scratch.is_none().then(|| journal::root(&root)).flatten();
+    let fael = scratch.map_or_else(|| root.join(".fael"), PathBuf::from);
     let cfg = config(&fael.join("config.toml"))?;
-    let journal = journal::root(&root);
     Ok(Repo {
         root,
         cwd,
