@@ -82,8 +82,17 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
         ("mcp", []) => mcp::serve().map(|()| ExitCode::SUCCESS),
-        ("install", []) => install::cmd(a.one("client"), a.has("dry-run"), a.has("replace-fapony"))
-            .map(|()| ExitCode::SUCCESS),
+        ("install" | "upgrade" | "update", []) => {
+            // `install` keeps writing without a question; upgrade/update ask first
+            let ask = cmd != "install" && !a.has("yes");
+            install::cmd(
+                a.one("client"),
+                a.has("dry-run"),
+                a.has("replace-fapony"),
+                ask,
+            )
+            .map(|()| ExitCode::SUCCESS)
+        }
         // bare `fael` is a probe, not an error — the usage, on stdout, exit 0
         ("", []) => {
             println!("{}", help::usage());
@@ -139,8 +148,8 @@ impl Args {
                 continue;
             }
             match name.as_str() {
-                "all" | "force" | "json" | "dry-run" | "replace-fapony" | "fix" | "prune"
-                | "urgent" | "not-urgent" | "full" | "rows" | "branches" | "fat" => {
+                "all" | "force" | "json" | "dry-run" | "yes" | "replace-fapony" | "fix"
+                | "prune" | "urgent" | "not-urgent" | "full" | "rows" | "branches" | "fat" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"

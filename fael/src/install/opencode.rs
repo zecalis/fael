@@ -62,6 +62,7 @@ pub(crate) fn opencode(c: &Ctx) -> Result<(), String> {
     let fp = dir.join("plugins/fapony-session-start.ts");
     if fp.is_file() {
         if c.replace {
+            c.changed.set(c.changed.get() + 1);
             if !c.dry {
                 std::fs::rename(&fp, fp.with_extension("ts.disabled"))
                     .map_err(|e| e.to_string())?;

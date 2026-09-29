@@ -115,6 +115,12 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "fael install [--client claude|codex|opencode] [--dry-run] [--replace-fapony]
     (install hooks and skills for an agent client; --dry-run prints without writing)",
     ),
+    (
+        "upgrade",
+        "bring hooks and skills up to date (alias: update)",
+        "fael upgrade [--client claude|codex|opencode] [--dry-run] [--yes] [--replace-fapony]
+    (show what is out of date, then ask before writing; --yes skips the question, --dry-run only shows; `fael update` is the same)",
+    ),
 ];
 
 /// Full usage: command list, global options, examples.
