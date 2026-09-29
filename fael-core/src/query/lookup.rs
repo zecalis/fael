@@ -96,12 +96,15 @@ pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
                 .into(),
         );
     }
+    let chars = row.text.chars().count();
     // `·` joins topics — two of them is a list of topics. `;` is also plain
-    // English clause punctuation inside one topic, so it takes three
-    // separators in all before the row reads as several topics
+    // English clause punctuation inside one topic: three separators read as
+    // a topic list only while the clauses stay short — prose clauses run a
+    // sentence long, so the check is a density and a long row needs more
+    // `;` per char before it stops being prose
     let mid = row.text.chars().filter(|&c| c == '·').count();
     let seps = mid + row.text.chars().filter(|&c| c == ';').count();
-    if mid >= 2 || seps >= 3 {
+    if mid >= 2 || (seps >= 3 && chars < seps * 100) {
         r.push(format!(
             "text has {seps} topic separators (; / ·) — one topic per row: split it, \
 each with --key area:topic, so one can be superseded alone"
@@ -110,7 +113,6 @@ each with --key area:topic, so one can be superseded alone"
     // a long row is usually several decisions in one: reversing one then
     // means superseding them all, so the nudge is to split, not to trim
     let t = est_tokens(&row.text);
-    let chars = row.text.chars().count();
     let (over_t, over_c) = (t > cfg.warn_row_tokens, chars > cfg.warn_row_chars);
     if over_t || over_c {
         // name the limit that actually tripped — a row can pass the token

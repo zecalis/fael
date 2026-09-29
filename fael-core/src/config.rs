@@ -60,7 +60,7 @@ impl Default for Config {
             push_rows: 5,
             session_decisions: 0,
             warn_row_tokens: 400,
-            warn_row_chars: 600,
+            warn_row_chars: 1200,
             resolve: true,
             store: Store::Tracked,
         }

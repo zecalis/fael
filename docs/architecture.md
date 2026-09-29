@@ -143,7 +143,7 @@ push_rows = 5               # at most this many rows per push (0 = token budget 
 session_decisions = 0         # session-start lists this many freshest open decisions above the count line
 [warn]
 row_tokens = 400
-row_chars = 600               # a single-topic-looking row can still run long
+row_chars = 1200              # a single-topic-looking row can still run long
 [limit]
 row_bytes = 10240             # hard cap, never above 10 KiB
 ```
