@@ -160,12 +160,42 @@ fn also_line(also: &[String], w: &core::Abbrev, out: &mut Vec<String>) {
 /// fixed `[..8]`: a ULID's leading characters are its millisecond timestamp, so
 /// rows written in the same second share them and `--supersedes <prefix>`
 /// would be ambiguous — `Abbrev::short` lengthens a prefix until it is unique.
+/// Sorted before the cut, so *which* five print never depends on log order.
 fn id_list(ids: &[String], w: &core::Abbrev) -> String {
-    let mut s: Vec<&str> = ids.iter().take(5).map(|id| w.short(id)).collect();
+    let mut s: Vec<&str> = ids.iter().map(|id| w.short(id)).collect();
     s.sort_unstable();
+    let n = ids.len();
+    s.truncate(5);
     let mut out = s.join(", ");
-    if ids.len() > 5 {
-        out.push_str(&format!(" (+{} more)", ids.len() - 5));
+    if n > 5 {
+        out.push_str(&format!(" (+{} more)", n - 5));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// More than five targets: *which* five print must not follow log order —
+    /// the invariant the property tests cannot reach (their scenes hold ≤4 rows).
+    #[test]
+    fn id_list_cut_is_order_independent() {
+        let ids: Vec<String> = (0..6).map(|i| format!("01{:024}", i)).collect();
+        let rows: Vec<core::Row> = ids
+            .iter()
+            .map(|id| {
+                let mut r = core::Row::new("me", "issue", "t", vec![]);
+                r.id = id.clone();
+                r
+            })
+            .collect();
+        let w = core::abbrev(&core::Log {
+            rows,
+            ..Default::default()
+        });
+        let mut rev = ids.clone();
+        rev.reverse();
+        assert_eq!(id_list(&ids, &w), id_list(&rev, &w));
+    }
 }

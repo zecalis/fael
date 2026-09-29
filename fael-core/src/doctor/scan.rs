@@ -1,6 +1,6 @@
 use super::{Kind, Problem, Report};
 use crate::log::{collect_files, is_marker, month_of};
-use crate::{MONTH_MAX, Row, is_alias_row};
+use crate::{MONTH_MAX, Row, is_alias_row, is_carrier_row};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -164,6 +164,7 @@ fn scan_file(
                 if row.files.is_empty()
                     && row.reference.as_deref().is_none_or(|t| t.trim().is_empty())
                     && !is_alias_row(&row)
+                    && !is_carrier_row(&row)
                 {
                     *no_files += 1;
                     no_files_ids.push(row.id.clone());
