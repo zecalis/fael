@@ -103,7 +103,11 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
         ..Filter::default()
     };
     // kickoff ranks the full set itself, so it pages after — same helper as query()
-    let (rows, total) = core::page(core::kickoff(&log, &f, &r.root, &al), limit, offset);
+    let (rows, total) = core::page(
+        core::kickoff(&log, &f, &r.root, &al, &r.cfg.anchor_prefixes),
+        limit,
+        offset,
+    );
     let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
     let _ = show(
         a,

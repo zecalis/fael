@@ -144,6 +144,8 @@ session_decisions = 0         # session-start lists this many freshest open deci
 [warn]
 row_tokens = 400
 row_chars = 1200              # a single-topic-looking row can still run long
+[anchor]
+prefixes = ["PLAN-"]          # <PREFIX><name>.md widens kickoff to <prefix>:<name> (e.g. HANDOFF-); PLAN- is the plain default, not fapony knowledge
 [limit]
 row_bytes = 10240             # hard cap, never above 10 KiB
 [lang]
@@ -222,7 +224,7 @@ A bug announcement blocks only without an issue row since the words — and the 
 client ─(session-start)─▶ write focus.json (start branch + the keys of the rows filed on it)
                         ─▶ open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
-fael never infers which plan a session is in. `plan:<name>` anchors and `plan:<name>:chunk-<n>` keys are a fapony convention: fael stores and matches them like any other anchor or key, and fapony's kickoff asks for them itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`). A session's intent is not a fact the shared log can answer — any rule that picks one plan from it is a guess, and a wrong guess pushes another task's rows into Now.
+fael never infers which plan a session is in. `plan:<name>` anchors and `plan:<name>:chunk-<n>` keys are a fapony convention: fael stores and matches them like any other anchor or key, and fapony's kickoff asks for them itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`). Which filename prefixes widen kickoff that way is repo config (`[anchor] prefixes`, default `PLAN-`) — a plain common name, not fapony knowledge; the key scheme fapony seeds stays fapony's. A session's intent is not a fact the shared log can answer — any rule that picks one plan from it is a guess, and a wrong guess pushes another task's rows into Now.
 
 **Across branches** (one branch per person or per agent):
 ```

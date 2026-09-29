@@ -256,11 +256,38 @@ fn kickoff_matches_plan_anchor() {
         files: vec![".fapony/plan/PLAN-foo.md".into()],
         ..Filter::default()
     };
-    assert_eq!(ids(&kickoff(&l, &f, &r, &Aliases::default())), ["10"]);
+    assert_eq!(ids(&kickoff(&l, &f, &r, &Aliases::default(), &["PLAN-".into()])), ["10"]);
     // a PLAN- name ending mid multi-byte char widens to nothing, no panic
-    assert!(kickoff(&l, &files(&["PLAN-แผน1"]), &r, &Aliases::default()).is_empty());
+    assert!(kickoff(&l, &files(&["PLAN-แผน1"]), &r, &Aliases::default(), &["PLAN-".into()]).is_empty());
     // a non-plan query never matches the anchor
-    assert!(kickoff(&l, &files(&["src/a.rs"]), &r, &Aliases::default()).is_empty());
+    assert!(kickoff(&l, &files(&["src/a.rs"]), &r, &Aliases::default(), &["PLAN-".into()]).is_empty());
+    // a configured second prefix widens the same way; unconfigured it stays out
+    std::fs::write(r.join("HANDOFF-req.md"), "handoff").unwrap();
+    let l2 = Log {
+        rows: vec![row(
+            "A0000000000000000000000012",
+            "note",
+            &["handoff:req"],
+            None,
+        )],
+        closes: vec![],
+        warnings: vec![],
+    };
+    let h = Filter {
+        files: vec!["HANDOFF-req.md".into()],
+        ..Filter::default()
+    };
+    assert_eq!(
+        ids(&kickoff(
+            &l2,
+            &h,
+            &r,
+            &Aliases::default(),
+            &["PLAN-".into(), "HANDOFF-".into()]
+        )),
+        ["12"]
+    );
+    assert!(kickoff(&l2, &h, &r, &Aliases::default(), &["PLAN-".into()]).is_empty());
 }
 
 #[test]
@@ -384,10 +411,10 @@ fn kickoff_keeps_rows_whose_files_were_renamed() {
     };
     let al = Aliases::from_pairs(vec![("a.rs".to_string(), "b.rs".to_string())]);
     assert!(
-        kickoff(&l, &Filter::default(), &r, &al)
+        kickoff(&l, &Filter::default(), &r, &al, &["PLAN-".into()])
             .iter()
             .any(|x| x.id == "A0000000000000000000000010")
     );
     // without the resolver the moved row is dropped, as before
-    assert!(kickoff(&l, &Filter::default(), &r, &Aliases::default()).is_empty());
+    assert!(kickoff(&l, &Filter::default(), &r, &Aliases::default(), &["PLAN-".into()]).is_empty());
 }
