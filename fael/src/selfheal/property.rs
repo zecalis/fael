@@ -16,7 +16,7 @@
 //!   decision never depends on log order. Listings over five targets keep log
 //!   order through the render cut like before (pre-existing, out of scope).
 
-use super::decide::{Verdict, decide, heal};
+use super::decide::{Verdict, decide, evaluate};
 use super::evidence::open_rows;
 use crate::core;
 
@@ -189,7 +189,7 @@ fn automatic_acts_close_only_my_own_rows() {
     }
 }
 
-/// Second, at most one row goes: `heal` names a single open id, or none.
+/// Second, at most one row goes: `evaluate` names a single open id, or none.
 /// The mode only moves the exposure (`warning:` vs info vs silent), never
 /// the supersede — one mode covers all three.
 #[test]
@@ -197,7 +197,7 @@ fn at_most_one_row_is_superseded() {
     let mut g = Lcg(SEED + 1);
     for n in 0..CASES {
         let (log, st, row) = gen_case(&mut g, n);
-        let h = heal(&log, &st, &row, None, core::CrossKey::Warn).unwrap();
+        let h = evaluate(&log, &st, &row, None, core::CrossKey::Warn).heal;
         if let Some(id) = h.supersedes {
             assert!(
                 log.rows.iter().any(|r| r.id == id),
@@ -268,7 +268,7 @@ fn hold_and_kept_open_supersede_nothing() {
                 | Verdict::KeyIssueKept { .. }
                 | Verdict::KeyOtherWriter { .. }
         ) {
-            let h = heal(&log, &st, &row, None, core::CrossKey::Warn).unwrap();
+            let h = evaluate(&log, &st, &row, None, core::CrossKey::Warn).heal;
             assert_eq!(
                 h.supersedes, None,
                 "seed {SEED:#x} case {n}: {v:?} superseded {:?}",

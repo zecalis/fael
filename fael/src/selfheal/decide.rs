@@ -11,7 +11,9 @@
 //! are unchanged: the table decides the same outcomes the order did, byte
 //! for byte.
 
-use super::evidence::{Candidate, KeyRel, NameRel, Rel, observe, open_rows, same_finding};
+use super::evidence::{
+    Candidate, Evidence, KeyRel, NameRel, Rel, observe, open_rows, same_finding,
+};
 use super::render::{Heal, render};
 use crate::core;
 
@@ -58,20 +60,27 @@ pub(crate) enum Verdict {
     Noop,
 }
 
-/// Fill an absent `--supersedes` from the open log: (d) the text that names a
-/// row, then (c) same kind + key — the key is the identity of the topic, any
-/// branch — then (b) notes on the same writer + branch with overlapping files.
-/// Zero matches → nothing; exactly one of mine → supersede it and say so;
-/// several, or one of another writer → file the row and list what was kept. A
-/// caller-given flag passes through untouched unless it resolves to nothing,
-/// in which case the text is the only place left to say what to supersede.
-pub(crate) fn heal(
+/// What `evaluate` settled on: the Verdict, the Heal it renders to, and the
+/// acted row's evidence — one shared source for the write path,
+/// `add --dry-run` and MCP `dry_run`, so the three can never disagree.
+pub(crate) struct Evaluated {
+    pub verdict: Verdict,
+    pub heal: Heal,
+    pub evidence: Option<Evidence>,
+}
+
+/// The single Verdict source (chunk 2 of PLAN-fael-selfheal-restore): settle
+/// the Verdict without writing anything. Order is Explicit > Identity >
+/// Heuristic (see `decide`): (d) the text naming a row, then (c) same kind +
+/// key, then (b) notes on the same writer + branch with overlapping files.
+/// The write path acts on exactly this.
+pub(crate) fn evaluate(
     log: &core::Log,
     st: &core::Stamp,
     row: &core::Row,
     flag: Option<&str>,
     cross: core::CrossKey,
-) -> Result<Heal, String> {
+) -> Evaluated {
     let open = open_rows(log);
     // ids print at their shortest unique prefix, same as render/doctor, so any
     // of them pastes straight into `--supersedes` — unique against the row
@@ -81,7 +90,20 @@ pub(crate) fn heal(
     let source = source_of(&verdict);
     let mut h = render(&verdict, row, st, &w, flag, cross);
     h.source = source;
-    Ok(h)
+    // observe runs a second time here (decide already did): a scan over open
+    // rows is nothing next to the git spawns around it, and sharing one
+    // observation would widen every signature between them.
+    let evidence = verdict.target().and_then(|t| {
+        observe(log, &open, st, row)
+            .into_iter()
+            .find(|c| c.row.id == t)
+            .map(|c| c.evidence)
+    });
+    Evaluated {
+        verdict,
+        heal: h,
+        evidence,
+    }
 }
 
 pub(crate) fn decide(

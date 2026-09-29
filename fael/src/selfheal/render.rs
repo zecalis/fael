@@ -128,6 +128,41 @@ pub(crate) fn render(
     }
 }
 
+impl Verdict {
+    /// Stable machine name for dry runs — one per variant. CrossKey unwraps
+    /// to the inner act; the `:cross-key` source carries the move.
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Verdict::FlagPassthrough => "FlagPassthrough",
+            Verdict::FlagRescued { .. } => "FlagRescued",
+            Verdict::FlagUnresolved => "FlagUnresolved",
+            Verdict::TextAct { .. } => "TextAct",
+            Verdict::TextHold { .. } => "TextHold",
+            Verdict::KeyAct { .. } => "KeyAct",
+            Verdict::KeyIssueKept { .. } => "KeyIssueKept",
+            Verdict::KeyOtherWriter { .. } => "KeyOtherWriter",
+            Verdict::KeyMany { .. } => "KeyMany",
+            Verdict::FilesAct { .. } => "FilesAct",
+            Verdict::FilesMany { .. } => "FilesMany",
+            Verdict::CrossKey { inner, .. } => inner.name(),
+            Verdict::Noop => "Noop",
+        }
+    }
+
+    /// The single row this verdict acts on, if any — what `heal` supersedes.
+    pub(crate) fn target(&self) -> Option<&str> {
+        match self {
+            Verdict::FlagRescued { target }
+            | Verdict::TextAct { target, .. }
+            | Verdict::KeyAct { target, .. }
+            | Verdict::FilesAct { target }
+            | Verdict::KeyOtherWriter { target } => Some(target),
+            Verdict::CrossKey { inner, .. } => inner.target(),
+            _ => None,
+        }
+    }
+}
+
 /// Cross-key exposure (chunk 3): the inner act stands under every mode —
 /// Warn prefixes its first line as the one `warning:` of this add (the
 /// also-kept trailer stays info, so one add counts at most one ask), Info

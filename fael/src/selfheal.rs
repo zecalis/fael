@@ -38,7 +38,9 @@
 //! the Explicit > Identity > Heuristic policy table in `decide` (Eligibility,
 //! Verdict), the byte-identical renderer in `render` (Heal). Chunk 2's five
 //! invariants live as generated unit tests in `property`. Public paths never
-//! change — callers keep `crate::selfheal::{heal, auto_key}`.
+//! change — callers keep `crate::selfheal::{evaluate, auto_key}`: `evaluate`
+//! is the single Verdict source the write path, `add --dry-run` and MCP
+//! `dry_run` share, so the three can never disagree on one input.
 
 #[cfg(test)]
 mod property;
@@ -47,5 +49,53 @@ mod decide;
 mod evidence;
 mod render;
 
-pub(crate) use decide::heal;
+pub(crate) use decide::{Evaluated, evaluate};
 pub(crate) use evidence::auto_key;
+
+/// Machine verdict for MCP `dry_run` and `add --dry-run --json`: names only,
+/// never full structs — the verdict, its single target, the provenance
+/// source, what `heal` would supersede, the target's evidence as enum names
+/// (`files` is the shared count), and the info lines a real add would print.
+pub(crate) fn verdict_json(ev: &Evaluated) -> serde_json::Value {
+    let h = &ev.heal;
+    serde_json::json!({
+        "verdict": ev.verdict.name(),
+        "target": ev.verdict.target(),
+        "source": h.source,
+        "supersedes": h.supersedes,
+        "evidence": ev.evidence.as_ref().map(|e| serde_json::json!({
+            "key": e.key.name(),
+            "writer": e.writer.name(),
+            "branch": e.branch.name(),
+            "kind": e.kind.name(),
+            "text": e.text.name(),
+            "files": e.files.shared,
+            "named": e.named.name(),
+        })),
+        "notes": h.notes,
+    })
+}
+
+/// Dry-run stdout in one call: the JSON verdict with `--json`, else one line.
+pub(crate) fn verdict_text(ev: &Evaluated, json: bool) -> String {
+    if json {
+        verdict_json(ev).to_string()
+    } else {
+        verdict_line(ev)
+    }
+}
+
+/// One stdout line for `add --dry-run`: the verdict `heal` would act on, with
+/// source and full target id (paste-safe into `--supersedes`) — the notes
+/// ride stderr exactly like a real add's warns.
+pub(crate) fn verdict_line(ev: &Evaluated) -> String {
+    let mut s = format!(
+        "dry-run {} ({})",
+        ev.verdict.name(),
+        ev.heal.source.as_deref().unwrap_or("none")
+    );
+    if let Some(t) = ev.verdict.target() {
+        s.push_str(&format!(" → {t}"));
+    }
+    s
+}

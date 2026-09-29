@@ -225,13 +225,29 @@ fn add(a: &Value) -> Result<String, String> {
             Err(e)
         }
         Ok((text, warns)) => {
-            record_asks("mcp", ASK_WARN, "mcp-add", Some(&r.root), &warns);
+            // a preview costs no round — its lines are the answer, not an ask
+            if !a["dry_run"].as_bool().unwrap_or(false) {
+                record_asks("mcp", ASK_WARN, "mcp-add", Some(&r.root), &warns);
+            }
             Ok(text)
         }
     }
 }
 
 fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
+    // `dry_run` previews the Verdict the real add would act on, writing
+    // nothing — same build as a real add, the JSON carries verdict + evidence
+    if a["dry_run"].as_bool().unwrap_or(false) && !a["rows"].is_array() {
+        need(a, "kind")?;
+        need(a, "text")?;
+        let b = crate::batch::batch_row(a)?;
+        let (p, _, _) = crate::write::prepare(r, &b.kind, &b.text, &b.files, b.opts)?;
+        let v = crate::selfheal::verdict_json(&p.evaluated).to_string();
+        return Ok((v, p.warns));
+    }
+    if a["dry_run"].as_bool().unwrap_or(false) {
+        return Err("rejected: dry_run takes one row — drop rows: [...]".into());
+    }
     // chunk 6b: `rows: [...]` files many rows in one call — each runs the same
     // validate + self-heal as a single add; a bad row reports alone, the rest save
     if let Some(rows) = a["rows"].as_array() {
