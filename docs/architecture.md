@@ -122,7 +122,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
 | `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it) |
-| `fael stats [--json] [--rows]` | how many bytes and tokens fael has put into agents' context |
+| `fael stats [--json] [--rows] [--day]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed) |
 
 `--files` in `find` matches a row's `files[]` only — exactly, as a directory (a zone), or by glob; an anchor's ref
 never matches as a directory. It does not fall back to searching text (fapony did); text is `find <text>`.

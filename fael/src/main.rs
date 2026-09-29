@@ -80,7 +80,9 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
-        ("stats", []) => hook::stats(a.has("json"), a.has("rows")).map(|()| ExitCode::SUCCESS),
+        ("stats", []) => {
+            hook::stats(a.has("json"), a.has("rows"), a.has("day")).map(|()| ExitCode::SUCCESS)
+        }
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
@@ -152,7 +154,8 @@ impl Args {
             }
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "yes" | "replace-fapony" | "fix"
-                | "prune" | "urgent" | "not-urgent" | "full" | "rows" | "branches" | "fat" => {
+                | "prune" | "urgent" | "not-urgent" | "full" | "rows" | "branches" | "fat"
+                | "day" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"

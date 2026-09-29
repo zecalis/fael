@@ -1,12 +1,15 @@
 //! `fael stats` numbers as a contract (`docs/stats.md`): parse `usage.jsonl`
 //! text into a `Parsed`, join it with the repos' logs into one `Stats`, and
 //! serialise that struct as-is for `--json` — the CLI, the desktop app and
-//! any outside reader share the shape by construction.
+//! any outside reader share the shape by construction. `day` cuts the same
+//! inputs to one local day for `fael stats --day` and the desktop popover.
 //!
 //! Thin entry only: `parse` (text in, struct out), `aggregate` (plus the
-//! `Stats` shape), `state_dir` (the one edge that reads the environment).
+//! `Stats` shape), `day` (plus the `DayView` shape), `state_dir` (the one
+//! edge that reads the environment).
 
 mod aggregate;
+mod day;
 mod metrics;
 mod parse;
 
@@ -14,8 +17,12 @@ pub use aggregate::{
     AskCount, BlockOutcome, Constants, Count, NonEnglish, RealAvg, Rounds, RowStatus, STATS_SCHEMA,
     Stats, TopRow, aggregate,
 };
+pub use day::{
+    BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
+    LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
+};
 pub use metrics::ASK_ORDER;
-pub use parse::{Parsed, StopBlock, parse};
+pub use parse::{Parsed, StopBlock, UsageRow, parse};
 
 /// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
 /// JSON map and the recording side share, so the two cannot drift.

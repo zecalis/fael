@@ -139,7 +139,7 @@ pub(super) fn post_block_cost(rows: &[serde_json::Value]) -> (usize, u64, u64, u
     (n, avg(0), avg(1), avg(2), avg(3))
 }
 
-fn real_in(r: &serde_json::Value) -> Option<[u64; 4]> {
+pub(super) fn real_in(r: &serde_json::Value) -> Option<[u64; 4]> {
     let u = r.get("real_tokens")?;
     let part = |k: &str| u.get(k).and_then(serde_json::Value::as_u64).unwrap_or(0);
     Some([

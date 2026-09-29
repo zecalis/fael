@@ -5,10 +5,12 @@
 //! `stop` (turn-end blocks), `stop_lang` ([lang] marker/rows packs),
 //! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
+//! `day` (PLAN-fael-sync chunk 3: `fael stats --day`),
 //! `push_cap` (read-push row cap + omitted line),
 //! `focus` (session Focus: focus.json written at start, read by the push).
 
 mod clients;
+mod day;
 mod focus;
 mod push_cap;
 mod seen;
