@@ -41,7 +41,7 @@ shape is a breaking change: ship the reader first.
 | `stop_blocks` | map event → `{blocks, followed_by_row}` | per `stop-*` event; `stop-bug` counts a following `issue` row, others any following row |
 | `asks` | `{reject, stop-block, warning}` → `{events, bytes}` | rounds fael cost the agent; plain pushes never count |
 | `repeat_blocks` | u32 | a block following a block in one session with no row between |
-| `constants` | `{skill_bytes, skill_est, mcp_schema_bytes, mcp_schema_est}` | bytes the agent pays every session before saying anything |
+| `constants` | `{skill_bytes, skill_est, mcp_schema_bytes, mcp_schema_est}` | bytes the agent pays every session before saying anything; SKILL.md is LF-normalised before measuring so the count is checkout-independent |
 | `rounds` | `{after_block, rows_added, since}` | `since` is the first-usage day (`YYYY-MM-DD`), empty when no rows |
 | `non_english_rows` | `{rows, non_english}` | rows outside the running repo's accepted `[lang] rows` scripts (deduped by id) |
 | `real_tokens` | object, else absent | mean cost of the round after a stop-block: `post_block_rounds`, `avg_input`, `avg_cache_create`, `avg_cache_read`, `avg_output` |
