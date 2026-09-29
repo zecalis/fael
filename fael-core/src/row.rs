@@ -50,6 +50,15 @@ pub struct Row {
     pub revisit: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
+    /// Which self-heal rule filed this row's `supersedes`
+    /// (PLAN-fael-selfheal-verdict chunk 3): `explicit:text`, `identity:key`,
+    /// `heuristic:files`, each with `:cross-key` when the key moved, or
+    /// `caller:flag` for a resolving `--supersedes` that passed through.
+    /// Absent reads as `unknown` — rows filed before chunk 3 are never
+    /// backfilled, and readers must not error on its absence. Top-level like
+    /// `to`, same compat: old readers keep it in `extra`, no `v` bump.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_source: Option<String>,
     #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
     #[serde(flatten)]

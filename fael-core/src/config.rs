@@ -12,6 +12,19 @@ pub enum Store {
     Local,
 }
 
+/// What a cross-key self-heal act prints (PLAN-fael-selfheal-verdict chunk
+/// 3): the key moved, so the act is the weakest-evidence one — `warn` says so
+/// in one `warning:` line (an ask), `info` keeps the info line, `off` acts
+/// silently. The act itself always happens: holding would pile notes back
+/// into the Stop-hook debt the rule exists to drain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CrossKey {
+    #[default]
+    Warn,
+    Info,
+    Off,
+}
+
 /// Per-repo settings from `.fael/config.toml` (every field has a default; see `Config::from_toml`).
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -58,6 +71,8 @@ pub struct Config {
     /// letter outside every accepted script warns once, never rejects.
     /// Empty switches the check off (mirrors `lang_marker = []`).
     pub lang_rows: Vec<String>,
+    /// Exposure of a cross-key self-heal act (`[selfheal] cross_key`).
+    pub cross_key: CrossKey,
 }
 
 impl Default for Config {
@@ -78,6 +93,7 @@ impl Default for Config {
             store: Store::Tracked,
             lang_marker: vec!["english".into(), "thai".into()],
             lang_rows: vec!["english".into()],
+            cross_key: CrossKey::Warn,
         }
     }
 }
@@ -98,6 +114,7 @@ impl Config {
             warn: Warn,
             limit: Limit,
             lang: Lang,
+            selfheal: Selfheal,
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
@@ -130,6 +147,11 @@ impl Config {
             marker: Option<Vec<String>>,
             rows: Option<Vec<String>>,
         }
+        #[derive(Deserialize, Default)]
+        #[serde(default)]
+        struct Selfheal {
+            cross_key: Option<String>,
+        }
         let f: File = toml::from_str(s).map_err(|e| e.to_string())?;
         let d = Config::default();
         let store = match f.store.as_deref() {
@@ -157,7 +179,22 @@ impl Config {
             store,
             lang_marker: check_lang("marker", f.lang.marker.unwrap_or(d.lang_marker))?,
             lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
+            cross_key: check_cross_key(f.selfheal.cross_key)?,
         })
+    }
+}
+
+/// Parse `[selfheal] cross_key` — anything outside `warn|info|off` is a
+/// config error, same reject style as `store`: a silent typo would flip a
+/// cross-key act from an ask to silence.
+fn check_cross_key(v: Option<String>) -> Result<CrossKey, String> {
+    match v.as_deref() {
+        None | Some("warn") => Ok(CrossKey::Warn),
+        Some("info") => Ok(CrossKey::Info),
+        Some("off") => Ok(CrossKey::Off),
+        Some(v) => Err(format!(
+            "rejected: [selfheal] cross_key = {v:?} — want \"warn\"|\"info\"|\"off\""
+        )),
     }
 }
 

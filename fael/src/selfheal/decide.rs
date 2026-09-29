@@ -43,6 +43,17 @@ pub(crate) enum Verdict {
     FilesAct { target: String },
     /// (b) several overlap: file the row, name them all.
     FilesMany { targets: Vec<String> },
+    /// (chunk 3) a cross-key act: the acted row's key differs from the new
+    /// row's. The inner act stands — a move, not a conflict — but the key is
+    /// the weakest evidence, so `[selfheal] cross_key` picks the exposure:
+    /// Warn prints the act as one `warning:` line (an ask), Info as info,
+    /// Off silently. Only `Differ` wraps: `OnlyNew`, `OnlyOld` and `Neither`
+    /// carry no conflict to expose.
+    CrossKey {
+        inner: Box<Verdict>,
+        old: String,
+        new: String,
+    },
     /// Nothing matched: file the row, say nothing.
     Noop,
 }
@@ -59,6 +70,7 @@ pub(crate) fn heal(
     st: &core::Stamp,
     row: &core::Row,
     flag: Option<&str>,
+    cross: core::CrossKey,
 ) -> Result<Heal, String> {
     let open = open_rows(log);
     // ids print at their shortest unique prefix, same as render/doctor, so any
@@ -66,7 +78,10 @@ pub(crate) fn heal(
     // being added too, which a fast caller may write in the same millisecond
     let w = core::abbrev(log).with(&row.id);
     let verdict = decide(log, &open, st, row, flag);
-    Ok(render(&verdict, row, st, &w, flag))
+    let source = source_of(&verdict);
+    let mut h = render(&verdict, row, st, &w, flag, cross);
+    h.source = source;
+    Ok(h)
 }
 
 pub(crate) fn decide(
@@ -88,13 +103,13 @@ pub(crate) fn decide(
     // reports "kept open" instead of yielding to a lower class (Blocks) —
     // that is why a caller-given key is never overridden by a files guess.
     if let Some(v) = explicit(&cands, row) {
-        return v;
+        return wrap_cross(&cands, v);
     }
     if let Some(v) = identity(&cands, st, row) {
-        return v;
+        return wrap_cross(&cands, v);
     }
     if let Some(v) = heuristic(&cands, row) {
-        return v;
+        return wrap_cross(&cands, v);
     }
     Verdict::Noop
 }
@@ -105,13 +120,62 @@ pub(crate) fn decide(
 fn decide_flag(log: &core::Log, cands: &[Candidate], flag: Option<&str>) -> Verdict {
     let f = flag.unwrap_or_default();
     if core::resolve(log, f).is_ok() {
+        // the caller named it and it resolved — full justification, nothing
+        // to expose, so this never wraps below
         return Verdict::FlagPassthrough;
     }
     match named(cands).as_slice() {
-        [one] => Verdict::FlagRescued {
-            target: one.row.id.clone(),
-        },
+        [one] => wrap_cross(
+            cands,
+            Verdict::FlagRescued {
+                target: one.row.id.clone(),
+            },
+        ),
         _ => Verdict::FlagUnresolved,
+    }
+}
+
+/// A cross-key act exposes the move: wrap any act whose target's key differs
+/// from the new row's, so the renderer — which owns the `[selfheal]
+/// cross_key` exposure — sees it. Explicit included: naming the row justifies
+/// the act, not the silence about the key moving underneath it.
+fn wrap_cross(cands: &[Candidate], v: Verdict) -> Verdict {
+    let target = match &v {
+        Verdict::TextAct { target, .. }
+        | Verdict::KeyAct { target, .. }
+        | Verdict::FilesAct { target }
+        | Verdict::FlagRescued { target } => target,
+        _ => return v,
+    };
+    let moved = cands
+        .iter()
+        .find(|c| &c.row.id == target)
+        .and_then(|c| match &c.evidence.key {
+            KeyRel::Differ { old, new } => Some((old.clone(), new.clone())),
+            _ => None,
+        });
+    match moved {
+        Some((old, new)) => Verdict::CrossKey {
+            inner: Box::new(v),
+            old,
+            new,
+        },
+        None => v,
+    }
+}
+
+/// Provenance for the row's `supersedes` (chunk 3): which rule filed it, so
+/// restore can trace an edge back to its cause. Cross-key acts append
+/// `:cross-key` — the exposure (`warning:` vs info vs silent) is the knob's
+/// job, the cause is recorded either way. Holds and keeps act on nothing.
+fn source_of(v: &Verdict) -> Option<String> {
+    match v {
+        Verdict::FlagPassthrough => Some("caller:flag".into()),
+        Verdict::FlagRescued { .. } | Verdict::TextAct { .. } => Some("explicit:text".into()),
+        Verdict::KeyAct { .. } => Some("identity:key".into()),
+        Verdict::FilesAct { .. } => Some("heuristic:files".into()),
+        Verdict::CrossKey { inner, .. } => source_of(inner).map(|s| format!("{s}:cross-key")),
+        _ => None,
     }
 }
 

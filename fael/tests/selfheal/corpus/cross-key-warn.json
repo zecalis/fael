@@ -1,0 +1,14 @@
+{
+  "name": "cross-key heuristic act warns once",
+  "seed": [
+    {"kind": "note", "text": "first pass", "files": ["src/a.rs"], "key": "auth:session"}
+  ],
+  "add": {"kind": "note", "text": "second pass", "files": ["src/a.rs"], "key": "billing:invoice"},
+  "expect": {
+    "supersedes_seed": 0,
+    "warning_lines": 1,
+    "warning_contains": ["superseded", "auth:session", "billing:invoice"],
+    "usage_warnings": 1,
+    "decision_source": "heuristic:files:cross-key"
+  }
+}

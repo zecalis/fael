@@ -74,7 +74,9 @@ fn two_named_rows_hold_and_touch_nothing() {
 
 /// The incident shape: A (decision, other key) named by the text acts, while
 /// B (same key, overlapping note) is reported "also kept" — the lower class
-/// never drags the explicit pick into a hold.
+/// never drags the explicit pick into a hold. The key moved (chunk 3), so the
+/// act warns exactly once: naming the row justifies the act, not the silence
+/// about the move. The also-kept trailer stays info — one add, one ask.
 #[test]
 fn explicit_act_reports_the_lower_class_as_also_kept() {
     let d = repo();
@@ -127,5 +129,26 @@ fn explicit_act_reports_the_lower_class_as_also_kept() {
         names(&err, "note ", &b) && err.contains("also overlaps these files"),
         "{err}"
     );
-    assert!(usage(&d).is_empty(), "act plus also-kept is info, no ask");
+    // chunk 3: the cross-key act is one `warning:` line — the move exposed,
+    // the trailer still info
+    let warns: Vec<&str> = err.lines().filter(|l| l.starts_with("warning:")).collect();
+    assert_eq!(warns.len(), 1, "{err}");
+    assert!(
+        warns[0].contains("auth:x") && warns[0].contains("billing:invoice"),
+        "{err}"
+    );
+    let u = usage(&d);
+    assert_eq!(u.len(), 1, "{u:?}");
+    assert_eq!(u[0]["ask"], "warning", "{u:?}");
+    let (ok, rows, err) = fael(&d, &["find", "--json", "--all"], "");
+    assert!(ok, "{err}");
+    let newest = rows
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|v| v["text"].as_str().is_some_and(|t| t.contains("Supersedes")))
+        .unwrap();
+    assert_eq!(
+        newest["decision_source"], "explicit:text:cross-key",
+        "{newest}"
+    );
 }

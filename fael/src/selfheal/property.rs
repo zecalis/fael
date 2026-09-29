@@ -138,6 +138,13 @@ fn gen_case(g: &mut Lcg, n: usize) -> (core::Log, core::Stamp, core::Row) {
 /// The verdict with every id list sorted: what the decision is, regardless
 /// of the order the log happened to list the rows in.
 fn canon(v: &Verdict) -> Verdict {
+    if let Verdict::CrossKey { inner, old, new } = v {
+        return Verdict::CrossKey {
+            inner: Box::new(canon(inner)),
+            old: old.clone(),
+            new: new.clone(),
+        };
+    }
     let mut out = v.clone();
     let sort = |xs: &mut Vec<String>| xs.sort();
     match &mut out {
@@ -149,6 +156,15 @@ fn canon(v: &Verdict) -> Verdict {
         _ => {}
     }
     out
+}
+
+/// Read through one `CrossKey` layer: the exposure wrapper never changes
+/// what the decision closes, so every invariant below sees the act inside.
+fn eff(v: &Verdict) -> &Verdict {
+    match v {
+        Verdict::CrossKey { inner, .. } => inner,
+        _ => v,
+    }
 }
 
 fn target_row<'a>(log: &'a core::Log, id: &str) -> &'a core::Row {
@@ -163,9 +179,9 @@ fn automatic_acts_close_only_my_own_rows() {
     for n in 0..CASES {
         let (log, st, row) = gen_case(&mut g, n);
         let open = open_rows(&log);
-        match decide(&log, &open, &st, &row, None) {
+        match eff(&decide(&log, &open, &st, &row, None)) {
             Verdict::KeyAct { target, .. } | Verdict::FilesAct { target } => {
-                let by = &target_row(&log, &target).by;
+                let by = &target_row(&log, target).by;
                 assert_eq!(by, "me", "seed {SEED:#x} case {n}: closed {target} of {by}");
             }
             _ => {}
@@ -174,12 +190,14 @@ fn automatic_acts_close_only_my_own_rows() {
 }
 
 /// Second, at most one row goes: `heal` names a single open id, or none.
+/// The mode only moves the exposure (`warning:` vs info vs silent), never
+/// the supersede — one mode covers all three.
 #[test]
 fn at_most_one_row_is_superseded() {
     let mut g = Lcg(SEED + 1);
     for n in 0..CASES {
         let (log, st, row) = gen_case(&mut g, n);
-        let h = heal(&log, &st, &row, None).unwrap();
+        let h = heal(&log, &st, &row, None, core::CrossKey::Warn).unwrap();
         if let Some(id) = h.supersedes {
             assert!(
                 log.rows.iter().any(|r| r.id == id),
@@ -243,14 +261,14 @@ fn hold_and_kept_open_supersede_nothing() {
         let open = open_rows(&log);
         let v = decide(&log, &open, &st, &row, None);
         if matches!(
-            v,
+            eff(&v),
             Verdict::TextHold { .. }
                 | Verdict::KeyMany { .. }
                 | Verdict::FilesMany { .. }
                 | Verdict::KeyIssueKept { .. }
                 | Verdict::KeyOtherWriter { .. }
         ) {
-            let h = heal(&log, &st, &row, None).unwrap();
+            let h = heal(&log, &st, &row, None, core::CrossKey::Warn).unwrap();
             assert_eq!(
                 h.supersedes, None,
                 "seed {SEED:#x} case {n}: {v:?} superseded {:?}",

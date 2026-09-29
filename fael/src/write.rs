@@ -89,8 +89,12 @@ pub(crate) fn add_row(
     row.urgent = core::resolve_urgent(&log, &urgent)?;
     // self-heal (chunks 3b–d): a repeat on these files or this key, or an id
     // the text names, supersedes itself — same path for CLI and MCP
-    let heal = crate::selfheal::heal(&log, &st, &row, supersedes.as_deref())?;
+    let heal = crate::selfheal::heal(&log, &st, &row, supersedes.as_deref(), r.cfg.cross_key)?;
     warns.extend(heal.notes);
+    // verdict chunk 3: provenance for restore — which rule filed `supersedes`
+    if let Some(s) = heal.source {
+        row.decision_source = Some(s);
+    }
     // id-refs chunk 2: prose citing an id with no row behind it says so —
     // one info line per id, never a reject. Skips the row itself and its
     // supersede target (a caller flag may name either verbatim).
