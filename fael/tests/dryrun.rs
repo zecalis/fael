@@ -246,3 +246,24 @@ fn cli_batch_dry_run_rejected() {
     assert!(err.contains("one row"), "{err}");
     assert!(log_bytes(&d).is_empty(), "a refused batch writes nothing");
 }
+
+/// `FAEL_DIR` sends the write to a scratch dir: the repo's real `.fael/log`
+/// stays byte-identical, so a wrong-cwd manual run cannot pollute it.
+#[test]
+fn fael_dir_isolates_the_log() {
+    let d = repo();
+    let scratch = d.join("scratch");
+    let before = log_bytes(&d);
+    let ok = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["add", "note", "scratch only", "--files", "src/a.rs"])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .env("FAEL_DIR", &scratch)
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok);
+    assert_eq!(log_bytes(&d), before);
+    assert!(scratch.join("log").exists());
+}
