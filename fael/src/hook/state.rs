@@ -57,24 +57,14 @@ pub(crate) fn risk_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.risk"))
 }
 
-/// The branch the session started on, written by session-start and read by
-/// stop (row-hygiene chunk 9) — two agents sharing one worktree move HEAD
-/// under each other, so stop warns instead of letting a push/PR land on the
-/// wrong branch. No file (sessions from before this existed) = silent.
-pub(crate) fn branch_path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
-    state_dir().join("sessions").join(format!("{key}.branch"))
-}
-
 /// The checked-out branch, read straight from `<gitdir>/HEAD` — no git spawn
-/// on this path (read/edit push must stay spawn-free; session-start already
-/// spawns elsewhere, stop only here). Lives in `journal` beside the git-dir
-/// traversal the journal root uses too, so the two cannot drift.
+/// on this path (session-start already spawns elsewhere). Lives in `journal`
+/// beside the git-dir traversal the journal root uses too, so the two cannot
+/// drift.
 pub(crate) use crate::journal::head_branch;
 
 /// Per-session files untouched this long are dead: a resumed session only
-/// loses its seen ids (rows push again) and its start branch (drift stays
-/// silent) — both fail quiet.
+/// loses its seen ids (rows push again) — it fails quiet.
 const STALE_SECS: u64 = 30 * 24 * 60 * 60;
 
 /// Drop per-session files older than `STALE_SECS` — without this `sessions/`

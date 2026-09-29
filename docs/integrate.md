@@ -41,9 +41,9 @@ use the one `fael install` writes (`~/.claude/skills/fael/SKILL.md`).
 
 Two agents (or two sessions) sharing one worktree folder share its HEAD and index with no
 coordination: one checks out its branch and the other is suddenly on the wrong branch, so its
-next push or PR targets work it never meant to touch. fael only detects this — `session-start`
-records the branch and `stop` warns one line when it changed mid-session (`a → b`), without
-blocking — because there is no daemon to hold a lock. The fix is structural: give each agent
-its own worktree (`git worktree add ../wt-<agent>`) and never run two agents in the same one.
-`fael find --branches` reads the other worktree's unmerged rows without checking anything out,
-and `fael doctor` flags local branches whose PR already merged (`[Merged]`) for deletion.
+next push or PR targets work it never meant to touch. fael does not guard this — it is a log,
+not a daemon, and each row already records the branch it was filed on. The fix is structural:
+give each agent its own worktree (`git worktree add ../wt-<agent>`) and never run two agents in
+the same one. `fael find --branches` reads the other worktree's unmerged rows without checking
+anything out, and `fael doctor` flags local branches whose PR already merged (`[Merged]`) for
+deletion.
