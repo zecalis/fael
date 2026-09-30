@@ -58,7 +58,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "kickoff",
         "the session brief",
         "fael kickoff [file|anchor] [--branches] [--full] [--limit N] [--offset M]
-    (the session brief: open rows ranked for a file, anchor or the whole repo)",
+    (the session brief: open rows ranked for a file, anchor or the whole repo;
+    an explicit --limit N is not cut by budget.kickoff_tokens)",
     ),
     (
         "mv",
