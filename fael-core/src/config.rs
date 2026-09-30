@@ -78,6 +78,10 @@ pub struct Config {
     /// blocks; `true` = the opt-in enforcement mode (block a turn that did
     /// work with no row). Capture itself never needs it.
     pub capture_block: bool,
+    /// `[sync] auto` — the Stop hook runs `fael sync` once per session when
+    /// `fael.remote` is set. `false` is the off-switch; the manual command
+    /// is unaffected.
+    pub sync_auto: bool,
 }
 
 impl Default for Config {
@@ -100,6 +104,7 @@ impl Default for Config {
             lang_rows: vec!["english".into()],
             cross_key: CrossKey::Warn,
             capture_block: false,
+            sync_auto: true,
         }
     }
 }
@@ -122,6 +127,12 @@ impl Config {
             lang: Lang,
             selfheal: Selfheal,
             capture: Capture,
+            sync: Sync,
+        }
+        #[derive(Deserialize, Default)]
+        #[serde(default)]
+        struct Sync {
+            auto: Option<bool>,
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
@@ -193,6 +204,7 @@ impl Config {
             lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
             cross_key: check_cross_key(f.selfheal.cross_key)?,
             capture_block: f.capture.block.unwrap_or(d.capture_block),
+            sync_auto: f.sync.auto.unwrap_or(d.sync_auto),
         })
     }
 }

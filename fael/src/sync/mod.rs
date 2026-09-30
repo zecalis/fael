@@ -8,7 +8,7 @@
 //! the same raw write `import`/`compact` use. A `.close.jsonl` row without
 //! `ref` (which an import can carry) rides along: it could never pass
 //! `close()`'s `validate_close`, so ingest never validates, it only dedupes
-//! by id.
+//! by id — and skips any row that trips the shared secret check.
 //!
 //! The working tree and checked-out branches are never touched: fetches land
 //! in `FETCH_HEAD`, pushes name the commit sha directly.
@@ -17,6 +17,7 @@ mod git;
 
 use crate::{Repo, core};
 use git::{fetch_tree, line_ref, ls_prefix, ls_remote, push, tip_tree, write_tree};
+use std::collections::HashSet;
 use std::path::Path;
 
 /// `fael sync [--remote url]`: push this writer's journal, ingest every
@@ -35,8 +36,9 @@ pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
     // own ref, before and after: ls → fetch+union → commit → ff-only push.
     let mut tip = ls_remote(&r.root, &remote, &own)?;
     let log = crate::read(r);
-    let local_rows: Vec<core::Row> = local_writer(&log.rows, &by);
-    let local_closes: Vec<core::Row> = local_writer(&log.closes, &by);
+    let imported = imported_ids(r);
+    let local_rows: Vec<core::Row> = local_writer(&log.rows, &by, &imported);
+    let local_closes: Vec<core::Row> = local_writer(&log.closes, &by, &imported);
     let (mut pushed, mut ingested) = (0usize, 0usize);
     if !local_rows.is_empty() || !local_closes.is_empty() || tip.is_some() {
         let attempt = |tip: &Option<String>| -> Result<(Vec<core::Row>, Vec<core::Row>), String> {
@@ -136,10 +138,25 @@ fn push_one(
     Ok(())
 }
 
-/// This writer's filed rows — what its ref carries. Rows others filed live
-/// locally after ingest but belong to their writers' refs, never this one.
-fn local_writer(rows: &[core::Row], by: &str) -> Vec<core::Row> {
-    rows.iter().filter(|r| r.by == by).cloned().collect()
+/// This writer's filed rows plus the rows an import put in this clone — what
+/// its ref carries. Rows others filed live locally after ingest but belong to
+/// their writers' refs, never this one. An imported row keeps its legacy `by`
+/// (`claude`), so no writer would ever push it unless the clone that imported
+/// it does; ingest files it under `<by>/`, not `_import/`, so it is never
+/// re-pushed by the clones that receive it.
+fn local_writer(rows: &[core::Row], by: &str, imported: &HashSet<String>) -> Vec<core::Row> {
+    let mine = |r: &&core::Row| r.by == by || imported.contains(&r.id);
+    rows.iter().filter(mine).cloned().collect()
+}
+
+/// Ids of every row under `_import/`, in the tree and in the journal.
+fn imported_ids(r: &Repo) -> HashSet<String> {
+    let roots = std::iter::once(r.fael.as_path()).chain(r.journal.as_deref());
+    let mut ids = HashSet::new();
+    for log in roots.map(core::read_imported) {
+        ids.extend(log.rows.into_iter().chain(log.closes).map(|x| x.id));
+    }
+    ids
 }
 
 /// Append fetched rows missing locally, one stream at a time so the two
@@ -154,6 +171,15 @@ fn ingest(
     for (fetched, is_close) in [(rows, false), (closes, true)] {
         let local = if is_close { &log.closes } else { &log.rows };
         for row in core::sync::missing(fetched, local) {
+            // a leaked row is never carried in: it would be re-served under
+            // every ref and come back after `fael purge`. Label + id only.
+            if let Some(what) = core::secret(&row.to_line()) {
+                eprintln!(
+                    "fael: skipped row {} from {} — looks like a secret ({what}); rotate it, then `fael purge {}` at its source",
+                    row.id, row.by, row.id
+                );
+                continue;
+            }
             put(r, &row, is_close)?;
             n += 1;
         }

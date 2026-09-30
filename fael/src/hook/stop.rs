@@ -18,12 +18,22 @@ use super::usage::record_usage;
 use crate::{core, git};
 use std::path::{Path, PathBuf};
 
-/// The stop event: block the turn when the session did work (edits after the
+/// The stop event: `decide`, then — only when the turn is let through, so a
+/// block's follow-up row is in the journal first — the once-per-session sync.
+pub(crate) fn stop(e: &Event) -> Reply {
+    let r = decide(e);
+    if !r.block {
+        super::autosync::after_stop(e);
+    }
+    r
+}
+
+/// Block the turn when the session did work (edits after the
 /// newest row, or commits when the edit hook saw nothing) but filed no row, or
 /// when it announced a bug with no issue row since — only under `[capture]
 /// block = true`; by default it files the reply's capture lines and lets the
 /// turn end. `stop_active` from the client guards the re-entry after a block.
-pub(crate) fn stop(e: &Event) -> Reply {
+fn decide(e: &Event) -> Reply {
     let no = || Reply {
         block: false,
         reason: None,
@@ -258,7 +268,7 @@ fn stash_risk(session: &str, worktree: &Path, marker: &str) {
 
 /// True when this session already blocked for this worktree + kind — else
 /// record the block and return false. Empty session = no dedupe (block).
-fn stop_blocked_before(session: &str, worktree: &str, kind: &str) -> bool {
+pub(super) fn stop_blocked_before(session: &str, worktree: &str, kind: &str) -> bool {
     if session.is_empty() {
         return false;
     }

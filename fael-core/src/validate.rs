@@ -237,9 +237,10 @@ pub fn valid_key(k: &str) -> Result<(), String> {
     }
 }
 
-/// Name of the first secret-looking token in `s`.
+/// Name of the first secret-looking token in `s` — the one check every ingress
+/// (add, import, sync ingest) shares; callers report the label, never the token.
 // ponytail: fixed prefix list, catches the common pasted tokens only; swap for a real scanner if one slips through
-fn secret(s: &str) -> Option<&'static str> {
+pub fn secret(s: &str) -> Option<&'static str> {
     const PREFIXES: [(&str, &str); 8] = [
         ("-----BEGIN", "private key block"),
         ("AKIA", "AWS access key"),

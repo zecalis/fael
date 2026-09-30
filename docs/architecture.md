@@ -199,6 +199,8 @@ prefixes = ["PLAN-"]          # <PREFIX><name>.md widens kickoff to <prefix>:<na
 row_bytes = 10240             # hard cap, never above 10 KiB
 [capture]
 block = false                 # true = opt-in enforcement: the Stop hook blocks a turn that did work with no row (default: it only files the reply's lines)
+[sync]
+auto = true                   # Stop hook runs `fael sync` once per session when fael.remote is set; false = manual only
 [lang]
 marker = ["english", "thai"]  # Stop-hook phrase packs (default); [] switches the bug rule off
 rows = ["english"]            # accepted row-writing languages; anything else warns once, never rejects ([] switches the check off)
@@ -270,6 +272,8 @@ client ─(stop event)─▶ edits recorded this session?
                         (or commits) and the exact command, --files prefilled
 ```
 Edits, not commits, are the primary signal: many agents are told never to commit, and a commit-only rule never fires for them. Git is only the fallback for edits the hook never saw (a shell `sed`, a heredoc). Measuring from the newest row, not the session start, keeps a row filed early from covering hours of work after it; a new row reopens one more block. The edit list is per-machine runtime state, never in `.fael/`. The `session` string sent with `edit` must equal the one sent with `stop`.
+
+A stop that lets the turn through also starts one detached `fael sync` per session when `fael.remote` is set (`[sync] auto`): fail-quiet, never awaited, the hook still exits 0.
 In the default mode the same signals only stash one line for the next push (shown once). A bug announcement blocks only without an issue row since the words — and the phrases that count as one come from the `[lang] marker` packs (`english` + `thai` by default, `marker = []` switches the rule off), never from hardcoded lists.
 
 **Session start:**
