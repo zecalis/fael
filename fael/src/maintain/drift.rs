@@ -2,8 +2,8 @@
 //! after the row was written. The code moved on, so the row may now restate
 //! it (close it: the code says it) or contradict it (supersede it). A fact from
 //! git, never a verdict — the reader checks each row against the code. A row
-//! checked and still true is re-filed with `--supersedes`, which restarts its
-//! count. One `git log` spawn for the whole log; no git = no note.
+//! checked and still true gets `fael bump <id>` (same text, new version), which
+//! restarts its count. One `git log` spawn for the whole log; no git = no note.
 
 use crate::core;
 use std::path::Path;
@@ -54,8 +54,8 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
             format!(
                 "{} open row(s) whose files took {DRIFT_COMMITS}+ commits since they were written \
                  — check each against the code: the code says it now → `fael close <id> \"now in \
-                 <file>\"`; wrong now → re-file with `--supersedes <id>`; still true → re-file \
-                 with `--supersedes <id>` to restart the count (e.g. {})",
+                 <file>\"`; wrong now → re-file with `--supersedes <id>`; still true → `fael \
+                 bump <id>` restarts the count (e.g. {})",
                 drifted.len(),
                 eg.join("; ")
             ),
