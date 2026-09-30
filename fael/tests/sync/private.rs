@@ -9,6 +9,9 @@ use super::*;
 #[test]
 fn fresh_clone_of_a_public_source_gets_every_row_from_the_private_remote() {
     let public = bare("private-public");
+    // a bare repo's HEAD follows the host's init.defaultBranch; the clone below
+    // checks out `main`, so pin it or a `master` host clones an empty tree
+    git(&public, &["symbolic-ref", "HEAD", "refs/heads/main"]);
     let memory = bare("private-memory");
 
     // 1. the source repo: `store = local` is committed, `.fael/log` never is
