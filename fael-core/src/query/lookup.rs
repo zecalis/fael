@@ -220,9 +220,42 @@ pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
             }
         }
     }
-    for r in fat_reasons(row, cfg) {
-        w.push(format!("warning: {r}"));
+    let mut shape = shape_warnings(row, cfg);
+    // a re-file carries the old row's shape: repeating what the old row
+    // already had teaches agents to skip warnings, so only what is new is said.
+    // ponytail: matched by kind (the words before the first number), so a
+    // row that grew longer still stays quiet on length
+    if let Some(old) = row
+        .supersedes
+        .as_deref()
+        .and_then(|s| log.rows.iter().find(|r| r.id == s))
+    {
+        let before: Vec<String> = shape_warnings(old, cfg)
+            .iter()
+            .map(|x| kind_of(x))
+            .collect();
+        shape.retain(|x| !before.contains(&kind_of(x)));
     }
+    w.extend(shape);
+    w
+}
+
+/// A warning's kind: its words before the first digit (`text is 1203 chars`
+/// and `text is 900 chars` are one kind).
+fn kind_of(w: &str) -> String {
+    w.split(|c: char| c.is_ascii_digit())
+        .next()
+        .unwrap_or(w)
+        .to_string()
+}
+
+/// The warnings about a row's own shape — fat reasons, a long untitled
+/// text, a long title — the ones a re-file inherits from the row it replaces.
+fn shape_warnings(row: &Row, cfg: &Config) -> Vec<String> {
+    let mut w: Vec<String> = fat_reasons(row, cfg)
+        .into_iter()
+        .map(|r| format!("warning: {r}"))
+        .collect();
     // lists show the title, bodies are pulled by id — a long untitled row
     // costs its full text on every push. Thai and CJK have no spaces between
     // words, so chars count too.

@@ -361,3 +361,40 @@ fn separator_density_applies_to_thai() {
         fat_reasons(&r, &cfg)
     );
 }
+
+#[test]
+fn a_refile_warns_only_what_it_made_worse() {
+    let cfg = Config::default();
+    let long = "word ".repeat(80);
+    // the old row: no key, long untitled text
+    let mut l = log();
+    let mut old = row(
+        "R0000000000000000000000001",
+        "decision",
+        &["src/a.rs"],
+        None,
+    );
+    old.text = long.clone();
+    l.rows.push(old);
+    // a translation re-file with the same shape: nothing new to say
+    let mut new = row(
+        "R0000000000000000000000002",
+        "decision",
+        &["src/a.rs"],
+        None,
+    );
+    new.text = long.clone();
+    new.supersedes = Some("R0000000000000000000000001".into());
+    assert!(
+        warnings(&new, &l, &cfg).is_empty(),
+        "{:?}",
+        warnings(&new, &l, &cfg)
+    );
+    // a problem the old row did not have still warns
+    new.title = Some("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen".into());
+    let w = warnings(&new, &l, &cfg);
+    assert!(w.len() == 1 && w[0].contains("title is 16 words"), "{w:?}");
+    // the same row filed fresh still hears every warning
+    new.supersedes = None;
+    assert!(warnings(&new, &l, &cfg).len() >= 2);
+}
