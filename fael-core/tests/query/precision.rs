@@ -125,28 +125,51 @@ fn tier_ladder_read_and_edit() {
 }
 
 /// Case "inherit" (01M3S446P): `hook.rs` was split into `hook/protocol.rs`,
-/// `state.rs`, `claude.rs`; every child inherits the parent's rows through the
-/// rename alias at the exact tier, though none says which child it is about.
-/// Today: exact. Expected after chunk 2: not exact (fael never guesses the child).
+/// `state.rs`, `claude.rs`; every child used to inherit the parent's rows
+/// through the rename alias at the exact tier, though none says which child it
+/// is about. fael never guesses the child: the push drops them (the pull,
+/// `find --files <child>`, still expands the alias and reaches them).
 #[test]
-fn split_file_rows_reach_every_child_as_exact() {
+fn split_file_rows_do_not_reach_the_children() {
     let l = log_of(vec![
         decision(11, &["fael/src/hook.rs"], None, "filed before the split"),
         decision(12, &["fael/src/hook/state.rs"], None, "about state.rs"),
         decision(13, &["fael/src/hook.rs"], None, "also before the split"),
     ]);
-    let read = tiers(&l, &["fael/src/hook/protocol.rs"], &split_pairs(), true);
-    assert_eq!(read, [("13".to_string(), 0), ("11".to_string(), 0)]);
-    // the row filed on the child itself stays exact at that child
-    let own = tiers(&l, &["fael/src/hook/state.rs"], &split_pairs(), true);
+    let al = split_pairs();
+    assert!(tiers(&l, &["fael/src/hook/protocol.rs"], &al, true).is_empty());
+    // an edit keeps only the genuine neighbour (12), at the same-dir tier
     assert_eq!(
-        own,
-        [
-            ("13".to_string(), 0),
-            ("12".to_string(), 0),
-            ("11".to_string(), 0)
-        ]
+        tiers(&l, &["fael/src/hook/protocol.rs"], &al, false),
+        [("12".to_string(), 1)]
     );
+    // the row filed on the child itself stays exact at that child
+    assert_eq!(
+        tiers(&l, &["fael/src/hook/state.rs"], &al, true),
+        [("12".to_string(), 0)]
+    );
+    // the parent still exists: reading it reaches its own rows
+    assert_eq!(
+        tiers(&l, &["fael/src/hook.rs"], &al, true),
+        [("13".to_string(), 0), ("11".to_string(), 0)]
+    );
+    // find expands across the split, every row the old path held is wanted
+    let f = al.expand_all(&["fael/src/hook/protocol.rs".to_string()]);
+    assert!(f.contains(&"fael/src/hook.rs".to_string()), "{f:?}");
+}
+
+/// A chain that ends in a split keeps the hops before it: `a → b`, then `b`
+/// split into `c` and `d` — reading `b` still reaches `a`'s rows.
+#[test]
+fn rename_before_a_split_still_resolves() {
+    let l = log_of(vec![decision(11, &["a.rs"], None, "filed at a")]);
+    let al = Aliases::from_pairs(vec![
+        ("a.rs".into(), "b.rs".into()),
+        ("b.rs".into(), "c.rs".into()),
+        ("b.rs".into(), "d.rs".into()),
+    ]);
+    assert_eq!(tiers(&l, &["b.rs"], &al, true), [("11".to_string(), 0)]);
+    assert!(tiers(&l, &["c.rs"], &al, true).is_empty());
 }
 
 /// A plain one-to-one rename keeps its rows exact — the alias is the whole

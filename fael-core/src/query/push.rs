@@ -10,7 +10,9 @@ use std::collections::HashSet;
 /// exact hit. Open `issue` before `decision` before the rest, freshest first
 /// by row-or-mtime inside each. Closed and superseded rows never push. Each
 /// query expands through `al` first, so a row filed under a path that was
-/// renamed since still pushes at the new path. The read/edit path never
+/// renamed since still pushes at the new path — except through a file that was
+/// split into several (the child a row is about is unknowable: fael never
+/// guesses, `find --files <child>` still reaches them). The read/edit path never
 /// computes reader identity (no git spawn there), so `to` does not reorder
 /// the push — session start is where routing lists. Deterministic: the
 /// same log and query give the same order on any machine. The hook push cuts
@@ -37,7 +39,7 @@ pub fn push_tiered<'a>(
         .union(&super::superseded(log))
         .copied()
         .collect();
-    let queries: Vec<String> = al.expand_all(
+    let queries: Vec<String> = al.expand_all_unsplit(
         &files
             .iter()
             .map(|q| lenient(q).trim_end_matches('/').to_string())
