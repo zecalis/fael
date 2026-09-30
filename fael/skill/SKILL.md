@@ -28,7 +28,6 @@ Each row is read months later with no chat: one or two standalone sentences.
 invent one; left out, it is the files this session edited.
 An id is verified only once this session's `fael find` printed it as `- [<id>]` — never type
 one from memory.
-With the MCP server connected, the tools `find` / `add` / `close` do the same.
 
 Something worth keeping and no row yet? End your reply with one line per memory:
 fael decision: <one sentence> [files: a,b]

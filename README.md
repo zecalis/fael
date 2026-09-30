@@ -24,8 +24,9 @@ touches that code later gets it, so the next feature doesn't forget what the las
 
 fael gives the repo a memory that agents can't skip:
 
-- **They have to write.** When an agent edited files but recorded nothing, fael stops the turn and
-  asks for a note. Mention a bug without filing it? Same.
+- **Writing costs no extra turn.** The agent ends its reply with `fael decision|issue|note: …
+  [files: …]` lines and fael files them — no turn is stopped or re-prompted. Want the old
+  enforcement (no row, no end of turn)? Opt in with `[capture] block = true`.
 - **Memory finds them.** When an agent reads a file, the decisions and open bugs about *that file*
   come attached — nobody has to remember to search.
 - **No spam in context.** Rows are pushed per file, once per session, and cut to a token budget
