@@ -100,3 +100,44 @@ fn missing_union_and_ignored() {
         "{ks:?}"
     );
 }
+
+#[test]
+fn secret_row_is_an_unfixable_error_that_never_echoes_the_token() {
+    let r = root();
+    let fael = fael_of(&r);
+    let token = format!("ghp_{}", "a".repeat(24));
+    let mut leaked = row("A0000000000000000000000001", "note", &["a.rs"]);
+    leaked.text = format!("token {token} pasted");
+    let clean = row("A0000000000000000000000002", "note", &["b.rs"]);
+    // the leaked row lives in a `.close` file too: a closed row still holds the bytes
+    let mut closed = row("A0000000000000000000000003", "note", &["c.rs"]);
+    closed.text = format!("old {token}");
+    write_lines(
+        &month_file(&fael, "tester-0000", "2026-07", false),
+        &[leaked.to_line(), clean.to_line()],
+    );
+    write_lines(
+        &month_file(&fael, "tester-0000", "2026-07", true),
+        &[closed.to_line()],
+    );
+    let rep = doctor_scan(&fael, &r, false, MONTH);
+    let hits: Vec<&Problem> = rep
+        .problems
+        .iter()
+        .filter(|p| p.kind == ProblemKind::Secret)
+        .collect();
+    assert_eq!(hits.len(), 2, "{rep:?}");
+    for p in &hits {
+        assert_eq!(p.severity, Severity::Error);
+        assert!(!p.fixable);
+        assert!(!p.detail.contains(&token), "{}", p.detail);
+        assert!(p.detail.contains("GitHub token") && p.detail.contains("rotate"));
+        assert!(p.detail.contains(&format!("fael purge {}", p.ids[0])));
+    }
+    let mut ids: Vec<&str> = hits.iter().map(|p| p.ids[0].as_str()).collect();
+    ids.sort_unstable();
+    assert_eq!(
+        ids,
+        ["A0000000000000000000000001", "A0000000000000000000000003"]
+    );
+}

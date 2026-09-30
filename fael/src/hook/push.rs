@@ -5,7 +5,7 @@
 use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
 use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
-use super::usage::record_usage;
+use super::usage::{memory_line, record_usage};
 use crate::{aliases, core};
 use std::collections::HashSet;
 use std::io::{Read, Write};
@@ -253,7 +253,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         let out: String = shown.iter().map(|id| format!("{id}\n")).collect();
         let _ = f.write_all(out.as_bytes());
     }
-    let context = format!("fael mem for {}:\n{body}", files.join(", "));
+    let usage = memory_line(&body, policy.budget).unwrap_or_default();
+    let context = format!("fael mem for {}:\n{body}{usage}", files.join(", "));
     // an edit is where a row goes stale: the agent is changing the code the
     // row describes, with both in front of it — the one moment to retire it.
     // ponytail: every edit push with rows; once per session if it costs too much

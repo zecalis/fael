@@ -263,3 +263,25 @@ fn oversize_month_is_an_error() {
         "{rep:?}"
     );
 }
+
+#[test]
+fn fix_leaves_a_secret_row_byte_identical() {
+    let r = root();
+    let fael = fael_of(&r);
+    let p = month_file(&fael, "tester-0000", "2026-07", false);
+    let mut leaked = row("A0000000000000000000000001", "note", &["a.rs"]);
+    leaked.text = format!("token ghp_{} pasted", "a".repeat(24));
+    write_lines(&p, &[leaked.to_line()]);
+    let bytes = fs::read(&p).unwrap();
+    let (before, done, after) = scan_fix_rescan(&fael, &r);
+    assert!(
+        before
+            .problems
+            .iter()
+            .any(|x| x.kind == ProblemKind::Secret)
+    );
+    assert!(done.is_empty(), "{done:?}");
+    assert_eq!(fs::read(&p).unwrap(), bytes);
+    // still reported: detect-only, `doctor` keeps failing until purge
+    assert!(after.problems.iter().any(|x| x.kind == ProblemKind::Secret));
+}

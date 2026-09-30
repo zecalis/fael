@@ -8,7 +8,8 @@
 //! `day` (PLAN-fael-sync chunk 3: `fael stats --day`),
 //! `push_cap` (read-push row cap + omitted line),
 //! `precision` (PLAN-fael-moat-token chunk 2: push footer + branch tag fixture),
-//! `focus` (session Focus: focus.json written at start, read by the push).
+//! `focus` (session Focus: focus.json written at start, read by the push),
+//! `memory_line` (the `memory: ~used/budget tokens · n rows` line).
 
 mod adopted;
 mod autosync;
@@ -16,6 +17,7 @@ mod capture;
 mod clients;
 mod day;
 mod focus;
+mod memory_line;
 mod precision;
 mod push_cap;
 mod search;

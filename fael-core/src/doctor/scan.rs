@@ -160,6 +160,23 @@ fn scan_file(
                 if !row.id.is_empty() {
                     *ids.entry(row.id.clone()).or_insert(0) += 1;
                 }
+                if let Some(what) = crate::secret(line) {
+                    r.problems.push(
+                        Problem::error(
+                            Kind::Secret,
+                            false,
+                            None,
+                            format!(
+                                "{name}:{}: row {} looks like it holds a secret ({what}) — rotate it first, \
+                                 then `fael purge {}`; purge does not undo git history or other clones",
+                                i + 1,
+                                row.id,
+                                row.id
+                            ),
+                        )
+                        .with_ids(vec![row.id.clone()]),
+                    );
+                }
                 // close-shaped and carrier rows carry no `files` by design — only adds count
                 if row.files.is_empty()
                     && row.reference.as_deref().is_none_or(|t| t.trim().is_empty())
