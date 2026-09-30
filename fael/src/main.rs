@@ -263,7 +263,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     }
     let (row, path, warns) = write::add_row(&r, kind, text, &a.files(), opts)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
-    hook::record_asks("cli", hook::ASK_WARN, "add", Some(&r.root), &warns);
+    hook::record_row_asks("cli", "add", &r.root, &row, &warns);
     batch::written(a, &r, &row, &path);
     Ok(())
 }

@@ -123,7 +123,37 @@ pub(crate) fn record_mcp(root: &Path, tool: &str, ask: &str, text: &str) {
 /// when the call never resolved one (parse errors before routing) — those rows
 /// still count, they just skip the temp-dir filter and the per-repo joins.
 pub(crate) fn record_ask(client: &str, ask: &str, event: &str, repo: Option<&Path>, text: &str) {
-    append_row(serde_json::json!({
+    append_row(ask_row(client, ask, event, repo, text));
+}
+
+/// Warnings on a row just filed (`add`, `mcp-add`): like `record_asks`, plus
+/// the row id under `row` (not `ids` — those count as pushes) and its writer
+/// session, so add-side asks join the row and the session that wrote it.
+pub(crate) fn record_row_asks(
+    client: &str,
+    event: &str,
+    root: &Path,
+    row: &core::Row,
+    texts: &[String],
+) {
+    for t in texts.iter().filter(|t| t.starts_with("warning:")) {
+        let mut v = ask_row(client, ASK_WARN, event, Some(root), t);
+        v["row"] = row.id.as_str().into();
+        if let Some(s) = row.session() {
+            v["session"] = s.into();
+        }
+        append_row(v);
+    }
+}
+
+fn ask_row(
+    client: &str,
+    ask: &str,
+    event: &str,
+    repo: Option<&Path>,
+    text: &str,
+) -> serde_json::Value {
+    serde_json::json!({
         "ts": now_rfc3339().unwrap_or_default(),
         "repo": repo.map(|r| r.to_string_lossy().into_owned()).unwrap_or_default(),
         "client": client,
@@ -131,7 +161,7 @@ pub(crate) fn record_ask(client: &str, ask: &str, event: &str, repo: Option<&Pat
         "ask": ask,
         "bytes": text.len(),
         "est_tokens": core::est_tokens(text),
-    }));
+    })
 }
 
 /// Bytes the agent pays every session before saying anything: the bundled

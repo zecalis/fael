@@ -124,3 +124,25 @@ fn stats_text_shows_asks_and_constants() {
     assert!(out.contains("asks: reject ×1"), "{out}");
     assert!(out.contains("constants per session: SKILL.md"), "{out}");
 }
+
+#[test]
+fn warning_add_carries_row_and_session() {
+    use std::process::Command;
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let text = vec!["word"; 70].join(" ");
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
+    c.args(["add", "note", &text, "--files", "src/a.rs", "--json"])
+        .current_dir(&d)
+        .env("CLAUDE_CODE_SESSION_ID", "sess-add-1");
+    super::state_env(&mut c, &d);
+    let o = c.output().unwrap();
+    assert!(o.status.success(), "{o:?}");
+    let row: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    let u = usage(&d);
+    assert_eq!(u.len(), 1, "{u:?}");
+    assert_eq!(u[0]["row"], row["id"], "{u:?}");
+    assert_eq!(u[0]["session"], "sess-add-1", "{u:?}");
+    // `ids` means "pushed to the agent" — an add's own row never counts there
+    assert!(u[0].get("ids").is_none(), "{u:?}");
+}

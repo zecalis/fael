@@ -3,7 +3,7 @@
 //! ratchet): parsing here, one shared `add_row` per row over there.
 
 use crate::core::Row;
-use crate::hook::{ASK_WARN, record_asks, record_cli_reject};
+use crate::hook::{ASK_WARN, record_asks, record_cli_reject, record_row_asks};
 use crate::{core, write};
 use std::process::ExitCode;
 
@@ -52,7 +52,7 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
         match res {
             Ok((row, _path, warns)) => {
                 warns.iter().for_each(|w| eprintln!("{w}"));
-                record_asks("cli", ASK_WARN, "add", Some(&r.root), &warns);
+                record_row_asks("cli", "add", &r.root, &row, &warns);
                 // batch rides `--json`: one JSON row per line, like single add
                 println!("{}", row.to_line());
             }
