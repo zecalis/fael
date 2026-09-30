@@ -34,8 +34,12 @@ task (its `key`) → decision → evidence → outcome → closure
 
 Fael resolves, reconciles, or self-heals **deterministic** context before asking an agent
 to reason again; when it cannot decide, it exposes the evidence and never guesses (§6).
-The goal is not to store more memory — it is to make existing work memory useful with
-**fewer agent rounds**.
+The goal is not to store more memory — it is memory that **points the right way**. Git owns
+what changed; fael keeps only what git and the code cannot say (why, what was rejected, what is
+unfinished), and retires a row once the code says it or contradicts it. It is measured by
+repeat mistakes (redoing what was decided or rejected), the share of pushed rows actually used,
+and how many open rows the code has outgrown. Rounds and tokens are a cost to keep low, never
+a promise.
 
 A feature ships only if it does at least one of these **and** gives nothing back:
 
@@ -323,7 +327,7 @@ Tokens are the unit of value, and they are spent when reading, not when storing.
 Reading never fails: broken lines, leftover merge-conflict markers, duplicate ids, CRLF and BOM are all handled in memory. Writing seals a torn last line before it appends. `fael doctor` reports problems, and `--fix` repairs them with tmp-then-rename. Bad lines go to `.fael/quarantine/`, so no byte is ever deleted.
 
 `doctor` reads prose as well as bytes: open rows, close reasons and every `*.md` under the repo (outside `.git`/`target`/`node_modules`) are checked for citations of ids with no row behind them — `[Phantom]`, the dead citation the next reader takes as confirmation. Fenced code blocks are skipped there: a ULID inside a fence is an example, never a citation.
-`[Drifted]` is the safety net for rows the code outgrew: an open row whose real files took 10+ commits since it was written (one `git log` spawn in `doctor`, never in core). It is a fact, never a verdict — the reader checks each row against the code: the code says it now → close it (`now in <file>`); wrong now → re-file with `--supersedes`; still true → re-file with `--supersedes`, which restarts the count. The edit push asks for the same check while the agent has the code in front of it, so most rows retire there and `doctor` catches the rest.
+`[Drifted]` is the safety net for rows the code outgrew: an open row whose real files took 10+ commits since it was written (one `git log` spawn in `doctor`, never in core). It is a fact, never a verdict — the reader checks each row against the code: the code says it now → close it (`now in <file>`); wrong now → re-file with `--supersedes`; still true → `fael bump <id>` (same text, new version), which restarts the count. The edit push asks for the same check while the agent has the code in front of it, so most rows retire there and `doctor` catches the rest.
 
 Open rows with a letter outside every accepted `[lang] rows` script report as one `[NotEnglish]` batch (info, never `--fix`ed) with the full ids a translate pass supersedes (`fael add --supersedes <id>`, batched over `fael add --json -`); `fael stats` counts the same rows with the same detector against the running repo's accepted scripts (`rows not in English` under the default, never `rows with Thai`).
 
