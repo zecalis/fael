@@ -90,6 +90,7 @@ pub(crate) fn evaluate(
     let source = source_of(&verdict);
     let mut h = render(&verdict, row, st, &w, flag, cross);
     h.source = source;
+    name_the_replaced(log, &w, &mut h);
     // observe runs a second time here (decide already did): a scan over open
     // rows is nothing next to the git spawns around it, and sharing one
     // observation would widen every signature between them.
@@ -103,6 +104,24 @@ pub(crate) fn evaluate(
         verdict,
         heal: h,
         evidence,
+    }
+}
+
+/// A self-heal supersede names what it replaced and how to undo it: a row
+/// on the same key can be another topic, and an id alone does not say so.
+/// Only fael's own "superseded …" line — a caller's `--supersedes` chose.
+fn name_the_replaced(log: &core::Log, w: &core::Abbrev, h: &mut Heal) {
+    let (Some(t), Some(first)) = (h.supersedes.as_deref(), h.notes.first_mut()) else {
+        return;
+    };
+    if let Some(old) = log.rows.iter().find(|r| r.id == t)
+        && first.starts_with("superseded ")
+    {
+        first.push_str(&format!(
+            " — was \"{}\"; wrong one? fael restore {}",
+            old.display_title(),
+            w.short(t)
+        ));
     }
 }
 

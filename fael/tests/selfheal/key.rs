@@ -39,6 +39,12 @@ fn single_key_match_supersedes_any_branch() {
     let (ok, _, err) = add(&d, "decision", "second", "src/a.rs", "auth:session");
     assert!(ok, "{err}");
     assert!(names(&err, "superseded ", &first), "{err}");
+    // the line names what it replaced and the undo — a same key can be
+    // another topic, and an id alone does not say so
+    assert!(
+        err.contains("— was \"first\"; wrong one? fael restore "),
+        "{err}"
+    );
     assert_eq!(open_rows(&d).len(), 1);
     assert!(usage(&d).is_empty(), "self-heal info is no ask");
 }

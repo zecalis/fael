@@ -228,7 +228,9 @@ fn doctor_flags_phantom_id_in_markdown() {
     assert!(ok, "{out}");
     assert!(
         out.contains("note [Phantom]: 1 reference(s) to ids with no row in markdown")
-            && out.contains(&format!("PLAN-x.md:3 → {fake}")),
+            && out.contains(&format!("PLAN-x.md:3 → {fake}"))
+            // an id from another repo's log reads as dead here: cite the key
+            && out.contains("cite its key instead"),
         "{out}"
     );
     // no row owns a doc citation: --json carries an empty ids list

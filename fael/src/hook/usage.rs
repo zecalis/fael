@@ -328,6 +328,12 @@ fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
     let (wn, wb) = ask(core::stats::ASK_WARN);
     println!("  asks: reject ×{rn} ({rb} bytes) · stop-block ×{bn} · warning ×{wn} ({wb} bytes)");
     print_capture(&s.capture);
+    if s.retired.pushed > 0 {
+        println!(
+            "  retired at touch: {} of {} pushed row(s) closed or superseded within a day of a push",
+            s.retired.at_touch, s.retired.pushed
+        );
+    }
     if s.repeat_blocks > 0 {
         println!(
             "  repeat stop-blocks: ×{} (a block followed a block in one session before any row)",

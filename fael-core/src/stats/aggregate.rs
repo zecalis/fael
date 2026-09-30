@@ -5,6 +5,7 @@
 use super::capture::{Capture, capture};
 use super::metrics::{added_since, ask_totals, non_english_share, post_block_cost, repeat_blocks};
 use super::parse::{Parsed, StopBlock};
+use super::retire::{Retired, retired};
 use crate::{Config, Log, closed, last_row_ms, rfc3339, superseded, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -108,6 +109,8 @@ pub struct Stats {
     pub rounds: Rounds,
     pub non_english_rows: NonEnglish,
     pub capture: Capture,
+    /// Pushed rows closed or superseded soon after a push (`retire.rs`).
+    pub retired: Retired,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub real_tokens: Option<RealAvg>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -202,6 +205,7 @@ pub fn aggregate(
             non_english: foreign_rows,
         },
         capture: capture(parsed, logs),
+        retired: retired(parsed, logs),
         real_tokens: real_avg(samples, avg_in, avg_cc, avg_cr, avg_out),
         rows: with_rows.then(|| row_statuses(&parsed.by_id, &parsed.id_repos, logs)),
     }

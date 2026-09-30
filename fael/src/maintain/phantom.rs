@@ -101,13 +101,19 @@ fn row_problem(log: &core::Log, cands: &[(String, String)]) -> core::Problem {
         format!(
             "{} reference(s) to ids with no row — check the citation, then re-file \
              with --supersedes (e.g. {}) · compact --prune can remove closed rows, \
-             so an old citation may point at a pruned row",
+             so an old citation may point at a pruned row · {CROSS_REPO}",
             cands.len(),
             eg.join("; ")
         ),
     )
     .with_ids(unique_ids(cands))
 }
+
+/// This doctor reads only this repo's log, so an id from another repo's log
+/// reads as dead — and ids change on every supersede anyway. A key follows
+/// the row wherever it lives.
+const CROSS_REPO: &str = "an id from another repo's log? cite its key instead \
+    (`fael find --key <key>` in that repo), which also survives a supersede";
 
 /// The markdown half: no row owns the citation, so `ids` stays empty (there
 /// is nothing to close) — the file and line are what to fix, and they are in
@@ -123,7 +129,7 @@ fn md_problem(refs: &[(String, usize, String)]) -> core::Problem {
         format!(
             "{} reference(s) to ids with no row in markdown — fix the citation where it is \
              written (e.g. {}) · compact --prune can remove closed rows, so an old citation \
-             may point at a pruned row",
+             may point at a pruned row · {CROSS_REPO}",
             refs.len(),
             eg.join("; ")
         ),
