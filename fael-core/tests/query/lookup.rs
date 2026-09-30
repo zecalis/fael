@@ -145,6 +145,13 @@ fn chunk_sibling_keys_never_warn() {
         "{:?}",
         warnings(&r, &l, &cfg)
     );
+    // the plan's one handoff key sits beside its chunks — silent
+    r.key = Some("plan:fael-selfheal-verdict:handoff".into());
+    assert!(
+        warnings(&r, &l, &cfg).is_empty(),
+        "{:?}",
+        warnings(&r, &l, &cfg)
+    );
     // a non-chunk sibling under the same parent still warns
     r.key = Some("plan:fael-selfheal-verdict:retro".into());
     assert!(

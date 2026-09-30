@@ -42,7 +42,9 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 **1 PLAN chunk = 1 session = 1 branch.** At the end of a chunk:
 
 1. Mark it complete and update its TL;DR.
-2. Add a handoff note with the plan path in `--files`.
+2. Add a handoff note on the plan, never a code path (every read of that file would
+   re-push it): `--files plan:<name>,<path/to/PLAN-<name>.md> --key plan:<name>:handoff`,
+   `<name>` lowercased. One key per plan, so each chunk's note supersedes the last.
 3. Commit the chunk.
 4. Stop.
 
