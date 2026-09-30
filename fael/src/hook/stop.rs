@@ -26,7 +26,7 @@ pub(crate) fn stop(e: &Event) -> Reply {
     }
     let r = decide(e);
     if !r.block {
-        super::autosync::after_stop(e);
+        super::autosync::start(e);
     }
     r
 }

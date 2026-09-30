@@ -10,7 +10,7 @@
 //! `stop` (turn-end work/bug rule), `capture` (the reply's `fael <kind>:` lines), `session` (session-start kickoff),
 //! `push` (read/edit context), `search` (files a Grep/Bash read touched), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
-//! `autosync` (session-end `fael sync`, off-switch `[sync] auto`),
+//! `autosync` (session-start and turn-end `fael sync`, off-switch `[sync] auto`),
 //! `usage` (SPEC §8 accounting + `stats`), `asks` (chunk-3a ask types +
 //! real tokens), `markers` (bug phrases).
 //!

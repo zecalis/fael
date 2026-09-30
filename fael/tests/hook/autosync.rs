@@ -1,5 +1,5 @@
-//! Session-end auto sync (PLAN-fael-journal-transport chunk 6): the Stop hook
-//! starts one detached `fael sync` per session and newest row when `fael.remote` is set, the
+//! Auto sync (PLAN-fael-journal-transport chunk 6): session start and the Stop hook
+//! start one detached `fael sync` per session and newest row when `fael.remote` is set, the
 //! `[sync] auto = false` switch silences it, and a dead remote never holds the
 //! turn. The sync is a background child, so tests poll the bare remote.
 
@@ -134,6 +134,50 @@ fn no_remote_or_a_dead_remote_still_ends_the_turn() {
     let t = Instant::now();
     assert!(stop(&d, "s2").contains(r#""block":false"#));
     assert!(t.elapsed() < Duration::from_secs(5), "the hook never waits");
+}
+
+#[test]
+fn session_start_ingests_a_teammates_row_and_the_stop_after_it_stays_quiet() {
+    let d = repo();
+    let remote = bare();
+    point(&d, &remote);
+    // a teammate: a clone with its own identity, synced by hand
+    let t = std::env::temp_dir().join(format!("fael-hook-mate-{}", fael_core::ulid()));
+    git(
+        &d,
+        &["clone", "-q", d.to_str().unwrap(), t.to_str().unwrap()],
+    );
+    git(&t, &["config", "user.email", "mate@example.com"]);
+    point(&t, &remote);
+    add(&t, "the teammate decided this");
+    let (ok, _, err) = fael(&t, &["sync"], "");
+    assert!(ok, "{err}");
+    let mate = tips(&remote);
+    add(&d, "left behind after the last session's final stop");
+
+    let ev = format!(r#"{{"cwd":{},"session":"s1"}}"#, json(&d));
+    assert!(fael(&d, &["hook", "session-start"], &ev).0);
+    let end = Instant::now() + Duration::from_secs(15);
+    let found = || {
+        fael(&d, &["find", "teammate"], "")
+            .1
+            .contains("teammate decided")
+    };
+    while !found() && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(found(), "session start never ingested the teammate's row");
+
+    // it also shipped the row the last session left behind
+    while tips(&remote).lines().count() < 2 && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let after_start = tips(&remote);
+    assert!(after_start.contains(mate.trim()) && after_start.lines().count() == 2);
+    // the session-start sync already ran for this newest row: the stop starts none
+    stop(&d, "s1");
+    settle();
+    assert_eq!(tips(&remote), after_start);
 }
 
 /// The `auto-sync-<hash>.log` files in this repo's state dir.

@@ -1,8 +1,10 @@
-//! Auto sync (PLAN-fael-journal-transport chunk 6): a Stop that lets a turn
-//! through starts one `fael sync` when `fael.remote` is set — once per session
-//! and worktree for each newest row this writer has filed, so a turn's rows go
-//! out at the next Stop and a Stop with nothing new starts nothing. Never per
-//! `add`.
+//! Auto sync (PLAN-fael-journal-transport chunk 6): session start, and a Stop
+//! that lets a turn through, start one `fael sync` when `fael.remote` is set —
+//! once per session and worktree for each newest row this writer has filed.
+//! Session start runs it first, so teammates' rows land in the journal before
+//! the session's first read and the rows the last session left behind go out;
+//! a turn's new rows go out at the next Stop, and a Stop with nothing new
+//! starts nothing. Never per `add`.
 //!
 //! Skip, never block: the sync runs as a detached child whose output goes to
 //! `<state>/auto-sync-<repo>.log` (last run only, one file per repo so one repo's
@@ -11,8 +13,9 @@
 //! turns a credential prompt into a failure instead of a hang; ssh prompts
 //! (host key, passphrase) read `/dev/tty` instead, so OpenSSH gets `BatchMode`.
 // ponytail: the mark is the writer's newest row id, read from the journal at each
-// Stop; a row filed after the last Stop of a session waits for the next session's
-// first one (a real SessionEnd event is the upgrade). No timeout either — a wedged
+// event; a row filed after the last Stop of a session waits for the next session's
+// start (a real SessionEnd event is the upgrade). The session-start sync is never
+// awaited, so its rows reach reads and pushes, not that session's kickoff context. No timeout either — a wedged
 // remote leaves one idle git child until the OS reaps it.
 
 use super::protocol::Event;
@@ -22,7 +25,7 @@ use crate::{Repo, git, repo_at};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-pub(crate) fn after_stop(e: &Event) {
+pub(crate) fn start(e: &Event) {
     let session = match e.session.as_deref() {
         Some(s) if !s.is_empty() => s,
         _ => return,
