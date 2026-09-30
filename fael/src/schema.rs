@@ -20,7 +20,7 @@ pub(crate) fn tools() -> Value {
     let mut t = json!([
         {
             "name": "find",
-            "description": "Project memory: past decisions, issues, notes. No args = the session brief. Start of task, before touching a file.",
+            "description": "Project memory: why, what was rejected, open issues, unfinished work — what git does not say. No args = the session brief.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
                 "id": str_("exact id or prefix, pulls the body — id-shaped with no row rejects; pass it as text for a literal search"),
