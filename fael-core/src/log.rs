@@ -103,7 +103,14 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
 /// Shared by `parse` and `import` so both normalise the same bytes the same way.
 pub fn decode_text(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
     use std::borrow::Cow;
-    match String::from_utf8_lossy(bytes) {
+    // `str::from_utf8` first: its validator is several times faster than the
+    // `Utf8Chunks` walk `from_utf8_lossy` does even on valid input (~35% of a
+    // large-log find); lossy runs only when the bytes really are broken
+    let text = match std::str::from_utf8(bytes) {
+        Ok(s) => Cow::Borrowed(s),
+        Err(_) => String::from_utf8_lossy(bytes),
+    };
+    match text {
         Cow::Borrowed(s) => Cow::Borrowed(s.strip_prefix('\u{feff}').unwrap_or(s)),
         Cow::Owned(s) => Cow::Owned(s.strip_prefix('\u{feff}').map(str::to_string).unwrap_or(s)),
     }
@@ -159,4 +166,23 @@ pub(crate) fn month_of(path: &Path) -> Option<String> {
         .strip_suffix(".close")
         .unwrap_or(name.strip_suffix(".jsonl")?);
     is_month(stem).then(|| stem.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_text;
+    use std::borrow::Cow;
+
+    #[test]
+    fn decode_text_borrows_valid_and_heals_broken_bytes() {
+        // valid UTF-8 (non-ASCII too) is borrowed, BOM stripped, no copy
+        let ok = "\u{feff}{\"t\":\"ไทย →\"}\n".as_bytes();
+        assert!(matches!(
+            decode_text(ok),
+            Cow::Borrowed("{\"t\":\"ไทย →\"}\n")
+        ));
+        // a broken byte still becomes U+FFFD, BOM still stripped
+        let bad = b"\xef\xbb\xbfa\xffb\n";
+        assert_eq!(decode_text(bad), "a\u{fffd}b\n");
+    }
 }
