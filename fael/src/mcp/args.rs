@@ -26,7 +26,14 @@ pub(super) fn files(a: &Value) -> Vec<String> {
 /// The repo a call acts on. The server runs in the session's cwd, so an agent
 /// working in another worktree would write there: `cwd` wins, then the repo
 /// holding the first absolute `files` path, then the server's own cwd.
+/// Pinned (`fael mcp --pin`): the server's own cwd only.
 pub(super) fn repo_for(a: &Value) -> Result<Repo, String> {
+    if super::pinned() {
+        if s(a, "cwd").is_some() {
+            return Err("rejected: this server is pinned to one workspace — drop cwd".into());
+        }
+        return repo();
+    }
     if let Some(d) = s(a, "cwd") {
         return repo_at(Path::new(&d));
     }

@@ -153,8 +153,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "mcp",
         "MCP server on stdio",
-        "fael mcp
-    (serve find/add/close over stdio for MCP clients)",
+        "fael mcp [--pin]
+    (serve find/add/close over stdio for MCP clients)
+    --pin: every call acts on this cwd only — set it before exposing over HTTP",
     ),
     (
         "install",

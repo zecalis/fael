@@ -172,7 +172,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael migrate local` | move a tracked repo to `store = "local"`: fold `.fael/log` into this clone's journal — the tree copy wins on every id it holds (a row edited in the tree replaces the journal's stale original in place), rows only the tree holds are copied — then set `store = "local"` in `.fael/config.toml`; idempotent; each clone runs it before the tree log is removed, since the fold reads the working tree |
 | `fael kickoff [anchor] [--branches] [--full] [--limit N] [--offset M]` | the session brief: urgent first, then issues, decisions, notes by freshness (newer of the row and its files' last change); rows whose files are all gone are left out; an explicit `--limit N` is not cut by `budget.kickoff_tokens` |
 | `fael hook <event> [--client c]` | hook entry point (see below) |
-| `fael mcp` | MCP server on stdio |
+| `fael mcp [--pin]` | MCP server on stdio; `--pin` keeps every call on this cwd (for HTTP exposure) |
 | `fael install [--client c] [--dry-run] [--replace-fapony]` | detect installed clients and wire MCP, hooks and skill into each one; `--replace-fapony` takes out fapony's Stop/session-start hooks and MCP (opt-in: they are user scope and still serve repos without `.fael/`) |
 | `fael upgrade [--client c] [--dry-run] [--yes] [--replace-fapony]` | `install` that looks first: lists what is out of date, counts it, asks `[y/N]` before writing (`--yes` or no terminal skips the question; `update` is an alias) |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |

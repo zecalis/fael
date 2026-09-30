@@ -69,8 +69,11 @@ pub(crate) fn tools() -> Value {
             }},
         },
     ]);
-    for tool in t.as_array_mut().unwrap() {
-        tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
+    // pinned: one workspace, so no `cwd` to route by
+    if !crate::mcp::pinned() {
+        for tool in t.as_array_mut().unwrap() {
+            tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
+        }
     }
     t
 }
