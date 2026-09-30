@@ -105,7 +105,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     if let Some(line) = count_line(&t) {
         body.push_str(&line);
     }
-    let adopted = c.repo.fael.join("log").is_dir();
+    let adopted = crate::journal::home(&c.repo).is_some();
     let mut context = match (body.is_empty(), adopted) {
         (true, false) => None,
         (true, true) => Some(format!("{ISSUE_LINE}\n{ID_LINE}\n")),

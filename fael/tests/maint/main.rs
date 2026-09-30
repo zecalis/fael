@@ -10,6 +10,7 @@ mod branches;
 mod compact;
 mod doctor;
 mod import;
+mod journal_only;
 mod notenglish;
 mod shipped;
 mod superseded;

@@ -58,6 +58,40 @@ pub(crate) fn root(repo_root: &Path) -> Option<PathBuf> {
     Some(common.join("fael"))
 }
 
+/// The dir whose `log/` holds this clone's rows: the tree's `.fael/` when it
+/// has a row file, else the journal (`store = "local"`, or a fresh worktree
+/// with no `.fael/` of its own). `None` = fael was never adopted here.
+pub(crate) fn home(r: &crate::Repo) -> Option<&Path> {
+    let has = |d: &Path| walk_jsonl(&d.join("log")).next().is_some();
+    if has(&r.fael) {
+        return Some(&r.fael);
+    }
+    r.journal.as_deref().filter(|j| has(j))
+}
+
+/// Any `.jsonl` under `dir` — lazy on purpose: the adopted-here check exits on
+/// the first hit instead of walking + sorting the whole log tree the way
+/// `core::collect_files` does.
+fn walk_jsonl(dir: &Path) -> impl Iterator<Item = PathBuf> {
+    let mut stack = vec![dir.to_path_buf()];
+    std::iter::from_fn(move || {
+        while let Some(d) = stack.pop() {
+            let Ok(rd) = std::fs::read_dir(&d) else {
+                continue;
+            };
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().is_some_and(|x| x == "jsonl") {
+                    return Some(p);
+                }
+            }
+        }
+        None
+    })
+}
+
 /// Tree + journal union (the tree wins on duplicate ids), plus the ids only
 /// the journal holds. Spawn-free — the hot paths (`crate::read`) stop here.
 fn union(r: &crate::Repo) -> (crate::core::Log, HashSet<String>) {
