@@ -7,7 +7,8 @@ description: This repo's memory — decisions, open issues and notes earlier ses
 
 # fael — the repo's memory
 
-Write rows in English. Add each in the same message as your next tool call or final edit — never as a turn of its own.
+Write rows in English — title, key and body. The dev reads them through you, in their language.
+Add each in the same message as your next tool call or final edit — never as a turn of its own.
 Rows about a file come back when you touch it; what you record goes to the next agent.
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there — do not wait for the end of the task.**
@@ -16,9 +17,17 @@ Rows about a file come back when you touch it; what you record goes to the next 
 - `fael add decision "<what was chosen, and why>" --files a,b` — agreed, and git and code do not say it
 - `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "fixed in <sha>"` — an issue that is fixed, a note that is done
+- Self-heal: a same-kind row on your open row's key, or a note on your open note's files,
+  supersedes it (`fael restore <id>` undoes); `Supersedes <id>` in the text names one. An issue
+  supersedes only the same finding, so file each bug as its own row. The one key those files
+  carry is reused — pass `--key` only for a new topic.
+- Long body? `--title "<≤15-word headline>"` — lists show the title, `fael find <id>` pulls the body.
 
 Each row is read months later with no chat: one or two standalone sentences.
-`--files` is required — name the paths it is about. Never type an id from memory; `fael find` it first.
+`--files` names the paths, or an anchor like `doc:pricing` that `fael find` showed — never
+invent one; left out, it is the files this session edited.
+An id is verified only once this session's `fael find` printed it as `- [<id>]` — never type
+one from memory. `doctor [Phantom]` flags cited ids with no row, in rows and in every `*.md`.
 With the MCP server connected, the tools `find` / `add` / `close` do the same.
 
 The Stop hook will not let a turn end that edited files with no row after the edits, or that reported a problem with no issue row. Write the row; do not argue with the hook.
