@@ -40,17 +40,14 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 
 ## Plan Workflow
 
-**1 PLAN chunk = 1 session = 1 branch.** At the end of a chunk:
+How many chunks per session/PR and when to stop: the §6 line in each PLAN (written by
+fapony `plan-seed`) is the single source — don't restate it here.
 
-1. Mark it complete and update its TL;DR.
-2. Add a handoff note on the plan, never a code path (every read of that file would
-   re-push it): `--files plan:<name>,<path/to/PLAN-<name>.md> --key plan:<name>:handoff`,
-   `<name>` lowercased. One key per plan, so each chunk's note supersedes the last.
-3. Commit the chunk.
-4. Stop.
-
-Don't start the next chunk in the same session unless told to. Start the next session
-with `fael kickoff <path/to/PLAN-x.md>`; don't carry the old transcript forward.
+Fael's part: each chunk's handoff note goes on the plan, never a code path (every read of
+that file would re-push it): `--files plan:<name>,<path/to/PLAN-<name>.md> --key
+plan:<name>:handoff`, `<name>` lowercased. One key per plan, so each chunk's note
+supersedes the last. Start the next session with `fael kickoff <path/to/PLAN-x.md>`;
+don't carry the old transcript forward.
 
 ## Git
 
