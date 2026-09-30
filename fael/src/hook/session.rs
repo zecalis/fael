@@ -5,7 +5,7 @@ use super::asks::hook_meta;
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::state::{head_branch, prune_sessions, seen_path, session_key, state_dir};
-use super::usage::record_usage;
+use super::usage::{memory_line, record_usage};
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
 
@@ -105,6 +105,8 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     if let Some(line) = count_line(&t) {
         body.push_str(&line);
     }
+    let usage = memory_line(&body, c.repo.cfg.kickoff_tokens).unwrap_or_default();
+    body.push_str(&usage);
     let adopted = crate::journal::home(&c.repo).is_some();
     let mut context = match (body.is_empty(), adopted) {
         (true, false) => None,

@@ -46,6 +46,22 @@ pub(crate) fn record_usage(
     asks::append_row(row);
 }
 
+/// The one line that says what memory cost this injection, only when rows
+/// rode along: `memory: ~412/800 tokens · 3 rows`. An estimate — `est_tokens`
+/// of the rendered row lines, the same ruler `render` cuts by — so it carries
+/// the `~`; the real bill lives in `fael stats`.
+pub(crate) fn memory_line(body: &str, budget: usize) -> Option<String> {
+    let rows: Vec<&str> = body.lines().filter(|l| l.starts_with("- [")).collect();
+    (!rows.is_empty()).then(|| {
+        let used: usize = rows.iter().map(|l| core::est_tokens(l)).sum();
+        let n = rows.len();
+        format!(
+            "memory: ~{used}/{budget} tokens · {n} {}\n",
+            if n == 1 { "row" } else { "rows" }
+        )
+    })
+}
+
 /// The log a stats row's repo has now — the tree + journal union the hooks
 /// read, so a `store = "local"` repo (journal only) is not read as empty.
 /// A repo path that no longer resolves falls back to its tree.
