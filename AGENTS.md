@@ -40,8 +40,8 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 
 ## Plan Workflow
 
-How many chunks per session/PR and when to stop: the §6 line in each PLAN (written by
-fapony `plan-seed`) is the single source — don't restate it here.
+How many chunks per session/PR, when to stop and how to close a chunk: `fapony plan <PLAN>`
+prints the rules (single source, fapony's `chunkRules()`) — don't restate them here.
 
 Fael's part: each chunk's handoff note goes on the plan, never a code path (every read of
 that file would re-push it): `--files plan:<name>,<path/to/PLAN-<name>.md> --key
