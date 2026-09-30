@@ -39,6 +39,8 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ("SubagentStop", None, "stop"),
     ("SessionStart", None, "session-start"),
     ("PostToolUse", Some("Read"), "read"),
+    // fresh agents read through the shell: files a grep/cat/sed touched push too
+    ("PostToolUse", Some("Grep|Bash"), "search"),
     // every file-writing tool, or stop sees no edits (only the git fallback)
     (
         "PostToolUse",

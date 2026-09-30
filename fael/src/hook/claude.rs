@@ -5,6 +5,7 @@
 use super::protocol::Event;
 use super::{push::push, session::session_start, stop::stop};
 use serde::Deserialize;
+use std::path::Path;
 use std::process::ExitCode;
 
 #[derive(Debug, Default, Deserialize)]
@@ -39,18 +40,15 @@ struct ClaudeStop {
 struct ClaudeTool {
     #[serde(flatten)]
     base: ClaudeBase,
+    /// Read/Edit: `file_path` (NotebookEdit: `notebook_path`) · codex
+    /// apply_patch: `command` is the patch text · Grep/Bash: the raw call
     #[serde(default)]
-    tool_input: ToolInput,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct ToolInput {
-    /// NotebookEdit names it notebook_path
-    #[serde(default, alias = "notebook_path")]
-    file_path: Option<String>,
-    /// codex apply_patch: the patch text
+    tool_input: serde_json::Value,
     #[serde(default)]
-    command: Option<String>,
+    tool_name: String,
+    /// Grep/Bash: the call's output, for `search::touched`
+    #[serde(default)]
+    tool_response: serde_json::Value,
 }
 
 /// Paths named by an apply_patch body (`*** Add/Update/Delete File: p`,
@@ -127,16 +125,27 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
-        "read" | "edit" => {
+        "read" | "edit" | "search" => {
             let p: ClaudeTool = serde_json::from_str(stdin).unwrap_or_default();
+            let input = &p.tool_input;
+            let files = if event == "search" {
+                let cwd = p.base.cwd.as_deref().unwrap_or(".");
+                super::search::touched(&p.tool_name, input, &p.tool_response, Path::new(cwd))
+            } else if let (true, Some(patch)) = (codex, input["command"].as_str()) {
+                patch_files(patch)
+            } else {
+                ["file_path", "notebook_path"]
+                    .iter()
+                    .find_map(|k| input[k].as_str())
+                    .map(String::from)
+                    .into_iter()
+                    .collect()
+            };
             let e = Event {
                 cwd: p.base.cwd,
                 // same key as stop, which needs the transcript path
                 session: p.base.transcript_path.or(p.base.session_id),
-                files: match (codex, p.tool_input.command) {
-                    (true, Some(patch)) => patch_files(&patch),
-                    _ => p.tool_input.file_path.into_iter().collect(),
-                },
+                files,
                 agent: p.base.agent_id,
                 client,
                 ..Event::default()
@@ -151,7 +160,9 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("fael hook: unknown event {event:?} — want stop|session-start|read|edit");
+            eprintln!(
+                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search"
+            );
             ExitCode::SUCCESS
         }
     }

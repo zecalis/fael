@@ -16,6 +16,7 @@ mod clients;
 mod day;
 mod focus;
 mod push_cap;
+mod search;
 mod seen;
 mod session;
 mod stats;

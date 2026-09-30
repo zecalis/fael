@@ -184,7 +184,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &c.log,
         &files,
         &aliases::load(&c.repo, &c.log, false),
-        event == "read",
+        event != "edit",
     );
     // a row already pushed into this context window is still there — say it
     // once. The lock spans read → append, so a batch of parallel reads queues
