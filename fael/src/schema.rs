@@ -77,10 +77,11 @@ pub(crate) fn tools() -> Value {
 
 #[cfg(test)]
 mod tests {
-    /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6400 bytes
-    /// combined (measured 5909 on 2026-09-28 — SKILL 2515 + schema 3394;
-    /// the ≥40% cut retargeted to ≥15% + this ceiling by owner decision —
-    /// PLAN-fael-durable-log §3).
+    /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6100 bytes
+    /// combined (measured 6052 on 2026-09-30 — SKILL 2385 + schema 3667;
+    /// the ≥40% cut retargeted to ≥15% + a ceiling by owner decision —
+    /// PLAN-fael-durable-log §3). The ceiling sits just above the measure so
+    /// any growth fails here, not only in the stats golden.
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
@@ -94,8 +95,8 @@ mod tests {
     fn constants_stay_small() {
         let total = SKILL.replace("\r\n", "\n").len() + super::schema_json().len();
         assert!(
-            total <= 6400,
-            "constants {total} B exceed the 6400 B ceiling — trim, don't grow"
+            total <= 6100,
+            "constants {total} B exceed the 6100 B ceiling — trim, don't grow"
         );
         assert!(
             total * 100 <= BASELINE * 85,
