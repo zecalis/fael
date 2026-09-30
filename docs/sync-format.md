@@ -118,9 +118,18 @@ identity; duplicating it invites divergence.
   under `refs/fael/`, never a checked-out branch, never a working-tree file.
 - Ingest is union by `id`: fetched rows missing locally are appended to the
   local journal through the normal write path (lock/seal rules of
-  [`format.md`](format.md) §Writers hold); local rows missing remotely are
-  pushed. Dedupe by `id` is the only de-duplication mechanism — there is no
+  [`format.md`](format.md) §Writers hold) — the journal only, never a
+  `.fael/log/` working-tree file, whatever `store` says; local rows missing
+  remotely are pushed. Dedupe by `id` is the only de-duplication mechanism — there is no
   merge and no conflict resolution on the remote side.
+- One writer's bad ref never stops the rest: another writer's ref whose
+  `meta.json` does not parse or validate (a newer `format_version`) or whose
+  fetch fails is skipped with one `fael: skipped <ref> — …` line, and a row
+  the local write refuses (`by`/`ts` not usable as a path) is skipped the
+  same way; every other row still lands.
+- One sync at a time per clone: the journal is shared by every worktree, so a
+  second `fael sync` while one runs exits with `another sync is running`
+  instead of appending the same ingested rows twice.
 - Empty journal + no remote ref is `nothing to sync`: no ref is created.
 - Remote resolution: `--remote <url>` flag wins, else `git config fael.remote`.
   Neither is set → exit 1 with

@@ -127,13 +127,22 @@ fn no_remote_or_a_dead_remote_still_ends_the_turn() {
     add(&d, "no remote configured");
     assert!(stop(&d, "s1").contains(r#""block":false"#));
     settle();
-    assert!(
-        !d.join("state/auto-sync.log").exists(),
-        "nothing was spawned"
-    );
+    assert!(!logs(&d).any(|_| true), "nothing was spawned");
 
     git(&d, &["config", "fael.remote", "/nonexistent/fael-remote"]);
     let t = Instant::now();
     assert!(stop(&d, "s2").contains(r#""block":false"#));
     assert!(t.elapsed() < Duration::from_secs(5), "the hook never waits");
+}
+
+/// The `auto-sync-<hash>.log` files in this repo's state dir.
+fn logs(d: &Path) -> impl Iterator<Item = std::path::PathBuf> {
+    std::fs::read_dir(d.join("state"))
+        .into_iter()
+        .flatten()
+        .filter_map(|e| Some(e.ok()?.path()))
+        .filter(|p| {
+            p.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("auto-sync-"))
+        })
 }
