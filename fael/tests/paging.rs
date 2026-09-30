@@ -44,6 +44,21 @@ fn add_issue(d: &Path, text: &str) {
     assert!(ok, "{err}");
 }
 
+/// `--limit N` is a request for N rows: it wins over `budget.find_tokens`, which
+/// still cuts a find that names no limit.
+#[test]
+fn an_explicit_limit_wins_over_the_token_budget() {
+    let d = repo();
+    for i in 0..5 {
+        add_issue(&d, &format!("limit row {i} {}", "filler ".repeat(130)));
+    }
+    let rows = |out: &str| out.lines().filter(|l| l.starts_with("- [")).count();
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue", "--full"]);
+    assert!(ok && rows(&out) < 5, "{err}{out}");
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue", "--full", "--limit", "5"]);
+    assert!(ok && rows(&out) == 5 && !out.contains("more"), "{err}{out}");
+}
+
 #[test]
 fn find_pages_and_names_the_next_call() {
     let d = repo();

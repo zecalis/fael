@@ -73,6 +73,49 @@ fn read_a(d: &std::path::Path, extra: &str) -> String {
     out
 }
 
+/// A row filed before the session's first edit stays seen: `add` only knows
+/// `$CLAUDE_CODE_SESSION_ID`, the hook keys by the transcript path whose stem
+/// is that id — no edit file exists yet to bridge the two.
+#[test]
+fn own_row_is_seen_before_the_sessions_first_edit() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "issue", "filed while reading", "--files", "src/a.rs"],
+        "",
+        &[("CLAUDE_CODE_SESSION_ID", "s1")],
+    );
+    assert!(ok, "{err}");
+    let out = read_a(&d, r#""transcript_path":"/tmp/t/s1.jsonl","#);
+    assert!(!out.contains("filed while reading"), "{out}");
+}
+
+/// Reads fired in one batch race on the seen list: every row is pushed once.
+#[test]
+fn parallel_reads_push_a_row_once() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "issue", "raced row", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let reads: Vec<_> = (0..16)
+        .map(|_| {
+            let d = d.clone();
+            std::thread::spawn(move || read_a(&d, ""))
+        })
+        .collect();
+    let pushed = reads
+        .into_iter()
+        .map(|t| t.join().unwrap())
+        .filter(|out| out.contains("raced row"))
+        .count();
+    assert_eq!(pushed, 1);
+}
+
 /// Seen is per context window, not per session: a sub-agent starts empty, so
 /// it gets the row its parent was already told — once each.
 #[test]

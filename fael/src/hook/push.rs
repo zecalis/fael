@@ -4,10 +4,11 @@
 
 use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
-use super::state::{edits_path, record_edits, seen_path, take_hint, take_risk};
+use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
 use super::usage::record_usage;
 use crate::{aliases, core};
 use std::collections::HashSet;
+use std::io::{Read, Write};
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
@@ -185,10 +186,15 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &aliases::load(&c.repo, &c.log, false),
         event == "read",
     );
-    // a row already pushed into this context window is still there — say it once
-    let seen = (!c.session.is_empty()).then(|| seen_path(&c.session, &c.agent, &c.repo.root));
-    if let Some(p) = &seen {
-        let old = std::fs::read_to_string(p).unwrap_or_default();
+    // a row already pushed into this context window is still there — say it
+    // once. The lock spans read → append, so a batch of parallel reads queues
+    // up behind the first instead of each pushing the same row.
+    let mut seen = (!c.session.is_empty())
+        .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
+        .flatten();
+    if let Some(f) = &mut seen {
+        let mut old = String::new();
+        let _ = f.read_to_string(&mut old);
         let old: HashSet<&str> = old.lines().collect();
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
@@ -217,16 +223,10 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     // usage counts only what was actually said — ids cut off never reached
     // any context, so stats must not count them
     let shown: Vec<String> = sel.shown.iter().take(n).map(|r| r.id.clone()).collect();
-    if let Some(p) = &seen {
+    if let Some(mut f) = seen {
         // only what fit the budget was said; the cut rows may push on a later read
         let out: String = shown.iter().map(|id| format!("{id}\n")).collect();
-        use std::io::Write;
-        let _ = std::fs::create_dir_all(p.parent().unwrap_or(&c.repo.root));
-        let _ = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(p)
-            .and_then(|mut f| f.write_all(out.as_bytes()));
+        let _ = f.write_all(out.as_bytes());
     }
     let context = format!("fael mem for {}:\n{body}", files.join(", "));
     let context = match notes {
