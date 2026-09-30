@@ -39,7 +39,8 @@ pub use stale::{backtick_paths, stale_refs};
 /// What `find` narrows by. Every field is optional; `files` holds normalised refs.
 #[derive(Debug, Default, Clone)]
 pub struct Filter {
-    /// case-insensitive substring of `text`
+    /// whitespace-split words, every one a case-insensitive substring of
+    /// `text` or `title`, in any order
     pub text: Option<String>,
     /// exact · dir prefix (a zone) · glob — any one matching any row file is a hit
     pub files: Vec<String>,
