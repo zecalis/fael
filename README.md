@@ -5,14 +5,15 @@
 [![CI](https://github.com/zecalis/fael/actions/workflows/ci.yml/badge.svg)](https://github.com/zecalis/fael/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**The secretary for every agent on your team.** Every agent on your repo knows what was decided and
-what's still open — without re-asking, and without a context dump.
+**The secretary for every agent on your team.** Every agent on your repo gets what git can't tell
+it — why a call was made, what was rejected, what's still open — next to the file it opens.
 
 One person runs five agents; a team runs fifty — and each of those hands work to sub-agents. Every
 one of them starts from zero: it finds the same flaky test, re-asks why that function looks weird,
 and repeats the mistake the last agent already fixed.
 Memory tools that try to help stuff a summary of everything into context before the agent has said
-what it's about to do — you pay tokens for noise, and the one row that mattered gets averaged away.
+what it's about to do — the one row that mattered gets averaged away, and a summary of stale notes
+is still stale.
 
 fael works the other way round: like a good secretary, it takes the notes nobody else will and hands
 each agent **only what matters for the file in front of it**. The agent writes down what it decided
@@ -35,6 +36,10 @@ fael gives the repo a memory that agents can't skip:
   session after compaction, is told again — it no longer has them), and cut to a token budget
   (800 by default) — not a notes dump. Anything else the agent asks for itself, through MCP.
   `fael stats` shows exactly what fael has put into context.
+- **It retires what the code outgrew.** Git owns what changed; fael keeps only what git can't say.
+  When an agent edits a file, it is asked to close a row the code now says, or re-file one the
+  code contradicts — in the same message. `fael doctor` lists the rest: open rows whose files took
+  10+ commits since they were written, to check against the code.
 - **It follows the code.** Rename a file and its rows follow it (`git log -M`). Split one into
   several and `fael mv old new` points the rows at the new files.
 - **It lives in your git, out of your branches.** Rows are plain JSONL in the clone's `.git/fael/`,

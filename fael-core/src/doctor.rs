@@ -91,6 +91,10 @@ pub enum Kind {
     /// batch can supersede them all (PLAN-fael-languages chunk 2); judged by
     /// `lang::row_language_check`, never new logic
     NotEnglish,
+    /// open rows whose files took many commits after the row was written —
+    /// the code moved on, so the row may restate or contradict it; counted
+    /// by `git log` in `doctor`, never in core (core never spawns processes)
+    Drifted,
     /// per-rule self-heal precision from restore labels
     /// (PLAN-fael-selfheal-restore chunk 3): a `restores` row labels the edge
     /// it reverts as wrong, an explicit re-supersede after it as right;
