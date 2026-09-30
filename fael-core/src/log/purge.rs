@@ -56,6 +56,12 @@ pub fn purge_row(
         Some(j) if j != fael => vec![fael, j],
         _ => vec![fael],
     };
+    // a store without `log/` has nothing to rewrite — and locking it would create
+    // it, which fails (EEXIST) on a worktree whose `.fael` symlinks to a missing dir
+    let stores: Vec<&Path> = stores
+        .into_iter()
+        .filter(|s| s.join("log").is_dir())
+        .collect();
     let _guards = stores
         .iter()
         .map(|s| lock(s))
