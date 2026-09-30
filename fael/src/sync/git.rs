@@ -1,8 +1,8 @@
 //! Git plumbing for `fael sync` — the only place sync touches the network
 //! or the object store. Core (`fael_core::sync`) never sees these; the flow
-//! in `super` never touches a socket. Fetches land in `FETCH_HEAD`, pushes
-//! name the commit sha, so the working tree and checked-out branches never
-//! move.
+//! in `super` never touches a socket. Fetches only store objects, pushes
+//! name the commit sha, so the working tree, checked-out branches and
+//! `FETCH_HEAD` never move.
 
 use crate::core;
 use std::path::Path;
@@ -17,15 +17,16 @@ pub(crate) struct Fetched {
     pub closes: Vec<core::Row>,
 }
 
-/// Fetch `refname` (lands in `FETCH_HEAD`, never a local ref or the worktree)
-/// and read its tree: `meta.json` + every `*.jsonl`, closes by filename.
+/// Fetch `refname` (objects only — never a local ref, the worktree, or the
+/// `FETCH_HEAD` a concurrent `git pull` merges) and read its tree:
+/// `meta.json` + every `*.jsonl`, closes by filename.
 pub(crate) fn fetch_tree(
     root: &Path,
     remote: &str,
     refname: &str,
     sha: &str,
 ) -> Result<Fetched, String> {
-    run(root, &["fetch", remote, refname])?;
+    run(root, &["fetch", "--no-write-fetch-head", remote, refname])?;
     let tree = run(root, &["rev-parse", &format!("{sha}^{{tree}}")])?;
     let mut out = Fetched::default();
     let mut warns = vec![];

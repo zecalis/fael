@@ -89,6 +89,38 @@ fn the_off_switch_keeps_the_hook_silent() {
     assert_eq!(tips(&remote), "", "auto = false: nothing pushed");
 }
 
+/// ssh prompts read `/dev/tty`, past `GIT_TERMINAL_PROMPT` — the child's ssh
+/// must run in BatchMode. A fake `ssh` on PATH records what git ran.
+#[cfg(unix)]
+#[test]
+fn an_ssh_remote_runs_in_batch_mode() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = repo();
+    let bin = std::env::temp_dir().join(format!("fael-hook-ssh-{}", fael_core::ulid()));
+    std::fs::create_dir_all(&bin).unwrap();
+    let ssh = bin.join("ssh");
+    let script = "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$@\" > \"$d/args.tmp\" && mv \"$d/args.tmp\" \"$d/args\"\nexit 255\n";
+    std::fs::write(&ssh, script).unwrap();
+    std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    git(
+        &d,
+        &["config", "fael.remote", "ssh://fael.invalid/memory.git"],
+    );
+    add(&d, "a row for the ssh remote");
+
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let ev = format!(r#"{{"cwd":{},"session":"s1"}}"#, json(&d));
+    let envs = [("PATH", path.as_str()), ("GIT_SSH_COMMAND", "ssh")];
+    assert!(fael_env(&d, &["hook", "stop"], &ev, &envs).0);
+    let args = bin.join("args");
+    let end = Instant::now() + Duration::from_secs(15);
+    while !args.exists() && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let got = std::fs::read_to_string(&args).expect("git never ran ssh");
+    assert!(got.contains("BatchMode=yes"), "{got}");
+}
+
 #[test]
 fn no_remote_or_a_dead_remote_still_ends_the_turn() {
     let d = repo();

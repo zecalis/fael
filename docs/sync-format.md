@@ -73,10 +73,12 @@ naming.
 
 ### repo-id
 
-- Computed from `git rev-list --max-parents=0 --all --not --glob=refs/fael/*`, taking the minimum SHA.
-  `refs/fael/*` is excluded so sync's own parentless commits can never shift the id afterwards.
-  Every clone of the same repo (any branch set that contains history) derives
-  the same id, including repos with two root commits.
+- Computed from `git rev-list --max-parents=0 --branches --remotes=origin`, taking the minimum SHA.
+  Only branches and origin's branches count — what every clone shares. A
+  `stash -u`, `git notes`, another remote or sync's own parentless commits
+  never shift the id. Every clone of the same repo derives the same id,
+  including repos with two root commits. A local-only orphan branch or a
+  single-branch clone can still differ; pin with `git config fael.repoid`.
 - Cached at the first sync in `git config fael.repoid` so the value never
   moves afterwards.
 - A shallow clone (history truncated, root set incomplete) errors clearly
@@ -97,7 +99,7 @@ One per ref, at the tree root:
 |---|---|---|
 | `format_version` | yes | `1`. Bump only when a field is removed, renamed, retyped, or changes meaning. Adding an optional field is **not** a bump (same rule as row schema) — the addition is recorded here in this doc. |
 | `repo_id` | yes | must equal the `<repo-id>` in the ref name. A mismatch is rejected on ingest. |
-| `origin` | yes | the source repo's origin URL at the time of the first push (provenance label, never used for auth or routing). Empty string when unknown. |
+| `origin` | yes | the source repo's origin URL at the time of the first push (provenance label, never used for auth or routing), with any `user:password@` stripped. Empty string when unknown. |
 | `name` | yes | human short name of the repo (display label). Empty string when unknown. |
 
 There is deliberately **no `writer` field**: the ref already is the writer

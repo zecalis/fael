@@ -94,6 +94,17 @@ fn sync_never_moves_the_branch_or_the_working_tree() {
 
     let (ok, _, err) = sync(&d);
     assert!(ok, "{err}");
+    // the second sync fetches its own ref — a concurrent `git pull` merges
+    // FETCH_HEAD, so the fetch must leave it alone
+    let fetch_head = d.join(".git/FETCH_HEAD");
+    std::fs::write(&fetch_head, "sentinel\n").unwrap();
+    let (ok, _, err) = sync(&d);
+    assert!(ok, "{err}");
+    assert_eq!(
+        std::fs::read_to_string(&fetch_head).unwrap(),
+        "sentinel\n",
+        "sync overwrote FETCH_HEAD"
+    );
 
     assert_eq!(
         git_out(&d, &["rev-parse", "HEAD"]),
