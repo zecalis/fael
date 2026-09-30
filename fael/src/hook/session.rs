@@ -114,7 +114,9 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // SPEC §11: the cheap check — one line, only when there is a problem.
     // Skipped while no log exists yet: warning about an empty missing log is
     // noise, and it saves a git spawn on every session start.
-    if adopted && check_ignore_hit(&c.repo.root) {
+    // `local` means the log is meant to stay out of git — an ignore is no problem
+    if adopted && matches!(c.repo.cfg.store, core::Store::Tracked) && check_ignore_hit(&c.repo.root)
+    {
         let warn = "fael: .fael/log is gitignored — rows stay on this machine, run fael doctor";
         context = Some(match context {
             Some(c) => format!("{c}{warn}\n"),

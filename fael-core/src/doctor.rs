@@ -41,6 +41,8 @@ pub enum Kind {
     MultiFael,
     Ignored,
     NoLog,
+    /// `store = "local"`: rows live in the clone's journal, not the tree
+    Local,
     Future,
     Oversize,
     /// open rows whose files all no longer exist — they never push again

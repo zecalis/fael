@@ -66,7 +66,8 @@ fn share_tree(d: &Path) {
         "{}-shared",
         d.file_name().unwrap().to_string_lossy()
     ));
-    std::fs::create_dir_all(&shared).unwrap();
+    // the fixture's `.fael` (its tracked pin) becomes the shared dir
+    std::fs::rename(d.join(".fael"), &shared).unwrap();
     std::os::unix::fs::symlink(&shared, d.join(".fael")).unwrap();
 }
 

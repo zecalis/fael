@@ -64,6 +64,10 @@ pub struct Config {
     /// (`local`, for gitignored or public repos). Ignored without a journal
     /// (no git): the tree is all there is.
     pub store: Store,
+    /// `store` was written in `config.toml`. When it was not, the adapter
+    /// picks: `tracked` where a `.fael/log` already sits in the tree, else
+    /// `local` (the default for repos that adopt fael from now on).
+    pub store_set: bool,
     /// Stop-hook phrase packs behind `[lang] marker` (PLAN-fael-languages).
     /// Default english+thai; empty switches the bug rule off entirely.
     pub lang_marker: Vec<String>,
@@ -100,6 +104,7 @@ impl Default for Config {
             warn_row_chars: 1200,
             resolve: true,
             store: Store::Tracked,
+            store_set: false,
             lang_marker: vec!["english".into(), "thai".into()],
             lang_rows: vec!["english".into()],
             cross_key: CrossKey::Warn,
@@ -200,6 +205,7 @@ impl Config {
             warn_row_chars: f.warn.row_chars.unwrap_or(d.warn_row_chars),
             resolve: f.resolve.unwrap_or(d.resolve),
             store,
+            store_set: f.store.is_some(),
             lang_marker: check_lang("marker", f.lang.marker.unwrap_or(d.lang_marker))?,
             lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
             cross_key: check_cross_key(f.selfheal.cross_key)?,

@@ -26,16 +26,21 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
         );
     }
     let month = core::current_month();
-    let source = crate::hook::ignore_source(&r.root);
+    let local = matches!(r.cfg.store, core::Store::Local);
+    // `local` keeps the log out of git on purpose: no ignore check to run
+    let source = (!local)
+        .then(|| crate::hook::ignore_source(&r.root))
+        .flatten();
     let excluded = source.as_deref().is_some_and(crate::hook::deliberate);
     let ignored = source.is_some() && !excluded;
     // Rows may live only in the clone's journal (`store = "local"`, a fresh
     // worktree): scan them there. Nothing of it is in git, so the `merge=union`
-    // and gitignore checks do not apply.
+    // and gitignore checks do not apply — nor under `local`, where a tree log
+    // is frozen history nothing appends to any more.
     let home = crate::journal::home(&r).unwrap_or(&r.fael);
     let scan = || {
         let mut rep = core::doctor_scan(home, &r.root, ignored, &month);
-        if home != r.fael {
+        if home != r.fael || local {
             rep.problems.retain(|p| {
                 !matches!(
                     p.kind,
@@ -51,6 +56,12 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
         }
     }
     let mut rep = scan();
+    if local {
+        rep.problems.push(core::Problem::info(
+            core::ProblemKind::Local,
+            local_note(&r),
+        ));
+    }
     if excluded {
         rep.problems.push(core::Problem::info(
             core::ProblemKind::Ignored,
@@ -91,6 +102,23 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     } else {
         ExitCode::SUCCESS
     })
+}
+
+/// Where a `local` repo's rows live, and — with no `fael.remote` — that
+/// nothing carries them off this clone yet.
+fn local_note(r: &crate::Repo) -> String {
+    let at = r
+        .journal
+        .as_deref()
+        .map_or_else(|| r.fael.display().to_string(), |j| j.display().to_string());
+    let mut s =
+        format!("store = local — rows live in {at}, shared by every worktree of this clone");
+    if crate::git(&r.root, &["config", "fael.remote"]).is_none() {
+        s.push_str(
+            "; nothing copies them off this clone — `git config fael.remote <url>` then `fael sync` to back up or share",
+        );
+    }
+    s
 }
 
 /// The adapter half of `doctor --fix`: close the confirmed `[Shipped]` notes,

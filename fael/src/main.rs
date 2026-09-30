@@ -13,6 +13,7 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
+mod migrate;
 mod purge;
 mod refs;
 mod restore;
@@ -82,6 +83,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
+        ("migrate", [to]) if to == "local" => migrate::local(&repo()?).map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
         ("stats", []) => {
             hook::stats(a.has("json"), a.has("rows"), a.has("day")).map(|()| ExitCode::SUCCESS)
@@ -155,7 +157,12 @@ pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
     let scratch = std::env::var_os("FAEL_DIR").filter(|d| !d.is_empty());
     let journal = scratch.is_none().then(|| journal::root(&root)).flatten();
     let fael = scratch.map_or_else(|| root.join(".fael"), PathBuf::from);
-    let cfg = config(&fael.join("config.toml"))?;
+    let mut cfg = config(&fael.join("config.toml"))?;
+    // unset store: a tree log already here keeps `tracked` (repos from before
+    // `local` became the default); everything else starts `local`
+    if !cfg.store_set && !fael.join("log").is_dir() {
+        cfg.store = core::Store::Local;
+    }
     Ok(Repo {
         root,
         cwd,

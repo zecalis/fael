@@ -38,8 +38,9 @@ pub use id::{
 };
 pub use lang::{Hit, Lang, by_name, marker_hit, row_language_check};
 pub use log::{
-    BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, append, bump_row, close, close_row,
-    decode_text, is_month, mv_row, needs_seal, parse, purge_row, read, read_imported, restore_row,
+    Adopted, BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, adopt_tree, append,
+    bump_row, close, close_row, decode_text, is_month, mv_row, needs_seal, parse, purge_row, read,
+    read_imported, restore_row,
 };
 pub use query::{
     Abbrev, Background, Bucket, Cut, Filter, Focus, Hidden, KeyUse, PUSH_BACKGROUND, PushPolicy,

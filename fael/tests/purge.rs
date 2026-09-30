@@ -54,6 +54,9 @@ fn repo() -> PathBuf {
         .unwrap();
     std::fs::write(d.join("src/a.rs"), "// a.rs\n").unwrap();
     std::fs::write(d.join(".gitattributes"), "*.jsonl merge=union\n").unwrap();
+    // these tests exercise the tree log: pin it over the `local` default
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 

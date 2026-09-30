@@ -59,6 +59,22 @@ the same one. `fael find --branches` reads the other worktree's unmerged rows wi
 anything out, and `fael doctor` flags local branches whose PR already merged (`[Merged]`) for
 deletion.
 
+## Moving a tracked repo to local
+
+Repos that adopted fael before `local` became the default still commit `.fael/log`, and every
+PR that appends to the same month file conflicts on GitHub (it ignores `merge=union`). To stop:
+
+```bash
+fael migrate local        # fold .fael/log into this clone's journal, set store = "local"
+git add .fael/config.toml && git commit -m "fael: keep rows out of the tree"
+```
+
+The simplest end state keeps `.fael/log` as frozen history: nothing appends to it any more, so it
+never conflicts again, and every clone keeps reading it. If you remove it instead
+(`git rm -r --cached .fael/log`), run `fael migrate local` in **every** clone before it pulls the
+removal — the fold reads the working tree, and it is what makes a row edited in the tree (say, a PR
+that renamed its files) win over the stale copy in that clone's journal.
+
 ## Private memory repo (public source, private memory)
 
 A public repo should not publish its team's memory. Keep the source on GitHub and the memory in a

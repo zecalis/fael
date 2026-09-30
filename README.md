@@ -37,8 +37,9 @@ fael gives the repo a memory that agents can't skip:
   `fael stats` shows exactly what fael has put into context.
 - **It follows the code.** Rename a file and its rows follow it (`git log -M`). Split one into
   several and `fael mv old new` points the rows at the new files.
-- **It lives in git.** Rows are plain JSONL in `.fael/`. Clone the repo and you get every decision,
-  bug and note with it — for every agent and every person on the team. No server, no account.
+- **It lives in your git, out of your branches.** Rows are plain JSONL in the clone's `.git/fael/`,
+  shared at once by every worktree, so PRs never carry log lines to conflict on. `fael sync` carries
+  them to teammates through your own remote (`refs/fael/*`). No server, no account.
 
 Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; hooks run in 2–3 ms.
 
@@ -51,7 +52,7 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 | Agent notices a bug mid-task, then forgets it | It's filed on the spot, and shown to whoever touches that file next |
 | Two agents in parallel worktrees hit the same problem | The first files it; the second gets it when it opens the file — the same hour, before any commit |
 | A sub-agent finds something and its summary drops it | Its `fael issue: …` line is filed when it stops (Claude Code), and the parent gets it on that file |
-| Knowledge stays in one person's chat history | It's in the repo — teammates and their agents get it on `git pull` |
+| Knowledge stays in one person's chat history | It's in the clone — teammates and their agents get it on `fael sync` |
 | A PM's requirement lives in a ticket the agent never opens | `fael add decision … --files src/pay.rs` — it's in front of the agent the moment it opens the file |
 
 ## Install
@@ -82,7 +83,16 @@ fael install --dry-run    # show what would change, write nothing
 an old path. That's also why `npx @zecalis/fael install` is refused: npx keeps the binary in a
 throwaway cache. Install it globally first.
 
-**3. Work as usual.** The first row an agent writes creates `.fael/log/` in the repo — commit it like code.
+**3. Work as usual.** Rows land in `.git/fael/` — nothing to commit. To share them or back them up:
+
+```bash
+git config fael.remote <url>   # any git remote you can push to — origin works, a private one if the repo is public
+fael sync                      # push your rows, pull everyone else's (the Stop hook also runs it once per session)
+```
+
+Rather review memory in PRs? `store = "tracked"` in `.fael/config.toml` also writes the rows to
+`.fael/log/` in the tree, to commit like code. Repos that already have a `.fael/log/` keep that mode;
+`fael migrate local` moves one over ([docs/integrate.md](docs/integrate.md#moving-a-tracked-repo-to-local)).
 
 ## How it works
 
@@ -90,7 +100,7 @@ throwaway cache. Install it globally first.
 agent reads src/pay.rs   →  fael attaches: "[bug] refund rounds down on JPY → src/pay.rs"
 agent fixes it, replies  →  "…done. fael decision: refunds round half-up, per finance [files: src/pay.rs]"
 fael                     →  files that line as a row — no extra turn, nothing blocked
-git push                 →  the next agent, on any machine, sees it when it opens src/pay.rs
+fael sync                →  the next agent, on any machine, sees it when it opens src/pay.rs
 ```
 
 Agents use the `fael` MCP server (`find`, `add`, `close`). You can use the same log from the shell:
@@ -102,7 +112,7 @@ fael add bug "refund rounds down on JPY" --files src/pay.rs
 fael add issue "count from order date or ship date?" --to finance --files src/pay.rs
 fael close <id> "fixed in 4f2a91c"
 fael mv src/pay.rs src/pay/refund.rs                     # a split git can't see — rows follow
-fael doctor                                              # check the setup (e.g. a gitignored .fael/log)
+fael doctor                                              # check the setup (e.g. no fael.remote to back rows up)
 ```
 
 `fael` with no arguments lists every command.

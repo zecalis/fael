@@ -91,6 +91,15 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      journal stay until purged there too)",
     ),
     (
+        "migrate",
+        "move a tracked repo to store = local",
+        "fael migrate local
+    (fold the tree log into this clone's journal — the tree copy wins on every
+     id it holds, so rows edited in the tree never fall back to a stale journal
+     copy — then set store = \"local\" in .fael/config.toml; safe to rerun;
+     every clone runs it before the tree log is removed)",
+    ),
+    (
         "hook",
         "stdin in, stdout out; always exits 0",
         "fael hook <event> [--client c]

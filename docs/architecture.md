@@ -103,7 +103,7 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
 
 - `<writer>` = `<git user.name slug>-<4 hex of sha256(email)>` — a writer is a **logical author, not a machine**: the same person on two machines shares a folder (their appends meet in git via union merge), and two people who share a name do not.
 - One file per month: last month's file is never written again, so rotation needs no command.
-- `.gitattributes`: `.fael/log/**/*.jsonl merge=union` — two branches that both appended keep both sides; readers remove the duplicates by `id`.
+- `.gitattributes` (tracked store only): `.fael/log/**/*.jsonl merge=union` — two branches that both appended keep both sides locally; readers remove the duplicates by `id`. GitHub ignores merge drivers, so PRs that append to the same month file still conflict there — the reason `local` is the default.
 
 **Row** (one JSON object per line — full spec in [format.md](format.md)):
 
@@ -126,10 +126,15 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
 - Files are rewritten only with tmp-then-rename, and only when no one writes to them any more.
 - Durability comes from the journal, not the tree: `add` writes
   `<git-common-dir>/fael/log/` first (same line bytes), then `.fael/log` —
-  unless `store = "local"`, which skips the tree so gitignored or public repos
+  unless `store = "local"` (the default), which skips the tree so PRs carry no
+  log lines and gitignored or public repos
   carry no memory. A failed tree write is a warning, never a retry (the row is
   already durable; a retry would file it twice under a new id). Reads union
   both, tree wins on duplicate ids; journal-only rows tag `@<branch>`.
+- An unset `store` is `tracked` where a `.fael/log` already sits in the tree
+  (repos from before `local` became the default, so none changes mode on
+  upgrade), else `local`. A repo whose rows live only in the journal keeps
+  its alias cache there too (`<git-common-dir>/fael/cache`): the tree never grows a `.fael/`.
 - Across clones durability still comes from git; rows are not fsynced one by one.
 - Across clones and machines journals travel through `fael sync`: each writer's
   journal is pushed to `refs/fael/<repo-id>/<writer>` on a remote (any git URL
@@ -160,6 +165,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael mv <old> <new>` | record a move git can't see — an anchor, an uncommitted rewrite, or one file split into several (one old path may point at many new ones). Adds matches only, never hides a row |
 | `fael restore [<id>] [--edge id]` | revert a supersede edge with an event row — the row keeps its id and opens again; `--edge` names the superseding row when several edges still hide it; an already-open row or an already-reverted edge is info, never an error |
 | `fael purge <id>` | permanently remove a leaked test row or a mistake: the row and its close events go from every month file, tree and journal; refused when another row supersedes or restores it, when the id names a close event, or when it lives in an immutable compact file; the id is kept as a tombstone (`purged.txt` in the writer's ref) so sync never carries the row back; copies already in a teammate's journal stay until purged there |
+| `fael migrate local` | move a tracked repo to `store = "local"`: fold `.fael/log` into this clone's journal — the tree copy wins on every id it holds (a row edited in the tree replaces the journal's stale original in place), rows only the tree holds are copied — then set `store = "local"` in `.fael/config.toml`; idempotent; each clone runs it before the tree log is removed, since the fold reads the working tree |
 | `fael kickoff [anchor] [--branches] [--full] [--limit N] [--offset M]` | the session brief: urgent first, then issues, decisions, notes by freshness (newer of the row and its files' last change); rows whose files are all gone are left out; an explicit `--limit N` is not cut by `budget.kickoff_tokens` |
 | `fael hook <event> [--client c]` | hook entry point (see below) |
 | `fael mcp` | MCP server on stdio |
@@ -183,7 +189,7 @@ Ids are accepted as a unique prefix and printed at the shortest length that stay
 kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
-store = "tracked"             # or "local": journal only, no .fael/log writes (gitignored/public repos)
+store = "local"               # journal only (default when no .fael/log sits in the tree); "tracked" also writes .fael/log to commit
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800
