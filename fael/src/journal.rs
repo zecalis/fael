@@ -40,6 +40,35 @@ pub(crate) fn head_branch(repo_root: &Path) -> Option<String> {
         .map(String::from)
 }
 
+/// HEAD's full sha, read off `<gitdir>/HEAD` and the ref it names (a loose
+/// ref in the worktree's dir, then the common dir, then `packed-refs`) — no
+/// git spawn. `None` for anything else (reftable, unborn branch, a symbolic
+/// ref chain): the caller spawns `git rev-parse` instead.
+pub(crate) fn head_sha(repo_root: &Path) -> Option<String> {
+    let is_sha = |s: &str| matches!(s.len(), 40 | 64) && s.bytes().all(|b| b.is_ascii_hexdigit());
+    let g = git_dir(repo_root)?;
+    let head = std::fs::read_to_string(g.join("HEAD")).ok()?;
+    let head = head.trim();
+    let Some(name) = head.strip_prefix("ref:").map(str::trim) else {
+        return is_sha(head).then(|| head.to_string());
+    };
+    let common = root(repo_root)?.parent()?.to_path_buf();
+    if common.join("reftable").exists() {
+        return None;
+    }
+    for d in [&g, &common] {
+        if let Ok(s) = std::fs::read_to_string(d.join(name)) {
+            return is_sha(s.trim()).then(|| s.trim().to_string());
+        }
+    }
+    let packed = std::fs::read_to_string(common.join("packed-refs")).ok()?;
+    packed
+        .lines()
+        .filter_map(|l| l.split_once(' '))
+        .find(|(sha, n)| *n == name && is_sha(sha))
+        .map(|(sha, _)| sha.to_string())
+}
+
 /// `<common>/fael` — the journal root all worktrees of this clone share.
 /// `None` without git (then the tree is all there is) or when `.git` is
 /// unreadable. A linked worktree's pointer ends in `worktrees/<name>`, whose

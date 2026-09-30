@@ -24,11 +24,18 @@ pub(crate) fn git_renames(
             .output()
             .ok()
     };
-    let o = git(&["rev-parse", "--verify", "-q", "HEAD"])?;
-    let head = String::from_utf8_lossy(&o.stdout).trim().to_string();
-    if !o.status.success() || head.is_empty() {
-        return Some((String::new(), vec![]));
-    }
+    // off the files first: an unchanged HEAD then costs no spawn at all
+    let head = match crate::journal::head_sha(root) {
+        Some(h) => h,
+        None => {
+            let o = git(&["rev-parse", "--verify", "-q", "HEAD"])?;
+            let head = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !o.status.success() || head.is_empty() {
+                return Some((String::new(), vec![]));
+            }
+            head
+        }
+    };
     if since == Some(head.as_str()) {
         return Some((head, vec![]));
     }
