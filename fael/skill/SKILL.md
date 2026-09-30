@@ -7,33 +7,18 @@ description: This repo's memory — decisions, open issues and notes earlier ses
 
 # fael — the repo's memory
 
-Write rows in English — title, key and body. The dev reads them through you, in their language.
-Add it in the same message as your next tool call or final edit — never as a turn of its own.
-
-What earlier agents saw comes back when you touch the same file. What you see
-goes to the next one. Rows live in `.fael/log/` and travel with the repo.
+Write rows in English. Add each in the same message as your next tool call or final edit — never as a turn of its own.
+Rows about a file come back when you touch it; what you record goes to the next agent.
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there — do not wait for the end of the task.**
 
-- `fael find` — the session brief · `fael find --files <path>` — rows about a file · `fael find <text>`
-- `fael add decision "<what was chosen, and why>" --files a,b` — something agreed that git and code do not say
+- `fael find [<text>] [--files <path>]` — the session brief, rows about a file, or a text search
+- `fael add decision "<what was chosen, and why>" --files a,b` — agreed, and git and code do not say it
 - `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "fixed in <sha>"` — an issue that is fixed, a note that is done
-- Self-heal: a repeat on the same files or key supersedes the open row itself,
-  `Supersedes <id>` in the text fills `--supersedes`, and the one key those
-  files already carry is reused — pass `--key` only to open a new topic.
-  An `issue` reuses a key freely (a key holds several findings); it supersedes
-  only the same finding re-filed, so file each distinct bug as its own row.
-- Long body? `--title "<≤15-word headline>"` — lists show the title, the body is pulled by id (`fael find <id>`)
-- An id needs a row behind it — never type one from memory. Verified only
-  after this session's `fael find <id>` printed it as `- [<id>]`, else find
-  by key/text first. `doctor [Phantom]` flags cites with no row — in rows, in
-  close reasons, and in the prose of every `*.md` in the repo (fences skipped).
 
 Each row is read months later with no chat: one or two standalone sentences.
-`--files` is required — name the paths (or anchors like `doc:pricing`) it is about;
-reuse one `fael find` already showed instead of inventing a new one.
+`--files` is required — name the paths it is about. Never type an id from memory; `fael find` it first.
 With the MCP server connected, the tools `find` / `add` / `close` do the same.
 
-The Stop hook will not let a turn end that edited files with no row after the
-edits, or that reported a problem with no issue row. Write the row; do not argue with the hook.
+The Stop hook will not let a turn end that edited files with no row after the edits, or that reported a problem with no issue row. Write the row; do not argue with the hook.

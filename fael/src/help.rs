@@ -154,24 +154,32 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     ),
 ];
 
-/// Full usage: command list, global options, examples.
+/// Commands a new user meets in week one; the rest are maintenance.
+const CORE: &[&str] = &["add", "find", "close", "install"];
+
+/// Full usage: core commands, maintenance commands, global options, examples.
 pub(crate) fn usage() -> String {
-    let rows: Vec<(String, &str)> = COMMANDS
+    let rows: Vec<(bool, String, &str)> = COMMANDS
         .iter()
-        .map(|(name, summary, section)| (list_args(name, section), *summary))
+        .map(|(name, summary, section)| (CORE.contains(name), list_args(name, section), *summary))
         .collect();
-    let width = rows.iter().map(|(a, _)| a.len()).max().unwrap_or(0);
-    let list: String = rows
-        .iter()
-        .map(|(a, s)| format!("  {a:width$}   {s}\n"))
-        .collect();
+    let width = rows.iter().map(|(_, a, _)| a.len()).max().unwrap_or(0);
+    let list = |core: bool| -> String {
+        rows.iter()
+            .filter(|(c, ..)| *c == core)
+            .map(|(_, a, s)| format!("  {a:width$}   {s}\n"))
+            .collect()
+    };
+    let (core, rest) = (list(true), list(false));
     format!(
         "fael — a repo's memory that agents can't skip writing
 
 usage: fael <command> [options]
 
 commands:
-{list}
+{core}
+maintenance:
+{rest}
 global options:
   --json             one JSON row per line, uncut, for programs
   -h, --help         this help — or one command's: fael <command> --help

@@ -35,7 +35,7 @@ fn normalize(out: &str, state: &Path) -> String {
 // Constants below mirror SKILL.md + the MCP schema (asks.rs `constants`).
 // If either source changes, update the numbers here deliberately.
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 2653 bytes (~669 est) + MCP schema 3667 bytes (~921 est)";
+    "  constants per session: SKILL.md 1633 bytes (~411 est) + MCP schema 3667 bytes (~921 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -86,7 +86,7 @@ fn stats_json_matches_golden_values() {
             "stop_blocks": {},
             "asks": {"reject": {"events": 0, "bytes": 0}, "stop-block": {"events": 0, "bytes": 0}, "warning": {"events": 0, "bytes": 0}},
             "repeat_blocks": 0,
-            "constants": {"skill_bytes": 2653, "skill_est": 669, "mcp_schema_bytes": 3667, "mcp_schema_est": 921},
+            "constants": {"skill_bytes": 1633, "skill_est": 411, "mcp_schema_bytes": 3667, "mcp_schema_est": 921},
             "rounds": {"after_block": 0, "rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
         }),
