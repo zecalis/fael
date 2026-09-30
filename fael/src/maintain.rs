@@ -2,6 +2,7 @@
 //! (SPEC §6, §11). Thin adapters: the repo is resolved here, the rules live
 //! in `fael-core` so a hosted server calls the same entry points.
 
+mod alive;
 mod drift;
 mod fat;
 mod merged;
