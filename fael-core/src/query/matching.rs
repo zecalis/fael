@@ -1,4 +1,12 @@
-use crate::anchor;
+use crate::{Row, anchor};
+
+/// Every word of the lowercased query `q` occurs in the row's text or title — lists show
+/// titles, so they count — in any order: `login timeout` finds "timeout on
+/// the login page". Words never hold whitespace, so the join adds no hit.
+pub(super) fn all_words(q: &str, r: &Row) -> bool {
+    let hay = format!("{}\n{}", r.text, r.title.as_deref().unwrap_or("")).to_lowercase();
+    q.split_whitespace().all(|w| hay.contains(w))
+}
 
 /// Exact or under the directory (a zone) — an anchor's ref is opaque, never a zone.
 /// Either side can be the zone: a row filed on `web/` or `web/**` covers `web/src/x.ts`.
