@@ -69,6 +69,17 @@ impl Args {
         self.flags.contains_key(f)
     }
 
+    /// Reject a flag the parser knows but `cmd` never reads — `bump --dry-run`
+    /// must not silently write.
+    pub(crate) fn only(&self, cmd: &str, allowed: &[&str]) -> Result<(), String> {
+        match self.flags.keys().find(|f| !allowed.contains(&f.as_str())) {
+            Some(f) => Err(format!(
+                "rejected: {cmd} takes no --{f} — try 'fael --help'"
+            )),
+            None => Ok(()),
+        }
+    }
+
     pub(crate) fn one(&self, f: &str) -> Option<String> {
         self.flags.get(f).and_then(|v| v.last()).cloned()
     }
