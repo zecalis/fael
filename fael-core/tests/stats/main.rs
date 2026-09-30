@@ -53,6 +53,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "events",
             "non_english_rows",
             "repeat_blocks",
+            "retired",
             "rounds",
             "schema",
             "skipped_temp",
@@ -94,6 +95,11 @@ fn json_shape_keys_and_types_are_frozen() {
     ] {
         assert!(v[k].is_object(), "{k}: {v}");
     }
+    assert_eq!(keys(&v["retired"]), ["at_touch", "pushed"], "{v}");
+    assert!(
+        v["retired"]["pushed"].is_u64() && v["retired"]["at_touch"].is_u64(),
+        "{v}"
+    );
     assert!(v["top_rows"].is_array(), "{v}");
     assert!(v.get("real_tokens").is_none(), "no samples, so absent: {v}");
     assert!(v.get("rows").is_none(), "no --rows, so absent: {v}");

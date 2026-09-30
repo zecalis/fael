@@ -46,7 +46,7 @@ fn stats_text_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2\n  row B: pushed ×2\n  asks: reject ×0 (0 bytes) · stop-block ×0 · warning ×0 (0 bytes)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2\n  row B: pushed ×2\n  asks: reject ×0 (0 bytes) · stop-block ×0 · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -61,7 +61,7 @@ fn stats_rows_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2\n  row B: pushed ×2\n  row A: pushed ×2 (unknown)\n  row B: pushed ×2 (unknown)\n  asks: reject ×0 (0 bytes) · stop-block ×0 · warning ×0 (0 bytes)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2\n  row B: pushed ×2\n  row A: pushed ×2 (unknown)\n  row B: pushed ×2 (unknown)\n  asks: reject ×0 (0 bytes) · stop-block ×0 · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -90,6 +90,7 @@ fn stats_json_matches_golden_values() {
             "rounds": {"after_block": 0, "rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "capture": {"post_stop_rounds": 0, "reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0},
+            "retired": {"pushed": 2, "at_touch": 0},
         }),
         "{out}"
     );

@@ -48,6 +48,7 @@ shape is a breaking change: ship the reader first.
 | `non_english_rows` | `{rows, non_english}` | rows outside the running repo's accepted `[lang] rows` scripts (deduped by id) |
 | `real_tokens` | object, else absent | mean cost of the round after a stop-block: `post_block_rounds`, `avg_input`, `avg_cache_create`, `avg_cache_read`, `avg_output` |
 | `capture` | object | reply capture and what the Stop hook still costs (fields below) |
+| `retired` | object | `pushed` = distinct rows a `read`/`edit` push handed over · `at_touch` = of those, closed or superseded (a bump is a supersede) within a day after one of those pushes — how many rows the edit-push ask retires where they went stale |
 | `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
 
 `capture` (PLAN-fael-dev-adoption): `post_stop_rounds` = Stop-hook blocks, cumulative (each cost a
@@ -108,6 +109,7 @@ panels are summed; `delivered.last` is newest-first across repos.
 
 ## Changelog
 
+- `1` (2026-10-01): added `retired` (pushed rows closed or superseded within a day of a push); no bump.
 - `1` (2026-09-30): usage rows may carry `agent`; readers ignore it today — no bump.
 - `1` (2026-09-30): added `capture` (reply capture, manual adds, silent sessions); no bump.
 - `1` (2026-09-29): first frozen shape. `schema` key added; everything else

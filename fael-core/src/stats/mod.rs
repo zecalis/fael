@@ -13,6 +13,7 @@ mod capture;
 mod day;
 mod metrics;
 mod parse;
+mod retire;
 
 pub use aggregate::{
     AskCount, BlockOutcome, Constants, Count, NonEnglish, RealAvg, Rounds, RowStatus, STATS_SCHEMA,
@@ -25,6 +26,7 @@ pub use day::{
 };
 pub use metrics::ASK_ORDER;
 pub use parse::{Parsed, StopBlock, UsageRow, parse};
+pub use retire::{RETIRE_WINDOW_MS, Retired};
 
 /// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
 /// JSON map and the recording side share, so the two cannot drift.
