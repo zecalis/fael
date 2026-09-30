@@ -91,7 +91,8 @@ fael sync                      # push your rows, pull everyone else's (the Stop 
 ```
 
 Rather review memory in PRs? `store = "tracked"` in `.fael/config.toml` also writes the rows to
-`.fael/log/` in the tree, to commit like code. Repos that already have a `.fael/log/` keep that mode.
+`.fael/log/` in the tree, to commit like code. Repos that already have a `.fael/log/` keep that mode;
+`fael migrate local` moves one over ([docs/integrate.md](docs/integrate.md#moving-a-tracked-repo-to-local)).
 
 ## How it works
 
