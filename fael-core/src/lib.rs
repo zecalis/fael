@@ -52,7 +52,7 @@ pub use query::{
 };
 pub use row::{Row, Stamp};
 pub use validate::{
-    normalize_files, valid_key, validate, validate_alias, validate_close, validate_restore,
+    normalize_files, secret, valid_key, validate, validate_alias, validate_close, validate_restore,
 };
 
 /// Core kinds with fixed meaning; a repo adds more through `Config::kinds`.

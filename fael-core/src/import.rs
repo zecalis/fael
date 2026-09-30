@@ -70,7 +70,11 @@ pub fn import(
             if line.is_empty() || is_marker(line) {
                 continue;
             }
-            match convert(line, is_close_file, allowed, opts) {
+            let converted = match crate::secret(line) {
+                Some(what) => Err(format!("looks like a secret ({what})")),
+                None => convert(line, is_close_file, allowed, opts),
+            };
+            match converted {
                 Ok(Converted::Add(r)) => adds.push(r),
                 Ok(Converted::Close(r)) => closes.push(r),
                 Err(w) => {

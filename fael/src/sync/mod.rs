@@ -8,7 +8,7 @@
 //! the same raw write `import`/`compact` use. A `.close.jsonl` row without
 //! `ref` (which an import can carry) rides along: it could never pass
 //! `close()`'s `validate_close`, so ingest never validates, it only dedupes
-//! by id.
+//! by id — and skips any row that trips the shared secret check.
 //!
 //! The working tree and checked-out branches are never touched: fetches land
 //! in `FETCH_HEAD`, pushes name the commit sha directly.
@@ -154,6 +154,15 @@ fn ingest(
     for (fetched, is_close) in [(rows, false), (closes, true)] {
         let local = if is_close { &log.closes } else { &log.rows };
         for row in core::sync::missing(fetched, local) {
+            // a leaked row is never carried in: it would be re-served under
+            // every ref and come back after `fael purge`. Label + id only.
+            if let Some(what) = core::secret(&row.to_line()) {
+                eprintln!(
+                    "fael: skipped row {} from {} — looks like a secret ({what}); rotate it, then `fael purge {}` at its source",
+                    row.id, row.by, row.id
+                );
+                continue;
+            }
             put(r, &row, is_close)?;
             n += 1;
         }
