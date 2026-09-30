@@ -5,7 +5,7 @@
 //! processes). Every row-based note carries the full ids a cleanup agent
 //! needs (`doctor --json` prints them) — not just the abbreviated examples.
 
-use super::{drift, fat, merged, orphan, phantom, shipped};
+use super::{alive, drift, fat, merged, orphan, phantom, shipped};
 use crate::core;
 use std::collections::HashSet;
 use std::path::Path;
@@ -56,9 +56,19 @@ pub(super) fn open_row_notes(
 /// still holds on disk.
 fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Problem> {
     let mut out = vec![];
-    let gone: Vec<_> = core::find(log, &core::Filter::default())
+    // a missing file that lives on the row's own unmerged branch is not gone
+    let branches = alive::BranchFiles::new(root);
+    let missing: Vec<(&core::Row, Vec<&str>)> = core::find(log, &core::Filter::default())
         .into_iter()
-        .filter(|row| core::gone(root, row, al))
+        .map(|row| (row, branches.missing(row, core::gone_files(root, row, al))))
+        .filter(|(_, m)| !m.is_empty())
+        .collect();
+    // every file gone — the same test as `core::gone`, after the branch check
+    let all_gone = |row: &core::Row, m: &[&str]| m.len() == row.files.len();
+    let gone: Vec<&core::Row> = missing
+        .iter()
+        .filter(|(row, m)| all_gone(row, m))
+        .map(|(row, _)| *row)
         .collect();
     if !gone.is_empty() {
         let w = core::abbrev(log);
@@ -83,18 +93,15 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
     }
     // some files gone, some left: the row still pushes, but it likely describes
     // the repo as it was (a tool swapped out, a config file removed)
-    let part: Vec<(String, String)> = core::find(log, &core::Filter::default())
-        .into_iter()
-        .filter(|row| !core::gone(root, row, al))
-        .filter_map(|row| {
-            let g = core::gone_files(root, row, al);
-            let w = core::abbrev(log);
-            (!g.is_empty()).then(|| {
-                (
-                    row.id.clone(),
-                    format!("{} → {}", w.short(&row.id), g.join(", ")),
-                )
-            })
+    let w = core::abbrev(log);
+    let part: Vec<(String, String)> = missing
+        .iter()
+        .filter(|(row, m)| !all_gone(row, m))
+        .map(|(row, m)| {
+            (
+                row.id.clone(),
+                format!("{} → {}", w.short(&row.id), m.join(", ")),
+            )
         })
         .collect();
     if !part.is_empty() {
