@@ -8,10 +8,10 @@ because it runs one `git check-ignore`). Claude Code and Codex use a built-in ad
 this page). Any other agent calls the neutral format:
 
 ```
-fael hook <stop|session-start|read|edit>   < Event   > Reply
+fael hook <stop|session-start|read|edit|search>   < Event   > Reply
 
 Event  {"cwd": str, "session": str, "client": str, "files": [str], "stop_active": bool, "text": str, "reply": str,
-        "agent"?: str, "source"?: str}
+        "agent"?: str, "source"?: str, "tool"?: str, "tool_input"?: obj, "tool_response"?: obj}
 Reply  {"block": bool, "reason"?: str, "context"?: str}
 ```
 
@@ -20,6 +20,7 @@ Reply  {"block": bool, "reason"?: str, "context"?: str}
 | session starts | `session-start` | `cwd`, `session` | put `context` in the system prompt / first turn |
 | a file was read | `read` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was written | `edit` | `cwd`, `session`, `files` | append `context` to the tool result |
+| a file was found via search or the shell | `search` | `cwd`, `session`, plus `files` — or the raw call as `tool`, `tool_input`, `tool_response` | append `context` to the tool result |
 | the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text`, `stop_active` | files the reply's `fael <kind>:` lines and never blocks; only under `[capture] block = true` does `block` mean: do not end, send `reason` back as the next message |
 
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript

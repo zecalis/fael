@@ -39,8 +39,9 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ("SubagentStop", None, "stop"),
     ("SessionStart", None, "session-start"),
     ("PostToolUse", Some("Read"), "read"),
-    // fresh agents read through the shell: files a grep/cat/sed touched push too
-    ("PostToolUse", Some("Grep|Bash"), "search"),
+    // fresh agents read through search tools and the shell: files a grep,
+    // glob or cat/sed touched push too
+    ("PostToolUse", Some("Glob|Grep|Bash"), "search"),
     // every file-writing tool, or stop sees no edits (only the git fallback)
     (
         "PostToolUse",
@@ -49,9 +50,11 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ),
 ];
 /// Codex reads through the shell — no read hook; file edits are apply_patch.
+/// Shell calls match as `Bash`, so the search hook fires there like on Claude.
 const CODEX_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ("Stop", None, "stop"),
     ("SessionStart", None, "session-start"),
+    ("PostToolUse", Some("Bash"), "search"),
     ("PostToolUse", Some("apply_patch|Edit|Write"), "edit"),
 ];
 

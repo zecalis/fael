@@ -95,7 +95,7 @@ pub(crate) fn opencode(c: &Ctx) -> Result<(), String> {
         }
         _ => {
             c.write(&plugin, &body)?;
-            c.say("plugin (stop/session-start/read/edit)", &plugin);
+            c.say("plugin (stop/session-start/read/edit/search)", &plugin);
         }
     }
     Ok(())

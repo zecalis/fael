@@ -19,6 +19,7 @@ function hook(event, e) {
 }
 
 const EDIT = new Set(["edit", "write", "multiedit"]);
+const SEARCH = new Set(["grep", "glob", "bash"]);
 
 export const Fael = async ({ client, directory }) => {
   // session start as RFC 3339 — the `session` string stop needs, and the same
@@ -52,10 +53,24 @@ export const Fael = async ({ client, directory }) => {
     // ponytail: filePath tools only — apply_patch (patchText) edits are not
     // recorded; stop then falls back to commits
     "tool.execute.after": async (input, output) => {
+      const session = await start(input.sessionID);
+      if (SEARCH.has(input.tool)) {
+        // grep/glob/bash reads push like a shell read: the raw call goes to
+        // `fael hook search`, which resolves the touched files server-side
+        const r = hook("search", {
+          cwd: directory,
+          session,
+          tool: input.tool,
+          tool_input: input.args ?? {},
+          tool_response: output?.output ?? output ?? {},
+        });
+        if (r.context) output.output += `\n\n${r.context}`;
+        return;
+      }
       const event = input.tool === "read" ? "read" : EDIT.has(input.tool) ? "edit" : null;
       const file = input.args?.filePath;
       if (!event || !file) return;
-      const r = hook(event, { cwd: directory, session: await start(input.sessionID), files: [file] });
+      const r = hook(event, { cwd: directory, session, files: [file] });
       if (r.context) output.output += `\n\n${r.context}`;
     },
 
