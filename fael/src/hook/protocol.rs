@@ -5,7 +5,7 @@ use super::{push::push, session::session_start, stop::stop};
 use crate::{Repo, core, repo_at};
 use serde::{Deserialize, Serialize};
 use std::io::Read as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 /// Neutral Event (SPEC §9) — also the shape every adapter normalises to.
@@ -22,6 +22,15 @@ pub(crate) struct Event {
     pub(crate) client: Option<String>,
     #[serde(default)]
     pub(crate) files: Vec<String>,
+    /// search: the raw tool call, when the client forwards it instead of
+    /// `files` (OpenCode's plugin sends `tool`/`tool_input`/`tool_response`;
+    /// `touched` resolves the files server-side, so the rule stays in one place).
+    #[serde(default)]
+    pub(crate) tool: Option<String>,
+    #[serde(default)]
+    pub(crate) tool_input: serde_json::Value,
+    #[serde(default)]
+    pub(crate) tool_response: serde_json::Value,
     #[serde(default, alias = "stop_hook_active")]
     pub(crate) stop_active: bool,
     /// stop: the assistant's text since the session start, for the issue rule.
@@ -84,8 +93,23 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
         "stop" => stop(&e),
         "session-start" => session_start(&e),
         "read" | "edit" => push(&e, event),
+        "search" => {
+            let mut e = e;
+            if e.files.is_empty() {
+                let cwd = e.cwd.clone().unwrap_or_else(|| ".".into());
+                e.files = super::search::touched(
+                    e.tool.as_deref().unwrap_or(""),
+                    &e.tool_input,
+                    &e.tool_response,
+                    Path::new(&cwd),
+                );
+            }
+            push(&e, event)
+        }
         _ => {
-            eprintln!("fael hook: unknown event {event:?} — want stop|session-start|read|edit");
+            eprintln!(
+                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search"
+            );
             Reply {
                 block: false,
                 reason: None,

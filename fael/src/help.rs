@@ -105,7 +105,7 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "hook",
         "stdin in, stdout out; always exits 0",
         "fael hook <event> [--client c]
-    (event: stop, session-start, read or edit; stdin in, stdout out; always exits 0)",
+    (event: stop, session-start, read, edit or search; stdin in, stdout out; always exits 0)",
     ),
     (
         "stats",
