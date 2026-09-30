@@ -10,6 +10,7 @@
 //! `stop` (turn-end work/bug rule), `session` (session-start kickoff),
 //! `push` (read/edit context), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
+//! `autosync` (session-end `fael sync`, off-switch `[sync] auto`),
 //! `usage` (SPEC §8 accounting + `stats`), `asks` (chunk-3a ask types +
 //! real tokens), `markers` (bug phrases).
 //!
@@ -18,6 +19,7 @@
 
 mod asks;
 mod askstats;
+mod autosync;
 mod claude;
 mod focus;
 mod markers;

@@ -80,4 +80,9 @@ fael find --all
 ```
 
 Point `fael.remote` at `origin` on a public repo and `fael sync` warns (the ref is fetchable by
-anyone). `fael sync` is manual: run it when you start and when you finish; there is no daemon.
+anyone).
+
+With `fael.remote` set, the Stop hook also runs `fael sync` once per session, in the background: a dead
+network or a failed login skips it (the last run's output is `auto-sync.log` in fael's per-machine state
+dir) and never holds the turn. Rows filed after that first stop ship with the next session's, or run
+`fael sync` yourself. Turn it off with `[sync] auto = false` in `.fael/config.toml`; there is no daemon.
