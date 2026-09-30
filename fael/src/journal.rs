@@ -9,7 +9,7 @@
 //! 5 ms ceiling with no spawn in it, so the hooks take the `@branch` tags too.
 
 use crate::find::branches::BranchMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// This checkout's git dir — `.git` itself in a plain repo, or the `gitdir:`
@@ -90,21 +90,50 @@ pub(crate) fn merged(r: &crate::Repo) -> crate::core::Log {
     union(r).0
 }
 
-/// The union read plus the branch each journal-only row was stamped on —
-/// unless it is the current branch, where a tag would be noise (a failed tree
-/// write on the branch you are on). `find`, `kickoff` and MCP `find` only.
+/// Whether `refs/heads/<branch>` still exists in the clone — a loose ref file
+/// or a `packed-refs` line, read off `<common>`, no git spawn.
+fn branch_alive(common: &Path, branch: &str) -> bool {
+    if common.join("refs/heads").join(branch).is_file() {
+        return true;
+    }
+    let want = format!("refs/heads/{branch}");
+    std::fs::read_to_string(common.join("packed-refs")).is_ok_and(|p| {
+        p.lines()
+            .any(|l| l.split_once(' ').is_some_and(|(_, name)| name == want))
+    })
+}
+
+/// The union read plus the branch each row was stamped on when that branch is
+/// not the current one — `find`, `kickoff`, MCP `find` and the hooks.
+/// - a journal-only row always carries its tag (the change may exist nowhere
+///   else; the branch may even be deleted);
+/// - a tree row carries it only when the tree is shared — `.fael` a symlink
+///   across worktrees — and that branch still exists. A tree that follows
+///   `git switch` holds only this branch's history, so a tag there would be
+///   noise (a merged branch); a shared tree holds every branch's rows and
+///   reads as fact on a branch that lacks the change. Once the branch is gone
+///   (merged, or a throwaway worktree branch) the tag points at nothing.
+///
+/// Detached HEAD has no branch to compare, so tree rows go untagged there.
+// ponytail: a merged branch that still exists is tagged in a shared tree
+// (ancestry needs a git spawn); an untracked non-symlink tree is not covered
+// — `store = "local"` already makes those rows journal-only.
 pub(crate) fn read(r: &crate::Repo) -> (crate::core::Log, BranchMap) {
     let (log, only) = union(r);
-    if only.is_empty() {
-        return (log, BranchMap::new());
-    }
     let cur = head_branch(&r.root);
+    let common = r.journal.as_deref().and_then(Path::parent);
+    let shared = std::fs::symlink_metadata(&r.fael).is_ok_and(|m| m.file_type().is_symlink());
+    let mut alive: HashMap<&str, bool> = HashMap::new();
     let mut tags = BranchMap::new();
     for row in &log.rows {
-        if only.contains(&row.id)
-            && let Some(b) = row.branch()
-            && Some(b) != cur.as_deref()
-        {
+        let Some(b) = row.branch().filter(|b| Some(*b) != cur.as_deref()) else {
+            continue;
+        };
+        let keep = only.contains(&row.id)
+            || (shared
+                && cur.is_some()
+                && common.is_some_and(|c| *alive.entry(b).or_insert_with(|| branch_alive(c, b))));
+        if keep {
             tags.insert(row.id.clone(), b.to_string());
         }
     }

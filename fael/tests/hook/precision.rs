@@ -56,12 +56,26 @@ fn many_hidden_keys_fold_into_one_footer_line() {
     );
 }
 
-/// Cases "off-branch" (01M3S4EBE): a row filed on another branch that is
-/// still alive reads as fact when the tree is shared (`.fael` is untracked,
-/// so it stays put across `git switch`). Today: no tag.
+/// A `.fael` symlinked out of the checkout — the tree every worktree of the
+/// clone shares, untouched by `git switch` (this repo's own setup).
+#[cfg(unix)]
+fn share_tree(d: &Path) {
+    let shared = d.with_file_name(format!(
+        "{}-shared",
+        d.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(&shared).unwrap();
+    std::os::unix::fs::symlink(&shared, d.join(".fael")).unwrap();
+}
+
+/// Case "off-branch" (01M3S4EBE): a row filed on another branch that is
+/// still alive reads as fact when the tree is shared. It used to read
+/// untagged; now it carries `@feat/x` while that branch exists.
+#[cfg(unix)]
 #[test]
-fn off_branch_row_in_a_shared_tree_reads_untagged() {
+fn off_branch_row_in_a_shared_tree_is_tagged() {
     let d = repo();
+    share_tree(&d);
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     git(&d, &["add", "src/a.rs"]);
     git(&d, &["commit", "-qm", "a"]);
@@ -76,14 +90,16 @@ fn off_branch_row_in_a_shared_tree_reads_untagged() {
     git(&d, &["switch", "-q", &main]);
     let out = read(&d, "src/a.rs");
     assert!(out.contains("only on feat/x"), "{out}");
-    assert!(!out.contains("@feat/x"), "{out}");
+    assert!(out.contains("@feat/x"), "{out}");
 }
 
 /// The same row once its branch is gone (merged and deleted, or a throwaway
 /// worktree branch): nothing to point at, so no tag — before and after.
+#[cfg(unix)]
 #[test]
 fn off_branch_row_of_a_deleted_branch_in_the_tree_stays_untagged() {
     let d = repo();
+    share_tree(&d);
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     git(&d, &["add", "src/a.rs"]);
     git(&d, &["commit", "-qm", "a"]);
