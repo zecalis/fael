@@ -33,18 +33,25 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
         .flatten();
     let excluded = source.as_deref().is_some_and(crate::hook::deliberate);
     let ignored = source.is_some() && !excluded;
-    // under `local` the tree log is frozen history (or absent): a missing
-    // tree log or union line is no problem — nothing appends there any more
+    // Rows may live only in the clone's journal (`store = "local"`, a fresh
+    // worktree): scan them there. Nothing of it is in git, so the `merge=union`
+    // and gitignore checks do not apply — nor under `local`, where a tree log
+    // is frozen history nothing appends to any more.
+    let home = crate::journal::home(&r).unwrap_or(&r.fael);
     let scan = || {
-        let mut rep = core::doctor_scan(&r.fael, &r.root, ignored, &month);
-        if local {
-            rep.problems
-                .retain(|p| !matches!(p.kind, core::ProblemKind::NoLog | core::ProblemKind::Union));
+        let mut rep = core::doctor_scan(home, &r.root, ignored, &month);
+        if home != r.fael || local {
+            rep.problems.retain(|p| {
+                !matches!(
+                    p.kind,
+                    core::ProblemKind::Union | core::ProblemKind::Ignored
+                )
+            });
         }
         rep
     };
     if a.has("fix") {
-        for action in core::doctor_fix(&r.fael, &r.root, &scan())? {
+        for action in core::doctor_fix(home, &r.root, &scan())? {
             say(a.has("json"), &format!("fixed: {action}"));
         }
     }
@@ -61,6 +68,16 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             ".fael/log is kept local by .git/info/exclude — taken as deliberate; \
              move the pattern to .gitignore if it is not"
                 .into(),
+        ));
+    }
+    let behind = crate::install::pending();
+    if behind > 0 {
+        rep.problems.push(core::Problem::info(
+            core::ProblemKind::Wiring,
+            format!(
+                "{behind} client wiring change(s) pending (hooks, plugin or skill behind this \
+                 binary) — `fael upgrade` applies them; until then a newer hook stays off"
+            ),
         ));
     }
     let log = crate::read(&r);

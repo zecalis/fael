@@ -180,7 +180,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         return no();
     }
     // only adopted repos — stop never blocks without a log anyway
-    if event == "edit" && !c.session.is_empty() && c.repo.adopted() {
+    if event == "edit" && !c.session.is_empty() && crate::journal::home(&c.repo).is_some() {
         record_edits(
             &edits_path(&c.session, &c.repo.root),
             &c.repo.root.to_string_lossy(),
@@ -206,7 +206,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &c.log,
         &files,
         &aliases::load(&c.repo, &c.log, false),
-        event == "read",
+        event != "edit",
     );
     // a row already pushed into this context window is still there — say it
     // once. The lock spans read → append, so a batch of parallel reads queues

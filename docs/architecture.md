@@ -133,8 +133,8 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
   both, tree wins on duplicate ids; journal-only rows tag `@<branch>`.
 - An unset `store` is `tracked` where a `.fael/log` already sits in the tree
   (repos from before `local` became the default, so none changes mode on
-  upgrade), else `local`. Under `local` the per-worktree alias cache lives in
-  the worktree's git dir (`<git-dir>/fael/cache`): the tree never grows a `.fael/`.
+  upgrade), else `local`. A repo whose rows live only in the journal keeps
+  its alias cache there too (`<git-common-dir>/fael/cache`): the tree never grows a `.fael/`.
 - Across clones durability still comes from git; rows are not fsynced one by one.
 - Across clones and machines journals travel through `fael sync`: each writer's
   journal is pushed to `refs/fael/<repo-id>/<writer>` on a remote (any git URL

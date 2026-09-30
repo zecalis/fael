@@ -131,28 +131,6 @@ pub(crate) struct Repo {
     pub(crate) journal: Option<PathBuf>,
 }
 
-impl Repo {
-    /// fael was adopted here: a log in the tree, or in the clone's journal —
-    /// `store = "local"` keeps rows only there.
-    pub(crate) fn adopted(&self) -> bool {
-        self.fael.join("log").is_dir()
-            || self
-                .journal
-                .as_ref()
-                .is_some_and(|j| j.join("log").is_dir())
-    }
-
-    /// Where per-worktree scratch (the alias cache) lives: `.fael/` when the
-    /// tree carries the log, else this worktree's git dir, so a `local` repo
-    /// never grows a `.fael/` in its tree.
-    pub(crate) fn scratch(&self) -> PathBuf {
-        match (self.cfg.store, journal::git_dir(&self.root)) {
-            (core::Store::Local, Some(g)) => g.join("fael"),
-            _ => self.fael.clone(),
-        }
-    }
-}
-
 pub(crate) fn repo() -> Result<Repo, String> {
     let cwd = std::env::current_dir()
         .and_then(|d| d.canonicalize())

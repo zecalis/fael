@@ -16,7 +16,7 @@ use super::state::{
 };
 use super::usage::record_usage;
 use crate::{core, git};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The stop event: `decide`, then — only when the turn is let through, so a
 /// block's follow-up row is in the journal first — the once-per-session sync.
@@ -52,11 +52,7 @@ fn subagent_stop(e: &Event) -> Reply {
 /// adopted here. The journal counts: `store = "local"` keeps rows nowhere else,
 /// and a session or sub-agent in a fresh worktree has no `.fael/` of its own.
 fn adopted(c: &super::protocol::Ctx) -> bool {
-    let journal = c.repo.journal.as_ref().map(|j| j.join("log"));
-    [Some(c.repo.fael.join("log")), journal]
-        .into_iter()
-        .flatten()
-        .any(|p| p.is_dir() && walk_jsonl(&p).next().is_some())
+    crate::journal::home(&c.repo).is_some()
 }
 
 /// Block the turn when the session did work (edits after the
@@ -256,29 +252,6 @@ fn session_start(e: &Event) -> Option<(String, i64)> {
 fn since_secs(ms: i64) -> String {
     let s = core::rfc3339((ms.max(0) as u64) / 1000 * 1000);
     s.replacen(".000Z", "Z", 1)
-}
-
-/// Any `.jsonl` under `dir` — lazy on purpose: the stop hook's adopted-here
-/// check exits on the first hit instead of walking + sorting the whole log
-/// tree the way `core::collect_files` does.
-fn walk_jsonl(dir: &Path) -> impl Iterator<Item = PathBuf> {
-    let mut stack = vec![dir.to_path_buf()];
-    std::iter::from_fn(move || {
-        while let Some(d) = stack.pop() {
-            let Ok(rd) = std::fs::read_dir(&d) else {
-                continue;
-            };
-            for e in rd.flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().is_some_and(|x| x == "jsonl") {
-                    return Some(p);
-                }
-            }
-        }
-        None
-    })
 }
 
 /// Stash a Weak risk line for the next push in this session — shown once,
