@@ -1,6 +1,6 @@
 //! render · token estimates — one markdown line per row under a budget.
 
-use super::log;
+use super::{log, row};
 use fael_core::*;
 
 #[test]
@@ -24,6 +24,44 @@ fn render_cuts_at_budget_but_shows_one_row() {
         "{out}"
     );
     assert!(out.contains("issue (closed) #auth:session"), "{out}");
+}
+
+/// A list says `(closed)`; the full view of a closed row says why — the close
+/// text and the commit the closer stamped, or a compacted row's folded text.
+#[test]
+fn render_full_says_why_a_row_was_closed() {
+    let mut l = log();
+    l.rows.push(row(
+        "A0000000000000000000000030",
+        "issue",
+        &["src/z.rs"],
+        None,
+    ));
+    let mut close = Row::close(
+        "t-0001",
+        "A0000000000000000000000030",
+        "fixed in  abc1234\nby  the guard",
+    );
+    close.extra.insert("sha".into(), "abc1234def0".into());
+    l.closes.push(close);
+    let mut folded = row("A0000000000000000000000031", "issue", &["src/z.rs"], None);
+    let why = serde_json::json!({"id": "t-9", "ts": "", "by": "x", "text": "folded reason"});
+    folded.extra.insert("closed".into(), why);
+    l.rows.push(folded);
+    let all = Filter {
+        all: true,
+        ..Filter::default()
+    };
+    let rows = find(&l, &all);
+    let full = render_full(&l, &rows, 10_000);
+    assert!(full.contains("  closed: fixed\n"), "{full}");
+    assert!(
+        full.contains("  closed: fixed in abc1234 by the guard (abc1234)\n"),
+        "{full}"
+    );
+    assert!(full.contains("  closed: folded reason\n"), "{full}");
+    // the list stays one line per row
+    assert!(!render(&l, &rows, 10_000).contains("closed:"));
 }
 
 #[test]

@@ -159,7 +159,10 @@ fn usage_rows_name_the_subagent_they_landed_in() {
         .filter(|v: &serde_json::Value| v["event"] == "read")
         .collect();
     assert_eq!(reads.len(), 2, "{usage}");
-    assert!(reads[0].get("agent").is_none() && reads[1]["agent"] == "a1", "{usage}");
+    assert!(
+        reads[0].get("agent").is_none() && reads[1]["agent"] == "a1",
+        "{usage}"
+    );
 }
 
 /// A compacted context lost the pushed rows: session-start with

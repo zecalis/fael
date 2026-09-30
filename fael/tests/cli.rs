@@ -95,6 +95,13 @@ fn add_find_close_round_trip() {
     assert!(out.is_empty() && err.contains("no rows match"), "{out}");
     let (_, out, _) = fael(&d, &["find", "--all", "--files", "src/a.rs"]);
     assert!(out.contains("issue (closed)"), "{out}");
+    // a list says closed; pulling the row says why
+    assert!(!out.contains("closed: "), "{out}");
+    let (_, out, _) = fael(&d, &["find", &id[..12]]);
+    assert!(
+        out.contains("issue (closed)") && out.contains("  closed: fixed"),
+        "{out}"
+    );
     // --json --all carries the close row too, so a consumer can tell it is closed
     let (_, out, _) = fael(&d, &["find", "--json", "--all", "--files", "src/a.rs"]);
     assert!(out.contains(&format!("\"ref\":\"{id}\"")), "{out}");
