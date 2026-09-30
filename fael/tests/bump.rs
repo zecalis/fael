@@ -181,3 +181,17 @@ fn bump_rejects_a_flag_it_never_reads() {
     let (ok, _, err) = fael(&d, &["bump", &id, "--to", "Ploy"]);
     assert!(ok, "{err}");
 }
+
+#[test]
+fn close_and_mv_reject_a_flag_they_never_read() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["add", "issue", "a", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = fael(&d, &["close", &id, "done", "--dry-run"]);
+    assert!(!ok && err.contains("close takes no --dry-run"), "{err}");
+    let (ok, _, err) = fael(&d, &["mv", "src/a.rs", "src/b.rs", "--force"]);
+    assert!(!ok && err.contains("mv takes no --force"), "{err}");
+    let (ok, _, err) = fael(&d, &["close", &id, "done"]);
+    assert!(ok, "close was not rejected, so it still works: {err}");
+}

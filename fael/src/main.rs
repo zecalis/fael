@@ -293,6 +293,7 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
 /// uncommitted rewrites, repos without git). Appends an alias row; the log
 /// stays append-only, nothing is rewritten.
 fn mv(a: &Args, old: &str, new: &str) -> Result<(), String> {
+    a.only("mv", &["json"])?;
     let r = repo()?;
     let norm = core::normalize_files(&[old.to_string(), new.to_string()], &r.cwd, &r.root)?;
     let (from, to) = (&norm[0], &norm[1]);
