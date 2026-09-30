@@ -61,9 +61,11 @@ fn another_destination_or_another_store_stays_silent() {
     );
     assert!(fael_refs(&origin).is_empty(), "origin never saw it");
 
-    // the default store (rows in the tree, committed like any other file)
+    // the tracked store (rows in the tree, committed like any other file)
     // going to its own origin is expected to be public — nothing to say
     let e = repo("origin-tracked", "Bob", "bob@example.com");
+    std::fs::create_dir_all(e.join(".fael")).unwrap();
+    std::fs::write(e.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     git(
         &e,
         &["config", "remote.origin.url", origin.to_str().unwrap()],

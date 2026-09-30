@@ -180,7 +180,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         return no();
     }
     // only adopted repos — stop never blocks without a log anyway
-    if event == "edit" && !c.session.is_empty() && c.repo.fael.join("log").is_dir() {
+    if event == "edit" && !c.session.is_empty() && c.repo.adopted() {
         record_edits(
             &edits_path(&c.session, &c.repo.root),
             &c.repo.root.to_string_lossy(),

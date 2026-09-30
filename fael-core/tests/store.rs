@@ -53,6 +53,9 @@ fn store_parses_tracked_default_local_and_rejects_the_rest() {
         Config::from_toml("store = \"tracked\"").unwrap().store,
         Store::Tracked
     ));
+    // unset is visible, so the adapter can pick local vs tracked per repo
+    assert!(!Config::from_toml("").unwrap().store_set);
+    assert!(Config::from_toml("store = \"tracked\"").unwrap().store_set);
     let e = Config::from_toml("store = \"cloud\"").unwrap_err();
     assert!(e.contains("tracked") && e.contains("local"), "{e}");
 }

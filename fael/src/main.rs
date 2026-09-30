@@ -129,6 +129,28 @@ pub(crate) struct Repo {
     pub(crate) journal: Option<PathBuf>,
 }
 
+impl Repo {
+    /// fael was adopted here: a log in the tree, or in the clone's journal —
+    /// `store = "local"` keeps rows only there.
+    pub(crate) fn adopted(&self) -> bool {
+        self.fael.join("log").is_dir()
+            || self
+                .journal
+                .as_ref()
+                .is_some_and(|j| j.join("log").is_dir())
+    }
+
+    /// Where per-worktree scratch (the alias cache) lives: `.fael/` when the
+    /// tree carries the log, else this worktree's git dir, so a `local` repo
+    /// never grows a `.fael/` in its tree.
+    pub(crate) fn scratch(&self) -> PathBuf {
+        match (self.cfg.store, journal::git_dir(&self.root)) {
+            (core::Store::Local, Some(g)) => g.join("fael"),
+            _ => self.fael.clone(),
+        }
+    }
+}
+
 pub(crate) fn repo() -> Result<Repo, String> {
     let cwd = std::env::current_dir()
         .and_then(|d| d.canonicalize())
@@ -155,7 +177,12 @@ pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
     let scratch = std::env::var_os("FAEL_DIR").filter(|d| !d.is_empty());
     let journal = scratch.is_none().then(|| journal::root(&root)).flatten();
     let fael = scratch.map_or_else(|| root.join(".fael"), PathBuf::from);
-    let cfg = config(&fael.join("config.toml"))?;
+    let mut cfg = config(&fael.join("config.toml"))?;
+    // unset store: a tree log already here keeps `tracked` (repos from before
+    // `local` became the default); everything else starts `local`
+    if !cfg.store_set && !fael.join("log").is_dir() {
+        cfg.store = core::Store::Local;
+    }
     Ok(Repo {
         root,
         cwd,

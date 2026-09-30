@@ -24,6 +24,9 @@ fn main_and_worktree() -> (PathBuf, PathBuf) {
     git(&main, &["config", "user.name", "Mcp Test"]);
     git(&main, &["config", "user.email", "mcp@example.com"]);
     std::fs::write(main.join("src/a.rs"), "// a\n").unwrap();
+    // these tests exercise the tree log: pin it over the `local` default
+    std::fs::create_dir_all(main.join(".fael")).unwrap();
+    std::fs::write(main.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     git(&main, &["add", "."]);
     git(&main, &["commit", "-qm", "init"]);
     git(&main, &["worktree", "add", "-q", wt.to_str().unwrap()]);

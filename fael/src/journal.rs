@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 /// This checkout's git dir — `.git` itself in a plain repo, or the `gitdir:`
 /// target of a worktree/submodule's `.git` file. Spawn-free (the read/edit
 /// push path must not fork `git`). `None` when `.git` is missing or unreadable.
-fn git_dir(repo_root: &Path) -> Option<PathBuf> {
+pub(crate) fn git_dir(repo_root: &Path) -> Option<PathBuf> {
     let dot = repo_root.join(".git");
     if dot.is_dir() {
         return Some(dot);

@@ -26,12 +26,12 @@ pub fn load(r: &Repo, log: &core::Log, refresh: bool) -> core::Aliases {
     if !r.cfg.resolve {
         return al;
     }
-    // No log anywhere = fael never adopted here: never create `.fael/` for a
+    // No log anywhere = fael never adopted here: never create a cache for a
     // repo that has none.
-    if !r.fael.join("log").is_dir() {
+    if !r.adopted() {
         return al;
     }
-    let cached = read_cache(&r.fael);
+    let cached = read_cache(&r.scratch());
     let mut renames: Vec<(String, String)> = cached
         .as_ref()
         .map(|c| c.renames.clone())
@@ -100,7 +100,7 @@ pub fn load(r: &Repo, log: &core::Log, refresh: bool) -> core::Aliases {
             None => vec![],
         };
         let blobs = blobs.unwrap_or_default();
-        write_cache(&r.fael, &head, &renames, &dead);
+        write_cache(&r.scratch(), &head, &renames, &dead);
         al.merge_pairs(&uncommitted_pairs(&r.root, &missing, &blobs));
     } else {
         let dead = cached.map(|c| c.dead).unwrap_or_default();

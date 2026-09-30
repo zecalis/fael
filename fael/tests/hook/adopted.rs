@@ -54,6 +54,6 @@ fn a_repo_without_any_log_files_nothing() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
     stop(&d, REPLY);
-    assert!(!d.join(".fael").exists());
+    assert!(!d.join(".fael/log").exists() && !d.join(".git/fael").exists());
     assert!(fael(&d, &["find", "backoff"], "").1.is_empty());
 }

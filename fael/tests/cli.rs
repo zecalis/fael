@@ -36,6 +36,9 @@ fn repo() -> PathBuf {
                 .success()
         );
     }
+    // these tests exercise the tree log: pin it over the `local` default
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -352,6 +355,8 @@ fn worktree_root_is_where_dot_git_file_sits() {
     git(&["commit", "-q", "--allow-empty", "-m", "init"]);
     let wt = d.with_extension("wt");
     git(&["worktree", "add", "-q", wt.to_str().unwrap()]);
+    // the tracked pin moves to the worktree: the main root must stay bare
+    std::fs::rename(d.join(".fael"), wt.join(".fael")).unwrap();
     std::fs::create_dir_all(wt.join("src")).unwrap();
     let (ok, _, err) = fael(
         &wt.join("src"),

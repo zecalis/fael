@@ -51,6 +51,9 @@ fn repo() -> PathBuf {
                 .success()
         );
     }
+    // these tests exercise the tree log: pin it over the `local` default
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 

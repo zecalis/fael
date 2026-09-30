@@ -26,16 +26,35 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
         );
     }
     let month = core::current_month();
-    let source = crate::hook::ignore_source(&r.root);
+    let local = matches!(r.cfg.store, core::Store::Local);
+    // `local` keeps the log out of git on purpose: no ignore check to run
+    let source = (!local)
+        .then(|| crate::hook::ignore_source(&r.root))
+        .flatten();
     let excluded = source.as_deref().is_some_and(crate::hook::deliberate);
     let ignored = source.is_some() && !excluded;
+    // under `local` the tree log is frozen history (or absent): a missing
+    // tree log or union line is no problem — nothing appends there any more
+    let scan = || {
+        let mut rep = core::doctor_scan(&r.fael, &r.root, ignored, &month);
+        if local {
+            rep.problems
+                .retain(|p| !matches!(p.kind, core::ProblemKind::NoLog | core::ProblemKind::Union));
+        }
+        rep
+    };
     if a.has("fix") {
-        let before = core::doctor_scan(&r.fael, &r.root, ignored, &month);
-        for action in core::doctor_fix(&r.fael, &r.root, &before)? {
+        for action in core::doctor_fix(&r.fael, &r.root, &scan())? {
             say(a.has("json"), &format!("fixed: {action}"));
         }
     }
-    let mut rep = core::doctor_scan(&r.fael, &r.root, ignored, &month);
+    let mut rep = scan();
+    if local {
+        rep.problems.push(core::Problem::info(
+            core::ProblemKind::Local,
+            local_note(&r),
+        ));
+    }
     if excluded {
         rep.problems.push(core::Problem::info(
             core::ProblemKind::Ignored,
@@ -66,6 +85,23 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     } else {
         ExitCode::SUCCESS
     })
+}
+
+/// Where a `local` repo's rows live, and — with no `fael.remote` — that
+/// nothing carries them off this clone yet.
+fn local_note(r: &crate::Repo) -> String {
+    let at = r
+        .journal
+        .as_deref()
+        .map_or_else(|| r.fael.display().to_string(), |j| j.display().to_string());
+    let mut s =
+        format!("store = local — rows live in {at}, shared by every worktree of this clone");
+    if crate::git(&r.root, &["config", "fael.remote"]).is_none() {
+        s.push_str(
+            "; nothing copies them off this clone — `git config fael.remote <url>` then `fael sync` to back up or share",
+        );
+    }
+    s
 }
 
 /// The adapter half of `doctor --fix`: close the confirmed `[Shipped]` notes,
