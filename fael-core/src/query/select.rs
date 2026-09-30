@@ -1,5 +1,5 @@
 use super::Filter;
-use super::matching::{file_match, glob, is_md, lenient};
+use super::matching::{all_words, file_match, glob, is_md, lenient};
 use crate::{Aliases, Log, Row, anchor, is_alias_row, is_carrier_row, resolve, to_matches};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -255,11 +255,7 @@ pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
                 && f.key
                     .as_ref()
                     .is_none_or(|g| r.key.as_deref().is_some_and(|k| glob(g, k)))
-                && text.as_ref().is_none_or(|t| {
-                    r.text.to_lowercase().contains(t)
-                        // lists show titles, so text search finds them too
-                        || r.title.as_deref().is_some_and(|ti| ti.to_lowercase().contains(t))
-                })
+                && text.as_ref().is_none_or(|t| all_words(t, r))
                 // `--revisit`: any revisit, or a substring of it
                 && revisit.as_ref().is_none_or(|q| {
                     r.revisit()

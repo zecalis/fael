@@ -29,7 +29,8 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             super::refs::Wide::Missing => Err(reject_missing(&log, t)),
         };
     }
-    let (log, branch_of) = working_or_branches(a, base, jtags, &r.root);
+    let (log, branch_of) =
+        working_or_branches(a, base, jtags, &r.root, r.cfg.store == core::Store::Local);
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
     // text search (a text query equalling a unique id prefix means the id)
     if forced.is_none()
@@ -93,7 +94,8 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
     let (base, jtags) = super::journal::read(&r);
-    let (log, branch_of) = working_or_branches(a, base, jtags, &r.root);
+    let (log, branch_of) =
+        working_or_branches(a, base, jtags, &r.root, r.cfg.store == core::Store::Local);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
     let f = Filter {
@@ -142,8 +144,14 @@ fn working_or_branches(
     log: Log,
     journal: branches::BranchMap,
     root: &std::path::Path,
+    local: bool,
 ) -> (Log, branches::BranchMap) {
     if a.has("branches") {
+        if local {
+            eprintln!(
+                "fael: --branches reads rows committed to other branches' trees; under store = \"local\" plain find already holds every branch's rows"
+            );
+        }
         let (log, btags) = branches::with_branches(root, log);
         (log, super::journal::overlay(journal, btags))
     } else {
