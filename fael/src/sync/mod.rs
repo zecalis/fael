@@ -17,6 +17,7 @@ mod git;
 
 use crate::{Repo, core};
 use git::{fetch_tree, line_ref, ls_prefix, ls_remote, push, tip_tree, write_tree};
+use std::collections::HashSet;
 use std::path::Path;
 
 /// `fael sync [--remote url]`: push this writer's journal, ingest every
@@ -35,8 +36,9 @@ pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
     // own ref, before and after: ls → fetch+union → commit → ff-only push.
     let mut tip = ls_remote(&r.root, &remote, &own)?;
     let log = crate::read(r);
-    let local_rows: Vec<core::Row> = local_writer(&log.rows, &by);
-    let local_closes: Vec<core::Row> = local_writer(&log.closes, &by);
+    let imported = imported_ids(r);
+    let local_rows: Vec<core::Row> = local_writer(&log.rows, &by, &imported);
+    let local_closes: Vec<core::Row> = local_writer(&log.closes, &by, &imported);
     let (mut pushed, mut ingested) = (0usize, 0usize);
     if !local_rows.is_empty() || !local_closes.is_empty() || tip.is_some() {
         let attempt = |tip: &Option<String>| -> Result<(Vec<core::Row>, Vec<core::Row>), String> {
@@ -136,10 +138,25 @@ fn push_one(
     Ok(())
 }
 
-/// This writer's filed rows — what its ref carries. Rows others filed live
-/// locally after ingest but belong to their writers' refs, never this one.
-fn local_writer(rows: &[core::Row], by: &str) -> Vec<core::Row> {
-    rows.iter().filter(|r| r.by == by).cloned().collect()
+/// This writer's filed rows plus the rows an import put in this clone — what
+/// its ref carries. Rows others filed live locally after ingest but belong to
+/// their writers' refs, never this one. An imported row keeps its legacy `by`
+/// (`claude`), so no writer would ever push it unless the clone that imported
+/// it does; ingest files it under `<by>/`, not `_import/`, so it is never
+/// re-pushed by the clones that receive it.
+fn local_writer(rows: &[core::Row], by: &str, imported: &HashSet<String>) -> Vec<core::Row> {
+    let mine = |r: &&core::Row| r.by == by || imported.contains(&r.id);
+    rows.iter().filter(mine).cloned().collect()
+}
+
+/// Ids of every row under `_import/`, in the tree and in the journal.
+fn imported_ids(r: &Repo) -> HashSet<String> {
+    let roots = std::iter::once(r.fael.as_path()).chain(r.journal.as_deref());
+    let mut ids = HashSet::new();
+    for log in roots.map(core::read_imported) {
+        ids.extend(log.rows.into_iter().chain(log.closes).map(|x| x.id));
+    }
+    ids
 }
 
 /// Append fetched rows missing locally, one stream at a time so the two

@@ -15,6 +15,7 @@
 //! `secret` (ingest skips a leaked row and never echoes it).
 
 mod errors;
+mod imported;
 mod namespace;
 mod origin;
 mod private;
