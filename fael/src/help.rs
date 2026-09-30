@@ -47,8 +47,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
       text finds rows holding every word, in any order; on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*';
      --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;
-     it only sees rows committed to .fael/log on those branches — a repo that
-     gitignores .fael/log gets nothing from it;
+     it only sees rows committed to .fael/log on those branches — under
+      store = \"local\" (the default) there are none, and it says so;
      a cut list prints the exact next call — rerun it with the new --offset)",
     ),
     (

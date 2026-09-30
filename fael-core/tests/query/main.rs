@@ -7,6 +7,7 @@
 //! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
 //! `focus` (push buckets + row cap), `precision` (push golden fixture: tiers + injected ids).
 //! `carrier` (no-kind-no-files rows never list, legacy stays).
+//! `search` (chunk 4 scenarios: files + text, key glob).
 //! `restore` (superseded = edges minus reverted; restore rows are carriers;
 //! old readers over-hide by the raw edge).
 //! The shared builders live here.
@@ -23,6 +24,7 @@ mod refs;
 mod render;
 mod restore;
 mod revisit;
+mod search;
 mod select;
 mod stale;
 mod title;
