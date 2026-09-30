@@ -159,7 +159,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael keys [glob]` | list keys, with a count and last use for each — to reuse a key that already exists |
 | `fael mv <old> <new>` | record a move git can't see — an anchor, an uncommitted rewrite, or one file split into several (one old path may point at many new ones). Adds matches only, never hides a row |
 | `fael restore [<id>] [--edge id]` | revert a supersede edge with an event row — the row keeps its id and opens again; `--edge` names the superseding row when several edges still hide it; an already-open row or an already-reverted edge is info, never an error |
-| `fael purge <id>` | permanently remove a leaked test row or a mistake: the row and its close events go from every month file, tree and journal; refused when another row supersedes or restores it, when the id names a close event, or when it lives in an immutable compact file; copies already synced elsewhere return on the next sync |
+| `fael purge <id>` | permanently remove a leaked test row or a mistake: the row and its close events go from every month file, tree and journal; refused when another row supersedes or restores it, when the id names a close event, or when it lives in an immutable compact file; the id is kept as a tombstone (`purged.txt` in the writer's ref) so sync never carries the row back; copies already in a teammate's journal stay until purged there |
 | `fael kickoff [anchor] [--branches] [--full] [--limit N] [--offset M]` | the session brief: urgent first, then issues, decisions, notes by freshness (newer of the row and its files' last change); rows whose files are all gone are left out |
 | `fael hook <event> [--client c]` | hook entry point (see below) |
 | `fael mcp` | MCP server on stdio |
@@ -200,7 +200,7 @@ row_bytes = 10240             # hard cap, never above 10 KiB
 [capture]
 block = false                 # true = opt-in enforcement: the Stop hook blocks a turn that did work with no row (default: it only files the reply's lines)
 [sync]
-auto = true                   # Stop hook runs `fael sync` once per session when fael.remote is set; false = manual only
+auto = true                   # Stop hook runs `fael sync` once per session and newest row when fael.remote is set; false = manual only
 [lang]
 marker = ["english", "thai"]  # Stop-hook phrase packs (default); [] switches the bug rule off
 rows = ["english"]            # accepted row-writing languages; anything else warns once, never rejects ([] switches the check off)

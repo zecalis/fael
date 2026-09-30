@@ -12,56 +12,93 @@
 //! ride the next `git add -A` into a PR and conflict with that writer's own
 //! PR (docs/sync-format.md: never a working-tree file).
 
-use super::git::{fetch_refs, line_ref, line_sha, ls_prefix, read_tree};
+use super::git::{Fetched, fetch_refs, line_ref, line_sha, ls_prefix, read_tree};
+use super::purged;
 use crate::{Repo, core};
+use std::collections::{BTreeSet, HashSet};
+
+/// What one pass over the other writers' refs learned, for the push that follows.
+#[derive(Default)]
+pub(super) struct Others {
+    /// Rows appended to the local journal.
+    pub ingested: usize,
+    /// This writer's own ref tip as the same listing saw it.
+    pub own_tip: Option<String>,
+    /// Row ids purged here or in any ref: no push carries them back.
+    pub purged: BTreeSet<String>,
+    /// Ids another ref already carries — a clone that received them must not
+    /// push them again under its own ref.
+    pub seen: HashSet<String>,
+    /// Writer ids that own a ref.
+    pub writers: HashSet<String>,
+}
 
 /// Fetch, validate and ingest every ref under `refs/fael/<repo-id>/` except
-/// `own`. Returns the count of rows appended. The whole pass costs one
-/// `ls-remote`, one `fetch` and one journal read however many writers there
-/// are: the listing already carries every tip sha, and each ref's rows are
-/// added to the in-memory log so the next ref dedupes against them.
-pub(super) fn others(r: &Repo, remote: &str, repo_id: &str, own: &str) -> Result<usize, String> {
-    let Some(listing) = ls_prefix(&r.root, remote, &format!("refs/fael/{repo_id}/"))? else {
-        return Ok(0);
+/// `own`. The whole pass costs one `ls-remote`, one `fetch` and one journal
+/// read however many writers there are: the listing already carries every tip
+/// sha, and each ref's rows are added to the in-memory log so the next ref
+/// dedupes against them. Tombstones are gathered from every ref first, so a
+/// purge in one ref also stops the same row arriving from another.
+pub(super) fn others(r: &Repo, remote: &str, repo_id: &str, own: &str) -> Result<Others, String> {
+    let mut out = Others {
+        purged: purged::local(r),
+        ..Others::default()
     };
-    let refs: Vec<(&str, &str)> = listing
+    let Some(listing) = ls_prefix(&r.root, remote, &format!("refs/fael/{repo_id}/"))? else {
+        return Ok(out);
+    };
+    let all: Vec<(&str, &str)> = listing
         .lines()
         .map(|l| (line_ref(l), line_sha(l)))
-        .filter(|(name, sha)| *name != own && !sha.is_empty())
+        .filter(|(_, sha)| !sha.is_empty())
+        .collect();
+    out.own_tip = all
+        .iter()
+        .find(|(name, _)| *name == own)
+        .map(|(_, sha)| sha.to_string());
+    let refs: Vec<(&str, &str)> = all.into_iter().filter(|(name, _)| *name != own).collect();
+    out.writers = refs
+        .iter()
+        .filter_map(|(name, _)| name.rsplit('/').next().map(String::from))
         .collect();
     let names: Vec<&str> = refs.iter().map(|(name, _)| *name).collect();
     // one ref gone between the listing and the fetch fails the batch; then
     // each ref fetches for itself and only that one is skipped
     let batched = !names.is_empty() && fetch_refs(&r.root, remote, &names).is_ok();
-    let mut log = crate::read(r);
-    let mut n = 0;
+    let mut trees = vec![];
     for (rname, sha) in refs {
         if !batched && let Err(e) = fetch_refs(&r.root, remote, &[rname]) {
             eprintln!("fael: skipped {rname} — {e}");
             continue;
         }
-        match one(r, repo_id, rname, sha, &mut log) {
-            Ok(k) => n += k,
+        match one(r, repo_id, sha, rname) {
+            Ok(f) => trees.push(f),
             Err(e) => eprintln!("fael: skipped {rname} — {e}"),
         }
     }
-    Ok(n)
+    out.purged
+        .extend(trees.iter().flat_map(|f| f.purged.clone()));
+    let mut log = crate::read(r);
+    for f in trees {
+        out.seen
+            .extend(f.rows.iter().chain(&f.closes).map(|x| x.id.clone()));
+        let rows = core::sync::without_purged(f.rows, &out.purged);
+        let closes = core::sync::without_purged(f.closes, &out.purged);
+        out.ingested += ingest(r, &log, &rows, &closes)?;
+        log.rows.extend(rows);
+        log.closes.extend(closes);
+    }
+    Ok(out)
 }
 
-fn one(
-    r: &Repo,
-    repo_id: &str,
-    rname: &str,
-    sha: &str,
-    log: &mut core::Log,
-) -> Result<usize, String> {
+/// One ref's tree, read and checked; a ref without `meta.json` reads empty.
+fn one(r: &Repo, repo_id: &str, sha: &str, rname: &str) -> Result<Fetched, String> {
     let fetched = read_tree(&r.root, sha, rname)?;
-    let Some(m) = fetched.meta else { return Ok(0) };
-    core::sync::validate(&m, repo_id).map_err(|e| e.to_string())?;
-    let n = ingest(r, log, &fetched.rows, &fetched.closes)?;
-    log.rows.extend(fetched.rows);
-    log.closes.extend(fetched.closes);
-    Ok(n)
+    let Some(m) = &fetched.meta else {
+        return Ok(Fetched::default());
+    };
+    core::sync::validate(m, repo_id).map_err(|e| e.to_string())?;
+    Ok(fetched)
 }
 
 /// Append fetched rows missing locally, one stream at a time so the two

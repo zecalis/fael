@@ -85,7 +85,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      row supersedes or restores it, when the id names a close event (use
      fael restore for those), when it lives in an immutable compact file, or
      when the file has lines `read` would skip — run `fael doctor --fix` first;
-     copies already synced elsewhere return on the next sync)",
+     the next sync keeps it from coming back; copies already in a teammate's
+     journal stay until purged there too)",
     ),
     (
         "hook",

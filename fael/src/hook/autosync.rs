@@ -1,6 +1,8 @@
-//! Session-end auto sync (PLAN-fael-journal-transport chunk 6): the first Stop
-//! that lets a turn through, per session and worktree, starts one `fael sync`
-//! when `fael.remote` is set — never per `add`, never a second time.
+//! Auto sync (PLAN-fael-journal-transport chunk 6): a Stop that lets a turn
+//! through starts one `fael sync` when `fael.remote` is set — once per session
+//! and worktree for each newest row this writer has filed, so a turn's rows go
+//! out at the next Stop and a Stop with nothing new starts nothing. Never per
+//! `add`.
 //!
 //! Skip, never block: the sync runs as a detached child whose output goes to
 //! `<state>/auto-sync-<repo>.log` (last run only, one file per repo so one repo's
@@ -8,15 +10,15 @@
 //! a failed auth costs the turn nothing and nothing retries. `GIT_TERMINAL_PROMPT=0`
 //! turns a credential prompt into a failure instead of a hang; ssh prompts
 //! (host key, passphrase) read `/dev/tty` instead, so OpenSSH gets `BatchMode`.
-// ponytail: Stop fires per turn in Claude/Codex, so "once per session" means the
-// first turn's end: rows filed later ride the next session's first stop. A real
-// session-end event (SessionEnd) is the upgrade if that lag matters. No timeout
-// either — a wedged remote leaves one idle git child until the OS reaps it.
+// ponytail: the mark is the writer's newest row id, read from the journal at each
+// Stop; a row filed after the last Stop of a session waits for the next session's
+// first one (a real SessionEnd event is the upgrade). No timeout either — a wedged
+// remote leaves one idle git child until the OS reaps it.
 
 use super::protocol::Event;
 use super::state::{session_key, state_dir};
 use super::stop::stop_blocked_before;
-use crate::{git, repo_at};
+use crate::{Repo, git, repo_at};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -35,8 +37,12 @@ pub(crate) fn after_stop(e: &Event) {
     };
     let Ok(repo) = repo_at(&cwd) else { return };
     // marks the session even without a remote: the git spawn below runs once
-    // per session for everyone, not once per turn
-    if !repo.cfg.sync_auto || stop_blocked_before(session, &repo.root.to_string_lossy(), "sync") {
+    // per newest row for everyone, not once per turn
+    if !repo.cfg.sync_auto {
+        return;
+    }
+    let kind = format!("sync:{}", newest(&repo));
+    if stop_blocked_before(session, &repo.root.to_string_lossy(), &kind) {
         return;
     }
     if git(&repo.root, &["config", "fael.remote"]).is_none() {
@@ -64,6 +70,13 @@ pub(crate) fn after_stop(e: &Event) {
         .stdout(out)
         .stderr(err)
         .spawn();
+}
+
+/// The newest row id this writer filed, or empty — what the session mark keys on.
+fn newest(repo: &Repo) -> String {
+    let (by, log) = (crate::writer(repo), crate::read(repo));
+    let mine = log.rows.iter().chain(&log.closes).filter(|r| r.by == by);
+    mine.map(|r| r.id.as_str()).max().unwrap_or("").to_string()
 }
 
 /// `auto-sync-<hash of the worktree path>.log` — per worktree, so a repo's

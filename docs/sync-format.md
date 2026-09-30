@@ -15,8 +15,11 @@ Four principles. They are locked from chunk 1 and never redefined by a transport
 4. *Git refs are a transport namespace, not the Fael data model.*
 
 "Writer" is [`format.md`](format.md) §Layout `<writer>` (a logical author, not a
-machine). "Row format" is [`format.md`](format.md) §Row, byte for byte: a
-transport copies lines, never re-renders them. A future cloud transport stores
+machine). "Row format" is [`format.md`](format.md) §Row: a transport carries
+every row's content, unknown fields included, and writes it in the one
+canonical rendering (`Row::to_line`) — the bytes `fael add` writes. A line an
+older fael or a hand edit wrote with another key order or spacing travels in
+the canonical form; the row is the same row. A future cloud transport stores
 the same rows behind HTTP instead of Git — its database is an index over this
 format, never a second format.
 
@@ -35,7 +38,7 @@ Local journal path → ref tree path, per writer:
 - Every row the reader sees travels, and the tree is the exact inverse of the
   reader's split: add rows go to `<yyyy-mm>.jsonl`, close rows to
   `<yyyy-mm>.close.jsonl`, month from `ts` (UTC). Bytes are the row's
-  `format.md` §Rows bytes, one JSON object per line, LF. This holds for rows
+  `format.md` §Row rendering, one JSON object per line, LF. This holds for rows
   stored in `compact.*` or `_import/*` locally too — they are re-split by
   their own `ts` month, and those file *names* never appear in the tree.
   `quarantine/` (lines doctor removed) and `cache/` (not `.jsonl`) are not
@@ -49,9 +52,18 @@ Example tree at `refs/fael/<repo-id>/alice-3f9a`:
 ```
 refs/fael/abc123…/alice-3f9a
 ├── meta.json
+├── purged.txt          (only once the writer purged a row)
 ├── 2026-09.jsonl
 └── 2026-09.close.jsonl
 ```
+
+`purged.txt` is the tombstone list: one row id per line, sorted. A push cannot
+delete a row from a remote (ff-only, no force), so `fael purge <id>` records
+the id and the next sync carries it here. Every reader skips a tombstoned id
+on ingest — and the close events that name it — and drops it from its own ref
+on its next push. History still holds the row, and a copy already in a
+teammate's journal stays there until they purge it. The file is optional; a
+reader that does not know it just keeps reading rows.
 
 ### Ref scheme
 
@@ -102,6 +114,11 @@ One per ref, at the tree root:
 | `origin` | yes | the source repo's origin URL at the time of the first push (provenance label, never used for auth or routing), with any `user:password@` stripped. Empty string when unknown. |
 | `name` | yes | human short name of the repo (display label). Empty string when unknown. |
 
+`meta.json` is written by the **first** push of a ref only. A later push, from
+another clone or worktree of the same writer, keeps the label the ref already
+has — otherwise checkouts named differently would rewrite it on every
+alternating sync.
+
 There is deliberately **no `writer` field**: the ref already is the writer
 identity; duplicating it invites divergence.
 
@@ -110,10 +127,16 @@ identity; duplicating it invites divergence.
 - A writer pushes **only its own ref** (`refs/fael/<repo-id>/<writer>`).
   Each ref is therefore append-only by construction; two writers never
   contend on one ref, so concurrent pushes do not conflict.
+- What a ref carries: the rows this writer filed, the rows an import put in
+  the clone, and rows filed under an earlier writer id of this clone (a
+  changed `user.email`/`user.name`) when that id owns no ref and no other ref
+  already carries them. A sync ingests every other ref first, so a clone that
+  merely received such rows never pushes them a second time.
 - Fast-forward only, never force. If the remote ref moved during a sync
   (same writer pushing from two machines), the pusher re-fetches, re-unions
-  and retries once; a second failure is an error telling the user to run
-  `fael sync` again.
+  ingests what that brought and retries once; a second failure is an error
+  telling the user to run `fael sync` again. `synced: pushed N` counts the
+  rows this push added to the ref, not the size of the journal.
 - The working tree and the PR diff never change: a sync touches only refs
   under `refs/fael/`, never a checked-out branch, never a working-tree file.
 - Ingest is union by `id`: fetched rows missing locally are appended to the
