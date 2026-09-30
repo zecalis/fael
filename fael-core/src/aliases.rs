@@ -71,9 +71,36 @@ impl Aliases {
     /// only (a ref is opaque, `/` in it is not a directory), and globs pass
     /// through untouched — `find` matches those itself.
     pub fn expand(&self, q: &str) -> Vec<String> {
+        self.walk(q, false)
+    }
+
+    /// Old paths that became two or more new ones (a file split into modules):
+    /// which child a row filed there is about is unknowable, so the push never
+    /// inherits across such a parent (`expand_all_unsplit`).
+    fn split_parents(&self) -> HashSet<&str> {
+        let mut first: Vec<(&str, &str)> = vec![];
+        let mut out = HashSet::new();
+        for (o, n) in &self.pairs {
+            match first.iter().find(|(fo, _)| fo == o) {
+                Some((_, fnew)) if fnew != n => {
+                    out.insert(o.as_str());
+                }
+                Some(_) => {}
+                None => first.push((o, n)),
+            }
+        }
+        out
+    }
+
+    fn walk(&self, q: &str, unsplit: bool) -> Vec<String> {
         if self.pairs.is_empty() {
             return vec![q.to_string()];
         }
+        let splits = if unsplit {
+            self.split_parents()
+        } else {
+            HashSet::new()
+        };
         let q = q.trim_end_matches('/');
         if q.contains(['*', '?', '[']) {
             return vec![q.to_string()];
@@ -88,6 +115,9 @@ impl Aliases {
             }
             out.push(cur.clone());
             for (o, n) in &self.pairs {
+                if splits.contains(o.as_str()) {
+                    continue;
+                }
                 if cur == *n {
                     stack.push(o.clone());
                 } else if anchored {
@@ -106,10 +136,22 @@ impl Aliases {
 
     /// `expand` over many queries, order kept, duplicates dropped.
     pub fn expand_all(&self, qs: &[String]) -> Vec<String> {
+        self.expand_many(qs, false)
+    }
+
+    /// `expand_all` that never walks back across a split (`split_parents`):
+    /// reading one child does not pull in the rows of its siblings' parent.
+    /// A one-to-one rename still resolves. Find keeps `expand_all` — asked
+    /// for by name, every row the old path held is wanted.
+    pub fn expand_all_unsplit(&self, qs: &[String]) -> Vec<String> {
+        self.expand_many(qs, true)
+    }
+
+    fn expand_many(&self, qs: &[String], unsplit: bool) -> Vec<String> {
         let mut seen = HashSet::new();
         let mut out = vec![];
         for q in qs {
-            for e in self.expand(q) {
+            for e in self.walk(q, unsplit) {
                 if seen.insert(e.clone()) {
                     out.push(e);
                 }
