@@ -50,7 +50,9 @@ fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
         .spawn()
         .unwrap();
     if !stdin.is_empty() {
-        c.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+        // A rejected batch exits without reading stdin, so the write may hit
+        // EPIPE; the exit status and stderr below are what the tests assert.
+        let _ = c.stdin.take().unwrap().write_all(stdin.as_bytes());
     }
     let o = c.wait_with_output().unwrap();
     let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
