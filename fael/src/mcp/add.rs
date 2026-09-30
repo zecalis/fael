@@ -2,7 +2,7 @@
 //! Split out of mcp.rs at the 400-line ratchet.
 
 use super::args::{done, files, need, repo_for, s, urgent_ask};
-use crate::hook::{ASK_REJECT, ASK_WARN, record_asks, record_mcp};
+use crate::hook::{ASK_REJECT, record_mcp, record_row_asks};
 use crate::{Repo, write::AddOpts, write::add_row};
 use serde_json::Value;
 
@@ -13,13 +13,9 @@ pub(super) fn add(a: &Value) -> Result<String, String> {
             record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
             Err(e)
         }
-        Ok((text, warns)) => {
-            // a preview costs no round — its lines are the answer, not an ask
-            if !a["dry_run"].as_bool().unwrap_or(false) {
-                record_asks("mcp", ASK_WARN, "mcp-add", Some(&r.root), &warns);
-            }
-            Ok(text)
-        }
+        // warnings are recorded per row where filed (with its id + session);
+        // a preview costs no round — its lines are the answer, not an ask
+        Ok((text, _)) => Ok(text),
     }
 }
 
@@ -64,6 +60,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                 },
             ) {
                 Ok((row, _, w)) => {
+                    record_row_asks("mcp", "mcp-add", &r.root, &row, &w);
                     out.push(format!("recorded {}", row.id));
                     warns.extend(w);
                 }
@@ -78,7 +75,6 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         // like the CLI batch: any rejection turns the call into an error —
         // the saved rows stay saved, their warnings ride along
         if failed > 0 {
-            record_asks("mcp", ASK_WARN, "mcp-add", Some(&r.root), &warns);
             out.extend(warns);
             return Err(out.join("\n"));
         }
@@ -100,6 +96,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             force: a["force"].as_bool().unwrap_or(false),
         },
     )?;
+    record_row_asks("mcp", "mcp-add", &r.root, &row, &warns);
     Ok((done(&row.id, &warns), warns))
 }
 

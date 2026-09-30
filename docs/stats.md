@@ -13,8 +13,9 @@ Every number comes from two inputs, joined as pure functions in
 - `usage.jsonl` under the state dir (`FAEL_STATE_DIR`, else
   `~/.local/state/fael`) — one row per injection into context, with `ask`
   (`reject` · `stop-block` · `warning`), `session`, `agent` (the sub-agent
-  whose context the push landed in — absent on the session's own thread) and
-  `real_tokens` on some rows. Torn lines are skipped; temp-dir repos are skipped unless the state
+  whose context the push landed in — absent on the session's own thread),
+  `real_tokens` on some rows, and `row` on an add's `warning` (the id just
+  filed — not in `ids`, which count pushes; `session` there is its writer). Torn lines are skipped; temp-dir repos are skipped unless the state
   dir itself is scratch.
 - the repos' logs (tree + journal union) — for stop-block outcomes, row
   statuses and language share. A repo that no longer resolves reads empty

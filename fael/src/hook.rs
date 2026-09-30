@@ -32,7 +32,9 @@ mod state;
 mod stop;
 mod usage;
 
-pub(crate) use asks::{ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp};
+pub(crate) use asks::{
+    ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp, record_row_asks,
+};
 pub(crate) use protocol::cmd;
 pub(crate) use usage::stats;
 
