@@ -25,22 +25,29 @@ pub(crate) fn edits_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.jsonl"))
 }
 
-/// Ids already pushed in this session, one per line.
-// ponytail: after the client compacts its context the pushed text may be gone, yet the
-// row stays "seen" — add a reset on the compact hook if agents miss rows because of it.
-pub(crate) fn seen_path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+/// Ids already pushed into one context window, one per line: the session's
+/// own thread (`agent` empty), or one sub-agent — it starts with an empty
+/// context, so what the parent was told says nothing about what it knows.
+/// Session-start drops the thread's list when the client compacted.
+pub(crate) fn seen_path(session: &str, agent: &str, root: &Path) -> PathBuf {
+    let sub = match agent {
+        "" => String::new(),
+        a => format!("\0{a}"),
+    };
+    let key = session_key(&format!("{session}\0{}{sub}", root.to_string_lossy()));
     state_dir().join("sessions").join(format!("{key}.seen"))
 }
 
 /// Chunk 6e: ids this session already holds in context — just filed by `add`
 /// or just shown by `find --files`. The next push skips them instead of
 /// repeating them. Empty session or ids = no-op (MCP outside a hook session).
+// ponytail: always the session's own thread — an `add`/`find` run by a sub-agent
+// carries no agent id, so that sub-agent may be told its own row once more.
 pub(crate) fn note_seen(session: &str, root: &Path, ids: &[&str]) {
     if session.is_empty() || ids.is_empty() {
         return;
     }
-    let p = seen_path(session, root);
+    let p = seen_path(session, "", root);
     use std::io::Write;
     let out: String = ids.iter().map(|id| format!("{id}\n")).collect();
     let _ = std::fs::create_dir_all(p.parent().unwrap_or(root));

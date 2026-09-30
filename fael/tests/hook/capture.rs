@@ -219,3 +219,32 @@ fn block_mode_counts_reply_rows_as_the_row_the_work_needs() {
     assert!(out.contains(r#""block":true"#), "{out}");
     let _ = state(&d);
 }
+
+/// A sub-agent's stop (`agent` set) only files its own reply's lines: it never
+/// blocks, even in block mode with uncovered work, and with no reply it does
+/// nothing — `session` is the parent's, never this agent's message. The row is
+/// news to the parent, so the parent's next read of the file still pushes it.
+#[test]
+fn a_subagent_stop_files_its_reply_and_never_blocks() {
+    let d = adopted(repo_blocking());
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let edit = format!(
+        r#"{{"cwd":{},"session":"{SESSION}","files":["src/b.rs"]}}"#,
+        json(&d)
+    );
+    assert!(fael(&d, &["hook", "edit"], &edit).0);
+    let out = stop(&d, r#""agent":"a1""#);
+    assert!(out.contains(r#""block":false"#), "no reply: {out}");
+    let out = stop(
+        &d,
+        r#""agent":"a1","reply":"fael issue: Sub-agent saw a race in the writer [files: src/a.rs]""#,
+    );
+    assert!(out.contains(r#""block":false"#), "{out}");
+    assert!(find(&d, "race in the writer").contains("race in the writer"));
+    let read = format!(
+        r#"{{"cwd":{},"session":"{SESSION}","files":["src/a.rs"]}}"#,
+        json(&d)
+    );
+    let (_, out, _) = fael(&d, &["hook", "read"], &read);
+    assert!(out.contains("race in the writer"), "{out}");
+}

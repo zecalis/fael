@@ -21,11 +21,37 @@ use std::path::{Path, PathBuf};
 /// The stop event: `decide`, then — only when the turn is let through, so a
 /// block's follow-up row is in the journal first — the once-per-session sync.
 pub(crate) fn stop(e: &Event) -> Reply {
+    if e.agent.is_some() {
+        return subagent_stop(e);
+    }
     let r = decide(e);
     if !r.block {
         super::autosync::after_stop(e);
     }
     r
+}
+
+/// A sub-agent's stop only files its own reply's lines: the work and bug
+/// rules and the once-per-session sync belong to the session's stop. No
+/// transcript fallback — `session` is the parent's transcript, never this
+/// agent's reply.
+fn subagent_stop(e: &Event) -> Reply {
+    if let (Some(c), Some(reply)) = (ctx(e), &e.reply)
+        && adopted(&c)
+    {
+        capture::collect(&c, reply);
+    }
+    Reply {
+        block: false,
+        reason: None,
+        context: None,
+    }
+}
+
+/// A log anywhere under `.fael/` — without one fael was never adopted here.
+fn adopted(c: &super::protocol::Ctx) -> bool {
+    let log_path = c.repo.fael.join("log");
+    log_path.is_dir() && walk_jsonl(&log_path).next().is_some()
 }
 
 /// Block the turn when the session did work (edits after the
@@ -46,8 +72,7 @@ fn decide(e: &Event) -> Reply {
     // no log anywhere under .fael/ = fael never adopted here — allow before
     // spending a git spawn or a transcript read (decide_stop agrees: !has_log
     // never blocks)
-    let log_path = c.repo.fael.join("log");
-    if !(log_path.is_dir() && walk_jsonl(&log_path).next().is_some()) {
+    if !adopted(&c) {
         return no();
     }
     // the reply's lines are filed first, so the rows they write count below —

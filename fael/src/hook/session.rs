@@ -4,7 +4,7 @@
 use super::asks::hook_meta;
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
-use super::state::{head_branch, prune_sessions, session_key, state_dir};
+use super::state::{head_branch, prune_sessions, seen_path, session_key, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
@@ -32,6 +32,10 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         None => return no(),
     };
     prune_sessions(&state_dir().join("sessions"));
+    // a compacted context lost the rows pushed into it — tell them again
+    if e.source.as_deref() == Some("compact") && !c.session.is_empty() {
+        let _ = std::fs::remove_file(seen_path(&c.session, "", &c.repo.root));
+    }
     let branch = start_branch(&c.session, &c.repo.root);
     // once per session: pick up renames committed since the last session, so
     // the read/edit push (which never spawns git) resolves them — and kickoff

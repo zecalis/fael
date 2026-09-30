@@ -60,3 +60,65 @@ fn add_and_find_mark_seen_for_the_session() {
     let (ok, out, _) = fael(&d, &["hook", "read", "--client", "claude"], &input);
     assert!(ok && out.contains("found via find"), "{out}");
 }
+
+/// A claude read of `src/a.rs` in session s1, `extra` spliced into the event.
+fn read_a(d: &std::path::Path, extra: &str) -> String {
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"s1",{extra}"tool_input":{{"file_path":{}}}}}"#,
+        json(d),
+        json(&d.join("src/a.rs"))
+    );
+    let (ok, out, err) = fael(d, &["hook", "read", "--client", "claude"], &input);
+    assert!(ok, "{err}");
+    out
+}
+
+/// Seen is per context window, not per session: a sub-agent starts empty, so
+/// it gets the row its parent was already told — once each.
+#[test]
+fn a_subagent_keeps_its_own_seen_list() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "issue", "ctx login loops", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(read_a(&d, "").contains("ctx login loops"));
+    assert!(!read_a(&d, "").contains("ctx login loops"));
+    let a1 = r#""agent_id":"a1","agent_type":"Explore","#;
+    assert!(read_a(&d, a1).contains("ctx login loops"));
+    assert!(!read_a(&d, a1).contains("ctx login loops"));
+    assert!(read_a(&d, r#""agent_id":"a2","#).contains("ctx login loops"));
+    // the sub-agents never spent the parent's own list
+    assert!(!read_a(&d, "").contains("ctx login loops"));
+}
+
+/// A compacted context lost the pushed rows: session-start with
+/// `source: compact` starts the seen list over; a resume keeps it.
+#[test]
+fn compaction_starts_the_seen_list_over() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    // a decision: session-start lists open issues itself, which is not the push
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "ctx tenant keys", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(read_a(&d, "").contains("ctx tenant keys"));
+    let start = |source: &str| {
+        let input = format!(
+            r#"{{"cwd":{},"session_id":"s1","source":"{source}"}}"#,
+            json(&d)
+        );
+        let (ok, _, err) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+        assert!(ok, "{err}");
+    };
+    start("resume");
+    assert!(!read_a(&d, "").contains("ctx tenant keys"));
+    start("compact");
+    assert!(read_a(&d, "").contains("ctx tenant keys"));
+}

@@ -26,6 +26,8 @@ const CLIENTS: [&str; 3] = ["claude", "codex", "opencode"];
 /// (event, matcher, fael hook event)
 const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ("Stop", None, "stop"),
+    // a sub-agent's final message: its `fael <kind>:` lines are filed, nothing blocks
+    ("SubagentStop", None, "stop"),
     ("SessionStart", None, "session-start"),
     ("PostToolUse", Some("Read"), "read"),
     // every file-writing tool, or stop sees no edits (only the git fallback)

@@ -8,15 +8,16 @@
 **The secretary for every agent on your team.** Every agent on your repo knows what was decided and
 what's still open — without re-asking, and without a context dump.
 
-One person runs five agents; a team runs fifty. Each one starts from zero: it finds the same flaky
-test, re-asks why that function looks weird, and repeats the mistake the last agent already fixed.
+One person runs five agents; a team runs fifty — and each of those hands work to sub-agents. Every
+one of them starts from zero: it finds the same flaky test, re-asks why that function looks weird,
+and repeats the mistake the last agent already fixed.
 Memory tools that try to help stuff a summary of everything into context before the agent has said
 what it's about to do — you pay tokens for noise, and the one row that mattered gets averaged away.
 
 fael works the other way round: like a good secretary, it takes the notes nobody else will and hands
-each agent **only what matters for the file in front of it**. The agent **can't finish without
-writing**, and when it opens a file it gets **only what was written about that file**. The file it
-touches is the question.
+each agent **only what matters for the file in front of it**. The agent writes down what it decided
+or found **in the same reply, at no extra turn**, and when it opens a file it gets **only what was
+written about that file**. The file it touches is the question.
 
 The team isn't only the people who write code. A PM, QA, EM or tech lead writes a requirement, a
 decision or an assignment once — through their own agent or the CLI — and every dev agent that
@@ -28,8 +29,10 @@ fael gives the repo a memory that agents can't skip:
   [files: …]` lines and fael files them — no turn is stopped or re-prompted. Want the old
   enforcement (no row, no end of turn)? Opt in with `[capture] block = true`.
 - **Memory finds them.** When an agent reads a file, the decisions and open bugs about *that file*
-  come attached — nobody has to remember to search.
-- **No spam in context.** Rows are pushed per file, once per session, and cut to a token budget
+  come attached — nobody has to remember to search. Sub-agents too: one starts with an empty
+  context and only a short brief, and the file it opens brings the memory the brief left out.
+- **No spam in context.** Rows are pushed per file, once per context window (a sub-agent, or a
+  session after compaction, is told again — it no longer has them), and cut to a token budget
   (800 by default) — not a notes dump. Anything else the agent asks for itself, through MCP.
   `fael stats` shows exactly what fael has put into context.
 - **It follows the code.** Rename a file and its rows follow it (`git log -M`). Split one into
@@ -46,6 +49,8 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 | Each session starts from zero | Session opens with what the last one left: open bugs, recent decisions |
 | "Why is it like this?" — ask again, guess again | The reason sits next to the file, from the agent that made the call |
 | Agent notices a bug mid-task, then forgets it | It's filed on the spot, and shown to whoever touches that file next |
+| Two agents in parallel worktrees hit the same problem | The first files it; the second gets it when it opens the file — the same hour, before any commit |
+| A sub-agent finds something and its summary drops it | Its `fael issue: …` line is filed when it stops (Claude Code), and the parent gets it on that file |
 | Knowledge stays in one person's chat history | It's in the repo — teammates and their agents get it on `git pull` |
 | A PM's requirement lives in a ticket the agent never opens | `fael add decision … --files src/pay.rs` — it's in front of the agent the moment it opens the file |
 
@@ -83,9 +88,8 @@ throwaway cache. Install it globally first.
 
 ```
 agent reads src/pay.rs   →  fael attaches: "[bug] refund rounds down on JPY → src/pay.rs"
-agent edits src/pay.rs   →  fael notes the edit
-agent tries to finish    →  fael: "you edited src/pay.rs — record what changed or what you found"
-agent                    →  fael add decision "refunds round half-up, per finance" --files src/pay.rs
+agent fixes it, replies  →  "…done. fael decision: refunds round half-up, per finance [files: src/pay.rs]"
+fael                     →  files that line as a row — no extra turn, nothing blocked
 git push                 →  the next agent, on any machine, sees it when it opens src/pay.rs
 ```
 
