@@ -66,7 +66,12 @@ fn fael_at_env(
     envs: &[(&str, &str)],
 ) -> (bool, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
-    c.args(args).current_dir(dir).env("FAEL_STATE_DIR", state);
+    // a HOME with no client config: session-start's wiring check reads
+    // nothing of this machine's ~/.claude
+    c.args(args)
+        .current_dir(dir)
+        .env("FAEL_STATE_DIR", state)
+        .env("HOME", state.join("home"));
     for (k, v) in envs {
         c.env(k, v);
     }

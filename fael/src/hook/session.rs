@@ -115,17 +115,8 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         (true, true) => Some(format!("{ISSUE_LINE}\n{ID_LINE}\n")),
         (false, _) => Some(format!("{body}{ISSUE_LINE}\n{ID_LINE}\n")),
     };
-    // SPEC §11: the cheap check — one line, only when there is a problem.
-    // Skipped while no log exists yet: warning about an empty missing log is
-    // noise, and it saves a git spawn on every session start.
-    // `local` means the log is meant to stay out of git — an ignore is no problem
-    if adopted && matches!(c.repo.cfg.store, core::Store::Tracked) && check_ignore_hit(&c.repo.root)
-    {
-        let warn = "fael: .fael/log is gitignored — rows stay on this machine, run fael doctor";
-        context = Some(match context {
-            Some(c) => format!("{c}{warn}\n"),
-            None => format!("{warn}\n"),
-        });
+    for warn in warnings(&c.repo, adopted) {
+        context = Some(format!("{}{warn}\n", context.unwrap_or_default()));
     }
     let Some(context) = context else { return no() };
     // like the read/edit push: usage counts only the ids render actually
@@ -147,6 +138,33 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         reason: None,
         context: Some(context),
     }
+}
+
+/// SPEC §11: the cheap checks — one line each, only when there is a problem.
+/// Skipped while no log exists yet: warning about an empty missing log is
+/// noise, and it saves a git spawn on every session start.
+fn warnings(repo: &crate::Repo, adopted: bool) -> Vec<String> {
+    let mut out = vec![];
+    if !adopted {
+        return out;
+    }
+    // `local` means the log is meant to stay out of git — an ignore is no problem
+    if matches!(repo.cfg.store, core::Store::Tracked) && check_ignore_hit(&repo.root) {
+        out.push(
+            "fael: .fael/log is gitignored — rows stay on this machine, run fael doctor".into(),
+        );
+    }
+    // doctor's [Wiring] note, where the agent sees it: a hook that shipped
+    // after the last install (the Grep/Bash push) stays off until then.
+    // Reads the client configs only — spawns nothing.
+    let behind = crate::install::pending();
+    if behind > 0 {
+        out.push(format!(
+            "fael: {behind} client wiring change(s) behind this binary — some file pushes stay \
+             off; tell the user to run `fael upgrade`"
+        ));
+    }
+    out
 }
 
 /// The branch this session started on, for the session Focus. Empty session
