@@ -57,6 +57,12 @@ pub(crate) fn risk_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.risk"))
 }
 
+/// A capture-reject hint stashed by stop for the next push — shown once, deleted.
+pub(crate) fn hint_path(session: &str, root: &Path) -> PathBuf {
+    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+    state_dir().join("sessions").join(format!("{key}.hint"))
+}
+
 /// The checked-out branch, read straight from `<gitdir>/HEAD` — no git spawn
 /// on this path (session-start already spawns elsewhere). Lives in `journal`
 /// beside the git-dir traversal the journal root uses too, so the two cannot
@@ -89,9 +95,17 @@ pub(crate) fn prune_sessions(dir: &Path) {
 
 /// Take the stashed risk note, if any — the file is gone after this call.
 pub(crate) fn take_risk(session: &str, root: &Path) -> Option<String> {
-    let path = risk_path(session, root);
-    let s = std::fs::read_to_string(&path).ok()?;
-    let _ = std::fs::remove_file(&path);
+    take(&risk_path(session, root))
+}
+
+/// Take the stashed capture-reject hint, if any — same once-only rule.
+pub(crate) fn take_hint(session: &str, root: &Path) -> Option<String> {
+    take(&hint_path(session, root))
+}
+
+fn take(path: &Path) -> Option<String> {
+    let s = std::fs::read_to_string(path).ok()?;
+    let _ = std::fs::remove_file(path);
     let s = s.trim().to_string();
     (!s.is_empty()).then_some(s)
 }

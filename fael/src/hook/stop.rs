@@ -1,10 +1,14 @@
-//! The stop event: block the turn when the session did work (edits after
-//! the newest row, or commits when the edit hook saw nothing) but filed no
-//! row — or when the assistant announced a bug with no issue row since.
-//! A bare risk mention never blocks: it joins the work block, or is stashed
-//! for the next push to show once.
+//! The stop event. First it files the reply's `fael <kind>:` lines
+//! (`capture`). By default that is all: nothing here starts a turn, and a
+//! bug announcement with no issue row is stashed for the next push to show
+//! once. With `[capture] block = true` (opt-in enforcement) it also blocks
+//! the turn when the session did work (edits after the newest row, or
+//! commits when the edit hook saw nothing) but filed no row — or announced
+//! a bug with no issue row since. A bare risk mention never blocks: it joins
+//! the work block, or is stashed.
 
 use super::asks::{ASK_BLOCK, hook_meta};
+use super::capture;
 use super::markers::{bug_signal_from_transcript, has_bug_marker};
 use super::protocol::{Event, Reply, ctx};
 use super::state::{
@@ -16,21 +20,19 @@ use std::path::{Path, PathBuf};
 
 /// The stop event: block the turn when the session did work (edits after the
 /// newest row, or commits when the edit hook saw nothing) but filed no row, or
-/// when it announced a bug with no issue row since. `stop_active` from the
-/// client guards the re-entry after a block.
+/// when it announced a bug with no issue row since — only under `[capture]
+/// block = true`; by default it files the reply's capture lines and lets the
+/// turn end. `stop_active` from the client guards the re-entry after a block.
 pub(crate) fn stop(e: &Event) -> Reply {
     let no = || Reply {
         block: false,
         reason: None,
         context: None,
     };
-    let c = match ctx(e) {
+    let mut c = match ctx(e) {
         Some(c) => c,
         None => return no(),
     };
-    if e.stop_active {
-        return no();
-    }
     // no log anywhere under .fael/ = fael never adopted here — allow before
     // spending a git spawn or a transcript read (decide_stop agrees: !has_log
     // never blocks)
@@ -38,21 +40,20 @@ pub(crate) fn stop(e: &Event) -> Reply {
     if !(log_path.is_dir() && walk_jsonl(&log_path).next().is_some()) {
         return no();
     }
+    // the reply's lines are filed first, so the rows they write count below —
+    // and also on the re-entry after a block, where the agent's answer lands
+    if collect_reply(e, &c).stored > 0 {
+        (c.log, c.tags) = crate::journal::read(&c.repo);
+    }
+    if e.stop_active {
+        return no();
+    }
     // session start: an RFC 3339 time, or a transcript file's birthtime.
     // Recency compares run at ms precision (`since_ms`) — whole seconds race
     // with rows filed just before the session start; the `since` string stays
     // second-precision for `git log --since`, which only parses that far.
-    let (since, since_ms) = match e.session.as_deref() {
-        // an RFC 3339 start time (neutral callers without a transcript)
-        Some(s) => match core::ts_ms(s) {
-            Some(ms) => (since_secs(ms), ms),
-            None => match file_birth_ms(Path::new(s)) {
-                // a transcript file — birthtime (fallback: mtime) is the start
-                Some(ms) => (since_secs(ms as i64), ms as i64),
-                None => return no(),
-            },
-        },
-        None => return no(),
+    let Some((since, since_ms)) = session_start(e) else {
+        return no();
     };
     let root = &c.repo.root;
     // edits count only after the session's newest row — a row filed early
@@ -106,11 +107,14 @@ pub(crate) fn stop(e: &Event) -> Reply {
         bug_signal: bug_signal.clone(),
         bug_row_since,
     });
-    // a Weak signal with no work block never blocks — stash one line for the
-    // next push in this session (shown once, then deleted), and let through
-    let Some(reason) = reason else {
+    // A Weak signal with no work block never blocks — stash one line for the
+    // next push in this session (shown once, then deleted), and let through.
+    // Outside `[capture] block = true` nothing blocks at all: this is the one
+    // place a `block: true` reply is made, so default mode cannot return one.
+    let blocking = c.repo.cfg.capture_block;
+    let Some(reason) = reason.filter(|_| blocking) else {
         if let Some(sig) = &bug_signal
-            && !sig.strong
+            && (!sig.strong || !blocking)
             && !bug_row_since
         {
             stash_risk(&c.session, root, &sig.marker);
@@ -152,6 +156,19 @@ pub(crate) fn stop(e: &Event) -> Reply {
     }
 }
 
+/// File the last message's capture lines. The message comes from the client
+/// (`reply`), else from the Claude transcript's tail; neither = nothing to do.
+fn collect_reply(e: &Event, c: &super::protocol::Ctx) -> capture::Filed {
+    let from_file = || {
+        let t = Path::new(e.session.as_deref()?);
+        t.is_file().then(|| capture::transcript_reply(t)).flatten()
+    };
+    match e.reply.clone().or_else(from_file) {
+        Some(reply) => capture::collect(c, &reply),
+        None => capture::Filed::default(),
+    }
+}
+
 /// The turn's bug announcement, if any — free text, or the transcript tail
 /// after the latest user message — with whether an issue row at or after the
 /// match already clears it. An issue filed before the words never does.
@@ -183,6 +200,15 @@ fn bug_state(
         .iter()
         .any(|r| r.kind == "issue" && core::ts_ms(&r.ts).is_some_and(|ms| ms >= match_ms));
     (bug_signal, cleared)
+}
+
+/// The session start as (`git log --since` string, ms): an RFC 3339 time
+/// (neutral callers without a transcript), or a transcript file's birthtime
+/// (fallback: mtime). `None` = no usable session.
+fn session_start(e: &Event) -> Option<(String, i64)> {
+    let s = e.session.as_deref()?;
+    let ms = core::ts_ms(s).or_else(|| file_birth_ms(Path::new(s)).map(|m| m as i64))?;
+    Some((since_secs(ms), ms))
 }
 
 /// Floor to whole seconds for `git log --since` — flooring can only include

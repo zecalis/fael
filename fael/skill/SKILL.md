@@ -27,7 +27,11 @@ Each row is read months later with no chat: one or two standalone sentences.
 `--files` names the paths, or an anchor like `doc:pricing` that `fael find` showed — never
 invent one; left out, it is the files this session edited.
 An id is verified only once this session's `fael find` printed it as `- [<id>]` — never type
-one from memory. `doctor [Phantom]` flags cited ids with no row, in rows and in every `*.md`.
+one from memory.
 With the MCP server connected, the tools `find` / `add` / `close` do the same.
 
-The Stop hook will not let a turn end that edited files with no row after the edits, or that reported a problem with no issue row. Write the row; do not argue with the hook.
+Something worth keeping and no row yet? End your reply with one line per memory:
+fael decision: <one sentence> [files: a,b]
+fael issue: <one sentence> [files: a,b]
+fael note: <one sentence> [files: a,b]
+fael files each one after your reply; no extra turn. `[files: …]` is required.

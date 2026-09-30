@@ -3,7 +3,7 @@
 //! signals, transcripts scan past the latest user message only, and an issue
 //! filed before the words does not clear them.
 
-use super::{fael, fael_at, json, repo, state};
+use super::{fael, fael_at, json, repo, repo_blocking, state};
 
 #[test]
 fn stop_weak_risk_never_blocks_shows_once_on_next_push() {
@@ -40,7 +40,7 @@ fn stop_weak_risk_never_blocks_shows_once_on_next_push() {
 
 #[test]
 fn stop_weak_risk_joins_work_block() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -71,7 +71,7 @@ fn stop_weak_risk_joins_work_block() {
 
 #[test]
 fn stop_weak_work_block_does_not_consume_the_bug_slot() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -147,7 +147,7 @@ fn transcript_line(role: &str, text: &str, ts: &str) -> String {
 
 #[test]
 fn stop_reads_transcript_only_after_latest_user_message() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -208,7 +208,7 @@ fn stop_reads_transcript_only_after_latest_user_message() {
 
 #[test]
 fn stop_issue_before_match_does_not_clear_signal() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],

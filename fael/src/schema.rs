@@ -78,7 +78,7 @@ pub(crate) fn tools() -> Value {
 #[cfg(test)]
 mod tests {
     /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6100 bytes
-    /// combined (measured 6052 on 2026-09-30 — SKILL 2385 + schema 3667;
+    /// combined (measured 6085 on 2026-09-30 — SKILL 2418 + schema 3667, after the reply-capture syntax replaced the Stop-hook paragraph;
     /// the ≥40% cut retargeted to ≥15% + a ceiling by owner decision —
     /// PLAN-fael-durable-log §3). The ceiling sits just above the measure so
     /// any growth fails here, not only in the stats golden.

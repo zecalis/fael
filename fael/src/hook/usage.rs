@@ -242,6 +242,22 @@ fn short_list(items: &[String], pre: &str, post: &str) -> String {
         format!("{pre}{}{post}", items.join(", "))
     }
 }
+fn print_capture(c: &core::stats::Capture) {
+    if c.reply_lines + c.manual_adds + c.sessions_with_edits + c.post_stop_rounds == 0 {
+        return;
+    }
+    println!(
+        "  capture: reply ×{} ({} stored, {} rejected) · manual adds ×{} · post-stop rounds ×{} · {} of {} edited session(s) left no row",
+        c.reply_lines,
+        c.reply_stored,
+        c.reply_rejected,
+        c.manual_adds,
+        c.post_stop_rounds,
+        c.sessions_with_edits_no_row,
+        c.sessions_with_edits
+    );
+}
+
 /// The human `fael stats` text — format only, every number comes from core.
 fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
     println!(
@@ -292,6 +308,7 @@ fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
     let (bn, _) = ask(core::stats::ASK_BLOCK);
     let (wn, wb) = ask(core::stats::ASK_WARN);
     println!("  asks: reject ×{rn} ({rb} bytes) · stop-block ×{bn} · warning ×{wn} ({wb} bytes)");
+    print_capture(&s.capture);
     if s.repeat_blocks > 0 {
         println!(
             "  repeat stop-blocks: ×{} (a block followed a block in one session before any row)",

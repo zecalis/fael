@@ -31,3 +31,15 @@ fn cross_key_default_warn_parse_and_reject() {
     let e = Config::from_toml("[selfheal]\ncross_key = \"hold\"").unwrap_err();
     assert!(e.contains("cross_key") && e.contains("warn"), "{e}");
 }
+
+#[test]
+fn capture_block_defaults_off_and_parses() {
+    assert!(!Config::from_toml("").unwrap().capture_block);
+    assert!(
+        Config::from_toml("[capture]\nblock = true")
+            .unwrap()
+            .capture_block
+    );
+    // a non-bool must fail loudly, never silently keep or flip enforcement
+    assert!(Config::from_toml("[capture]\nblock = \"yes\"").is_err());
+}

@@ -2,7 +2,7 @@
 //! behind `[lang] marker` decide which phrases block, and `[lang] rows`
 //! decides which rows file silently.
 
-use super::{fael, json, repo};
+use super::{fael, json, repo, repo_blocking};
 
 fn decide(d: &std::path::Path) {
     let (ok, _, err) = fael(
@@ -30,7 +30,7 @@ fn stop_text(d: &std::path::Path, text: &str) -> (bool, String) {
 
 #[test]
 fn stop_thai_marker_blocks_by_default() {
-    let d = repo();
+    let d = repo_blocking();
     decide(&d);
     let (ok, out) = stop_text(&d, "เจอบั๊กใน login");
     assert!(ok && out.contains("fael add issue"), "{out}");
@@ -38,9 +38,12 @@ fn stop_thai_marker_blocks_by_default() {
 
 #[test]
 fn stop_marker_english_only_ignores_thai() {
-    let d = repo();
+    let d = repo_blocking();
     decide(&d);
-    lang_config(&d, "[lang]\nmarker = [\"english\"]\n");
+    lang_config(
+        &d,
+        "[capture]\nblock = true\n[lang]\nmarker = [\"english\"]\n",
+    );
     // the Thai pack is off: no block, nothing stashed against a later phrase
     let (ok, out) = stop_text(&d, "เจอบั๊กใน login");
     assert!(ok && out.contains(r#""block":false"#), "{out}");
@@ -62,7 +65,10 @@ fn stop_marker_empty_disables_the_bug_rule() {
 fn stop_thai_risk_note_needs_thai_pack() {
     let d = repo();
     decide(&d);
-    lang_config(&d, "[lang]\nmarker = [\"english\"]\n");
+    lang_config(
+        &d,
+        "[capture]\nblock = true\n[lang]\nmarker = [\"english\"]\n",
+    );
     // a Thai risk mention alone never blocks — but with the pack off it must
     // not even stash a line for the next push
     let (ok, out) = stop_text(&d, "doc กับโค้ดไม่ตรงกัน");

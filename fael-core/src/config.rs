@@ -73,6 +73,11 @@ pub struct Config {
     pub lang_rows: Vec<String>,
     /// Exposure of a cross-key self-heal act (`[selfheal] cross_key`).
     pub cross_key: CrossKey,
+    /// `[capture] block` (PLAN-fael-dev-adoption chunk 1): `false` (default)
+    /// = the Stop hook only files the reply's `fael <kind>:` lines and never
+    /// blocks; `true` = the opt-in enforcement mode (block a turn that did
+    /// work with no row). Capture itself never needs it.
+    pub capture_block: bool,
 }
 
 impl Default for Config {
@@ -94,6 +99,7 @@ impl Default for Config {
             lang_marker: vec!["english".into(), "thai".into()],
             lang_rows: vec!["english".into()],
             cross_key: CrossKey::Warn,
+            capture_block: false,
         }
     }
 }
@@ -115,6 +121,7 @@ impl Config {
             limit: Limit,
             lang: Lang,
             selfheal: Selfheal,
+            capture: Capture,
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
@@ -149,6 +156,11 @@ impl Config {
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
+        struct Capture {
+            block: Option<bool>,
+        }
+        #[derive(Deserialize, Default)]
+        #[serde(default)]
         struct Selfheal {
             cross_key: Option<String>,
         }
@@ -180,6 +192,7 @@ impl Config {
             lang_marker: check_lang("marker", f.lang.marker.unwrap_or(d.lang_marker))?,
             lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
             cross_key: check_cross_key(f.selfheal.cross_key)?,
+            capture_block: f.capture.block.unwrap_or(d.capture_block),
         })
     }
 }

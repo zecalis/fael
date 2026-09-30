@@ -67,6 +67,15 @@ fn repo() -> PathBuf {
     d
 }
 
+/// A repo that opted into the enforcement mode (`[capture] block = true`) —
+/// stop-block accounting only happens there; the default mode never blocks.
+fn repo_blocking() -> PathBuf {
+    let d = repo();
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "[capture]\nblock = true\n").unwrap();
+    d
+}
+
 /// Usage rows recorded so far in this repo's scratch state dir.
 fn usage(d: &Path) -> Vec<serde_json::Value> {
     let root = d.ancestors().find(|p| p.join(".git").exists()).unwrap();

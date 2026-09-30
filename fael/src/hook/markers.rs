@@ -45,7 +45,7 @@ pub(crate) fn has_bug_marker(text: &str, cfg: &core::Config) -> Option<BugHit> {
 
 /// Last ≤200 KB of a small transcript (nothing over 10 MB) — the hook must
 /// not stall turn-end. Skips a partial first line.
-fn read_tail(path: &Path) -> Option<String> {
+pub(super) fn read_tail(path: &Path) -> Option<String> {
     use std::io::{Read, Seek, SeekFrom};
     let mut f = std::fs::File::open(path).ok()?;
     let size = f.metadata().ok()?.len();

@@ -10,7 +10,7 @@ this page). Any other agent calls the neutral format:
 ```
 fael hook <stop|session-start|read|edit>   < Event   > Reply
 
-Event  {"cwd": str, "session": str, "client": str, "files": [str], "stop_active": bool, "text": str}
+Event  {"cwd": str, "session": str, "client": str, "files": [str], "stop_active": bool, "text": str, "reply": str}
 Reply  {"block": bool, "reason"?: str, "context"?: str}
 ```
 
@@ -19,13 +19,16 @@ Reply  {"block": bool, "reason"?: str, "context"?: str}
 | session starts | `session-start` | `cwd`, `session` | put `context` in the system prompt / first turn |
 | a file was read | `read` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was written | `edit` | `cwd`, `session`, `files` | append `context` to the tool result |
-| the agent is about to end its turn | `stop` | `cwd`, `session`, `text`, `stop_active` | `block` → do not end; send `reason` back to the model as the next message |
+| the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text`, `stop_active` | files the reply's `fael <kind>:` lines and never blocks; only under `[capture] block = true` does `block` mean: do not end, send `reason` back as the next message |
 
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript
   file whose birthtime is the start. **Send the exact same string to `read`, `edit` and `stop`**: it keys the
   session's edit list, stop blocks when files were edited after the newest row, and the read/edit push
   says each row once per session — without it every read re-pushes the same rows at full budget.
 - `files` — absolute, or relative to `cwd`. Paths outside the repo are dropped.
+- `reply` — the assistant's **last message only**. fael files its `fael decision|issue|note: <text> [files: a,b]`
+  lines (column 0, outside code fences); leave it out and fael reads the last message of `session` as a Claude
+  transcript. Send it once per turn end — the same lines twice in a session file once.
 - `text` — the assistant's text in this session (or at least the last message). The issue rule
   looks for "found a bug", "inconsistent", "might break", and similar; leave it out and fael reads `session` as a Claude transcript.
 - `stop_active` — `true` when this stop comes right after one you blocked, so it never loops.
