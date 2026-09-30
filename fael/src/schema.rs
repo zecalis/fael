@@ -23,10 +23,10 @@ pub(crate) fn tools() -> Value {
             "description": "Memory git lacks: why, what was rejected, open issues, unfinished work. No args = the session brief; call it first only if no fael hook gave one.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
-                "id": str_("exact id or prefix, pulls the body — id-shaped with no row rejects; pass it as text for a literal search"),
+                "id": str_("exact id or prefix, pulls the body — id-shaped with no row rejects; pass it as text for a text search"),
                 "full": {"type": "boolean", "description": "bodies under titles"},
                 "files": files("paths, dirs, globs, anchors like doc:pricing — rows on any"),
-                "text": str_("all words, any order, in text or title; also the literal search for an id-shaped string"),
+                "text": str_("all words, any order, in text or title; also the search for an id-shaped string"),
                 "key": str_("key glob, e.g. auth:*"),
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),

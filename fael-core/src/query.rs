@@ -69,7 +69,8 @@ impl Filter {
     /// No narrowing at all — `find` then answers with the session brief.
     /// Paging is not narrowing: `find --limit 2` still briefs, just shorter.
     pub fn is_empty(&self) -> bool {
-        self.text.is_none()
+        // a blank query holds no word, so it narrows nothing
+        self.text.as_deref().is_none_or(|t| t.trim().is_empty())
             && self.files.is_empty()
             && self.key.is_none()
             && self.kind.is_none()

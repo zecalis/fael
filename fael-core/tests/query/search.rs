@@ -65,3 +65,19 @@ fn s3_a_key_glob_lists_one_topic_and_nothing_else() {
     };
     assert_eq!(ids(&find(&l, &f)), ["02", "01"]);
 }
+
+/// A blank text holds no word: it narrows nothing, so `find` answers with
+/// the brief (the same rows as no text), never "every row matches a space".
+#[test]
+fn blank_text_narrows_nothing() {
+    let blank = Filter {
+        text: Some("  ".into()),
+        ..Filter::default()
+    };
+    assert!(blank.is_empty());
+    let l = log_of(vec![
+        note(1, &["a.md"], None, "a"),
+        note(2, &["b.md"], None, "b"),
+    ]);
+    assert_eq!(ids(&find(&l, &blank)), ids(&find(&l, &Filter::default())));
+}

@@ -40,15 +40,16 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
       why: `closed: <text> (<sha>)`; an id-shaped query is
       never a text search — it rejects when no row owns it, naming the rows
-      that only mention it; --text forces a literal text search;
+      that only mention it; --text forces a text search;
       an id counts as verified only after fael find printed it as - [<id>] —
       never type one from memory;
       --full shows every body;
       text finds rows holding every word, in any order; on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*';
      --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;
-     it only sees rows committed to .fael/log on those branches — under
-      store = \"local\" (the default) there are none, and it says so;
+     it only adds rows committed to .fael/log on those branches that plain find
+      lacks — none under store = \"local\" (the default) or a gitignored
+      .fael/log; when it adds none it says why;
      a cut list prints the exact next call — rerun it with the new --offset)",
     ),
     (

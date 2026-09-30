@@ -145,44 +145,76 @@ fn find_branches_after_merge_shows_each_row_once_untagged() {
     }
 }
 
-#[test]
-fn mcp_find_branches_tags_like_cli() {
+/// One MCP `find` call through `fael mcp` — the raw JSON-RPC reply.
+fn mcp_find(d: &Path, args: serde_json::Value) -> String {
     use std::io::Write;
     use std::process::Stdio;
-    let d = repo();
-    main_and_feat(&d);
-
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("mcp")
-        .current_dir(&d)
+        .current_dir(d)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
     let call = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-        "params": {"name": "find", "arguments": {"branches": true}}});
+        "params": {"name": "find", "arguments": args}});
     c.stdin
         .take()
         .unwrap()
         .write_all((call.to_string() + "\n").as_bytes())
         .unwrap();
-    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
+    String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap()
+}
+
+#[test]
+fn mcp_find_branches_tags_like_cli() {
+    let d = repo();
+    main_and_feat(&d);
+    let out = mcp_find(&d, serde_json::json!({"branches": true}));
     assert!(out.contains("row A on feat"), "{out}");
     assert!(out.contains("@feat/x"), "{out}");
     assert!(out.contains("row B on main"), "{out}");
 }
 
+/// Chunk 4 S4: when `--branches` adds no row the union read lacks, it says
+/// why — `local` (rows live in the journal) or tracked (the journal already
+/// has them, or the log is gitignored) — on stderr, and over MCP as a trailing
+/// line. Rows really added (another clone's branch) print no note.
 #[test]
-fn find_branches_under_local_says_why_it_adds_nothing() {
+fn find_branches_says_why_when_it_adds_nothing() {
     let d = repo();
     std::fs::write(d.join(".fael/config.toml"), "store = \"local\"\n").unwrap();
-    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
-    let (ok, _, err) = fael(&d, &["add", "note", "journal row", "--files", "src/b.rs"]);
-    assert!(ok, "{err}");
-    let (_, plain, _) = fael(&d, &["find"]);
-    let (ok, out, err) = fael(&d, &["find", "--branches"]);
-    assert!(ok && out == plain && out.contains("journal row"), "{out}");
+    main_and_feat(&d);
+    let (ok, plain, _) = fael(&d, &["find", "row"]);
+    assert!(
+        ok && plain.contains("row A on feat") && plain.contains("@feat/x"),
+        "{plain}"
+    );
+    let (ok, wide, err) = fael(&d, &["find", "row", "--branches"]);
+    assert!(ok);
+    assert_eq!(wide, plain);
     assert!(err.contains("store = \"local\""), "{err}");
-    let (_, _, err) = fael(&d, &["find"]);
+    let out = mcp_find(&d, serde_json::json!({"branches": true}));
+    assert!(out.contains("added no rows beyond plain find"), "{out}");
+    let (_, _, err) = fael(&d, &["find", "row"]);
+    assert!(err.is_empty(), "{err}");
+
+    // tracked, one clone: the journal already holds feat/x's row
+    let t = repo();
+    main_and_feat(&t);
+    let (ok, _, err) = fael(&t, &["find", "--branches"]);
+    assert!(
+        ok && err.contains("gitignored") && !err.contains("local"),
+        "{err}"
+    );
+
+    // another clone's journal never saw feat/x: --branches adds it, no note
+    let c = std::env::temp_dir().join(format!("fael-branches-{}", fael_core::ulid()));
+    git(
+        &t,
+        &["clone", "-q", t.to_str().unwrap(), c.to_str().unwrap()],
+    );
+    let (ok, out, err) = fael(&c, &["find", "--branches"]);
+    assert!(ok && out.contains("row A on feat"), "{out}");
     assert!(!err.contains("--branches"), "{err}");
 }
