@@ -12,7 +12,8 @@ pub(crate) fn codex_mcp(c: &Ctx) -> Result<(), String> {
         s = drop_toml_table(&s, "mcp_servers.fapony");
         what.push("removed mcp_servers.fapony");
     } else if s.contains("[mcp_servers.fapony]") {
-        println!(
+        out!(
+            c,
             "  ! mcp_servers.fapony is still in {} — --replace-fapony removes it",
             path.display()
         );
@@ -21,12 +22,13 @@ pub(crate) fn codex_mcp(c: &Ctx) -> Result<(), String> {
     let exe = serde_json::to_string(&c.exe).map_err(|e| e.to_string())?;
     if s.contains("[mcp_servers.fael]") {
         match toml_value(&s, "mcp_servers.fael", "command") {
-            Some(r) if s[r.clone()] == exe => println!("  mcp fael already set"),
+            Some(r) if s[r.clone()] == exe => out!(c, "  mcp fael already set"),
             Some(r) if s[r.clone()].contains("fael") => {
                 s.replace_range(r, &exe);
                 what.push("mcp_servers.fael (repointed)");
             }
-            _ => println!(
+            _ => out!(
+                c,
                 "  ! mcp_servers.fael in {} is not a fael binary — left alone",
                 path.display()
             ),

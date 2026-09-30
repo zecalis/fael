@@ -29,19 +29,44 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     let source = crate::hook::ignore_source(&r.root);
     let excluded = source.as_deref().is_some_and(crate::hook::deliberate);
     let ignored = source.is_some() && !excluded;
+    // Rows may live only in the clone's journal (`store = "local"`, a fresh
+    // worktree): scan them there. Nothing of it is in git, so the `merge=union`
+    // and gitignore checks do not apply.
+    let home = crate::journal::home(&r).unwrap_or(&r.fael);
+    let scan = || {
+        let mut rep = core::doctor_scan(home, &r.root, ignored, &month);
+        if home != r.fael {
+            rep.problems.retain(|p| {
+                !matches!(
+                    p.kind,
+                    core::ProblemKind::Union | core::ProblemKind::Ignored
+                )
+            });
+        }
+        rep
+    };
     if a.has("fix") {
-        let before = core::doctor_scan(&r.fael, &r.root, ignored, &month);
-        for action in core::doctor_fix(&r.fael, &r.root, &before)? {
+        for action in core::doctor_fix(home, &r.root, &scan())? {
             say(a.has("json"), &format!("fixed: {action}"));
         }
     }
-    let mut rep = core::doctor_scan(&r.fael, &r.root, ignored, &month);
+    let mut rep = scan();
     if excluded {
         rep.problems.push(core::Problem::info(
             core::ProblemKind::Ignored,
             ".fael/log is kept local by .git/info/exclude — taken as deliberate; \
              move the pattern to .gitignore if it is not"
                 .into(),
+        ));
+    }
+    let behind = crate::install::pending();
+    if behind > 0 {
+        rep.problems.push(core::Problem::info(
+            core::ProblemKind::Wiring,
+            format!(
+                "{behind} client wiring change(s) pending (hooks, plugin or skill behind this \
+                 binary) — `fael upgrade` applies them; until then a newer hook stays off"
+            ),
         ));
     }
     let log = crate::read(&r);

@@ -23,7 +23,8 @@ pub(crate) fn hooks_json(
         Ok(s) => match serde_json::from_str(&s) {
             Ok(v @ Value::Object(_)) => v,
             _ => {
-                println!(
+                out!(
+                    c,
                     "  ! {} is not a JSON object — left alone, hooks not installed",
                     path.display()
                 );
@@ -37,7 +38,8 @@ pub(crate) fn hooks_json(
         .map(|o| o.entry("hooks").or_insert_with(|| json!({})))
         .and_then(Value::as_object_mut)
     else {
-        println!(
+        out!(
+            c,
             "  ! {} has a non-object \"hooks\" — left alone",
             path.display()
         );
@@ -78,14 +80,15 @@ pub(crate) fn hooks_json(
     if fapony > 0 && c.replace {
         changed.push(format!("removed {fapony} fapony hook(s)"));
     } else if fapony > 0 {
-        println!(
+        out!(
+            c,
             "  ! fapony's Stop/session-start hooks are still in {} — in a repo with .fael/ both block; \
              rerun with --replace-fapony once that repo's log is imported",
             path.display()
         );
     }
     if changed.is_empty() {
-        println!("  hooks already set in {}", path.display());
+        out!(c, "  hooks already set in {}", path.display());
         return Ok(());
     }
     let body = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())? + "\n";

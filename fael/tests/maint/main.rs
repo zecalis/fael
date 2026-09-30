@@ -10,6 +10,7 @@ mod branches;
 mod compact;
 mod doctor;
 mod import;
+mod journal_only;
 mod notenglish;
 mod shipped;
 mod superseded;
@@ -24,6 +25,7 @@ use std::process::Command;
 fn state_env(c: &mut Command, dir: &Path) {
     let root = dir.ancestors().find(|p| p.join(".git").exists()).unwrap();
     c.env("FAEL_STATE_DIR", root.join("state"));
+    c.env("HOME", root.join("home")); // no client wiring: doctor stays about the repo
 }
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {

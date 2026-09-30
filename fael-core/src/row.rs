@@ -88,6 +88,13 @@ impl Row {
         self.extra.get("branch").and_then(|v| v.as_str())
     }
 
+    /// The agent session that filed this row: `extra.session`, stamped by the
+    /// adapter from the hook session (absent outside one). With a push's session
+    /// it tells "written by A, used by B" from "written and used by A".
+    pub fn session(&self) -> Option<&str> {
+        self.extra.get("session").and_then(|v| v.as_str())
+    }
+
     /// When to look at this row again: the `revisit` field, falling back to
     /// a hand-written `revisit` in `extra` (forward-compat read).
     pub fn revisit(&self) -> Option<&str> {

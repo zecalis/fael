@@ -18,6 +18,7 @@ mod day;
 mod focus;
 mod precision;
 mod push_cap;
+mod search;
 mod seen;
 mod session;
 mod stats;
@@ -26,6 +27,7 @@ mod stop;
 mod stop_lang;
 mod stop_risk;
 mod tags;
+mod writer;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
