@@ -16,6 +16,7 @@
 mod git;
 mod ingest;
 mod lock;
+mod origin;
 
 use crate::{Repo, core};
 use git::{fetch_tree, ls_remote, push, tip_tree, write_tree};
@@ -29,7 +30,7 @@ use std::path::Path;
 pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
     let _lock = lock::acquire(r)?; // before the first journal read; drops at return
     let remote = remote(r, a.one("remote"))?;
-    warn_origin(r, &remote);
+    origin::warn(r, &remote);
     let repo_id = repo_id(r)?;
     let by = crate::writer(r);
     let own = core::sync::ref_name(&repo_id, &by)?;
@@ -175,20 +176,6 @@ fn remote(r: &Repo, flag: Option<String>) -> Result<String, String> {
     crate::git(&r.root, &["config", "fael.remote"]).ok_or_else(|| {
         "fael: no fael.remote — set it with: git config fael.remote <url>".to_string()
     })
-}
-
-/// `store = local` + destination is `origin`: the ref is fetchable by anyone
-/// with read access even though no UI shows it. One line, then push as usual.
-fn warn_origin(r: &Repo, remote: &str) {
-    if !matches!(r.cfg.store, core::Store::Local) {
-        return;
-    }
-    let origin = crate::git(&r.root, &["config", "remote.origin.url"]).unwrap_or_default();
-    if !origin.is_empty() && remote == origin {
-        eprintln!(
-            "fael: fael ref is publicly fetchable from origin — point fael.remote at a private remote if this repo is public"
-        );
-    }
 }
 
 /// The workspace identity, identical for every clone and every branch: the
