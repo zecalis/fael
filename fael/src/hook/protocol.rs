@@ -5,11 +5,11 @@ use super::{push::push, session::session_start, stop::stop};
 use crate::{Repo, core, repo_at};
 use serde::{Deserialize, Serialize};
 use std::io::Read as _;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// Neutral Event (SPEC §9) — also the shape every adapter normalises to.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub(crate) struct Event {
     #[serde(default)]
     pub(crate) cwd: Option<String>,
@@ -93,19 +93,13 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
         "stop" => stop(&e),
         "session-start" => session_start(&e),
         "read" | "edit" => push(&e, event),
-        "search" => {
-            let mut e = e;
-            if e.files.is_empty() {
-                let cwd = e.cwd.clone().unwrap_or_else(|| ".".into());
-                e.files = super::search::touched(
-                    e.tool.as_deref().unwrap_or(""),
-                    &e.tool_input,
-                    &e.tool_response,
-                    Path::new(&cwd),
-                );
-            }
-            push(&e, event)
-        }
+        "search" if e.files.is_empty() => super::search::push_call(
+            &e,
+            e.tool.as_deref().unwrap_or(""),
+            &e.tool_input,
+            &e.tool_response,
+        ),
+        "search" => push(&e, event),
         _ => {
             eprintln!(
                 "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search"
