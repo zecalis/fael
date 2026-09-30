@@ -60,7 +60,6 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 **1. Get the binary** — prebuilt for macOS, Linux and Windows. No Rust needed.
 
 ```bash
-npm i -g @zecalis/fael               # Node
 brew install zecalis/tap/fael    # Homebrew (macOS / Linux)
 curl -LsSf https://github.com/zecalis/fael/releases/latest/download/fael-installer.sh | sh
 ```
@@ -70,6 +69,9 @@ Windows (PowerShell):
 ```powershell
 irm https://github.com/zecalis/fael/releases/latest/download/fael-installer.ps1 | iex
 ```
+
+Or through npm: `npm i -g @zecalis/fael`. It works, but every `fael` call — including each hook —
+starts Node first, so the options above are faster.
 
 **2. Connect your agents** — once per machine.
 
@@ -122,8 +124,8 @@ fael doctor                                              # check the setup (e.g.
 
 ## Links
 
-- **npm:** [@zecalis/fael](https://www.npmjs.com/package/@zecalis/fael)
 - **Homebrew tap:** [zecalis/homebrew-tap](https://github.com/zecalis/homebrew-tap)
+- **npm:** [@zecalis/fael](https://www.npmjs.com/package/@zecalis/fael)
 - **Releases & changelog:** [GitHub Releases](https://github.com/zecalis/fael/releases)
 - **Bugs & ideas:** [Issues](https://github.com/zecalis/fael/issues)
 - **Docs:** [architecture](docs/architecture.md) · [log format](docs/format.md) (read/write it without fael) · [integrate another agent](docs/integrate.md)
