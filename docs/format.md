@@ -75,8 +75,13 @@ edited or deleted — a wrong alias is fixed by moving back, not by rewriting.
 Planning rides the existing `key` and `files` fields — no new field, no format bump:
 
 - `plan:<name>` — the anchor a `PLAN-<name>.md` path widens a kickoff filter to (plan name
-  lowercased; see `plan_anchor`). `files` still holds the real code files the row is about.
-- `plan:<name>:chunk-<n>` — one chunk's row (a handoff note). The `n` is a plain number.
+  lowercased; see `plan_anchor`). A decision or issue also lists the real code files it is
+  about; a handoff note lists only the anchor and the PLAN path, so reading code never
+  re-pushes it.
+- `plan:<name>:handoff` — the plan's handoff note. One key per plan: each chunk's note
+  supersedes the last by self-heal identity (same kind, key and writer).
+- `plan:<name>:chunk-<n>` — a row about chunk `n`, the chunk it was filed in. The `n` is a
+  plain number.
 
 These are a **fapony convention**, not fael semantics: fael stores and matches them like any
 other anchor or key, and never infers from them which plan a session is inside — a session's

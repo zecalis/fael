@@ -154,24 +154,33 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     ),
 ];
 
-/// Full usage: command list, global options, examples.
+/// Commands a new user meets in week one; the rest list under "more".
+/// `core_names_are_commands` keeps every name here a real COMMANDS row.
+const CORE: &[&str] = &["add", "find", "close", "kickoff", "install"];
+
+/// Full usage: core commands, the rest, global options, examples.
 pub(crate) fn usage() -> String {
-    let rows: Vec<(String, &str)> = COMMANDS
+    let rows: Vec<(&str, String, &str)> = COMMANDS
         .iter()
-        .map(|(name, summary, section)| (list_args(name, section), *summary))
+        .map(|(name, summary, section)| (*name, list_args(name, section), *summary))
         .collect();
-    let width = rows.iter().map(|(a, _)| a.len()).max().unwrap_or(0);
-    let list: String = rows
-        .iter()
-        .map(|(a, s)| format!("  {a:width$}   {s}\n"))
-        .collect();
+    let width = rows.iter().map(|(_, a, _)| a.len()).max().unwrap_or(0);
+    let (core, rest): (Vec<_>, Vec<_>) = rows.iter().partition(|(n, ..)| CORE.contains(n));
+    let list = |rows: Vec<&(&str, String, &str)>| -> String {
+        rows.iter()
+            .map(|(_, a, s)| format!("  {a:width$}   {s}\n"))
+            .collect()
+    };
+    let (core, rest) = (list(core), list(rest));
     format!(
         "fael — a repo's memory that agents can't skip writing
 
 usage: fael <command> [options]
 
 commands:
-{list}
+{core}
+more commands:
+{rest}
 global options:
   --json             one JSON row per line, uncut, for programs
   -h, --help         this help — or one command's: fael <command> --help
@@ -234,6 +243,18 @@ mod tests {
         s.split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
             .filter(|w| w.starts_with("--") && w.len() > 2)
             .collect()
+    }
+
+    /// A misspelled or renamed CORE entry would silently drop that command
+    /// from the "commands:" list.
+    #[test]
+    fn core_names_are_commands() {
+        for c in super::CORE {
+            assert!(
+                super::COMMANDS.iter().any(|(n, ..)| n == c),
+                "CORE names {c}, which is not in COMMANDS"
+            );
+        }
     }
 
     /// docs/architecture.md's CLI table is prose around the same synopses —
