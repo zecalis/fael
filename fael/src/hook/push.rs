@@ -90,7 +90,7 @@ fn counts(sel: &core::Selection, rendered: usize, files: &[String]) -> Vec<Strin
         // used to spend more tokens on the footer than on the rows
         many => {
             let mut top = many.to_vec();
-            top.sort_by(|a, b| b.1.cmp(&a.1)); // stable: ties keep encounter order
+            top.sort_by_key(|a| std::cmp::Reverse(a.1)); // stable: ties keep encounter order
             let named: Vec<String> = top
                 .iter()
                 .take(3)

@@ -2,7 +2,9 @@
 //! the read push renders around the rows — the count footer and the
 //! `@branch` tag — for the real-session cases of notes 01M3S446P / 01M3S6NAH.
 
-use super::{fael, git, json, repo};
+#[cfg(unix)]
+use super::git;
+use super::{fael, json, repo};
 use std::path::Path;
 
 fn read(d: &Path, file: &str) -> String {
