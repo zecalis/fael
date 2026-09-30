@@ -11,12 +11,14 @@
 //! `writers` (two writers pushing at the same time),
 //! `origin` (the `store = local` + origin warning),
 //! `errors` (no remote → error, empty journal → no ref),
-//! `private` (public source repo, memory in a separate private remote).
+//! `private` (public source repo, memory in a separate private remote),
+//! `secret` (ingest skips a leaked row and never echoes it).
 
 mod errors;
 mod namespace;
 mod origin;
 mod private;
+mod secret;
 mod share;
 mod writers;
 

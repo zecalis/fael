@@ -205,3 +205,37 @@ fn import_350_legacy_rows_drops_nothing() {
     assert_eq!(rep.folded, 2);
     assert_eq!(rep.carried, 1);
 }
+
+#[test]
+fn import_skips_a_secret_row_and_never_echoes_it() {
+    let r = root();
+    let fael = fael_of(&r);
+    let src = tmp().join("leaky").join(".fael").join("log");
+    fs::create_dir_all(src.join("w-0000")).unwrap();
+    let token = format!("ghp_{}", "a".repeat(24));
+    let clean = row("A0000000000000000000000001", "decision", &["x.rs"]).to_line();
+    let mut leaked = row("A0000000000000000000000002", "note", &["x.rs"]);
+    leaked.text = format!("token is {token}");
+    fs::write(
+        src.join("w-0000").join("2026-01.jsonl"),
+        format!("{clean}\n{}\n", leaked.to_line()),
+    )
+    .unwrap();
+    let rep = import(
+        &fael,
+        None,
+        Store::Tracked,
+        &src,
+        &[],
+        &ImportOpts::default(),
+    )
+    .unwrap();
+    assert_eq!((rep.adds, rep.skipped), (1, 1));
+    assert_eq!(read(&fael).rows.len(), 1);
+    let w = rep.warnings.join("\n");
+    assert!(
+        w.contains("2026-01.jsonl:2") && w.contains("GitHub token"),
+        "{w}"
+    );
+    assert!(!w.contains(&token), "the warning must not echo the secret");
+}
