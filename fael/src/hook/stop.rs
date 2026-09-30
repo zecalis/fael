@@ -48,10 +48,15 @@ fn subagent_stop(e: &Event) -> Reply {
     }
 }
 
-/// A log anywhere under `.fael/` — without one fael was never adopted here.
+/// A log under `.fael/` or in the clone's journal — without one fael was never
+/// adopted here. The journal counts: `store = "local"` keeps rows nowhere else,
+/// and a session or sub-agent in a fresh worktree has no `.fael/` of its own.
 fn adopted(c: &super::protocol::Ctx) -> bool {
-    let log_path = c.repo.fael.join("log");
-    log_path.is_dir() && walk_jsonl(&log_path).next().is_some()
+    let journal = c.repo.journal.as_ref().map(|j| j.join("log"));
+    [Some(c.repo.fael.join("log")), journal]
+        .into_iter()
+        .flatten()
+        .any(|p| p.is_dir() && walk_jsonl(&p).next().is_some())
 }
 
 /// Block the turn when the session did work (edits after the
@@ -69,7 +74,7 @@ fn decide(e: &Event) -> Reply {
         Some(c) => c,
         None => return no(),
     };
-    // no log anywhere under .fael/ = fael never adopted here — allow before
+    // no log in the tree or the journal = fael never adopted here — allow before
     // spending a git spawn or a transcript read (decide_stop agrees: !has_log
     // never blocks)
     if !adopted(&c) {
