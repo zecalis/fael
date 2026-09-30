@@ -37,7 +37,10 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
         let mut rep = core::doctor_scan(home, &r.root, ignored, &month);
         if home != r.fael {
             rep.problems.retain(|p| {
-                !matches!(p.kind, core::ProblemKind::Union | core::ProblemKind::Ignored)
+                !matches!(
+                    p.kind,
+                    core::ProblemKind::Union | core::ProblemKind::Ignored
+                )
             });
         }
         rep
@@ -54,6 +57,16 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             ".fael/log is kept local by .git/info/exclude — taken as deliberate; \
              move the pattern to .gitignore if it is not"
                 .into(),
+        ));
+    }
+    let behind = crate::install::pending();
+    if behind > 0 {
+        rep.problems.push(core::Problem::info(
+            core::ProblemKind::Wiring,
+            format!(
+                "{behind} client wiring change(s) pending (hooks, plugin or skill behind this \
+                 binary) — `fael upgrade` applies them; until then a newer hook stays off"
+            ),
         ));
     }
     let log = crate::read(&r);
