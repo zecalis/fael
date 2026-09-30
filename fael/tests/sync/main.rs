@@ -10,11 +10,13 @@
 //! `namespace` (two repos on one remote; repo-id across clones/branches),
 //! `writers` (two writers pushing at the same time),
 //! `origin` (the `store = local` + origin warning),
-//! `errors` (no remote → error, empty journal → no ref).
+//! `errors` (no remote → error, empty journal → no ref),
+//! `private` (public source repo, memory in a separate private remote).
 
 mod errors;
 mod namespace;
 mod origin;
+mod private;
 mod share;
 mod writers;
 
