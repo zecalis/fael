@@ -171,3 +171,18 @@ fn mcp_find_branches_tags_like_cli() {
     assert!(out.contains("@feat/x"), "{out}");
     assert!(out.contains("row B on main"), "{out}");
 }
+
+#[test]
+fn find_branches_under_local_says_why_it_adds_nothing() {
+    let d = repo();
+    std::fs::write(d.join(".fael/config.toml"), "store = \"local\"\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, _, err) = fael(&d, &["add", "note", "journal row", "--files", "src/b.rs"]);
+    assert!(ok, "{err}");
+    let (_, plain, _) = fael(&d, &["find"]);
+    let (ok, out, err) = fael(&d, &["find", "--branches"]);
+    assert!(ok && out == plain && out.contains("journal row"), "{out}");
+    assert!(err.contains("store = \"local\""), "{err}");
+    let (_, _, err) = fael(&d, &["find"]);
+    assert!(!err.contains("--branches"), "{err}");
+}

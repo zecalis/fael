@@ -64,6 +64,29 @@ fn key_kind_text_since() {
 }
 
 #[test]
+fn text_matches_every_word_in_any_order() {
+    let mut r = row("A0000000000000000000000020", "issue", &["src/a.rs"], None);
+    r.text = "timeout on the login page".into();
+    r.title = Some("Auth flake".into());
+    let l = Log {
+        rows: vec![r],
+        ..Log::default()
+    };
+    let hit = |q: &str| {
+        !find(
+            &l,
+            &Filter {
+                text: Some(q.into()),
+                ..Filter::default()
+            },
+        )
+        .is_empty()
+    };
+    assert!(hit("login timeout") && hit("TIMEOUT  login") && hit("flake login"));
+    assert!(!hit("login crash"));
+}
+
+#[test]
 fn to_matches_name_part_full_id_and_no_prefix() {
     assert!(to_matches("ploy", "ploy-1a2b"));
     assert!(to_matches("ploy-1a2b", "ploy-1a2b"));
