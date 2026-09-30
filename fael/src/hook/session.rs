@@ -127,7 +127,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let n = context.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = shown.iter().take(n).map(|r| r.id.clone()).collect();
     // the session just began — no round completed yet, so no real tokens
-    let meta = hook_meta(&c.session, None, false);
+    let meta = hook_meta(&c, None, false);
     record_usage(
         &c.client,
         "session-start",

@@ -113,7 +113,8 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
         a,
         &log,
         &rows,
-        r.cfg.kickoff_tokens,
+        // an explicit --limit wins over the token budget, same as find
+        limit.map_or(r.cfg.kickoff_tokens, |_| usize::MAX),
         core::Cut {
             total,
             offset,

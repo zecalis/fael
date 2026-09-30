@@ -37,7 +37,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "find",
         "search rows",
         "fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--text query]
-     (an exact id or unique prefix pulls that row's body; an id-shaped query is
+     (an exact id or unique prefix pulls that row's body — and, if it is closed,
+      why: `closed: <text> (<sha>)`; an id-shaped query is
       never a text search — it rejects when no row owns it, naming the rows
       that only mention it; --text forces a literal text search;
       an id counts as verified only after fael find printed it as - [<id>] —
@@ -58,7 +59,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "kickoff",
         "the session brief",
         "fael kickoff [file|anchor] [--branches] [--full] [--limit N] [--offset M]
-    (the session brief: open rows ranked for a file, anchor or the whole repo)",
+    (the session brief: open rows ranked for a file, anchor or the whole repo;
+    an explicit --limit N is not cut by budget.kickoff_tokens)",
     ),
     (
         "mv",

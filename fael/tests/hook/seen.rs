@@ -138,6 +138,33 @@ fn a_subagent_keeps_its_own_seen_list() {
     assert!(!read_a(&d, "").contains("ctx login loops"));
 }
 
+/// Usage says whose context a push landed in: a sub-agent's row carries its
+/// `agent`, the session's own thread has none — the two can be told apart.
+#[test]
+fn usage_rows_name_the_subagent_they_landed_in() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "issue", "ctx login loops", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    read_a(&d, "");
+    read_a(&d, r#""agent_id":"a1","#);
+    let usage = std::fs::read_to_string(super::state(&d).join("usage.jsonl")).unwrap();
+    let reads: Vec<serde_json::Value> = usage
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .filter(|v: &serde_json::Value| v["event"] == "read")
+        .collect();
+    assert_eq!(reads.len(), 2, "{usage}");
+    assert!(
+        reads[0].get("agent").is_none() && reads[1]["agent"] == "a1",
+        "{usage}"
+    );
+}
+
 /// A compacted context lost the pushed rows: session-start with
 /// `source: compact` starts the seen list over; a resume keeps it.
 #[test]

@@ -12,8 +12,9 @@ Every number comes from two inputs, joined as pure functions in
 
 - `usage.jsonl` under the state dir (`FAEL_STATE_DIR`, else
   `~/.local/state/fael`) — one row per injection into context, with `ask`
-  (`reject` · `stop-block` · `warning`), `session` and `real_tokens` on some
-  rows. Torn lines are skipped; temp-dir repos are skipped unless the state
+  (`reject` · `stop-block` · `warning`), `session`, `agent` (the sub-agent
+  whose context the push landed in — absent on the session's own thread) and
+  `real_tokens` on some rows. Torn lines are skipped; temp-dir repos are skipped unless the state
   dir itself is scratch.
 - the repos' logs (tree + journal union) — for stop-block outcomes, row
   statuses and language share. A repo that no longer resolves reads empty
@@ -106,6 +107,7 @@ panels are summed; `delivered.last` is newest-first across repos.
 
 ## Changelog
 
+- `1` (2026-09-30): usage rows may carry `agent`; readers ignore it today — no bump.
 - `1` (2026-09-30): added `capture` (reply capture, manual adds, silent sessions); no bump.
 - `1` (2026-09-29): first frozen shape. `schema` key added; everything else
   byte-identical to the pre-core output.

@@ -9,6 +9,7 @@
 //! `push_cap` (read-push row cap + omitted line),
 //! `focus` (session Focus: focus.json written at start, read by the push).
 
+mod adopted;
 mod autosync;
 mod capture;
 mod clients;

@@ -204,7 +204,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     if sel.shown.is_empty() {
         // a stashed line still gets said, even with no rows to join
         if let Some(context) = notes {
-            let meta = hook_meta(&c.session, None, true);
+            let meta = hook_meta(&c, None, true);
             record_usage(&c.client, event, &c.repo.root, &context, &[], &meta);
             return Reply {
                 block: false,
@@ -233,7 +233,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         Some(n) => format!("{context}\n{n}"),
         None => context,
     };
-    let meta = hook_meta(&c.session, None, true);
+    let meta = hook_meta(&c, None, true);
     record_usage(&c.client, event, &c.repo.root, &context, &shown, &meta);
     Reply {
         block: false,

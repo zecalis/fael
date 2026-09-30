@@ -1,6 +1,6 @@
 use super::{closed, reverted, superseded};
 use crate::{Log, Row};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Estimated tokens — derived at read time, never stored (every model's tokenizer differs).
 /// An id-like run (≥ 6 chars of `0-9A-Z` mixing digits and letters — a ULID
@@ -151,10 +151,42 @@ pub fn render_full_page(log: &Log, rows: &[&Row], budget: usize, cut: Cut) -> St
     render_inner(log, rows, budget, true, Some(cut))
 }
 
+/// Why each closed row was closed — the close text, plus the commit the closer
+/// stamped — for the full view: a list says `(closed)`, the body says why. A
+/// compacted row carries its close as `closed.text` (the stamp is not folded).
+fn close_notes(log: &Log) -> HashMap<&str, String> {
+    let mut notes = HashMap::new();
+    for c in &log.closes {
+        let Some(id) = c.reference.as_deref() else {
+            continue;
+        };
+        let sha = c.extra.get("sha").and_then(|v| v.as_str());
+        let text = c.text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let note = sha.map_or(text.clone(), |s| {
+            format!("{text} ({})", &s[..s.len().min(7)])
+        });
+        notes.entry(id).or_insert(note);
+    }
+    for r in &log.rows {
+        let folded = r.extra.get("closed").and_then(|c| c.get("text"));
+        if let Some(t) = folded.and_then(|t| t.as_str()) {
+            notes
+                .entry(r.id.as_str())
+                .or_insert_with(|| t.split_whitespace().collect::<Vec<_>>().join(" "));
+        }
+    }
+    notes
+}
+
 fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option<Cut>) -> String {
     let ab = abbrev(log);
     let (closed, superseded) = (closed(log), superseded(log));
     let restored = restored(log);
+    let notes = if full {
+        close_notes(log)
+    } else {
+        HashMap::new()
+    };
     let mut out = String::new();
     let mut used = 0;
     let mut cut_budget = false;
@@ -188,7 +220,11 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
         // bodies read on demand only: the indented full text under its title line
         let line = if full {
             let body = r.text.split_whitespace().collect::<Vec<_>>().join(" ");
-            format!("{line}  {body}\n")
+            let why = notes
+                .get(r.id.as_str())
+                .map(|n| format!("  closed: {n}\n"))
+                .unwrap_or_default();
+            format!("{line}  {body}\n{why}")
         } else {
             line
         };

@@ -59,6 +59,38 @@ fn an_explicit_limit_wins_over_the_token_budget() {
     assert!(ok && rows(&out) == 5 && !out.contains("more"), "{err}{out}");
 }
 
+/// Same for `kickoff`: a tiny `kickoff_tokens` still cuts a plain kickoff,
+/// but `--limit 5` lists 5 rows.
+#[test]
+fn a_kickoff_limit_wins_over_the_token_budget() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "").unwrap();
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(
+        d.join(".fael/config.toml"),
+        "[budget]\nkickoff_tokens = 30\n",
+    )
+    .unwrap();
+    for i in 0..5 {
+        add_issue(&d, &format!("kick row {i} {}", "filler ".repeat(20)));
+    }
+    let rows = |out: &str| out.lines().filter(|l| l.starts_with("- [")).count();
+    let (ok, out, err) = fael(&d, &["kickoff"]);
+    assert!(ok && rows(&out) < 5, "{err}{out}");
+    let (ok, out, err) = fael(&d, &["kickoff", "--limit", "5"]);
+    assert!(ok && rows(&out) == 5 && !out.contains("more"), "{err}{out}");
+    // a limit below the total still cuts by count and names the next call
+    let (ok, out, err) = fael(&d, &["kickoff", "--limit", "2"]);
+    assert!(ok && rows(&out) == 2, "{err}{out}");
+    assert!(
+        out.contains("next: fael kickoff --limit 2 --offset 2"),
+        "{out}"
+    );
+    // an offset alone names no limit, so the budget still cuts
+    let (ok, out, err) = fael(&d, &["kickoff", "--offset", "1"]);
+    assert!(ok && rows(&out) < 4, "{err}{out}");
+}
+
 #[test]
 fn find_pages_and_names_the_next_call() {
     let d = repo();
