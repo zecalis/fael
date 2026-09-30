@@ -25,6 +25,26 @@ pub(crate) fn hook_session(root: &Path) -> String {
     env
 }
 
+/// The id a row records as its writer session: `hook_session` cut to the
+/// transcript's file stem — the UUID Claude Code puts in `$CLAUDE_CODE_SESSION_ID`,
+/// so no local path ever lands in a row that syncs to the team. `None` outside
+/// any hook session.
+fn writer_session(root: &Path) -> Option<String> {
+    let s = hook_session(root);
+    let id = match s.contains(['/', '\\']) {
+        true => Path::new(&s).file_stem()?.to_string_lossy().into_owned(),
+        false => s,
+    };
+    (!id.is_empty()).then_some(id)
+}
+
+/// Record the writer session on a row about to be filed (no-op outside a session).
+pub(crate) fn tag_writer(root: &Path, row: &mut core::Row) {
+    let session = writer_session(root);
+    row.extra
+        .extend(session.map(|s| ("session".into(), s.into())));
+}
+
 /// A session stays usable for deriving files while its edit file was written
 /// recently — the plan's guess is 2 h.
 const ACTIVE_SECS: u64 = 2 * 60 * 60;

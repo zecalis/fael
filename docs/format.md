@@ -48,7 +48,7 @@ Reference implementation: [`fael-core`](../fael-core/src).
 | `urgent` | no | orderable number on issues, lower = more urgent — absent = not urgent; `--urgent` files at the back, `--urgent-before <id>` just above that row, `fael bump` moves it later |
 | `revisit` | no | a date `YYYY-MM`/`YYYY-MM-DD` or free text (`mdl lands`) — a date ≤ today lists the row first at kickoff whatever its files; free text only counts (`fael find --revisit` lists it) |
 | `supersedes` | no | id of an older row this one replaces |
-| `client` `model` `session` `branch` `sha` | no | filled in by tools, never by the agent |
+| `client` `model` `session` `branch` `sha` | no | filled in by tools, never by the agent · `session` is the hook session id that filed the row (the transcript UUID, never a path), absent outside a hook session |
 
 **Close row** — in `<writer>/<yyyy-mm>.close.jsonl`. Any kind can be closed; a close never edits the row.
 

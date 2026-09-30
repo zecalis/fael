@@ -77,6 +77,7 @@ pub(crate) fn prepare(
     )?);
     let st = crate::stamp(r);
     let mut row = core::Row::new(&st.by, kind, text, files);
+    crate::session::tag_writer(&r.root, &mut row); // "written by A, used by B" needs the writer
     row.key = key;
     // a headline lists show; the body stays in `text` for `find <id>` / `--full`
     row.title = title

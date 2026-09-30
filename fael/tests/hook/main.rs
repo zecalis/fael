@@ -25,6 +25,7 @@ mod stop;
 mod stop_lang;
 mod stop_risk;
 mod tags;
+mod writer;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
