@@ -90,7 +90,7 @@ fn a_secret_row_is_never_pushed_nor_ingested_and_never_echoed() {
 
 /// What an older fael left on `rname`: one extra month file holding `line`,
 /// committed on top of the tip straight in the bare remote.
-fn plant(remote: &Path, rname: &str, line: &str) {
+pub(super) fn plant(remote: &Path, rname: &str, line: &str) {
     let tip = tip(remote, rname);
     let blob = git_in(
         remote,
@@ -113,7 +113,7 @@ fn plant(remote: &Path, rname: &str, line: &str) {
 }
 
 /// `git <args>` with `input` on stdin → trimmed stdout.
-fn git_in(d: &Path, args: &[&str], input: &str) -> String {
+pub(super) fn git_in(d: &Path, args: &[&str], input: &str) -> String {
     let mut c = Command::new("git")
         .args(args)
         .current_dir(d)

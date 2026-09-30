@@ -14,9 +14,12 @@
 //! fetches only store objects, pushes name the commit sha directly.
 
 mod git;
+mod ingest;
+mod lock;
 
 use crate::{Repo, core};
-use git::{fetch_tree, line_ref, ls_prefix, ls_remote, push, tip_tree, write_tree};
+use git::{fetch_tree, ls_remote, push, tip_tree, write_tree};
+use ingest::ingest;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -24,6 +27,7 @@ use std::path::Path;
 /// writer's. Prints one summary line; an empty journal against a remote with
 /// no ref prints `nothing to sync` and creates nothing.
 pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
+    let _lock = lock::acquire(r)?; // before the first journal read; drops at return
     let remote = remote(r, a.one("remote"))?;
     warn_origin(r, &remote);
     let repo_id = repo_id(r)?;
@@ -67,21 +71,7 @@ pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
         )?;
     }
     // every other writer's ref under this repo-id: fetch, validate, ingest.
-    if let Some(refs) = ls_prefix(&r.root, &remote, &format!("refs/fael/{repo_id}/"))? {
-        for rname in refs.lines().map(line_ref).filter(|n| *n != own) {
-            let sha = ls_remote(&r.root, &remote, rname)?.unwrap_or_default();
-            if sha.is_empty() {
-                continue;
-            }
-            let fetched = fetch_tree(&r.root, &remote, rname, &sha)?;
-            let Some(m) = fetched.meta else { continue };
-            if core::sync::validate(&m, &repo_id).is_err() {
-                continue;
-            }
-            let log = crate::read(r);
-            ingested += ingest(r, &log, &fetched.rows, &fetched.closes)?;
-        }
-    }
+    ingested += ingest::others(r, &remote, &repo_id, &own)?;
     if pushed == 0 && ingested == 0 && tip.is_none() {
         println!("nothing to sync");
     } else {
@@ -174,47 +164,6 @@ fn imported_ids(r: &Repo) -> HashSet<String> {
         ids.extend(log.rows.into_iter().chain(log.closes).map(|x| x.id));
     }
     ids
-}
-
-/// Append fetched rows missing locally, one stream at a time so the two
-/// dedupe separately exactly as the reader does. Returns the count appended.
-fn ingest(
-    r: &Repo,
-    log: &core::Log,
-    rows: &[core::Row],
-    closes: &[core::Row],
-) -> Result<usize, String> {
-    let mut n = 0;
-    for (fetched, is_close) in [(rows, false), (closes, true)] {
-        let local = if is_close { &log.closes } else { &log.rows };
-        for row in core::sync::missing(fetched, local) {
-            // a leaked row is never carried in: it would be re-served under
-            // every ref and come back after `fael purge`. Label + id only.
-            if let Some(what) = core::secret(&row.to_line()) {
-                eprintln!(
-                    "fael: skipped row {} from {} — looks like a secret ({what}); rotate it, then `fael purge {}` at its source",
-                    row.id, row.by, row.id
-                );
-                continue;
-            }
-            put(r, &row, is_close)?;
-            n += 1;
-        }
-    }
-    Ok(n)
-}
-
-/// The journal-first write for an ingested row: journal, then the tree per
-/// `store` (`local` skips the tree) — the same order as `add_row`, without
-/// its validation (fetched bytes already parsed; see the module docs).
-fn put(r: &Repo, row: &core::Row, is_close: bool) -> Result<(), String> {
-    if let Some(j) = r.journal.as_deref() {
-        core::append(j, row, is_close)?;
-    }
-    if !matches!(r.cfg.store, core::Store::Local) || r.journal.is_none() {
-        core::append(&r.fael, row, is_close)?;
-    }
-    Ok(())
 }
 
 /// `--remote <url>` wins, else `git config fael.remote` (per machine, in

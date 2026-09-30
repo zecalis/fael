@@ -3,7 +3,8 @@
 //! when `fael.remote` is set — never per `add`, never a second time.
 //!
 //! Skip, never block: the sync runs as a detached child whose output goes to
-//! `<state>/auto-sync.log` (last run only), so a dead network, a slow remote or
+//! `<state>/auto-sync-<repo>.log` (last run only, one file per repo so one repo's
+//! run never erases another's last error), so a dead network, a slow remote or
 //! a failed auth costs the turn nothing and nothing retries. `GIT_TERMINAL_PROMPT=0`
 //! turns a credential prompt into a failure instead of a hang; ssh prompts
 //! (host key, passphrase) read `/dev/tty` instead, so OpenSSH gets `BatchMode`.
@@ -13,7 +14,7 @@
 // either — a wedged remote leaves one idle git child until the OS reaps it.
 
 use super::protocol::Event;
-use super::state::state_dir;
+use super::state::{session_key, state_dir};
 use super::stop::stop_blocked_before;
 use crate::{git, repo_at};
 use std::path::{Path, PathBuf};
@@ -46,7 +47,7 @@ pub(crate) fn after_stop(e: &Event) {
     };
     let log = std::fs::create_dir_all(state_dir())
         .ok()
-        .and_then(|()| std::fs::File::create(state_dir().join("auto-sync.log")).ok());
+        .and_then(|()| std::fs::File::create(state_dir().join(log_name(&repo.root))).ok());
     let (out, err) = match log.and_then(|f| f.try_clone().ok().map(|c| (f, c))) {
         Some((a, b)) => (Stdio::from(a), Stdio::from(b)),
         None => (Stdio::null(), Stdio::null()),
@@ -63,6 +64,12 @@ pub(crate) fn after_stop(e: &Event) {
         .stdout(out)
         .stderr(err)
         .spawn();
+}
+
+/// `auto-sync-<hash of the worktree path>.log` — per worktree, so a repo's
+/// runs share one file and other repos' logs are left alone.
+fn log_name(root: &Path) -> String {
+    format!("auto-sync-{}.log", session_key(&root.to_string_lossy()))
 }
 
 /// The ssh command git would run (`GIT_SSH_COMMAND`, else `core.sshCommand`,
