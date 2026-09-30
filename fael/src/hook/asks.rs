@@ -6,6 +6,7 @@
 //! `token`.
 
 use super::askstats::{RealTokens, transcript_usage};
+use super::protocol::Ctx;
 use super::state::{now_rfc3339, state_dir};
 use crate::core;
 use std::path::Path;
@@ -13,12 +14,15 @@ use std::path::Path;
 pub(crate) use crate::core::stats::{ASK_BLOCK, ASK_REJECT, ASK_WARN};
 
 /// Optional half of a usage row: what kind of ask this was (absent on plain
-/// pushes), the session it belongs to (absent outside hooks), and the real
-/// tokens of the round that just ended (absent without a transcript `usage`).
+/// pushes), the session it belongs to (absent outside hooks), the sub-agent
+/// whose context it landed in (absent on the session's own thread), and the
+/// real tokens of the round that just ended (absent without a transcript
+/// `usage`).
 #[derive(Default)]
 pub(crate) struct UsageMeta<'a> {
     pub ask: Option<&'a str>,
     pub session: Option<&'a str>,
+    pub agent: Option<&'a str>,
     pub real: Option<RealTokens>,
 }
 
@@ -46,11 +50,12 @@ pub(crate) fn append_row(row: serde_json::Value) {
 /// The usage meta for a hook event: the ask type, the session, and the
 /// transcript's latest `usage` — unless `real` is false (session-start: no
 /// round completed yet, so the transcript's past tells nothing).
-pub(crate) fn hook_meta<'a>(session: &'a str, ask: Option<&'a str>, real: bool) -> UsageMeta<'a> {
+pub(crate) fn hook_meta<'a>(c: &'a Ctx, ask: Option<&'a str>, real: bool) -> UsageMeta<'a> {
     UsageMeta {
         ask,
-        session: session_meta(session),
-        real: real.then(|| transcript_usage(session)).flatten(),
+        session: session_meta(&c.session),
+        agent: (!c.agent.is_empty()).then_some(c.agent.as_str()),
+        real: real.then(|| transcript_usage(&c.session)).flatten(),
     }
 }
 

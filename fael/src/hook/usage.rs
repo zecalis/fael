@@ -35,6 +35,9 @@ pub(crate) fn record_usage(
     if let Some(session) = meta.session {
         row["session"] = session.into();
     }
+    if let Some(agent) = meta.agent {
+        row["agent"] = agent.into();
+    }
     if let Some(real) = meta.real
         && let Ok(t) = serde_json::to_value(real)
     {

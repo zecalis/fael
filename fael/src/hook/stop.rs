@@ -182,7 +182,7 @@ fn decide(e: &Event) -> Reply {
         root,
         &reason,
         &[],
-        &hook_meta(&c.session, Some(ASK_BLOCK), true),
+        &hook_meta(&c, Some(ASK_BLOCK), true),
     );
     Reply {
         block: true,
