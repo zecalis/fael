@@ -28,7 +28,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let (base, jtags) = crate::journal::read(r);
     // `find {"id": ...}` pulls that row's body — an id-shaped query is an id
     // lookup, never text (same messages as the CLI); pass it as `text` for a
-    // literal text search
+    // text search
     if let Some(id) = s(a, "id")
         && core::looks_like_id(&id)
     {
@@ -47,11 +47,10 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             crate::refs::Wide::Missing => Err(crate::find::reject_missing(&log, &id)),
         };
     }
-    let (log, branch_of) = if a["branches"].as_bool().unwrap_or(false) {
-        let (log, btags) = crate::find::branches::with_branches(&r.root, base);
-        (log, crate::journal::overlay(jtags, btags))
+    let (log, branch_of, note) = if a["branches"].as_bool().unwrap_or(false) {
+        crate::find::branches::widen(r, base, jtags)
     } else {
-        (base, jtags)
+        (base, jtags, None)
     };
     // a non-id-shaped `id` keeps the old prefix shortcut: an exact id or
     // unique prefix pulls that row's body, else the call is rejected
@@ -104,5 +103,10 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     };
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
+    // the CLI's stderr line has no stderr here: it rides the result
+    let text = match note {
+        Some(n) => format!("{}\n{n}", text.trim_end()),
+        None => text,
+    };
     Ok((text, shown))
 }

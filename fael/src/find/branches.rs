@@ -20,6 +20,28 @@ use std::process::{Command, Stdio};
 /// hold. Empty when there is no git, no other branch, or every listing fails.
 pub type BranchMap = HashMap<String, String>;
 
+/// `with_branches` on the union log, plus the journal tags, plus one line
+/// when no branch added a row the union lacks — why, never a silent plain list
+/// (moat-token chunk 4, S4). CLI prints it to stderr, MCP appends it.
+pub fn widen(
+    r: &crate::Repo,
+    base: core::Log,
+    journal: BranchMap,
+) -> (core::Log, BranchMap, Option<&'static str>) {
+    let (log, btags) = with_branches(&r.root, base);
+    let note = btags.is_empty().then_some(match r.cfg.store {
+        core::Store::Local => {
+            "fael: --branches added no rows beyond plain find — it reads rows committed to other branches' .fael/log; \
+under store = \"local\" rows live in the journal plain find already reads (this machine's branches and synced ones)"
+        }
+        core::Store::Tracked => {
+            "fael: --branches added no rows beyond plain find — no unmerged branch commits a row \
+this clone's journal lacks (or .fael/log is gitignored)"
+        }
+    });
+    (log, crate::journal::overlay(journal, btags), note)
+}
+
 /// The working-tree `base` plus every unmerged branch's rows (HEAD wins on
 /// duplicate ids), with the branch each extra row came from.
 pub fn with_branches(root: &Path, base: core::Log) -> (core::Log, BranchMap) {

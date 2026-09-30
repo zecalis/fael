@@ -14,7 +14,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // duplicate ids) and tags those ` @<branch>` on render
     let (base, jtags) = super::journal::read(&r);
     // an id-shaped query is an id lookup, never text — unless `--text`
-    // forces a literal text search (the escape hatch for the old fallback)
+    // forces a text search (the escape hatch for the old fallback)
     let forced = a.one("text");
     if forced.is_none()
         && let Some(t) = text
@@ -29,8 +29,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             super::refs::Wide::Missing => Err(reject_missing(&log, t)),
         };
     }
-    let (log, branch_of) =
-        working_or_branches(a, base, jtags, &r.root, r.cfg.store == core::Store::Local);
+    let (log, branch_of) = working_or_branches(a, base, jtags, &r);
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
     // text search (a text query equalling a unique id prefix means the id)
     if forced.is_none()
@@ -94,8 +93,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
     let (base, jtags) = super::journal::read(&r);
-    let (log, branch_of) =
-        working_or_branches(a, base, jtags, &r.root, r.cfg.store == core::Store::Local);
+    let (log, branch_of) = working_or_branches(a, base, jtags, &r);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
     let f = Filter {
@@ -143,17 +141,14 @@ fn working_or_branches(
     a: &Args,
     log: Log,
     journal: branches::BranchMap,
-    root: &std::path::Path,
-    local: bool,
+    r: &super::Repo,
 ) -> (Log, branches::BranchMap) {
     if a.has("branches") {
-        if local {
-            eprintln!(
-                "fael: --branches reads rows committed to other branches' trees; under store = \"local\" plain find already holds every branch's rows"
-            );
+        let (log, tags, note) = branches::widen(r, log, journal);
+        if let Some(n) = note {
+            eprintln!("{n}");
         }
-        let (log, btags) = branches::with_branches(root, log);
-        (log, super::journal::overlay(journal, btags))
+        (log, tags)
     } else {
         (log, journal)
     }

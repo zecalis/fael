@@ -2,10 +2,16 @@ use crate::{Row, anchor};
 
 /// Every word of the lowercased query `q` occurs in the row's text or title — lists show
 /// titles, so they count — in any order: `login timeout` finds "timeout on
-/// the login page". Words never hold whitespace, so the join adds no hit.
+/// the login page". A blank `q` holds no word and matches every row.
 pub(super) fn all_words(q: &str, r: &Row) -> bool {
-    let hay = format!("{}\n{}", r.text, r.title.as_deref().unwrap_or("")).to_lowercase();
-    q.split_whitespace().all(|w| hay.contains(w))
+    let text = r.text.to_lowercase();
+    let title = r
+        .title
+        .as_deref()
+        .map(str::to_lowercase)
+        .unwrap_or_default();
+    q.split_whitespace()
+        .all(|w| text.contains(w) || title.contains(w))
 }
 
 /// Exact or under the directory (a zone) — an anchor's ref is opaque, never a zone.
