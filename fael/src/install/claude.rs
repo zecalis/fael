@@ -3,6 +3,14 @@
 use super::{Ctx, on_path};
 use std::process::Command;
 
+/// The path after `Command:` in `claude mcp get`. Compared whole: a bare `fael`
+/// is a substring of every stale npm path, which then read as already set.
+fn mcp_command(out: &str) -> Option<&str> {
+    out.lines()
+        .find_map(|l| l.trim().strip_prefix("Command:"))
+        .map(str::trim)
+}
+
 pub(crate) fn claude_mcp(c: &Ctx) {
     let add = format!("claude mcp add fael -s user -- {} mcp", c.exe);
     if !on_path("claude") {
@@ -20,16 +28,11 @@ pub(crate) fn claude_mcp(c: &Ctx) {
                     + &String::from_utf8_lossy(&o.stderr)
             })
     };
-    // the path after `Command:` in `claude mcp get` — a fael binary there is ours to repoint
-    let points_at_fael = |out: &str| {
-        out.lines()
-            .find_map(|l| l.trim().strip_prefix("Command:"))
-            .is_some_and(|v| v.contains("fael"))
-    };
     let remove = "claude mcp remove fael -s user";
     match get("fael") {
-        Some(out) if out.contains(&c.exe) => println!("  mcp fael already set"),
-        Some(out) if !points_at_fael(&out) => println!(
+        Some(out) if mcp_command(&out) == Some(&c.exe) => println!("  mcp fael already set"),
+        // a fael binary there is ours to repoint
+        Some(out) if !mcp_command(&out).is_some_and(|v| v.contains("fael")) => println!(
             "  ! an MCP server named fael points elsewhere — left alone; `{remove}` and rerun"
         ),
         Some(_) if c.dry => {
@@ -99,5 +102,18 @@ pub(crate) fn claude_mcp(c: &Ctx) {
                 }
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn stale_npm_path_is_not_bare_fael() {
+        let out = "fael:\n  Command: /x/node_modules/.bin_real/fael\n  Args: mcp\n";
+        assert_eq!(
+            super::mcp_command(out),
+            Some("/x/node_modules/.bin_real/fael")
+        );
+        assert_ne!(super::mcp_command(out), Some("fael"));
     }
 }
