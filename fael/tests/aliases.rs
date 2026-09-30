@@ -346,3 +346,36 @@ fn deleted_row_file_is_cached_dead_so_the_hook_skips_git() {
     let v: serde_json::Value = serde_json::from_str(&cache).unwrap();
     assert_eq!(v["dead"], serde_json::json!(["src/a.rs"]), "{cache}");
 }
+
+#[test]
+fn find_with_head_unchanged_spawns_no_git() {
+    // HEAD read off the files + the cached dead list: a repeat `find` forks
+    // nothing — a committed delete, a never-committed path, and packed refs
+    let d = repo();
+    add(&d, "src/a.rs");
+    git(&d, &["rm", "-q", "src/a.rs"]);
+    commit_all(&d, "delete a");
+    let (ok, _, err) = fael(&d, &["add", "note", "ghost", "--files", "src/ghost.rs"], "");
+    assert!(ok, "{err}");
+    git(&d, &["pack-refs", "--all"]);
+    let trace = d.join("git-trace.log");
+    let find = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
+        c.args(args).current_dir(&d).env("GIT_TRACE", &trace);
+        state_env(&mut c, &d);
+        assert!(c.output().unwrap().status.success());
+    };
+    find(&["find"]); // warms the cache at HEAD and learns src/ghost.rs is dead
+    assert!(
+        trace.exists(),
+        "GIT_TRACE never fired — the tripwire is dead"
+    );
+    std::fs::remove_file(&trace).unwrap();
+    find(&["find"]);
+    find(&["find", "--files", "src/a.rs"]);
+    assert!(
+        !trace.exists(),
+        "find spawned git with HEAD unchanged:\n{}",
+        std::fs::read_to_string(&trace).unwrap_or_default()
+    );
+}

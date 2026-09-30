@@ -51,6 +51,10 @@ pub fn load(r: &Repo, log: &core::Log, refresh: bool) -> core::Aliases {
             .filter(|c| !c.head.is_empty())
             .and_then(|c| git_renames(&r.root, Some(&c.head)));
         match inc {
+            // HEAD unchanged since the cache: nothing new, its dead list still
+            // holds — take the steady path below (no ls-tree, no rewrite)
+            Some((head, pairs))
+                if pairs.is_empty() && cached.as_ref().is_some_and(|c| c.head == head) => {}
             Some((head, pairs)) => {
                 for p in pairs {
                     push_pair(&mut renames, p);
@@ -102,14 +106,33 @@ pub fn load(r: &Repo, log: &core::Log, refresh: bool) -> core::Aliases {
         let blobs = blobs.unwrap_or_default();
         write_cache(home, &head, &renames, &dead);
         al.merge_pairs(&uncommitted_pairs(&r.root, &missing, &blobs));
-    } else {
-        let dead = cached.map(|c| c.dead).unwrap_or_default();
-        missing.retain(|m| !dead.contains(m));
+    } else if let Some(c) = cached {
+        missing.retain(|m| !c.dead.contains(m));
         if !missing.is_empty()
             && let Some(blobs) = git_blobs(&r.root, &missing)
         {
+            remember_dead(home, c, &renames, &missing, &blobs);
             al.merge_pairs(&uncommitted_pairs(&r.root, &missing, &blobs));
         }
     }
     al
+}
+
+/// Paths the steady path just found with no blob at HEAD join the cached
+/// dead list, so a row naming a gitignored or long-deleted file costs one
+/// ls-tree, not one per call. The cached head stays: the next HEAD move
+/// recomputes the whole list anyway.
+fn remember_dead(
+    home: &std::path::Path,
+    c: cache::Cache,
+    renames: &[(String, String)],
+    missing: &[String],
+    blobs: &std::collections::HashMap<String, String>,
+) {
+    let mut dead = c.dead;
+    let before = dead.len();
+    dead.extend(missing.iter().filter(|m| !blobs.contains_key(*m)).cloned());
+    if dead.len() > before {
+        write_cache(home, &c.head, renames, &dead);
+    }
 }
