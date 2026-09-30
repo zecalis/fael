@@ -159,13 +159,17 @@ each with --key area:topic, so one can be superseded alone"
     r
 }
 
-/// The stem of a `plan:<name>:chunk-<n>`-shaped key (format.md §Plan
-/// keys): `Some("plan:<name>")` when the last segment is `chunk-<digits>`,
-/// else `None`. Per-chunk rows are sequential by convention — chunk-1 vs
-/// chunk-3 is the next handoff, not a typo — so `warnings` never reports
-/// two keys with the same stem as similar.
+/// The stem of a `plan:<name>:chunk-<n>` or `plan:<name>:handoff` key
+/// (format.md §Plan keys): `Some("plan:<name>")` when the last segment is
+/// `chunk-<digits>` or `handoff`, else `None`. Per-chunk rows are sequential
+/// by convention and the handoff sits beside them — chunk-1 vs chunk-3 is
+/// the next chunk, not a typo — so `warnings` never reports two keys with
+/// the same stem as similar.
 fn chunk_stem(k: &str) -> Option<&str> {
     let (stem, tail) = k.rsplit_once(':')?;
+    if tail == "handoff" {
+        return Some(stem);
+    }
     let n = tail.strip_prefix("chunk-")?;
     (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(stem)
 }
