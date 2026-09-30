@@ -71,7 +71,8 @@ pub fn keys(log: &Log, pattern: Option<&str>) -> Vec<KeyUse> {
 
 /// No filter = the session brief under the kickoff budget; otherwise find under the find budget.
 /// Either way the ranked list is paged (`Filter::limit`/`offset`) before it
-/// reaches render — the token budget stays the hard cap, whichever hits first.
+/// reaches render. The token budget caps a call that names no `limit`; a
+/// caller that names one asked for that many rows, so the limit wins.
 pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize, usize) {
     let (rows, budget) = if f.is_empty() && !f.all {
         (super::brief(log, f), cfg.kickoff_tokens)
@@ -79,7 +80,7 @@ pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize
         (super::find(log, f), cfg.find_tokens)
     };
     let (page, total) = super::page(rows, f.limit, f.offset);
-    (page, budget, total)
+    (page, f.limit.map_or(budget, |_| usize::MAX), total)
 }
 
 /// Chars per clause below which `;`-separated chunks read as a topic list

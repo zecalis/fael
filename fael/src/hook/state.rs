@@ -3,6 +3,8 @@
 //! tiny std-only time helpers the hook path uses instead of chrono.
 
 use crate::core;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -25,6 +27,21 @@ pub(crate) fn edits_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.jsonl"))
 }
 
+/// The session id inside a hook session string. Claude keys hooks by the
+/// transcript path (`…/<session id>.jsonl`), while `add`/`find` only know
+/// `$CLAUDE_CODE_SESSION_ID` — the stem is what both share, so the seen list
+/// is keyed by it and a row filed before the session's first edit (no edit
+/// file yet to bridge the two) still lands where the push reads.
+fn session_id(s: &str) -> &str {
+    if !s.contains(['/', '\\']) {
+        return s;
+    }
+    Path::new(s)
+        .file_stem()
+        .and_then(|f| f.to_str())
+        .unwrap_or(s)
+}
+
 /// Ids already pushed into one context window, one per line: the session's
 /// own thread (`agent` empty), or one sub-agent — it starts with an empty
 /// context, so what the parent was told says nothing about what it knows.
@@ -34,7 +51,8 @@ pub(crate) fn seen_path(session: &str, agent: &str, root: &Path) -> PathBuf {
         "" => String::new(),
         a => format!("\0{a}"),
     };
-    let key = session_key(&format!("{session}\0{}{sub}", root.to_string_lossy()));
+    let id = session_id(session);
+    let key = session_key(&format!("{id}\0{}{sub}", root.to_string_lossy()));
     state_dir().join("sessions").join(format!("{key}.seen"))
 }
 
@@ -47,15 +65,27 @@ pub(crate) fn note_seen(session: &str, root: &Path, ids: &[&str]) {
     if session.is_empty() || ids.is_empty() {
         return;
     }
-    let p = seen_path(session, "", root);
-    use std::io::Write;
     let out: String = ids.iter().map(|id| format!("{id}\n")).collect();
-    let _ = std::fs::create_dir_all(p.parent().unwrap_or(root));
-    let _ = std::fs::OpenOptions::new()
+    if let Some(mut f) = lock_seen(&seen_path(session, "", root)) {
+        let _ = f.write_all(out.as_bytes());
+    }
+}
+
+/// Open a seen list under an exclusive lock held until the returned file
+/// drops. The push reads, filters and appends under it: reads fired in one
+/// batch would otherwise each see the old list and push the same row. `None`
+/// = unopenable, and the push then runs unlisted (fail open).
+// ponytail: a filesystem without flock runs unlocked, as before the lock.
+pub(crate) fn lock_seen(p: &Path) -> Option<File> {
+    std::fs::create_dir_all(p.parent()?).ok()?;
+    let f = OpenOptions::new()
         .create(true)
+        .read(true)
         .append(true)
-        .open(&p)
-        .and_then(|mut f| f.write_all(out.as_bytes()));
+        .open(p)
+        .ok()?;
+    let _ = f.lock();
+    Some(f)
 }
 
 /// A Weak risk line stashed by stop for the next push — shown once, deleted.
