@@ -270,6 +270,17 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
 
 /// `fael bump` — same text/files, new `to`/`urgent`/`revisit` (see write::bump).
 fn bump(a: &Args, id: &str) -> Result<(), String> {
+    a.only(
+        "bump",
+        &[
+            "to",
+            "urgent",
+            "urgent-before",
+            "not-urgent",
+            "revisit",
+            "json",
+        ],
+    )?;
     let r = repo()?;
     let (row, path, warns) = write::bump(&r, a, id)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
