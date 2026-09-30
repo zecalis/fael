@@ -3,16 +3,21 @@
 //!
 //! No git, no network, no clock, no filesystem — the Git transport
 //! (`fael/src/sync.rs`, chunk 3) and a future cloud transport both build on
-//! this. A transport copies row bytes, never re-renders them.
+//! this. A transport carries every row's content (unknown fields included) and
+//! re-renders it with `Row::to_line`: bytes equal what `fael add` wrote, but a
+//! hand-edited or older line may differ in key order or spacing.
 
 use crate::{Row, is_month};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// The `format_version` in every `meta.json` this code writes — bump only
 /// when a field is removed, renamed, retyped, or changes meaning
 /// (docs/sync-format.md); adding an optional field is not a bump.
 pub const FORMAT_VERSION: u64 = 1;
+
+/// The tombstone file's name in a ref's tree (docs/sync-format.md).
+pub const PURGED: &str = "purged.txt";
 
 /// One ref's provenance label, at the tree root as `meta.json`.
 /// Deliberately no `writer` field — the ref already is the writer identity.
@@ -61,6 +66,33 @@ pub fn ref_name(repo_id: &str, writer: &str) -> Result<String, String> {
 pub struct TreeFile {
     pub path: String,
     pub body: String,
+}
+
+/// The tombstone file at a ref's root: one purged row id per line, sorted.
+/// `None` when nothing was purged, so a ref without one stays as it was.
+pub fn purged_file(ids: &BTreeSet<String>) -> Option<TreeFile> {
+    (!ids.is_empty()).then(|| TreeFile {
+        path: PURGED.into(),
+        body: ids.iter().map(|i| format!("{i}\n")).collect(),
+    })
+}
+
+/// Ids named by a `purged.txt` body; blank lines fall away.
+pub fn parse_purged(body: &str) -> Vec<String> {
+    body.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+/// `rows` without the purged ones — and, for a close stream, without the
+/// closes that name a purged row (`ref`), which `fael purge` removes with it.
+pub fn without_purged(rows: Vec<Row>, purged: &BTreeSet<String>) -> Vec<Row> {
+    let gone = |r: &Row| {
+        purged.contains(&r.id) || r.reference.as_ref().is_some_and(|x| purged.contains(x))
+    };
+    rows.into_iter().filter(|r| !gone(r)).collect()
 }
 
 /// Group the journal into flat-tree files: `meta.json` first, then one

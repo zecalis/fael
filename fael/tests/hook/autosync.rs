@@ -1,5 +1,5 @@
 //! Session-end auto sync (PLAN-fael-journal-transport chunk 6): the Stop hook
-//! starts one detached `fael sync` per session when `fael.remote` is set, the
+//! starts one detached `fael sync` per session and newest row when `fael.remote` is set, the
 //! `[sync] auto = false` switch silences it, and a dead remote never holds the
 //! turn. The sync is a background child, so tests poll the bare remote.
 
@@ -54,7 +54,7 @@ fn settle() {
 }
 
 #[test]
-fn first_stop_syncs_and_the_session_never_syncs_twice() {
+fn a_stop_syncs_again_when_a_newer_row_was_filed() {
     let d = repo();
     let remote = bare();
     point(&d, &remote);
@@ -62,18 +62,19 @@ fn first_stop_syncs_and_the_session_never_syncs_twice() {
     assert!(stop(&d, "s1").contains(r#""block":false"#));
     let first = wait_ref(&remote);
 
-    add(&d, "filed after the first stop");
+    // same session, nothing new: the second stop starts no sync
     stop(&d, "s1");
     settle();
-    assert_eq!(tips(&remote), first, "same session: no second sync");
+    assert_eq!(tips(&remote), first);
 
-    // a new session syncs again and carries the later row
-    stop(&d, "s2");
+    // a row filed after the first stop ships at the next stop of the same session
+    add(&d, "filed after the first stop");
+    stop(&d, "s1");
     let end = Instant::now() + Duration::from_secs(15);
     while tips(&remote) == first && Instant::now() < end {
         std::thread::sleep(Duration::from_millis(50));
     }
-    assert_ne!(tips(&remote), first, "the next session ships the new row");
+    assert_ne!(tips(&remote), first, "the newer row was not shipped");
 }
 
 #[test]

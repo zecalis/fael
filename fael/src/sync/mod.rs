@@ -17,154 +17,47 @@ mod git;
 mod ingest;
 mod lock;
 mod origin;
+mod purged;
+mod push;
+
+pub(crate) use purged::record as record_purge;
 
 use crate::{Repo, core};
-use git::{fetch_tree, ls_remote, push, tip_tree, write_tree};
-use ingest::ingest;
-use std::collections::HashSet;
 use std::path::Path;
 
-/// `fael sync [--remote url]`: push this writer's journal, ingest every
-/// writer's. Prints one summary line; an empty journal against a remote with
-/// no ref prints `nothing to sync` and creates nothing.
+/// `fael sync [--remote url]`: ingest every other writer's ref, then push this
+/// writer's journal. Prints one summary line; an empty journal against a
+/// remote with no ref prints `nothing to sync` and creates nothing.
+///
+/// Ingest comes first: the push needs to know which rows other refs already
+/// carry, which writer ids own a ref, and which ids were purged.
 pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
     let _lock = lock::acquire(r)?; // before the first journal read; drops at return
     let remote = remote(r, a.one("remote"))?;
     origin::warn(r, &remote);
     let repo_id = repo_id(r)?;
     let by = crate::writer(r);
-    let own = core::sync::ref_name(&repo_id, &by)?;
+    let refname = core::sync::ref_name(&repo_id, &by)?;
     let origin = crate::git(&r.root, &["config", "remote.origin.url"]).unwrap_or_default();
-    let name = name(&r.root);
-    let meta = core::sync::Meta::new(&repo_id, &origin, &name);
+    let meta = core::sync::Meta::new(&repo_id, &origin, &name(&r.root));
 
-    // own ref, before and after: ls → fetch+union → commit → ff-only push.
-    let mut tip = ls_remote(&r.root, &remote, &own)?;
-    let log = crate::read(r);
-    let imported = imported_ids(r);
-    let local_rows: Vec<core::Row> = local_writer(&log.rows, &by, &imported);
-    let local_closes: Vec<core::Row> = local_writer(&log.closes, &by, &imported);
-    let (mut pushed, mut ingested) = (0usize, 0usize);
-    if !local_rows.is_empty() || !local_closes.is_empty() || tip.is_some() {
-        let attempt = |tip: &Option<String>| -> Result<(Vec<core::Row>, Vec<core::Row>), String> {
-            let fetched = match tip {
-                Some(sha) => fetch_tree(&r.root, &remote, &own, sha)?,
-                None => git::Fetched::default(),
-            };
-            if let Some(m) = fetched.meta {
-                core::sync::validate(&m, &repo_id).map_err(|e| format!("{own}: {e}"))?;
-            }
-            Ok((
-                no_secrets(core::sync::union(&fetched.rows, &local_rows)),
-                no_secrets(core::sync::union(&fetched.closes, &local_closes)),
-            ))
-        };
-        push_one(
-            r,
-            &remote,
-            &own,
-            &meta,
-            &log,
-            &mut tip,
-            &mut pushed,
-            &mut ingested,
-            &attempt,
-        )?;
-    }
-    // every other writer's ref under this repo-id: fetch, validate, ingest.
-    ingested += ingest::others(r, &remote, &repo_id, &own)?;
-    if pushed == 0 && ingested == 0 && tip.is_none() {
+    let others = ingest::others(r, &remote, &repo_id, &refname)?;
+    let own = push::Own {
+        r,
+        remote: &remote,
+        refname: &refname,
+        repo_id: &repo_id,
+        by: &by,
+        meta: &meta,
+    };
+    let p = own.push(&others)?;
+    let ingested = others.ingested + p.ingested;
+    if p.pushed == 0 && ingested == 0 && others.own_tip.is_none() {
         println!("nothing to sync");
     } else {
-        println!("synced: pushed {pushed}, ingested {ingested}");
+        println!("synced: pushed {}, ingested {ingested}", p.pushed);
     }
     Ok(())
-}
-
-/// Fetch+union for one tip: the merged journal both sides converge on.
-type Attempt<'a> = &'a dyn Fn(&Option<String>) -> Result<(Vec<core::Row>, Vec<core::Row>), String>;
-
-/// Push this writer's union for one tip: fetch+union, ingest what is missing
-/// locally, and push when the union differs from the remote tree. A remote
-/// that moved under us re-fetches, re-unions and retries once; a second
-/// failure is the caller's next `fael sync`.
-#[allow(clippy::too_many_arguments)]
-fn push_one(
-    r: &Repo,
-    remote: &str,
-    own: &str,
-    meta: &core::sync::Meta,
-    log: &core::Log,
-    tip: &mut Option<String>,
-    pushed: &mut usize,
-    ingested: &mut usize,
-    attempt: Attempt<'_>,
-) -> Result<(), String> {
-    let (rows, closes) = attempt(tip)?;
-    *ingested += ingest(r, log, &rows, &closes)?;
-    let files = core::sync::tree_files(meta, &rows, &closes);
-    let tree = write_tree(&r.root, &files)?;
-    // the union is what the remote already has — no commit, no push.
-    if tip_tree(&r.root, tip)? == Some(tree.clone()) {
-        *pushed = 0;
-        return Ok(());
-    }
-    *pushed = rows.len() + closes.len();
-    let sha = git::commit_tree(&r.root, &tree, tip.as_deref())?;
-    if push(&r.root, remote, own, &sha)?.is_some() {
-        return Ok(());
-    }
-    *tip = ls_remote(&r.root, remote, own)?;
-    let (rows, closes) = attempt(tip)?;
-    let files = core::sync::tree_files(meta, &rows, &closes);
-    let tree = write_tree(&r.root, &files)?;
-    if tip_tree(&r.root, tip)? == Some(tree.clone()) {
-        *pushed = 0;
-        return Ok(());
-    }
-    let sha = git::commit_tree(&r.root, &tree, tip.as_deref())?;
-    if push(&r.root, remote, own, &sha)?.is_none() {
-        return Err("fael: remote moved twice during sync — run fael sync again".into());
-    }
-    Ok(())
-}
-
-/// This writer's filed rows plus the rows an import put in this clone — what
-/// its ref carries. Rows others filed live locally after ingest but belong to
-/// their writers' refs, never this one. An imported row keeps its legacy `by`
-/// (`claude`), so no writer would ever push it unless the clone that imported
-/// it does; ingest files it under `<by>/`, not `_import/`, so it is never
-/// re-pushed by the clones that receive it.
-fn local_writer(rows: &[core::Row], by: &str, imported: &HashSet<String>) -> Vec<core::Row> {
-    let mine = |r: &&core::Row| r.by == by || imported.contains(&r.id);
-    rows.iter().filter(mine).cloned().collect()
-}
-
-/// The push-side twin of ingest's check: a leaked row in this journal (from
-/// before the add-time check, or an import) never leaves the machine, and one
-/// an older fael already pushed drops out of the next tip. Label + id only.
-fn no_secrets(rows: Vec<core::Row>) -> Vec<core::Row> {
-    let clean = |row: &core::Row| {
-        let Some(what) = core::secret(&row.to_line()) else {
-            return true;
-        };
-        eprintln!(
-            "fael: not pushing row {} — looks like a secret ({what}); rotate it, then `fael purge {}`",
-            row.id, row.id
-        );
-        false
-    };
-    rows.into_iter().filter(clean).collect()
-}
-
-/// Ids of every row under `_import/`, in the tree and in the journal.
-fn imported_ids(r: &Repo) -> HashSet<String> {
-    let roots = std::iter::once(r.fael.as_path()).chain(r.journal.as_deref());
-    let mut ids = HashSet::new();
-    for log in roots.map(core::read_imported) {
-        ids.extend(log.rows.into_iter().chain(log.closes).map(|x| x.id));
-    }
-    ids
 }
 
 /// `--remote <url>` wins, else `git config fael.remote` (per machine, in

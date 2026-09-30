@@ -356,4 +356,21 @@ mod tests {
         std::fs::write(&t, [line("assistant", "x"), line("user", "y")].join("\n")).unwrap();
         assert_eq!(transcript_reply(&t), None);
     }
+
+    #[test]
+    fn a_long_transcript_still_yields_its_last_message() {
+        let d = std::env::temp_dir().join(format!("fael-cap-big-{}", core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let t = d.join("t.jsonl");
+        let filler = serde_json::json!({"message": {"role": "user", "content": "x".repeat(1000)}});
+        let last = serde_json::json!({"message": {"role": "assistant", "content": [
+            {"type": "text", "text": "fael note: at the end [files: a]"}]}});
+        let mut body = format!("{filler}\n").repeat(11_000); // ~11 MB
+        body.push_str(&last.to_string());
+        std::fs::write(&t, body).unwrap();
+        assert_eq!(
+            transcript_reply(&t).unwrap(),
+            "fael note: at the end [files: a]"
+        );
+    }
 }

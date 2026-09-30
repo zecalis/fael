@@ -13,6 +13,8 @@ use std::process::{Command, Stdio};
 #[derive(Default)]
 pub(crate) struct Fetched {
     pub meta: Option<core::sync::Meta>,
+    /// Row ids the writer purged (`purged.txt`): nobody carries them back.
+    pub purged: Vec<String>,
     pub rows: Vec<core::Row>,
     pub closes: Vec<core::Row>,
 }
@@ -36,14 +38,14 @@ pub(crate) fn fetch_refs(root: &Path, remote: &str, refs: &[&str]) -> Result<(),
     run(root, &args).map(drop)
 }
 
-/// Read a fetched ref's tree: `meta.json` + every `*.jsonl`, closes by
+/// Read a fetched ref's tree: `meta.json`, `purged.txt` + every `*.jsonl`, closes by
 /// filename. Every blob comes through one `git cat-file --batch`.
 pub(crate) fn read_tree(root: &Path, sha: &str, refname: &str) -> Result<Fetched, String> {
     let tree = run(root, &["rev-parse", &format!("{sha}^{{tree}}")])?;
     let listing = run(root, &["ls-tree", "-r", "--name-only", &tree])?;
     let paths: Vec<&str> = listing
         .lines()
-        .filter(|p| *p == "meta.json" || p.ends_with(".jsonl"))
+        .filter(|p| matches!(*p, "meta.json" | core::sync::PURGED) || p.ends_with(".jsonl"))
         .collect();
     let bodies = blobs(root, &tree, &paths)?;
     let mut out = Fetched::default();
@@ -52,6 +54,8 @@ pub(crate) fn read_tree(root: &Path, sha: &str, refname: &str) -> Result<Fetched
         if *path == "meta.json" {
             out.meta =
                 Some(core::sync::Meta::from_json(&body).map_err(|e| format!("{refname}: {e}"))?);
+        } else if *path == core::sync::PURGED {
+            out.purged = core::sync::parse_purged(&body);
         } else {
             let dst = if path.ends_with(".close.jsonl") {
                 &mut out.closes

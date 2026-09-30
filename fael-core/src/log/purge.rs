@@ -14,8 +14,9 @@
 //! `[Phantom]` `doctor` would flag). Both stores are rewritten — the tree and
 //! the journal when the clone has one — following `compact` (locks, tmp +
 //! rename, same bytes to every root that held a source line). Copies already
-//! synced to other clones or remotes are out of reach and return on the next
-//! `fael sync`; the CLI warns about that when `fael.remote` is set.
+//! synced to other clones or remotes are out of reach; the CLI keeps the id as
+//! a tombstone so `fael sync` never carries the row back, and warns about the
+//! copies in teammates' journals when `fael.remote` is set.
 
 use super::{Log, collect_files, lock, month_of, tmp_rename};
 use crate::{Row, decode_text, resolve};
