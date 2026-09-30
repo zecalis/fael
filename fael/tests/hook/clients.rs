@@ -1,11 +1,11 @@
 //! Client shapes: codex apply_patch edits + last message, claude
 //! NotebookEdit paths.
 
-use super::{fael, repo, transcript};
+use super::{fael, repo_blocking, transcript};
 
 #[test]
 fn codex_apply_patch_edits_and_last_message() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -38,7 +38,7 @@ fn codex_apply_patch_edits_and_last_message() {
 
 #[test]
 fn claude_notebook_edit_is_recorded() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],

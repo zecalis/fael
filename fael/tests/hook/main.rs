@@ -10,6 +10,7 @@
 //! `focus` (session Focus: focus.json written at start, read by the push).
 
 mod autosync;
+mod capture;
 mod clients;
 mod day;
 mod focus;
@@ -100,6 +101,15 @@ fn repo() -> PathBuf {
         .current_dir(&d)
         .status()
         .unwrap();
+    d
+}
+
+/// A repo that opted into the enforcement mode (`[capture] block = true`) —
+/// the Stop-block rules only apply there; the default mode never blocks.
+fn repo_blocking() -> PathBuf {
+    let d = repo();
+    std::fs::create_dir_all(d.join(".fael")).unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "[capture]\nblock = true\n").unwrap();
     d
 }
 

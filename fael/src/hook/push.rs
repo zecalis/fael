@@ -4,7 +4,7 @@
 
 use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
-use super::state::{edits_path, record_edits, seen_path, take_risk};
+use super::state::{edits_path, record_edits, seen_path, take_hint, take_risk};
 use super::usage::record_usage;
 use crate::{aliases, core};
 use std::collections::HashSet;
@@ -15,6 +15,19 @@ fn risk_line(marker: &str, files: &[String]) -> String {
         "fael note: this session mentioned a possible problem (\"{marker}\") — file an issue if it holds up: fael add issue \"<what is at risk>\" --files {}",
         files.join(",")
     )
+}
+
+/// Take the lines stop stashed for this push — the Weak risk mention and the
+/// capture-reject hint, each shown once, whether or not rows join them.
+/// Joined, or `None` when there are none.
+fn take_stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
+    if c.session.is_empty() {
+        return None;
+    }
+    let risk = take_risk(&c.session, &c.repo.root).map(|m| risk_line(&m, files));
+    let hint = take_hint(&c.session, &c.repo.root).map(|h| format!("fael: {h}"));
+    let lines: Vec<String> = risk.into_iter().chain(hint).collect();
+    (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
 /// The directory calls that reach the hidden same-dir ring: every distinct
@@ -180,14 +193,10 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     }
     let focus = super::focus::read(&c.session, &c.repo.root);
     let sel = core::select(tiered, &focus, &policy);
-    // a stashed Weak risk is taken here — shown once, whether or not rows join it
-    let risk = (!c.session.is_empty())
-        .then(|| take_risk(&c.session, &c.repo.root))
-        .flatten();
+    let notes = take_stashed(&c, &files);
     if sel.shown.is_empty() {
-        // a stashed risk still gets its one line, even with no rows to join
-        if let Some(marker) = risk {
-            let context = risk_line(&marker, &files);
+        // a stashed line still gets said, even with no rows to join
+        if let Some(context) = notes {
             let meta = hook_meta(&c.session, None, true);
             record_usage(&c.client, event, &c.repo.root, &context, &[], &meta);
             return Reply {
@@ -219,8 +228,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
             .and_then(|mut f| f.write_all(out.as_bytes()));
     }
     let context = format!("fael mem for {}:\n{body}", files.join(", "));
-    let context = match risk {
-        Some(marker) => format!("{context}\n{}", risk_line(&marker, &files)),
+    let context = match notes {
+        Some(n) => format!("{context}\n{n}"),
         None => context,
     };
     let meta = hook_meta(&c.session, None, true);

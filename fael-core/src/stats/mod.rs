@@ -9,6 +9,7 @@
 //! edge that reads the environment).
 
 mod aggregate;
+mod capture;
 mod day;
 mod metrics;
 mod parse;
@@ -17,6 +18,7 @@ pub use aggregate::{
     AskCount, BlockOutcome, Constants, Count, NonEnglish, RealAvg, Rounds, RowStatus, STATS_SCHEMA,
     Stats, TopRow, aggregate,
 };
+pub use capture::Capture;
 pub use day::{
     BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,

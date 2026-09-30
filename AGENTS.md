@@ -8,9 +8,10 @@ generic AI memory store, and not a process or git guard. Value is work context
 agent rounds**, never more rows.
 
 Ship a feature only if it preserves/repairs context, retrieves the right context, cuts
-repeated agent work, or improves team reuse — and starts no agent turn beyond the
-capture block, adds no daemon, never guesses, never polices the developer's process
-(worktree, branch, git flow). Full statement: `docs/architecture.md` §0.
+repeated agent work, or improves team reuse — and never starts an agent turn or
+re-prompts on idle (the opt-in `[capture] block = true` mode aside), adds no daemon,
+never guesses, never polices the developer's process (worktree, branch, git flow).
+Full statement: `docs/architecture.md` §0.
 
 ## Memory — `.fael/log/`
 

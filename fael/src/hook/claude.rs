@@ -23,7 +23,8 @@ struct ClaudeStop {
     base: ClaudeBase,
     #[serde(default)]
     stop_hook_active: bool,
-    /// codex only: the turn's final assistant message
+    /// the turn's final assistant message — codex always sends it, Claude Code
+    /// on recent versions
     #[serde(default)]
     last_assistant_message: Option<String>,
 }
@@ -79,10 +80,13 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 // codex transcripts are not claude-format: always hand the
                 // text over, so stop never falls back to parsing the file
                 text: if codex {
-                    Some(p.last_assistant_message.unwrap_or_default())
+                    Some(p.last_assistant_message.clone().unwrap_or_default())
                 } else {
                     None
                 },
+                // the final message, when the client hands it over (codex always;
+                // Claude Code on recent versions) — else stop reads the transcript
+                reply: p.last_assistant_message,
                 client,
                 ..Event::default()
             };

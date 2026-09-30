@@ -1,7 +1,7 @@
 //! Stop-hook blocks land with their ask type and session, transcript `usage`
 //! lands as `real_tokens`, and `stats` joins blocks to the round after them.
 
-use super::{fael, json, repo, stats_json, usage};
+use super::{fael, json, repo_blocking, stats_json, usage};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -51,7 +51,7 @@ fn stop(d: &std::path::Path, input: &str) -> (bool, String, String) {
 
 #[test]
 fn stop_block_records_ask_and_session() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &[
@@ -85,7 +85,7 @@ fn stop_block_records_ask_and_session() {
 
 #[test]
 fn transcript_usage_lands_on_block_row() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &[
@@ -115,7 +115,7 @@ fn transcript_usage_lands_on_block_row() {
 
 #[test]
 fn post_block_round_cost_joins_block_to_next_push() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &[
@@ -171,7 +171,7 @@ fn post_block_round_cost_joins_block_to_next_push() {
 
 #[test]
 fn repeat_block_counts_block_after_block_before_any_row() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &[

@@ -274,7 +274,12 @@ fn replay_long_untitled_warns_once() {
 /// across the replay (blocking policy is unchanged by chunk 3).
 #[test]
 fn replay_stop_block_then_row_then_silence() {
-    let d = replay_repo();
+    let d = {
+        let d = replay_repo();
+        std::fs::create_dir_all(d.join(".fael")).unwrap();
+        std::fs::write(d.join(".fael/config.toml"), "[capture]\nblock = true\n").unwrap();
+        d
+    };
     let (ok, _, err) = fael(
         &d,
         &[

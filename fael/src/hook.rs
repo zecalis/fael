@@ -7,7 +7,7 @@
 //!
 //! Thin entry only — the events live in `hook/`:
 //! `protocol` (neutral Event/Reply + shared ctx), `claude` (client adapters),
-//! `stop` (turn-end work/bug rule), `session` (session-start kickoff),
+//! `stop` (turn-end work/bug rule), `capture` (the reply's `fael <kind>:` lines), `session` (session-start kickoff),
 //! `push` (read/edit context), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
 //! `autosync` (session-end `fael sync`, off-switch `[sync] auto`),
@@ -20,6 +20,7 @@
 mod asks;
 mod askstats;
 mod autosync;
+mod capture;
 mod claude;
 mod focus;
 mod markers;

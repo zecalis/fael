@@ -1,11 +1,11 @@
 //! Stop-event blocks: commits without a row, edits after the last row, bug
 //! signals without an issue row — and fail-open on garbage.
 
-use super::{commit, fael, fael_at, json, repo, state, transcript};
+use super::{commit, fael, fael_at, json, repo, repo_blocking, state, transcript};
 
 #[test]
 fn stop_blocks_commit_without_row_then_allows() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -48,7 +48,7 @@ fn stop_blocks_commit_without_row_then_allows() {
 #[test]
 fn stop_blocks_edits_after_last_row() {
     // agents told never to commit: the edit hook's list is the work signal
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -103,7 +103,7 @@ fn stop_blocks_edits_after_last_row() {
 
 #[test]
 fn stop_bug_signal_needs_issue_row() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -162,7 +162,7 @@ fn stop_bug_signal_needs_issue_row() {
 fn stop_strong_bug_with_edits_blocks_once_with_runnable_command() {
     // plan chunk 6c replay: three edited files + a reported problem in one
     // turn → exactly one block, and the command printed in it runs verbatim.
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -235,7 +235,7 @@ fn stop_fails_open() {
 
 #[test]
 fn stop_skips_commits_merged_in_from_origin() {
-    let d = repo();
+    let d = repo_blocking();
     let (ok, _, err) = fael(&d, &["add", "note", "seed", "--files", "src/a.rs"], "");
     assert!(ok, "{err}");
     let git = |args: &[&str]| {

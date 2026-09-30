@@ -29,6 +29,11 @@ pub(crate) struct Event {
     /// falls back to reading `session` as a Claude-format transcript.
     #[serde(default)]
     pub(crate) text: Option<String>,
+    /// stop: the last assistant message only — the capture collector reads
+    /// its `fael <kind>:` lines. Without it fael reads the last message of a
+    /// Claude-format transcript in `session`.
+    #[serde(default)]
+    pub(crate) reply: Option<String>,
 }
 
 /// Neutral Reply (SPEC §9).

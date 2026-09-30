@@ -59,28 +59,30 @@ export const Fael = async ({ client, directory }) => {
       if (r.context) output.output += `\n\n${r.context}`;
     },
 
-    // OpenCode has no Stop hook: on idle, a block becomes a prompt back. A
-    // non-blocking stop context has no mid-turn channel here — prompting it
-    // would start a turn the user cannot cancel with Esc — so it is dropped
-    // rather than re-prompted.
+    // OpenCode has no Stop hook: on idle the last message goes to fael, which
+    // files its `fael <kind>:` lines and, by default, never answers with a
+    // block. Only the opt-in `[capture] block = true` mode does — that becomes
+    // a prompt back. A non-blocking stop context has no mid-turn channel here —
+    // prompting it would start a turn the user cannot cancel with Esc — so it
+    // is dropped rather than re-prompted.
     event: async ({ event }) => {
       if (event.type !== "session.idle") return;
       const id = event.properties?.sessionID;
       if (!id) return;
       let text = "";
+      let reply = "";
       try {
         const m = await client.session.messages({ path: { id } });
-        text = (m.data ?? [])
-          .filter((x) => x.info?.role === "assistant")
-          .flatMap((x) => x.parts ?? [])
-          .filter((p) => p.type === "text")
-          .map((p) => p.text)
-          .join("\n");
+        const asked = (m.data ?? []).filter((x) => x.info?.role === "assistant");
+        const texts = (x) => (x?.parts ?? []).filter((p) => p.type === "text").map((p) => p.text);
+        text = asked.flatMap(texts).join("\n");
+        reply = texts(asked[asked.length - 1]).join("\n");
       } catch {}
       const r = hook("stop", {
         cwd: directory,
         session: await start(id),
         text,
+        reply,
         stop_active: blocked.delete(id),
       });
       if (r.block && r.reason) {

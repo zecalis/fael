@@ -35,7 +35,7 @@ shape is a breaking change: ship the reader first.
 | `bytes` | u32 | summed `bytes` |
 | `est_tokens` | u32 | summed `est_tokens` (estimate, never `token`) |
 | `skipped_temp` | u32 | rows skipped as temp-dir repos |
-| `by_event` | map name → `{events, est_tokens}` | per `event` (`read`, `edit`, `stop-work`, …) |
+| `by_event` | map name → `{events, est_tokens}` | per `event` (`read`, `edit`, `stop-work`, `capture`, …) |
 | `by_client` | map name → `{events, est_tokens}` | per `client` (`claude`, `codex`, …) |
 | `top_rows` | `[{id, pushes}]` × ≤10 | most-pushed row ids, pushes desc then id asc |
 | `stop_blocks` | map event → `{blocks, followed_by_row}` | per `stop-*` event; `stop-bug` counts a following `issue` row, others any following row |
@@ -45,7 +45,16 @@ shape is a breaking change: ship the reader first.
 | `rounds` | `{after_block, rows_added, since}` | `since` is the first-usage day (`YYYY-MM-DD`), empty when no rows |
 | `non_english_rows` | `{rows, non_english}` | rows outside the running repo's accepted `[lang] rows` scripts (deduped by id) |
 | `real_tokens` | object, else absent | mean cost of the round after a stop-block: `post_block_rounds`, `avg_input`, `avg_cache_create`, `avg_cache_read`, `avg_output` |
+| `capture` | object | reply capture and what the Stop hook still costs (fields below) |
 | `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
+
+`capture` (PLAN-fael-dev-adoption): `post_stop_rounds` = Stop-hook blocks, cumulative (each cost a
+round; `0` by construction unless `[capture] block = true`) · `reply_lines` = `fael <kind>:` lines seen in
+replies = `reply_stored` + `reply_rejected` · `manual_adds` = rows added since the repo's first usage that
+did not come from a reply line, by any writer · `sessions_with_edits` = sessions that edited a file ·
+`sessions_with_edits_no_row` = of those, sessions with no row filed during them (+10 min) — a signal to
+look at, not a verdict. Replies are recorded as `event: "capture"` usage rows (`capture: stored|rejected`,
+`row` = the filed id; never `ids`, a capture is no push).
 
 `null` never appears in `Stats`: an absent `real_tokens` means no post-block
 round had transcript `usage` (not zero tokens), and an absent `rows` means
@@ -97,6 +106,7 @@ panels are summed; `delivered.last` is newest-first across repos.
 
 ## Changelog
 
+- `1` (2026-09-30): added `capture` (reply capture, manual adds, silent sessions); no bump.
 - `1` (2026-09-29): first frozen shape. `schema` key added; everything else
   byte-identical to the pre-core output.
 - `DayView: 1` (2026-09-29): first frozen day shape (`fael stats --day --json`).

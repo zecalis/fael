@@ -47,6 +47,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "by_client",
             "by_event",
             "bytes",
+            "capture",
             "constants",
             "est_tokens",
             "events",
@@ -61,6 +62,19 @@ fn json_shape_keys_and_types_are_frozen() {
         "{v}"
     );
     assert_eq!(v["schema"], 1, "{v}");
+    assert_eq!(
+        keys(&v["capture"]),
+        [
+            "manual_adds",
+            "post_stop_rounds",
+            "reply_lines",
+            "reply_rejected",
+            "reply_stored",
+            "sessions_with_edits",
+            "sessions_with_edits_no_row",
+        ],
+        "{v}"
+    );
     for k in [
         "events",
         "bytes",
