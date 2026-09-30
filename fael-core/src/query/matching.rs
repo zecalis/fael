@@ -65,37 +65,48 @@ pub(super) fn file_match(q: &str, f: &str) -> bool {
 }
 
 /// Redis `KEYS` glob: `*` any run (including `:` and `/`), `?` one char, `[abc]` `[a-z]` `[^a]`, `\x` literal.
-// ponytail: backtracking matcher, exponential on many `*` — keys are ≤ 64 chars so it never matters
+/// Memoises failed `(pattern, text)` positions, so it is O(|p|·|s|) — the
+/// pattern is user input and `**********x` must not hang `find`.
 pub fn glob(pattern: &str, s: &str) -> bool {
-    fn m(p: &[char], s: &[char]) -> bool {
-        match p.first() {
-            None => s.is_empty(),
-            Some('*') => (0..=s.len()).any(|i| m(&p[1..], &s[i..])),
-            Some('?') => !s.is_empty() && m(&p[1..], &s[1..]),
-            Some('[') if p.len() > 2 && p[2..].contains(&']') && !s.is_empty() => {
-                let end = 2 + p[2..].iter().position(|&c| c == ']').unwrap();
-                let (neg, set) = match p[1] {
-                    '^' => (true, &p[2..end]),
-                    _ => (false, &p[1..end]),
+    fn m(p: &[char], s: &[char], i: usize, j: usize, dead: &mut [bool]) -> bool {
+        let k = i * (s.len() + 1) + j;
+        if dead[k] {
+            return false;
+        }
+        let (p1, s1) = (&p[i..], &s[j..]);
+        let hit = match p1.first() {
+            None => s1.is_empty(),
+            Some('*') => m(p, s, i + 1, j, dead) || (!s1.is_empty() && m(p, s, i, j + 1, dead)),
+            Some('?') => !s1.is_empty() && m(p, s, i + 1, j + 1, dead),
+            Some('[') if p1.len() > 2 && p1[2..].contains(&']') && !s1.is_empty() => {
+                let end = 2 + p1[2..].iter().position(|&c| c == ']').unwrap();
+                let (neg, set) = match p1[1] {
+                    '^' => (true, &p1[2..end]),
+                    _ => (false, &p1[1..end]),
                 };
                 let mut hit = false;
-                let mut i = 0;
-                while i < set.len() {
-                    if i + 2 < set.len() && set[i + 1] == '-' {
-                        hit |= (set[i]..=set[i + 2]).contains(&s[0]);
-                        i += 3;
+                let mut n = 0;
+                while n < set.len() {
+                    if n + 2 < set.len() && set[n + 1] == '-' {
+                        hit |= (set[n]..=set[n + 2]).contains(&s1[0]);
+                        n += 3;
                     } else {
-                        hit |= set[i] == s[0];
-                        i += 1;
+                        hit |= set[n] == s1[0];
+                        n += 1;
                     }
                 }
-                hit != neg && m(&p[end + 1..], &s[1..])
+                hit != neg && m(p, s, i + end + 1, j + 1, dead)
             }
-            Some('\\') if p.len() > 1 => !s.is_empty() && s[0] == p[1] && m(&p[2..], &s[1..]),
-            Some(&c) => !s.is_empty() && s[0] == c && m(&p[1..], &s[1..]),
-        }
+            Some('\\') if p1.len() > 1 => {
+                !s1.is_empty() && s1[0] == p1[1] && m(p, s, i + 2, j + 1, dead)
+            }
+            Some(&c) => !s1.is_empty() && s1[0] == c && m(p, s, i + 1, j + 1, dead),
+        };
+        dead[k] = !hit;
+        hit
     }
     let p: Vec<char> = pattern.chars().collect();
     let s: Vec<char> = s.chars().collect();
-    m(&p, &s)
+    let mut dead = vec![false; (p.len() + 1) * (s.len() + 1)];
+    m(&p, &s, 0, 0, &mut dead)
 }
