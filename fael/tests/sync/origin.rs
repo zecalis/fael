@@ -76,3 +76,37 @@ fn another_destination_or_another_store_stays_silent() {
     assert!(!err.contains(WARN), "{err}");
     assert_eq!(fael_refs(&origin).len(), 1, "the ref is pushed");
 }
+
+#[test]
+fn a_remote_name_or_another_spelling_of_origin_still_warns() {
+    let origin = bare("origin-spell");
+    let url = origin.to_str().unwrap();
+    // the name `origin`, the url with a trailing slash, and a url that is only
+    // origin's pushurl (its fetch url is elsewhere)
+    for (n, set) in ["origin", "slash", "pushurl"].into_iter().enumerate() {
+        let d = repo(&format!("origin-spell-{n}"), "Alice", "alice@example.com");
+        local_store(&d);
+        match set {
+            "origin" => {
+                git(&d, &["config", "remote.origin.url", url]);
+                git(&d, &["config", "fael.remote", "origin"]);
+            }
+            "slash" => {
+                git(&d, &["config", "remote.origin.url", url]);
+                git(&d, &["config", "fael.remote", &format!("{url}/")]);
+            }
+            _ => {
+                git(
+                    &d,
+                    &["config", "remote.origin.url", "/nonexistent/fetch.git"],
+                );
+                git(&d, &["config", "remote.origin.pushurl", url]);
+                git(&d, &["config", "fael.remote", url]);
+            }
+        }
+        add(&d, "public destination, spelled differently");
+        let (ok, _, err) = sync(&d);
+        assert!(ok, "{set}: {err}");
+        assert_eq!(err.matches(WARN).count(), 1, "{set}: {err}");
+    }
+}

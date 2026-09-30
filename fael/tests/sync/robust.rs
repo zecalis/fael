@@ -106,3 +106,32 @@ fn a_second_sync_stops_instead_of_appending_twice() {
     assert!(ok, "{err}");
     assert!(out.contains("pushed 1"), "{out}");
 }
+
+#[test]
+fn many_writers_ingest_in_one_pass() {
+    let remote = bare("many");
+    let src = repo("many-src", "Seed", "seed@example.com");
+    let who = [("Alice", "alice@"), ("Bob", "bob@"), ("Carol", "carol@")];
+    let mut want = vec![];
+    for (name, mail) in who {
+        let d = clone(
+            &src,
+            &format!("many-{name}"),
+            name,
+            &format!("{mail}example.com"),
+        );
+        point(&d, &remote);
+        want.push(add(&d, &format!("row from {name}")));
+        assert!(sync(&d).0);
+    }
+    let reader = clone(&src, "many-reader", "Dave", "dave@example.com");
+    point(&reader, &remote);
+    let (ok, out, err) = sync(&reader);
+    assert!(ok, "{err}");
+    assert!(out.contains("ingested 3"), "{out}");
+    let seen = unique_ids(&reader);
+    assert!(want.iter().all(|id| seen.contains(id)), "{seen:?}");
+    // a second pass has nothing left to ingest
+    let again = sync(&reader).1;
+    assert!(again.contains("nothing to sync"), "{again}");
+}

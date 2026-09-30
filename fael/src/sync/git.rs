@@ -18,24 +18,41 @@ pub(crate) struct Fetched {
 }
 
 /// Fetch `refname` (objects only — never a local ref, the worktree, or the
-/// `FETCH_HEAD` a concurrent `git pull` merges) and read its tree:
-/// `meta.json` + every `*.jsonl`, closes by filename.
+/// `FETCH_HEAD` a concurrent `git pull` merges) and read its tree.
 pub(crate) fn fetch_tree(
     root: &Path,
     remote: &str,
     refname: &str,
     sha: &str,
 ) -> Result<Fetched, String> {
-    run(root, &["fetch", "--no-write-fetch-head", remote, refname])?;
+    fetch_refs(root, remote, &[refname])?;
+    read_tree(root, sha, refname)
+}
+
+/// One `git fetch` for every ref in `refs` — objects only, as `fetch_tree`.
+pub(crate) fn fetch_refs(root: &Path, remote: &str, refs: &[&str]) -> Result<(), String> {
+    let mut args = vec!["fetch", "--no-write-fetch-head", remote];
+    args.extend(refs);
+    run(root, &args).map(drop)
+}
+
+/// Read a fetched ref's tree: `meta.json` + every `*.jsonl`, closes by
+/// filename. Every blob comes through one `git cat-file --batch`.
+pub(crate) fn read_tree(root: &Path, sha: &str, refname: &str) -> Result<Fetched, String> {
     let tree = run(root, &["rev-parse", &format!("{sha}^{{tree}}")])?;
+    let listing = run(root, &["ls-tree", "-r", "--name-only", &tree])?;
+    let paths: Vec<&str> = listing
+        .lines()
+        .filter(|p| *p == "meta.json" || p.ends_with(".jsonl"))
+        .collect();
+    let bodies = blobs(root, &tree, &paths)?;
     let mut out = Fetched::default();
     let mut warns = vec![];
-    for path in run(root, &["ls-tree", "-r", "--name-only", &tree])?.lines() {
-        let body = raw(root, &["cat-file", "-p", &format!("{tree}:{path}")])?;
-        if path == "meta.json" {
+    for (path, body) in paths.iter().zip(bodies) {
+        if *path == "meta.json" {
             out.meta =
                 Some(core::sync::Meta::from_json(&body).map_err(|e| format!("{refname}: {e}"))?);
-        } else if path.ends_with(".jsonl") {
+        } else {
             let dst = if path.ends_with(".close.jsonl") {
                 &mut out.closes
             } else {
@@ -50,6 +67,55 @@ pub(crate) fn fetch_tree(
             warns.len(),
             warns[0]
         );
+    }
+    Ok(out)
+}
+
+/// The bodies of `tree:<path>` for every path, in order, from one
+/// `cat-file --batch` process (`<oid> <type> <size>\n<bytes>\n` per blob).
+fn blobs(root: &Path, tree: &str, paths: &[&str]) -> Result<Vec<String>, String> {
+    if paths.is_empty() {
+        return Ok(vec![]);
+    }
+    let err = |e: &dyn std::fmt::Display| format!("fael: git cat-file --batch: {e}");
+    let mut c = Command::new("git")
+        .args(["cat-file", "--batch"])
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| err(&e))?;
+    let mut input = c.stdin.take().ok_or_else(|| err(&"no stdin"))?;
+    let want: String = paths.iter().map(|p| format!("{tree}:{p}\n")).collect();
+    // a writer thread: a big tree must not fill both pipes at once
+    let feed = std::thread::spawn(move || {
+        use std::io::Write;
+        input.write_all(want.as_bytes())
+    });
+    let o = c.wait_with_output().map_err(|e| err(&e))?;
+    let _ = feed.join();
+    if !o.status.success() {
+        return Err(err(&String::from_utf8_lossy(&o.stderr).trim()));
+    }
+    let (mut rest, mut out) = (&o.stdout[..], Vec::with_capacity(paths.len()));
+    for path in paths {
+        let nl = rest.iter().position(|b| *b == b'\n');
+        let head = nl.map(|i| String::from_utf8_lossy(&rest[..i]).into_owned());
+        let size = head
+            .as_deref()
+            .and_then(|h| match h.split(' ').collect::<Vec<_>>()[..] {
+                [_, "blob", n] => n.parse::<usize>().ok(),
+                _ => None,
+            });
+        let (Some(nl), Some(size)) = (nl, size) else {
+            return Err(err(&format!("{tree}:{path}: not a readable blob")));
+        };
+        let body = rest
+            .get(nl + 1..nl + 1 + size)
+            .ok_or_else(|| err(&"short read"))?;
+        out.push(String::from_utf8_lossy(body).into_owned());
+        rest = rest.get(nl + 2 + size..).unwrap_or_default();
     }
     Ok(out)
 }
@@ -88,6 +154,11 @@ pub(crate) fn ls_prefix(root: &Path, remote: &str, prefix: &str) -> Result<Optio
             String::from_utf8_lossy(&o.stderr).trim()
         )),
     }
+}
+
+/// The sha column of a `sha\tref` line.
+pub(crate) fn line_sha(line: &str) -> &str {
+    line.split_whitespace().next().unwrap_or("")
 }
 
 /// The ref column of a `sha\tref` line.
