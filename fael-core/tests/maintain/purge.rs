@@ -177,3 +177,16 @@ fn purge_keeps_neighbours_byte_identical() {
         );
     }
 }
+
+/// store=local worktree: `.fael` symlinks to a main checkout that has none —
+/// purge skips the empty tree instead of failing EEXIST creating its lock.
+#[cfg(unix)]
+#[test]
+fn purge_skips_dangling_tree_symlink() {
+    let (_, journal, log) = two_stores("01M3QA00000000000000000009");
+    let fael = tmp().join("wt").join(".fael");
+    fs::create_dir_all(fael.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(tmp().join("missing"), &fael).unwrap();
+    let out = purge_row(&fael, Some(&journal), &log, "01M3QA00000000000000000009").unwrap();
+    assert_eq!(out.rows, 1, "journal only");
+}
