@@ -193,7 +193,9 @@ fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {
         out!(c, "{t}");
         match *t {
             "claude" => {
-                claude::claude_mcp(c);
+                if !c.quiet {
+                    claude::claude_mcp(c); // reading the entry spawns the claude CLI
+                }
                 hooks::hooks_json(
                     c,
                     &c.home.join(".claude/settings.json"),
