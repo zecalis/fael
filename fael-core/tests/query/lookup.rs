@@ -12,6 +12,11 @@ fn redis_glob() {
     assert!(glob("v[0-9]", "v7") && !glob("v[0-9]", "vx"));
     assert!(glob("a\\*", "a*") && !glob("a\\*", "ab"));
     assert!(!glob("auth:*", "billing:x"));
+    assert!(glob("*a*b", "xaxb") && glob("**", "") && !glob("*a", "b"));
+    // Many `*` against a long near-miss: backtracking without a memo never returns.
+    let long = "a".repeat(400);
+    assert!(!glob(&("*a".repeat(12) + "*b"), &long));
+    assert!(!glob(&("*".repeat(30) + "x"), &long));
 }
 
 #[test]
