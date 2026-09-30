@@ -73,6 +73,10 @@ pub struct Config {
     pub lang_rows: Vec<String>,
     /// Exposure of a cross-key self-heal act (`[selfheal] cross_key`).
     pub cross_key: CrossKey,
+    /// `[sync] auto` — the Stop hook runs `fael sync` once per session when
+    /// `fael.remote` is set. `false` is the off-switch; the manual command
+    /// is unaffected.
+    pub sync_auto: bool,
 }
 
 impl Default for Config {
@@ -94,6 +98,7 @@ impl Default for Config {
             lang_marker: vec!["english".into(), "thai".into()],
             lang_rows: vec!["english".into()],
             cross_key: CrossKey::Warn,
+            sync_auto: true,
         }
     }
 }
@@ -115,6 +120,12 @@ impl Config {
             limit: Limit,
             lang: Lang,
             selfheal: Selfheal,
+            sync: Sync,
+        }
+        #[derive(Deserialize, Default)]
+        #[serde(default)]
+        struct Sync {
+            auto: Option<bool>,
         }
         #[derive(Deserialize, Default)]
         #[serde(default)]
@@ -180,6 +191,7 @@ impl Config {
             lang_marker: check_lang("marker", f.lang.marker.unwrap_or(d.lang_marker))?,
             lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
             cross_key: check_cross_key(f.selfheal.cross_key)?,
+            sync_auto: f.sync.auto.unwrap_or(d.sync_auto),
         })
     }
 }
