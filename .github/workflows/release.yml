@@ -39,7 +39,12 @@ permissions:
 # If there's a prerelease-style suffix to the version, then the release(s)
 # will be marked as a prerelease.
 on:
+  # a PR only needs `dist plan` when it can change what a release builds
   pull_request:
+    paths:
+      - dist-workspace.toml
+      - '**/Cargo.toml'
+      - .github/workflows/release.yml
   push:
     tags:
       - '**[0-9]+.[0-9]+.[0-9]+*'
