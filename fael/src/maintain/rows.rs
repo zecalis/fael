@@ -5,7 +5,7 @@
 //! processes). Every row-based note carries the full ids a cleanup agent
 //! needs (`doctor --json` prints them) — not just the abbreviated examples.
 
-use super::{fat, merged, orphan, phantom, shipped};
+use super::{drift, fat, merged, orphan, phantom, shipped};
 use crate::core;
 use std::collections::HashSet;
 use std::path::Path;
@@ -46,6 +46,9 @@ pub(super) fn open_row_notes(
     // repeated as one batch, so a translate pass can supersede them all
     // (`fael add --json -`) — closed/superseded rows never appear
     out.extend(not_english_note(log, cfg));
+    // the safety net for rows the code outgrew: many commits on a row's
+    // files since it was written — the reader checks each against the code
+    out.extend(drift::problem(log, root));
     out
 }
 

@@ -148,8 +148,8 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
 
 The storage and core are identical; only how the agent reaches fael differs.
 
-- **Enforcement** — coding agents with lifecycle hooks: `agent → hook → fael`. Session brief, memory attached to reads, stop enforcement.
-- **Tool** — chat agents and MCP hosts without hooks: `agent → MCP → fael`. The agent calls `find` at the start and `add` on its own for durable things (an explicit "remember", a rule, a stable preference, a correction) — never for chatter. That judgement is agent behaviour (skill / tool description), not a core rule. Tool mode has no commit step: rows reach git only when the host or the user commits `.fael/`.
+- **Enforcement** — coding agents with lifecycle hooks: `agent → hook → fael`. Session brief, memory attached to reads and edits, opt-in stop enforcement. The agent reads git and the code first and calls `find` only for what they cannot say (why, what was rejected, what is unfinished) — never as a start-of-task ritual.
+- **Tool** — chat agents and MCP hosts without hooks: `agent → MCP → fael`. With no push, the agent calls `find` once at the start (the session brief) and `add` on its own for durable things (an explicit "remember", a rule, a stable preference, a correction) — never for chatter. That judgement is agent behaviour (skill / tool description), not a core rule. Under `store = "tracked"` tool mode has no commit step: rows reach git only when the host or the user commits `.fael/`.
 
 A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integration.
 
@@ -174,7 +174,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
 | `fael sync [--remote url]` | push this writer's journal to `refs/fael/<repo-id>/<writer>` on the remote and ingest every writer's ref back (`--remote` wins, else `git config fael.remote`) |
-| `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it) |
+| `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it); `[Drifted]` lists open rows whose files took 10+ commits since they were written, for a check against the code |
 | `fael stats [--json] [--rows] [--day]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed) |
 
 `--files` in `find` matches a row's `files[]` only — exactly, as a directory (a zone), or by glob; an anchor's ref
@@ -323,6 +323,8 @@ Tokens are the unit of value, and they are spent when reading, not when storing.
 Reading never fails: broken lines, leftover merge-conflict markers, duplicate ids, CRLF and BOM are all handled in memory. Writing seals a torn last line before it appends. `fael doctor` reports problems, and `--fix` repairs them with tmp-then-rename. Bad lines go to `.fael/quarantine/`, so no byte is ever deleted.
 
 `doctor` reads prose as well as bytes: open rows, close reasons and every `*.md` under the repo (outside `.git`/`target`/`node_modules`) are checked for citations of ids with no row behind them — `[Phantom]`, the dead citation the next reader takes as confirmation. Fenced code blocks are skipped there: a ULID inside a fence is an example, never a citation.
+`[Drifted]` is the safety net for rows the code outgrew: an open row whose real files took 10+ commits since it was written (one `git log` spawn in `doctor`, never in core). It is a fact, never a verdict — the reader checks each row against the code: the code says it now → close it (`now in <file>`); wrong now → re-file with `--supersedes`; still true → re-file with `--supersedes`, which restarts the count. The edit push asks for the same check while the agent has the code in front of it, so most rows retire there and `doctor` catches the rest.
+
 Open rows with a letter outside every accepted `[lang] rows` script report as one `[NotEnglish]` batch (info, never `--fix`ed) with the full ids a translate pass supersedes (`fael add --supersedes <id>`, batched over `fael add --json -`); `fael stats` counts the same rows with the same detector against the running repo's accepted scripts (`rows not in English` under the default, never `rows with Thai`).
 
 ## 7. Non-goals

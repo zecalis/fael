@@ -10,6 +10,9 @@ use crate::{aliases, core};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
+/// Said under the rows of an edit push (see `push`).
+const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
+
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
     format!(
@@ -251,6 +254,14 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         let _ = f.write_all(out.as_bytes());
     }
     let context = format!("fael mem for {}:\n{body}", files.join(", "));
+    // an edit is where a row goes stale: the agent is changing the code the
+    // row describes, with both in front of it — the one moment to retire it.
+    // ponytail: every edit push with rows; once per session if it costs too much
+    let context = if event == "edit" {
+        format!("{context}{STALE_HINT}\n")
+    } else {
+        context
+    };
     let context = match notes {
         Some(n) => format!("{context}\n{n}"),
         None => context,
