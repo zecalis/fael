@@ -5,7 +5,6 @@
 use super::protocol::Event;
 use super::{push::push, session::session_start, stop::stop};
 use serde::Deserialize;
-use std::path::Path;
 use std::process::ExitCode;
 
 #[derive(Debug, Default, Deserialize)]
@@ -129,8 +128,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             let p: ClaudeTool = serde_json::from_str(stdin).unwrap_or_default();
             let input = &p.tool_input;
             let files = if event == "search" {
-                let cwd = p.base.cwd.as_deref().unwrap_or(".");
-                super::search::touched(&p.tool_name, input, &p.tool_response, Path::new(cwd))
+                vec![] // push_call resolves them from the raw call
             } else if let (true, Some(patch)) = (codex, input["command"].as_str()) {
                 patch_files(patch)
             } else {
@@ -150,7 +148,12 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 client,
                 ..Event::default()
             };
-            if let Some(ctx) = push(&e, event).context {
+            let reply = if event == "search" {
+                super::search::push_call(&e, &p.tool_name, input, &p.tool_response)
+            } else {
+                push(&e, event)
+            };
+            if let Some(ctx) = reply.context {
                 println!(
                     "{}",
                     serde_json::json!({"hookSpecificOutput": {

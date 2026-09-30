@@ -159,6 +159,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         Some(c) => c,
         None => return no(),
     };
+    // a shell call that wrote a file is an edit; only its usage label differs
+    let edit = event == "edit" || event == super::search::SHELL_EDIT;
     // normalize through core — outside the repo falls away, never errors out
     let mut files = vec![];
     for f in &e.files {
@@ -183,7 +185,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         return no();
     }
     // only adopted repos — stop never blocks without a log anyway
-    if event == "edit" && !c.session.is_empty() && crate::journal::home(&c.repo).is_some() {
+    if edit && !c.session.is_empty() && crate::journal::home(&c.repo).is_some() {
         record_edits(
             &edits_path(&c.session, &c.repo.root),
             &c.repo.root.to_string_lossy(),
@@ -209,7 +211,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &c.log,
         &files,
         &aliases::load(&c.repo, &c.log, false),
-        event != "edit",
+        !edit,
     );
     // a row already pushed into this context window is still there — say it
     // once. The lock spans read → append, so a batch of parallel reads queues
@@ -258,7 +260,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     // an edit is where a row goes stale: the agent is changing the code the
     // row describes, with both in front of it — the one moment to retire it.
     // ponytail: every edit push with rows; once per session if it costs too much
-    let context = if event == "edit" {
+    let context = if edit {
         format!("{context}{STALE_HINT}\n")
     } else {
         context

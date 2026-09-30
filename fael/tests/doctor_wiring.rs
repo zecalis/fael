@@ -62,3 +62,43 @@ fn doctor_reports_wiring_behind_the_binary_and_clears_after_install() {
     assert!(out.contains("[Wiring]"), "stale hooks: {out}");
     assert!(out.contains("fael upgrade"), "{out}");
 }
+
+/// session-start output for `repo`, with `home` as the machine's home.
+fn session_start(home: &Path, repo: &Path) -> String {
+    use std::io::Write;
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["hook", "session-start", "--client", "claude"])
+        .current_dir(repo)
+        .env("HOME", home)
+        .env("FAEL_STATE_DIR", home.join("state"))
+        // the same fael on PATH as `install` saw, or every entry reads as a repoint
+        .env(
+            "PATH",
+            Path::new(env!("CARGO_BIN_EXE_fael")).parent().unwrap(),
+        )
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdin = format!(r#"{{"cwd":"{}","session_id":"s1"}}"#, repo.display());
+    c.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    let o = c.wait_with_output().unwrap();
+    String::from_utf8_lossy(&o.stdout).into_owned()
+}
+
+#[test]
+fn session_start_says_the_wiring_is_behind_until_install() {
+    let (home, repo) = scratch();
+    std::fs::write(repo.join("a.rs"), "").unwrap();
+    fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
+    let out = session_start(&home, &repo);
+    assert!(
+        out.contains("client wiring change(s) behind"),
+        "nothing installed yet: {out}"
+    );
+    assert!(out.contains("fael upgrade"), "{out}");
+
+    fael(&home, &repo, &["install", "--client", "claude"]);
+    let out = session_start(&home, &repo);
+    assert!(!out.contains("wiring"), "wiring is current: {out}");
+}

@@ -2,15 +2,26 @@
 //! about the files it touched — from the command's arguments and from a
 //! grep's hit list, never from a path that is not a file on disk.
 
-use super::{fael, json, repo};
+use super::{fael, json, repo, state};
 use std::path::Path;
+use std::time::{Duration, SystemTime};
 
+/// Two files with one issue each, written a minute ago — a shell call that
+/// names a file modified just now counts as its edit.
 fn seed(d: &Path) {
     for (f, text) in [("src/a.rs", "login loops"), ("src/b.rs", "retry storms")] {
         std::fs::write(d.join(f), "// x\n").unwrap();
+        backdate(&d.join(f));
         let (ok, _, err) = fael(d, &["add", "issue", text, "--files", f], "");
         assert!(ok, "{err}");
     }
+}
+
+/// A minute old: past the window that makes a named file a shell edit.
+fn backdate(f: &Path) {
+    let old = SystemTime::now() - Duration::from_secs(60);
+    let file = std::fs::File::options().write(true).open(f).unwrap();
+    file.set_modified(old).unwrap();
 }
 
 /// One `PostToolUse` call in Claude's shape, through `fael hook search`.
@@ -207,4 +218,55 @@ fn neutral_search_resolves_opencode_tool_calls() {
         r#""src/a.rs:1: x""#,
     );
     assert!(!out.contains("context"), "{out}");
+}
+
+#[test]
+fn a_shell_write_pushes_as_an_edit() {
+    let d = repo();
+    seed(&d);
+    // the call ran: python rewrote a.rs, and only named b.rs in a string it never wrote
+    std::fs::write(d.join("src/a.rs"), "// y\n").unwrap();
+    let cmd =
+        "python3 - <<'EOF'\np='src/a.rs'\nopen(p,'w').write(open(p).read())\nq=\"src/b.rs\"\nEOF";
+    let out = bash(&d, "w1", cmd, "");
+    // b.rs was named, not written — its row may still come through the
+    // edit's same-directory tier, never as an edited file
+    assert!(out.contains(r"fael mem for src/a.rs:\n"), "{out}");
+    assert!(out.contains("login loops"), "{out}");
+    assert!(
+        out.contains("fael close"),
+        "an edit carries the stale hint: {out}"
+    );
+    let usage = std::fs::read_to_string(state(&d).join("usage.jsonl")).unwrap();
+    assert!(usage.contains(r#""event":"shell-edit""#), "{usage}");
+
+    // a read of an old file is still a read: no stale hint
+    let out = bash(&d, "w2", "cat src/b.rs", "");
+    assert!(out.contains("retry storms"), "{out}");
+    assert!(!out.contains("fael close"), "{out}");
+}
+
+#[test]
+fn a_shell_write_and_read_push_both() {
+    let d = repo();
+    seed(&d);
+    std::fs::write(d.join("src/a.rs"), "// y\n").unwrap();
+    // outside src/: the edit's same-directory tier cannot reach it
+    std::fs::write(d.join("c.rs"), "").unwrap();
+    backdate(&d.join("c.rs"));
+    let (ok, _, err) = fael(&d, &["add", "issue", "cache misses", "--files", "c.rs"], "");
+    assert!(ok, "{err}");
+    let out = bash(&d, "wr", "sed -i '' s/x/y/ src/a.rs && cat c.rs", "");
+    let edit = out.find(r"fael mem for src/a.rs:\n").expect(&out);
+    let hint = out.find("fael close").expect(&out);
+    let read = out.find(r"fael mem for c.rs:\n").expect(&out);
+    assert!(
+        edit < hint && hint < read,
+        "the edit block, its hint, then the read: {out}"
+    );
+    assert_eq!(
+        out.matches("fael close").count(),
+        1,
+        "a read has no hint: {out}"
+    );
 }
