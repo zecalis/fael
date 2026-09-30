@@ -92,7 +92,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
         ("sync", []) => sync::sync(&repo()?, &a).map(|()| ExitCode::SUCCESS),
-        ("mcp", []) => mcp::serve().map(|()| ExitCode::SUCCESS),
+        ("mcp", []) => mcp::serve(a.has("pin")).map(|()| ExitCode::SUCCESS),
         ("install" | "upgrade" | "update", []) => {
             // `install` keeps writing without a question; upgrade/update ask first
             let ask = cmd != "install" && !a.has("yes");

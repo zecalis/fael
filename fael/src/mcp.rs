@@ -15,10 +15,21 @@ mod find;
 
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const VERSION: &str = "2025-06-18";
 
-pub fn serve() -> Result<(), String> {
+/// `fael mcp --pin`: every call acts on the server's own cwd — no `cwd` arg, no
+/// routing by absolute `files`. For a server reachable over HTTP (a proxy, a
+/// tunnel), where any caller could otherwise read every repo on the host.
+static PIN: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn pinned() -> bool {
+    PIN.load(Ordering::Relaxed)
+}
+
+pub fn serve(pin: bool) -> Result<(), String> {
+    PIN.store(pin, Ordering::Relaxed);
     let mut out = std::io::stdout().lock();
     for line in std::io::stdin().lock().lines() {
         let line = line.map_err(|e| format!("stdin: {e}"))?;
