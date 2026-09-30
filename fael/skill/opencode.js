@@ -66,9 +66,16 @@ export const Fael = async ({ client, directory }) => {
     // prompting it would start a turn the user cannot cancel with Esc — so it
     // is dropped rather than re-prompted.
     event: async ({ event }) => {
-      if (event.type !== "session.idle") return;
       const id = event.properties?.sessionID;
       if (!id) return;
+      // compaction dropped the pushed rows from context: `source: "compact"`
+      // makes fael forget what it said there, so the next read tells them again
+      if (event.type === "session.compacted") {
+        const e = { cwd: directory, session: await start(id), source: "compact" };
+        briefs.set(id, hook("session-start", e).context ?? "");
+        return;
+      }
+      if (event.type !== "session.idle") return;
       let text = "";
       let reply = "";
       try {

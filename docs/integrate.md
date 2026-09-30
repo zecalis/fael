@@ -10,7 +10,8 @@ this page). Any other agent calls the neutral format:
 ```
 fael hook <stop|session-start|read|edit>   < Event   > Reply
 
-Event  {"cwd": str, "session": str, "client": str, "files": [str], "stop_active": bool, "text": str, "reply": str}
+Event  {"cwd": str, "session": str, "client": str, "files": [str], "stop_active": bool, "text": str, "reply": str,
+        "agent"?: str, "source"?: str}
 Reply  {"block": bool, "reason"?: str, "context"?: str}
 ```
 
@@ -33,6 +34,13 @@ Reply  {"block": bool, "reason"?: str, "context"?: str}
   looks for "found a bug", "inconsistent", "might break", and similar; leave it out and fael reads `session` as a Claude transcript.
 - `stop_active` — `true` when this stop comes right after one you blocked, so it never loops.
   fael also blocks each problem only once per session.
+- `agent` — only when the event fires inside a sub-agent: any id that is stable for that sub-agent. A
+  sub-agent is its own context window, so `read`/`edit` keep a separate said-once list per `agent`
+  (it gets the rows its parent was already told), and a `stop` with `agent` only files that `reply`'s
+  lines — it never blocks. Leave it out on the session's own thread. A client whose sub-agents already
+  have their own `session` needs nothing here.
+- `source` — on `session-start`, send `"compact"` right after the client compacted its context: the
+  pushed rows are gone from it, so fael starts the said-once list over.
 - `client` — a name for `fael stats`.
 
 Any error, missing field or repo without `.fael/` is `{"block": false}`. Integration cannot break the agent.

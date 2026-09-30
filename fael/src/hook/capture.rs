@@ -161,7 +161,10 @@ pub(super) fn collect(c: &Ctx, reply: &str) -> Filed {
         }) {
             Ok((kind, id)) => {
                 usage(c, "stored", Some(&id));
-                note_seen(&c.session, &c.repo.root, &[&id]);
+                // a sub-agent's row is news to the parent: it only got a summary
+                if c.agent.is_empty() {
+                    note_seen(&c.session, &c.repo.root, &[&id]);
+                }
                 filed.stored += 1;
                 filed.issue |= kind == "issue";
             }

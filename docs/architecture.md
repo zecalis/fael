@@ -223,7 +223,7 @@ Each client speaks its own hook format. The binary contains the adapters for the
 ```
 fael hook <stop|session-start|read|edit> [--client claude|codex]   < stdin  > stdout
 
-neutral Event  {"cwd","session","client","files":[…],"stop_active","text","reply"}
+neutral Event  {"cwd","session","client","files":[…],"stop_active","text","reply","agent","source"}
 neutral Reply  {"block":bool,"reason"?:str,"context"?:str}
 ```
 
@@ -254,7 +254,9 @@ Ranking is **deterministic**: the same log, query and budget give the same outpu
 Rows are then bucketed by the session **Focus** — the start branch and the keys of the open rows filed on it, written once at session start to
 `~/.local/state/fael/sessions/<session+worktree>.focus.json`: **Now** (an open issue, an urgent row, a row on the session branch, or sharing one of those keys) always renders, **File** (the queried file) fills the row cap next, **Background** (same directory, shared key) never renders — each hidden class gets one count line naming the exact `fael find` call that reaches it. The push only reads that file: no git spawn, one small read. No session, no file or an unparsable file is `Focus::default()` — the ranking above, capped at `budget.push_rows`.
 
-**Capture** — the agent ends its turn. The Stop hook reads the last assistant message (`reply`, else the tail of a Claude transcript) and files every line of the form `fael decision|issue|note: <text> [files: a,b]` at column 0, outside a code fence, through the same validation as `fael add` (secrets, ids, size, paths). `[files: …]` is required and never inferred from the session's edits. A line that cannot be filed is dropped and becomes one hint on the next push — never a turn. The same lines seen twice in one session file once. This is the whole default Stop behaviour: `block` is always `false`.
+A row is said once per **context window**, not once per session: the pushed ids are kept per session, worktree and `agent` (`<state>/sessions/<key>.seen`). A sub-agent starts with an empty context, so it has its own list — what its parent was told says nothing about what it knows (Claude Code sends `agent_id` on tool events inside a sub-agent; an OpenCode sub-agent is a child session with its own id). A session-start with `source: "compact"` drops the thread's list, because compaction removed the pushed rows from context.
+
+**Capture** — the agent ends its turn. The Stop hook reads the last assistant message (`reply`, else the tail of a Claude transcript) and files every line of the form `fael decision|issue|note: <text> [files: a,b]` at column 0, outside a code fence, through the same validation as `fael add` (secrets, ids, size, paths). `[files: …]` is required and never inferred from the session's edits. A line that cannot be filed is dropped and becomes one hint on the next push — never a turn. The same lines seen twice in one session file once. This is the whole default Stop behaviour: `block` is always `false`. A sub-agent's stop (`agent` set — Claude Code `SubagentStop`) files its own `reply` the same way and does nothing else: no work or bug rule, no sync, no transcript fallback (the transcript is the parent's).
 
 **Enforce** (opt-in, `[capture] block = true`) — the agent tries to end a turn:
 ```

@@ -19,9 +19,10 @@ fn risk_line(marker: &str, files: &[String]) -> String {
 
 /// Take the lines stop stashed for this push — the Weak risk mention and the
 /// capture-reject hint, each shown once, whether or not rows join them.
-/// Joined, or `None` when there are none.
+/// Joined, or `None` when there are none. Stop stashed them for the session's
+/// own thread — a sub-agent's push leaves them there.
 fn take_stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
-    if c.session.is_empty() {
+    if c.session.is_empty() || !c.agent.is_empty() {
         return None;
     }
     let risk = take_risk(&c.session, &c.repo.root).map(|m| risk_line(&m, files));
@@ -184,8 +185,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &aliases::load(&c.repo, &c.log, false),
         event == "read",
     );
-    // a row already pushed this session is still in the agent's context — say it once
-    let seen = (!c.session.is_empty()).then(|| seen_path(&c.session, &c.repo.root));
+    // a row already pushed into this context window is still there — say it once
+    let seen = (!c.session.is_empty()).then(|| seen_path(&c.session, &c.agent, &c.repo.root));
     if let Some(p) = &seen {
         let old = std::fs::read_to_string(p).unwrap_or_default();
         let old: HashSet<&str> = old.lines().collect();

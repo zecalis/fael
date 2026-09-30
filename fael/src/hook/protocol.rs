@@ -34,6 +34,15 @@ pub(crate) struct Event {
     /// Claude-format transcript in `session`.
     #[serde(default)]
     pub(crate) reply: Option<String>,
+    /// read/edit/stop: the sub-agent the event fired inside, when the client
+    /// names one. A sub-agent is its own context window: it keeps its own
+    /// seen list, and its stop only files its reply's capture lines.
+    #[serde(default)]
+    pub(crate) agent: Option<String>,
+    /// session-start: `"compact"` when the client just compacted its context —
+    /// the rows pushed into it are gone, so the seen list starts over.
+    #[serde(default)]
+    pub(crate) source: Option<String>,
 }
 
 /// Neutral Reply (SPEC §9).
@@ -99,6 +108,8 @@ pub(crate) struct Ctx {
     pub(crate) tags: crate::find::branches::BranchMap,
     pub(crate) client: String,
     pub(crate) session: String,
+    /// the sub-agent id, empty on the session's own thread
+    pub(crate) agent: String,
 }
 
 /// Resolve cwd → repo + log. `None` = fail open (not a repo, no cwd, …).
@@ -116,5 +127,6 @@ pub(crate) fn ctx(e: &Event) -> Option<Ctx> {
         tags,
         client: e.client.clone().unwrap_or_else(|| "neutral".into()),
         session: e.session.clone().unwrap_or_default(),
+        agent: e.agent.clone().unwrap_or_default(),
     })
 }

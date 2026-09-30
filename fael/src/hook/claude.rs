@@ -15,6 +15,12 @@ struct ClaudeBase {
     session_id: Option<String>,
     #[serde(default)]
     transcript_path: Option<String>,
+    /// Claude Code: set only when the hook fires inside a sub-agent
+    #[serde(default)]
+    agent_id: Option<String>,
+    /// SessionStart: startup | resume | clear | compact
+    #[serde(default)]
+    source: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -87,6 +93,8 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 // the final message, when the client hands it over (codex always;
                 // Claude Code on recent versions) — else stop reads the transcript
                 reply: p.last_assistant_message,
+                // SubagentStop runs this arm too
+                agent: p.base.agent_id,
                 client,
                 ..Event::default()
             };
@@ -106,6 +114,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 // same key as stop/edit, or session-start's branch baseline lands
                 // under a filename stop never reads (transcript path over session id)
                 session: p.transcript_path.or(p.session_id),
+                source: p.source,
                 client,
                 ..Event::default()
             };
@@ -128,6 +137,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                     (true, Some(patch)) => patch_files(&patch),
                     _ => p.tool_input.file_path.into_iter().collect(),
                 },
+                agent: p.base.agent_id,
                 client,
                 ..Event::default()
             };
