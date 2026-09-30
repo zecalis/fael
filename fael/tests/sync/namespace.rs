@@ -58,8 +58,21 @@ fn one_repo_keeps_one_repo_id_across_clones_and_branches() {
     assert!(sync(&d).0, "the source pushes");
     assert_eq!(repoid(&d).unwrap(), expected, "min root sha is the repo-id");
 
-    // a clone derives the same id before anything is cached for it
+    // a clone derives the same id before anything is cached for it — even
+    // with a `stash -u`, `git notes` or another remote holding a parentless
+    // commit that sorts below the real roots
     let c = clone(&d, "roots-clone", "Root Test", "root@example.com");
+    let stray = (0..)
+        .map(|i| git_out(&c, &["commit-tree", &tree, "-m", &format!("stray {i}")]))
+        .find(|s| *s < expected)
+        .unwrap();
+    for r in [
+        "refs/stash",
+        "refs/notes/commits",
+        "refs/remotes/other/main",
+    ] {
+        git(&c, &["update-ref", r, &stray]);
+    }
     point(&c, &remote);
     assert!(sync(&c).0, "the clone pushes");
     assert_eq!(repoid(&c).unwrap(), expected, "a clone derives the same id");

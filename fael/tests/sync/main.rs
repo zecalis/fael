@@ -12,7 +12,7 @@
 //! `origin` (the `store = local` + origin warning),
 //! `errors` (no remote → error, empty journal → no ref),
 //! `private` (public source repo, memory in a separate private remote),
-//! `secret` (ingest skips a leaked row and never echoes it).
+//! `secret` (a leaked row is neither pushed nor ingested, never echoed).
 
 mod errors;
 mod imported;

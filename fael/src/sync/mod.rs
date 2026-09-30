@@ -10,8 +10,8 @@
 //! `close()`'s `validate_close`, so ingest never validates, it only dedupes
 //! by id — and skips any row that trips the shared secret check.
 //!
-//! The working tree and checked-out branches are never touched: fetches land
-//! in `FETCH_HEAD`, pushes name the commit sha directly.
+//! The working tree, checked-out branches and `FETCH_HEAD` are never touched:
+//! fetches only store objects, pushes name the commit sha directly.
 
 mod git;
 
@@ -50,8 +50,8 @@ pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
                 core::sync::validate(&m, &repo_id).map_err(|e| format!("{own}: {e}"))?;
             }
             Ok((
-                core::sync::union(&fetched.rows, &local_rows),
-                core::sync::union(&fetched.closes, &local_closes),
+                no_secrets(core::sync::union(&fetched.rows, &local_rows)),
+                no_secrets(core::sync::union(&fetched.closes, &local_closes)),
             ))
         };
         push_one(
@@ -149,6 +149,23 @@ fn local_writer(rows: &[core::Row], by: &str, imported: &HashSet<String>) -> Vec
     rows.iter().filter(mine).cloned().collect()
 }
 
+/// The push-side twin of ingest's check: a leaked row in this journal (from
+/// before the add-time check, or an import) never leaves the machine, and one
+/// an older fael already pushed drops out of the next tip. Label + id only.
+fn no_secrets(rows: Vec<core::Row>) -> Vec<core::Row> {
+    let clean = |row: &core::Row| {
+        let Some(what) = core::secret(&row.to_line()) else {
+            return true;
+        };
+        eprintln!(
+            "fael: not pushing row {} — looks like a secret ({what}); rotate it, then `fael purge {}`",
+            row.id, row.id
+        );
+        false
+    };
+    rows.into_iter().filter(clean).collect()
+}
+
 /// Ids of every row under `_import/`, in the tree and in the journal.
 fn imported_ids(r: &Repo) -> HashSet<String> {
     let roots = std::iter::once(r.fael.as_path()).chain(r.journal.as_deref());
@@ -227,8 +244,13 @@ fn warn_origin(r: &Repo, remote: &str) {
 
 /// The workspace identity, identical for every clone and every branch: the
 /// minimum root sha, cached in `git config fael.repoid` at the first sync so
-/// the value never moves. `refs/fael/*` is excluded so sync's own parentless
-/// commits can never shift it. A shallow clone errors instead of a wrong id.
+/// the value never moves. Only branches and origin's branches count — what
+/// every clone shares; `--all` would let a `stash -u`, `git notes`, another
+/// remote or sync's own parentless commits shift it. A shallow clone errors
+/// instead of a wrong id.
+// ponytail: a local-only orphan branch, or a single-branch clone of a repo whose
+// orphan branch holds the min root, still derives its own id — pin it with
+// `git config fael.repoid <id>` if that ever bites.
 fn repo_id(r: &Repo) -> Result<String, String> {
     if let Some(id) = crate::git(&r.root, &["config", "fael.repoid"]) {
         return Ok(id);
@@ -246,9 +268,8 @@ fn repo_id(r: &Repo) -> Result<String, String> {
         &[
             "rev-list",
             "--max-parents=0",
-            "--all",
-            "--not",
-            "--glob=refs/fael/*",
+            "--branches",
+            "--remotes=origin",
         ],
     )?;
     let id = roots.lines().map(str::trim).filter(|l| !l.is_empty()).min();

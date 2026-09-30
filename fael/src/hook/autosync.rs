@@ -5,7 +5,8 @@
 //! Skip, never block: the sync runs as a detached child whose output goes to
 //! `<state>/auto-sync.log` (last run only), so a dead network, a slow remote or
 //! a failed auth costs the turn nothing and nothing retries. `GIT_TERMINAL_PROMPT=0`
-//! turns a credential prompt into a failure instead of a hang.
+//! turns a credential prompt into a failure instead of a hang; ssh prompts
+//! (host key, passphrase) read `/dev/tty` instead, so OpenSSH gets `BatchMode`.
 // ponytail: Stop fires per turn in Claude/Codex, so "once per session" means the
 // first turn's end: rows filed later ride the next session's first stop. A real
 // session-end event (SessionEnd) is the upgrade if that lag matters. No timeout
@@ -15,7 +16,7 @@ use super::protocol::Event;
 use super::state::state_dir;
 use super::stop::stop_blocked_before;
 use crate::{git, repo_at};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 pub(crate) fn after_stop(e: &Event) {
@@ -50,7 +51,11 @@ pub(crate) fn after_stop(e: &Event) {
         Some((a, b)) => (Stdio::from(a), Stdio::from(b)),
         None => (Stdio::null(), Stdio::null()),
     };
-    let _ = Command::new(exe)
+    let mut sync = Command::new(exe);
+    if let Some(ssh) = batch_ssh(&repo.root) {
+        sync.env("GIT_SSH_COMMAND", ssh);
+    }
+    let _ = sync
         .arg("sync")
         .current_dir(&repo.root)
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -58,4 +63,19 @@ pub(crate) fn after_stop(e: &Event) {
         .stdout(out)
         .stderr(err)
         .spawn();
+}
+
+/// The ssh command git would run (`GIT_SSH_COMMAND`, else `core.sshCommand`,
+/// else `ssh`) plus `-o BatchMode=yes` when it is OpenSSH. `None` leaves git's
+/// own choice alone: `GIT_SSH`, plink or a wrapper may not take `-o`.
+fn batch_ssh(root: &Path) -> Option<String> {
+    let env = std::env::var("GIT_SSH_COMMAND").ok();
+    if env.is_none() && std::env::var_os("GIT_SSH").is_some() {
+        return None;
+    }
+    let cmd = env
+        .or_else(|| git(root, &["config", "core.sshCommand"]))
+        .unwrap_or_else(|| "ssh".into());
+    let prog = Path::new(cmd.split_whitespace().next()?).file_stem()?;
+    (prog == "ssh").then(|| format!("{cmd} -o BatchMode=yes"))
 }
