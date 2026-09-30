@@ -5,7 +5,7 @@
 //! `urgent` (queue/6-step rank), `bump` (MVCC-style new versions),
 //! `title` (title/body split, `--title` fallback,
 //! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
-//! `focus` (push buckets + row cap).
+//! `focus` (push buckets + row cap), `precision` (push golden fixture: tiers + injected ids).
 //! `carrier` (no-kind-no-files rows never list, legacy stays).
 //! `restore` (superseded = edges minus reverted; restore rows are carriers;
 //! old readers over-hide by the raw edge).
@@ -18,6 +18,7 @@ mod focus;
 mod lookup;
 mod md;
 mod paging;
+mod precision;
 mod refs;
 mod render;
 mod restore;
