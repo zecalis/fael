@@ -21,11 +21,12 @@ fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
 fn dir() -> PathBuf {
     let d = std::env::temp_dir().join(format!("fael-report-{}", fael_core::ulid()));
     std::fs::create_dir_all(d.join("state")).unwrap();
+    // serde writes the repo path: a Windows path's backslashes need escaping
     let line = |ts: &str, id: &str| {
-        format!(
-            "{{\"ts\":\"{ts}\",\"repo\":\"{}\",\"client\":\"claude\",\"event\":\"read\",\"bytes\":10,\"est_tokens\":3,\"ids\":[\"{id}\"]}}\n",
-            d.join("repo").display()
-        )
+        serde_json::json!({"ts": ts, "repo": d.join("repo"), "client": "claude",
+            "event": "read", "bytes": 10, "est_tokens": 3, "ids": [id]})
+        .to_string()
+            + "\n"
     };
     let text = line("2026-09-29T10:00:00.000Z", "OLD") + &line("2026-09-30T10:00:00.000Z", "NEW");
     std::fs::write(d.join("state/usage.jsonl"), text).unwrap();
