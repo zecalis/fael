@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>fael report</title><style>:root{--bg:#fff;--fg:#1d1d1f;--mute:#6e6e73;--line:#e5e5ea;--code:#f2f2f7}
+@media (prefers-color-scheme:dark){:root{--bg:#161618;--fg:#f2f2f7;--mute:#a1a1a6;--line:#2c2c2e;--code:#232326}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:960px;margin:0 auto;padding:24px 16px}
+h1{margin:0 0 4px}h2{margin:32px 0 8px;font-size:18px}
+.sub,.none,footer{color:var(--mute)}
+code{background:var(--code);padding:1px 4px;border-radius:4px;font-size:13px}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}td.n{text-align:right}</style></head><body><main>
+<h1>fael report</h1>
+<p class="sub">since 2026-09-30 · 3 usage events on this machine · every number comes from <code>fael stats --json --since 2026-09-30</code></p>
+<section><h2>1. What memory reached your agents?</h2>
+<p>fael put memory into context <b>2</b> times (read ×1 · edit ×1 · session start ×0 · search ×0), ~15 tokens. Of 2 rows pushed on a read or edit, 0 were closed or superseded within a day of the push.</p>
+<div class="wrap"><table><thead><tr><th>row</th><th>files</th><th>status</th><th>pushes</th><th>next</th></tr></thead><tbody>
+<tr><td>decision: Cache keys &lt;include&gt; the tenant</td><td>src/a.rs, src/b.rs, …</td><td>open</td><td class="n">2</td><td><code>fael find A</code></td></tr>
+<tr><td>(not in a log on this machine)</td><td></td><td>open</td><td class="n">1</td><td><code>fael find B</code></td></tr>
+</tbody></table></div>
+</section>
+<section><h2>2. What is noise?</h2>
+<p>Open rows pushed 10 times or more. Each one costs context on every push — check it still points the right way: close it when the code already says it, or file it again with narrower <code>--files</code>.</p>
+<div class="wrap"><table><thead><tr><th>row</th><th>files</th><th>status</th><th>pushes</th><th>next</th></tr></thead><tbody>
+<tr><td>decision: Cache keys &lt;include&gt; the tenant</td><td>src/a.rs, src/b.rs, …</td><td>open</td><td class="n">2</td><td><code>fael close A &quot;&lt;why&gt;&quot;</code></td></tr>
+</tbody></table></div>
+</section>
+<section><h2>3. Did fael add friction?</h2>
+<ul>
+<li>Extra rounds after the agent thought it was done: <b>0</b></li>
+<li>Memory written from replies (<code>fael decision: …</code> lines): 0 stored · 0 rejected</li>
+<li>Rows written outside replies (<code>add</code> over CLI or MCP, synced teammate rows included): 0</li>
+<li>Sessions that edited files: 0, of which 0 left no row</li>
+<li>Asks: reject ×0 · warning ×1</li>
+</ul>
+<p>Extra rounds come only from <code>[capture] block = true</code> in <code>.fael/config.toml</code>; the default (<code>false</code>) never adds one.</p>
+</section>
+<footer><p>Offline, no scripts. Estimates carry ~ — they come from text length, not a tokenizer.</p></footer>
+</main></body></html>

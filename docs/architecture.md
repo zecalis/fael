@@ -4,7 +4,7 @@
 > `add` `close` `find` `keys` `kickoff` `mv` in the `fael` CLI (`find` and `kickoff` take
 > `--branches` to read unmerged branches without a checkout), `fael mcp`
 > (stdio, 3 tools), `fael hook <stop|session-start|read|edit|search>` (neutral + claude/codex adapters) with
-> per-machine usage accounting (`fael stats`), `fael install` (Claude Code, Codex, OpenCode),
+> per-machine usage accounting (`fael stats`, `fael report`), `fael install` (Claude Code, Codex, OpenCode),
 > and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11) ·
 > `fael purge` (delete a leaked row for good — the one deliberate exception to the append-only log).
 > This page is the contract the code is built against —
@@ -179,7 +179,8 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
 | `fael sync [--remote url]` | push this writer's journal to `refs/fael/<repo-id>/<writer>` on the remote and ingest every writer's ref back (`--remote` wins, else `git config fael.remote`) |
 | `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it); `[Drifted]` lists open rows whose files took 10+ commits since they were written, for a check against the code |
-| `fael stats [--json] [--rows] [--day]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed) |
+| `fael stats [--json] [--rows] [--day] [--since d]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed; `--since` = only usage from then on) |
+| `fael report [--out f] [--open] [--since d]` | one offline HTML page for a lead: what memory reached the agents, what is noise, did fael add friction — numbers from `fael stats --json` |
 
 `--files` in `find` matches a row's `files[]` only — exactly, as a directory (a zone), or by glob; an anchor's ref
 never matches as a directory. It does not fall back to searching text (fapony did); text is `find <text>`.

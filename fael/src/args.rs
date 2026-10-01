@@ -44,12 +44,12 @@ impl Args {
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "yes" | "replace-fapony" | "fix"
                 | "prune" | "urgent" | "not-urgent" | "full" | "rows" | "branches" | "fat"
-                | "day" | "pin" => {
+                | "day" | "pin" | "open" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
                 | "before" | "map" | "to" | "title" | "urgent-before" | "limit" | "offset"
-                | "text" | "edge" | "remote" => {
+                | "text" | "edge" | "remote" | "out" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("--{name} needs a value"))?;
