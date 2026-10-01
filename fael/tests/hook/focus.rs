@@ -165,3 +165,21 @@ fn read_push_spawns_no_git() {
         std::fs::read_to_string(&trace).unwrap_or_default()
     );
 }
+
+#[test]
+fn head_switch_mid_session_rebuilds_focus() {
+    let d = repo();
+    let base = git(&d, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    seed(&d, &base);
+    // the session starts on base: both decisions are filed there, so both
+    // are Now and freshness decides
+    let state = d.join("state-head");
+    session_start(&d, Some(&state), "head-1");
+    // another session switches the worktree; the push follows HEAD
+    git(&d, &["checkout", "-q", "feat/focus"]);
+    let (keyed, plain) = order(&read(&d, Some(&state), "head-1"));
+    assert!(keyed < plain, "Focus stuck on {base}: {keyed} {plain}");
+    let files = focus_files(&state);
+    let body = std::fs::read_to_string(&files[0]).unwrap();
+    assert!(body.contains("feat/focus"), "{body}");
+}

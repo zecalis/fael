@@ -226,7 +226,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         }
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
-    let focus = super::focus::read(&c.session, &c.repo.root);
+    let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     let sel = core::select(tiered, &focus, &policy);
     let notes = take_stashed(&c, &files);
     if sel.shown.is_empty() {
