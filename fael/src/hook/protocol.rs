@@ -34,6 +34,7 @@ pub(crate) struct Event {
     #[serde(default, alias = "stop_hook_active")]
     pub(crate) stop_active: bool,
     /// stop: the assistant's text since the session start, for the issue rule.
+    /// prompt: the user's prompt.
     /// Any client that can see its own messages sends it; without it fael
     /// falls back to reading `session` as a Claude-format transcript.
     #[serde(default)]
@@ -105,9 +106,10 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
             &e.tool_response,
         ),
         "search" => push(&e, event),
+        "prompt" => super::prompt::prompt(&e),
         _ => {
             eprintln!(
-                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search"
+                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search|prompt"
             );
             Reply {
                 block: false,

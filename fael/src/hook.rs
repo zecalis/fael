@@ -1,4 +1,4 @@
-//! `fael hook <stop|session-start|read|edit|search> [--client c]` — stdin in, stdout out.
+//! `fael hook <stop|session-start|read|edit|search|prompt> [--client c]` — stdin in, stdout out.
 //! The decision (`core::decide_stop`, `core::push`) is written once; each
 //! adapter only parses its client's JSON and renders the answer back.
 //! No `--client` = the neutral protocol from SPEC §9: Event in, Reply out.
@@ -8,7 +8,7 @@
 //! Thin entry only — the events live in `hook/`:
 //! `protocol` (neutral Event/Reply + shared ctx), `claude` (client adapters),
 //! `stop` (turn-end work/bug rule), `capture` (the reply's `fael <kind>:` lines), `session` (session-start kickoff),
-//! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `focus` (session Focus written at start and
+//! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `prompt` (the open-key pointer on a user prompt), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
 //! `autosync` (session-start and turn-end `fael sync`, off-switch `[sync] auto`),
 //! `tally` (the user channel's per-session ledger: reminders, receipt),
@@ -25,6 +25,7 @@ mod capture;
 mod claude;
 mod focus;
 mod markers;
+mod prompt;
 mod protocol;
 mod push;
 mod search;

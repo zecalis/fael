@@ -36,6 +36,14 @@ struct ClaudeStop {
 }
 
 #[derive(Debug, Default, Deserialize)]
+struct ClaudePrompt {
+    #[serde(flatten)]
+    base: ClaudeBase,
+    #[serde(default)]
+    prompt: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
 struct ClaudeTool {
     #[serde(flatten)]
     base: ClaudeBase,
@@ -145,6 +153,18 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             print_reply("SessionStart", session_start(&e), codex);
             ExitCode::SUCCESS
         }
+        "prompt" => {
+            let p: ClaudePrompt = serde_json::from_str(stdin).unwrap_or_default();
+            let e = Event {
+                cwd: p.base.cwd,
+                session: p.base.transcript_path.or(p.base.session_id),
+                text: Some(p.prompt),
+                client,
+                ..Event::default()
+            };
+            print_reply("UserPromptSubmit", super::prompt::prompt(&e), codex);
+            ExitCode::SUCCESS
+        }
         "read" | "edit" | "search" => {
             let p: ClaudeTool = serde_json::from_str(stdin).unwrap_or_default();
             let input = &p.tool_input;
@@ -179,7 +199,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
         }
         _ => {
             eprintln!(
-                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search"
+                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search|prompt"
             );
             ExitCode::SUCCESS
         }

@@ -1,7 +1,7 @@
 //! find · brief · keys · render · resolve · warnings · urgent · bump · title · revisit — against an in-memory `Log`.
 //!
 //! Thin entry only — the suites sit next to this file:
-//! `select` (find/brief/push/gone/kickoff/`to`), `render` (render/tokens),//! `paging` (limit/offset page + cut line), `lookup` (resolve/keys/warnings/glob),
+//! `select` (find/brief/push/gone/kickoff/`to`), `render` (render/tokens),//! `paging` (limit/offset page + cut line), `lookup` (resolve/keys/warnings/glob), `keyhint` (prompt → open key, exact segment only),
 //! `urgent` (queue/6-step rank), `bump` (MVCC-style new versions),
 //! `title` (title/body split, `--title` fallback,
 //! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
@@ -16,6 +16,7 @@ mod anchor;
 mod bump;
 mod carrier;
 mod focus;
+mod keyhint;
 mod lookup;
 mod md;
 mod paging;
