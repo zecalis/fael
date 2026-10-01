@@ -169,6 +169,14 @@ fn delivered(h: &mut String, s: &Stats, info: &HashMap<String, Info>) {
             s.retired.pushed, s.retired.at_touch
         );
     }
+    if s.value.reminded_before_edit > 0 {
+        let _ = write!(
+            h,
+            " {} times a decision or issue about a file was already in context when the agent \
+             edited that file.",
+            s.value.reminded_before_edit
+        );
+    }
     h.push_str("</p>\n");
     let rows: Vec<_> = s.rows.iter().flatten().take(10).collect();
     table(

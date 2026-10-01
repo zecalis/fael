@@ -59,6 +59,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "skipped_temp",
             "stop_blocks",
             "top_rows",
+            "value",
         ],
         "{v}"
     );
@@ -100,6 +101,15 @@ fn json_shape_keys_and_types_are_frozen() {
         v["retired"]["pushed"].is_u64() && v["retired"]["at_touch"].is_u64(),
         "{v}"
     );
+    let value = [
+        "filed_from_replies",
+        "handoffs_picked_up",
+        "issues_closed",
+        "reminded_before_edit",
+        "retired_at_touch",
+    ];
+    assert_eq!(keys(&v["value"]), value, "{v}");
+    assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
     assert!(v["top_rows"].is_array(), "{v}");
     assert!(v.get("real_tokens").is_none(), "no samples, so absent: {v}");
     assert!(v.get("rows").is_none(), "no --rows, so absent: {v}");

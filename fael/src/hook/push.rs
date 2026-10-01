@@ -4,7 +4,9 @@
 
 use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
-use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
+use super::state::{
+    edits_path, lock_seen, now_rfc3339, record_edits, seen_path, take_hint, take_risk,
+};
 use super::usage::{memory_line, record_usage};
 use crate::{aliases, core};
 use std::collections::HashSet;
@@ -219,6 +221,9 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         let mut old = String::new();
         let _ = f.read_to_string(&mut old);
         let old: HashSet<&str> = old.lines().collect();
+        if edit {
+            record_reminded(&c, &tiered, &old);
+        }
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
     let focus = super::focus::read(&c.session, &c.repo.root);
@@ -271,6 +276,36 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         reason: None,
         context: Some(context),
         notice: whisper(&c, &sel.shown[..n.min(sel.shown.len())], &files),
+    }
+}
+
+/// PLAN-fael-visible-secretary chunk 5: decisions and issues about this very
+/// file (tier 0) the agent already had in context when it edited it — the
+/// "reminded before edit" count of `fael stats`. Its own 0-byte usage line
+/// under `reminded`, never `ids` (nothing was pushed), so an edit with
+/// nothing new to say still records it.
+fn record_reminded(c: &super::protocol::Ctx, tiered: &[(&core::Row, usize)], said: &HashSet<&str>) {
+    let ids: Vec<&str> = tiered
+        .iter()
+        .filter(|(r, tier)| {
+            *tier == 0
+                && matches!(r.kind.as_str(), "decision" | "issue")
+                && said.contains(r.id.as_str())
+        })
+        .map(|(r, _)| r.id.as_str())
+        .collect();
+    if !ids.is_empty() {
+        super::asks::append_row(serde_json::json!({
+            "ts": now_rfc3339().unwrap_or_default(),
+            "repo": c.repo.root.to_string_lossy(),
+            "client": c.client,
+            "event": "reminded",
+            "bytes": 0,
+            "est_tokens": 0,
+            "ids": [],
+            "reminded": ids,
+            "session": c.session,
+        }));
     }
 }
 

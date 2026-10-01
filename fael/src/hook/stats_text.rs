@@ -5,6 +5,25 @@
 use crate::core;
 use std::path::Path;
 
+/// What fael gave back, ahead of what it cost (PLAN-fael-visible-secretary
+/// chunk 5) — every number from `Stats.value`, zero parts left out, nothing
+/// to say = no line.
+fn value_line(s: &core::stats::Stats) -> Option<String> {
+    let v = &s.value;
+    let parts: Vec<String> = [
+        ("reminded before edit", v.reminded_before_edit),
+        ("issues closed", v.issues_closed),
+        ("handoffs picked up", v.handoffs_picked_up),
+        ("retired at touch", v.retired_at_touch),
+        ("filed from replies", v.filed_from_replies),
+    ]
+    .iter()
+    .filter(|(_, n)| *n > 0)
+    .map(|(k, n)| format!("{k} ×{n}"))
+    .collect();
+    (!parts.is_empty()).then(|| format!("fael since {}: {}", s.rounds.since, parts.join(" · ")))
+}
+
 /// The human `fael stats --day` text — format only, every number from core.
 pub(super) fn print_day(v: &core::stats::DayView) {
     let a = &v.all;
@@ -102,6 +121,9 @@ fn print_capture(c: &core::stats::Capture) {
 
 /// The human `fael stats` text — format only, every number comes from core.
 pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
+    if let Some(line) = value_line(s) {
+        println!("{line}");
+    }
     println!(
         "fael usage ({}): {} injections · {} bytes · ~{} tokens into context",
         path.display(),

@@ -6,6 +6,7 @@ use super::capture::{Capture, capture};
 use super::metrics::{added_since, ask_totals, non_english_share, post_block_cost, repeat_blocks};
 use super::parse::{Parsed, StopBlock};
 use super::retire::{Retired, retired};
+use super::value::{Value, value};
 use crate::{Config, Log, closed, last_row_ms, rfc3339, superseded, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -111,6 +112,8 @@ pub struct Stats {
     pub capture: Capture,
     /// Pushed rows closed or superseded soon after a push (`retire.rs`).
     pub retired: Retired,
+    /// The value line `fael stats` prints first (`value.rs`).
+    pub value: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub real_tokens: Option<RealAvg>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -151,6 +154,8 @@ pub fn aggregate(
     let (row_total, foreign_rows) = non_english_share(logs, cfg);
     let (samples, avg_in, avg_cc, avg_cr, avg_out) = post_block_cost(&parsed.kept);
     let after_block: usize = outcome.values().map(|(_, f)| f).sum();
+    let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
+    let value = value(parsed, logs, &retired, &capture);
     let mut top: Vec<(&String, &usize)> = parsed.by_id.iter().collect();
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     Stats {
@@ -204,8 +209,9 @@ pub fn aggregate(
             rows: row_total,
             non_english: foreign_rows,
         },
-        capture: capture(parsed, logs),
-        retired: retired(parsed, logs),
+        capture,
+        retired,
+        value,
         real_tokens: real_avg(samples, avg_in, avg_cc, avg_cr, avg_out),
         rows: with_rows.then(|| row_statuses(&parsed.by_id, &parsed.id_repos, logs)),
     }
