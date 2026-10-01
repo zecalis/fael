@@ -77,3 +77,9 @@ if npm ls -g @zecalis/fael >/dev/null 2>&1; then
   npm i -g "@zecalis/fael@$new" >/dev/null && echo "local fael -> $new (npm)" \
     || echo "release: npm has no $new after 5 min — run: npm i -g @zecalis/fael@$new" >&2
 fi
+# release.yml's publish-homebrew-formula job already pushed the tap, so one `brew update` sees it
+if command -v brew >/dev/null 2>&1 && brew list --versions fael >/dev/null 2>&1; then
+  brew update -q >/dev/null && brew upgrade -q zecalis/tap/fael >/dev/null \
+    && echo "local fael -> $(brew list --versions fael | cut -d' ' -f2) (brew)" \
+    || echo "release: brew upgrade failed — run: brew update && brew upgrade zecalis/tap/fael" >&2
+fi
