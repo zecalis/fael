@@ -33,6 +33,29 @@ fn unmatched_path_without_a_close_sibling_is_warned_not_blocked() {
 }
 
 #[test]
+fn planned_path_pushes_once_the_file_exists() {
+    let d = repo();
+    // a plan decision about a file the plan creates later, plan anchor alongside
+    let args = [
+        "add",
+        "decision",
+        "tx rules",
+        "--files",
+        "plan:money,src/money/tx.rs",
+    ];
+    let (ok, _, err) = fael(&d, &args, "");
+    assert!(ok && err.contains("push once it exists"), "{err}");
+    std::fs::create_dir_all(d.join("src/money")).unwrap();
+    std::fs::write(d.join("src/money/tx.rs"), "//\n").unwrap();
+    let input = format!(
+        r#"{{"cwd":{:?},"files":["src/money/tx.rs"]}}"#,
+        d.to_string_lossy()
+    );
+    let (ok, out, err) = fael(&d, &["hook", "read"], &input);
+    assert!(ok && out.contains("tx rules"), "{out}{err}");
+}
+
+#[test]
 fn edited_then_deleted_file_passes_silently() {
     let d = repo();
     std::fs::write(d.join("src/tmp.rs"), "//\n").unwrap();
