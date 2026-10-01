@@ -259,6 +259,39 @@ fn log_only_repo_still_shows() {
 }
 
 #[test]
+fn worktrees_sharing_a_journal_count_once() {
+    // two worktrees of one clone read the same journal: the rollup must
+    // count its rows once, while a separate clone still adds its own
+    let now = ts_ms("2026-09-29T12:00:00Z").unwrap();
+    let shared = Log {
+        rows: vec![
+            row("I1", "issue", "2026-09-29T08:00:00Z", "me-1"),
+            row("D1", "decision", "2026-09-29T09:00:00Z", "me-1"),
+        ],
+        closes: vec![],
+        warnings: vec![],
+    };
+    let other = Log {
+        rows: vec![row("I2", "issue", "2026-09-29T10:00:00Z", "me-1")],
+        closes: vec![],
+        warnings: vec![],
+    };
+    let logs: HashMap<String, Log> = [
+        ("/wt-1".to_string(), shared.clone()),
+        ("/wt-2".to_string(), shared),
+        ("/other".to_string(), other),
+    ]
+    .into_iter()
+    .collect();
+    let v = day(&parsed_of(""), &logs, None, now, 0);
+    assert_eq!(v.repos.len(), 3);
+    assert_eq!(v.repos[2].panels.memory.added.get("issue"), Some(&1));
+    assert_eq!(v.all.memory.added.get("issue"), Some(&2));
+    assert_eq!(v.all.memory.added.get("decision"), Some(&1));
+    assert_eq!(v.all.memory.open_issues, 2);
+}
+
+#[test]
 fn ten_thousand_rows_stay_under_budget() {
     let base = ts_ms("2026-09-29T00:00:00Z").unwrap();
     let mut text = String::new();

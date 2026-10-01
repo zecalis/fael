@@ -9,7 +9,7 @@ mod panels;
 
 use super::parse::{Parsed, StopBlock, UsageRow};
 use crate::{Log, is_alias_row, is_carrier_row, ts_ms};
-use panels::{context_of, timeline_of};
+use panels::{context_of, for_you_of, health_of, memory_of, timeline_of};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -155,6 +155,18 @@ pub fn day(
     }
     names.sort();
     let empty = Log::default();
+    // worktrees of one clone share one journal, so the `all` log panels read
+    // the union of the logs deduped by id — summing per repo counted each
+    // clone's rows once per worktree
+    let mut union = Log::default();
+    for repo in &names {
+        if let Some(log) = logs.get(repo) {
+            union.rows.extend(log.rows.iter().cloned());
+            union.closes.extend(log.closes.iter().cloned());
+        }
+    }
+    crate::log::dedupe_ids(&mut union.rows);
+    crate::log::dedupe_ids(&mut union.closes);
     let mut repos = Vec::with_capacity(names.len());
     for repo in &names {
         let log = logs.get(repo).unwrap_or(&empty);
@@ -177,7 +189,7 @@ pub fn day(
         schema: DAY_SCHEMA,
         day: ctx.day.clone(),
         tz_offset: tz_string(tz_min),
-        all: sum_all(&today, &repos, &ctx),
+        all: sum_all(&today, &repos, &union, &ctx),
         repos,
     }
 }
@@ -191,9 +203,11 @@ pub(super) struct Ctx<'a> {
     start_ms: i64,
 }
 
-/// The `all` rollup: context/timeline recomputed from the union (so `share`
-/// is exact, not averaged), the log panels summed, `last` newest-first.
-fn sum_all(today: &[&UsageRow], repos: &[RepoDay], ctx: &Ctx) -> DayPanels {
+/// The `all` rollup: context/timeline recomputed from the usage union (so
+/// `share` is exact, not averaged), the log panels from `union` (the repos'
+/// logs deduped by id), `delivered` and `ignored_blocks` summed, `last`
+/// newest-first.
+fn sum_all(today: &[&UsageRow], repos: &[RepoDay], union: &Log, ctx: &Ctx) -> DayPanels {
     let mut all = DayPanels {
         delivered: Delivered {
             rows: 0,
@@ -201,21 +215,11 @@ fn sum_all(today: &[&UsageRow], repos: &[RepoDay], ctx: &Ctx) -> DayPanels {
             last: vec![],
         },
         context: context_of(today),
-        memory: Memory {
-            added: BTreeMap::new(),
-            closed: 0,
-            open_issues: 0,
-            superseded: 0,
-        },
-        for_you: ctx.me.filter(|m| !m.is_empty()).map(|_| ForYou {
-            rows: 0,
-            from: BTreeMap::new(),
-            urgent: 0,
-            revisit_due: 0,
-        }),
+        memory: memory_of(union, ctx.noon, ctx.tz_min),
+        for_you: for_you_of(union, ctx.me, &ctx.day),
         health: Health {
             ignored_blocks: 0,
-            stale_issues: 0,
+            stale_issues: health_of(union, &[], ctx.now_ms).stale_issues,
         },
         timeline: timeline_of(today, ctx.start_ms),
     };
@@ -244,18 +248,7 @@ fn sum_all(today: &[&UsageRow], repos: &[RepoDay], ctx: &Ctx) -> DayPanels {
     for v in repos {
         all.delivered.rows += v.panels.delivered.rows;
         merge_map(&mut all.delivered.by_client, &v.panels.delivered.by_client);
-        merge_map(&mut all.memory.added, &v.panels.memory.added);
-        all.memory.closed += v.panels.memory.closed;
-        all.memory.open_issues += v.panels.memory.open_issues;
-        all.memory.superseded += v.panels.memory.superseded;
-        if let (Some(a), Some(b)) = (all.for_you.as_mut(), &v.panels.for_you) {
-            a.rows += b.rows;
-            merge_map(&mut a.from, &b.from);
-            a.urgent += b.urgent;
-            a.revisit_due += b.revisit_due;
-        }
         all.health.ignored_blocks += v.panels.health.ignored_blocks;
-        all.health.stale_issues += v.panels.health.stale_issues;
     }
     all
 }
