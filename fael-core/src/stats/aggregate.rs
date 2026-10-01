@@ -155,7 +155,7 @@ pub fn aggregate(
     let (samples, avg_in, avg_cc, avg_cr, avg_out) = post_block_cost(&parsed.kept);
     let after_block: usize = outcome.values().map(|(_, f)| f).sum();
     let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
-    let value = value(parsed, logs, &retired, &capture);
+    let value = value(parsed, logs);
     let mut top: Vec<(&String, &usize)> = parsed.by_id.iter().collect();
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     Stats {

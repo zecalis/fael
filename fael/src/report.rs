@@ -169,12 +169,12 @@ fn delivered(h: &mut String, s: &Stats, info: &HashMap<String, Info>) {
             s.retired.pushed, s.retired.at_touch
         );
     }
-    if s.value.reminded_before_edit > 0 {
+    if s.value.in_context_at_edit > 0 {
         let _ = write!(
             h,
-            " {} times a decision or issue about a file was already in context when the agent \
-             edited that file.",
-            s.value.reminded_before_edit
+            " Decisions or issues a push handed over and still in context when the agent edited \
+             their file: {} (each counted once per session).",
+            s.value.in_context_at_edit
         );
     }
     h.push_str("</p>\n");

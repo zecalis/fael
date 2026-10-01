@@ -101,13 +101,7 @@ fn json_shape_keys_and_types_are_frozen() {
         v["retired"]["pushed"].is_u64() && v["retired"]["at_touch"].is_u64(),
         "{v}"
     );
-    let value = [
-        "filed_from_replies",
-        "handoffs_picked_up",
-        "issues_closed",
-        "reminded_before_edit",
-        "retired_at_touch",
-    ];
+    let value = ["handoffs_picked_up", "in_context_at_edit", "issues_closed"];
     assert_eq!(keys(&v["value"]), value, "{v}");
     assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
     assert!(v["top_rows"].is_array(), "{v}");

@@ -4,15 +4,15 @@
 
 use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
-use super::state::{
-    edits_path, lock_seen, now_rfc3339, record_edits, seen_path, take_hint, take_risk,
-};
-use super::usage::{memory_line, record_usage};
+use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
+use super::usage::{memory_line, record_usage, usage_row};
 use crate::{aliases, core};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
 /// Said under the rows of an edit push (see `push`).
+/// The usage event `fael-core::stats` reads as "in context at edit".
+const IN_CONTEXT: &str = "in-context";
 const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
@@ -222,7 +222,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         let _ = f.read_to_string(&mut old);
         let old: HashSet<&str> = old.lines().collect();
         if edit {
-            record_reminded(&c, &tiered, &old);
+            record_in_context(&c, &tiered, &old, f);
         }
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
@@ -280,33 +280,36 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
 }
 
 /// PLAN-fael-visible-secretary chunk 5: decisions and issues about this very
-/// file (tier 0) the agent already had in context when it edited it — the
-/// "reminded before edit" count of `fael stats`. Its own 0-byte usage line
-/// under `reminded`, never `ids` (nothing was pushed), so an edit with
-/// nothing new to say still records it.
-fn record_reminded(c: &super::protocol::Ctx, tiered: &[(&core::Row, usize)], said: &HashSet<&str>) {
+/// file (tier 0) already in the agent's context when it edited it. Its own
+/// 0-byte usage line under `in_context`, never `ids` (nothing was pushed).
+/// The seen list also holds rows the agent filed or found itself, so stats
+/// counts only ids an earlier push of the session handed over. Each id once
+/// per session: an `@<id>` line in the seen list (never a row id) marks it.
+fn record_in_context(
+    c: &super::protocol::Ctx,
+    tiered: &[(&core::Row, usize)],
+    seen: &HashSet<&str>,
+    f: &mut std::fs::File,
+) {
     let ids: Vec<&str> = tiered
         .iter()
         .filter(|(r, tier)| {
             *tier == 0
                 && matches!(r.kind.as_str(), "decision" | "issue")
-                && said.contains(r.id.as_str())
+                && seen.contains(r.id.as_str())
+                && !seen.contains(format!("@{}", r.id).as_str())
         })
         .map(|(r, _)| r.id.as_str())
         .collect();
-    if !ids.is_empty() {
-        super::asks::append_row(serde_json::json!({
-            "ts": now_rfc3339().unwrap_or_default(),
-            "repo": c.repo.root.to_string_lossy(),
-            "client": c.client,
-            "event": "reminded",
-            "bytes": 0,
-            "est_tokens": 0,
-            "ids": [],
-            "reminded": ids,
-            "session": c.session,
-        }));
+    if ids.is_empty() {
+        return;
     }
+    let marks: String = ids.iter().map(|id| format!("@{id}\n")).collect();
+    let _ = f.write_all(marks.as_bytes());
+    let meta = hook_meta(c, None, false);
+    let mut row = usage_row(&c.client, IN_CONTEXT, &c.repo.root, "", &[], &meta);
+    row["in_context"] = ids.into();
+    super::asks::append_row(row);
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the user hears which decision or

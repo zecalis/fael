@@ -6,16 +6,16 @@ use crate::core;
 use std::path::Path;
 
 /// What fael gave back, ahead of what it cost (PLAN-fael-visible-secretary
-/// chunk 5) — every number from `Stats.value`, zero parts left out, nothing
-/// to say = no line.
+/// chunk 5) — every number from `--json`, zero parts left out, nothing to
+/// say = no line.
 fn value_line(s: &core::stats::Stats) -> Option<String> {
     let v = &s.value;
     let parts: Vec<String> = [
-        ("reminded before edit", v.reminded_before_edit),
+        ("in context at edit", v.in_context_at_edit),
         ("issues closed", v.issues_closed),
         ("handoffs picked up", v.handoffs_picked_up),
-        ("retired at touch", v.retired_at_touch),
-        ("filed from replies", v.filed_from_replies),
+        ("retired at touch", s.retired.at_touch),
+        ("filed from replies", s.capture.reply_stored),
     ]
     .iter()
     .filter(|(_, n)| *n > 0)

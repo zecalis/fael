@@ -16,9 +16,10 @@ Every number comes from two inputs, joined as pure functions in
   whose context the push landed in — absent on the session's own thread),
   `real_tokens` on some rows, and `row` on an add's `warning` (the id just
   filed — not in `ids`, which count pushes; `session` there is its writer).
-  An edit writes one 0-byte `event: "reminded"` row when decisions or issues
+  An edit writes one 0-byte `event: "in-context"` row when decisions or issues
   about that very file were already in the session's context — their ids go
-  under `reminded`, never `ids` (nothing was pushed). Torn lines are skipped; temp-dir repos (the OS temp dir and `/tmp`, where
+  under `in_context`, never `ids` (nothing was pushed), each id once per
+  session. It is no injection: no count above includes it. Torn lines are skipped; temp-dir repos (the OS temp dir and `/tmp`, where
   agent scratchpads live) are skipped unless the state dir itself is scratch.
   `--since <YYYY-MM-DD | RFC 3339>` keeps only the lines stamped at or after
   it, before anything is counted — first use per repo, rows added and
@@ -56,7 +57,7 @@ shape is a breaking change: ship the reader first.
 | `real_tokens` | object, else absent | mean cost of the round after a stop-block: `post_block_rounds`, `avg_input`, `avg_cache_create`, `avg_cache_read`, `avg_output` |
 | `capture` | object | reply capture and what the Stop hook still costs (fields below) |
 | `retired` | object | `pushed` = distinct rows a `read`/`edit` push handed over · `at_touch` = of those, closed or superseded (a bump is a supersede) within a day after one of those pushes — how many rows the edit-push ask retires where they went stale |
-| `value` | object | the line `fael stats` prints first: `reminded_before_edit` = distinct (session, row) pairs from `reminded` rows · `issues_closed` = issues closed at or after the repo's first usage (deduped by id) · `handoffs_picked_up` = distinct `*:handoff`-keyed rows a push handed over · `retired_at_touch` = `retired.at_touch` · `filed_from_replies` = `capture.reply_stored` |
+| `value` | object | the line `fael stats` prints first: `in_context_at_edit` = distinct (session, row) pairs from `in-context` rows whose row an earlier push of that session handed over (a row the agent filed or found itself does not count) · `issues_closed` = issues closed at or after the repo's first usage, a close `fael compact` folded into its row included (deduped by id) · `handoffs_picked_up` = distinct `*:handoff`-keyed rows a push handed over. The text line adds `retired.at_touch` and `capture.reply_stored` |
 | `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
 
 `capture` (PLAN-fael-dev-adoption): `post_stop_rounds` = Stop-hook blocks, cumulative (each cost a
@@ -117,7 +118,7 @@ panels are summed; `delivered.last` is newest-first across repos.
 
 ## Changelog
 
-- `1` (2026-10-01): added `value` (the value line) and `reminded` usage rows; no bump.
+- `1` (2026-10-01): added `value` (the value line) and `in-context` usage rows; no bump.
 
 - `1` (2026-10-01): `--since` cuts the input to a window and the temp filter also skips `/tmp`; same shape, no bump.
 - `1` (2026-10-01): added `retired` (pushed rows closed or superseded within a day of a push); no bump.
