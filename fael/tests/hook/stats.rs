@@ -259,3 +259,48 @@ fn stats_rows_sees_local_store_journal_rows() {
         "{out}"
     );
 }
+
+/// PLAN-fael-visible-secretary chunk 5: a decision read into context, then
+/// its file edited twice in the same session, is one "in context at edit" —
+/// the edit says nothing new (the row is seen) yet still records it, once,
+/// as no injection; `fael stats` leads with the value line `--json` carries.
+#[test]
+fn edit_after_read_counts_in_context_at_edit() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "decision",
+            "keep the parser pure",
+            "--files",
+            "src/a.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"s1","tool_input":{{"file_path":{}}}}}"#,
+        json(&d),
+        json(&d.join("src/a.rs"))
+    );
+    let (ok, out, _) = fael(&d, &["hook", "read", "--client", "claude"], &input);
+    assert!(ok && out.contains("keep the parser pure"), "{out}");
+    for _ in 0..2 {
+        let (ok, out, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
+        assert!(ok && !out.contains("keep the parser pure"), "{out}");
+    }
+    let (ok, out, _) = fael(&d, &["stats", "--json"], "");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(ok && v["value"]["in_context_at_edit"] == 1, "{out}");
+    let (ok, out, _) = fael(&d, &["stats"], "");
+    let first = out.lines().next().unwrap_or("");
+    assert!(
+        ok && first.starts_with("fael since ") && first.ends_with(": in context at edit ×1"),
+        "{out}"
+    );
+    assert!(!out.contains("in-context"), "no injection: {out}");
+    let usage = std::fs::read_to_string(d.join("state/usage.jsonl")).unwrap();
+    assert_eq!(usage.matches("\"in-context\"").count(), 1, "{usage}");
+}

@@ -1,0 +1,165 @@
+//! The value line (PLAN-fael-visible-secretary chunk 5): what fael gave back
+//! in the window, ahead of what it cost. Deterministic events only — never
+//! "saved" or "prevented": fael knows what it handed over, not what the agent
+//! would have done without it. Pure: kept usage rows and loaded logs in.
+
+use super::parse::Parsed;
+use crate::{Log, ts_ms};
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
+
+/// `retired.at_touch` and `capture.reply_stored` join the line from their
+/// own blocks — not copied here, so `--json` carries each number once.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Value {
+    /// Distinct (session, row) pairs: a decision or issue an earlier push of
+    /// the session handed over was still in context when the agent edited
+    /// its file (`in-context` usage lines).
+    pub in_context_at_edit: usize,
+    /// Issues closed since the repo's first usage.
+    pub issues_closed: usize,
+    /// Distinct `*:handoff` rows a push handed to an agent.
+    pub handoffs_picked_up: usize,
+}
+
+pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
+    // the seen list behind an `in-context` line also holds rows the agent
+    // filed or found itself: only a row a push said first counts.
+    // ponytail: usage.jsonl is append-only, so file order is time order.
+    let mut pushed: HashSet<(&str, &str, &str)> = HashSet::new();
+    let mut in_context: HashSet<(&str, &str, &str)> = HashSet::new();
+    for v in &parsed.kept {
+        let (Some(repo), Some(session)) = (v["repo"].as_str(), v["session"].as_str()) else {
+            continue;
+        };
+        let ids = |k: &str| {
+            v[k].as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|i| i.as_str())
+        };
+        if v["event"] == "in-context" {
+            in_context.extend(
+                ids("in_context")
+                    .map(|id| (repo, session, id))
+                    .filter(|k| pushed.contains(k)),
+            );
+        } else {
+            pushed.extend(ids("ids").map(|id| (repo, session, id)));
+        }
+    }
+    // repos in one clone share the journal: dedup closes and rows by id
+    let mut closed: HashSet<&str> = HashSet::new();
+    for (repo, first) in &parsed.first_seen {
+        let Some(log) = logs.get(repo) else { continue };
+        let in_window = |ts: Option<&str>| ts.and_then(ts_ms).is_some_and(|t| t >= *first);
+        let issues = log.rows.iter().filter(|r| r.kind == "issue");
+        let ids: HashSet<&str> = issues.clone().map(|r| r.id.as_str()).collect();
+        closed.extend(log.closes.iter().filter_map(|c| {
+            let id = c.reference.as_deref()?;
+            (ids.contains(id) && in_window(Some(&c.ts))).then_some(id)
+        }));
+        // `fael compact` folds a close into its row
+        closed.extend(
+            issues
+                .filter(|r| in_window(r.extra.get("closed").and_then(|c| c["ts"].as_str())))
+                .map(|r| r.id.as_str()),
+        );
+    }
+    let handoff_ids: HashMap<&str, HashSet<&str>> = logs
+        .iter()
+        .map(|(repo, log)| {
+            let h = log
+                .rows
+                .iter()
+                .filter(|r| r.key.as_deref().is_some_and(|k| k.ends_with(":handoff")));
+            (repo.as_str(), h.map(|r| r.id.as_str()).collect())
+        })
+        .collect();
+    let handoffs = parsed
+        .id_repos
+        .iter()
+        .filter(|(id, repos)| {
+            repos.iter().any(|repo| {
+                handoff_ids
+                    .get(repo.as_str())
+                    .is_some_and(|h| h.contains(id.as_str()))
+            })
+        })
+        .count();
+    Value {
+        in_context_at_edit: in_context.len(),
+        issues_closed: closed.len(),
+        handoffs_picked_up: handoffs,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Log;
+    use std::collections::HashMap;
+
+    fn rows(jsonl: &str) -> Vec<crate::Row> {
+        let (mut out, mut w) = (vec![], vec![]);
+        crate::log::parse(jsonl.as_bytes(), "t.jsonl", &mut out, &mut w);
+        out
+    }
+
+    fn row(id: &str, ts: &str, kind: &str, extra: &str) -> String {
+        format!(
+            "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"{ts}\",\"by\":\"w\",\"kind\":\"{kind}\",\"text\":\"t\",\"files\":[\"a.rs\"]{extra}}}\n"
+        )
+    }
+
+    #[test]
+    fn counts_in_context_closes_and_handoffs() {
+        let log = Log {
+            rows: rows(
+                &(row("I1", "2026-09-20T00:00:00Z", "issue", "")
+                    + &row("I2", "2026-09-20T00:00:00Z", "issue", "")
+                    // closed in the window, then folded into the row by compact
+                    + &row(
+                        "I3",
+                        "2026-09-20T00:00:00Z",
+                        "issue",
+                        ",\"closed\":{\"id\":\"C9\",\"ts\":\"2026-09-27T00:00:00Z\"}",
+                    )
+                    + &row("D1", "2026-09-20T00:00:00Z", "decision", "")
+                    + &row("D2", "2026-09-26T00:00:00Z", "decision", "")
+                    + &row(
+                        "H1",
+                        "2026-09-25T00:00:00Z",
+                        "note",
+                        ",\"key\":\"plan:x:handoff\"",
+                    )),
+            ),
+            // I1 closed in the window, I2 before it, D1 is no issue
+            closes: rows(
+                &(row("C1", "2026-09-26T05:00:00Z", "close", ",\"ref\":\"I1\"")
+                    + &row("C2", "2026-09-21T00:00:00Z", "close", ",\"ref\":\"I2\"")
+                    + &row("C3", "2026-09-26T05:00:00Z", "close", ",\"ref\":\"D1\"")),
+            ),
+            ..Default::default()
+        };
+        // s1 was pushed H1, D1, I1: in context at edit D1 twice (counts once)
+        // and I1; D2 the agent filed itself, never pushed — no count. s2 is
+        // pushed D1 too. A session-less line never joins.
+        let usage = r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/r","client":"claude","event":"session-start","bytes":9,"est_tokens":2,"ids":["H1","D1"],"session":"s1"}
+{"ts":"2026-09-26T00:00:30.000Z","repo":"/work/r","client":"claude","event":"read","bytes":9,"est_tokens":2,"ids":["I1"],"session":"s1"}
+{"ts":"2026-09-26T00:01:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["D1","I1","D2"],"session":"s1"}
+{"ts":"2026-09-26T00:02:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["D1"],"session":"s1"}
+{"ts":"2026-09-26T00:02:30.000Z","repo":"/work/r","client":"claude","event":"read","bytes":9,"est_tokens":2,"ids":["D1"],"session":"s2"}
+{"ts":"2026-09-26T00:03:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["D1"],"session":"s2"}
+{"ts":"2026-09-26T00:04:00.000Z","repo":"/work/r","client":"codex","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["D1"]}
+"#;
+        let parsed = super::super::parse::parse(usage, std::path::Path::new("/s/usage.jsonl"), &[]);
+        // in-context lines are no injection
+        assert_eq!(parsed.n, 3);
+        let logs = HashMap::from([("/work/r".to_string(), log)]);
+        let v = super::value(&parsed, &logs);
+        assert_eq!(
+            (v.in_context_at_edit, v.issues_closed, v.handoffs_picked_up),
+            (3, 2, 1)
+        );
+    }
+}

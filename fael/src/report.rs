@@ -169,6 +169,14 @@ fn delivered(h: &mut String, s: &Stats, info: &HashMap<String, Info>) {
             s.retired.pushed, s.retired.at_touch
         );
     }
+    if s.value.in_context_at_edit > 0 {
+        let _ = write!(
+            h,
+            " Decisions or issues a push handed over and still in context when the agent edited \
+             their file: {} (each counted once per session).",
+            s.value.in_context_at_edit
+        );
+    }
     h.push_str("</p>\n");
     let rows: Vec<_> = s.rows.iter().flatten().take(10).collect();
     table(

@@ -103,6 +103,11 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
             p.skipped += 1;
             continue;
         }
+        // nothing reached any context: `value` reads it, no count does
+        if v["event"] == "in-context" {
+            p.kept.push(v);
+            continue;
+        }
         p.n += 1;
         p.bytes += v["bytes"].as_u64().unwrap_or(0) as usize;
         let t = v["est_tokens"].as_u64().unwrap_or(0) as usize;

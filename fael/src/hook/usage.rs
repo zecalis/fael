@@ -21,6 +21,19 @@ pub(crate) fn record_usage(
     ids: &[String],
     meta: &UsageMeta,
 ) {
+    asks::append_row(usage_row(client, event, repo, text, ids, meta));
+}
+
+/// One usage row, every key `record_usage` writes — shared with the 0-byte
+/// `in-context-at-edit` row so the two shapes cannot drift.
+pub(crate) fn usage_row(
+    client: &str,
+    event: &str,
+    repo: &Path,
+    text: &str,
+    ids: &[String],
+    meta: &UsageMeta,
+) -> serde_json::Value {
     let mut row = serde_json::json!({
         "ts": now_rfc3339().unwrap_or_default(),
         "repo": repo.to_string_lossy(),
@@ -44,7 +57,7 @@ pub(crate) fn record_usage(
     {
         row["real_tokens"] = t;
     }
-    asks::append_row(row);
+    row
 }
 
 /// The one line that says what memory cost this injection, only when rows
