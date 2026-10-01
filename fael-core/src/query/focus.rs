@@ -5,6 +5,7 @@
 //! reads: the hook builds the Focus at session start (`hook/focus.rs`) and
 //! the push only reads it back.
 
+use super::select::plan_anchor;
 use crate::Row;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -47,6 +48,42 @@ impl Focus {
             keys,
         }
     }
+}
+
+/// PLAN-fael-visible-secretary chunk 3: the open issues on this session's
+/// work, which session start lists in full — filed on the start branch,
+/// keyed by a Focus key, or naming an anchor (`plan:<name>`, or the
+/// `PLAN-<name>.md` that names it) that a row filed on the start branch
+/// names too. fael infers no plan (#66): the anchors come only from what the
+/// branch's own rows say. `rows` arrives open, as for `from_rows`; no branch
+/// = none.
+pub fn on_work<'a>(focus: &Focus, rows: &[&'a Row], prefixes: &[String]) -> Vec<&'a Row> {
+    let Some(branch) = focus.branch.as_deref() else {
+        return vec![];
+    };
+    let anchors = |r: &Row| -> Vec<String> {
+        r.files
+            .iter()
+            .filter_map(|f| match crate::anchor(f) {
+                Some(_) => Some(f.clone()),
+                None => plan_anchor(f, prefixes),
+            })
+            .collect()
+    };
+    let named: HashSet<String> = rows
+        .iter()
+        .filter(|r| r.branch() == Some(branch))
+        .flat_map(|r| anchors(r))
+        .collect();
+    rows.iter()
+        .copied()
+        .filter(|r| r.kind == "issue")
+        .filter(|r| {
+            r.branch() == Some(branch)
+                || r.key.as_deref().is_some_and(|k| focus.keys.contains(k))
+                || anchors(r).iter().any(|a| named.contains(a))
+        })
+        .collect()
 }
 
 /// Where one gathered row lands: Now shows first (budget still caps), File

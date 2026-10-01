@@ -293,8 +293,9 @@ In the default mode the same signals only stash one line for the next push (show
 **Session start:**
 ```
 client ─(session-start)─▶ write focus.json (start branch + the keys of the rows filed on it)
-                        ─▶ open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
+                        ─▶ open issues to you, urgent unassigned, or tied to this branch in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
+An issue is tied to this branch when it was filed on the start branch, carries a Focus key, or names an anchor that a row filed on the start branch names too (`plan:<name>`, or the `PLAN-<name>.md` that names it). A count line is easy to skim past, and that is how an agent missed the one open issue on its own plan. The anchors come only from what the branch's own rows say, so nothing about the session's plan is guessed.
 fael never infers which plan a session is in. `plan:<name>` anchors and `plan:<name>:handoff` / `plan:<name>:chunk-<n>` keys are a fapony convention: fael stores and matches them like any other anchor or key, and fapony's kickoff asks for them itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`). Which filename prefixes widen kickoff that way is repo config (`[anchor] prefixes`, default `PLAN-`) — a plain common name, not fapony knowledge; the key scheme fapony seeds stays fapony's. A session's intent is not a fact the shared log can answer — any rule that picks one plan from it is a guess, and a wrong guess pushes another task's rows into Now.
 
 **Across branches** (one branch per person or per agent):

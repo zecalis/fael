@@ -19,16 +19,15 @@ pub(crate) fn path(session: &str, root: &Path) -> PathBuf {
         .join(format!("{key}.focus.json"))
 }
 
-/// Build the session Focus (start branch and the keys of the open rows filed
-/// on it) and write it. An empty session has no key to write under — MCP and
-/// CLI calls outside a hook session build nothing — and a detached HEAD
-/// builds `Focus::default()`, which reads back the same as no file at all.
-pub(crate) fn write(session: &str, root: &Path, branch: Option<&str>, rows: &[&core::Row]) {
+/// Write the session Focus (`core::Focus::from_rows`: start branch and the
+/// keys of the open rows filed on it). An empty session has no key to write
+/// under — MCP and CLI calls outside a hook session write nothing — and a
+/// detached HEAD's `Focus::default()` reads back the same as no file at all.
+pub(crate) fn write(session: &str, root: &Path, focus: &core::Focus) {
     if session.is_empty() {
         return;
     }
-    let focus = core::Focus::from_rows(branch, rows);
-    let Ok(body) = serde_json::to_string(&focus) else {
+    let Ok(body) = serde_json::to_string(focus) else {
         return;
     };
     let path = path(session, root);
