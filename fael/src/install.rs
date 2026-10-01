@@ -38,6 +38,8 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
     // a sub-agent's final message: its `fael <kind>:` lines are filed, nothing blocks
     ("SubagentStop", None, "stop"),
     ("SessionStart", None, "session-start"),
+    // a prompt naming an open key gets one pointer line (01M3WCK7N)
+    ("UserPromptSubmit", None, "prompt"),
     ("PostToolUse", Some("Read"), "read"),
     // fresh agents read through search tools and the shell: files a grep,
     // glob or cat/sed touched push too

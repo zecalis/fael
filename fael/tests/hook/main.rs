@@ -22,6 +22,7 @@ mod focus;
 mod memory_line;
 mod notify;
 mod precision;
+mod prompt;
 mod push_cap;
 mod search;
 mod seen;

@@ -3,7 +3,7 @@
 > **Status:** the log format and storage (§2, [format.md](format.md)) are implemented in `fael-core`, and so are
 > `add` `close` `find` `keys` `kickoff` `mv` in the `fael` CLI (`find` and `kickoff` take
 > `--branches` to read unmerged branches without a checkout), `fael mcp`
-> (stdio, 3 tools), `fael hook <stop|session-start|read|edit|search>` (neutral + claude/codex adapters) with
+> (stdio, 3 tools), `fael hook <stop|session-start|read|edit|search|prompt>` (neutral + claude/codex adapters) with
 > per-machine usage accounting (`fael stats`, `fael report`), `fael install` (Claude Code, Codex, OpenCode),
 > and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11) ·
 > `fael purge` (delete a leaked row for good — the one deliberate exception to the append-only log).
@@ -234,7 +234,7 @@ rows = ["english"]            # accepted row-writing languages; anything else wa
 Each client speaks its own hook format. The binary contains the adapters for the supported clients; everyone else uses the neutral format.
 
 ```
-fael hook <stop|session-start|read|edit|search> [--client claude|codex]   < stdin  > stdout
+fael hook <stop|session-start|read|edit|search|prompt> [--client claude|codex]   < stdin  > stdout
 
 neutral Event  {"cwd","session","client","files":[…],"stop_active","text","reply","agent","source","tool","tool_input","tool_response"}
 neutral Reply  {"block":bool,"reason"?:str,"context"?:str,"notice"?:str}

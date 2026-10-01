@@ -45,28 +45,77 @@ pub struct KeyUse {
 
 /// Every key matching `pattern` (all when `None`), most used first — so agents reuse one.
 pub fn keys(log: &Log, pattern: Option<&str>) -> Vec<KeyUse> {
+    let mut out = tally(log.rows.iter().filter(|r| {
+        r.key
+            .as_deref()
+            .is_some_and(|k| pattern.is_none_or(|p| glob(p, k)))
+    }));
+    out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.key.cmp(&b.key)));
+    out
+}
+
+/// One `KeyUse` per key the rows carry; keyless rows are skipped.
+fn tally<'a>(rows: impl Iterator<Item = &'a Row>) -> Vec<KeyUse> {
     let mut by: HashMap<&str, (usize, &Row)> = HashMap::new();
-    for r in &log.rows {
+    for r in rows {
         let Some(k) = r.key.as_deref() else { continue };
-        if pattern.is_some_and(|p| !glob(p, k)) {
-            continue;
-        }
         let e = by.entry(k).or_insert((0, r));
         e.0 += 1;
         if r.id > e.1.id {
             e.1 = r;
         }
     }
-    let mut out: Vec<KeyUse> = by
-        .into_iter()
+    by.into_iter()
         .map(|(k, (count, r))| KeyUse {
             key: k.into(),
             count,
             last: r.ts.clone(),
         })
+        .collect()
+}
+
+/// Open keys one matched segment may name before it is an area word, not a
+/// topic — and the most keys one hint line lists.
+const HINT_MAX_KEYS: usize = 3;
+
+/// Open keys a user prompt names (01M3WCK7N): a prompt word equal, ASCII
+/// case-insensitively, to one segment of the key (`:`/`-`/`_`/`.`/`/` split).
+/// Never fuzzy: no prefix, stem or edit distance. A segment under 4 chars or
+/// all digits never matches, and one shared by more than `HINT_MAX_KEYS` open
+/// keys is dropped whole (`vela` in `vela:*`) — too common to point anywhere.
+/// Open = some row on the key is neither closed nor superseded. At most
+/// `HINT_MAX_KEYS`, most used first, like `keys`.
+// ponytail: plain English words that happen to be a segment ("file" → fael:file-size)
+// still match; a stop list when usage shows them as noise.
+pub fn key_hints(log: &Log, prompt: &str) -> Vec<KeyUse> {
+    let (closed, gone) = (super::closed(log), super::superseded(log));
+    let keys = tally(log.rows.iter().filter(|r| {
+        !closed.contains(r.id.as_str())
+            && !gone.contains(r.id.as_str())
+            && !crate::is_carrier_row(r)
+            && !crate::is_alias_row(r)
+    }));
+    let words: std::collections::HashSet<String> = prompt
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| w.len() >= 4 && !w.bytes().all(|b| b.is_ascii_digit()))
+        .map(str::to_ascii_lowercase)
         .collect();
-    out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.key.cmp(&b.key)));
-    out
+    let segs = |k: &str| -> Vec<String> {
+        k.split([':', '-', '_', '.', '/'])
+            .map(str::to_ascii_lowercase)
+            .collect()
+    };
+    let mut hit: Vec<KeyUse> = vec![];
+    for w in &words {
+        let named: Vec<&KeyUse> = keys.iter().filter(|k| segs(&k.key).contains(w)).collect();
+        if named.len() <= HINT_MAX_KEYS {
+            hit.extend(named.into_iter().cloned());
+        }
+    }
+    hit.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.key.cmp(&b.key)));
+    hit.dedup_by(|a, b| a.key == b.key);
+    hit.truncate(HINT_MAX_KEYS);
+    hit
 }
 
 /// No filter = the session brief under the kickoff budget; otherwise find under the find budget.

@@ -22,7 +22,7 @@ pub use focus::{
     Background, Bucket, Focus, Hidden, PUSH_BACKGROUND, PUSH_HUB_ROWS, PushPolicy, Selection,
     bucket, on_work, select,
 };
-pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
+pub use lookup::{KeyUse, fat_reasons, key_hints, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
 pub use push::{push, push_tiered};
