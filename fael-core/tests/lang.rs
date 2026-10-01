@@ -132,6 +132,28 @@ fn quoted_code_never_signals() {
     assert!(hit.strong, "{}", hit.marker);
 }
 
+/// A risk inside a conditional is a hypothetical (2026-10-01: "ถ้าทำพร้อมกัน
+/// … ตัวเลขไม่ตรงกัน" nudged an issue on files it never named). The
+/// conditional covers its own sentence only.
+#[test]
+fn conditional_risks_stay_quiet() {
+    let packs = en_th();
+    for quiet in [
+        "ถ้าทำพร้อมกันจะได้นิยามสองแบบที่ตัวเลขไม่ตรงกัน",
+        "หากรันสองที่ ค่าอาจมีปัญหา",
+        "if both run at once the counts mismatch",
+    ] {
+        assert!(marker_hit(quiet, &packs, &[]).is_none(), "{quiet}");
+    }
+    for hit in [
+        "if needed, rerun. the counts mismatch",
+        "the verify step shows a mismatch",
+        "ถ้าว่างค่อยดู\ndoc กับโค้ดไม่ตรงกัน",
+    ] {
+        assert!(marker_hit(hit, &packs, &[]).is_some(), "{hit}");
+    }
+}
+
 #[test]
 fn negations_extra_cancels_like_a_builtin() {
     let packs = en_th();

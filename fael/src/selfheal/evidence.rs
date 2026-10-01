@@ -230,8 +230,9 @@ fn norm_text(s: &str) -> String {
 /// Open rows the text names after a "supersede*" word. The word still leads
 /// the id in the broken-flag rescue — the caller asked to supersede something,
 /// but a text that only mentions a row in passing ("see 01A… for context")
-/// must not close it (§6d). Ids of rows already closed or superseded are not
-/// targets either: naming them changes nothing.
+/// must not close it (§6d). The word arms only the ids right after it ("Supersedes
+/// A and B"); any other word disarms, so an id cited later is a mention. Ids
+/// of rows already closed or superseded are not targets: naming them changes nothing.
 fn text_targets<'a>(log: &'a core::Log, open: &[&'a core::Row], text: &str) -> Vec<&'a core::Row> {
     let mut out: Vec<&core::Row> = vec![];
     let mut armed = false;
@@ -240,13 +241,15 @@ fn text_targets<'a>(log: &'a core::Log, open: &[&'a core::Row], text: &str) -> V
         if t.is_empty() {
             continue;
         }
-        if !armed {
-            armed = t.to_ascii_lowercase().starts_with("supersede");
+        let lower = t.to_ascii_lowercase();
+        if lower.starts_with("supersede") || !armed || lower == "and" || lower == "or" {
+            armed |= lower.starts_with("supersede");
             continue;
         }
         // resolution is exact-id or unique prefix, same as --supersedes, so a
-        // word that merely looks like an id resolves to nothing and is skipped
+        // word that merely looks like an id resolves to nothing and disarms
         let Ok(r) = core::resolve(log, t) else {
+            armed = false;
             continue;
         };
         if open.iter().any(|o| o.id == r.id) && !out.iter().any(|o| o.id == r.id) {
