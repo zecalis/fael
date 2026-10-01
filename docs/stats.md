@@ -116,8 +116,11 @@ Each panel (identical shape under `all` and inside `repos[]`):
 | | `fael_tokens` | [u32] × 96 | `est_tokens` per bucket |
 
 All-repos vs per-repo: `context` and `timeline` recompute over the union (so
-`share` is exact, not averaged); `delivered.rows`/`by_client` and the log
-panels are summed; `delivered.last` is newest-first across repos.
+`share` is exact, not averaged); `delivered.rows`/`by_client` and
+`health.ignored_blocks` are summed; the log panels (`memory`, `for_you`,
+`health.stale_issues`) are built once from the repos' logs deduped by id, so
+worktrees that share one journal count its rows once; `delivered.last` is
+newest-first across repos.
 
 ## Changelog
 
