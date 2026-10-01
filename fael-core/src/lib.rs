@@ -44,8 +44,8 @@ pub use log::{
 };
 pub use query::{
     Abbrev, Background, Bucket, Cut, Filter, Focus, Hidden, KeyUse, MdRef, PUSH_BACKGROUND,
-    PushPolicy, Ref, Selection, Urgent, UrgentChange, abbrev, backtick_paths, brief, bucket,
-    closed, cmp_rows, due, est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone,
+    PUSH_HUB_ROWS, PushPolicy, Ref, Selection, Urgent, UrgentChange, abbrev, backtick_paths, brief,
+    bucket, closed, cmp_rows, due, est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone,
     gone_files, id_tokens, is_date, keys, kickoff, levenshtein, on_work, page, phantom_md_refs,
     phantom_refs, push, push_tiered, query, ranked, ref_state, render, render_full,
     render_full_page, render_page, resolve, resolve_urgent, restored, reverted, row_due, select,

@@ -313,7 +313,7 @@ pub(crate) fn check(
         match sibling_suggest(root, f) {
             Some(near) if !force => bad.push((f, near)),
             _ => warns.push(format!(
-                "warning: {f:?} matches nothing on disk — filed anyway; check the spelling"
+                "warning: {f:?} matches nothing on disk — filed anyway; a typo? else its rows push once it exists"
             )),
         }
     }

@@ -274,3 +274,47 @@ fn select_never_cuts_now_rows() {
     assert!(sel.shown.iter().all(|r| r.kind == "issue"));
     assert_eq!(sel.omitted, 1);
 }
+
+#[test]
+fn select_hub_file_shows_only_now_rows() {
+    // a plan cited by more rows than PUSH_HUB_ROWS: freshness alone would
+    // pick 5 off-topic rows — only the issue and the Focus-keyed row render
+    let hub = |n: usize| {
+        let mut l = Log::default();
+        for i in 0..n {
+            l.rows.push(row(
+                &format!("D00000000000000000000001{i:02}"),
+                "decision",
+                &["PLAN.md"],
+                None,
+            ));
+        }
+        l.rows.push(row(
+            "I0000000000000000000000020",
+            "issue",
+            &["PLAN.md"],
+            None,
+        ));
+        l.rows.push(row(
+            "K0000000000000000000000021",
+            "decision",
+            &["PLAN.md"],
+            Some("credit:ledger"),
+        ));
+        l
+    };
+    let focus = Focus {
+        branch: None,
+        keys: HashSet::from(["credit:ledger".to_string()]),
+    };
+    let l = hub(PUSH_HUB_ROWS + 1);
+    let sel = select(query(&l, "PLAN.md", true), &focus, &policy(5));
+    assert_eq!(ids(&sel.shown), ["20", "21"]);
+    assert_eq!(sel.omitted, PUSH_HUB_ROWS + 1);
+    assert_eq!(sel.findable_after(2), PUSH_HUB_ROWS + 1);
+    // at the threshold the file is no hub: the cap fills as before
+    let l = hub(PUSH_HUB_ROWS);
+    let sel = select(query(&l, "PLAN.md", true), &focus, &policy(5));
+    assert_eq!(sel.shown.len(), 5);
+    assert_eq!(sel.omitted, PUSH_HUB_ROWS - 3);
+}

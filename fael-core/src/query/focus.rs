@@ -116,6 +116,15 @@ pub struct PushPolicy {
 /// D2 — background rows never render: one count line with the exact next call.
 pub const PUSH_BACKGROUND: Background = Background::CountLine;
 
+/// A hub file (a spec, a plan, PRODUCT.md) is cited by more open rows than
+/// the cap holds, and off the Focus those File rows rank by freshness only —
+/// any `push_rows` of them is a guess (issue push:hub-files: 72% of vela's
+/// read-push rows touched such a file). Past this many File rows none render:
+/// Now rows still do, the rest is the `fael find --files` count line.
+/// `push_rows` itself stays (decision push:rows). Counted per push, so a
+/// Grep hit list whose files add up past it is cut the same way.
+pub const PUSH_HUB_ROWS: usize = 8;
+
 /// What `select` did, split into classes that each have one exact next call:
 /// `omitted` rows (the row cap cut tier-0 rows — `fael find --files <f>`
 /// returns them) and `background_dirs` same-dir rows hidden by the policy
@@ -242,8 +251,13 @@ pub fn select<'a>(
             },
         }
     }
-    // Now rows always show; the cap only limits how much of File joins them.
-    let room = policy.max_rows.saturating_sub(now.len());
+    // Now rows always show; the cap only limits how much of File joins them,
+    // and a hub's File rows join not at all (PUSH_HUB_ROWS)
+    let room = if file.len() > PUSH_HUB_ROWS {
+        0
+    } else {
+        policy.max_rows.saturating_sub(now.len())
+    };
     let omitted = file.len().saturating_sub(room);
     now.extend(file.into_iter().take(room));
     let (shown, tiers) = now.into_iter().unzip();

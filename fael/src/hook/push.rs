@@ -226,10 +226,11 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         }
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
-    let focus = super::focus::read(&c.session, &c.repo.root);
+    let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     let sel = core::select(tiered, &focus, &policy);
     let notes = take_stashed(&c, &files);
-    if sel.shown.is_empty() {
+    // a hub file with no Now row still says its count line (PUSH_HUB_ROWS)
+    if sel.shown.is_empty() && sel.omitted == 0 {
         // a stashed line still gets said, even with no rows to join
         if let Some(context) = notes {
             let meta = hook_meta(&c, None, true);

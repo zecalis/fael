@@ -19,8 +19,8 @@ mod select;
 mod stale;
 
 pub use focus::{
-    Background, Bucket, Focus, Hidden, PUSH_BACKGROUND, PushPolicy, Selection, bucket, on_work,
-    select,
+    Background, Bucket, Focus, Hidden, PUSH_BACKGROUND, PUSH_HUB_ROWS, PushPolicy, Selection,
+    bucket, on_work, select,
 };
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;

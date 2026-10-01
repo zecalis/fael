@@ -187,10 +187,11 @@ fn one_to_one_rename_stays_exact() {
 }
 
 /// Case "hot-file flood" (01M3S6NAH): 30 exact-tier decisions on one doc, two
-/// about kickoff. No structural signal says which row matches the edit, so the
-/// freshest five push whatever the topic — recorded as-is, not a rank bug.
+/// about kickoff. No structural signal says which row matches the edit, so
+/// the freshest five were a guess — past `PUSH_HUB_ROWS` none push off the
+/// Focus (issue push:hub-files); the count line names `fael find --files`.
 #[test]
-fn hot_file_pushes_the_freshest_five_whatever_the_topic() {
+fn hot_file_pushes_no_off_focus_rows() {
     let rows = (1..=30)
         .map(|n| {
             let text = if n == 2 || n == 5 {
@@ -203,5 +204,5 @@ fn hot_file_pushes_the_freshest_five_whatever_the_topic() {
         .collect();
     let l = log_of(rows);
     let got = injected(&l, &["docs/architecture.md"], &Aliases::default(), false);
-    assert_eq!(got, ["30", "29", "28", "27", "26"]);
+    assert!(got.is_empty(), "{got:?}");
 }
