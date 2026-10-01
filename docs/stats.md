@@ -15,8 +15,12 @@ Every number comes from two inputs, joined as pure functions in
   (`reject` · `stop-block` · `warning`), `session`, `agent` (the sub-agent
   whose context the push landed in — absent on the session's own thread),
   `real_tokens` on some rows, and `row` on an add's `warning` (the id just
-  filed — not in `ids`, which count pushes; `session` there is its writer). Torn lines are skipped; temp-dir repos are skipped unless the state
-  dir itself is scratch.
+  filed — not in `ids`, which count pushes; `session` there is its writer). Torn lines are skipped; temp-dir repos (the OS temp dir and `/tmp`, where
+  agent scratchpads live) are skipped unless the state dir itself is scratch.
+  `--since <YYYY-MM-DD | RFC 3339>` keeps only the lines stamped at or after
+  it, before anything is counted — first use per repo, rows added and
+  `capture` then all read as that window. `fael report` renders this same
+  `Stats` (with `--rows`) as one offline HTML page.
 - the repos' logs (tree + journal union) — for stop-block outcomes, row
   statuses and language share. A repo that no longer resolves reads empty
   (its rows resolve `unknown`).
@@ -109,6 +113,7 @@ panels are summed; `delivered.last` is newest-first across repos.
 
 ## Changelog
 
+- `1` (2026-10-01): `--since` cuts the input to a window and the temp filter also skips `/tmp`; same shape, no bump.
 - `1` (2026-10-01): added `retired` (pushed rows closed or superseded within a day of a push); no bump.
 - `1` (2026-09-30): usage rows may carry `agent`; readers ignore it today — no bump.
 - `1` (2026-09-30): added `capture` (reply capture, manual adds, silent sessions); no bump.

@@ -16,6 +16,7 @@ mod mcp;
 mod migrate;
 mod purge;
 mod refs;
+mod report;
 mod restore;
 mod schema;
 mod selfheal;
@@ -85,9 +86,14 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
         ("migrate", [to]) if to == "local" => migrate::local(&repo()?).map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
-        ("stats", []) => {
-            hook::stats(a.has("json"), a.has("rows"), a.has("day")).map(|()| ExitCode::SUCCESS)
-        }
+        ("stats", []) => hook::stats(
+            a.has("json"),
+            a.has("rows"),
+            a.has("day"),
+            report::since(&a)?,
+        )
+        .map(|()| ExitCode::SUCCESS),
+        ("report", []) => report::report(&a).map(|()| ExitCode::SUCCESS),
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),

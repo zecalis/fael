@@ -11,7 +11,7 @@
 //! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
 //! `autosync` (session-start and turn-end `fael sync`, off-switch `[sync] auto`),
-//! `usage` (SPEC §8 accounting + `stats`), `asks` (chunk-3a ask types +
+//! `usage` (SPEC §8 accounting + `stats`), `stats_text` (its human text), `asks` (chunk-3a ask types +
 //! real tokens), `markers` (bug phrases).
 //!
 //! The hook always exits 0. Any internal error is an empty Reply (let the
@@ -29,6 +29,7 @@ mod push;
 mod search;
 mod session;
 mod state;
+mod stats_text;
 mod stop;
 mod usage;
 
@@ -36,7 +37,7 @@ pub(crate) use asks::{
     ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp, record_row_asks,
 };
 pub(crate) use protocol::cmd;
-pub(crate) use usage::stats;
+pub(crate) use usage::{aggregate, load, stats};
 
 // What the binary shares: `write` reads session edits and checks anchors,
 // `maintain` asks where the gitignore rule comes from.
