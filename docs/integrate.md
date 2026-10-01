@@ -12,7 +12,7 @@ fael hook <stop|session-start|read|edit|search>   < Event   > Reply
 
 Event  {"cwd": str, "session": str, "client": str, "files": [str], "stop_active": bool, "text": str, "reply": str,
         "agent"?: str, "source"?: str, "tool"?: str, "tool_input"?: obj, "tool_response"?: obj}
-Reply  {"block": bool, "reason"?: str, "context"?: str}
+Reply  {"block": bool, "reason"?: str, "context"?: str, "notice"?: str}
 ```
 
 | When | Call | Send | Do with the Reply |
@@ -28,6 +28,10 @@ Reply  {"block": bool, "reason"?: str, "context"?: str}
   session's edit list, stop blocks when files were edited after the newest row, and the read/edit push
   says each row once per session — without it every read re-pushes the same rows at full budget.
 - `files` — absolute, or relative to `cwd`. Paths outside the repo are dropped.
+- `notice` — one line for the **user**, never the agent: which issues the brief handed over, which
+  decision or issue a push reminded the agent of (once per file per session), and the turn's receipt
+  on `stop`. Show it where only the user sees it (a toast, a status line); a client with no such
+  channel drops it. Never put it in `context`. `[notify] user = false` turns it off.
 - `reply` — the assistant's **last message only**. fael files its `fael decision|issue|note: <text> [files: a,b]`
   lines (column 0, outside code fences); leave it out and fael reads the last message of `session` as a Claude
   transcript. Send it once per turn end — the same lines twice in a session file once.

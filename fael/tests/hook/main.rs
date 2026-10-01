@@ -9,7 +9,9 @@
 //! `push_cap` (read-push row cap + omitted line),
 //! `precision` (PLAN-fael-moat-token chunk 2: push footer + branch tag fixture),
 //! `focus` (session Focus: focus.json written at start, read by the push),
-//! `memory_line` (the `memory: ~used/budget tokens · n rows` line).
+//! `memory_line` (the `memory: ~used/budget tokens · n rows` line),
+//! `tied` (session start lists issues tied to the branch), `notify` (the
+//! user channel: brief, reminder, receipt).
 
 mod adopted;
 mod autosync;
@@ -18,6 +20,7 @@ mod clients;
 mod day;
 mod focus;
 mod memory_line;
+mod notify;
 mod precision;
 mod push_cap;
 mod search;
@@ -29,6 +32,7 @@ mod stop;
 mod stop_lang;
 mod stop_risk;
 mod tags;
+mod tied;
 mod writer;
 
 use std::io::Write;

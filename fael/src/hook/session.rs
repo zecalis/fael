@@ -26,6 +26,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         block: false,
         reason: None,
         context: None,
+        notice: None,
     };
     let c = match ctx(e) {
         Some(c) => c,
@@ -53,9 +54,11 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // one pass over the open rows: the Focus keys the branch rows carry, and
     // the to-do's issues — `find` hides closed and superseded either way
     let all: Vec<&core::Row> = core::find(&c.log, &core::Filter::default());
-    focus::write(&c.session, &c.repo.root, branch.as_deref(), &all);
+    let f = core::Focus::from_rows(branch.as_deref(), &all);
+    focus::write(&c.session, &c.repo.root, &f);
+    let work = core::on_work(&f, &all, &c.repo.cfg.anchor_prefixes);
     let open: Vec<&core::Row> = all.iter().copied().filter(|r| r.kind == "issue").collect();
-    let t = todo(open, &reader);
+    let t = todo(open, &reader, &work);
     let decisions: Vec<_> = if c.repo.cfg.session_decisions == 0 {
         vec![]
     } else {
@@ -122,6 +125,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // like the read/edit push: usage counts only the ids render actually
     // said — rows the budget cut off never reached any context
     let n = context.lines().filter(|l| l.starts_with("- [")).count();
+    let notice = brief_line(&c, &shown[..n.min(shown.len())]);
     let shown: Vec<String> = shown.iter().take(n).map(|r| r.id.clone()).collect();
     // the session just began — no round completed yet, so no real tokens
     let meta = hook_meta(&c, None, false);
@@ -137,7 +141,34 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         block: false,
         reason: None,
         context: Some(context),
+        notice,
     }
+}
+
+/// PLAN-fael-visible-secretary chunk 4: the brief's line for the user — the
+/// open issues the agent was just handed in full, up to two named by key
+/// (else id) so each is a `fael find` away. No issue said = no line.
+fn brief_line(c: &super::protocol::Ctx, said: &[&core::Row]) -> Option<String> {
+    let issues: Vec<&core::Row> = said.iter().copied().filter(|r| r.kind == "issue").collect();
+    if !c.repo.cfg.notify_user || issues.is_empty() {
+        return None;
+    }
+    let ab = core::abbrev(&c.log);
+    let named: Vec<String> = issues
+        .iter()
+        .take(2)
+        .map(|r| match &r.key {
+            Some(k) => format!("#{k}"),
+            None => ab.short(&r.id).to_string(),
+        })
+        .collect();
+    let more = if issues.len() > 2 { " …" } else { "" };
+    Some(format!(
+        "fael: briefed agent — {} open {} ({}{more})",
+        issues.len(),
+        if issues.len() == 1 { "issue" } else { "issues" },
+        named.join(", ")
+    ))
 }
 
 /// SPEC §11: the cheap checks — one line each, only when there is a problem.
@@ -177,20 +208,24 @@ fn start_branch(session: &str, root: &Path) -> Option<String> {
 }
 
 /// Open issues grouped for session start: mine (`to` = reader, the reader's
-/// job) plus hot (urgent with no `to` — nobody owns them, so everyone sees
-/// them in full). Both list in full, ranked; everything else counts only.
+/// job), hot (urgent with no `to` — nobody owns them, so everyone sees them
+/// in full) and work (tied to this branch, `core::on_work` — a count the
+/// agent skims past hid the one issue on its plan). All list in full,
+/// ranked; everything else counts only.
 struct Todo<'a> {
     listed: Vec<&'a core::Row>,
     to_you: usize,
     to_you_urgent: usize,
     hot: usize,
+    work: usize,
     total: usize,
 }
 
-fn todo<'a>(open: Vec<&'a core::Row>, reader: &str) -> Todo<'a> {
+fn todo<'a>(open: Vec<&'a core::Row>, reader: &str, work: &[&core::Row]) -> Todo<'a> {
     let total = open.len();
     let mut mine = vec![];
     let mut unowned = vec![];
+    let mut tied = vec![];
     let mut to_you_urgent = 0;
     for r in open {
         match r.to_who() {
@@ -199,12 +234,13 @@ fn todo<'a>(open: Vec<&'a core::Row>, reader: &str) -> Todo<'a> {
                 mine.push(r);
             }
             None if r.urgent_value().is_some() => unowned.push(r),
+            _ if work.iter().any(|w| w.id == r.id) => tied.push(r),
             _ => {}
         }
     }
-    let (to_you, hot) = (mine.len(), unowned.len());
+    let (to_you, hot, work) = (mine.len(), unowned.len(), tied.len());
     let listed = core::ranked(
-        mine.into_iter().chain(unowned).collect(),
+        mine.into_iter().chain(unowned).chain(tied).collect(),
         Some(reader),
         |_| 0,
         core::fresh_ts,
@@ -214,6 +250,7 @@ fn todo<'a>(open: Vec<&'a core::Row>, reader: &str) -> Todo<'a> {
         to_you,
         to_you_urgent,
         hot,
+        work,
         total,
     }
 }
@@ -231,6 +268,9 @@ fn count_line(t: &Todo) -> Option<String> {
     }
     if t.hot > 0 {
         parts.push(format!("{} urgent unassigned", t.hot));
+    }
+    if t.work > 0 {
+        parts.push(format!("{} tied to this branch", t.work));
     }
     parts.push(format!(
         "{} open {}",

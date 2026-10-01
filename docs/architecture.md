@@ -212,6 +212,8 @@ row_bytes = 10240             # hard cap, never above 10 KiB
 block = false                 # true = opt-in enforcement: the Stop hook blocks a turn that did work with no row (default: it only files the reply's lines)
 [sync]
 auto = true                   # session start and Stop run `fael sync` once per session and newest row when fael.remote is set; false = manual only
+[notify]
+user = true                   # one line per beat for the user only (Claude systemMessage, OpenCode toast); false = off
 [lang]
 marker = ["english", "thai"]  # Stop-hook phrase packs (default); [] switches the bug rule off
 rows = ["english"]            # accepted row-writing languages; anything else warns once, never rejects ([] switches the check off)
@@ -235,8 +237,10 @@ Each client speaks its own hook format. The binary contains the adapters for the
 fael hook <stop|session-start|read|edit|search> [--client claude|codex]   < stdin  > stdout
 
 neutral Event  {"cwd","session","client","files":[…],"stop_active","text","reply","agent","source","tool","tool_input","tool_response"}
-neutral Reply  {"block":bool,"reason"?:str,"context"?:str}
+neutral Reply  {"block":bool,"reason"?:str,"context"?:str,"notice"?:str}
 ```
+
+**The user channel** (`notice`, PLAN-fael-visible-secretary): fael does its work in the agent's context, so the user never saw it. Each hook can now carry one line for the user only. Claude Code gets it as `systemMessage`, which is shown to the user and never added to the model's context. OpenCode shows it as a toast. Codex and the bare neutral protocol have no such channel, so they stay silent. There are three beats. Session start names the open issues the brief handed over in full. A push names the first decision or issue it reminded the agent of, at most once per file per session. Stop gives the turn's receipt (`filed · reminded · retired · closed`), and every count names up to two ids or keys that `fael find` takes back. When nothing happened there is no line: fael never says "nothing new", and never claims anything was prevented or saved. The receipt reads a per-session tally in the state dir (`<seen key>.tally`). `add`, `close`, capture and the push append to it, and each Stop reads the lines since its last marker. The tally is never part of a row, and `additionalContext` is the same byte for byte with the channel on or off. `[notify] user = false` turns the channel off.
 
 OpenCode has no Stop hook and runs plugins in-process: `fael install` writes a JS plugin that speaks the neutral format (a stop block — only under `[capture] block = true` — becomes a prompt on `session.idle`). How to wire any other agent: [integrate.md](integrate.md).
 
@@ -294,8 +298,9 @@ In the default mode the same signals only stash one line for the next push (show
 **Session start:**
 ```
 client ─(session-start)─▶ write focus.json (start branch + the keys of the rows filed on it)
-                        ─▶ open issues to you in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
+                        ─▶ open issues to you, urgent unassigned, or tied to this branch in full · due revisits in full · N freshest open decisions (opt-in) · count line for the rest ─▶ context
 ```
+An issue is tied to this branch when it was filed on the start branch, carries a Focus key, or names an anchor that a row filed on the start branch names too (`plan:<name>`, or the `PLAN-<name>.md` that names it). A count line is easy to skim past, and that is how an agent missed the one open issue on its own plan. The anchors come only from what the branch's own rows say, so nothing about the session's plan is guessed.
 fael never infers which plan a session is in. `plan:<name>` anchors and `plan:<name>:handoff` / `plan:<name>:chunk-<n>` keys are a fapony convention: fael stores and matches them like any other anchor or key, and fapony's kickoff asks for them itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`). Which filename prefixes widen kickoff that way is repo config (`[anchor] prefixes`, default `PLAN-`) — a plain common name, not fapony knowledge; the key scheme fapony seeds stays fapony's. A session's intent is not a fact the shared log can answer — any rule that picks one plan from it is a guess, and a wrong guess pushes another task's rows into Now.
 
 **Across branches** (one branch per person or per agent):

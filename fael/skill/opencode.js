@@ -38,6 +38,13 @@ export const Fael = async ({ client, directory }) => {
   };
   const briefs = new Map();
   const blocked = new Set();
+  // the user line (Reply.notice) goes to a toast, never into the agent's
+  // context; an OpenCode without the toast API simply shows nothing
+  const say = (r) => {
+    try {
+      if (r.notice) client.tui?.showToast?.({ body: { message: r.notice, variant: "info" } })?.catch?.(() => {});
+    } catch {}
+  };
 
   return {
     // system is rebuilt per LLM call: fetch the brief once, push it every call
@@ -45,7 +52,9 @@ export const Fael = async ({ client, directory }) => {
       const id = input?.sessionID;
       if (!id) return;
       if (!briefs.has(id)) {
-        briefs.set(id, hook("session-start", { cwd: directory, session: await start(id) }).context ?? "");
+        const r = hook("session-start", { cwd: directory, session: await start(id) });
+        say(r);
+        briefs.set(id, r.context ?? "");
       }
       if (briefs.get(id)) output.system.push(briefs.get(id));
     },
@@ -65,6 +74,7 @@ export const Fael = async ({ client, directory }) => {
           tool_response: output?.output ?? output ?? {},
         });
         if (r.context) output.output += `\n\n${r.context}`;
+        say(r);
         return;
       }
       const event = input.tool === "read" ? "read" : EDIT.has(input.tool) ? "edit" : null;
@@ -72,6 +82,7 @@ export const Fael = async ({ client, directory }) => {
       if (!event || !file) return;
       const r = hook(event, { cwd: directory, session, files: [file] });
       if (r.context) output.output += `\n\n${r.context}`;
+      say(r);
     },
 
     // OpenCode has no Stop hook: on idle the last message goes to fael, which
@@ -107,6 +118,7 @@ export const Fael = async ({ client, directory }) => {
         reply,
         stop_active: blocked.delete(id),
       });
+      say(r);
       if (r.block && r.reason) {
         blocked.add(id);
         await client.session

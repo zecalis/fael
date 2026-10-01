@@ -24,11 +24,25 @@ pub(crate) fn stop(e: &Event) -> Reply {
     if e.agent.is_some() {
         return subagent_stop(e);
     }
-    let r = decide(e);
+    let mut r = decide(e);
     if !r.block {
         super::autosync::start(e);
+        r.notice = receipt(e);
     }
     r
+}
+
+/// PLAN-fael-visible-secretary chunk 4: the turn's receipt for the user —
+/// only when the turn ends (a block keeps it going), `None` when it did
+/// nothing worth a line.
+// ponytail: resolves the repo and reads the log a second time after
+// `decide`; thread the Ctx through if stop's latency budget ever needs it
+fn receipt(e: &Event) -> Option<String> {
+    let c = ctx(e)?;
+    if !c.repo.cfg.notify_user {
+        return None;
+    }
+    super::tally::take_receipt(&c.session, &c.repo.root, &c.log)
 }
 
 /// A sub-agent's stop only files its own reply's lines: the work and bug
@@ -45,6 +59,7 @@ fn subagent_stop(e: &Event) -> Reply {
         block: false,
         reason: None,
         context: None,
+        notice: None,
     }
 }
 
@@ -65,6 +80,7 @@ fn decide(e: &Event) -> Reply {
         block: false,
         reason: None,
         context: None,
+        notice: None,
     };
     let mut c = match ctx(e) {
         Some(c) => c,
@@ -189,6 +205,7 @@ fn decide(e: &Event) -> Reply {
         block: true,
         reason: Some(reason),
         context: None,
+        notice: None,
     }
 }
 

@@ -165,6 +165,7 @@ pub(super) fn collect(c: &Ctx, reply: &str) -> Filed {
                 if c.agent.is_empty() {
                     note_seen(&c.session, &c.repo.root, &[&id]);
                 }
+                super::tally::note(&c.session, &c.repo.root, "filed", &[&id]);
                 filed.stored += 1;
                 filed.issue |= kind == "issue";
             }
