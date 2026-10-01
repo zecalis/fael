@@ -21,6 +21,9 @@ pub struct Lang {
     pub negations: &'static [&'static str],
     /// Weak-cancel window words.
     pub risk_negations: &'static [&'static str],
+    /// Weak-cancel sentence words: a risk inside a conditional is a
+    /// hypothetical, not a claim ("if both run, the numbers mismatch").
+    pub conditionals: &'static [&'static str],
     /// Accepted alphabet ranges.
     pub script: &'static [RangeInclusive<char>],
 }
@@ -55,6 +58,7 @@ static EN: Lang = Lang {
     ],
     negations: &["not", "no", "if"],
     risk_negations: &["not", "no"],
+    conditionals: &["if", "unless"],
     script: &['A'..='Z', 'a'..='z', 'À'..='ſ', 'ƀ'..='ɏ', 'Ḁ'..='ỿ'],
 };
 
@@ -73,6 +77,7 @@ static TH: Lang = Lang {
     ],
     negations: &["ไม่", "จะ", "ถ้า", "อาจ"],
     risk_negations: &["ไม่"],
+    conditionals: &["ถ้า", "หาก", "สมมติ"],
     // one range is the whole Thai block — the slice shape stays so EN/TH match
     #[allow(clippy::single_range_in_vec_init)]
     script: &['\u{0E00}'..='\u{0E7F}'],
@@ -134,10 +139,15 @@ pub fn marker_hit(text: &str, packs: &[&Lang], negations_extra: &[&str]) -> Opti
             }
         }
     }
+    let conds: Vec<&str> = packs
+        .iter()
+        .flat_map(|p| p.conditionals.iter().copied())
+        .collect();
     for pack in packs {
         for p in pack.risk {
             if let Some(i) = lower.find(*p)
                 && !negated(&lower, i, &risk_negs)
+                && !conditional(&lower, i, &conds)
             {
                 return Some(Hit {
                     marker: (*p).to_string(),
@@ -287,5 +297,24 @@ fn negated(lower: &str, i: usize, negations: &[&str]) -> bool {
                     .chars()
                     .last()
                     .is_none_or(|c| !c.is_alphabetic()))
+    })
+}
+
+/// The sentence before the match (back to `.`/`!`/`?`/newline) holds a
+/// conditional word — ASCII ones only as whole words, Thai ones anywhere
+/// (Thai has no spaces between words).
+// ponytail: 120-char window; a long Thai line with an unrelated ถ้า far back
+// still cancels — a clause splitter if that ever shows up in replies
+fn conditional(lower: &str, i: usize, conds: &[&str]) -> bool {
+    let start = lower[..i].rfind(['.', '!', '?', '\n']).map_or(0, |j| j + 1);
+    let sentence: String = lower[start..i].chars().rev().take(120).collect();
+    let sentence: String = sentence.chars().rev().collect();
+    conds.iter().any(|c| {
+        if !c.is_ascii() {
+            return sentence.contains(c);
+        }
+        sentence
+            .match_indices(c)
+            .any(|(j, _)| word_boundary(&sentence, j, c.len()))
     })
 }

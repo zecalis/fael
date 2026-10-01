@@ -79,7 +79,9 @@ Planning rides the existing `key` and `files` fields — no new field, no format
   about; a handoff note lists only the anchor and the PLAN path, so reading code never
   re-pushes it.
 - `plan:<name>:handoff` — the plan's handoff note. One key per plan: each chunk's note
-  supersedes the last by self-heal identity (same kind, key and writer).
+  supersedes the last by self-heal identity (same kind, key and writer). A chunk run in
+  parallel with another open chunk of the same plan (another worktree) writes its note under
+  `plan:<name>:chunk-<n>` instead — on the shared key it would supersede the other's handoff.
 - `plan:<name>:chunk-<n>` — a row about chunk `n`, the chunk it was filed in. The `n` is a
   plain number.
 

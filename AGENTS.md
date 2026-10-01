@@ -46,7 +46,9 @@ prints the rules (single source, fapony's `chunkRules()`) — don't restate them
 Fael's part: each chunk's handoff note goes on the plan, never a code path (every read of
 that file would re-push it): `--files plan:<name>,<path/to/PLAN-<name>.md> --key
 plan:<name>:handoff`, `<name>` lowercased. One key per plan, so each chunk's note
-supersedes the last. Start the next session with `fael kickoff <path/to/PLAN-x.md>`;
+supersedes the last — except a chunk run in parallel with another open chunk (another
+worktree): its note goes under `--key plan:<name>:chunk-<n>` so it can't wipe that
+chunk's handoff. Start the next session with `fael kickoff <path/to/PLAN-x.md>`;
 don't carry the old transcript forward.
 
 ## Git

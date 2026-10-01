@@ -59,6 +59,29 @@ fn an_id_merely_mentioned_is_not_a_target() {
     assert_eq!(open_notes(&d).len(), 2, "the id needs the word supersede");
 }
 
+/// The 2026-10-01 incident: "supersedes" in one sentence armed every id that
+/// followed, so an id cited later as evidence was superseded. Only ids right
+/// after the word are targets.
+#[test]
+fn an_id_cited_after_other_words_is_not_a_target() {
+    let d = repo();
+    let first = seed(&d, "first pass", "src/a.rs");
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            &format!("a parallel note supersedes the handoff. Seen in {first}"),
+            "--files",
+            "src/b.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(!err.contains("superseded"), "{err}");
+    assert_eq!(open_notes(&d).len(), 2, "a cited id stays open");
+}
+
 #[test]
 fn two_named_rows_file_and_list_without_asking() {
     let d = repo();
