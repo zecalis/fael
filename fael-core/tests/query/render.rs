@@ -20,7 +20,9 @@ fn render_cuts_at_budget_but_shows_one_row() {
     };
     let out = render(&l, &find(&l, &all), 10_000);
     assert!(
-        out.contains("- [A0000000000000000000000011] decision (superseded) text"),
+        out.contains(
+            "- [A0000000000000000000000011] decision (superseded → A0000000000000000000000014) text"
+        ),
         "{out}"
     );
     assert!(out.contains("issue (closed) #auth:session"), "{out}");

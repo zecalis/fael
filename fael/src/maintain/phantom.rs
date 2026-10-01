@@ -10,7 +10,8 @@
 //! Only close *texts* and open rows are scanned in the log: a closed row's own
 //! text went quiet with the row, but its close reason still speaks for it.
 //! Markdown is read as a whole file — a doc has no row to go quiet with — and
-//! fenced code blocks are skipped there (a ULID in a fence is an example).
+//! fenced code blocks are skipped there (a ULID in a fence is an example). A
+//! markdown citation of a superseded row is reported too, with its successor.
 
 use crate::core;
 use crate::find::branches::with_branches;
@@ -45,14 +46,18 @@ pub(super) fn problems(log: &core::Log, root: &Path) -> Vec<core::Problem> {
     let (wide, _) = with_branches(root, log.clone());
     let missing = |tok: &str| matches!(core::ref_state(&wide, tok), core::Ref::Missing);
     let rows: Vec<(String, String)> = rows.into_iter().filter(|(_, t)| missing(t)).collect();
-    let docs: Vec<(String, usize, String)> =
-        docs.into_iter().filter(|(_, _, t)| missing(t)).collect();
+    let (sup, dead): (Vec<core::MdRef>, Vec<core::MdRef>) =
+        docs.into_iter().partition(|(_, _, _, s)| s.is_some());
+    let dead: Vec<core::MdRef> = dead.into_iter().filter(|(_, _, t, _)| missing(t)).collect();
     let mut out = vec![];
     if !rows.is_empty() {
         out.push(row_problem(log, &rows));
     }
-    if !docs.is_empty() {
-        out.push(md_problem(&docs));
+    if !dead.is_empty() {
+        out.push(md_problem(&dead));
+    }
+    if !sup.is_empty() {
+        out.push(md_superseded(log, &sup));
     }
     out
 }
@@ -118,11 +123,11 @@ const CROSS_REPO: &str = "an id from another repo's log? cite its key instead \
 /// The markdown half: no row owns the citation, so `ids` stays empty (there
 /// is nothing to close) — the file and line are what to fix, and they are in
 /// the example, exactly where the reader lands.
-fn md_problem(refs: &[(String, usize, String)]) -> core::Problem {
+fn md_problem(refs: &[core::MdRef]) -> core::Problem {
     let eg: Vec<String> = refs
         .iter()
         .take(5)
-        .map(|(p, n, t)| format!("{p}:{n} → {t}"))
+        .map(|(p, n, t, _)| format!("{p}:{n} → {t}"))
         .collect();
     core::Problem::info(
         core::ProblemKind::Phantom,
@@ -130,6 +135,32 @@ fn md_problem(refs: &[(String, usize, String)]) -> core::Problem {
             "{} reference(s) to ids with no row in markdown — fix the citation where it is \
              written (e.g. {}) · compact --prune can remove closed rows, so an old citation \
              may point at a pruned row · {CROSS_REPO}",
+            refs.len(),
+            eg.join("; ")
+        ),
+    )
+}
+
+/// A markdown citation of a superseded row still resolves, but to the old
+/// version — the reader acts on what was replaced. The successor is named so
+/// the fix is a copy, not a lookup.
+fn md_superseded(log: &core::Log, refs: &[core::MdRef]) -> core::Problem {
+    let w = core::abbrev(log);
+    let eg: Vec<String> = refs
+        .iter()
+        .take(5)
+        .map(|(p, n, t, s)| {
+            format!(
+                "{p}:{n} → {t} (superseded → {})",
+                w.short(s.as_deref().unwrap_or_default())
+            )
+        })
+        .collect();
+    core::Problem::info(
+        core::ProblemKind::Phantom,
+        format!(
+            "{} reference(s) in markdown to superseded rows — cite the successor, or its key \
+             (e.g. {})",
             refs.len(),
             eg.join("; ")
         ),

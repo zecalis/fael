@@ -81,9 +81,9 @@ pub const PUSH_BACKGROUND: Background = Background::CountLine;
 
 /// What `select` did, split into classes that each have one exact next call:
 /// `omitted` rows (the row cap cut tier-0 rows — `fael find --files <f>`
-/// returns them), `background_dirs` same-dir rows hidden by the policy
-/// (`fael find --files <dir>/`), and `background_keys` shared-key rows, key ->
-/// count (`fael find --key <k>`). The token budget cuts later, at render, so
+/// returns them) and `background_dirs` same-dir rows hidden by the policy
+/// (`fael find --files <dir>/`). A shared-key row is never Background: it
+/// rides only on a Focus key, which makes it Now. The token budget cuts later, at render, so
 /// the tier of every shown row travels along (`tiers`) — see `hidden`.
 #[derive(Debug)]
 pub struct Selection<'a> {
@@ -94,7 +94,6 @@ pub struct Selection<'a> {
     tiers: Vec<usize>,
     pub omitted: usize,
     pub background_dirs: usize,
-    pub background_keys: Vec<(String, usize)>,
 }
 
 /// The rows that did not render, split by the exact `fael find` call that
@@ -117,7 +116,7 @@ impl Selection<'_> {
         let mut h = Hidden {
             file: self.omitted,
             dirs: self.background_dirs,
-            keys: self.background_keys.clone(),
+            keys: vec![],
         };
         for (r, t) in self.shown.iter().zip(&self.tiers).skip(rendered) {
             match t {
@@ -172,13 +171,19 @@ pub fn bucket(r: &Row, tier: usize, focus: &Focus) -> Bucket {
 /// only). Otherwise Now rows move ahead of File and always render (only the
 /// token budget caps them, at render); the row cap eats the File tail after
 /// them. Background rows never render — each class is counted by the exact
-/// call that reaches it: same-dir rows by the query's directory, shared-key
-/// rows by their key.
+/// call that reaches it: same-dir rows by the query's directory. A shared-key
+/// row off the Focus keys is dropped first, never counted.
 pub fn select<'a>(
     rows: Vec<(&'a Row, usize)>,
     focus: &Focus,
     policy: &PushPolicy,
 ) -> Selection<'a> {
+    // a shared-key sibling (tier 2) rides only on a key this session works on
+    // (decision push:shared-key-siblings): a broad key spanning plans would
+    // otherwise drag another plan's rows into the push
+    let rows = rows
+        .into_iter()
+        .filter(|(r, t)| *t != 2 || r.key.as_deref().is_some_and(|k| focus.keys.contains(k)));
     if policy.max_rows == 0 {
         let (shown, tiers) = rows.into_iter().unzip();
         return Selection {
@@ -186,26 +191,17 @@ pub fn select<'a>(
             tiers,
             omitted: 0,
             background_dirs: 0,
-            background_keys: Vec::new(),
         };
     }
     let mut now: Vec<(&Row, usize)> = vec![];
     let mut file: Vec<(&Row, usize)> = vec![];
     let mut background_dirs = 0usize;
-    let mut background_keys: Vec<(String, usize)> = vec![];
     for (r, t) in rows {
         match bucket(r, t, focus) {
             Bucket::Now => now.push((r, t)),
             Bucket::File => file.push((r, t)),
             Bucket::Background => match policy.background {
-                // tier 2 is a shared key; tier 1 (or a keyless row) a neighbour
-                Background::CountLine => match t {
-                    2 => match r.key.clone() {
-                        Some(k) => bump_key(&mut background_keys, k),
-                        None => background_dirs += 1,
-                    },
-                    _ => background_dirs += 1,
-                },
+                Background::CountLine => background_dirs += 1,
             },
         }
     }
@@ -219,6 +215,5 @@ pub fn select<'a>(
         tiers,
         omitted,
         background_dirs,
-        background_keys,
     }
 }

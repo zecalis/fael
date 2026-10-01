@@ -86,7 +86,7 @@ fn restored_label_marks_reopened_row_until_hidden_again() {
     };
     let out = render(&l2, &find(&l2, &all), 10_000);
     assert!(
-        out.contains("(superseded)") && !out.contains("(restored)"),
+        out.contains("(superseded → ") && !out.contains("(restored)"),
         "{out}"
     );
     // a close wins over both: the row left every list through closing

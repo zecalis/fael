@@ -7,7 +7,7 @@ description: This repo's memory of what git and code do not say — why a choice
 
 # fael — the repo's memory
 
-Write rows in English — title, key and body. The dev reads them through you, in their language.
+Rows in English — title, key, body; `quote` foreign terms. The dev reads them through you, in their language.
 Add each in the same message as your next tool call or final edit — never as a turn of its own.
 Rows about a file come back when you touch it. One the code now says or contradicts misleads the
 next agent: close it (`now in <file>`) or re-file it with `--supersedes <id>`, in that same message.

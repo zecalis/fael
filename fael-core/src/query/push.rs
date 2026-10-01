@@ -28,7 +28,7 @@ use std::collections::HashSet;
 /// `push_tiered` is `push` plus L1's match tier per row (0 exact file/zone,
 /// 1 same-dir, 2 shared key) — what L3 `bucket` ranks on. Same gather and
 /// order as `push`; chunk 1 exposes the tier so `select` can keep same-dir
-/// and shared-key rows in Background even under the row cap.
+/// rows in Background and drop shared-key rows off the session Focus.
 pub fn push_tiered<'a>(
     log: &'a Log,
     files: &[String],

@@ -1,4 +1,4 @@
-use super::{closed, reverted, superseded};
+use super::{closed, reverted, successors, superseded};
 use crate::{Log, Row};
 use std::collections::{HashMap, HashSet};
 
@@ -180,7 +180,7 @@ fn close_notes(log: &Log) -> HashMap<&str, String> {
 
 fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option<Cut>) -> String {
     let ab = abbrev(log);
-    let (closed, superseded) = (closed(log), superseded(log));
+    let (closed, successors) = (closed(log), successors(log));
     let restored = restored(log);
     let notes = if full {
         close_notes(log)
@@ -196,8 +196,8 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
         let id = ab.short(&r.id);
         let mark = if closed.contains(r.id.as_str()) {
             " (closed)"
-        } else if superseded.contains(r.id.as_str()) {
-            " (superseded)"
+        } else if let Some(next) = successors.get(r.id.as_str()) {
+            &format!(" (superseded → {})", ab.short(next))
         } else if restored.contains(r.id.as_str()) {
             " (restored)"
         } else {

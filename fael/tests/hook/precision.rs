@@ -21,9 +21,11 @@ fn footer(out: &str) -> Vec<&str> {
 
 /// Case "footer" (01M3S4EBF): a file whose rows carry many keys. Eight rows
 /// on `src/a.rs`, each with its own key, each key shared with a row on another
-/// file — the count footer used to spend a line per key (1 file line + 8 key lines). Now: 2.
+/// file — the count footer used to spend a line per key (1 file line + 8 key
+/// lines), then folded them into one. With no key in the session Focus the
+/// siblings are not counted at all (decision push:shared-key-siblings): 1.
 #[test]
-fn many_hidden_keys_fold_into_one_footer_line() {
+fn shared_keys_outside_focus_add_no_footer_line() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     for i in 0..8 {
@@ -50,12 +52,8 @@ fn many_hidden_keys_fold_into_one_footer_line() {
     }
     let out = read(&d, "src/a.rs");
     let lines = footer(&out);
-    assert_eq!(lines.len(), 2, "{lines:#?}");
+    assert_eq!(lines.len(), 1, "{lines:#?}");
     assert!(lines[0].contains("more about this file"), "{lines:#?}");
-    assert!(
-        lines[1].starts_with("… +8 more under 8 keys: #topic:t7 (1), #topic:t6 (1), #topic:t5 (1), +5 keys — fael find --key <key>"),
-        "{lines:#?}"
-    );
 }
 
 /// A `.fael` symlinked out of the checkout — the tree every worktree of the

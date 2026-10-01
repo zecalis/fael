@@ -4,6 +4,7 @@
 //! spawns); branch escalation lives on the binary side (`fael/src/refs.rs`).
 
 use crate::{Log, Row, looks_like_id};
+use std::collections::HashMap;
 
 /// Union-scope existence of one token: exact id or case-insensitive prefix
 /// over rows AND closes (a close row's own id counts — it exists, only the
@@ -73,4 +74,20 @@ pub fn phantom_refs(log: &Log, text: &str) -> Vec<String> {
         .filter(|tok| matches!(ref_state(log, tok), Ref::Missing))
         .map(String::from)
         .collect()
+}
+
+/// `superseded()` with the edge kept: superseded id → the id that replaced it,
+/// so a reader can point the old row at its successor. Two edges on one target
+/// keep the newer.
+pub fn successors(log: &Log) -> HashMap<&str, &str> {
+    let rev = super::reverted(log);
+    let mut out = HashMap::new();
+    for r in &log.rows {
+        if let Some(t) = r.supersedes.as_deref()
+            && !rev.contains(r.id.as_str())
+        {
+            out.insert(t, r.id.as_str());
+        }
+    }
+    out
 }

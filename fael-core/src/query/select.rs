@@ -35,16 +35,7 @@ pub fn reverted(log: &Log) -> HashSet<&str> {
 /// The one reader for hiding (find, push, doctor, hook) — an old reader that
 /// subtracts nothing keeps hiding the restored row (over-hide, intended).
 pub fn superseded(log: &Log) -> HashSet<&str> {
-    let rev = reverted(log);
-    let mut out = HashSet::new();
-    for r in &log.rows {
-        if let Some(t) = r.supersedes.as_deref()
-            && !rev.contains(r.id.as_str())
-        {
-            out.insert(t);
-        }
-    }
-    out
+    super::successors(log).into_keys().collect()
 }
 
 /// What `add --urgent` asks for: `Unset` = not urgent, `End` = back of the
