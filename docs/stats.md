@@ -65,7 +65,10 @@ round; `0` by construction unless `[capture] block = true`) · `reply_lines` = `
 replies = `reply_stored` + `reply_rejected` · `manual_adds` = rows added since the repo's first usage that
 did not come from a reply line, by any writer · `sessions_with_edits` = sessions that edited a file ·
 `sessions_with_edits_no_row` = of those, sessions with no row filed during them (+10 min) — a signal to
-look at, not a verdict. Replies are recorded as `event: "capture"` usage rows (`capture: stored|rejected`,
+look at, not a verdict. Worktrees share one journal, so a row counts for a session only when it is that session's: its writer
+`session` (transcript stem) when the row has one, else its `branch` against the session's edit events
+(`branch` on `edit` usage rows; either side absent = it counts) ·
+`no_row_sessions` = the newest ≤10 of those as `[{repo, session, from, to}]`, for a human to judge. Replies are recorded as `event: "capture"` usage rows (`capture: stored|rejected`,
 `row` = the filed id; never `ids`, a capture is no push).
 
 `null` never appears in `Stats`: an absent `real_tokens` means no post-block
