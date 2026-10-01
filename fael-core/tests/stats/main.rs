@@ -67,6 +67,7 @@ fn json_shape_keys_and_types_are_frozen() {
         keys(&v["capture"]),
         [
             "manual_adds",
+            "no_row_sessions",
             "post_stop_rounds",
             "reply_lines",
             "reply_rejected",

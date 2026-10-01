@@ -72,12 +72,14 @@ pub(super) fn parse(text: &str) -> Vec<Result<Line, Reject>> {
     out
 }
 
-/// The fence char and run length when `line` opens or closes a fence.
+/// The fence char and run length when `line` opens or closes a fence. A
+/// backtick run with another backtick after it is inline code, not a fence
+/// (CommonMark: a backtick fence's info string holds no backtick).
 fn fence_of(line: &str) -> Option<(char, usize)> {
     let t = line.trim_start();
     let c = t.chars().next().filter(|c| matches!(c, '`' | '~'))?;
     let n = t.chars().take_while(|x| *x == c).count();
-    (n >= 3).then_some((c, n))
+    (n >= 3 && !(c == '`' && t[n..].contains('`'))).then_some((c, n))
 }
 
 /// A closing fence carries nothing after its run.
@@ -251,12 +253,18 @@ fn stash_hint(c: &Ctx, n: usize, why: &str) {
         .next()
         .unwrap_or("")
         .trim_start_matches("rejected: ");
+    // the hint lands on the parent's next push: a sub-agent's lines are not its own
+    let whose = if c.agent.is_empty() {
+        "your last reply"
+    } else {
+        "a sub-agent's last reply"
+    };
     let path = hint_path(&c.session, &c.repo.root);
     if std::fs::create_dir_all(path.parent().unwrap_or(&c.repo.root)).is_ok() {
         let _ = std::fs::write(
             path,
             format!(
-                "{n} `fael <kind>:` line(s) in your last reply were not filed — {why}. Fix the line, or file it with `fael add`.\n"
+                "{n} `fael <kind>:` line(s) in {whose} were not filed — {why}. Fix the line, or file it with `fael add`.\n"
             ),
         );
     }
@@ -306,10 +314,14 @@ mod tests {
 
     #[test]
     fn fenced_lines_are_skipped_and_the_fence_closes() {
-        let text = "```\nfael note: quoted [files: a]\n```\nfael note: real [files: b]\n~~~sh\nfael note: quoted [files: a]\n~~~\n````\n```\nfael note: nested [files: a]\n```\n````\nfael note: after [files: c]";
+        let text = "```cargo test```\nfael note: inline [files: i]\n```\nfael note: quoted [files: a]\n```\nfael note: real [files: b]\n~~~sh\nfael note: quoted [files: a]\n~~~\n````\n```\nfael note: nested [files: a]\n```\n````\nfael note: after [files: c]";
         assert_eq!(
             parse(text),
-            vec![ok("note", "real", &["b"]), ok("note", "after", &["c"])]
+            vec![
+                ok("note", "inline", &["i"]),
+                ok("note", "real", &["b"]),
+                ok("note", "after", &["c"])
+            ]
         );
     }
 

@@ -89,7 +89,7 @@ fn stats_json_matches_golden_values() {
             "constants": {"skill_bytes": 2390, "skill_est": 602, "mcp_schema_bytes": 3708, "mcp_schema_est": 931},
             "rounds": {"after_block": 0, "rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
-            "capture": {"post_stop_rounds": 0, "reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0},
+            "capture": {"post_stop_rounds": 0, "reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
         }),
         "{out}"

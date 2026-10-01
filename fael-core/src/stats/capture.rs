@@ -6,13 +6,26 @@
 //! human to look at, not a verdict.
 
 use super::parse::Parsed;
-use crate::{Log, ts_ms};
+use crate::{Log, rfc3339, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 /// A row filed this long after a session's last event still belongs to it —
 /// the closing `add` follows the final edit by a moment, not by a usage event.
 const SLACK_MS: i64 = 10 * 60 * 1000;
+
+/// How many silent sessions `no_row_sessions` lists — the checkpoint's ten
+/// for a human to judge, newest first.
+const SAMPLE: usize = 10;
+
+/// One session that edited files and filed no row — where to look.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Silent {
+    pub repo: String,
+    pub session: String,
+    pub from: String,
+    pub to: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Capture {
@@ -29,15 +42,20 @@ pub struct Capture {
     pub manual_adds: usize,
     /// Sessions (per repo) that edited at least one file.
     pub sessions_with_edits: usize,
-    /// …of which no row was filed during the session (+10 min).
+    /// …of which no row was filed during the session (+10 min). Worktrees
+    /// share a journal, so a row counts only when its branch matches the
+    /// session's edits (either side unknown = it counts, as before).
     pub sessions_with_edits_no_row: usize,
+    /// The newest ≤10 of those, for a human to judge.
+    pub no_row_sessions: Vec<Silent>,
 }
 
 pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
     let (mut stored, mut rejected) = (0usize, 0usize);
     let mut stored_ids: HashSet<&str> = HashSet::new();
-    // (repo, session) → (first event, last event, edited?)
-    let mut sessions: HashMap<(&str, &str), (i64, i64, bool)> = HashMap::new();
+    // (repo, session) → (first event, last event, edited?, edit branch)
+    type Span<'a> = (i64, i64, bool, Option<&'a str>);
+    let mut sessions: HashMap<(&str, &str), Span> = HashMap::new();
     for v in &parsed.kept {
         if v["event"] == "capture" {
             match v["capture"].as_str() {
@@ -56,10 +74,15 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         ) else {
             continue;
         };
-        let s = sessions.entry((repo, session)).or_insert((ms, ms, false));
+        let s = sessions
+            .entry((repo, session))
+            .or_insert((ms, ms, false, None));
         s.0 = s.0.min(ms);
         s.1 = s.1.max(ms);
-        s.2 |= v["event"] == "edit";
+        if v["event"] == "edit" {
+            s.2 = true;
+            s.3 = v["branch"].as_str().or(s.3);
+        }
     }
     let mut seen: HashSet<&str> = HashSet::new();
     let mut manual = 0usize;
@@ -75,17 +98,20 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         }
     }
     let edited: Vec<_> = sessions.iter().filter(|(_, s)| s.2).collect();
-    let no_row = edited
+    let mut no_row: Vec<_> = edited
         .iter()
-        .filter(|((repo, _), (first, last, _))| {
+        .filter(|((repo, _), (first, last, _, branch))| {
             !logs.get(*repo).is_some_and(|l| {
                 l.rows.iter().any(|r| {
                     !r.kind.is_empty()
                         && ts_ms(&r.ts).is_some_and(|t| t >= *first && t <= last + SLACK_MS)
+                        && (branch.is_none() || r.branch().is_none() || r.branch() == *branch)
                 })
             })
         })
-        .count();
+        .collect();
+    no_row.sort_by_key(|(k, s)| (std::cmp::Reverse(s.1), *k));
+    let at = |ms: i64| rfc3339(ms.max(0) as u64);
     Capture {
         post_stop_rounds: parsed.blocks.len(),
         reply_lines: stored + rejected,
@@ -93,7 +119,17 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         reply_rejected: rejected,
         manual_adds: manual,
         sessions_with_edits: edited.len(),
-        sessions_with_edits_no_row: no_row,
+        sessions_with_edits_no_row: no_row.len(),
+        no_row_sessions: no_row
+            .iter()
+            .take(SAMPLE)
+            .map(|((repo, session), s)| Silent {
+                repo: repo.to_string(),
+                session: session.to_string(),
+                from: at(s.0),
+                to: at(s.1),
+            })
+            .collect(),
     }
 }
 
@@ -126,13 +162,19 @@ mod tests {
             r#"{"ts":"2026-09-30T01:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","session":"s2","ids":[]}"#,
             r#"{"ts":"2026-09-30T02:00:00.000Z","repo":"/w/r","client":"claude","event":"read","session":"s3","ids":[]}"#,
             r#"{"ts":"2026-09-30T00:00:30.000Z","repo":"/w/r","client":"claude","event":"stop-work","ask":"stop-block","session":"s1"}"#,
+            // two worktrees, one journal: s4's window holds only s5's row
+            r#"{"ts":"2026-09-30T03:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","branch":"feat/a","session":"s4","ids":[]}"#,
+            r#"{"ts":"2026-09-30T03:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","branch":"feat/b","session":"s5","ids":[]}"#,
         ]);
+        let mut on_b = row("B1", "2026-09-30T03:01:00.000Z", "note");
+        on_b.extra.insert("branch".into(), "feat/b".into());
         let log = Log {
             rows: vec![
                 row("R1", "2026-09-30T00:01:00.000Z", "note"), // via reply
                 row("M1", "2026-09-30T00:00:20.000Z", "decision"), // manual
                 row("C1", "2026-09-30T00:00:25.000Z", ""),     // a close: not an add
                 row("OLD", "2026-09-29T00:00:00.000Z", "note"), // before first usage
+                on_b,
             ],
             ..Log::default()
         };
@@ -144,9 +186,19 @@ mod tests {
                 reply_lines: 2,
                 reply_stored: 1,
                 reply_rejected: 1,
-                manual_adds: 1,
-                sessions_with_edits: 2,
-                sessions_with_edits_no_row: 1, // s2: edited at 01:00, no row near it
+                manual_adds: 2,
+                sessions_with_edits: 4,
+                sessions_with_edits_no_row: 2, // s2: no row near it · s4: only feat/b's
+                no_row_sessions: ["s4", "s2"]
+                    .iter()
+                    .zip(["2026-09-30T03:00:00.000Z", "2026-09-30T01:00:00.000Z"])
+                    .map(|(s, t)| Silent {
+                        repo: "/w/r".into(),
+                        session: s.to_string(),
+                        from: t.into(),
+                        to: t.into(),
+                    })
+                    .collect(),
             }
         );
     }

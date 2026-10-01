@@ -3,7 +3,7 @@
 //! numbers live in core so the desktop app shares them) and renders here.
 
 use super::asks::{self, UsageMeta};
-use super::state::{now_rfc3339, state_dir};
+use super::state::{head_branch, now_rfc3339, state_dir};
 use super::stats_text::{print_day, print_text};
 use crate::core;
 use std::collections::HashMap;
@@ -38,6 +38,13 @@ pub(crate) fn record_usage(
     }
     if let Some(agent) = meta.agent {
         row["agent"] = agent.into();
+    }
+    // worktrees share one journal: the branch is what ties an edit session
+    // to the rows it filed (stats capture). A file read, no git spawn.
+    if event == "edit"
+        && let Some(b) = head_branch(repo)
+    {
+        row["branch"] = b.into();
     }
     if let Some(real) = meta.real
         && let Ok(t) = serde_json::to_value(real)
