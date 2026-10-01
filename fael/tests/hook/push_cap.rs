@@ -173,7 +173,7 @@ fn budget_cut_names_the_dir_call_for_a_same_dir_now_row() {
 }
 
 #[test]
-fn read_push_names_the_key_call_for_shared_key_rows() {
+fn read_push_drops_shared_key_rows_outside_focus() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     // an exact hit on src/a.rs, and another file sharing its key (tier 2).
@@ -209,11 +209,10 @@ fn read_push_names_the_key_call_for_shared_key_rows() {
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "read"], &input);
     assert!(ok, "{out}");
+    // no session Focus holds the key: the sibling is neither pushed nor
+    // counted (decision push:shared-key-siblings), `find --key` still has it
     assert!(!out.contains("elsewhere"), "{out}");
-    assert!(
-        out.contains("… +1 more with #auth:session — fael find --key auth:session"),
-        "{out}"
-    );
+    assert!(!out.contains("#auth:session —"), "{out}");
     let (ok, found, _) = fael(&d, &["find", "--key", "auth:session"], "");
     assert!(ok && found.contains("elsewhere"), "{found}");
 }

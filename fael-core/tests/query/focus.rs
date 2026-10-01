@@ -180,14 +180,14 @@ fn select_zero_means_token_budget_only() {
     assert_eq!(ids(&sel.shown), ["14", "13", "26"]);
     assert_eq!(sel.findable_after(3), 0);
     assert_eq!(sel.background_dirs, 0);
-    assert!(sel.background_keys.is_empty());
 }
 
 #[test]
 fn select_counts_background_by_exact_call() {
     let mut l = log();
     // a same-dir decision (tier 1) and a decision on another dir sharing the
-    // exact hit's key (tier 2) — both hidden, each with its own exact call
+    // exact hit's key (tier 2) — the vela case (decision push:shared-key-siblings):
+    // with the key outside Focus the sibling is neither pushed nor counted
     l.rows.push(row(
         "D0000000000000000000000026",
         "decision",
@@ -205,7 +205,24 @@ fn select_counts_background_by_exact_call() {
     assert_eq!(ids(&sel.shown), ["13", "14"]);
     assert_eq!(sel.omitted, 0);
     assert_eq!(sel.background_dirs, 1);
-    assert_eq!(sel.background_keys, [("auth:session".to_string(), 1)]);
+    // the same key in Focus: the sibling is this session's work, so it shows
+    let sel = select(
+        query(&l, "src/a.rs", false),
+        &focus_on("auth:session"),
+        &policy(5),
+    );
+    assert!(
+        ids(&sel.shown).contains(&"27".to_string()),
+        "{:?}",
+        ids(&sel.shown)
+    );
+}
+
+fn focus_on(key: &str) -> Focus {
+    Focus {
+        keys: [key.to_string()].into(),
+        ..Focus::default()
+    }
 }
 
 #[test]
@@ -226,10 +243,16 @@ fn hidden_routes_the_budget_cut_by_tier() {
         &["lib/z.rs"],
         Some("auth:session"),
     ));
-    let sel = select(query(&l, "src/a.rs", false), &Focus::default(), &policy(5));
+    let sel = select(
+        query(&l, "src/a.rs", false),
+        &focus_on("auth:session"),
+        &policy(5),
+    );
     // render said the first row only; the rest were cut by the budget
     let h = sel.hidden(1);
-    assert_eq!(h.dirs, 1, "the same-dir issue needs the dir call: {h:?}");
+    // the Focus key makes tier-0 row 14 Now, so it renders first and both
+    // same-dir issues (13, 26) are cut
+    assert_eq!(h.dirs, 2, "the same-dir issues need the dir call: {h:?}");
     assert_eq!(h.keys, [("auth:session".to_string(), 1)]);
 }
 
