@@ -6,9 +6,10 @@
 //! human to look at, not a verdict.
 
 use super::parse::Parsed;
-use crate::{Log, rfc3339, ts_ms};
+use crate::{Log, Row, rfc3339, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 /// A row filed this long after a session's last event still belongs to it —
 /// the closing `add` follows the final edit by a moment, not by a usage event.
@@ -43,7 +44,8 @@ pub struct Capture {
     /// Sessions (per repo) that edited at least one file.
     pub sessions_with_edits: usize,
     /// …of which no row was filed during the session (+10 min). Worktrees
-    /// share a journal, so a row counts only when its branch matches the
+    /// share a journal, so a row counts only when it is this session's: its
+    /// writer session when the row has one, else its branch against the
     /// session's edits (either side unknown = it counts, as before).
     pub sessions_with_edits_no_row: usize,
     /// The newest ≤10 of those, for a human to judge.
@@ -100,12 +102,12 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
     let edited: Vec<_> = sessions.iter().filter(|(_, s)| s.2).collect();
     let mut no_row: Vec<_> = edited
         .iter()
-        .filter(|((repo, _), (first, last, _, branch))| {
+        .filter(|((repo, session), (first, last, _, branch))| {
             !logs.get(*repo).is_some_and(|l| {
                 l.rows.iter().any(|r| {
                     !r.kind.is_empty()
                         && ts_ms(&r.ts).is_some_and(|t| t >= *first && t <= last + SLACK_MS)
-                        && (branch.is_none() || r.branch().is_none() || r.branch() == *branch)
+                        && mine(r, session, *branch)
                 })
             })
         })
@@ -133,11 +135,20 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
     }
 }
 
+/// Whether row `r` came from this session: rows carry the writer's session
+/// as the transcript's file stem (`Row::session`), usage carries the hook's
+/// key (a path for Claude), so compare stems. No writer session → branch.
+fn mine(r: &Row, session: &str, branch: Option<&str>) -> bool {
+    match r.session() {
+        Some(w) => Path::new(session).file_stem().is_some_and(|s| *s == *w),
+        None => branch.is_none() || r.branch().is_none() || r.branch() == branch,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Row;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     fn parsed(rows: &[&str]) -> Parsed {
         let tmp: Vec<PathBuf> = vec![PathBuf::from("/tmp")];
@@ -168,6 +179,10 @@ mod tests {
         ]);
         let mut on_b = row("B1", "2026-09-30T03:01:00.000Z", "note");
         on_b.extra.insert("branch".into(), "feat/b".into());
+        // filed by another session on s4's own branch: still not s4's row
+        let mut other = row("B2", "2026-09-30T03:02:00.000Z", "note");
+        other.extra.insert("branch".into(), "feat/a".into());
+        other.extra.insert("session".into(), "s9".into());
         let log = Log {
             rows: vec![
                 row("R1", "2026-09-30T00:01:00.000Z", "note"), // via reply
@@ -175,6 +190,7 @@ mod tests {
                 row("C1", "2026-09-30T00:00:25.000Z", ""),     // a close: not an add
                 row("OLD", "2026-09-29T00:00:00.000Z", "note"), // before first usage
                 on_b,
+                other,
             ],
             ..Log::default()
         };
@@ -186,7 +202,7 @@ mod tests {
                 reply_lines: 2,
                 reply_stored: 1,
                 reply_rejected: 1,
-                manual_adds: 2,
+                manual_adds: 3,
                 sessions_with_edits: 4,
                 sessions_with_edits_no_row: 2, // s2: no row near it · s4: only feat/b's
                 no_row_sessions: ["s4", "s2"]
@@ -201,5 +217,18 @@ mod tests {
                     .collect(),
             }
         );
+    }
+
+    #[test]
+    fn a_row_is_the_session_whose_transcript_stem_wrote_it() {
+        let mut r = row("R", "2026-09-30T00:00:00.000Z", "note");
+        r.extra.insert("session".into(), "abc".into());
+        r.extra.insert("branch".into(), "feat/other".into());
+        assert!(mine(&r, "/h/.claude/projects/x/abc.jsonl", Some("feat/z")));
+        assert!(!mine(
+            &r,
+            "/h/.claude/projects/x/def.jsonl",
+            Some("feat/other")
+        ));
     }
 }
