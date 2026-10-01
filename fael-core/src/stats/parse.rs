@@ -154,6 +154,29 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
     p
 }
 
+/// `--since`: the usage lines stamped at or after `ms`, cut before `parse`
+/// so every number downstream — first use per repo, rows added, capture —
+/// reads as that window. A line with no readable `ts` falls outside it.
+pub fn since(text: &str, ms: i64) -> String {
+    text.lines()
+        .filter(|l| {
+            serde_json::from_str::<serde_json::Value>(l)
+                .ok()
+                .and_then(|v| v["ts"].as_str().and_then(ts_ms))
+                .is_some_and(|t| t >= ms)
+        })
+        .flat_map(|l| [l, "\n"])
+        .collect()
+}
+
+/// A `--since` value: `YYYY-MM-DD` (00:00 UTC) or a full RFC 3339 time.
+pub fn since_arg(s: &str) -> Option<i64> {
+    match s.len() {
+        10 => ts_ms(&format!("{s}T00:00:00Z")),
+        _ => ts_ms(s),
+    }
+}
+
 /// Ids one usage event handed to the agent — shared by the push counts
 /// above and the day view's delivered panel, so the two cannot drift.
 fn ids_of(v: &serde_json::Value) -> Vec<String> {
@@ -196,6 +219,20 @@ mod tests {
         assert_eq!(p.by_event.get("read"), Some(&(1, 3)));
         assert_eq!(p.first_seen.get("/work/real"), Some(&1790380800000));
         assert_eq!(p.repos(), vec!["/work/real"]);
+    }
+
+    #[test]
+    fn since_keeps_the_window_and_reads_both_forms() {
+        let line =
+            |ts: &str| format!("{{\"ts\":\"{ts}\",\"repo\":\"/work/real\",\"event\":\"read\"}}\n");
+        let text = line("2026-09-29T23:59:59.000Z") + &line("2026-09-30T09:00:00.000Z") + "torn\n";
+        let day = super::since_arg("2026-09-30").unwrap();
+        assert_eq!(super::since(&text, day), line("2026-09-30T09:00:00.000Z"));
+        assert_eq!(
+            super::since_arg("2026-09-30T09:00:00Z"),
+            Some(day + 9 * 3_600_000)
+        );
+        assert_eq!(super::since_arg("last week"), None);
     }
 
     #[test]

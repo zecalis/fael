@@ -30,6 +30,7 @@ mod push;
 mod search;
 mod session;
 mod state;
+mod stats_text;
 mod stop;
 mod tally;
 mod usage;
@@ -38,7 +39,7 @@ pub(crate) use asks::{
     ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp, record_row_asks,
 };
 pub(crate) use protocol::cmd;
-pub(crate) use usage::stats;
+pub(crate) use usage::{aggregate, load, stats};
 
 // What the binary shares: `write` reads session edits and checks anchors,
 // `maintain` asks where the gitignore rule comes from.

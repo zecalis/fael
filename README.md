@@ -35,7 +35,8 @@ fael gives the repo a memory that agents can't skip:
 - **No spam in context.** Rows are pushed per file, once per context window (a sub-agent, or a
   session after compaction, is told again — it no longer has them), and cut to a token budget
   (800 by default) — not a notes dump. Anything else the agent asks for itself, through MCP.
-  `fael stats` shows exactly what fael has put into context.
+  `fael stats` shows exactly what fael has put into context; `fael report` puts it on one
+  offline page you can hand to your lead.
 - **It retires what the code outgrew.** Git owns what changed; fael keeps only what git can't say.
   When an agent edits a file, it is asked to close a row the code now says, or re-file one the
   code contradicts — in the same message. `fael doctor` lists the rest: open rows whose files took

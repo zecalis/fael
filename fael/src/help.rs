@@ -111,11 +111,21 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "stats",
         "tokens fael has put into context",
-        "fael stats [--json] [--rows] [--day]
+        "fael stats [--json] [--rows] [--day] [--since d]
     (tokens fael has put into context, per machine;
+     --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on;
      --rows = per-row pushes against open/closed/superseded, flagging noise?;
      --day = today's panels per repo and summed (local day: FAEL_TZ_OFFSET
      like +07:00 wins, else the machine zone); --day --json prints DayView)",
+    ),
+    (
+        "report",
+        "one offline HTML page for a lead",
+        "fael report [--out f] [--open] [--since d]
+    (one offline HTML page answering three questions: what memory reached the
+     agents, what is noise, did fael add friction — every number is a field of
+     `fael stats --json` for the same --since; default --out is report.html in
+     the state dir, never .fael/; --open hands it to the OS opener)",
     ),
     (
         "doctor",

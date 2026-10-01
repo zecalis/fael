@@ -25,7 +25,7 @@ pub use day::{
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
 pub use metrics::ASK_ORDER;
-pub use parse::{Parsed, StopBlock, UsageRow, parse};
+pub use parse::{Parsed, StopBlock, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 
 /// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
