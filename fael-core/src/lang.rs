@@ -174,8 +174,11 @@ pub fn row_language_check(cfg: &Config, title: Option<&str>, text: &str) -> Opti
         return None;
     }
     let packs: Vec<&Lang> = cfg.lang_rows.iter().filter_map(|n| by_name(n)).collect();
+    // quoted text is a term cited verbatim (`ภาษี` in an English row), not
+    // the row's language — only the prose outside code/quotes is judged
     let foreign = |s: &str| {
-        s.chars()
+        strip_quoted(s)
+            .chars()
             .any(|c| c.is_alphabetic() && !packs.iter().any(|p| in_script(p, c)))
     };
     if foreign(text) || title.is_some_and(foreign) {

@@ -1,6 +1,7 @@
 //! `[Phantom]` in markdown (issue `ids:doctor-plans`): prose is scanned like a
 //! row's text, fenced code blocks are examples (never citations), and only
-//! `*.md` under the repo root is read — `.git`/`target`/`node_modules` never.
+//! `*.md` under the repo root is read — `.git`/`target`/`node_modules` and
+//! archived plans (`.fapony/done`) never.
 
 use super::row;
 use fael_core::*;
@@ -51,7 +52,7 @@ fn prose_is_scanned_and_fenced_blocks_are_not() {
     // line 5 is the prose citation; the fenced ones (8 and 13) never count
     assert_eq!(
         phantom_md_refs(&log(), &r),
-        vec![("PLAN-x.md".to_string(), 5, DEAD.to_string())]
+        vec![("PLAN-x.md".to_string(), 5, DEAD.to_string(), None)]
     );
 }
 
@@ -62,6 +63,7 @@ fn only_markdown_counts_and_build_dirs_are_skipped() {
         "README.md",
         "docs/README.MD",
         ".fapony/plan/PLAN-x.md",
+        ".fapony/done/PLAN-old.md",
         "target/gen.md",
         "node_modules/pkg/README.md",
         ".git/HOOKS.md",
@@ -72,7 +74,7 @@ fn only_markdown_counts_and_build_dirs_are_skipped() {
     put(&r, "notes.txt", &format!("prose citing {DEAD}\n"));
     put(&r, "src/lib.rs", &format!("// prose citing {DEAD}\n"));
     let found = phantom_md_refs(&log(), &r);
-    let paths: Vec<&str> = found.iter().map(|(p, _, _)| p.as_str()).collect();
+    let paths: Vec<&str> = found.iter().map(|(p, _, _, _)| p.as_str()).collect();
     assert_eq!(
         paths,
         [".fapony/plan/PLAN-x.md", "README.md", "docs/README.MD"]
@@ -88,5 +90,48 @@ fn an_unclosed_fence_swallows_the_rest_and_a_token_counts_once() {
         &format!("first {DEAD} here\nand again {DEAD}\n```\nnever closed {DEAD}\n"),
     );
     let found = phantom_md_refs(&log(), &r);
-    assert_eq!(found, vec![("a.md".to_string(), 1, DEAD.to_string())]);
+    assert_eq!(found, vec![("a.md".to_string(), 1, DEAD.to_string(), None)]);
+}
+
+#[test]
+fn a_superseded_citation_names_its_successor() {
+    const NEW: &str = "01CCCC22222222222222222222";
+    let r = tmp("superseded");
+    let mut l = log();
+    let mut next = row(NEW, "note", &["src/a.rs"], None);
+    next.supersedes = Some(ALIVE.into());
+    l.rows.push(next);
+    put(
+        &r,
+        "a.md",
+        &format!("old cite {}\nnew cite {NEW}\n", &ALIVE[..8]),
+    );
+    assert_eq!(
+        phantom_md_refs(&l, &r),
+        vec![(
+            "a.md".to_string(),
+            1,
+            ALIVE[..8].to_string(),
+            Some(NEW.to_string())
+        )]
+    );
+}
+
+/// `.fapony` is a symlink to a shared plan dir here — the one symlink followed.
+#[cfg(unix)]
+#[test]
+fn a_symlinked_fapony_is_scanned() {
+    let (r, shared) = (tmp("link"), tmp("shared"));
+    put(&shared, "plan/PLAN-x.md", &format!("cites {DEAD}\n"));
+    std::os::unix::fs::symlink(&shared, r.join(".fapony")).unwrap();
+    let found = phantom_md_refs(&log(), &r);
+    assert_eq!(
+        found,
+        vec![(
+            ".fapony/plan/PLAN-x.md".to_string(),
+            1,
+            DEAD.to_string(),
+            None
+        )]
+    );
 }

@@ -23,9 +23,9 @@ pub use focus::{
 };
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
-pub use md::phantom_md_refs;
+pub use md::{MdRef, phantom_md_refs};
 pub use push::{push, push_tiered};
-pub use refs::{Ref, id_tokens, phantom_refs, ref_state};
+pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};
 pub use render::{
     Abbrev, Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page, restored,
 };

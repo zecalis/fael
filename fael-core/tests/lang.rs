@@ -158,6 +158,11 @@ fn default_rows_warn_byte_identical() {
         row_language_check(&c, None, "a → b when ≤ 3, café laté"),
         None
     );
+    // a term quoted in backticks is cited verbatim, not the row's language
+    assert_eq!(
+        row_language_check(&c, Some("rename `ภาษี` field"), "the `ภาษี` label stays"),
+        None
+    );
 }
 
 #[test]
