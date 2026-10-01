@@ -55,13 +55,18 @@ pub(crate) struct Event {
 }
 
 /// Neutral Reply (SPEC §9).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize)]
 pub(crate) struct Reply {
     pub(crate) block: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) context: Option<String>,
+    /// One line for the user, never the agent (PLAN-fael-visible-secretary
+    /// chunk 4): Claude's `systemMessage`, an OpenCode toast. A client with
+    /// no such channel drops it — it must never land in `context`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) notice: Option<String>,
 }
 
 pub(crate) fn cmd(event: &str, client: Option<String>) -> ExitCode {
@@ -108,6 +113,7 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
                 block: false,
                 reason: None,
                 context: None,
+                notice: None,
             }
         }
     };

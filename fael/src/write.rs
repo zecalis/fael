@@ -159,8 +159,8 @@ pub(crate) fn add_row(
         warns.push(w);
     }
     // chunk 6e: the id just filed is already in this session's context — mark
-    // it seen so the next push does not repeat it
-    hook::note_seen(&crate::session::hook_session(&r.root), &r.root, &[&row.id]);
+    // it seen so the next push does not repeat it; the turn's receipt counts it
+    hook::note_filed(&r.root, &row);
     Ok((row, path, warns))
 }
 
@@ -227,6 +227,7 @@ pub(crate) fn close_row(
         why,
     )?;
     warns.append(&mut core_warns);
+    hook::note_closed(&r.root, &row);
     Ok((row, path, warns))
 }
 

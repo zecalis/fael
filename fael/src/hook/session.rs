@@ -26,6 +26,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         block: false,
         reason: None,
         context: None,
+        notice: None,
     };
     let c = match ctx(e) {
         Some(c) => c,
@@ -124,6 +125,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // like the read/edit push: usage counts only the ids render actually
     // said — rows the budget cut off never reached any context
     let n = context.lines().filter(|l| l.starts_with("- [")).count();
+    let notice = brief_line(&c, &shown[..n.min(shown.len())]);
     let shown: Vec<String> = shown.iter().take(n).map(|r| r.id.clone()).collect();
     // the session just began — no round completed yet, so no real tokens
     let meta = hook_meta(&c, None, false);
@@ -139,7 +141,34 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         block: false,
         reason: None,
         context: Some(context),
+        notice,
     }
+}
+
+/// PLAN-fael-visible-secretary chunk 4: the brief's line for the user — the
+/// open issues the agent was just handed in full, up to two named by key
+/// (else id) so each is a `fael find` away. No issue said = no line.
+fn brief_line(c: &super::protocol::Ctx, said: &[&core::Row]) -> Option<String> {
+    let issues: Vec<&core::Row> = said.iter().copied().filter(|r| r.kind == "issue").collect();
+    if !c.repo.cfg.notify_user || issues.is_empty() {
+        return None;
+    }
+    let ab = core::abbrev(&c.log);
+    let named: Vec<String> = issues
+        .iter()
+        .take(2)
+        .map(|r| match &r.key {
+            Some(k) => format!("#{k}"),
+            None => ab.short(&r.id).to_string(),
+        })
+        .collect();
+    let more = if issues.len() > 2 { " …" } else { "" };
+    Some(format!(
+        "fael: briefed agent — {} open {} ({}{more})",
+        issues.len(),
+        if issues.len() == 1 { "issue" } else { "issues" },
+        named.join(", ")
+    ))
 }
 
 /// SPEC §11: the cheap checks — one line each, only when there is a problem.

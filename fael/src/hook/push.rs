@@ -150,11 +150,7 @@ pub(crate) fn is_anchor(f: &str) -> bool {
 }
 
 pub(crate) fn push(e: &Event, event: &str) -> Reply {
-    let no = || Reply {
-        block: false,
-        reason: None,
-        context: None,
-    };
+    let no = Reply::default;
     let c = match ctx(e) {
         Some(c) => c,
         None => return no(),
@@ -234,9 +230,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
             let meta = hook_meta(&c, None, true);
             record_usage(&c.client, event, &c.repo.root, &context, &[], &meta);
             return Reply {
-                block: false,
-                reason: None,
                 context: Some(context),
+                ..Reply::default()
             };
         }
         return no();
@@ -275,5 +270,41 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         block: false,
         reason: None,
         context: Some(context),
+        notice: whisper(&c, &sel.shown[..n.min(sel.shown.len())], &files),
     }
+}
+
+/// PLAN-fael-visible-secretary chunk 4: the user hears which decision or
+/// issue the agent was just reminded of — one line, the first such row, at
+/// most once per file per session. Every reminded id also goes to the
+/// tally for the turn's receipt. Notes and repo kinds stay quiet: a
+/// reminder is a choice made or a problem known, never a row count.
+fn whisper(c: &super::protocol::Ctx, said: &[&core::Row], files: &[String]) -> Option<String> {
+    if !c.repo.cfg.notify_user {
+        return None;
+    }
+    let hits: Vec<&core::Row> = said
+        .iter()
+        .copied()
+        .filter(|r| matches!(r.kind.as_str(), "decision" | "issue"))
+        .collect();
+    let ids: Vec<&str> = hits.iter().map(|r| r.id.as_str()).collect();
+    super::tally::note(&c.session, &c.repo.root, "reminded", &ids);
+    let first = hits.first()?;
+    if !super::tally::first_whisper(&c.session, &c.repo.root, files) {
+        return None;
+    }
+    let label = match &first.key {
+        Some(k) => format!("#{k}"),
+        None => core::abbrev(&c.log).short(&first.id).to_string(),
+    };
+    let more = match hits.len() {
+        1 => String::new(),
+        n => format!(" +{} more", n - 1),
+    };
+    Some(format!(
+        "fael: reminded agent — {label} \"{}\" ({}){more}",
+        first.display_title(),
+        files.join(", ")
+    ))
 }

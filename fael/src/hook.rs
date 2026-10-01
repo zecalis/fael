@@ -11,6 +11,7 @@
 //! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
 //! `autosync` (session-start and turn-end `fael sync`, off-switch `[sync] auto`),
+//! `tally` (the user channel's per-session ledger: reminders, receipt),
 //! `usage` (SPEC §8 accounting + `stats`), `asks` (chunk-3a ask types +
 //! real tokens), `markers` (bug phrases).
 //!
@@ -30,6 +31,7 @@ mod search;
 mod session;
 mod state;
 mod stop;
+mod tally;
 mod usage;
 
 pub(crate) use asks::{
@@ -43,3 +45,4 @@ pub(crate) use usage::stats;
 pub(crate) use push::is_anchor;
 pub(crate) use session::{deliberate, ignore_source};
 pub(crate) use state::{Edit, note_seen, session_edits, state_dir};
+pub(crate) use tally::{note_closed, note_filed};

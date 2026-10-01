@@ -69,6 +69,31 @@ fn patch_files(patch: &str) -> Vec<String> {
         .collect()
 }
 
+/// The user line, Claude Code only: its `systemMessage` shows to the user
+/// and never reaches the model. Codex has no such channel, so it says
+/// nothing (PLAN-fael-visible-secretary §2).
+fn user_line(r: &super::protocol::Reply, codex: bool) -> Option<&str> {
+    (!codex).then_some(r.notice.as_deref()).flatten()
+}
+
+/// `additionalContext` for the agent, `systemMessage` for the user — each
+/// only when there is one; nothing at all prints nothing.
+fn print_reply(event: &str, r: super::protocol::Reply, codex: bool) {
+    let mut out = serde_json::Map::new();
+    if let Some(ctx) = &r.context {
+        out.insert(
+            "hookSpecificOutput".into(),
+            serde_json::json!({"hookEventName": event, "additionalContext": ctx}),
+        );
+    }
+    if let Some(n) = user_line(&r, codex) {
+        out.insert("systemMessage".into(), n.into());
+    }
+    if !out.is_empty() {
+        println!("{}", serde_json::Value::Object(out));
+    }
+}
+
 /// Claude Code and Codex: same stdin fields, same reply JSON.
 pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
     let client = Some(client.to_string());
@@ -101,6 +126,8 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                     "{}",
                     serde_json::json!({"decision": "block", "reason": reason})
                 );
+            } else if let Some(n) = user_line(&r, codex) {
+                println!("{}", serde_json::json!({"systemMessage": n}));
             }
             ExitCode::SUCCESS
         }
@@ -115,13 +142,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 client,
                 ..Event::default()
             };
-            if let Some(ctx) = session_start(&e).context {
-                println!(
-                    "{}",
-                    serde_json::json!({"hookSpecificOutput": {
-                        "hookEventName": "SessionStart", "additionalContext": ctx}})
-                );
-            }
+            print_reply("SessionStart", session_start(&e), codex);
             ExitCode::SUCCESS
         }
         "read" | "edit" | "search" => {
@@ -153,13 +174,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             } else {
                 push(&e, event)
             };
-            if let Some(ctx) = reply.context {
-                println!(
-                    "{}",
-                    serde_json::json!({"hookSpecificOutput": {
-                        "hookEventName": "PostToolUse", "additionalContext": ctx}})
-                );
-            }
+            print_reply("PostToolUse", reply, codex);
             ExitCode::SUCCESS
         }
         _ => {

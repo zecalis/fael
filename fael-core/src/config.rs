@@ -86,6 +86,10 @@ pub struct Config {
     /// `fael.remote` is set. `false` is the off-switch; the manual command
     /// is unaffected.
     pub sync_auto: bool,
+    /// `[notify] user` (PLAN-fael-visible-secretary chunk 4): `true`
+    /// (default) = the hooks report to the user in one line per beat (brief,
+    /// reminder, receipt) on a channel the agent never reads; `false` = off.
+    pub notify_user: bool,
 }
 
 impl Default for Config {
@@ -110,8 +114,17 @@ impl Default for Config {
             cross_key: CrossKey::Warn,
             capture_block: false,
             sync_auto: true,
+            notify_user: true,
         }
     }
+}
+
+/// `[notify]` in `.fael/config.toml` — outside `from_toml` only to keep that
+/// function under the line lint.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Notify {
+    user: Option<bool>,
 }
 
 impl Config {
@@ -133,7 +146,9 @@ impl Config {
             selfheal: Selfheal,
             capture: Capture,
             sync: Sync,
+            notify: Notify,
         }
+
         #[derive(Deserialize, Default)]
         #[serde(default)]
         struct Sync {
@@ -211,6 +226,7 @@ impl Config {
             cross_key: check_cross_key(f.selfheal.cross_key)?,
             capture_block: f.capture.block.unwrap_or(d.capture_block),
             sync_auto: f.sync.auto.unwrap_or(d.sync_auto),
+            notify_user: f.notify.user.unwrap_or(d.notify_user),
         })
     }
 }
