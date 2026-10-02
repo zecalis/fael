@@ -194,15 +194,18 @@ fn bump_key(keys: &mut Vec<(String, usize)>, key: String) {
 }
 
 /// Bucket one gathered row. `tier` is L1's match (0 exact file/zone, 1
-/// same-dir, 2 shared key): an open issue is Now whatever its tier, a
-/// tier-0 decision or note is File, the rest is Background. Inside a bucket
-/// the existing `cmp_rows` order holds — no second ranking.
+/// same-dir, 2 shared key): an open issue on the file itself is Now, a
+/// tier-0 decision or note is File, the rest is Background — an issue on a
+/// sibling file is counted like any sibling row, never pushed (a vela edit of
+/// upload.ts pushed an OCR outage issue that names no such file). Urgent, a
+/// Focus key or the session branch is Now at any tier. Inside a bucket the
+/// existing `cmp_rows` order holds — no second ranking.
 pub fn bucket(r: &Row, tier: usize, focus: &Focus) -> Bucket {
     let now_key = r.key.as_deref().is_some_and(|k| focus.keys.contains(k));
     let now_branch = r
         .branch()
         .is_some_and(|b| focus.branch.as_deref() == Some(b));
-    if r.kind == "issue" || r.urgent_value().is_some() || now_key || now_branch {
+    if (r.kind == "issue" && tier == 0) || r.urgent_value().is_some() || now_key || now_branch {
         return Bucket::Now;
     }
     if tier == 0 {

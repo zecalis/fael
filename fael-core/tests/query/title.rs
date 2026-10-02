@@ -172,6 +172,7 @@ fn bump_keeps_the_title() {
         &st,
         &r.id,
         BumpOpts {
+            held: None,
             to: Some("ploy".into()),
             urgent: UrgentChange::Keep,
             revisit: None,

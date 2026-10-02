@@ -28,6 +28,7 @@ fn close_on_a_bumped_id_points_at_the_newest_version() {
         &st,
         &r.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
@@ -62,6 +63,7 @@ fn closing_the_newest_version_closes_the_chain_it_supersedes() {
             &st,
             id,
             BumpOpts {
+                held: None,
                 to: None,
                 urgent: UrgentChange::Keep,
                 revisit: None,
@@ -137,6 +139,7 @@ fn closing_a_superseded_row_past_its_closed_head_repairs_a_stuck_chain() {
         &st,
         &a.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
@@ -183,6 +186,7 @@ fn bump_rewrites_only_the_moved_row() {
         &st,
         &b.id,
         BumpOpts {
+            held: None,
             to: Some("Ploy".into()),
             urgent: UrgentChange::Before(a.id.clone()),
             revisit: None,
@@ -217,6 +221,7 @@ fn bump_rewrites_only_the_moved_row() {
         &st,
         &b2.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Remove,
             revisit: None,
@@ -249,6 +254,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
         &st,
         &d.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::End,
             revisit: None,
@@ -264,6 +270,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
         &st,
         &d.id,
         BumpOpts {
+            held: None,
             to: Some("ploy".into()),
             urgent: UrgentChange::Keep,
             revisit: None,
@@ -280,6 +287,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
         &st,
         &d.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
@@ -296,6 +304,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
         &st,
         &gone.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,

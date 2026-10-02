@@ -34,16 +34,27 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (same text/files, new version — text and files never change through bump)",
     ),
     (
+        "claim",
+        "mark an open issue held by this branch",
+        "fael claim <id>
+    (find --kind issue then shows (held @<branch>) so another agent picks
+     something else; never a lock — a second claim moves it with a warning;
+     closing the issue ends it)",
+    ),
+    (
         "find",
         "search rows",
-        "fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--text query]
+        "fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--groups] [--text query]
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
       why: `closed: <text> (<sha>)`; an id-shaped query is
       never a text search — it rejects when no row owns it, naming the rows
       that only mention it; --text forces a text search;
       an id counts as verified only after fael find printed it as - [<id>] —
       never type one from memory;
-      --full shows every body;
+      --full shows every body; its cut line asks for the rest in one call;
+      --kind issue lists issues ready to work first, (waiting: …) ones last;
+      --groups groups every match by shared files — what to fix in one PR
+      (*.md and anchors never link);
       text finds rows holding every word, in any order; on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*';
      --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;

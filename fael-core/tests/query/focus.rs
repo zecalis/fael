@@ -27,9 +27,10 @@ fn bucket_now_file_background() {
         &["src/a.rs"],
         None,
     );
-    // an open issue is Now whatever its tier; a tier-0 decision or note is
-    // File; the same-dir and shared-key tiers never render
-    assert_eq!(bucket(&issue, 1, &f), Bucket::Now);
+    // an open issue on the file is Now, a tier-0 decision or note is File;
+    // the same-dir and shared-key tiers never render, issues included
+    assert_eq!(bucket(&issue, 0, &f), Bucket::Now);
+    assert_eq!(bucket(&issue, 1, &f), Bucket::Background);
     assert_eq!(bucket(&dec, 0, &f), Bucket::File);
     assert_eq!(bucket(&dec, 1, &f), Bucket::Background);
     assert_eq!(bucket(&dec, 2, &f), Bucket::Background);
@@ -148,6 +149,12 @@ fn select_caps_rows_issues_first() {
         r.ts = format!("2026-09-{d}T00:00:0{i}Z");
         l.rows.push(r);
     }
+    l.rows.push(row(
+        "D0000000000000000000000029",
+        "issue",
+        &["src/a.rs"],
+        None,
+    ));
     let tiered = query(&l, "src/a.rs", false);
     // same rows, same order as push — tiers only add information
     assert_eq!(
@@ -158,11 +165,12 @@ fn select_caps_rows_issues_first() {
             .collect::<Vec<_>>()
     );
     let sel = select(tiered, &Focus::default(), &policy(5));
-    // 8 match (14 exact + 6 new + 13 same-dir): 5 shown with the issue
-    // first — L1 ranked it last — and 3 omitted
+    // 9 match (14 exact + 6 new + issue 29 + 13 same-dir): 5 shown with the
+    // file's issue first, 3 omitted; the same-dir issue 13 is only counted
     assert_eq!(sel.shown.len(), 5);
-    assert_eq!(sel.shown[0].kind, "issue");
+    assert_eq!(sel.shown[0].id, "D0000000000000000000000029");
     assert_eq!(sel.omitted, 3);
+    assert_eq!(sel.background_dirs, 1);
 }
 
 #[test]
@@ -201,10 +209,11 @@ fn select_counts_background_by_exact_call() {
         Some("auth:session"),
     ));
     let sel = select(query(&l, "src/a.rs", false), &Focus::default(), &policy(5));
-    // the same-dir issue 13 is still Now and shows; 14 the tier-0 File row
-    assert_eq!(ids(&sel.shown), ["13", "14"]);
+    // 14 the tier-0 File row shows; the same-dir issue 13 and decision 26
+    // are counted for the dir call, never pushed
+    assert_eq!(ids(&sel.shown), ["14"]);
     assert_eq!(sel.omitted, 0);
-    assert_eq!(sel.background_dirs, 1);
+    assert_eq!(sel.background_dirs, 2);
     // the same key in Focus: the sibling is this session's work, so it shows
     let sel = select(
         query(&l, "src/a.rs", false),
@@ -228,9 +237,9 @@ fn focus_on(key: &str) -> Focus {
 #[test]
 fn hidden_routes_the_budget_cut_by_tier() {
     let mut l = log();
-    // a same-dir (tier 1) and a shared-key (tier 2) issue: both are Now, so the
-    // row cap never cuts them — only the token budget can, and each must still
-    // name its own find call (the dir / the key), never `--files <f>`
+    // a same-dir (tier 1) issue is counted for the dir call; a shared-key
+    // (tier 2) issue on a Focus key is Now and only the token budget can cut
+    // it — each names its own find call (the dir / the key), never `--files <f>`
     l.rows.push(row(
         "D0000000000000000000000026",
         "issue",
@@ -250,8 +259,8 @@ fn hidden_routes_the_budget_cut_by_tier() {
     );
     // render said the first row only; the rest were cut by the budget
     let h = sel.hidden(1);
-    // the Focus key makes tier-0 row 14 Now, so it renders first and both
-    // same-dir issues (13, 26) are cut
+    // the Focus key makes tier-0 row 14 Now, so it renders first; both
+    // same-dir issues (13, 26) were counted, never shown
     assert_eq!(h.dirs, 2, "the same-dir issues need the dir call: {h:?}");
     assert_eq!(h.keys, [("auth:session".to_string(), 1)]);
 }
@@ -268,9 +277,9 @@ fn select_never_cuts_now_rows() {
         ));
     }
     let sel = select(query(&l, "src/a.rs", false), &Focus::default(), &policy(5));
-    // 7 open issues (6 new + 13) exceed the cap: every one shows, the cap
+    // 6 open issues on the file exceed the cap: every one shows, the cap
     // only limits the File ring, so the tier-0 decision 14 is the one cut
-    assert_eq!(sel.shown.len(), 7);
+    assert_eq!(sel.shown.len(), 6);
     assert!(sel.shown.iter().all(|r| r.kind == "issue"));
     assert_eq!(sel.omitted, 1);
 }

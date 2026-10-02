@@ -88,6 +88,12 @@ impl Row {
         self.extra.get("branch").and_then(|v| v.as_str())
     }
 
+    /// The branch working on this issue: `extra.held`, set by `fael claim`.
+    /// Informational only — nothing refuses a second claim, it warns.
+    pub fn held(&self) -> Option<&str> {
+        self.extra.get("held").and_then(|v| v.as_str())
+    }
+
     /// The agent session that filed this row: `extra.session`, stamped by the
     /// adapter from the hook session (absent outside one). With a push's session
     /// it tells "written by A, used by B" from "written and used by A".

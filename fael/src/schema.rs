@@ -35,8 +35,9 @@ pub(crate) fn tools() -> Value {
                 "all": {"type": "boolean", "description": "closed and superseded rows too"},
                 "revisit": {"type": ["boolean", "string"], "description": "true = any revisit, a string narrows it"},
                 "branches": {"type": "boolean", "description": "unmerged branches too, tagged @branch; none under store=local"},
-                "limit": {"type": "integer", "minimum": 1, "description": "max rows; a cut prints next: offset=N"},
+                "limit": {"type": "integer", "minimum": 1, "description": "max rows"},
                 "offset": {"type": "integer", "minimum": 0, "description": "skip this many first"},
+                "groups": {"type": "boolean"},
             }},
         },
         {

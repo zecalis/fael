@@ -5,9 +5,11 @@
 //! `select` (find/brief/kickoff/push/gone over row sets), `matching` (path and
 //! glob primitives), `render` (token-budgeted markdown), `lookup` (resolve,
 //! keys, query, warnings), `stale` (backticked paths gone from disk),
-//! `md` (id citations in markdown prose), `focus` (push buckets + row cap).
+//! `md` (id citations in markdown prose), `focus` (push buckets + row cap),
+//! `groups` (open rows linked by a shared file).
 
 mod focus;
+mod groups;
 mod lookup;
 mod matching;
 mod md;
@@ -22,6 +24,7 @@ pub use focus::{
     Background, Bucket, Focus, Hidden, PUSH_BACKGROUND, PUSH_HUB_ROWS, PushPolicy, Selection,
     bucket, on_work, select,
 };
+pub use groups::{groups, render_groups};
 pub use lookup::{KeyUse, fat_reasons, key_hints, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
@@ -30,7 +33,7 @@ pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};
 pub use render::{
     Abbrev, Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page, restored,
 };
-pub use revisit::{due, is_date, row_due, today, waiting, waiting_line, with_due};
+pub use revisit::{due, is_date, row_due, row_waiting, today, waiting, waiting_line, with_due};
 pub use select::{
     Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, freshness, gone, gone_files,
     kickoff, page, ranked, resolve_urgent, reverted, superseded,

@@ -201,6 +201,7 @@ fn bump_keeps_sets_and_clears_revisit() {
         &st,
         &r.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
@@ -217,6 +218,7 @@ fn bump_keeps_sets_and_clears_revisit() {
         &st,
         &b.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Keep,
             revisit: Some(FUTURE.into()),
@@ -233,6 +235,7 @@ fn bump_keeps_sets_and_clears_revisit() {
         &st,
         &b2.id,
         BumpOpts {
+            held: None,
             to: None,
             urgent: UrgentChange::Keep,
             revisit: Some("  ".into()),

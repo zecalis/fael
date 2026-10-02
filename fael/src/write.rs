@@ -231,8 +231,7 @@ pub(crate) fn close_row(
     Ok((row, path, warns))
 }
 
-/// `fael bump <id>` — change routing/urgency/revisit as a new version: same
-/// kind/text/files/key, new `to`/`urgent`/`revisit`, superseding the old row.
+/// `fael bump <id>` — new `to`/`urgent`/`revisit` as a new version superseding the old row.
 /// At most one of `--urgent` (back of the queue), `--urgent-before <id>`
 /// (just above that row), `--not-urgent` (leave the queue); none keeps the
 /// old number. Absent `--revisit` keeps the old date/text; a value sets it.
@@ -267,6 +266,7 @@ pub(crate) fn bump(
             to: a.one("to"),
             urgent,
             revisit,
+            held: None,
         },
     )
 }

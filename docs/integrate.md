@@ -21,7 +21,7 @@ Reply  {"block": bool, "reason"?: str, "context"?: str, "notice"?: str}
 | a file was read | `read` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was written | `edit` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was found via search or the shell | `search` | `cwd`, `session`, plus `files` — or the raw call as `tool`, `tool_input`, `tool_response` | append `context` to the tool result |
-| the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | add `context` to that turn — one pointer line when a prompt word equals a segment of an open key, each key once per session |
+| the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | add `context` to that turn — one pointer line when a prompt word equals the head of an open key (`credit` in `vela:credit-ledger`), each key once per session |
 | the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text`, `stop_active` | files the reply's `fael <kind>:` lines and never blocks; only under `[capture] block = true` does `block` mean: do not end, send `reason` back as the next message |
 
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript

@@ -182,6 +182,7 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
     let ab = abbrev(log);
     let (closed, successors) = (closed(log), successors(log));
     let restored = restored(log);
+    let day = super::revisit::today();
     let notes = if full {
         close_notes(log)
     } else {
@@ -204,12 +205,19 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
             ""
         };
         let key = r.key.as_ref().map(|k| format!(" #{k}")).unwrap_or_default();
-        // `(urgent 1, to: ploy)` — whichever of the two is set, urgent first
-        let route = match (r.urgent_value().map(|u| format!("urgent {u}")), r.to_who()) {
-            (Some(u), Some(t)) => format!(" ({u}, to: {t})"),
-            (Some(u), None) => format!(" ({u})"),
-            (None, Some(t)) => format!(" (to: {t})"),
-            (None, None) => String::new(),
+        // `(urgent 1, to: ploy, waiting: mdl lands, held @feat/x)` — whichever are set
+        let route = [
+            r.urgent_value().map(|u| format!("urgent {u}")),
+            r.to_who().map(|t| format!("to: {t}")),
+            super::revisit::row_waiting(r, &day)
+                .then(|| format!("waiting: {}", r.revisit().unwrap_or_default().trim())),
+            r.held().map(|h| format!("held @{h}")),
+        ];
+        let route: Vec<String> = route.into_iter().flatten().collect();
+        let route = if route.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", route.join(", "))
         };
         let text = r.display_title();
         let line = format!(

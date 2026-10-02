@@ -44,7 +44,7 @@ impl Args {
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "yes" | "replace-fapony" | "fix"
                 | "prune" | "urgent" | "not-urgent" | "full" | "rows" | "branches" | "fat"
-                | "day" | "pin" | "open" => {
+                | "day" | "pin" | "open" | "groups" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"

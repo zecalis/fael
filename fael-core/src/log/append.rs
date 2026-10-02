@@ -154,10 +154,12 @@ pub(crate) fn write_both(
 /// What `bump_row` changes — bundled so the arg count stays under the lint
 /// (the binary's `AddOpts` does the same for `add_row`). `to`/`revisit`:
 /// `None` keeps the old value, `Some("")` clears it, anything else sets it.
+/// `held` (`fael claim`): `Some(branch)` sets it, `None` keeps the old one.
 pub struct BumpOpts {
     pub to: Option<String>,
     pub urgent: UrgentChange,
     pub revisit: Option<String>,
+    pub held: Option<String>,
 }
 
 /// Change routing/urgency/revisit on an open row as a new version (MVCC-style):
@@ -175,11 +177,6 @@ pub fn bump_row(
     id: &str,
     opts: BumpOpts,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
-    let BumpOpts {
-        to,
-        urgent,
-        revisit,
-    } = opts;
     let old = resolve(log, id)?.clone();
     if closed(log).contains(old.id.as_str()) {
         return Err(format!(
@@ -193,20 +190,20 @@ pub fn bump_row(
             old.id
         ));
     }
-    let to = match to {
+    let to = match opts.to {
         None => old.to.clone(),
         Some(t) => {
             let t = t.trim().to_lowercase();
             (!t.is_empty()).then_some(t)
         }
     };
-    let urgent = match urgent {
+    let urgent = match opts.urgent {
         UrgentChange::Keep => old.urgent,
         UrgentChange::End => resolve_urgent(log, &Urgent::End)?,
         UrgentChange::Before(t) => resolve_urgent(log, &Urgent::Before(t))?,
         UrgentChange::Remove => None,
     };
-    let revisit = match revisit {
+    let revisit = match opts.revisit {
         None => old.revisit.clone(),
         Some(v) => {
             let v = v.trim().to_string();
@@ -219,6 +216,9 @@ pub fn bump_row(
     row.to = to;
     row.urgent = urgent;
     row.revisit = revisit;
+    if let Some(h) = opts.held.as_deref().or(old.held()) {
+        row.extra.insert("held".into(), h.into());
+    }
     add_row(fael, journal, log, cfg, stamp, row, Some(&old.id))
 }
 

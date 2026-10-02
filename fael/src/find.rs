@@ -57,9 +57,19 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         limit,
         offset,
     };
+    if a.has("groups") {
+        return groups(a, &log, &f, &branch_of);
+    }
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
-    // the cut line reprints this call with the next offset — same flags, no guessing
+    // the cut line reprints this call with the next offset — same flags, no
+    // guessing; under --full (bodies fill the budget in a few rows) it asks
+    // for the rest in one call, since an explicit --limit beats the budget
     let base = a.page_base("find", query.map(String::as_str), limit);
+    let rest_in_one = a.has("full") && limit.is_none();
+    let next = |n: usize| match rest_in_one {
+        true => format!("{base} --offset {n} --limit {}", total.saturating_sub(n)),
+        false => format!("{base} --offset {n}"),
+    };
     let shown = show(
         a,
         &log,
@@ -68,10 +78,16 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         core::Cut {
             total,
             offset,
-            next: &|n| format!("{base} --offset {n}"),
+            next: &next,
         },
         &branch_of,
     )?;
+    // the issue list is where grouping and claiming are needed — said here,
+    // not in the skill every session pays for; a paged call keeps its cut line last
+    let unpaged = limit.is_none() && offset == 0;
+    if f.kind.as_deref() == Some("issue") && total > 1 && unpaged && !a.has("json") {
+        println!("{}", ISSUE_TIP);
+    }
     // chunk 6e: ids just shown for these files are already in this session's
     // context — the next push skips them instead of repeating them
     if !files.is_empty() {
@@ -88,6 +104,33 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// `find --groups`: every match, grouped by shared files — what to fix in one
+/// PR. Unpaged and unbudgeted: half a group answers the question wrong.
+fn groups(a: &Args, log: &Log, f: &Filter, branch_of: &branches::BranchMap) -> Result<(), String> {
+    if a.has("json") || a.has("full") || f.limit.is_some() || f.offset > 0 {
+        return Err("rejected: --groups lists every match as text — drop --json, --full, --limit and --offset".into());
+    }
+    let rows = core::find(
+        log,
+        &Filter {
+            limit: None,
+            ..f.clone()
+        },
+    );
+    if rows.is_empty() {
+        eprintln!("fael: no rows match");
+    } else {
+        print!(
+            "{}",
+            branches::tag(core::render_groups(log, &rows), branch_of)
+        );
+    }
+    Ok(())
+}
+
+const ISSUE_TIP: &str =
+    "fix together: fael find --kind issue --groups · working one? fael claim <id> first";
 
 pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;

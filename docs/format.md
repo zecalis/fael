@@ -46,8 +46,9 @@ Reference implementation: [`fael-core`](../fael-core/src).
 | `to` | no | who has to answer, e.g. `ploy` — stored lowercase; an `issue --to <who>` lists in full at that reader's session start, everyone else only counts it |
 | `title` | no | ≤ ~15-word headline lists show; the body stays in `text` and is pulled by id (`find <id>`, `--full`) — set it when `text` tops ~60 words; rows without one list their first sentence (~20 words + `…`) |
 | `urgent` | no | orderable number on issues, lower = more urgent — absent = not urgent; `--urgent` files at the back, `--urgent-before <id>` just above that row, `fael bump` moves it later |
-| `revisit` | no | a date `YYYY-MM`/`YYYY-MM-DD` or free text (`mdl lands`) — a date ≤ today lists the row first at kickoff whatever its files; free text only counts (`fael find --revisit` lists it) |
+| `revisit` | no | a date `YYYY-MM`/`YYYY-MM-DD` or free text (`mdl lands`) — a date ≤ today lists the row first at kickoff whatever its files; free text only counts (`fael find --revisit` lists it); `find --kind issue` lists a row whose revisit is free text or a date ahead after the ready ones, shown `(waiting: …)` |
 | `supersedes` | no | id of an older row this one replaces |
+| `held` | no | the branch working on an issue, set by `fael claim` and carried through later bumps — informational, never a lock; `find` shows `(held @<branch>)` |
 | `client` `model` `session` `branch` `sha` | no | filled in by tools, never by the agent · `session` is the hook session id that filed the row (the transcript UUID, never a path), absent outside a hook session |
 
 **Close row** — in `<writer>/<yyyy-mm>.close.jsonl`. Any kind can be closed; a close never edits the row.

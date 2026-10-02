@@ -12,15 +12,14 @@ Add each in the same message as your next tool call or final edit — never as a
 Rows about a file come back when you touch it. One the code now says or contradicts misleads the
 next agent: close it (`now in <file>`) or re-file it with `--supersedes <id>`, in that same message.
 
-**Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there — do not wait for the end of the task.**
+**Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there, one per finding — do not wait for the end of the task.**
 
 - `fael find [<text>] [--files <path>]` — the session brief, rows about a file, or a text search
 - `fael add decision "<the choice, why, what was rejected>" --files a,b` — never what code does or progress
 - `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
 - Self-heal: a same-kind row on your open row's key, or a note on your open note's files,
-  supersedes it (`fael restore <id>` undoes). An issue supersedes only the same finding: one
-  bug per row. The key those files carry is reused — `--key` only for a new topic.
+  supersedes it (`fael restore <id>` undoes); an issue only the same finding. The key those files carry is reused — `--key` only for a new topic.
 - Long body? `--title "<≤15-word headline>"` — lists show the title, `fael find <id>` pulls the body.
 
 Each row is read months later with no chat: one or two standalone sentences.
