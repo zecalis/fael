@@ -157,9 +157,14 @@ identity; duplicating it invites divergence.
 - Remote resolution: `--remote <url>` flag wins, else `git config fael.remote`.
   Neither is set → exit 1 with
   `fael: no fael.remote — set it with: git config fael.remote <url>`.
+  A `--remote` that synced is kept as `fael.remote` when none is set (one
+  command sets a clone up); one that failed is never kept.
   `fael.remote` lives in `.git/config` (per machine, never committed), and
   auth is the user's own Git credential. A remote is any Git URL (private
   repo, Gitea/Forgejo, bare path on a NAS) — fael does not care who hosts it.
+- Sync state is local, never wire: `<journal>/synced` (the writer's newest id
+  when the last good sync started) and `<journal>/sync-error` (the last
+  failure, removed by the next success) — what the late line counts from.
 - `store = local` + destination is `origin` pushes no less, but prints one
   warning line (the ref is fetchable by anyone with read access even though
   no UI shows it):

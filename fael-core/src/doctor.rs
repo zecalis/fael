@@ -108,6 +108,11 @@ pub enum Kind {
     /// dry pass in `doctor`, never in core (core never reads client configs).
     /// Info-only: it is machine state, not the repo's log.
     Wiring,
+    /// rows that have not reached their destination: uncommitted `.fael/log`
+    /// files under `store = "tracked"`, or this writer's rows not on the
+    /// remote after a failed `fael sync` (PLAN-fael-local-first chunk 2);
+    /// judged in the adapter (git, sync state), never in core. Info-only.
+    Late,
     /// a row (open or closed) whose serialised line trips `validate::secret`
     /// — the ingress checks (add, import, sync ingest) prevent this, so what
     /// lands here predates them or was hand-edited in. Detect-only by design:

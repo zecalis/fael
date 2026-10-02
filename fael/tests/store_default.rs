@@ -1,5 +1,5 @@
-//! An unset `store`: `local` for a repo with no tree log, `tracked` where one
-//! already sits — and a `local` repo keeps every feature without a `.fael/`.
+//! An unset `store` is `local`, with or without a tree log — and a `local`
+//! repo keeps every feature without a `.fael/`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -71,13 +71,28 @@ fn a_fresh_repo_keeps_rows_out_of_the_tree() {
     assert!(!out.contains("fael.remote"), "remote set, no hint: {out}");
 }
 
+/// Decision 01M3YQT4: a tree log no longer makes a repo `tracked` — its rows
+/// stay readable as frozen history, new rows go to the journal only, so
+/// there is never a memory file left to commit.
 #[test]
-fn a_repo_with_a_tree_log_stays_tracked() {
+fn a_repo_with_a_tree_log_reads_it_and_writes_the_journal() {
     let d = repo();
-    std::fs::create_dir_all(d.join(".fael/log")).unwrap();
-    add(&d, "tree row");
+    let old = d.join(".fael/log/mate-1234");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(
+        old.join("2026-09.jsonl"),
+        "{\"v\":1,\"id\":\"01M3AAAAAAAAAAAAAAAAAAAAAA\",\"ts\":\"2026-09-01T00:00:00Z\",\"by\":\"mate-1234\",\"kind\":\"note\",\"text\":\"from the tree\",\"files\":[\"src/a.rs\"]}\n",
+    )
+    .unwrap();
+    let id = add(&d, "after the switch");
     let n = std::fs::read_dir(d.join(".fael/log")).unwrap().count();
-    assert_eq!(n, 1, "the row landed in the tree log");
+    assert_eq!(n, 1, "no new writer dir in the tree log");
+    assert!(
+        d.join(".git/fael/log").is_dir(),
+        "the row is in the journal"
+    );
+    let (_, out, _) = fael(&d, &["find", "--files", "src/a.rs"]);
+    assert!(out.contains(&id[..8]) && out.contains("01M3AAAA"), "{out}");
 }
 
 #[test]

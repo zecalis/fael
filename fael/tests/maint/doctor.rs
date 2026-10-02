@@ -51,8 +51,13 @@ fn doctor_fails_without_union_then_fix_repairs() {
     assert!(ok, "{out}");
     assert!(out.contains("merge=union"), "{out}");
     assert!(d.join(".gitattributes").exists());
+    // union repaired; the one note left is the uncommitted row (tracked)
     let (ok, out, _) = fael(&d, &["doctor"]);
-    assert!(ok && out.contains("clean"), "{out}");
+    assert!(
+        ok && out.contains("1 problem(s) (0 error(s), 1 note(s))")
+            && out.contains("note [Late]: 1 .fael/log file(s) uncommitted"),
+        "{out}"
+    );
     // excluded locally on purpose: a note, not an error; in .gitignore: an error
     std::fs::write(d.join(".git/info/exclude"), ".fael/log/\n").unwrap();
     let (ok, out, _) = fael(&d, &["doctor"]);

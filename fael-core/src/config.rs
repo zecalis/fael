@@ -65,8 +65,7 @@ pub struct Config {
     /// (no git): the tree is all there is.
     pub store: Store,
     /// `store` was written in `config.toml`. When it was not, the adapter
-    /// picks: `tracked` where a `.fael/log` already sits in the tree, else
-    /// `local` (the default for repos that adopt fael from now on).
+    /// picks `local` — a tree log already in the repo is read, never written.
     pub store_set: bool,
     /// Stop-hook phrase packs behind `[lang] marker` (PLAN-fael-languages).
     /// Default english+thai; empty switches the bug rule off entirely.

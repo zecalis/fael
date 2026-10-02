@@ -96,6 +96,13 @@ fn reminder_once_per_file_then_the_turn_receipt() {
         "{line}"
     );
     assert!(line.contains("reminded 2 (#cache:keep, "), "{line}");
+    // tracked: the turn that filed a row also says the log is uncommitted
+    assert!(
+        line.ends_with(
+            "\nfael: 1 .fael/log file(s) uncommitted (store = tracked) — commit them, or `fael migrate local`"
+        ),
+        "{line}"
+    );
     assert!(out.get("decision").is_none(), "{out}");
     // the next turn did nothing: silence, not "nothing new"
     assert!(stop(&d).is_none());
@@ -171,4 +178,26 @@ fn session_start_briefs_the_user_on_issues_said() {
         on["hookSpecificOutput"]["additionalContext"],
         off["hookSpecificOutput"]["additionalContext"]
     );
+}
+
+/// PLAN-fael-local-first chunk 2: under `local`, a failed sync names the rows
+/// stuck in this clone once per session — a quiet turn after it says nothing.
+#[test]
+fn a_failed_sync_is_said_once_per_session() {
+    let d = repo();
+    std::fs::write(
+        d.join(".fael/config.toml"),
+        "store = \"local\"\n[sync]\nauto = false\n",
+    )
+    .unwrap();
+    add(&d, &["add", "note", "stuck here", "--files", "src/a.rs"]);
+    let (ok, _, _) = fael(&d, &["sync", "--remote", "/nowhere/fael.git"], "");
+    assert!(!ok, "a missing remote fails");
+    let out = stop(&d).unwrap();
+    let line = out["systemMessage"].as_str().unwrap();
+    assert!(
+        line.contains("\nfael: 1 row(s) only in this clone — last sync failed ("),
+        "{line}"
+    );
+    assert!(stop(&d).is_none(), "said once per session");
 }

@@ -135,9 +135,10 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
   carry no memory. A failed tree write is a warning, never a retry (the row is
   already durable; a retry would file it twice under a new id). Reads union
   both, tree wins on duplicate ids; journal-only rows tag `@<branch>`.
-- An unset `store` is `tracked` where a `.fael/log` already sits in the tree
-  (repos from before `local` became the default, so none changes mode on
-  upgrade), else `local`. A repo whose rows live only in the journal keeps
+- An unset `store` is `local`, also where a `.fael/log` already sits in the
+  tree: that log stays read (the union above) as frozen history and nothing
+  appends to it, so no memory file is ever left to commit (decision
+  01M3YQT4). Only an explicit `store = "tracked"` writes the tree. A repo whose rows live only in the journal keeps
   its alias cache there too (`<git-common-dir>/fael/cache`): the tree never grows a `.fael/`.
 - Across clones durability still comes from git; rows are not fsynced one by one.
 - Across clones and machines journals travel through `fael sync`: each writer's
@@ -178,7 +179,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael upgrade [--client c] [--dry-run] [--yes] [--replace-fapony]` | `install` that looks first: lists what is out of date, counts it, asks `[y/N]` before writing (`--yes` or no terminal skips the question; `update` is an alias) |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
-| `fael sync [--remote url]` | push this writer's journal to `refs/fael/<repo-id>/<writer>` on the remote and ingest every writer's ref back (`--remote` wins, else `git config fael.remote`) |
+| `fael sync [--remote url]` | push this writer's journal to `refs/fael/<repo-id>/<writer>` on the remote and ingest every writer's ref back (`--remote` wins, else `git config fael.remote`); a `--remote` that synced becomes `fael.remote` when none is set; every run leaves its outcome in the journal dir (`synced` watermark, `sync-error`) for the late line |
 | `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it); `[Drifted]` lists open rows whose files took 10+ commits since they were written, for a check against the code |
 | `fael stats [--json] [--rows] [--day] [--misses] [--since d]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed; `--since` = only usage from then on; `--misses` = the newest empty text searches, machine-local — the plain page ends with a count line once any exist) |
 | `fael report [--out f] [--open] [--since d]` | one offline HTML page for a lead: what memory reached the agents, what is noise, did fael add friction — numbers from `fael stats --json` |
@@ -195,7 +196,7 @@ Ids are accepted as a unique prefix and printed at the shortest length that stay
 kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
-store = "local"               # journal only (default when no .fael/log sits in the tree); "tracked" also writes .fael/log to commit
+store = "local"               # journal only (default, tree log or not); "tracked" also writes .fael/log to commit
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800
@@ -241,7 +242,7 @@ neutral Event  {"cwd","session","client","files":[…],"stop_active","text","rep
 neutral Reply  {"block":bool,"reason"?:str,"context"?:str,"notice"?:str}
 ```
 
-**The user channel** (`notice`, PLAN-fael-visible-secretary): fael does its work in the agent's context, so the user never saw it. Each hook can now carry one line for the user only. Claude Code gets it as `systemMessage`, which is shown to the user and never added to the model's context. OpenCode shows it as a toast. Codex and the bare neutral protocol have no such channel, so they stay silent. There are three beats. Session start names the open issues the brief handed over in full. A push names the first decision or issue it reminded the agent of, at most once per file per session. Stop gives the turn's receipt (`filed · reminded · retired · closed`), and every count names up to two ids or keys that `fael find` takes back. When nothing happened there is no line: fael never says "nothing new", and never claims anything was prevented or saved. The receipt reads a per-session tally in the state dir (`<seen key>.tally`). `add`, `close`, capture and the push append to it, and each Stop reads the lines since its last marker. The tally is never part of a row, and `additionalContext` is the same byte for byte with the channel on or off. `[notify] user = false` turns the channel off.
+**The user channel** (`notice`, PLAN-fael-visible-secretary): fael does its work in the agent's context, so the user never saw it. Each hook can now carry one line for the user only. Claude Code gets it as `systemMessage`, which is shown to the user and never added to the model's context. OpenCode shows it as a toast. Codex and the bare neutral protocol have no such channel, so they stay silent. There are three beats. Session start names the open issues the brief handed over in full. A push names the first decision or issue it reminded the agent of, at most once per file per session. Stop gives the turn's receipt (`filed · reminded · retired · closed`), and every count names up to two ids or keys that `fael find` takes back. A row that has not reached its destination adds one late line (PLAN-fael-local-first): under `store = "tracked"`, on a turn that filed or closed, the count of uncommitted `.fael/log` files; under `local`, once per session, this writer's rows newer than the last good sync after a sync failed — a pending row is only late, a failed sync must not stay in a log file nobody reads. `doctor` shows the same line as `[Late]`. When nothing happened there is no line: fael never says "nothing new", and never claims anything was prevented or saved. The receipt reads a per-session tally in the state dir (`<seen key>.tally`). `add`, `close`, capture and the push append to it, and each Stop reads the lines since its last marker. The tally is never part of a row, and `additionalContext` is the same byte for byte with the channel on or off. `[notify] user = false` turns the channel off.
 
 OpenCode has no Stop hook and runs plugins in-process: `fael install` writes a JS plugin that speaks the neutral format (a stop block — only under `[capture] block = true` — becomes a prompt on `session.idle`). How to wire any other agent: [integrate.md](integrate.md).
 
