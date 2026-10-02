@@ -96,7 +96,10 @@ fn add_find_close_round_trip() {
     assert_eq!(out.matches("\"ref\":").count(), 1, "{out}");
     let (_, out, err) = fael(&d, &["find", "--files", "src/a.rs"]);
     assert!(out.is_empty() && err.contains("no rows match"), "{out}");
-    let (_, out, _) = fael(&d, &["find", "--all", "--files", "src/a.rs"]);
+    let (_, out, _) = fael(
+        &d,
+        &["find", "--all", "--limit", "10", "--files", "src/a.rs"],
+    );
     assert!(out.contains("issue (closed)"), "{out}");
     // a list says closed; pulling the row says why
     assert!(!out.contains("closed: "), "{out}");
@@ -300,7 +303,7 @@ fn mcp_add_find_to() {
     let d = repo();
     let msgs = [
         r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add","arguments":{"kind":"issue","text":"whose call is it really when the pager fires at night","files":["src/a.rs"],"to":"Ploy","title":"short headline"}}}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"find","arguments":{"to":"ploy"}}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"find","arguments":{"to":"ploy","limit":10}}}"#,
         r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find","arguments":{"to":"ploy","full":true}}}"#,
         r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find","arguments":{"to":"delamind"}}}"#,
     ];
@@ -331,9 +334,9 @@ fn mcp_add_find_to() {
     // full:true pulls the body under the title
     let text = r[2]["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("pager fires at night"), "{text}");
-    assert_eq!(
-        r[3]["result"]["content"][0]["text"].as_str().unwrap(),
-        "no rows match",
+    let none = r[3]["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        none.starts_with("no rows match") && none.contains("to=delamind ×0"),
         "{out}"
     );
 }

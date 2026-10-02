@@ -247,7 +247,7 @@ fn add_title_lists_show_body_by_id() {
         "{out}"
     );
     // lists show the title, never the body
-    let (_, out, _) = fael(&d, &["find", "--files", "src/a.rs"]);
+    let (_, out, _) = fael(&d, &["find", "--limit", "10", "--files", "src/a.rs"]);
     assert!(
         out.contains("refund job double-charges → src/a.rs"),
         "{out}"
@@ -271,6 +271,11 @@ fn add_title_lists_show_body_by_id() {
         .join(" ");
     let (ok, _, err) = fael(&d, &["add", "note", &long, "--files", "src/a.rs"]);
     assert!(ok, "{err}");
-    let (_, out, _) = fael(&d, &["find", "--files", "src/a.rs", "--kind", "note"]);
+    let (_, out, _) = fael(
+        &d,
+        &[
+            "find", "--limit", "10", "--files", "src/a.rs", "--kind", "note",
+        ],
+    );
     assert!(out.contains("w20 …") && !out.contains("w21"), "{out}");
 }

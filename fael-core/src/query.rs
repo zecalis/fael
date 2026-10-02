@@ -6,8 +6,10 @@
 //! glob primitives), `render` (token-budgeted markdown), `lookup` (resolve,
 //! keys, query, warnings), `stale` (backticked paths gone from disk),
 //! `md` (id citations in markdown prose), `focus` (push buckets + row cap),
-//! `groups` (open rows linked by a shared file).
+//! `groups` (open rows linked by a shared file), `explain` (why a find came
+//! back empty, when a short list shows bodies).
 
+mod explain;
 mod focus;
 mod groups;
 mod keyhint;
@@ -21,6 +23,7 @@ mod revisit;
 mod select;
 mod stale;
 
+pub use explain::{EXPAND_MAX, expands, why_empty};
 pub use focus::{
     Background, Bucket, Focus, Hidden, PUSH_BACKGROUND, PUSH_HUB_ROWS, PushPolicy, Selection,
     bucket, on_work, select,

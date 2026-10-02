@@ -142,9 +142,17 @@ pub fn stats(json: bool, rows: bool, day_view: bool, since: Option<i64>) -> Resu
     if day_view {
         return day(json, &u);
     }
+    // empty text searches ride after the page — even an "nothing yet" one,
+    // since a repo that only searched has misses and no injections
+    let misses = || {
+        if let Some(l) = crate::find::misses::stats_line() {
+            println!("{l}");
+        }
+    };
     // without `--json` an empty log is one friendly line, not a table of zeros
     if u.empty && !json {
         println!("fael: no usage recorded yet");
+        misses();
         return Ok(());
     }
     if u.parsed.n == 0 && !json {
@@ -152,6 +160,7 @@ pub fn stats(json: bool, rows: bool, day_view: bool, since: Option<i64>) -> Resu
             "fael: no usage recorded yet ({} from temp repos skipped)",
             u.parsed.skipped
         );
+        misses();
         return Ok(());
     }
     let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
@@ -164,6 +173,7 @@ pub fn stats(json: bool, rows: bool, day_view: bool, since: Option<i64>) -> Resu
         return Ok(());
     }
     print_text(&stats, &u.path, &cfg.lang_rows);
+    misses();
     Ok(())
 }
 

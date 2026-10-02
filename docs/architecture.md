@@ -180,7 +180,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael import <path> [--map old/=new/]` | maintenance: import a fapony log |
 | `fael sync [--remote url]` | push this writer's journal to `refs/fael/<repo-id>/<writer>` on the remote and ingest every writer's ref back (`--remote` wins, else `git config fael.remote`) |
 | `fael doctor [--fix] [--fat]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it); `[Drifted]` lists open rows whose files took 10+ commits since they were written, for a check against the code |
-| `fael stats [--json] [--rows] [--day] [--since d]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed; `--since` = only usage from then on) |
+| `fael stats [--json] [--rows] [--day] [--misses] [--since d]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed; `--since` = only usage from then on; `--misses` = the newest empty text searches, machine-local — the plain page ends with a count line once any exist) |
 | `fael report [--out f] [--open] [--since d]` | one offline HTML page for a lead: what memory reached the agents, what is noise, did fael add friction — numbers from `fael stats --json` |
 
 `--files` in `find` matches a row's `files[]` only — exactly, as a directory (a zone), or by glob; an anchor's ref
@@ -224,9 +224,9 @@ rows = ["english"]            # accepted row-writing languages; anything else wa
 
 | Tool | Input | Notes |
 |---|---|---|
-| `find` | `files[]` `text` `key` `kind` `since` `to` `by?` `all?` `revisit?` `branches?` `limit` `offset` | read-only, cut to `budget.find_tokens` unless `limit` is given — a named `limit` wins over the budget. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. `branches: true` also reads unmerged branches (rows tagged `@<branch>`). A cut list prints `next: offset=N` — repeat the call with it |
+| `find` | `id?` `ids[]?` `files[]` `text` `key` `kind` `since` `to` `by?` `all?` `revisit?` `branches?` `limit` `offset` | read-only, `ids` pulls several bodies in one call (a bad id reports alone, the rest print, the call is an error); a first page of one or two rows with no `limit` shows bodies like `full`; an empty find says why — each word, `files` and filter counted on its own — and an empty *text* search is also kept in the machine-local `find-misses.jsonl` (`fael stats --misses`), the recorded miss decision 01M3ST4V waits for; cut to `budget.find_tokens` unless `limit` is given — a named `limit` wins over the budget. No filter = the session brief (what `kickoff` shows) — so there is no `kickoff` tool. `branches: true` also reads unmerged branches (rows tagged `@<branch>`). A cut list prints `next: offset=N` — repeat the call with it |
 | `add` | `kind` `text` `files[]` (required, non-empty) `key?` `to?` `title?` `revisit?` `urgent?` `urgent_before?` `supersedes?` `force?` `rows[]?` | a bad value is rejected with an error message that says how to fix the call. Its description tells the agent to reuse an anchor `find` already showed rather than invent a new one. `rows` batches many rows in one call — a bad row reports alone while the rest save |
-| `close` | `id` `text` | |
+| `close` | `id` or `ids[]` `text` | `ids` closes many with one reason — a bad id reports alone, the rest close |
 
 `bump` is CLI-only (`fael bump`): re-routing a row is rare and mostly a human call, so its schema is not paid in every session. The server still answers a `bump` call from a client that sends one.
 

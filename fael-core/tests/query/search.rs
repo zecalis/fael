@@ -81,3 +81,62 @@ fn blank_text_narrows_nothing() {
     ]);
     assert_eq!(ids(&find(&l, &blank)), ids(&find(&l, &Filter::default())));
 }
+
+/// An empty find names the part that matched nothing: each word, file and
+/// filter counted on its own, so the agent fixes one word instead of guessing.
+#[test]
+fn an_empty_find_counts_each_part_alone() {
+    let l = log_of(vec![
+        note(1, &["src/a.rs"], None, "find ranks by freshness"),
+        note(2, &["src/a.rs"], None, "search stays deterministic"),
+        note(3, &["src/b.rs"], None, "search of find"),
+    ]);
+    let f = Filter {
+        text: Some("find search".into()),
+        kind: Some("issue".into()),
+        ..Filter::default()
+    };
+    assert!(find(&l, &f).is_empty());
+    assert_eq!(
+        why_empty(&l, &f, "--files"),
+        "no rows match — each alone: \"find\" ×2 · \"search\" ×2 · kind=issue ×0"
+    );
+    // a word no row uses reads ×0, and a path typed as a word points at --files
+    let f = Filter {
+        text: Some("vector decide.rs".into()),
+        ..Filter::default()
+    };
+    assert_eq!(
+        why_empty(&l, &f, "files"),
+        "no rows match — each alone: \"vector\" ×0 · \"decide.rs\" ×0 · a path? use files"
+    );
+    // closed rows count only under --all, like the find itself
+    assert_eq!(
+        why_empty(&l, &Filter::default(), "--files"),
+        "no rows match"
+    );
+}
+
+/// Two rows or fewer from the first page show their bodies; a paged, limited
+/// or longer list stays titles.
+#[test]
+fn a_short_first_page_shows_bodies() {
+    let q = Filter {
+        key: Some("k:a".into()),
+        ..Filter::default()
+    };
+    assert!(!expands(0, &q) && expands(1, &q) && expands(EXPAND_MAX, &q));
+    assert!(!expands(EXPAND_MAX + 1, &q));
+    let paged = Filter {
+        offset: 1,
+        ..q.clone()
+    };
+    assert!(!expands(1, &paged));
+    let limited = Filter {
+        limit: Some(5),
+        ..q
+    };
+    assert!(!expands(1, &limited));
+    // the brief (no narrowing) stays a map of titles
+    assert!(!expands(1, &Filter::default()));
+}

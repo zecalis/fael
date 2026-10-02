@@ -230,7 +230,11 @@ fn find_filters_by_writer_and_includes_closed() {
     let mine = find(serde_json::json!({"by": writer}));
     assert!(mine.contains("keeper row one"), "{mine}");
     let none = find(serde_json::json!({"by": "no-such-writer"}));
-    assert_eq!(none.trim(), "no rows match", "{none}");
+    // an empty find counts each part alone, so the dead filter shows
+    assert!(
+        none.starts_with("no rows match") && none.contains("by=no-such-writer ×0"),
+        "{none}"
+    );
 }
 
 /// PLAN-fael-id-refs chunk-1: MCP `find {"id"}` answers exactly like the CLI —

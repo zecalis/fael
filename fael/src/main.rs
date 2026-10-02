@@ -80,6 +80,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
         ("claim", [id]) => claim(&a, id).map(|()| ExitCode::SUCCESS),
         ("find", [] | [_]) => find::find(&a, rest.first()).map(|()| ExitCode::SUCCESS),
+        ("find", ids) => find::many::find_many(&a, ids).map(|()| ExitCode::SUCCESS),
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("mv", [old, new]) => mv(&a, old, new).map(|()| ExitCode::SUCCESS),
@@ -88,6 +89,10 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
         ("migrate", [to]) if to == "local" => migrate::local(&repo()?).map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
+        ("stats", []) if a.has("misses") => {
+            find::misses::print_recent(20);
+            Ok(ExitCode::SUCCESS)
+        }
         ("stats", []) => hook::stats(
             a.has("json"),
             a.has("rows"),

@@ -3,6 +3,8 @@
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
 pub(crate) mod branches;
+pub(crate) mod many;
+pub(crate) mod misses;
 
 use super::{Args, aliases};
 use fael_core::{self as core, Filter, Log, Row};
@@ -61,6 +63,15 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         return groups(a, &log, &f, &branch_of);
     }
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
+    if rows.is_empty() {
+        eprintln!(
+            "fael: {}",
+            misses::explain(&r.root, "cli", &log, &f, "--files")
+        );
+        return Ok(());
+    }
+    // a list of one or two shows its bodies: the next call would be `find <id>`
+    let full = a.has("full") || core::expands(total, &f);
     // the cut line reprints this call with the next offset — same flags, no
     // guessing; under --full (bodies fill the budget in a few rows) it asks
     // for the rest in one call, since an explicit --limit beats the budget
@@ -72,6 +83,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     };
     let shown = show(
         a,
+        full,
         &log,
         &rows,
         budget,
@@ -154,6 +166,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
     let _ = show(
         a,
+        a.has("full"),
         &log,
         &rows,
         // an explicit --limit wins over the token budget, same as find
@@ -199,6 +212,7 @@ fn working_or_branches(
 
 fn show(
     a: &Args,
+    full: bool,
     log: &Log,
     rows: &[&Row],
     budget: usize,
@@ -217,7 +231,7 @@ fn show(
     }
     // only what fit the budget was said — like the push, the cut rows may come
     // on a later read, so seen-ids take just the shown lines
-    let out = if a.has("full") {
+    let out = if full {
         branches::tag(core::render_full_page(log, rows, budget, cut), branch_of)
     } else {
         branches::tag(core::render_page(log, rows, budget, cut), branch_of)

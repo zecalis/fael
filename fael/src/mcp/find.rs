@@ -26,6 +26,29 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // `branches: true` merges unmerged branches' rows into the union log
     // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
     let (base, jtags) = crate::journal::read(r);
+    // `ids: [...]` pulls several bodies in one call; a bad id reports alone,
+    // the rest still print, and any bad id makes the call an error (like close)
+    if let Some(ids) = a["ids"].as_array() {
+        let ids: Vec<String> = ids
+            .iter()
+            .filter_map(Value::as_str)
+            .map(String::from)
+            .collect();
+        if ids.is_empty() {
+            return Err("rejected: ids is empty — pass at least one id".into());
+        }
+        let p = crate::find::many::pull(r, base, jtags, &ids, false);
+        let text = [p.text.trim_end().to_string()]
+            .into_iter()
+            .chain(p.errors.iter().cloned())
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        return match p.errors.is_empty() {
+            true => Ok((text, p.shown)),
+            false => Err(text),
+        };
+    }
     // `find {"id": ...}` pulls that row's body — an id-shaped query is an id
     // lookup, never text (same messages as the CLI); pass it as `text` for a
     // text search
@@ -104,9 +127,11 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         next: &next,
     };
     // only what fit the budget was said — like the push, count the shown lines
+    // a list of one or two shows its bodies: the next call would be `find id=<id>`
+    let full = a["full"].as_bool().unwrap_or(false) || core::expands(total, &f);
     let text = if rows.is_empty() {
-        "no rows match".into()
-    } else if a["full"].as_bool().unwrap_or(false) {
+        crate::find::misses::explain(&r.root, "mcp", &log, &f, "files")
+    } else if full {
         crate::find::branches::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
     } else {
         crate::find::branches::tag(core::render_page(&log, &rows, budget, cut), &branch_of)
