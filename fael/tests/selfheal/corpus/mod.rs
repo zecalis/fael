@@ -86,7 +86,6 @@ fn replay(path: &std::path::Path) {
         ex["usage_warnings"].as_u64().unwrap() as usize,
         "{tag}: {u:?}"
     );
-    // the act stands under every mode — only the exposure changes
     let (ok, rows, err) = fael(&d, &["find", "--json", "--all"], "");
     assert!(ok, "{tag}: {err}");
     let want_text = fx["add"]["text"].as_str().unwrap();
@@ -95,11 +94,11 @@ fn replay(path: &std::path::Path) {
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
         .find(|v| v["text"].as_str() == Some(want_text))
         .unwrap();
-    assert_eq!(
-        newest["supersedes"].as_str(),
-        Some(ids[ex["supersedes_seed"].as_u64().unwrap() as usize].as_str()),
-        "{tag}: {newest}"
-    );
+    // `null`: the row is filed and the seed stays open
+    let want = ex["supersedes_seed"]
+        .as_u64()
+        .map(|i| ids[i as usize].as_str());
+    assert_eq!(newest["supersedes"].as_str(), want, "{tag}: {newest}");
     assert_eq!(
         newest["decision_source"], ex["decision_source"],
         "{tag}: {newest}"

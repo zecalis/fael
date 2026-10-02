@@ -1,0 +1,14 @@
+{
+  "name": "a keyed note never hides a keyless one on shared files",
+  "seed": [
+    {"kind": "note", "text": "first pass", "files": ["src/a.rs"]}
+  ],
+  "add": {"kind": "note", "text": "second pass", "files": ["src/a.rs"], "key": "billing:invoice"},
+  "expect": {
+    "supersedes_seed": null,
+    "warning_lines": 0,
+    "info_contains": ["kept all"],
+    "usage_warnings": 0,
+    "decision_source": null
+  }
+}

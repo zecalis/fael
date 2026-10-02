@@ -41,12 +41,15 @@ pub(crate) enum Verdict {
     KeyOtherWriter { target: String },
     /// (c) several rows share kind + key: file the row, name them all.
     KeyMany { targets: Vec<String> },
-    /// (b) one open note of mine on this branch overlaps these files.
+    /// (b) the one open note of mine on this branch overlapping these files,
+    /// and neither it nor the new row has a key — no topic to lose.
     FilesAct { target: String },
-    /// (b) several overlap: file the row, name them all.
+    /// (b) several overlap, or one with a key on either side: file the row,
+    /// name them all — shared files are related, not proof of a replacement.
     FilesMany { targets: Vec<String> },
     /// (chunk 3) a cross-key act: the acted row's key differs from the new
-    /// row's. The inner act stands — a move, not a conflict — but the key is
+    /// row's — only an explicit act (the text names the row) reaches it, the
+    /// files guess never acts across keys. The inner act stands, but the key is
     /// the weakest evidence, so `[selfheal] cross_key` picks the exposure:
     /// Warn prints the act as one `warning:` line (an ask), Info as info,
     /// Off silently. Only `Differ` wraps: `OnlyNew`, `OnlyOld` and `Neither`
@@ -261,7 +264,8 @@ fn identity_standing(c: &Candidate, st: &core::Stamp, row: &core::Row) -> Option
     Some(Standing::Eligible)
 }
 
-/// Heuristic: an open note of mine on this branch overlapping these files.
+/// Heuristic: an open note of mine on this branch overlapping these files —
+/// related, which is all `heuristic` may act on (it decides what to do with it).
 /// No Blocks here — a guess never outranks an identity, it only fires when
 /// neither higher class claimed anything.
 fn heuristic_standing(c: &Candidate) -> Option<Standing> {
@@ -341,19 +345,22 @@ fn finding_blocked(c: &Candidate, st: &core::Stamp, row: &core::Row) -> bool {
     )
 }
 
-/// Heuristic resolves last, notes only: one overlapping note acts, several
-/// hold. It fires only when neither higher class claimed anything — a guess
-/// never outranks an identity.
+/// Heuristic resolves last, notes only. Shared files prove two notes are
+/// related, not that one replaces the other, so only the one pair with no
+/// topic on either side — both keyless — acts. A key on either side names a
+/// topic, and a lone overlap or several are kept and named, never picked: a
+/// silent hide costs the next reader a todo, a kept note costs one `close`.
+/// It fires only when neither higher class claimed anything.
 fn heuristic(cands: &[Candidate], row: &core::Row) -> Option<Verdict> {
     if row.kind != "note" {
         return None;
     }
     match files_match(cands).as_slice() {
-        [one] => Some(Verdict::FilesAct {
+        [] => None,
+        [one] if one.evidence.key == KeyRel::Neither => Some(Verdict::FilesAct {
             target: one.row.id.clone(),
         }),
-        many @ [_, ..] => Some(Verdict::FilesMany { targets: ids(many) }),
-        [] => None,
+        many => Some(Verdict::FilesMany { targets: ids(many) }),
     }
 }
 

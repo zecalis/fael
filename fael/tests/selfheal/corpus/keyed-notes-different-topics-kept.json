@@ -1,15 +1,14 @@
 {
-  "name": "cross-key act under cross_key=off acts silently",
-  "config": "[selfheal]\ncross_key = \"off\"\n",
+  "name": "a handoff note on a stopped review's files keeps the review open",
   "seed": [
     {"kind": "note", "text": "first pass", "files": ["src/a.rs"], "key": "auth:session"}
   ],
   "add": {"kind": "note", "text": "second pass", "files": ["src/a.rs"], "key": "billing:invoice"},
   "expect": {
-    "supersedes_seed": 0,
+    "supersedes_seed": null,
     "warning_lines": 0,
-    "stderr_empty": true,
+    "info_contains": ["kept all"],
     "usage_warnings": 0,
-    "decision_source": "heuristic:files:cross-key"
+    "decision_source": null
   }
 }
