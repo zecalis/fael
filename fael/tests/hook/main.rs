@@ -17,6 +17,7 @@ mod adopted;
 mod autosync;
 mod capture;
 mod clients;
+mod close_hint;
 mod day;
 mod focus;
 mod memory_line;

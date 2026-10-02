@@ -15,6 +15,26 @@ use std::io::{Read, Write};
 const IN_CONTEXT: &str = "in-context";
 const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
 
+/// The edit hint. When the push just showed open issues, name up to two of
+/// them with the close ready to run: the agent only writes the why. Decisions
+/// and notes never get one — an edit rarely ends them. Else the generic line.
+fn stale_hint(c: &super::protocol::Ctx, said: &[&core::Row]) -> String {
+    let ab = core::abbrev(&c.log);
+    let calls: Vec<String> = said
+        .iter()
+        .filter(|r| r.kind == "issue")
+        .take(2)
+        .map(|r| format!("fael close {} \"<why>\"", ab.short(&r.id)))
+        .collect();
+    if calls.is_empty() {
+        return STALE_HINT.to_string();
+    }
+    format!(
+        "fael: done with one? {} — or re-file with --supersedes <id>",
+        calls.join(" · ")
+    )
+}
+
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
     format!(
@@ -262,7 +282,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     // row describes, with both in front of it — the one moment to retire it.
     // ponytail: every edit push with rows; once per session if it costs too much
     let context = if edit {
-        format!("{context}{STALE_HINT}\n")
+        let said = &sel.shown[..n.min(sel.shown.len())];
+        format!("{context}{}\n", stale_hint(&c, said))
     } else {
         context
     };
