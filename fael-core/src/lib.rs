@@ -43,14 +43,14 @@ pub use log::{
     read_imported, restore_row,
 };
 pub use query::{
-    Abbrev, Background, Bucket, Cut, Filter, Focus, Hidden, KeyUse, MdRef, PUSH_BACKGROUND,
-    PUSH_HUB_ROWS, PushPolicy, Ref, Selection, Urgent, UrgentChange, abbrev, backtick_paths, brief,
-    bucket, closed, cmp_rows, due, est_tokens, fat_reasons, find, fresh_ts, freshness, glob, gone,
-    gone_files, groups, id_tokens, is_date, key_hints, keys, kickoff, levenshtein, on_work, page,
-    phantom_md_refs, phantom_refs, push, push_tiered, query, ranked, ref_state, render,
-    render_full, render_full_page, render_groups, render_page, resolve, resolve_urgent, restored,
-    reverted, row_due, row_waiting, select, stale_refs, successors, superseded, today, waiting,
-    waiting_line, warnings, with_due,
+    Abbrev, Background, Bucket, Cut, EXPAND_MAX, Filter, Focus, Hidden, KeyUse, MdRef,
+    PUSH_BACKGROUND, PUSH_HUB_ROWS, PushPolicy, Ref, Selection, Urgent, UrgentChange, abbrev,
+    backtick_paths, brief, bucket, closed, cmp_rows, due, est_tokens, expands, fat_reasons, find,
+    fresh_ts, freshness, glob, gone, gone_files, groups, id_tokens, is_date, json_note, key_hints,
+    keys, kickoff, levenshtein, on_work, page, phantom_md_refs, phantom_refs, push, push_tiered,
+    query, ranked, ref_state, render, render_full, render_full_page, render_groups, render_page,
+    resolve, resolve_urgent, restored, reverted, row_due, row_waiting, select, stale_refs,
+    successors, superseded, today, waiting, waiting_line, warnings, why_empty, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{

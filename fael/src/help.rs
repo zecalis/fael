@@ -44,14 +44,20 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "find",
         "search rows",
-        "fael find [text|id] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--groups] [--text query]
+        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--groups] [--text query]
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
-      why: `closed: <text> (<sha>)`; an id-shaped query is
+      why: `closed: <text> (<sha>)`; several ids print every body in one call,
+      a bad id reports alone and the exit is 1; an id-shaped query is
       never a text search — it rejects when no row owns it, naming the rows
       that only mention it; --text forces a text search;
       an id counts as verified only after fael find printed it as - [<id>] —
       never type one from memory;
-      --full shows every body; its cut line asks for the rest in one call;
+      --full shows every body — a first page of one or two rows (no --limit)
+      shows them anyway when they fit find_tokens; several ids stop at the same
+      budget and the cut line names the ids left; its cut line asks for the
+      rest in one call;
+      an empty search counts each word, --files and filter on its own, so the
+      one that matched nothing shows;
       --kind issue lists issues ready to work first, (waiting: …) ones last;
       --groups groups every match by shared files — what to fix in one PR
       (*.md and anchors never link);
@@ -122,10 +128,12 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "stats",
         "tokens fael has put into context",
-        "fael stats [--json] [--rows] [--day] [--since d]
+        "fael stats [--json] [--rows] [--day] [--misses] [--since d]
     (tokens fael has put into context, per machine;
      --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on;
      --rows = per-row pushes against open/closed/superseded, flagging noise?;
+     --misses = the newest empty text searches (machine-local), each with the
+     per-word counts — the data a vector index would be judged by;
      --day = today's panels per repo and summed (local day: FAEL_TZ_OFFSET
      like +07:00 wins, else the machine zone); --day --json prints DayView)",
     ),

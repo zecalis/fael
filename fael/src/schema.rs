@@ -23,6 +23,7 @@ pub(crate) fn tools() -> Value {
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
                 "id": str_("exact id or prefix, pulls the body — id-shaped with no row rejects; pass it as text for a text search"),
+                "ids": files("many ids, bodies in one call — a bad id fails alone"),
                 "full": {"type": "boolean", "description": "bodies under titles"},
                 "files": files("paths, dirs, globs, anchors like doc:pricing — rows on any"),
                 "text": str_("all words, any order, in text or title; also the search for an id-shaped string"),
@@ -82,13 +83,14 @@ pub(crate) fn tools() -> Value {
 
 #[cfg(test)]
 mod tests {
-    /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6100 bytes
-    /// combined (measured 6006 on 2026-09-30 — SKILL 2339 + schema 3667, after
-    /// the reply-capture syntax replaced the Stop-hook paragraph and the
-    /// doctor/MCP lines left — `doctor --help` and `tools/list` carry them;
-    /// the ≥40% cut retargeted to ≥15% + a ceiling by owner decision —
-    /// PLAN-fael-durable-log §3). The ceiling sits just above the measure so
-    /// any growth fails here, not only in the stats golden.
+    /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6300 bytes
+    /// combined (measured 6215 on 2026-10-02 — SKILL 2390 + schema 3825).
+    /// Raised from 6100 by owner decision when `find ids[]` joined `close
+    /// ids[]`: batching the read and the write each saves an agent round per
+    /// row, which outweighs ~120 bytes a session. The ≥40% cut was retargeted
+    /// to ≥15% + a ceiling (PLAN-fael-durable-log §3). The ceiling sits just
+    /// above the measure so any growth fails here, not only in the stats
+    /// golden — raise it again only with a feature that earns it.
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
@@ -102,8 +104,8 @@ mod tests {
     fn constants_stay_small() {
         let total = SKILL.replace("\r\n", "\n").len() + super::schema_json().len();
         assert!(
-            total <= 6100,
-            "constants {total} B exceed the 6100 B ceiling — trim, don't grow"
+            total <= 6300,
+            "constants {total} B exceed the 6300 B ceiling — trim, don't grow"
         );
         assert!(
             total * 100 <= BASELINE * 85,
