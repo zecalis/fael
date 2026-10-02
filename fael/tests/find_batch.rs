@@ -108,6 +108,32 @@ fn a_short_list_shows_bodies_and_a_long_one_stays_titles() {
     assert!(!out.contains("body words"), "{out}");
 }
 
+/// A fat body would cost more than the `find <id>` it saves, so a short list
+/// keeps its title; the ids pull is cut at the budget and names the ids left.
+#[test]
+fn fat_bodies_are_bounded_in_a_short_list_and_in_an_ids_pull() {
+    let d = repo();
+    let fat = "word ".repeat(900);
+    let a = add(&d, "a.rs", "fat headline one", &fat);
+    let b = add(&d, "b.rs", "fat headline two", &fat);
+    let (_, out, _) = fael(&d, &["find", "--files", "src/a.rs"]);
+    assert!(
+        out.contains("fat headline one") && !out.contains("word word word"),
+        "{out}"
+    );
+    // the first body always shows; the second is cut with the exact next call
+    let (ok, out, err) = fael(&d, &["find", &a, &b]);
+    assert!(ok, "{err}");
+    assert!(
+        out.matches("word word").count() >= 1 && !out.contains("fat headline two →"),
+        "{out}"
+    );
+    assert!(
+        out.contains("… +1 more — next: fael find ") && out.contains(&b[..12]),
+        "{out}"
+    );
+}
+
 #[test]
 fn an_empty_text_search_names_the_word_and_is_recorded() {
     let d = repo();

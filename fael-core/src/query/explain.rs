@@ -2,21 +2,25 @@
 //! read the same log and filter the call already had, so no extra round and
 //! nothing a clock or a model could change.
 
-use super::{Filter, select::find};
-use crate::Log;
+use super::{Filter, est_tokens, select::find};
+use crate::{Log, Row};
 
 /// A list this short, from the first page with no `limit`, shows bodies
 /// without `--full`: the next call would be `find <id>` for each row anyway,
 /// and two bodies cost what that round costs.
 pub const EXPAND_MAX: usize = 2;
 
-/// `total` rows came back for `f`: show bodies, not titles? Never for the
-/// session brief (no narrowing at all) — that list is a map, not an answer.
-pub fn expands(total: usize, f: &Filter) -> bool {
+/// These `rows` (the whole first page) came back for `f`: show bodies, not
+/// titles? Only when every body fits `budget` — a fat row stays a title, since
+/// a list must never cost more than the `find <id>` it saves. Never for the
+/// session brief (no narrowing at all): that list is a map, not an answer.
+pub fn expands(rows: &[&Row], total: usize, f: &Filter, budget: usize) -> bool {
+    let bodies: usize = rows.iter().map(|r| est_tokens(&r.text)).sum();
     (1..=EXPAND_MAX).contains(&total)
         && f.offset == 0
         && f.limit.is_none()
         && !(f.is_empty() && !f.all)
+        && bodies <= budget
 }
 
 /// The reason a find came back empty: every part of the call counted on its

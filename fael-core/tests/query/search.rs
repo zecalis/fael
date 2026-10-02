@@ -117,26 +117,35 @@ fn an_empty_find_counts_each_part_alone() {
     );
 }
 
-/// Two rows or fewer from the first page show their bodies; a paged, limited
-/// or longer list stays titles.
+/// Two rows or fewer from the first page show their bodies when the bodies
+/// fit the budget; a paged, limited, longer or fat list stays titles.
 #[test]
-fn a_short_first_page_shows_bodies() {
+fn a_short_first_page_shows_bodies_that_fit() {
+    let (a, b, c) = (
+        note(1, &["src/a.rs"], None, "short body"),
+        note(2, &["src/a.rs"], None, "another short body"),
+        note(3, &["src/a.rs"], None, "third short body"),
+    );
     let q = Filter {
         key: Some("k:a".into()),
         ..Filter::default()
     };
-    assert!(!expands(0, &q) && expands(1, &q) && expands(EXPAND_MAX, &q));
-    assert!(!expands(EXPAND_MAX + 1, &q));
+    assert!(expands(&[&a], 1, &q, 800) && expands(&[&a, &b], 2, &q, 800));
+    assert!(!expands(&[], 0, &q, 800));
+    assert!(!expands(&[&a, &b, &c], 3, &q, 800));
     let paged = Filter {
         offset: 1,
         ..q.clone()
     };
-    assert!(!expands(1, &paged));
+    assert!(!expands(&[&a], 1, &paged, 800));
     let limited = Filter {
         limit: Some(5),
-        ..q
+        ..q.clone()
     };
-    assert!(!expands(1, &limited));
+    assert!(!expands(&[&a], 1, &limited, 800));
+    // a fat body would cost more than the `find <id>` it saves: stays a title
+    let fat = note(4, &["src/a.rs"], None, &"word ".repeat(1000));
+    assert!(!expands(&[&fat], 1, &q, 800));
     // the brief (no narrowing) stays a map of titles
-    assert!(!expands(1, &Filter::default()));
+    assert!(!expands(&[&a], 1, &Filter::default(), 800));
 }

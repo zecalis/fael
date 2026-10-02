@@ -71,7 +71,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         return Ok(());
     }
     // a list of one or two shows its bodies: the next call would be `find <id>`
-    let full = a.has("full") || core::expands(total, &f);
+    let full = a.has("full") || core::expands(&rows, total, &f, budget);
     // the cut line reprints this call with the next offset — same flags, no
     // guessing; under --full (bodies fill the budget in a few rows) it asks
     // for the rest in one call, since an explicit --limit beats the budget

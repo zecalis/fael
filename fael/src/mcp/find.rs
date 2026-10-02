@@ -37,7 +37,8 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         if ids.is_empty() {
             return Err("rejected: ids is empty — pass at least one id".into());
         }
-        let p = crate::find::many::pull(r, base, jtags, &ids, false);
+        let spell = |left: &[String]| format!("ids=[{}]", left.join(", "));
+        let p = crate::find::many::pull(r, base, jtags, &ids, false, &spell);
         let text = [p.text.trim_end().to_string()]
             .into_iter()
             .chain(p.errors.iter().cloned())
@@ -128,7 +129,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     };
     // only what fit the budget was said — like the push, count the shown lines
     // a list of one or two shows its bodies: the next call would be `find id=<id>`
-    let full = a["full"].as_bool().unwrap_or(false) || core::expands(total, &f);
+    let full = a["full"].as_bool().unwrap_or(false) || core::expands(&rows, total, &f, budget);
     let text = if rows.is_empty() {
         crate::find::misses::explain(&r.root, "mcp", &log, &f, "files")
     } else if full {

@@ -53,7 +53,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
       an id counts as verified only after fael find printed it as - [<id>] —
       never type one from memory;
       --full shows every body — a first page of one or two rows (no --limit)
-      shows them anyway; its cut line asks for the rest in one call;
+      shows them anyway when they fit find_tokens; several ids stop at the same
+      budget and the cut line names the ids left; its cut line asks for the
+      rest in one call;
       an empty search counts each word, --files and filter on its own, so the
       one that matched nothing shows;
       --kind issue lists issues ready to work first, (waiting: …) ones last;
