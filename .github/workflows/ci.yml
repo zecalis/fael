@@ -32,13 +32,16 @@ jobs:
       # include_str! builds docs/architecture.md and skill/SKILL.md into the binary
       - id: diff
         run: |
-          if [ "${{ github.event_name }}" = pull_request ] &&
-             ! git diff --name-only HEAD^1 HEAD |
-               grep -qvE '^[^/]+\.md$|^LICENSE|^\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)'; then
-            echo rust=false >> "$GITHUB_OUTPUT"
-          else
-            echo rust=true >> "$GITHUB_OUTPUT"
+          rust=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            # fail closed: a failed diff aborts the step (bash -e), an empty one runs all
+            files=$(git diff --name-only HEAD^1 HEAD)
+            if [ -n "$files" ] &&
+               ! grep -qvE '^[^/]+\.md$|^LICENSE|^\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)' <<<"$files"; then
+              rust=false
+            fi
           fi
+          echo "rust=$rust" >> "$GITHUB_OUTPUT"
 
   lint:
     needs: changes
@@ -99,5 +102,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      # a skip passes only when changes said rust=false outright, never on a missing output
+      - if: needs.changes.outputs.rust != 'false' && contains(needs.*.result, 'skipped')
         run: exit 1
       - run: echo ok
