@@ -72,6 +72,11 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
                 .into(),
         ));
     }
+    if let Some(l) = crate::sync::late_line(&r) {
+        let l = l.strip_prefix("fael: ").unwrap_or(&l).to_string();
+        rep.problems
+            .push(core::Problem::info(core::ProblemKind::Late, l));
+    }
     let behind = crate::install::pending();
     if behind > 0 {
         rep.problems.push(core::Problem::info(

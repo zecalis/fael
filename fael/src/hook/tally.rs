@@ -63,6 +63,17 @@ pub(crate) fn note_closed(root: &Path, row: &core::Row) {
     }
 }
 
+/// True the first time this session notes `<what> <item>` — and records it,
+/// so the same notice shows once per session.
+pub(crate) fn first(session: &str, root: &Path, what: &str, item: &str) -> bool {
+    let line = format!("{what} {item}");
+    if session.is_empty() || lines(session, root).lines().any(|l| l == line) {
+        return false;
+    }
+    note(session, root, what, &[item]);
+    true
+}
+
 fn lines(session: &str, root: &Path) -> String {
     std::fs::read_to_string(path(session, root)).unwrap_or_default()
 }

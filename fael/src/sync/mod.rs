@@ -15,11 +15,13 @@
 
 mod git;
 mod ingest;
+mod late;
 mod lock;
 mod origin;
 mod purged;
 mod push;
 
+pub(crate) use late::{line as late_line, newest};
 pub(crate) use purged::record as record_purge;
 
 use crate::{Repo, core};
@@ -31,9 +33,27 @@ use std::path::Path;
 ///
 /// Ingest comes first: the push needs to know which rows other refs already
 /// carry, which writer ids own a ref, and which ids were purged.
+///
+/// Every run past the lock leaves its outcome for the late line (`late`): a
+/// failure must not stay in a log file nobody reads. A `--remote` that
+/// synced becomes `fael.remote` when none is set — one command sets it up.
 pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
     let _lock = lock::acquire(r)?; // before the first journal read; drops at return
-    let remote = remote(r, a.one("remote"))?;
+    let mark = newest(r);
+    let flag = a.one("remote").filter(|u| !u.is_empty());
+    let res = run(r, flag.clone());
+    late::record(r, &mark, &res);
+    if let (Ok(()), Some(u)) = (&res, flag)
+        && crate::git(&r.root, &["config", "fael.remote"]).is_none()
+    {
+        let _ = git::run(&r.root, &["config", "fael.remote", &u]);
+        println!("fael.remote = {u} (this clone) — auto sync uses it from now on");
+    }
+    res
+}
+
+fn run(r: &Repo, flag: Option<String>) -> Result<(), String> {
+    let remote = remote(r, flag)?;
     origin::warn(r, &remote);
     let repo_id = repo_id(r)?;
     let by = crate::writer(r);

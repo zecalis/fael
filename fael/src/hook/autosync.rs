@@ -21,7 +21,7 @@
 use super::protocol::Event;
 use super::state::{session_key, state_dir};
 use super::stop::stop_blocked_before;
-use crate::{Repo, git, repo_at};
+use crate::{git, repo_at};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -44,7 +44,7 @@ pub(crate) fn start(e: &Event) {
     if !repo.cfg.sync_auto {
         return;
     }
-    let kind = format!("sync:{}", newest(&repo));
+    let kind = format!("sync:{}", crate::sync::newest(&repo));
     if stop_blocked_before(session, &repo.root.to_string_lossy(), &kind) {
         return;
     }
@@ -73,13 +73,6 @@ pub(crate) fn start(e: &Event) {
         .stdout(out)
         .stderr(err)
         .spawn();
-}
-
-/// The newest row id this writer filed, or empty — what the session mark keys on.
-fn newest(repo: &Repo) -> String {
-    let (by, log) = (crate::writer(repo), crate::read(repo));
-    let mine = log.rows.iter().chain(&log.closes).filter(|r| r.by == by);
-    mine.map(|r| r.id.as_str()).max().unwrap_or("").to_string()
 }
 
 /// `auto-sync-<hash of the worktree path>.log` — per worktree, so a repo's
