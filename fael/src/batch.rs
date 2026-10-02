@@ -79,7 +79,7 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
 /// batch add above). A single id keeps the old behaviour byte for byte: the
 /// original error returns unchanged, so `already closed` still lands on stderr.
 pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<ExitCode, String> {
-    a.only("close", &["json"])?;
+    a.only("close", &["json", "key"])?;
     let r = crate::repo()?;
     let (mut failed, mut first) = (0, String::new());
     for id in ids {

@@ -24,8 +24,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "close",
         "close a row",
-        "fael close <id> \"<why>\"
-    (an exact id or unique prefix names the row; closing twice is rejected)",
+        "fael close (<id> | --key <key>) \"<why>\"
+    (an exact id or unique prefix names the row; closing twice is rejected;
+     --key closes the one open row on that key, and lists them if there are several)",
     ),
     (
         "bump",
