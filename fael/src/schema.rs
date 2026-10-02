@@ -15,8 +15,7 @@ pub(crate) fn tools() -> Value {
     let str_ = |d: &str| json!({"type": "string", "description": d});
     let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
     // chunk 6d: one short sentence — it repeats on every tool, so every word is paid three times
-    let cwd =
-        str_("repo this call is about — pass when outside the session cwd, or rows land wrong");
+    let cwd = str_("repo this call is about, if not the session cwd");
     let mut t = json!([
         {
             "name": "find",
@@ -46,7 +45,7 @@ pub(crate) fn tools() -> Value {
             "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "text": str_("what happened and why, standalone"),
-                "title": str_("≤15-word list headline — set it past ~60 words"),
+                "title": str_("≤15-word headline — set it if the first sentence passes ~12 words"),
                 "files": {"type": "array", "items": {"type": "string"},
                     "description": "paths or scheme:ref anchors — omit for this session's edited files"},
                 "rows": {"type": "array", "items": {"type": "object"},
@@ -64,8 +63,10 @@ pub(crate) fn tools() -> Value {
         {
             "name": "close",
             "description": "Close a fixed issue or done note.",
-            "inputSchema": {"type": "object", "required": ["id"], "properties": {
-                "id": str_("id or prefix, as find showed"),
+            "inputSchema": {"type": "object", "required": ["text"], "properties": {
+                "id": str_("id or prefix from find"),
+                "ids": {"type": "array", "items": {"type": "string"},
+                    "description": "many ids, one reason"},
                 "text": str_("why, e.g. fixed in <sha>"),
             }},
         },
