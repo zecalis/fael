@@ -23,6 +23,20 @@ pub fn expands(rows: &[&Row], total: usize, f: &Filter, budget: usize) -> bool {
         && bodies <= budget
 }
 
+/// `--json` is the machine shape and is never cut — truncating it would hand a
+/// script fewer rows than it asked for without a word. A caller that did not
+/// name a `limit` and got more than the find budget is told once instead, so an
+/// agent that reached for `--json` to read ids sees what it just paid.
+pub fn json_note(rows: &[&Row], budget: usize) -> Option<String> {
+    let t: usize = rows.iter().map(|r| est_tokens(&r.to_line())).sum();
+    (t > budget).then(|| {
+        format!(
+            "{} rows, ~{t} tokens of JSON, over the {budget}-token find budget — add --limit N, or drop --json for the list",
+            rows.len()
+        )
+    })
+}
+
 /// The reason a find came back empty: every part of the call counted on its
 /// own, so the one that matched nothing — a word the rows never use, a key
 /// that does not exist — shows next to the ones that did. `files_flag` is how

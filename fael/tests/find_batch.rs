@@ -134,6 +134,35 @@ fn fat_bodies_are_bounded_in_a_short_list_and_in_an_ids_pull() {
     );
 }
 
+/// `--json` is never cut, only priced: a script still gets every row, an agent
+/// that reached for it sees the cost on stderr, and a named `--limit` is silent.
+#[test]
+fn json_over_the_budget_warns_on_stderr_and_stays_whole() {
+    let d = repo();
+    let fat = "word ".repeat(900);
+    add(&d, "a.rs", "fat headline one", &fat);
+    add(&d, "b.rs", "fat headline two", &fat);
+    let (ok, out, err) = fael(&d, &["find", "--json", "--kind", "note"]);
+    assert!(ok, "{err}");
+    assert_eq!(out.lines().count(), 2, "every row, uncut");
+    assert!(
+        out.lines()
+            .all(|l| serde_json::from_str::<serde_json::Value>(l).is_ok())
+    );
+    assert!(
+        err.contains("2 rows") && err.contains("tokens of JSON") && err.contains("--limit"),
+        "{err}"
+    );
+    let (_, out, err) = fael(&d, &["find", "--json", "--kind", "note", "--limit", "5"]);
+    assert_eq!(out.lines().count(), 2);
+    assert!(!err.contains("tokens of JSON"), "{err}");
+    // a small result stays silent
+    let e = repo();
+    add(&e, "a.rs", "tiny", "tiny body");
+    let (_, _, err) = fael(&e, &["find", "--json", "--kind", "note"]);
+    assert!(!err.contains("tokens of JSON"), "{err}");
+}
+
 #[test]
 fn an_empty_text_search_names_the_word_and_is_recorded() {
     let d = repo();

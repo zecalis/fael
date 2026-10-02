@@ -227,6 +227,9 @@ fn show(
         // JSON stays the row shape (consumers dedupe by id) — the branch tag
         // is a list-display feature, like titles
         rows.iter().for_each(|r| println!("{}", r.to_line()));
+        if let Some(n) = core::json_note(rows, budget) {
+            eprintln!("fael: {n}");
+        }
         return Ok(rows.iter().map(|r| r.id.clone()).collect());
     }
     // only what fit the budget was said — like the push, the cut rows may come

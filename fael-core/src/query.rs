@@ -23,7 +23,7 @@ mod revisit;
 mod select;
 mod stale;
 
-pub use explain::{EXPAND_MAX, expands, why_empty};
+pub use explain::{EXPAND_MAX, expands, json_note, why_empty};
 pub use focus::{
     Background, Bucket, Focus, Hidden, PUSH_BACKGROUND, PUSH_HUB_ROWS, PushPolicy, Selection,
     bucket, on_work, select,
