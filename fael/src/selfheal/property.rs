@@ -1,4 +1,4 @@
-//! Chunk 2's five invariants as generated unit tests
+//! Chunk 2's invariants as generated unit tests
 //! (PLAN-fael-selfheal-verdict).
 //!
 //! The corpus (chunk 3) catches cases we have seen; these catch cases we have
@@ -185,6 +185,26 @@ fn automatic_acts_close_only_my_own_rows() {
                 assert_eq!(by, "me", "seed {SEED:#x} case {n}: closed {target} of {by}");
             }
             _ => {}
+        }
+    }
+}
+
+/// Sixth, shared files prove relatedness, not replacement: a files act never
+/// hides a keyed row, and a keyed new row is never the cause of one. A key
+/// names a topic; the files guess only fires where no topic exists to lose.
+#[test]
+fn files_never_hide_a_keyed_topic() {
+    let mut g = Lcg(SEED + 5);
+    for n in 0..CASES {
+        let (log, st, row) = gen_case(&mut g, n);
+        let open = open_rows(&log);
+        if let Verdict::FilesAct { target } = eff(&decide(&log, &open, &st, &row, None)) {
+            let old = &target_row(&log, target).key;
+            assert!(
+                old.is_none() && row.key.is_none(),
+                "seed {SEED:#x} case {n}: files hid {target} ({old:?}) for key {:?}",
+                row.key
+            );
         }
     }
 }

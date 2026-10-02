@@ -22,17 +22,23 @@
 //! can justify, exposes the evidence when it can't, and makes every automatic
 //! decision reversible.
 //!
+//! Proof or link: a row is hidden only on proof that the new one replaces it —
+//! a text naming it, a flag, or the same kind + key from the same writer.
+//! Shared files prove two notes related, not the same, so the files guess acts
+//! only where no topic exists to lose (both notes keyless); a key on either
+//! side, or any other overlap, files the row and names what stays open. A
+//! silent hide costs the next reader a todo; a kept note costs one `close`.
+//!
 //! Chunk 3 (ActWarn + provenance): an act whose target's key differs from the
-//! new row's is a cross-key act — it still acts (a move, not a conflict;
-//! holding would pile notes back into the Stop-hook debt above), but the key
-//! is the weakest evidence, so `[selfheal] cross_key` picks the exposure:
-//! `warn` (default) prints the act as one `warning:` line, which the existing
-//! gate counts as an ask on CLI/MCP/batch; `info` keeps the info line;
-//! `off` acts silently. Same-key acts stay info. Every act stamps
-//! `decision_source` (`explicit:text`, `identity:key`, `heuristic:files`,
-//! each with `:cross-key` when the key moved, `caller:flag` for a resolving
-//! flag) so restore can trace an edge back to its cause; older rows read as
-//! `unknown` and are never backfilled.
+//! new row's is a cross-key act — only an explicit one (the text names the row)
+//! can still reach it. The key is the weakest evidence, so `[selfheal]
+//! cross_key` picks the exposure: `warn` (default) prints the act as one
+//! `warning:` line, which the existing gate counts as an ask on CLI/MCP/batch;
+//! `info` keeps the info line; `off` acts silently. Same-key acts stay info.
+//! Every act stamps `decision_source` (`explicit:text`, `identity:key`,
+//! `heuristic:files`, each with `:cross-key` when the key moved, `caller:flag`
+//! for a resolving flag) so restore can trace an edge back to its cause; older
+//! rows read as `unknown` and are never backfilled.
 //!
 //! Thin entry only — observation lives in `evidence` (Evidence, Candidate),
 //! the Explicit > Identity > Heuristic policy table in `decide` (Eligibility,
