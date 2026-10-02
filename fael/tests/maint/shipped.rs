@@ -170,3 +170,25 @@ fn doctor_silent_for_note_on_default_branch() {
     assert!(ok, "{out}");
     assert!(!out.contains("[Shipped"), "{out}");
 }
+
+#[test]
+fn handoff_and_revisit_notes_never_ship() {
+    let d = repo();
+    git(&d, &["checkout", "-qb", "feat/plan-chunk"]);
+    std::fs::write(d.join("src/a.rs"), "").unwrap();
+    for extra in [
+        &["--key", "plan:x:handoff"][..],
+        &["--revisit=after the deploy"],
+    ] {
+        let mut args = vec!["add", "note", "waits past the merge", "--files", "src/a.rs"];
+        args.extend_from_slice(extra);
+        let (ok, _, err) = fael(&d, &args);
+        assert!(ok, "{err}");
+    }
+    let gh = r#"[{"headRefName":"feat/plan-chunk","mergedAt":"2099-01-01T00:00:00Z","number":7}]"#;
+    // --fix closes neither (it also repairs the fresh repo's `.gitattributes`)
+    let (ok, out) = doctor_args(&d, gh, &["doctor", "--fix"]);
+    assert!(ok && !out.contains("fixed: closed"), "{out}");
+    let (ok, out) = doctor(&d, gh);
+    assert!(ok && !out.contains("[Shipped"), "{out}");
+}

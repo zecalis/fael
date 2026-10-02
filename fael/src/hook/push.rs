@@ -15,22 +15,22 @@ use std::io::{Read, Write};
 const IN_CONTEXT: &str = "in-context";
 const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
 
-/// The edit hint. When the push just showed open issues, name up to two of
-/// them with the close ready to run: the agent only writes the why. Decisions
-/// and notes never get one — an edit rarely ends them. Else the generic line.
-fn stale_hint(c: &super::protocol::Ctx, said: &[&core::Row]) -> String {
-    let ab = core::abbrev(&c.log);
-    let calls: Vec<String> = said
-        .iter()
-        .filter(|r| r.kind == "issue")
-        .take(2)
-        .map(|r| format!("fael close {} \"<why>\"", ab.short(&r.id)))
-        .collect();
-    if calls.is_empty() {
+/// The edit hint. With open issues about this very file in context (shown
+/// now or by an earlier push this session — a Read before the Edit already
+/// said them), name up to two with the close ready to run: the agent only
+/// writes the why. Decisions and notes never get one — an edit rarely ends
+/// them — but the generic clause still covers them.
+fn stale_hint(log: &core::Log, issues: &[&core::Row]) -> String {
+    if issues.is_empty() {
         return STALE_HINT.to_string();
     }
+    let ab = core::abbrev(log);
+    let calls: Vec<String> = issues
+        .iter()
+        .map(|r| format!("fael close {} \"<why>\"", ab.short(&r.id)))
+        .collect();
     format!(
-        "fael: done with one? {} — or re-file with --supersedes <id>",
+        "fael: done with one? {} — any other row the code now says or contradicts: `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`",
         calls.join(" · ")
     )
 }
@@ -171,17 +171,11 @@ pub(crate) fn is_anchor(f: &str) -> bool {
             .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'+' | b'.' | b'-'))
 }
 
-pub(crate) fn push(e: &Event, event: &str) -> Reply {
-    let no = Reply::default;
-    let c = match ctx(e) {
-        Some(c) => c,
-        None => return no(),
-    };
-    // a shell call that wrote a file is an edit; only its usage label differs
-    let edit = event == "edit" || event == super::search::SHELL_EDIT;
-    // normalize through core — outside the repo falls away, never errors out
+/// The pushed paths as repo-relative files. Outside the repo falls away,
+/// never errors out.
+fn repo_files(c: &super::protocol::Ctx, raw: &[String]) -> Vec<String> {
     let mut files = vec![];
-    for f in &e.files {
+    for f in raw {
         // the client sends whatever the OS gave it (`/var/…` vs `/private/var/…`);
         // resolve symlinks while the repo root is already resolved, or the
         // lexical strip in normalize_files reads the file as outside the repo
@@ -199,6 +193,18 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
             files.append(&mut n);
         }
     }
+    files
+}
+
+pub(crate) fn push(e: &Event, event: &str) -> Reply {
+    let no = Reply::default;
+    let c = match ctx(e) {
+        Some(c) => c,
+        None => return no(),
+    };
+    // a shell call that wrote a file is an edit; only its usage label differs
+    let edit = event == "edit" || event == super::search::SHELL_EDIT;
+    let files = repo_files(&c, &e.files);
     if files.is_empty() {
         return no();
     }
@@ -234,6 +240,13 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     // a row already pushed into this context window is still there — say it
     // once. The lock spans read → append, so a batch of parallel reads queues
     // up behind the first instead of each pushing the same row.
+    // tier 0 only: an issue about a neighbouring file is not this edit's to close
+    let ready: Vec<&core::Row> = tiered
+        .iter()
+        .filter(|(r, tier)| edit && *tier == 0 && r.kind == "issue")
+        .map(|(r, _)| *r)
+        .take(2)
+        .collect();
     let mut seen = (!c.session.is_empty())
         .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
         .flatten();
@@ -251,8 +264,12 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let notes = take_stashed(&c, &files);
     // a hub file with no Now row still says its count line (PUSH_HUB_ROWS)
     if sel.shown.is_empty() && sel.omitted == 0 {
-        // a stashed line still gets said, even with no rows to join
-        if let Some(context) = notes {
+        // a ready close for an issue already in context, or a stashed line,
+        // still gets said, even with no rows to join
+        let ready = (!ready.is_empty()).then(|| stale_hint(&c.log, &ready));
+        let lines: Vec<String> = ready.into_iter().chain(notes).collect();
+        if !lines.is_empty() {
+            let context = lines.join("\n");
             let meta = hook_meta(&c, None, true);
             record_usage(&c.client, event, &c.repo.root, &context, &[], &meta);
             return Reply {
@@ -282,8 +299,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     // row describes, with both in front of it — the one moment to retire it.
     // ponytail: every edit push with rows; once per session if it costs too much
     let context = if edit {
-        let said = &sel.shown[..n.min(sel.shown.len())];
-        format!("{context}{}\n", stale_hint(&c, said))
+        format!("{context}{}\n", stale_hint(&c.log, &ready))
     } else {
         context
     };

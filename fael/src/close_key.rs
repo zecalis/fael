@@ -9,13 +9,8 @@ pub(crate) const BOTH: &str = "rejected: close takes an id or a key, not both";
 /// The id of the one open row carrying exactly `key`.
 pub(crate) fn open_row_on(r: &crate::Repo, key: &str) -> Result<String, String> {
     let log = crate::read(r);
-    let f = Filter {
-        key: Some(key.into()),
-        ..Filter::default()
-    };
-    // the filter is a glob: keep only the rows whose key is exactly this one
-    let (rows, _, _) = core::query(&log, &f, &r.cfg);
-    let rows: Vec<_> = rows
+    // an exact scan of the open rows: no glob, ranking or budget needed
+    let rows: Vec<_> = core::find(&log, &Filter::default())
         .into_iter()
         .filter(|x| x.key.as_deref() == Some(key))
         .collect();

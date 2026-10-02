@@ -264,8 +264,9 @@ fn a_shell_write_and_read_push_both() {
         edit < hint && hint < read,
         "the edit block, its hint, then the read: {out}"
     );
+    // one hint line (generic or ready close), the edit's: a read has none
     assert_eq!(
-        out.matches("fael close").count(),
+        out.matches("now in <file>").count(),
         1,
         "a read has no hint: {out}"
     );
