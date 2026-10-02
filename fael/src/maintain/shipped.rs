@@ -73,7 +73,9 @@ pub(super) fn problems(
     let mut maybe: Vec<Landed> = vec![];
     let w = core::abbrev(log);
     for row in core::find(log, &core::Filter::default()) {
-        if row.kind != "note" {
+        // a revisit or a plan handoff waits on something other than the
+        // merge (PLAN-fael-close-helpers §2) — never counted, never --fix closed
+        if row.kind != "note" || waits_past_merge(row) {
             continue;
         }
         let Some(branch) = row.branch().filter(|b| !b.is_empty()) else {
@@ -124,6 +126,12 @@ pub(super) fn problems(
         ));
     }
     out
+}
+
+/// A note whose end is not its branch's merge: it carries a `revisit`, or it
+/// is a plan's `*:handoff` (the next chunk reads it after this one merges).
+fn waits_past_merge(row: &core::Row) -> bool {
+    row.revisit.is_some() || row.key.as_deref().is_some_and(|k| k.ends_with(":handoff"))
 }
 
 /// Pure half of `problems`: the earliest PR merged at/after the row's birth
