@@ -19,9 +19,7 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - `fael add decision "<the choice, why, what was rejected>" --files a,b` — never what code does or progress
 - `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
-- Self-heal: a same-kind row on your open row's key — an issue only the same finding — supersedes
-  it, same-topic notes likewise; `fael restore <id>` undoes. `--key` starts a new topic.
-- First sentence past ~12 words? `--title "<≤15 words>"` — lists cut untitled rows at ~80 chars.
+- A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
 Each row is read months later with no chat: one or two standalone sentences.
 `--files` names the paths or an anchor (`doc:pricing`) `fael find` showed — never

@@ -19,14 +19,14 @@ pub(crate) fn tools() -> Value {
     let mut t = json!([
         {
             "name": "find",
-            "description": "Memory git lacks: why, what was rejected, open issues, unfinished work. No args = the session brief; call it first only if no fael hook gave one.",
+            "description": "No args = the session brief; call it first only if no fael hook gave one.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
                 "id": str_("exact id or prefix, pulls the body — id-shaped with no row rejects; pass it as text for a text search"),
                 "ids": files("many ids, bodies in one call — a bad id fails alone"),
                 "full": {"type": "boolean", "description": "bodies under titles"},
                 "files": files("paths, dirs, globs, anchors like doc:pricing — rows on any"),
-                "text": str_("all words, any order, in text or title; also the search for an id-shaped string"),
+                "text": str_("all words, any order, in text or title"),
                 "key": str_("key glob, e.g. auth:*"),
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "since": str_("yyyy-mm or yyyy-mm-dd"),
@@ -42,7 +42,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "add",
-            "description": "File what the next session needs — a decision and why, a bug (kind issue), or state it needs (note). Add it in the same message as your next tool call or final edit — never as a turn of its own. Write rows in English — title, key and body. The dev reads them through you, in their language. Reuse an anchor find showed, never invent one. rows[] files many at once.",
+            "description": "File what the next session needs — a decision and why, a bug (kind issue), or state it needs (note). Add it in the same message as your next tool call or final edit — never as a turn of its own.",
             "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "text": str_("what happened and why, standalone"),
@@ -85,7 +85,7 @@ pub(crate) fn tools() -> Value {
 #[cfg(test)]
 mod tests {
     /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6300 bytes
-    /// combined (measured 6284 on 2026-10-03 — SKILL 2390 + schema 3894, `close key` included).
+    /// combined (measured 5813 on 2026-10-03 — SKILL 2204 + schema 3609, after the duplicate-text trim).
     /// Raised from 6100 by owner decision when `find ids[]` joined `close
     /// ids[]`: batching the read and the write each saves an agent round per
     /// row, which outweighs ~120 bytes a session. The ≥40% cut was retargeted
