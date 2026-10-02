@@ -53,13 +53,13 @@ fn receipt(e: &Event) -> Option<String> {
 /// destination (`sync::late_line`). `tracked`: only on a turn that filed or
 /// closed — that is when a row can be left uncommitted, and quiet turns skip
 /// the git spawn. `local`: once per session per distinct line, since a
-/// failed sync stays failed across turns.
+/// failed sync or a repo with no way to share stays so across turns.
 fn late(c: &super::protocol::Ctx, filed: bool) -> Option<String> {
     let tracked = matches!(c.repo.cfg.store, core::Store::Tracked);
     if tracked && !filed {
         return None;
     }
-    let l = crate::sync::late_line(&c.repo)?;
+    let l = crate::sync::late_line(&c.repo, &c.log)?;
     (tracked || super::tally::first(&c.session, &c.repo.root, "late", &l)).then_some(l)
 }
 

@@ -163,8 +163,12 @@ identity; duplicating it invites divergence.
   auth is the user's own Git credential. A remote is any Git URL (private
   repo, Gitea/Forgejo, bare path on a NAS) — fael does not care who hosts it.
 - Sync state is local, never wire: `<journal>/synced` (the writer's newest id
-  when the last good sync started) and `<journal>/sync-error` (the last
-  failure, removed by the next success) — what the late line counts from.
+  when the last good sync to `fael.remote` read the journal) and
+  `<journal>/sync-error` (that remote's last failure, url credentials
+  stripped, removed by the next success) — what the late line counts from. A
+  one-off `--remote` elsewhere touches neither; no remote at all records
+  nothing; an import drops `synced`, and with no `synced` a failure is named
+  without a count.
 - `store = local` + destination is `origin` pushes no less, but prints one
   warning line (the ref is fetchable by anyone with read access even though
   no UI shows it):

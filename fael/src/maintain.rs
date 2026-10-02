@@ -72,7 +72,8 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
                 .into(),
         ));
     }
-    if let Some(l) = crate::sync::late_line(&r) {
+    let log = crate::read(&r);
+    if let Some(l) = crate::sync::late_line(&r, &log) {
         let l = l.strip_prefix("fael: ").unwrap_or(&l).to_string();
         rep.problems
             .push(core::Problem::info(core::ProblemKind::Late, l));
@@ -88,7 +89,6 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             ),
         ));
     }
-    let log = crate::read(&r);
     // Gone is judged through the resolver: a file that was renamed still
     // exists under its new path, so its rows still push and are not gone.
     let al = crate::aliases::load(&r, &log, true);
@@ -295,6 +295,10 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
         &r.cfg.kinds,
         &core::ImportOpts { maps },
     )?;
+    // imported rows are older than the late watermark but pushed by this clone
+    if rep.adds > 0 {
+        crate::sync::forget_mark(&r);
+    }
     for w in &rep.warnings {
         eprintln!("{w}");
     }
