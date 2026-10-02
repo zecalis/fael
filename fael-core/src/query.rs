@@ -10,6 +10,7 @@
 
 mod focus;
 mod groups;
+mod keyhint;
 mod lookup;
 mod matching;
 mod md;
@@ -25,7 +26,8 @@ pub use focus::{
     bucket, on_work, select,
 };
 pub use groups::{groups, render_groups};
-pub use lookup::{KeyUse, fat_reasons, key_hints, keys, levenshtein, query, resolve, warnings};
+pub use keyhint::key_hints;
+pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, warnings};
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
 pub use push::{push, push_tiered};

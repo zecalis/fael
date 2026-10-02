@@ -1,11 +1,15 @@
 //! key_hints — a prompt word equal to the key's head (first segment after the
-//! namespace) points at the key; no fuzz.
+//! namespace) points at the key; no fuzz. Rank by match strength: more prompt
+//! words met wins (a key typed whole over head-only), then most used, then name.
 
 use super::row;
 use fael_core::*;
 
 fn keys_of(log: &Log, prompt: &str) -> Vec<String> {
-    key_hints(log, prompt).into_iter().map(|k| k.key).collect()
+    key_hints(log, prompt)
+        .into_iter()
+        .map(|(k, _)| k.key)
+        .collect()
 }
 
 fn ledger() -> Log {
@@ -34,7 +38,9 @@ fn exact_segment_points_most_used_first() {
         ["vela:credit-ledger", "vela:credit-layer"]
     );
     let h = key_hints(&l, "credit");
-    assert_eq!(h[0].count, 2);
+    assert_eq!(h[0].0.count, 2);
+    // 01M3XKB7G: the hint names the word that matched
+    assert_eq!(h[0].1, ["credit"]);
 }
 
 #[test]
@@ -74,6 +80,63 @@ fn closed_or_superseded_keys_are_not_open() {
 fn at_most_three_keys() {
     let l = ledger();
     assert_eq!(keys_of(&l, "credit billing plan").len(), 3);
+}
+
+/// 01M3XKB7E: a key typed whole ranks no lower than keys met by one common
+/// word, and the area-word rule drops only the word, never a stronger match.
+#[test]
+fn key_typed_whole_outranks_head_only_hits() {
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000030", "cli:close-multi"),
+            k("A0000000000000000000000031", "close:chain"),
+            k("A0000000000000000000000032", "close:loop"),
+            // extra open rows so the close:* keys win the old count-only sort
+            k("A0000000000000000000000033", "close:chain"),
+            k("A0000000000000000000000034", "close:loop"),
+            k("A0000000000000000000000035", "plan:x-y:handoff"),
+        ],
+        ..Log::default()
+    };
+    // the typed key survives, ranked first despite fewer rows
+    assert_eq!(
+        keys_of(&l, "close out plan:x-y:handoff")[0],
+        "plan:x-y:handoff"
+    );
+}
+
+/// 01M3XKB7E: a topic does not switch off as it grows — with 4 open keys
+/// sharing the head, plain 'credit' still names the most used, and a key the
+/// prompt names beyond its head ranks first.
+#[test]
+fn growing_topic_keeps_hinting() {
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000040", "vela:credit-ledger"),
+            k("A0000000000000000000000041", "vela:credit-ledger"),
+            k("A0000000000000000000000042", "vela:credit-layer"),
+            k("A0000000000000000000000043", "vela:credit-notes"),
+            k("A0000000000000000000000044", "vela:ledger-run"),
+        ],
+        ..Log::default()
+    };
+    // a 4th credit-* key used to silence 'credit' entirely — now the top 3
+    // most-used hint instead
+    let got = keys_of(&l, "credit");
+    assert_eq!(got.len(), 3);
+    assert_eq!(got[0], "vela:credit-ledger");
+    // a prompt naming a trailing segment too lifts that key over head-only
+    // matches of the same strength ('ledger' hits credit-ledger AND ledger-run,
+    // but credit-ledger met one more word) — the ties below sort by usage, name
+    let h = key_hints(&l, "credit ledger merge");
+    assert_eq!(h[0].0.key, "vela:credit-ledger");
+    assert_eq!(h[0].1, ["credit", "ledger"]);
+    assert_eq!(h[1].0.key, "vela:credit-layer");
+    assert_eq!(h[1].1, ["credit"]);
+    assert_eq!(h[2].0.key, "vela:credit-notes");
+    assert_eq!(h[2].1, ["credit"]);
 }
 
 #[test]

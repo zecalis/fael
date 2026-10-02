@@ -55,7 +55,7 @@ pub fn keys(log: &Log, pattern: Option<&str>) -> Vec<KeyUse> {
 }
 
 /// One `KeyUse` per key the rows carry; keyless rows are skipped.
-fn tally<'a>(rows: impl Iterator<Item = &'a Row>) -> Vec<KeyUse> {
+pub(crate) fn tally<'a>(rows: impl Iterator<Item = &'a Row>) -> Vec<KeyUse> {
     let mut by: HashMap<&str, (usize, &Row)> = HashMap::new();
     for r in rows {
         let Some(k) = r.key.as_deref() else { continue };
@@ -72,53 +72,6 @@ fn tally<'a>(rows: impl Iterator<Item = &'a Row>) -> Vec<KeyUse> {
             last: r.ts.clone(),
         })
         .collect()
-}
-
-/// Open keys one matched segment may name before it is an area word, not a
-/// topic — and the most keys one hint line lists.
-const HINT_MAX_KEYS: usize = 3;
-
-/// Open keys a user prompt names (01M3WCK7N): a prompt word equal, ASCII
-/// case-insensitively, to the key's head — the first segment after the
-/// namespace (`credit` in `vela:credit-ledger`, `-`/`_`/`.`/`/` split). The
-/// namespace and the trailing segments never match: in vela "data scope" hit
-/// every `vela:*-scope` key and "fael" hit `fael:store`. Never fuzzy: no
-/// prefix, stem or edit distance. A head under 4 chars or all digits never
-/// matches, and one shared by more than `HINT_MAX_KEYS` open keys is dropped
-/// whole — too common to point anywhere.
-/// Open = some row on the key is neither closed nor superseded. At most
-/// `HINT_MAX_KEYS`, most used first, like `keys`.
-// ponytail: plain English words that happen to be a segment ("file" → fael:file-size)
-// still match; a stop list when usage shows them as noise.
-pub fn key_hints(log: &Log, prompt: &str) -> Vec<KeyUse> {
-    let (closed, gone) = (super::closed(log), super::superseded(log));
-    let keys = tally(log.rows.iter().filter(|r| {
-        !closed.contains(r.id.as_str())
-            && !gone.contains(r.id.as_str())
-            && !crate::is_carrier_row(r)
-            && !crate::is_alias_row(r)
-    }));
-    let words: std::collections::HashSet<String> = prompt
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| w.len() >= 4 && !w.bytes().all(|b| b.is_ascii_digit()))
-        .map(str::to_ascii_lowercase)
-        .collect();
-    let head = |k: &str| -> String {
-        let topic = k.split_once(':').map_or(k, |(_, t)| t);
-        let h = topic.split([':', '-', '_', '.', '/']).next().unwrap_or("");
-        h.to_ascii_lowercase()
-    };
-    let mut hit: Vec<KeyUse> = vec![];
-    for w in &words {
-        let named: Vec<&KeyUse> = keys.iter().filter(|k| head(&k.key) == *w).collect();
-        if named.len() <= HINT_MAX_KEYS {
-            hit.extend(named.into_iter().cloned());
-        }
-    }
-    hit.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.key.cmp(&b.key)));
-    hit.dedup_by(|a, b| a.key == b.key);
-    hit.truncate(HINT_MAX_KEYS);
-    hit
 }
 
 /// No filter = the session brief under the kickoff budget; otherwise find under the find budget.

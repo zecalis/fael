@@ -24,6 +24,11 @@ Reply  {"block": bool, "reason"?: str, "context"?: str, "notice"?: str}
 | the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | add `context` to that turn — one pointer line when a prompt word equals the head of an open key (`credit` in `vela:credit-ledger`), each key once per session |
 | the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text`, `stop_active` | files the reply's `fael <kind>:` lines and never blocks; only under `[capture] block = true` does `block` mean: do not end, send `reason` back as the next message |
 
+`fael install` wires every event above on **Claude Code**. **Codex has no prompt hook** (its
+hooks know no UserPromptSubmit), so the pointer-line hint is Claude-only there — deliberate
+(its Stop/session-start/search/edit hooks are wired). A custom client can still call
+`prompt` from its own lifecycle; the adapter accepts it for both (`--client claude|codex`).
+
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript
   file whose birthtime is the start. **Send the exact same string to `read`, `edit` and `stop`**: it keys the
   session's edit list, stop blocks when files were edited after the newest row, and the read/edit push
