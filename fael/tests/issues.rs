@@ -1,0 +1,155 @@
+//! Working the issue list in the real binary: waiting issues list last,
+//! `claim` shows who holds one, `--groups` says what to fix in one PR, and
+//! `--full` asks for the rest in one call.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
+    c.args(args)
+        .current_dir(dir)
+        .env("FAEL_STATE_DIR", dir.join("state"));
+    let o = c.output().unwrap();
+    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    (o.status.success(), s(&o.stdout), s(&o.stderr))
+}
+
+fn git(d: &Path, args: &[&str]) {
+    assert!(
+        Command::new("git")
+            .args(args)
+            .current_dir(d)
+            .status()
+            .unwrap()
+            .success()
+    );
+}
+
+fn repo() -> PathBuf {
+    let d = std::env::temp_dir().join(format!("fael-issues-{}", fael_core::ulid()));
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    git(&d, &["init", "-q", "-b", "feat/one"]);
+    git(&d, &["config", "user.name", "Test User"]);
+    git(&d, &["config", "user.email", "t@example.com"]);
+    for f in ["a", "b", "c"] {
+        std::fs::write(d.join(format!("src/{f}.rs")), "//\n").unwrap();
+    }
+    d
+}
+
+/// Add an issue, return its id.
+fn issue(d: &Path, text: &str, files: &str, extra: &[&str]) -> (String, String) {
+    let mut args = vec!["add", "issue", text, "--files", files, "--json"];
+    args.extend(extra);
+    let (ok, out, err) = fael(d, &args);
+    assert!(ok, "{err}");
+    let row: serde_json::Value = serde_json::from_str(out.lines().last().unwrap()).unwrap();
+    (row["id"].as_str().unwrap().to_string(), err)
+}
+
+#[test]
+fn waiting_issues_list_after_ready_ones() {
+    let d = repo();
+    let (_, warn) = issue(&d, "ocr retry WHEN: vendor fixes 5xx", "src/a.rs", &[]);
+    assert!(
+        warn.contains("WHEN:") && warn.contains("--revisit"),
+        "{warn}"
+    );
+    issue(
+        &d,
+        "ocr gated",
+        "src/a.rs",
+        &["--revisit", "vendor fixes 5xx"],
+    );
+    issue(&d, "scope bug", "src/b.rs", &[]);
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(ok, "{err}");
+    let lines: Vec<&str> = out.lines().filter(|l| l.starts_with("- [")).collect();
+    // newest first among the ready ones; the waiting one last, tagged
+    assert!(
+        lines[2].contains("ocr gated (waiting: vendor fixes 5xx)"),
+        "{out}"
+    );
+    assert!(lines[0].contains("scope bug"), "{out}");
+    assert!(
+        out.contains("--groups") && out.contains("fael claim"),
+        "{out}"
+    );
+}
+
+#[test]
+fn claim_shows_the_holding_branch() {
+    let d = repo();
+    let (id, _) = issue(&d, "invite accept breaks", "src/a.rs", &[]);
+    let (ok, _, err) = fael(&d, &["claim", &id]);
+    assert!(ok, "{err}");
+    let (_, out, _) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(
+        out.contains("invite accept breaks (held @feat/one)"),
+        "{out}"
+    );
+    // the same branch again: nothing to do
+    let new = out.split("- [").nth(1).unwrap().split(']').next().unwrap();
+    let (ok, _, err) = fael(&d, &["claim", new]);
+    assert!(!ok && err.contains("already held @feat/one"), "{err}");
+    // another branch takes it over, with a warning naming the old holder
+    git(&d, &["switch", "-q", "-c", "feat/two"]);
+    let (ok, _, err) = fael(&d, &["claim", new]);
+    assert!(ok && err.contains("was held @feat/one"), "{err}");
+    let (_, out, _) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(out.contains("(held @feat/two)"), "{out}");
+    // a decision is no work item
+    let (ok, out, _) = fael(
+        &d,
+        &[
+            "add", "decision", "x", "--files", "src/a.rs", "--key", "a:b", "--json",
+        ],
+    );
+    assert!(ok);
+    let row: serde_json::Value = serde_json::from_str(out.lines().last().unwrap()).unwrap();
+    let (ok, _, err) = fael(&d, &["claim", row["id"].as_str().unwrap()]);
+    assert!(!ok && err.contains("claim takes an open issue"), "{err}");
+}
+
+#[test]
+fn groups_by_shared_files() {
+    let d = repo();
+    issue(&d, "ocr timeout", "src/a.rs,src/b.rs", &[]);
+    issue(&d, "scope leak", "src/b.rs", &[]);
+    issue(&d, "auth typo", "src/c.rs", &[]);
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue", "--groups"]);
+    assert!(ok, "{err}");
+    assert!(
+        out.starts_with("## group 1 · 2 rows · shared: src/b.rs\n"),
+        "{out}"
+    );
+    let g2 = out.split("## group 2").nth(1).unwrap();
+    assert!(
+        g2.contains("auth typo") && !g2.contains("scope leak"),
+        "{out}"
+    );
+    let (ok, _, err) = fael(&d, &["find", "--kind", "issue", "--groups", "--limit", "2"]);
+    assert!(!ok && err.contains("--groups lists every match"), "{err}");
+}
+
+#[test]
+fn full_cut_line_asks_for_the_rest_in_one_call() {
+    let d = repo();
+    for i in 0..5 {
+        issue(
+            &d,
+            &format!("full row {i} {}", "filler ".repeat(130)),
+            "src/a.rs",
+            &[],
+        );
+    }
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue", "--full"]);
+    assert!(ok, "{err}");
+    let shown = out.lines().filter(|l| l.starts_with("- [")).count();
+    let want = format!(
+        "next: fael find --kind issue --full --offset {shown} --limit {}\n",
+        5 - shown
+    );
+    assert!(out.contains(&want), "{out}");
+}

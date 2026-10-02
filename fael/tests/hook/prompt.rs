@@ -28,10 +28,11 @@ fn prompt_points_at_named_key_once() {
     // once per session
     let (ok, out, _) = ask("s1", "credit again");
     assert!(ok && out.is_empty(), "{out}");
-    // a fresh session: no exact segment = silent, the exact one still points
-    let (ok, out, _) = ask("s2", "credits ledge");
+    // a fresh session: no exact head = silent (a trailing segment is no
+    // head), the exact one still points
+    let (ok, out, _) = ask("s2", "credits ledger");
     assert!(ok && out.is_empty(), "{out}");
-    let (ok, out, _) = ask("s2", "the ledger");
+    let (ok, out, _) = ask("s2", "the credit layer");
     assert!(ok && out.contains("vela:credit-ledger"), "{out}");
     // no session = no once-only list, so no hint
     let (ok, out, _) = ask("", "credit");

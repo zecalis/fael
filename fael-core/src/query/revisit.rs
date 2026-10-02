@@ -62,6 +62,13 @@ pub fn row_due(r: &Row, today: &str) -> bool {
     r.revisit().is_some_and(|v| due(v, today))
 }
 
+/// Waiting on its revisit as of `today`: free text, or a date still ahead.
+/// `find --kind issue` lists these after the issues ready to work.
+pub fn row_waiting(r: &Row, today: &str) -> bool {
+    r.revisit()
+        .is_some_and(|v| !v.trim().is_empty() && !due(v, today))
+}
+
 /// Open rows whose revisit is free text — kickoff counts them,
 /// `find --revisit` lists them. Gone rows stay counted: the count line
 /// points at `find --revisit`, which lists them too, and kickoff never

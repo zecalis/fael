@@ -6,6 +6,7 @@
 mod aliases;
 mod args;
 mod batch;
+mod claim;
 mod find;
 mod help;
 mod hook;
@@ -77,6 +78,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             batch::batch_close(&a, &rest[..rest.len() - 1], &rest[rest.len() - 1])
         }
         ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
+        ("claim", [id]) => claim(&a, id).map(|()| ExitCode::SUCCESS),
         ("find", [] | [_]) => find::find(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
@@ -291,6 +293,17 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
     let (row, path, warns) = write::bump(&r, a, id)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "bump", Some(&r.root), &warns);
+    batch::written(a, &r, &row, &path);
+    Ok(())
+}
+
+/// `fael claim <id>` — this branch holds the issue (see claim::claim).
+fn claim(a: &Args, id: &str) -> Result<(), String> {
+    a.only("claim", &["json"])?;
+    let r = repo()?;
+    let (row, path, warns) = claim::claim(&r, id)?;
+    warns.iter().for_each(|w| eprintln!("{w}"));
+    hook::record_asks("cli", hook::ASK_WARN, "claim", Some(&r.root), &warns);
     batch::written(a, &r, &row, &path);
     Ok(())
 }

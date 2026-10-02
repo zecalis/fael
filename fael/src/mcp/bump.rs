@@ -21,6 +21,11 @@ pub(super) fn bump(a: &Value) -> Result<String, String> {
 }
 
 fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
+    // `claim: true` = `fael claim <id>`: this branch holds the issue
+    if a["claim"].as_bool().unwrap_or(false) {
+        let (row, _, warns) = crate::claim::claim(r, &need(a, "id")?)?;
+        return Ok((done(&row.id, &warns), warns));
+    }
     let log = read(r);
     let urgent = match (
         a["urgent"].as_bool().unwrap_or(false),
@@ -44,6 +49,7 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             to: s(a, "to"),
             urgent,
             revisit: s(a, "revisit"),
+            held: None,
         },
     )?;
     Ok((done(&row.id, &warns), warns))

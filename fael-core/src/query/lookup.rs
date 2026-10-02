@@ -79,10 +79,13 @@ fn tally<'a>(rows: impl Iterator<Item = &'a Row>) -> Vec<KeyUse> {
 const HINT_MAX_KEYS: usize = 3;
 
 /// Open keys a user prompt names (01M3WCK7N): a prompt word equal, ASCII
-/// case-insensitively, to one segment of the key (`:`/`-`/`_`/`.`/`/` split).
-/// Never fuzzy: no prefix, stem or edit distance. A segment under 4 chars or
-/// all digits never matches, and one shared by more than `HINT_MAX_KEYS` open
-/// keys is dropped whole (`vela` in `vela:*`) — too common to point anywhere.
+/// case-insensitively, to the key's head — the first segment after the
+/// namespace (`credit` in `vela:credit-ledger`, `-`/`_`/`.`/`/` split). The
+/// namespace and the trailing segments never match: in vela "data scope" hit
+/// every `vela:*-scope` key and "fael" hit `fael:store`. Never fuzzy: no
+/// prefix, stem or edit distance. A head under 4 chars or all digits never
+/// matches, and one shared by more than `HINT_MAX_KEYS` open keys is dropped
+/// whole — too common to point anywhere.
 /// Open = some row on the key is neither closed nor superseded. At most
 /// `HINT_MAX_KEYS`, most used first, like `keys`.
 // ponytail: plain English words that happen to be a segment ("file" → fael:file-size)
@@ -100,14 +103,14 @@ pub fn key_hints(log: &Log, prompt: &str) -> Vec<KeyUse> {
         .filter(|w| w.len() >= 4 && !w.bytes().all(|b| b.is_ascii_digit()))
         .map(str::to_ascii_lowercase)
         .collect();
-    let segs = |k: &str| -> Vec<String> {
-        k.split([':', '-', '_', '.', '/'])
-            .map(str::to_ascii_lowercase)
-            .collect()
+    let head = |k: &str| -> String {
+        let topic = k.split_once(':').map_or(k, |(_, t)| t);
+        let h = topic.split([':', '-', '_', '.', '/']).next().unwrap_or("");
+        h.to_ascii_lowercase()
     };
     let mut hit: Vec<KeyUse> = vec![];
     for w in &words {
-        let named: Vec<&KeyUse> = keys.iter().filter(|k| segs(&k.key).contains(w)).collect();
+        let named: Vec<&KeyUse> = keys.iter().filter(|k| head(&k.key) == *w).collect();
         if named.len() <= HINT_MAX_KEYS {
             hit.extend(named.into_iter().cloned());
         }
@@ -127,6 +130,17 @@ pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize
         (super::brief(log, f), cfg.kickoff_tokens)
     } else {
         (super::find(log, f), cfg.find_tokens)
+    };
+    // issues ready to work first, those waiting on a revisit after — stable,
+    // so each half keeps its rank (the vela "WHEN: …" issues mixed in)
+    let rows = if f.kind.as_deref() == Some("issue") {
+        let day = super::revisit::today();
+        let (wait, ready): (Vec<_>, Vec<_>) = rows
+            .into_iter()
+            .partition(|r| super::revisit::row_waiting(r, &day));
+        ready.into_iter().chain(wait).collect()
+    } else {
+        rows
     };
     let (page, total) = super::page(rows, f.limit, f.offset);
     (page, f.limit.map_or(budget, |_| usize::MAX), total)
@@ -167,6 +181,13 @@ pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
             "text has {seps} topic separators (; / ·) — one topic per row: split it, \
 each with --key area:topic, so one can be superseded alone"
         ));
+    }
+    // a condition written into the text lists as ready work: --revisit is
+    // the field `find --kind issue` sorts waiting rows by. Warn, never parse.
+    if row.text.contains("WHEN:") && row.revisit().is_none_or(|v| v.trim().is_empty()) {
+        r.push(
+            "text names a condition (WHEN:) but no --revisit — add --revisit \"<condition or YYYY-MM-DD>\" so find lists it as waiting, not ready".into(),
+        );
     }
     // a row whose real files are all docs and carries no anchor leaves
     // kickoff the day the docs move or go (`gone` keeps anchors, never

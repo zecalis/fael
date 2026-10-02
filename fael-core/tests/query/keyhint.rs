@@ -1,4 +1,5 @@
-//! key_hints — a prompt word equal to one key segment points at the key; no fuzz.
+//! key_hints — a prompt word equal to the key's head (first segment after the
+//! namespace) points at the key; no fuzz.
 
 use super::row;
 use fael_core::*;
@@ -66,11 +67,31 @@ fn closed_or_superseded_keys_are_not_open() {
     );
     sup.supersedes = Some("A0000000000000000000000013".into());
     l.rows.push(sup);
-    assert!(keys_of(&l, "token").is_empty());
+    assert!(keys_of(&l, "auth").is_empty());
 }
 
 #[test]
 fn at_most_three_keys() {
     let l = ledger();
-    assert_eq!(keys_of(&l, "credit token billing plan").len(), 3);
+    assert_eq!(keys_of(&l, "credit billing plan").len(), 3);
+}
+
+#[test]
+fn namespace_and_trailing_segments_never_match() {
+    // the vela report: "data scope" named every `*-scope` key, "fael" named
+    // fael:store — only the head after the namespace is a topic word
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000020", "vela:adjustment-scope"),
+            k("A0000000000000000000000021", "vela:line-scope"),
+            k("A0000000000000000000000022", "vela:tax-scope"),
+            k("A0000000000000000000000023", "fael:store"),
+        ],
+        ..Log::default()
+    };
+    assert!(keys_of(&l, "data scope").is_empty());
+    assert!(keys_of(&l, "the fael log").is_empty());
+    assert_eq!(keys_of(&l, "store"), ["fael:store"]);
+    assert_eq!(keys_of(&l, "adjustment"), ["vela:adjustment-scope"]);
 }

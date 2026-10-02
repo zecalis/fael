@@ -85,13 +85,23 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         },
         offset: a["offset"].as_u64().unwrap_or(0) as usize,
     };
+    if a["groups"].as_bool().unwrap_or(false) {
+        return Ok(groups(&log, f, &branch_of));
+    }
     // same rows as the CLI: query() pages after ranking, the cut line names
     // the next offset to repeat the call with
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
+    // under full=true bodies fill the budget in a few rows: ask for the rest in
+    // one call (an explicit limit beats the budget, 01M3S6GD)
+    let rest_in_one = a["full"].as_bool().unwrap_or(false) && f.limit.is_none();
+    let next = |n: usize| match rest_in_one {
+        true => format!("offset={n} limit={}", total.saturating_sub(n)),
+        false => format!("offset={n}"),
+    };
     let cut = core::Cut {
         total,
         offset: f.offset,
-        next: &|n| format!("offset={n}"),
+        next: &next,
     };
     // only what fit the budget was said — like the push, count the shown lines
     let text = if rows.is_empty() {
@@ -103,10 +113,40 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     };
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
+    // grouping and claiming, said where the issue list is (CLI: ISSUE_TIP)
+    let unpaged = f.limit.is_none() && f.offset == 0;
+    let text = if f.kind.as_deref() == Some("issue") && total > 1 && unpaged {
+        format!(
+            "{text}fix together: find kind=issue groups=true · working one? bump id=<id> claim=true first\n"
+        )
+    } else {
+        text
+    };
     // the CLI's stderr line has no stderr here: it rides the result
     let text = match note {
         Some(n) => format!("{}\n{n}", text.trim_end()),
         None => text,
     };
     Ok((text, shown))
+}
+
+/// `groups: true` — every match, unpaged: half a group answers the question wrong.
+fn groups(
+    log: &core::Log,
+    f: core::Filter,
+    branch_of: &crate::find::branches::BranchMap,
+) -> (String, Vec<String>) {
+    let rows = core::find(
+        log,
+        &core::Filter {
+            limit: None,
+            offset: 0,
+            ..f
+        },
+    );
+    let text = match rows.is_empty() {
+        true => "no rows match".into(),
+        false => crate::find::branches::tag(core::render_groups(log, &rows), branch_of),
+    };
+    (text, rows.iter().map(|r| r.id.clone()).collect())
 }
