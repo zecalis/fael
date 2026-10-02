@@ -171,9 +171,10 @@ pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
     let journal = scratch.is_none().then(|| journal::root(&root)).flatten();
     let fael = scratch.map_or_else(|| root.join(".fael"), PathBuf::from);
     let mut cfg = config(&fael.join("config.toml"))?;
-    // unset store: a tree log already here keeps `tracked` (repos from before
-    // `local` became the default); everything else starts `local`
-    if !cfg.store_set && !fael.join("log").is_dir() {
+    // unset store is `local` everywhere: a tree log from before stays read
+    // (the union, tree wins on ids) as frozen history, never written again —
+    // only an explicit `store = "tracked"` asks for rows to commit (01M3YQT4)
+    if !cfg.store_set {
         cfg.store = core::Store::Local;
     }
     Ok(Repo {

@@ -72,8 +72,10 @@ deletion.
 
 ## Moving a tracked repo to local
 
-Repos that adopted fael before `local` became the default still commit `.fael/log`, and every
-PR that appends to the same month file conflicts on GitHub (it ignores `merge=union`). To stop:
+A repo with no `store` line stops writing `.fael/log` on upgrade: the tree log is read as frozen
+history and new rows stay in the journal. A repo that set `store = "tracked"` keeps committing
+`.fael/log`, and every PR that appends to the same month file conflicts on GitHub (it ignores
+`merge=union`). To stop, or to fold the tree log in before removing it:
 
 ```bash
 fael migrate local        # fold .fael/log into this clone's journal, set store = "local"

@@ -135,9 +135,10 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
   carry no memory. A failed tree write is a warning, never a retry (the row is
   already durable; a retry would file it twice under a new id). Reads union
   both, tree wins on duplicate ids; journal-only rows tag `@<branch>`.
-- An unset `store` is `tracked` where a `.fael/log` already sits in the tree
-  (repos from before `local` became the default, so none changes mode on
-  upgrade), else `local`. A repo whose rows live only in the journal keeps
+- An unset `store` is `local`, also where a `.fael/log` already sits in the
+  tree: that log stays read (the union above) as frozen history and nothing
+  appends to it, so no memory file is ever left to commit (decision
+  01M3YQT4). Only an explicit `store = "tracked"` writes the tree. A repo whose rows live only in the journal keeps
   its alias cache there too (`<git-common-dir>/fael/cache`): the tree never grows a `.fael/`.
 - Across clones durability still comes from git; rows are not fsynced one by one.
 - Across clones and machines journals travel through `fael sync`: each writer's
@@ -195,7 +196,7 @@ Ids are accepted as a unique prefix and printed at the shortest length that stay
 kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
-store = "local"               # journal only (default when no .fael/log sits in the tree); "tracked" also writes .fael/log to commit
+store = "local"               # journal only (default, tree log or not); "tracked" also writes .fael/log to commit
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800
