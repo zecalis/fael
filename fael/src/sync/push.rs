@@ -30,6 +30,9 @@ pub(super) struct Pushed {
     pub pushed: usize,
     /// Rows the remote ref held that the journal was missing.
     pub ingested: usize,
+    /// This writer's newest id in the journal this push read — the late
+    /// watermark once the sync succeeds.
+    pub mark: String,
 }
 
 impl Own<'_> {
@@ -43,7 +46,10 @@ impl Own<'_> {
         let carried = |rows: &[core::Row]| carried(rows, self.by, &imported, o);
         let (rows0, closes0) = (carried(&log.rows), carried(&log.closes));
         let mut tip = o.own_tip.clone();
-        let mut out = Pushed::default();
+        let mut out = Pushed {
+            mark: super::late::newest_in(&log, self.by),
+            ..Pushed::default()
+        };
         if rows0.is_empty() && closes0.is_empty() && tip.is_none() {
             return Ok(out);
         }

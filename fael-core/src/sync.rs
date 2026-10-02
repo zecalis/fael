@@ -184,17 +184,24 @@ pub fn validate(meta: &Meta, repo_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `scheme://user:pass@host/p` → `scheme://host/p`. scp-style `git@host:p`
-/// has no password slot and passes through, like every url without `://`.
-fn strip_userinfo(url: &str) -> String {
-    let Some((scheme, rest)) = url.split_once("://") else {
-        return url.into();
-    };
-    let host = &rest[..rest.find('/').unwrap_or(rest.len())];
-    match host.rfind('@') {
-        Some(at) => format!("{scheme}://{}", &rest[at + 1..]),
-        None => url.into(),
+/// `scheme://user:pass@host/p` → `scheme://host/p`, for every url in `text`
+/// — one url, or a git error that quotes one. scp-style `git@host:p` has no
+/// password slot and passes through, like every url without `://`.
+pub fn strip_userinfo(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("://") {
+        let (head, tail) = rest.split_at(i + 3);
+        out.push_str(head);
+        let end = tail
+            .find(|c: char| c == '/' || c == '\'' || c == '"' || c.is_whitespace())
+            .unwrap_or(tail.len());
+        let host = &tail[..end];
+        out.push_str(host.rfind('@').map_or(host, |at| &host[at + 1..]));
+        rest = &tail[end..];
     }
+    out.push_str(rest);
+    out
 }
 
 fn lines(rows: &[&Row]) -> String {

@@ -190,3 +190,12 @@ fn validate_meta_rejects_version_and_repo_mismatch() {
     assert!(validate(&v2, "abc123").is_err());
     assert!(validate(&meta(), "other").is_err());
 }
+
+#[test]
+fn a_git_error_loses_every_url_password() {
+    let raw = "fatal: unable to access 'https://u:ghp_x@host/m.git/': 403\nvia http://a:b@c d";
+    assert_eq!(
+        strip_userinfo(raw),
+        "fatal: unable to access 'https://host/m.git/': 403\nvia http://c d"
+    );
+}

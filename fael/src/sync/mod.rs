@@ -21,7 +21,7 @@ mod origin;
 mod purged;
 mod push;
 
-pub(crate) use late::{line as late_line, newest};
+pub(crate) use late::{forget as forget_mark, line as late_line, newest};
 pub(crate) use purged::record as record_purge;
 
 use crate::{Repo, core};
@@ -34,37 +34,44 @@ use std::path::Path;
 /// Ingest comes first: the push needs to know which rows other refs already
 /// carry, which writer ids own a ref, and which ids were purged.
 ///
-/// Every run past the lock leaves its outcome for the late line (`late`): a
-/// failure must not stay in a log file nobody reads. A `--remote` that
-/// synced becomes `fael.remote` when none is set — one command sets it up.
+/// A run against `fael.remote` leaves its outcome for the late line (`late`):
+/// a failure must not stay in a log file nobody reads. A one-off `--remote`
+/// elsewhere neither clears nor sets it, and with no remote at all nothing
+/// ran. A `--remote` that synced becomes `fael.remote` when none is set —
+/// one command sets it up.
 pub(crate) fn sync(r: &Repo, a: &crate::Args) -> Result<(), String> {
     let _lock = lock::acquire(r)?; // before the first journal read; drops at return
-    let mark = newest(r);
     let flag = a.one("remote").filter(|u| !u.is_empty());
-    let res = run(r, flag.clone());
-    late::record(r, &mark, &res);
-    if let (Ok(()), Some(u)) = (&res, flag)
-        && crate::git(&r.root, &["config", "fael.remote"]).is_none()
-    {
+    // `--remote <url>` wins, else `git config fael.remote` (per machine, in
+    // `.git/config`, never committed)
+    let set = crate::git(&r.root, &["config", "fael.remote"]);
+    let remote = flag.clone().or(set.clone()).ok_or_else(|| {
+        "fael: no fael.remote — set it with: git config fael.remote <url>".to_string()
+    })?;
+    let res = run(r, &remote);
+    if set.as_ref().is_none_or(|s| *s == remote) {
+        late::record(r, &res);
+    }
+    if let (Ok(_), Some(u), None) = (&res, flag, set) {
         let _ = git::run(&r.root, &["config", "fael.remote", &u]);
         println!("fael.remote = {u} (this clone) — auto sync uses it from now on");
     }
-    res
+    res.map(drop)
 }
 
-fn run(r: &Repo, flag: Option<String>) -> Result<(), String> {
-    let remote = remote(r, flag)?;
-    origin::warn(r, &remote);
+/// One sync against `remote`; `Ok` carries the late watermark.
+fn run(r: &Repo, remote: &str) -> Result<String, String> {
+    origin::warn(r, remote);
     let repo_id = repo_id(r)?;
     let by = crate::writer(r);
     let refname = core::sync::ref_name(&repo_id, &by)?;
     let origin = crate::git(&r.root, &["config", "remote.origin.url"]).unwrap_or_default();
     let meta = core::sync::Meta::new(&repo_id, &origin, &name(&r.root));
 
-    let others = ingest::others(r, &remote, &repo_id, &refname)?;
+    let others = ingest::others(r, remote, &repo_id, &refname)?;
     let own = push::Own {
         r,
-        remote: &remote,
+        remote,
         refname: &refname,
         repo_id: &repo_id,
         by: &by,
@@ -77,18 +84,7 @@ fn run(r: &Repo, flag: Option<String>) -> Result<(), String> {
     } else {
         println!("synced: pushed {}, ingested {ingested}", p.pushed);
     }
-    Ok(())
-}
-
-/// `--remote <url>` wins, else `git config fael.remote` (per machine, in
-/// `.git/config`, never committed). Neither is set → the one-line error.
-fn remote(r: &Repo, flag: Option<String>) -> Result<String, String> {
-    if let Some(u) = flag.filter(|u| !u.is_empty()) {
-        return Ok(u);
-    }
-    crate::git(&r.root, &["config", "fael.remote"]).ok_or_else(|| {
-        "fael: no fael.remote — set it with: git config fael.remote <url>".to_string()
-    })
+    Ok(p.mark)
 }
 
 /// The workspace identity, identical for every clone and every branch: the
