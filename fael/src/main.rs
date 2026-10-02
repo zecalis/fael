@@ -7,6 +7,7 @@ mod aliases;
 mod args;
 mod batch;
 mod claim;
+mod close_key;
 mod find;
 mod help;
 mod hook;
@@ -74,6 +75,9 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("add", [kind, text]) => add(&a, kind, text).map(|()| ExitCode::SUCCESS),
         // chunk 6b: `fael add --json -` reads a JSON array of rows from stdin
         ("add", [dash]) if dash == "-" && a.has("json") => batch::batch_add(&a),
+        ("close", rest) if a.has("key") => {
+            close_key::cli(&a, &a.one("key").unwrap_or_default(), rest)
+        }
         ("close", rest) if rest.len() >= 2 => {
             batch::batch_close(&a, &rest[..rest.len() - 1], &rest[rest.len() - 1])
         }

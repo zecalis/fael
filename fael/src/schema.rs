@@ -68,6 +68,7 @@ pub(crate) fn tools() -> Value {
                 "id": str_("id or prefix from find"),
                 "ids": {"type": "array", "items": {"type": "string"},
                     "description": "many ids, one reason"},
+                "key": str_("the one open row on this key"),
                 "text": str_("why, e.g. fixed in <sha>"),
             }},
         },
@@ -84,7 +85,7 @@ pub(crate) fn tools() -> Value {
 #[cfg(test)]
 mod tests {
     /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6300 bytes
-    /// combined (measured 6215 on 2026-10-02 — SKILL 2390 + schema 3825).
+    /// combined (measured 6284 on 2026-10-03 — SKILL 2390 + schema 3894, `close key` included).
     /// Raised from 6100 by owner decision when `find ids[]` joined `close
     /// ids[]`: batching the read and the write each saves an agent round per
     /// row, which outweighs ~120 bytes a session. The ≥40% cut was retargeted
