@@ -17,7 +17,32 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
+  # branch protection requires `gate` alone, so the jobs below may skip on a prose-only
+  # PR: a skipped matrix job reports as bare `test`, never `test (<os>)`, which left
+  # a per-job requirement pending forever
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.diff.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      # ponytail: a short allowlist of files nothing compiles. docs/ and skill/ stay out:
+      # include_str! builds docs/architecture.md and skill/SKILL.md into the binary
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ] &&
+             ! git diff --name-only HEAD^1 HEAD |
+               grep -qvE '^[^/]+\.md$|^LICENSE|^\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)'; then
+            echo rust=false >> "$GITHUB_OUTPUT"
+          else
+            echo rust=true >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -34,6 +59,8 @@ jobs:
       - run: scripts/file-size.sh
 
   test:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +80,8 @@ jobs:
       - run: cargo nextest run --workspace --locked --no-fail-fast
 
   msrv:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -63,3 +92,12 @@ jobs:
           # that PR alone, so saving it is upload time for nobody)
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --workspace --locked
+
+  gate:
+    if: always()
+    needs: [changes, lint, test, msrv]
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo ok
