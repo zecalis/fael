@@ -47,7 +47,10 @@ jobs:
           # main's run warms every OS; PR runs only read it (a PR cache is visible to
           # that PR alone, so saving it is upload time for nobody)
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo test --workspace --locked --no-fail-fast
+      # nextest pools every test binary's tests; `cargo test` runs the ~35 binaries one
+      # after another, so Windows (slow process spawn) idles on small binaries
+      - uses: taiki-e/install-action@nextest
+      - run: cargo nextest run --workspace --locked --no-fail-fast
 
   msrv:
     runs-on: ubuntu-latest
