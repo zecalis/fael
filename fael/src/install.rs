@@ -53,6 +53,8 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
 ];
 /// Codex reads through the shell — no read hook; file edits are apply_patch.
 /// Shell calls match as `Bash`, so the search hook fires there like on Claude.
+/// No prompt hook either — Codex hooks know no UserPromptSubmit, so the key
+/// hint is Claude-only (deliberate, #159); the docs say so too (01M3XKB7K).
 const CODEX_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ("Stop", None, "stop"),
     ("SessionStart", None, "session-start"),

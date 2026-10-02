@@ -102,6 +102,29 @@ fn print_reply(event: &str, r: super::protocol::Reply, codex: bool) {
     }
 }
 
+/// The prompt arm: a changed payload must say so, not silently switch the hint
+/// off (01M3XKB7H). Serde defaults every field, so a renamed or dropped
+/// `prompt` parses Ok with empty text — a hook on a real turn always carries
+/// the prompt, so an empty one is logged. Malformed JSON is logged too. Either
+/// way the reply fails open (no hint, nothing printed).
+fn prompt_reply(stdin: &str, client: Option<String>) -> super::protocol::Reply {
+    let Ok(p) = serde_json::from_str::<ClaudePrompt>(stdin) else {
+        eprintln!("fael hook prompt: unparsable UserPromptSubmit payload");
+        return super::protocol::Reply::default();
+    };
+    if p.prompt.is_empty() && !stdin.trim().is_empty() {
+        eprintln!("fael hook prompt: UserPromptSubmit payload has no `prompt` text — hint skipped");
+    }
+    let e = Event {
+        cwd: p.base.cwd,
+        session: p.base.transcript_path.or(p.base.session_id),
+        text: Some(p.prompt),
+        client,
+        ..Event::default()
+    };
+    super::prompt::prompt(&e)
+}
+
 /// Claude Code and Codex: same stdin fields, same reply JSON.
 pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
     let client = Some(client.to_string());
@@ -154,15 +177,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             ExitCode::SUCCESS
         }
         "prompt" => {
-            let p: ClaudePrompt = serde_json::from_str(stdin).unwrap_or_default();
-            let e = Event {
-                cwd: p.base.cwd,
-                session: p.base.transcript_path.or(p.base.session_id),
-                text: Some(p.prompt),
-                client,
-                ..Event::default()
-            };
-            print_reply("UserPromptSubmit", super::prompt::prompt(&e), codex);
+            print_reply("UserPromptSubmit", prompt_reply(stdin, client), codex);
             ExitCode::SUCCESS
         }
         "read" | "edit" | "search" => {

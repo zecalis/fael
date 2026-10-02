@@ -152,14 +152,14 @@ fn delivered(h: &mut String, s: &Stats, info: &HashMap<String, Info>) {
             .map(|c| (c.events, c.est_tokens))
             .unwrap_or((0, 0))
     };
-    let parts = ["read", "edit", "session-start", "search"].map(ev);
+    let parts = ["read", "edit", "session-start", "search", "prompt"].map(ev);
     let (n, toks) = parts.iter().fold((0, 0), |a, p| (a.0 + p.0, a.1 + p.1));
     let _ = write!(
         h,
         "<section><h2>1. What memory reached your agents?</h2>\n<p>fael put memory into \
-         context <b>{n}</b> times (read ×{} · edit ×{} · session start ×{} · search ×{}), \
-         ~{toks} tokens.",
-        parts[0].0, parts[1].0, parts[2].0, parts[3].0
+         context <b>{n}</b> times (read ×{} · edit ×{} · session start ×{} · search ×{} · \
+         prompt hint ×{}), ~{toks} tokens.",
+        parts[0].0, parts[1].0, parts[2].0, parts[3].0, parts[4].0
     );
     if s.retired.pushed > 0 {
         let _ = write!(
