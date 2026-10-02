@@ -309,3 +309,43 @@ fn find_id_shapes_match_cli() {
     let (is_err, body) = find(serde_json::json!({"text": fake}));
     assert!(!is_err && body.contains("for context"), "{body}");
 }
+
+/// MCP `close` takes `ids: [...]` like the CLI's `close a b "why"`: a bad id
+/// reports alone and turns the call into an error, the rest still close.
+#[test]
+fn close_ids_closes_the_rest_and_names_the_bad_one() {
+    let (_, wt) = main_and_worktree();
+    std::fs::write(wt.join("src/b.rs"), "// b\n").unwrap();
+    let text = |r: &[serde_json::Value]| {
+        r[0]["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let file = |t: &str| {
+        let r = mcp_tool(
+            &wt,
+            "add",
+            &[serde_json::json!({"kind": "issue", "text": t, "files": ["src/b.rs"]})],
+        );
+        text(&r).lines().next().unwrap()["recorded ".len()..].to_string()
+    };
+    let (a, b) = (file("first broken thing"), file("second odd thing"));
+    let r = mcp_tool(
+        &wt,
+        "close",
+        &[serde_json::json!({"ids": [a, "01NOSUCHROW", b], "text": "fixed"})],
+    );
+    assert_eq!(r[0]["result"]["isError"], true);
+    let out = text(&r);
+    // each close files its own row: two recorded, the bad id named
+    assert_eq!(out.matches("recorded ").count(), 2, "{out}");
+    assert!(out.contains("rejected: 01NOSUCHROW"), "{out}");
+    // both really closed: closing one again is refused
+    let again = mcp_tool(
+        &wt,
+        "close",
+        &[serde_json::json!({"id": a, "text": "again"})],
+    );
+    assert!(text(&again).contains("closed"), "{}", text(&again));
+}

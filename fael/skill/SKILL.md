@@ -21,7 +21,7 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
 - Self-heal: a same-kind row on your open row's key — an issue only the same finding — supersedes
   it, same-topic notes likewise; `fael restore <id>` undoes. `--key` starts a new topic.
-- Long body? `--title "<≤15-word headline>"` — lists show it, `fael find <id>` pulls the body.
+- First sentence past ~12 words? `--title "<≤15 words>"` — lists cut untitled rows at ~80 chars.
 
 Each row is read months later with no chat: one or two standalone sentences.
 `--files` names the paths or an anchor (`doc:pricing`) `fael find` showed — never
