@@ -26,29 +26,8 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // `branches: true` merges unmerged branches' rows into the union log
     // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
     let (base, jtags) = crate::journal::read(r);
-    // `ids: [...]` pulls several bodies in one call; a bad id reports alone,
-    // the rest still print, and any bad id makes the call an error (like close)
     if let Some(ids) = a["ids"].as_array() {
-        let ids: Vec<String> = ids
-            .iter()
-            .filter_map(Value::as_str)
-            .map(String::from)
-            .collect();
-        if ids.is_empty() {
-            return Err("rejected: ids is empty — pass at least one id".into());
-        }
-        let spell = |left: &[String]| format!("ids=[{}]", left.join(", "));
-        let p = crate::find::many::pull(r, base, jtags, &ids, false, &spell);
-        let text = [p.text.trim_end().to_string()]
-            .into_iter()
-            .chain(p.errors.iter().cloned())
-            .filter(|t| !t.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n");
-        return match p.errors.is_empty() {
-            true => Ok((text, p.shown)),
-            false => Err(text),
-        };
+        return ids_call(ids, r, base, jtags);
     }
     // `find {"id": ...}` pulls that row's body — an id-shaped query is an id
     // lookup, never text (same messages as the CLI); pass it as `text` for a
@@ -154,6 +133,37 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         None => text,
     };
     Ok((text, shown))
+}
+
+/// `ids: [...]` pulls several bodies in one call under the find budget; a bad
+/// id reports alone, the rest still print, and any bad id makes the call an
+/// error (like batch close).
+fn ids_call(
+    ids: &[Value],
+    r: &Repo,
+    base: core::Log,
+    jtags: crate::find::branches::BranchMap,
+) -> Result<(String, Vec<String>), String> {
+    let ids: Vec<String> = ids
+        .iter()
+        .filter_map(Value::as_str)
+        .map(String::from)
+        .collect();
+    if ids.is_empty() {
+        return Err("rejected: ids is empty — pass at least one id".into());
+    }
+    let spell = |left: &[String]| format!("ids=[{}]", left.join(", "));
+    let p = crate::find::many::pull(r, base, jtags, &ids, false, &spell);
+    let text = [p.text.trim_end().to_string()]
+        .into_iter()
+        .chain(p.errors.iter().cloned())
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    match p.errors.is_empty() {
+        true => Ok((text, p.shown)),
+        false => Err(text),
+    }
 }
 
 /// `groups: true` — every match, unpaged: half a group answers the question wrong.
