@@ -230,15 +230,29 @@ pub(crate) fn read(r: &Repo) -> Log {
 /// Writer id from git identity; no email → hostname hash, with a warning.
 /// `pub(crate)` — the session-start hook matches `--to` against it.
 pub(crate) fn writer(r: &Repo) -> String {
-    let name = git(&r.root, &["config", "user.name"]).unwrap_or_default();
-    let email = git(&r.root, &["config", "user.email"]);
-    let host = Command::new("hostname")
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default();
-    if email.is_none() {
-        eprintln!("fael: git user.email is not set — writer id hashes the hostname instead");
+    // one spawn for both keys (last value wins, as `git config <key>`); `hostname` only as the seed
+    let cfg = git(
+        &r.root,
+        &["config", "--get-regexp", r"^user\.(name|email)$"],
+    )
+    .unwrap_or_default();
+    let (mut name, mut email) = (String::new(), None);
+    for line in cfg.lines() {
+        match line.split_once(' ') {
+            Some(("user.name", v)) => name = v.to_string(),
+            Some(("user.email", v)) if !v.is_empty() => email = Some(v.to_string()),
+            _ => {}
+        }
     }
+    let host = if email.is_some() {
+        String::new()
+    } else {
+        eprintln!("fael: git user.email is not set — writer id hashes the hostname instead");
+        Command::new("hostname")
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default()
+    };
     core::writer_id(&name, email.as_deref(), &host)
 }
 
