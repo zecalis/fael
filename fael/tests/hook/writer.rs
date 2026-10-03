@@ -70,9 +70,11 @@ fn fael_session_tags_a_row_like_claude_code_session_id() {
 }
 
 #[test]
-fn claude_code_session_id_wins_over_fael_session() {
+fn fael_session_wins_over_claude_code_session_id() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    // the plugin sets FAEL_SESSION only inside OpenCode's own shells, so it
+    // is fresher than an inherited CLAUDE_CODE_SESSION_ID from an outer shell
     let (ok, _, err) = fael_env(
         &d,
         &["add", "note", "first", "--files", "src/a.rs"],
@@ -84,7 +86,10 @@ fn claude_code_session_id_wins_over_fael_session() {
     );
     assert!(ok, "{err}");
     let log = log_text(&d);
-    assert!(log.contains(r#""session":"abc-123""#), "{log}");
+    assert!(
+        log.contains(r#""session":"2026-09-26T00:00:00.000Z""#),
+        "{log}"
+    );
 }
 
 #[test]
