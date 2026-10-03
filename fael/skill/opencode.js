@@ -18,8 +18,27 @@ function hook(event, e) {
   }
 }
 
-const EDIT = new Set(["edit", "write", "multiedit"]);
+const EDIT = new Set(["edit", "write", "multiedit", "apply_patch"]);
 const SEARCH = new Set(["grep", "glob", "bash"]);
+
+// apply_patch (patchText) carries no filePath: read the paths off the patch
+// headers, the same four claude.rs `patch_files` reads for Codex.
+const PATCH_HEADERS = [
+  "*** Add File: ",
+  "*** Update File: ",
+  "*** Delete File: ",
+  "*** Move to: ",
+];
+function patch_files(patch) {
+  if (typeof patch !== "string") return [];
+  return patch
+    .split("\n")
+    .flatMap((l) => {
+      const h = PATCH_HEADERS.find((h) => l.startsWith(h));
+      return h ? [l.slice(h.length).trim()] : [];
+    })
+    .filter(Boolean);
+}
 
 export const Fael = async ({ client, directory }) => {
   // session start as RFC 3339 — the `session` string stop needs, and the same
@@ -59,8 +78,6 @@ export const Fael = async ({ client, directory }) => {
       if (briefs.get(id)) output.system.push(briefs.get(id));
     },
 
-    // ponytail: filePath tools only — apply_patch (patchText) edits are not
-    // recorded; stop then falls back to commits
     "tool.execute.after": async (input, output) => {
       const session = await start(input.sessionID);
       if (SEARCH.has(input.tool)) {
@@ -78,9 +95,12 @@ export const Fael = async ({ client, directory }) => {
         return;
       }
       const event = input.tool === "read" ? "read" : EDIT.has(input.tool) ? "edit" : null;
-      const file = input.args?.filePath;
-      if (!event || !file) return;
-      const r = hook(event, { cwd: directory, session, files: [file] });
+      const files =
+        input.tool === "apply_patch"
+          ? patch_files(input.args?.patchText)
+          : [input.args?.filePath].filter(Boolean);
+      if (!event || files.length === 0) return;
+      const r = hook(event, { cwd: directory, session, files });
       if (r.context) output.output += `\n\n${r.context}`;
       say(r);
     },
