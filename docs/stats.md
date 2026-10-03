@@ -20,8 +20,9 @@ Every number comes from two inputs, joined as pure functions in
   An edit writes one 0-byte `event: "in-context"` row when decisions or issues
   about that very file were already in the session's context — their ids go
   under `in_context`, never `ids` (nothing was pushed), each id once per
-  session. It is no injection: no count above includes it. Torn lines are skipped; temp-dir repos (the OS temp dir and `/tmp`, where
-  agent scratchpads live) are skipped unless the state dir itself is scratch.
+  session. It is no injection: no count above includes it. Torn lines are
+  skipped; temp-dir repos (the OS temp dir and `/tmp`, where agent
+  scratchpads live) are skipped unless the state dir itself is scratch.
   `--since <YYYY-MM-DD | RFC 3339>` keeps only the lines stamped at or after
   it, before anything is counted — first use per repo, rows added and
   `capture` then all read as that window. `fael report` renders this same
@@ -84,7 +85,7 @@ No state dir → zeros with `repos: []`, exit 0.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema` | u32 | contract version of **this** shape, currently `1` (`DAY_SCHEMA`, versioned apart from `Stats`) |
+| `schema` | u32 | contract version of **this** shape, currently `2` (`DAY_SCHEMA`, versioned apart from `Stats`) |
 | `day` | `YYYY-MM-DD` | the local day `now` falls in |
 | `tz_offset` | `±hh:mm` | the offset used (`+00:00` for UTC) |
 | `all` | object | the five panels + `timeline` over every repo |
@@ -119,17 +120,21 @@ newest-first across repos.
 
 ## Changelog
 
+Newest first.
+
 - `2` (2026-10-03): the Stop-block mode is gone (fael never blocks a turn), so
   every field that read its usage rows went with it: `stop_blocks`,
   `repeat_blocks`, `real_tokens` (post-block cost), `asks.stop-block`,
   `rounds.after_block`, `capture.post_stop_rounds`. Old `stop-*` usage rows
-  still count as events in `events`/`by_event`. `DayView: 2` (same day):
-  `health.ignored_blocks` removed.
-- `1` (2026-10-01): added `value` (the value line) and `in-context` usage rows; no bump.
-- `1` (2026-10-03): added `value.cross_agent` (rows that crossed sessions, worktrees, live); no bump.
-- `1` (2026-10-03): `cross_agent` gained `other_client`, `by_client`, `writer_unknown`, and now joins a Claude session's usage path to the row's UUID (before, a row pushed back to its own Claude writer counted as another session and `other_worktree` missed Claude writers); no bump.
+  still count as events in `events`/`by_event`. No reader of `1` ships: the
+  CLI and `fael report` use the `Stats` struct itself, and the desktop app is
+  not built yet.
+- `DayView: 2` (2026-10-03): `health.ignored_blocks` removed with the
+  Stop-block mode; `health` is `{stale_issues}`.
 - `1` (2026-10-03): added `value.by_event` (hit rate per push event, windowed to when each client could write `in-context` lines); no bump. The text `fael stats` prints it beside each event's cost.
-
+- `1` (2026-10-03): `cross_agent` gained `other_client`, `by_client`, `writer_unknown`, and now joins a Claude session's usage path to the row's UUID (before, a row pushed back to its own Claude writer counted as another session and `other_worktree` missed Claude writers); no bump.
+- `1` (2026-10-03): added `value.cross_agent` (rows that crossed sessions, worktrees, live); no bump.
+- `1` (2026-10-01): added `value` (the value line) and `in-context` usage rows; no bump.
 - `1` (2026-10-01): `--since` cuts the input to a window and the temp filter also skips `/tmp`; same shape, no bump.
 - `1` (2026-10-01): added `retired` (pushed rows closed or superseded within a day of a push); no bump.
 - `1` (2026-09-30): usage rows may carry `agent`; readers ignore it today — no bump.
