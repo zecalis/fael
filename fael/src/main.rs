@@ -4,6 +4,7 @@
 //! add/close/find over stdio (see mcp.rs).
 
 mod aliases;
+mod amend;
 mod args;
 mod batch;
 mod claim;
@@ -73,6 +74,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     let rest = a.pos.get(1..).unwrap_or_default();
     match (cmd, rest) {
         ("add", [kind, text]) => add(&a, kind, text).map(|()| ExitCode::SUCCESS),
+        // `--replace` re-files a row with one passage changed — no text to type
+        ("add", [kind]) if a.has("replace") => add(&a, kind, "").map(|()| ExitCode::SUCCESS),
         // chunk 6b: `fael add --json -` reads a JSON array of rows from stdin
         ("add", [dash]) if dash == "-" && a.has("json") => batch::batch_add(&a),
         ("close", rest) if a.has("key") => {
@@ -249,6 +252,18 @@ fn stamp(r: &Repo) -> core::Stamp {
 
 fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     let r = repo()?;
+    let base = match a.has("replace") {
+        true if !text.is_empty() => {
+            return Err("rejected: --replace takes the text from the row it supersedes — drop the \"<text>\"".into());
+        }
+        true => Some(amend::base(&r, a, kind)?),
+        false => None,
+    };
+    let text = base.as_ref().map_or(text, |b| b.text.as_str());
+    let files = match (a.files(), &base) {
+        (f, Some(b)) if f.is_empty() => b.files.clone(),
+        (f, _) => f,
+    };
     let urgent = match (a.has("urgent"), a.one("urgent-before")) {
         (false, None) => core::Urgent::Unset,
         (true, None) => core::Urgent::End,
@@ -260,9 +275,11 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     // bare `--revisit` names no date or text — that only filters on `find`
     let revisit = write::parse_revisit(a.has("revisit"), a.one("revisit"))?;
     let opts = write::AddOpts {
-        key: a.one("key"),
+        key: a.one("key").or(base.as_ref().and_then(|b| b.key.clone())),
         to: a.one("to"),
-        title: a.one("title"),
+        title: a
+            .one("title")
+            .or(base.as_ref().and_then(|b| b.title.clone())),
         revisit,
         urgent,
         supersedes: a.one("supersedes"),
@@ -271,7 +288,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     // `--dry-run` prints the Verdict the real add would act on and writes
     // nothing — same `prepare` as the real add, so the two can never disagree
     if a.has("dry-run") {
-        let (p, _, _) = write::prepare(&r, kind, text, &a.files(), opts)?;
+        let (p, _, _) = write::prepare(&r, kind, text, &files, opts)?;
         p.warns.iter().for_each(|w| eprintln!("{w}"));
         println!(
             "{}",
@@ -279,7 +296,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         );
         return Ok(());
     }
-    let (row, path, warns) = write::add_row(&r, kind, text, &a.files(), opts)?;
+    let (row, path, warns) = write::add_row(&r, kind, text, &files, opts)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_row_asks("cli", "add", &r.root, &row, &warns);
     batch::written(a, &r, &row, &path);
