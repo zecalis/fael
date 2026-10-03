@@ -269,6 +269,7 @@ fn install_repoints_stale_hook_without_client() {
     let s = read(&claude);
     assert!(!s.contains("/old/fael"), "{s}");
     assert!(s.contains("hook read --client claude"), "{s}");
+    assert!(s.contains("\"timeout\": 10"), "{s}");
     // one entry, not old + new side by side
     assert_eq!(s.matches("hook read").count(), 1, "{s}");
     // a second run changes nothing
@@ -277,6 +278,26 @@ fn install_repoints_stale_hook_without_client() {
         !out.contains("wrote") && !out.contains("repointed"),
         "{out}"
     );
+}
+
+/// A fael hook left without a timeout gets one; a timeout the user set stays.
+#[test]
+fn install_adds_a_missing_hook_timeout_and_keeps_the_users() {
+    let home = std::env::temp_dir().join(format!("fael-install-{}", fael_core::ulid()));
+    let claude = home.join(".claude/settings.json");
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(
+        &claude,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "fael hook read --client claude"}]}],
+          "Stop": [{"hooks": [{"type": "command", "command": "fael hook stop --client claude", "timeout": 30}]}]}}"#,
+    )
+    .unwrap();
+    let out = install(&home, &["--client", "claude"]);
+    assert!(out.contains("PostToolUse (timeout)"), "{out}");
+    let s = read(&claude);
+    assert!(s.contains("\"timeout\": 30"), "{s}");
+    assert_eq!(s.matches("\"timeout\": 30").count(), 1, "{s}");
+    assert!(!out.contains("Stop (timeout)"), "{out}");
 }
 
 /// The state the pre-fix installer left — a bare subcommand plus a suffixed

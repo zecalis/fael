@@ -7,7 +7,12 @@ use super::Ctx;
 use serde_json::{Map, Value, json};
 use std::path::Path;
 
-// --- claude / codex hooks: the same {hooks: {Event: [{matcher?, hooks: [{type, command}]}]}} ---
+// --- claude / codex hooks: the same {hooks: {Event: [{matcher?, hooks: [{type, command, timeout}]}]}} ---
+
+/// Seconds a fael hook may run before the client kills it. Unset, a hung hook
+/// holds the turn for the client's default (Claude Code: 600s); fael's hooks
+/// take milliseconds (docs/integrate.md), so 10s only ever ends a hang.
+const HOOK_TIMEOUT: u64 = 10;
 
 pub(crate) fn is_fapony_blocker(cmd: &str) -> bool {
     cmd.contains("fapony") && (cmd.contains("hook-stop") || cmd.contains("hook-session-start"))
@@ -130,7 +135,10 @@ fn adopt_hook(
         if let Some(m) = matcher {
             g.insert("matcher".into(), json!(m));
         }
-        g.insert("hooks".into(), json!([{"type": "command", "command": cmd}]));
+        g.insert(
+            "hooks".into(),
+            json!([{"type": "command", "command": cmd, "timeout": HOOK_TIMEOUT}]),
+        );
         groups.push(Value::Object(g));
         return Some(match matcher {
             Some(m) => format!("{event}({m})"),
@@ -138,11 +146,18 @@ fn adopt_hook(
         });
     };
     let changed = {
-        let slot = &mut groups[gi]["hooks"][hi]["command"];
-        if slot == &json!(cmd) {
-            (hits.len() > 1).then(|| format!("{event} ({} duplicate hook)", hits.len() - 1))
+        let h = &mut groups[gi]["hooks"][hi];
+        // a timeout the user set is theirs; only a missing one is added
+        let timed = h.get("timeout").is_none().then(|| {
+            h["timeout"] = json!(HOOK_TIMEOUT);
+            format!("{event} (timeout)")
+        });
+        if h["command"] == json!(cmd) {
+            (hits.len() > 1)
+                .then(|| format!("{event} ({} duplicate hook)", hits.len() - 1))
+                .or(timed)
         } else {
-            *slot = json!(cmd);
+            h["command"] = json!(cmd);
             Some(format!("{event} (repointed)"))
         }
     };
