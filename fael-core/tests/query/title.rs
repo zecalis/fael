@@ -176,6 +176,7 @@ fn bump_keeps_the_title() {
             to: Some("ploy".into()),
             urgent: UrgentChange::Keep,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap();

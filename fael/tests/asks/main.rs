@@ -24,7 +24,9 @@ fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
     c.args(args).current_dir(dir);
     state_env(&mut c, dir);
+    c.env_remove("FAEL_SESSION");
     c.env_remove("CLAUDE_CODE_SESSION_ID");
+    c.env_remove("CODEX_THREAD_ID");
     if !stdin.is_empty() {
         c.stdin(Stdio::piped());
     }

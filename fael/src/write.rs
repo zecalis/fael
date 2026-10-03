@@ -78,6 +78,7 @@ pub(crate) fn prepare(
     let st = crate::stamp(r);
     let mut row = core::Row::new(&st.by, kind, text, files);
     crate::session::tag_writer(&r.root, &mut row); // "written by A, used by B" needs the writer
+    crate::filehash::stamp_row(&r.root, &mut row); // the file as it stood when the row was written
     row.key = key;
     // a headline lists show; the body stays in `text` for `find <id>` / `--full`
     row.title = title
@@ -171,7 +172,7 @@ pub(crate) fn add_row(
 fn root_relative(r: &crate::Repo, args: &[String], files: &mut [String]) -> Vec<String> {
     let mut warns = vec![];
     for (arg, f) in args.iter().zip(files.iter_mut()) {
-        if hook::is_anchor(f) || is_glob(f) || r.root.join(&*f).exists() {
+        if hook::is_anchor(f) || crate::filehash::is_glob(f) || r.root.join(&*f).exists() {
             continue;
         }
         if let Ok(v) = core::normalize_files(std::slice::from_ref(arg), &r.root, &r.root)
@@ -255,6 +256,7 @@ pub(crate) fn bump(
     // bare `--revisit` names no date or text — that only filters on `find`
     let revisit = parse_revisit(a.has("revisit"), a.one("revisit"))?;
     let log = crate::read(r);
+    let fh = crate::filehash::stamp(&r.root, &core::resolve(&log, id)?.files);
     core::bump_row(
         &r.fael,
         r.journal.as_deref(),
@@ -267,6 +269,7 @@ pub(crate) fn bump(
             urgent,
             revisit,
             held: None,
+            fh: Some(fh),
         },
     )
 }
@@ -289,7 +292,7 @@ pub(crate) fn check(
     let in_edits: HashSet<&str> = edits.iter().map(|(p, _)| p.as_str()).collect();
     let mut missing: Vec<&str> = vec![];
     for f in files {
-        if hook::is_anchor(f) || is_glob(f) || root.join(f).exists() {
+        if hook::is_anchor(f) || crate::filehash::is_glob(f) || root.join(f).exists() {
             continue;
         }
         if al.forward(f).iter().any(|p| root.join(p).exists()) {
@@ -330,12 +333,6 @@ not in this session's edits or git status — did you mean {near:?}? \
         return Err(msg);
     }
     Ok(warns)
-}
-
-/// A file glob (`*`, `?`, `[...]`) is a pattern, not a path — `find` matches
-/// it the same way, so it always passes the write check.
-fn is_glob(f: &str) -> bool {
-    f.contains(['*', '?', '['])
 }
 
 /// Paths git knows in the worktree but the disk walk above missed: untracked,

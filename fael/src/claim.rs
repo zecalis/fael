@@ -121,6 +121,8 @@ fn take(
             urgent: core::UrgentChange::Keep,
             revisit: None,
             held: Some(branch.to_string()),
+            // a claim is not a check: carry the row's old hashes, never restamp
+            fh: old.file_hashes().cloned(),
         },
     )?;
     warns.append(&mut more);

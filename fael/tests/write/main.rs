@@ -8,6 +8,7 @@
 //! bump round trip).
 
 mod derive;
+mod filehash;
 mod paths;
 mod receipt;
 mod refs;
@@ -40,6 +41,11 @@ fn fael_as(
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
     c.args(args).current_dir(dir);
     state_env(&mut c, dir);
+    // a session id the caller runs under would otherwise outrank the one under
+    // test: `env_session` reads FAEL_SESSION first, then the client vars, so
+    // clear all three and set only what the test asks for
+    c.env_remove("FAEL_SESSION");
+    c.env_remove("CODEX_THREAD_ID");
     match session {
         Some(s) => c.env("CLAUDE_CODE_SESSION_ID", s),
         None => c.env_remove("CLAUDE_CODE_SESSION_ID"),
