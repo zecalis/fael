@@ -1,8 +1,8 @@
 //! Capture in reply (PLAN-fael-dev-adoption chunk 1): the Stop hook files the
-//! last message's `fael <kind>: … [files: …]` lines, never blocks in the
-//! default mode, and reports the rejects on the next push.
+//! last message's `fael <kind>: … [files: …]` lines, never blocks, and
+//! reports the rejects on the next push.
 
-use super::{fael, json, repo, repo_blocking, state, transcript};
+use super::{fael, json, repo, transcript};
 use std::path::{Path, PathBuf};
 
 const SESSION: &str = "2020-01-01T00:00:00Z";
@@ -196,37 +196,13 @@ fn default_mode_never_returns_a_block() {
     assert!(ok && !out.contains("block"), "claude: {out}");
 }
 
-#[test]
-fn block_mode_counts_reply_rows_as_the_row_the_work_needs() {
-    let d = adopted(repo_blocking());
-    let edit = format!(
-        r#"{{"cwd":{},"session":"{SESSION}","files":["src/b.rs"]}}"#,
-        json(&d)
-    );
-    assert!(fael(&d, &["hook", "edit"], &edit).0);
-    // the reply files a row first, so the edit is covered and the turn ends
-    let out = stop_reply(
-        &d,
-        "fael note: b.rs edited, nothing else pending [files: src/b.rs]",
-    );
-    assert!(out.contains(r#""block":false"#), "{out}");
-    assert!(find(&d, "nothing else pending").contains("nothing else pending"));
-
-    // the opt-in mode still blocks when a later edit has no row
-    std::thread::sleep(std::time::Duration::from_millis(5));
-    assert!(fael(&d, &["hook", "edit"], &edit).0);
-    let out = stop(&d, r#""text":"finished""#);
-    assert!(out.contains(r#""block":true"#), "{out}");
-    let _ = state(&d);
-}
-
 /// A sub-agent's stop (`agent` set) only files its own reply's lines: it never
-/// blocks, even in block mode with uncovered work, and with no reply it does
+/// blocks, even with uncovered work, and with no reply it does
 /// nothing — `session` is the parent's, never this agent's message. The row is
 /// news to the parent, so the parent's next read of the file still pushes it.
 #[test]
 fn a_subagent_stop_files_its_reply_and_never_blocks() {
-    let d = adopted(repo_blocking());
+    let d = adopted(repo());
     std::thread::sleep(std::time::Duration::from_millis(5));
     let edit = format!(
         r#"{{"cwd":{},"session":"{SESSION}","files":["src/b.rs"]}}"#,

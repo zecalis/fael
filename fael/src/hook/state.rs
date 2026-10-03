@@ -1,5 +1,5 @@
 //! Per-machine runtime state, never in `.fael/` (that is shared project
-//! data): session edit lists, seen ids, stop-block dedupe, usage — plus the
+//! data): session edit lists, seen ids, once-per-session marks, usage — plus the
 //! tiny std-only time helpers the hook path uses instead of chrono.
 
 use crate::core;

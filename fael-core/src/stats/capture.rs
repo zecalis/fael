@@ -31,8 +31,8 @@ pub struct Silent {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Capture {
     /// Stop-hook blocks — each one cost the agent a round after it thought it
-    /// was done. Cumulative, like `stop_blocks`; 0 by construction unless the
-    /// repo opted into `[capture] block = true`.
+    /// was done. Cumulative, like `stop_blocks`; history only — the
+    /// Stop-block mode was removed 2026-10-03.
     pub post_stop_rounds: usize,
     /// Capture lines the Stop hook saw in replies (stored + rejected).
     pub reply_lines: usize,

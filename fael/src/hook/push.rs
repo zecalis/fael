@@ -208,7 +208,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     if files.is_empty() {
         return no();
     }
-    // only adopted repos — stop never blocks without a log anyway
+    // only adopted repos — `add` derives files from this list only there
     if edit && !c.session.is_empty() && crate::journal::home(&c.repo).is_some() {
         record_edits(
             &edits_path(&c.session, &c.repo.root),
@@ -311,7 +311,6 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     record_usage(&c.client, event, &c.repo.root, &context, &shown, &meta);
     Reply {
         block: false,
-        reason: None,
         context: Some(context),
         notice: whisper(&c, &sel.shown[..n.min(sel.shown.len())], &files),
     }

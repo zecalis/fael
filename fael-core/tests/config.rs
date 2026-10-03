@@ -33,13 +33,7 @@ fn cross_key_default_warn_parse_and_reject() {
 }
 
 #[test]
-fn capture_block_defaults_off_and_parses() {
-    assert!(!Config::from_toml("").unwrap().capture_block);
-    assert!(
-        Config::from_toml("[capture]\nblock = true")
-            .unwrap()
-            .capture_block
-    );
-    // a non-bool must fail loudly, never silently keep or flip enforcement
-    assert!(Config::from_toml("[capture]\nblock = \"yes\"").is_err());
+fn removed_capture_block_key_still_parses() {
+    // the Stop-block mode is gone; a config that opted in must not break
+    assert!(Config::from_toml("[capture]\nblock = true").is_ok());
 }

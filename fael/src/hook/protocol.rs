@@ -31,8 +31,6 @@ pub(crate) struct Event {
     pub(crate) tool_input: serde_json::Value,
     #[serde(default)]
     pub(crate) tool_response: serde_json::Value,
-    #[serde(default, alias = "stop_hook_active")]
-    pub(crate) stop_active: bool,
     /// stop: the assistant's text since the session start, for the issue rule.
     /// prompt: the user's prompt.
     /// Any client that can see its own messages sends it; without it fael
@@ -58,9 +56,9 @@ pub(crate) struct Event {
 /// Neutral Reply (SPEC §9).
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct Reply {
+    // ponytail: always false since the Stop-block mode went; kept on the wire
+    // so an integration that reads `block` keeps parsing
     pub(crate) block: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) context: Option<String>,
     /// One line for the user, never the agent (PLAN-fael-visible-secretary
@@ -113,7 +111,6 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
             );
             Reply {
                 block: false,
-                reason: None,
                 context: None,
                 notice: None,
             }

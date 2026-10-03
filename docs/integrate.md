@@ -10,9 +10,9 @@ this page). Any other agent calls the neutral format:
 ```
 fael hook <stop|session-start|read|edit|search|prompt>   < Event   > Reply
 
-Event  {"cwd": str, "session": str, "client": str, "files": [str], "stop_active": bool, "text": str, "reply": str,
+Event  {"cwd": str, "session": str, "client": str, "files": [str], "text": str, "reply": str,
         "agent"?: str, "source"?: str, "tool"?: str, "tool_input"?: obj, "tool_response"?: obj}
-Reply  {"block": bool, "reason"?: str, "context"?: str, "notice"?: str}
+Reply  {"block": false, "context"?: str, "notice"?: str}
 ```
 
 | When | Call | Send | Do with the Reply |
@@ -22,7 +22,7 @@ Reply  {"block": bool, "reason"?: str, "context"?: str, "notice"?: str}
 | a file was written | `edit` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was found via search or the shell | `search` | `cwd`, `session`, plus `files` — or the raw call as `tool`, `tool_input`, `tool_response` | append `context` to the tool result |
 | the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | add `context` to that turn — one pointer line when a prompt word equals the head of an open key (`credit` in `vela:credit-ledger`), each key once per session |
-| the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text`, `stop_active` | files the reply's `fael <kind>:` lines and never blocks; only under `[capture] block = true` does `block` mean: do not end, send `reason` back as the next message |
+| the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text` | nothing to do: fael files the reply's `fael <kind>:` lines and never blocks (`block` is always `false`, kept for old integrations) |
 
 `fael install` wires every event above on **Claude Code**. **Codex has no prompt hook** (its
 hooks know no UserPromptSubmit), so the pointer-line hint is Claude-only there — deliberate
@@ -31,7 +31,7 @@ hooks know no UserPromptSubmit), so the pointer-line hint is Claude-only there �
 
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript
   file whose birthtime is the start. **Send the exact same string to `read`, `edit` and `stop`**: it keys the
-  session's edit list, stop blocks when files were edited after the newest row, and the read/edit push
+  session's edit list (`fael add` without `--files` files them), stop's bug line for the next push, and the read/edit push
   says each row once per session — without it every read re-pushes the same rows at full budget.
 - `files` — absolute, or relative to `cwd`. Paths outside the repo are dropped.
 - `notice` — one line for the **user**, never the agent: which issues the brief handed over, which
@@ -43,8 +43,6 @@ hooks know no UserPromptSubmit), so the pointer-line hint is Claude-only there �
   transcript. Send it once per turn end — the same lines twice in a session file once.
 - `text` — the assistant's text in this session (or at least the last message). The issue rule
   looks for "found a bug", "inconsistent", "might break", and similar; leave it out and fael reads `session` as a Claude transcript.
-- `stop_active` — `true` when this stop comes right after one you blocked, so it never loops.
-  fael also blocks each problem only once per session.
 - `agent` — only when the event fires inside a sub-agent: any id that is stable for that sub-agent. A
   sub-agent is its own context window, so `read`/`edit` keep a separate said-once list per `agent`
   (it gets the rows its parent was already told), and a `stop` with `agent` only files that `reply`'s

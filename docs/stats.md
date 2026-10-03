@@ -61,7 +61,7 @@ shape is a breaking change: ship the reader first.
 | `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
 
 `capture` (PLAN-fael-dev-adoption): `post_stop_rounds` = Stop-hook blocks, cumulative (each cost a
-round; `0` by construction unless `[capture] block = true`) · `reply_lines` = `fael <kind>:` lines seen in
+round; the Stop-block mode is gone, so only usage rows from before 2026-10-03 count) · `reply_lines` = `fael <kind>:` lines seen in
 replies = `reply_stored` + `reply_rejected` · `manual_adds` = rows added since the repo's first usage that
 did not come from a reply line, by any writer · `sessions_with_edits` = sessions that edited a file ·
 `sessions_with_edits_no_row` = of those, sessions with no row filed during them (+10 min) — a signal to

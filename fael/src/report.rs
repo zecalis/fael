@@ -265,8 +265,8 @@ fn friction(h: &mut String, s: &Stats) {
          <li>Rows written outside replies (<code>add</code> over CLI or MCP, synced teammate rows included): {}</li>\n\
          <li>Sessions that edited files: {}, of which {} left no row</li>\n\
          <li>Asks: reject ×{} · warning ×{}</li>\n</ul>\n\
-         <p>Extra rounds come only from <code>[capture] block = true</code> in \
-         <code>.fael/config.toml</code>; the default (<code>false</code>) never adds one.</p>\n\
+         <p>Extra rounds came only from the Stop-block mode, removed 2026-10-03; \
+         fael no longer adds one.</p>\n\
          </section>\n",
         c.post_stop_rounds,
         c.reply_stored,

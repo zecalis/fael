@@ -31,7 +31,7 @@ pub use doctor::{
     fix as doctor_fix, precision as doctor_precision, scan as doctor_scan,
 };
 
-pub use hook::{BugSignal, StopFacts, decide_stop, last_row_ms};
+pub use hook::last_row_ms;
 
 pub use id::{
     looks_like_id, now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id,
