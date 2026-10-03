@@ -81,6 +81,9 @@ fn waiting_issues_list_after_ready_ones() {
 #[test]
 fn claim_shows_the_holding_branch() {
     let d = repo();
+    // a branch exists once it has a commit — a hold on a live branch is real
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
     let (id, _) = issue(&d, "invite accept breaks", "src/a.rs", &[]);
     let (ok, _, err) = fael(&d, &["claim", &id]);
     assert!(ok, "{err}");
@@ -93,9 +96,14 @@ fn claim_shows_the_holding_branch() {
     let new = out.split("- [").nth(1).unwrap().split(']').next().unwrap();
     let (ok, _, err) = fael(&d, &["claim", new]);
     assert!(!ok && err.contains("already held @feat/one"), "{err}");
-    // another branch takes it over, with a warning naming the old holder
+    // another branch is told who holds it, and --force takes it over
     git(&d, &["switch", "-q", "-c", "feat/two"]);
     let (ok, _, err) = fael(&d, &["claim", new]);
+    assert!(
+        !ok && err.contains("held @feat/one") && err.contains("--force"),
+        "{err}"
+    );
+    let (ok, _, err) = fael(&d, &["claim", new, "--force"]);
     assert!(ok && err.contains("was held @feat/one"), "{err}");
     let (_, out, _) = fael(&d, &["find", "--kind", "issue"]);
     assert!(out.contains("(held @feat/two)"), "{out}");
@@ -110,6 +118,78 @@ fn claim_shows_the_holding_branch() {
     let row: serde_json::Value = serde_json::from_str(out.lines().last().unwrap()).unwrap();
     let (ok, _, err) = fael(&d, &["claim", row["id"].as_str().unwrap()]);
     assert!(!ok && err.contains("claim takes an open issue"), "{err}");
+}
+
+#[test]
+fn a_hold_whose_branch_is_gone_is_taken_over_without_force() {
+    let d = repo();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
+    git(&d, &["switch", "-q", "-c", "feat/dead"]);
+    let (id, _) = issue(&d, "stale hold", "src/a.rs", &[]);
+    assert!(fael(&d, &["claim", &id]).0);
+    git(&d, &["switch", "-q", "feat/one"]);
+    git(&d, &["branch", "-q", "-D", "feat/dead"]);
+    // a claim files a new version: take the current id from the list
+    let (_, list, _) = fael(&d, &["find", "--kind", "issue"]);
+    let cur = list.split("- [").nth(1).unwrap().split(']').next().unwrap();
+    let (ok, _, err) = fael(&d, &["claim", cur]);
+    assert!(
+        ok && err.contains("was held @feat/dead (branch gone)"),
+        "{err}"
+    );
+}
+
+/// Two worktrees, one clone, one issue: exactly one claimer wins.
+#[test]
+fn two_agents_racing_for_one_issue_have_one_winner() {
+    let d = repo();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
+    let (id, _) = issue(&d, "contested", "src/a.rs", &[]);
+    let w = d.with_file_name(format!("{}-w2", d.file_name().unwrap().to_string_lossy()));
+    git(
+        &d,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feat/two",
+            w.to_str().unwrap(),
+        ],
+    );
+    let wins: Vec<bool> = std::thread::scope(|s| {
+        let a = s.spawn(|| fael(&d, &["claim", &id]).0);
+        let b = s.spawn(|| fael(&w, &["claim", &id]).0);
+        vec![a.join().unwrap(), b.join().unwrap()]
+    });
+    assert_eq!(wins.iter().filter(|w| **w).count(), 1, "{wins:?}");
+}
+
+#[test]
+fn next_claims_the_best_free_issue_and_prints_it() {
+    let d = repo();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
+    issue(&d, "older plain", "src/a.rs", &[]);
+    issue(&d, "urgent one", "src/b.rs", &["--urgent"]);
+    issue(&d, "gated", "src/c.rs", &["--revisit", "vendor fixes 5xx"]);
+    issue(&d, "theirs", "src/a.rs", &["--to", "someone-else"]);
+    let (ok, out, err) = fael(&d, &["next"]);
+    assert!(ok, "{err}");
+    // urgent first; its text is printed so the agent starts without a second call
+    assert!(out.lines().nth(1) == Some("urgent one"), "{out}");
+    let (_, list, _) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(
+        list.contains("urgent one (urgent 1, held @feat/one)"),
+        "{list}"
+    );
+    // held by this branch now: the next call moves on; waiting and routed stay out
+    let (ok, out, _) = fael(&d, &["next"]);
+    assert!(ok && out.contains("older plain"), "{out}");
+    let (ok, _, err) = fael(&d, &["next"]);
+    assert!(!ok && err.contains("no ready issue"), "{err}");
 }
 
 #[test]

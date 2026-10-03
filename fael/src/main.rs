@@ -86,6 +86,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         }
         ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
         ("claim", [id]) => claim(&a, id).map(|()| ExitCode::SUCCESS),
+        ("next", []) => next(&a).map(|()| ExitCode::SUCCESS),
         ("find", [] | [_]) => find::find(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("find", ids) => find::many::find_many(&a, ids).map(|()| ExitCode::SUCCESS),
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
@@ -326,12 +327,30 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
 
 /// `fael claim <id>` — this branch holds the issue (see claim::claim).
 fn claim(a: &Args, id: &str) -> Result<(), String> {
-    a.only("claim", &["json"])?;
+    a.only("claim", &["json", "force"])?;
     let r = repo()?;
-    let (row, path, warns) = claim::claim(&r, id)?;
+    let (row, path, warns) = claim::claim(&r, id, a.has("force"))?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "claim", Some(&r.root), &warns);
     batch::written(a, &r, &row, &path);
+    Ok(())
+}
+
+/// `fael next` — claim the best free issue and print it, so an agent starts
+/// without a second call (see claim::next).
+fn next(a: &Args) -> Result<(), String> {
+    a.only("next", &["json"])?;
+    let r = repo()?;
+    let (row, path, warns) = claim::next(&r, &writer(&r))?;
+    warns.iter().for_each(|w| eprintln!("{w}"));
+    hook::record_asks("cli", hook::ASK_WARN, "next", Some(&r.root), &warns);
+    batch::written(a, &r, &row, &path);
+    if !a.has("json") {
+        println!(
+            "{}",
+            row.text.split_whitespace().collect::<Vec<_>>().join(" ")
+        );
+    }
     Ok(())
 }
 

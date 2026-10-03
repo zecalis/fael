@@ -155,7 +155,7 @@ pub(crate) fn merged(r: &crate::Repo) -> crate::core::Log {
 
 /// Whether `refs/heads/<branch>` still exists in the clone — a loose ref file
 /// or a `packed-refs` line, read off `<common>`, no git spawn.
-fn branch_alive(common: &Path, branch: &str) -> bool {
+pub(crate) fn branch_alive(common: &Path, branch: &str) -> bool {
     if common.join("refs/heads").join(branch).is_file() {
         return true;
     }
