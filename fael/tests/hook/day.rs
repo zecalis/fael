@@ -50,7 +50,7 @@ fn day_json_shares_stats_numbers() {
     let (ok, day_v, txt) = day_json(&state, &state);
     assert!(ok, "{txt}");
     let all = &day_v["all"];
-    assert_eq!(day_v["schema"], 1, "{day_v}");
+    assert_eq!(day_v["schema"], 2, "{day_v}");
     assert_eq!(day_v["day"].as_str(), Some(day), "{day_v}");
     assert_eq!(day_v["tz_offset"].as_str(), Some("+00:00"), "{day_v}");
     // fael's tokens of the day == fael stats' total on this one-day log
@@ -129,7 +129,7 @@ fn day_view_without_state_dir_is_zeros() {
     std::fs::create_dir_all(&state).unwrap();
     let (ok, v, txt) = day_json(&state, &state);
     assert!(ok, "{txt}");
-    assert_eq!(v["schema"], 1, "{txt}");
+    assert_eq!(v["schema"], 2, "{txt}");
     assert_eq!(v["all"]["delivered"]["rows"], 0, "{txt}");
     assert_eq!(v["all"]["context"]["fael_tokens"], 0, "{txt}");
     assert!(v["all"]["context"]["share"].is_null(), "{txt}");

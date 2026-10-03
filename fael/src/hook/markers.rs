@@ -6,23 +6,6 @@
 use crate::core;
 use std::path::Path;
 
-/// A matched marker: Strong = a confirmed-bug announcement (blocks without
-/// an issue row), Weak = a risk/inconsistency mention (one-line note only,
-///
-/// never a block).
-pub(crate) struct BugHit {
-    pub(crate) marker: String,
-    pub(crate) strong: bool,
-}
-
-/// A transcript match with its line timestamp — the adapter clears the signal
-/// only with an issue row stamped at or after the match, never an older one.
-pub(crate) struct TranscriptHit {
-    pub(crate) marker: String,
-    pub(crate) strong: bool,
-    pub(crate) at_ms: i64,
-}
-
 /// The packs behind `cfg.lang_marker`, in repo order — unknown names never
 /// reach here (`Config::from_toml` rejects them), so this filters defensively.
 fn packs(cfg: &core::Config) -> Vec<&'static core::lang::Lang> {
@@ -32,15 +15,12 @@ fn packs(cfg: &core::Config) -> Vec<&'static core::lang::Lang> {
         .collect()
 }
 
-/// The matched marker, or `None` — `core::lang::marker_hit` with this repo's
+/// The matched marker phrase, or `None` — `core::lang::marker_hit` with this repo's
 /// packs. Matching semantics (quote stripping, negation window, the `bug…:`
 /// rule) live in core; the phrase unit tests moved to
 /// `fael-core/tests/lang.rs` with them.
-pub(crate) fn has_bug_marker(text: &str, cfg: &core::Config) -> Option<BugHit> {
-    core::lang::marker_hit(text, &packs(cfg), &[]).map(|h| BugHit {
-        marker: h.marker,
-        strong: h.strong,
-    })
+pub(crate) fn has_bug_marker(text: &str, cfg: &core::Config) -> Option<String> {
+    core::lang::marker_hit(text, &packs(cfg), &[]).map(|h| h.marker)
 }
 
 /// Last ≤200 KB of a transcript, whatever its size — one seek, so the hook
@@ -64,13 +44,14 @@ pub(super) fn read_tail(path: &Path) -> Option<String> {
 
 /// Scan assistant text in a Claude transcript tail for a bug marker — only
 /// lines after the latest user message (a plan written an hour ago must not
-/// block this turn). Returns the match with its line timestamp (fallback:
-/// the session start, when the line carries none).
+/// flag this turn). Returns the marker with its line timestamp (fallback:
+/// the session start, when the line carries none) — an issue row clears it
+/// only when stamped at or after that.
 pub(crate) fn bug_signal_from_transcript(
     path: &Path,
     since_ms: i64,
     cfg: &core::Config,
-) -> Option<TranscriptHit> {
+) -> Option<(String, i64)> {
     let text = read_tail(path)?;
     // (is_user, line ms, text blocks) in file order
     let mut msgs: Vec<(bool, i64, Vec<String>)> = vec![];
@@ -112,12 +93,8 @@ pub(crate) fn bug_signal_from_transcript(
         .unwrap_or(0);
     for (_, at_ms, texts) in msgs.iter().skip(after).filter(|m| !m.0) {
         for t in texts {
-            if let Some(hit) = has_bug_marker(t, cfg) {
-                return Some(TranscriptHit {
-                    marker: hit.marker,
-                    strong: hit.strong,
-                    at_ms: *at_ms,
-                });
+            if let Some(marker) = has_bug_marker(t, cfg) {
+                return Some((marker, *at_ms));
             }
         }
     }

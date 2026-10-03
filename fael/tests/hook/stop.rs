@@ -1,109 +1,11 @@
-//! Stop-event blocks: commits without a row, edits after the last row, bug
-//! signals without an issue row — and fail-open on garbage.
+//! Stop-event bug rule: an announcement with no issue row since is flagged
+//! on the next push, never a block — and fail-open on garbage.
 
-use super::{commit, fael, fael_at, json, repo, repo_blocking, state, transcript};
-
-#[test]
-fn stop_blocks_commit_without_row_then_allows() {
-    let d = repo_blocking();
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "decision", "old choice", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-
-    let t = transcript(&d, "t1.jsonl");
-    commit(&d, "tweak login");
-    let input = format!(r#"{{"cwd":{},"transcript_path":{}}}"#, json(&d), json(&t));
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok, "hook must always exit 0");
-    assert!(out.contains(r#""decision":"block""#), "{out}");
-    assert!(out.contains("fael add <decision|issue|note>"), "{out}");
-
-    // once per session — the second end lets through
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok && !out.contains("block"), "{out}");
-
-    // a mem row filed for the work lets the turn through (fresh state dir,
-    // so this allow comes from the row and not from the dedupe above)
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "note", "tweaked login copy", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let s2 = state(&d).join("s2");
-    let (ok, out, _) = fael_at(&s2, &d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok && !out.contains("block"), "{out}");
-
-    // a new session with a new commit and no row blocks again
-    let t = transcript(&d, "t2.jsonl");
-    commit(&d, "tweak again");
-    let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
-    let (ok, out, _) = fael_at(&s2, &d, &["hook", "stop"], &input);
-    assert!(ok && out.contains(r#""block":true"#), "{out}");
-}
-
-#[test]
-fn stop_blocks_edits_after_last_row() {
-    // agents told never to commit: the edit hook's list is the work signal
-    let d = repo_blocking();
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "decision", "old choice", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let t = transcript(&d, "t1.jsonl");
-    for f in ["src/a.rs", "src/b.rs"] {
-        std::fs::write(d.join(f), "//\n").unwrap();
-    }
-    for f in ["src/b.rs", "src/b.rs", "src/a.rs"] {
-        let edit = format!(
-            r#"{{"cwd":{},"transcript_path":{},"tool_input":{{"file_path":{}}}}}"#,
-            json(&d),
-            json(&t),
-            json(&d.join(f))
-        );
-        assert!(fael(&d, &["hook", "edit", "--client", "claude"], &edit).0);
-    }
-    let input = format!(r#"{{"cwd":{},"transcript_path":{}}}"#, json(&d), json(&t));
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok && out.contains("2 file(s) edited"), "{out}");
-    assert!(out.contains("--files src/b.rs,src/a.rs"), "{out}");
-
-    // a row for the work lets it through — same state dir: the dedupe is keyed
-    // on the last row, and no edit follows the new one
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "note", "b.rs added", "--files", "src/b.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok && !out.contains("block"), "{out}");
-
-    // work after that row blocks once more, listing only the later edit
-    std::thread::sleep(std::time::Duration::from_millis(5));
-    let edit = format!(
-        r#"{{"cwd":{},"transcript_path":{},"tool_input":{{"file_path":"src/a.rs"}}}}"#,
-        json(&d),
-        json(&t)
-    );
-    assert!(fael(&d, &["hook", "edit", "--client", "claude"], &edit).0);
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(
-        ok && out.contains("1 file(s) edited") && !out.contains("src/b.rs"),
-        "{out}"
-    );
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok && !out.contains("block"), "{out}");
-}
+use super::{fael, flagged, json, repo};
 
 #[test]
 fn stop_bug_signal_needs_issue_row() {
-    let d = repo_blocking();
+    let d = repo();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -119,108 +21,36 @@ fn stop_bug_signal_needs_issue_row() {
     .unwrap();
     let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
     let (ok, out, _) = fael(&d, &["hook", "stop"], &input);
-    assert!(ok && out.contains("fael add issue"), "{out}");
+    assert!(ok && out.contains(r#""block":false"#), "{out}");
+    assert!(flagged(&d, &json(&t)));
+    // shown once
+    assert!(!flagged(&d, &json(&t)));
 
     // any client: the assistant text arrives in the Event, no transcript needed
+    let session = r#""2020-01-01T00:00:00Z""#;
     let neutral = format!(
-        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"bug confirmed in logout"}}"#,
+        r#"{{"cwd":{},"session":{session},"text":"bug confirmed in logout"}}"#,
         json(&d)
     );
     let (ok, out, _) = fael(&d, &["hook", "stop"], &neutral);
-    assert!(ok && out.contains("bug confirmed"), "{out}");
-    // a different strong phrase in the same session does not block again
-    let again = neutral.replace("bug confirmed in logout", "I found the bug");
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &again);
     assert!(ok && out.contains(r#""block":false"#), "{out}");
+    assert!(flagged(&d, session));
 
-    // an issue row filed in this session clears it — same transcript, fresh
-    // state dir, so the allow comes from the row and not from the dedupe
-    let (ok, out, _) = fael(&d, &["stats", "--json"], "");
-    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert!(
-        ok && v["stop_blocks"]["stop-bug"]
-            == serde_json::json!({"blocks": 2, "followed_by_row": 0}),
-        "{out}"
-    );
+    // an issue row filed in this session clears it
     let (ok, _, err) = fael(
         &d,
         &["add", "issue", "login loops", "--files", "src/a.rs"],
         "",
     );
     assert!(ok, "{err}");
-    // stats sees the issue that followed the block
-    let (_, out, _) = fael(&d, &["stats"], "");
-    assert!(
-        out.contains("stop-bug: 2 block(s) → 2 followed by a row"),
-        "{out}"
-    );
-    let (ok, out, _) = fael_at(&state(&d).join("s2"), &d, &["hook", "stop"], &input);
-    assert!(ok && out.contains(r#""block":false"#), "{out}");
-}
-
-#[test]
-fn stop_strong_bug_with_edits_blocks_once_with_runnable_command() {
-    // plan chunk 6c replay: three edited files + a reported problem in one
-    // turn → exactly one block, and the command printed in it runs verbatim.
-    let d = repo_blocking();
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "decision", "old choice", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let t = transcript(&d, "t.jsonl");
-    for f in ["src/a.rs", "src/b.rs", "src/c.rs"] {
-        std::fs::write(d.join(f), "// work\n").unwrap();
-        let edit = format!(
-            r#"{{"cwd":{},"transcript_path":{},"tool_input":{{"file_path":{}}}}}"#,
-            json(&d),
-            json(&t),
-            json(&d.join(f))
-        );
-        assert!(fael(&d, &["hook", "edit", "--client", "claude"], &edit).0);
-    }
-    std::fs::write(
-        &t,
-        r#"{"message":{"role":"assistant","content":[{"type":"text","text":"I found a bug in login"}]}}"#,
-    )
-    .unwrap();
-    let input = format!(r#"{{"cwd":{},"transcript_path":{}}}"#, json(&d), json(&t));
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok, "hook must always exit 0");
-    assert!(out.contains(r#""decision":"block""#), "{out}");
-    // one block — no work block plus a second issue block
-    assert_eq!(out.matches("fael add").count(), 1, "{out}");
-    assert!(
-        out.contains(
-            "fael add issue \\\"<what is broken or at risk>\\\" --files src/a.rs,src/b.rs,src/c.rs"
-        ),
-        "{out}"
-    );
-
-    // the printed command runs verbatim (placeholder included) and files it
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "issue",
-            "<what is broken or at risk>",
-            "--files",
-            "src/a.rs,src/b.rs,src/c.rs",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-
-    // the filed issue clears the block — no second block with no new work
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
-    assert!(ok && !out.contains("block"), "{out}");
+    assert!(fael(&d, &["hook", "stop"], &input).0);
+    assert!(!flagged(&d, &json(&t)));
 }
 
 #[test]
 fn stop_fails_open() {
     let d = repo();
-    // garbage in, no repoadopted log, already-fired hook — all allow, all exit 0
+    // garbage in, unknown client, no adopted log — all allow, all exit 0
     let (ok, out, _) = fael(&d, &["hook", "stop"], "not json");
     assert!(ok && out.contains(r#""block":false"#), "{out}");
     let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "nope"], "{}");
@@ -228,50 +58,7 @@ fn stop_fails_open() {
     let (ok, out, _) = fael(
         &d,
         &["hook", "stop", "--client", "claude"],
-        r#"{"cwd":"/","stop_hook_active":true}"#,
+        r#"{"cwd":"/"}"#,
     );
     assert!(ok && out.is_empty(), "{out}");
-}
-
-#[test]
-fn stop_skips_commits_merged_in_from_origin() {
-    let d = repo_blocking();
-    let (ok, _, err) = fael(&d, &["add", "note", "seed", "--files", "src/a.rs"], "");
-    assert!(ok, "{err}");
-    let git = |args: &[&str]| {
-        let o = std::process::Command::new("git")
-            .args(args)
-            .current_dir(&d)
-            .output()
-            .unwrap();
-        assert!(o.status.success(), "git {args:?}");
-        String::from_utf8(o.stdout).unwrap().trim().to_string()
-    };
-    let branch = git(&["branch", "--show-current"]);
-    git(&["checkout", "-qb", "base"]);
-    let t = transcript(&d, "t1.jsonl");
-    // a squash merge landing on origin/main after the session started,
-    // then merged into the work branch
-    commit(&d, "someone else's PR (#3)");
-    let base = git(&["rev-parse", "HEAD"]);
-    git(&["update-ref", "refs/remotes/origin/main", &base]);
-    git(&[
-        "symbolic-ref",
-        "refs/remotes/origin/HEAD",
-        "refs/remotes/origin/main",
-    ]);
-    git(&["checkout", "-q", &branch]);
-    git(&["merge", "-q", "--no-ff", "--no-edit", "base"]);
-    let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &input);
-    assert!(ok && !out.contains(r#""block":true"#), "{out}");
-
-    // this branch's own commit still blocks (fresh state, no dedupe)
-    commit(&d, "own work");
-    let s2 = state(&d).join("s2");
-    let (ok, out, _) = fael_at(&s2, &d, &["hook", "stop"], &input);
-    assert!(
-        ok && out.contains(r#""block":true"#) && out.contains("own work"),
-        "{out}"
-    );
 }

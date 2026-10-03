@@ -27,8 +27,6 @@ struct ClaudeBase {
 struct ClaudeStop {
     #[serde(flatten)]
     base: ClaudeBase,
-    #[serde(default)]
-    stop_hook_active: bool,
     /// the turn's final assistant message — codex always sends it, Claude Code
     /// on recent versions
     #[serde(default)]
@@ -135,7 +133,6 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             let e = Event {
                 cwd: p.base.cwd,
                 session: p.base.transcript_path.or(p.base.session_id),
-                stop_active: p.stop_hook_active,
                 // codex transcripts are not claude-format: always hand the
                 // text over, so stop never falls back to parsing the file
                 text: if codex {
@@ -152,12 +149,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 ..Event::default()
             };
             let r = stop(&e);
-            if let Some(reason) = r.reason {
-                println!(
-                    "{}",
-                    serde_json::json!({"decision": "block", "reason": reason})
-                );
-            } else if let Some(n) = user_line(&r, codex) {
+            if let Some(n) = user_line(&r, codex) {
                 println!("{}", serde_json::json!({"systemMessage": n}));
             }
             ExitCode::SUCCESS

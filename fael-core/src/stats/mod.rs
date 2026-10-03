@@ -18,8 +18,8 @@ mod retire;
 mod value;
 
 pub use aggregate::{
-    AskCount, BlockOutcome, Constants, Count, NonEnglish, RealAvg, Rounds, RowStatus, STATS_SCHEMA,
-    Stats, TopRow, aggregate,
+    AskCount, Constants, Count, NonEnglish, Rounds, RowStatus, STATS_SCHEMA, Stats, TopRow,
+    aggregate,
 };
 pub use capture::Capture;
 pub use cross::{CrossAgent, Reuse};
@@ -28,14 +28,13 @@ pub use day::{
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
 pub use metrics::ASK_ORDER;
-pub use parse::{Parsed, StopBlock, UsageRow, parse, since, since_arg};
+pub use parse::{Parsed, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use value::{EventValue, Value};
 
 /// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
 /// JSON map and the recording side share, so the two cannot drift.
 pub const ASK_REJECT: &str = "reject";
-pub const ASK_BLOCK: &str = "stop-block";
 pub const ASK_WARN: &str = "warning";
 
 /// Per-machine runtime state, never in `.fael/`. `FAEL_STATE_DIR` wins (tests

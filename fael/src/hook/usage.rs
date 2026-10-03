@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 /// Every injection into context, per machine — never in git. Fails open:
 /// a usage write never fails the command it rode along with. Asks (reject /
-/// stop-block / warning), the session, and real transcript tokens ride in
+/// warning), the session, and real transcript tokens ride in
 /// `meta` — absent keys stay absent, so old readers keep working.
 pub(crate) fn record_usage(
     client: &str,

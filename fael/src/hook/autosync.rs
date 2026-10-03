@@ -20,7 +20,7 @@
 
 use super::protocol::Event;
 use super::state::{session_key, state_dir};
-use super::stop::stop_blocked_before;
+use super::stop::seen_before;
 use crate::{git, repo_at};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -45,7 +45,7 @@ pub(crate) fn start(e: &Event) {
         return;
     }
     let kind = format!("sync:{}", crate::sync::newest(&repo));
-    if stop_blocked_before(session, &repo.root.to_string_lossy(), &kind) {
+    if seen_before(session, &repo.root.to_string_lossy(), &kind) {
         return;
     }
     if git(&repo.root, &["config", "fael.remote"]).is_none() {

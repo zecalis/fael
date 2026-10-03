@@ -1,11 +1,10 @@
 //! Chunk 3a (PLAN-fael-durable-log): every ask fael costs the agent — a
-//! `rejected:` write, a stop-hook block, a warning line — is counted in
+//! `rejected:` write or a warning line — is counted in
 //! usage.jsonl with its type, and `stats` shows the split. `replay` is the
 //! fixed baseline sequence the plan requires before self-heal (3b–e): real
 //! cases (5-note debt, Supersedes-in-text, key candidates) plus the reject
 //! and warning paths. Thin entry only — suites sit next to this file.
 
-mod blocks;
 mod concurrent;
 mod counting;
 mod replay;
@@ -67,15 +66,6 @@ fn repo() -> PathBuf {
     d
 }
 
-/// A repo that opted into the enforcement mode (`[capture] block = true`) —
-/// stop-block accounting only happens there; the default mode never blocks.
-fn repo_blocking() -> PathBuf {
-    let d = repo();
-    std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "[capture]\nblock = true\n").unwrap();
-    d
-}
-
 /// Usage rows recorded so far in this repo's scratch state dir.
 fn usage(d: &Path) -> Vec<serde_json::Value> {
     let root = d.ancestors().find(|p| p.join(".git").exists()).unwrap();
@@ -90,8 +80,4 @@ fn stats_json(d: &Path) -> serde_json::Value {
     let (ok, out, err) = fael(d, &["stats", "--json"], "");
     assert!(ok, "{err}");
     serde_json::from_str(&out).unwrap()
-}
-
-fn json(v: &Path) -> String {
-    serde_json::Value::String(v.to_string_lossy().into_owned()).to_string()
 }

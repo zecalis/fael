@@ -16,7 +16,7 @@ host speaking MCP, …) and every person on the team reads and writes the same l
 Three ideas carry the whole design:
 
 1. **The log is the truth; everything else is derived** — like Redis's append-only file or a Kafka topic.
-2. **Agents write in the same message, never a turn of their own** — `fael add` beside the next tool call, or `fael <kind>:` lines closing the reply; refusing to end a turn without a row is opt-in (`[capture] block = true`).
+2. **Agents write in the same message, never a turn of their own** — `fael add` beside the next tool call, or `fael <kind>:` lines closing the reply; fael never refuses to end a turn.
 3. **Memory comes to the agent** — when an agent reads a file, the rows about that file are attached to the read.
 
 ---
@@ -55,9 +55,7 @@ A feature ships only if it does at least one of these **and** gives nothing back
 A feature must never:
 
 - start a new agent turn, or re-prompt on idle. Capture rides the agent's own reply
-  (`fael <kind>: … [files: …]` lines the Stop hook files); the opt-in enforcement mode
-  `[capture] block = true` is the one exception and is off unless a repo turns it on.
-  An informational line must ride existing context or be dropped, never become a
+  (`fael <kind>: … [files: …]` lines the Stop hook files). An informational line must ride existing context or be dropped, never become a
   prompt the user cannot cancel
 - add a daemon or a server the local binary must babysit (§7)
 - guess when the log is ambiguous
@@ -157,7 +155,7 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
 
 The storage and core are identical; only how the agent reaches fael differs.
 
-- **Enforcement** — coding agents with lifecycle hooks: `agent → hook → fael`. Session brief, memory attached to reads and edits, opt-in stop enforcement. The agent reads git and the code first and calls `find` only for what they cannot say (why, what was rejected, what is unfinished) — never as a start-of-task ritual.
+- **Enforcement** — coding agents with lifecycle hooks: `agent → hook → fael`. Session brief, memory attached to reads and edits, capture from the reply. The agent reads git and the code first and calls `find` only for what they cannot say (why, what was rejected, what is unfinished) — never as a start-of-task ritual.
 - **Tool** — chat agents and MCP hosts without hooks: `agent → MCP → fael`. With no push, the agent calls `find` once at the start (the session brief) and `add` on its own for durable things (an explicit "remember", a rule, a stable preference, a correction) — never for chatter. That judgement is agent behaviour (skill / tool description), not a core rule. Under `store = "tracked"` tool mode has no commit step: rows reach git only when the host or the user commits `.fael/`.
 
 A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integration.
@@ -215,8 +213,6 @@ row_chars = 1200              # a single-topic-looking row can still run long
 prefixes = ["PLAN-"]          # <PREFIX><name>.md widens kickoff to <prefix>:<name> (e.g. HANDOFF-); PLAN- is the plain default, not fapony knowledge
 [limit]
 row_bytes = 10240             # hard cap, never above 10 KiB
-[capture]
-block = false                 # true = opt-in enforcement: the Stop hook blocks a turn that did work with no row (default: it only files the reply's lines)
 [sync]
 auto = true                   # session start and Stop run `fael sync` once per session and newest row when fael.remote is set; false = manual only
 [notify]
@@ -243,13 +239,13 @@ Each client speaks its own hook format. The binary contains the adapters for the
 ```
 fael hook <stop|session-start|read|edit|search|prompt> [--client claude|codex]   < stdin  > stdout
 
-neutral Event  {"cwd","session","client","files":[…],"stop_active","text","reply","agent","source","tool","tool_input","tool_response"}
-neutral Reply  {"block":bool,"reason"?:str,"context"?:str,"notice"?:str}
+neutral Event  {"cwd","session","client","files":[…],"text","reply","agent","source","tool","tool_input","tool_response"}
+neutral Reply  {"block":false,"context"?:str,"notice"?:str}
 ```
 
 **The user channel** (`notice`, PLAN-fael-visible-secretary): fael does its work in the agent's context, so the user never saw it. Each hook can now carry one line for the user only. Claude Code gets it as `systemMessage`, which is shown to the user and never added to the model's context. OpenCode shows it as a toast. Codex and the bare neutral protocol have no such channel, so they stay silent. There are three beats. Session start names the open issues the brief handed over in full. A push names the first decision or issue it reminded the agent of, at most once per file per session. Stop gives the turn's receipt (`filed · reminded · retired · closed`), and every count names up to two ids or keys that `fael find` takes back. A row that has not reached its destination adds one late line (PLAN-fael-local-first): under `store = "tracked"`, on a turn that filed or closed, the count of uncommitted `.fael/log` files; under `local`, once per session, this writer's rows newer than the last good sync after a sync failed (no count when there is no watermark yet), or, with `store` unset, a `.fael/log` in git and no `fael.remote`, that new rows stay in this clone (the repo used to share them by commit). A pending row is only late; a failed sync, or sharing that stopped, must not stay silent. `doctor` shows the same line as `[Late]`. When nothing happened there is no line: fael never says "nothing new", and never claims anything was prevented or saved. The receipt reads a per-session tally in the state dir (`<seen key>.tally`). `add`, `close`, capture and the push append to it, and each Stop reads the lines since its last marker. The tally is never part of a row, and `additionalContext` is the same byte for byte with the channel on or off. `[notify] user = false` turns the channel off.
 
-OpenCode has no Stop hook and runs plugins in-process: `fael install` writes a JS plugin that speaks the neutral format (a stop block — only under `[capture] block = true` — becomes a prompt on `session.idle`). How to wire any other agent: [integrate.md](integrate.md).
+OpenCode has no Stop hook and runs plugins in-process: `fael install` writes a JS plugin that speaks the neutral format (stop runs on `session.idle` and never prompts back). How to wire any other agent: [integrate.md](integrate.md).
 
 The hook always exits 0. If fael hits an internal error it replies with an empty Reply, because a memory tool must never break the agent's tool call.
 
@@ -280,27 +276,13 @@ When rows ride along, the push and the session-start brief end their row block w
 
 A row is said once per **context window**, not once per session: the pushed ids are kept per session, worktree and `agent` (`<state>/sessions/<key>.seen`), keyed by the session id (a transcript path counts as its file stem, so `add` and `find` — which only know `$CLAUDE_CODE_SESSION_ID` — mark the same list), and read-filter-append runs under a file lock so parallel reads push a row once. A sub-agent starts with an empty context, so it has its own list — what its parent was told says nothing about what it knows (Claude Code sends `agent_id` on tool events inside a sub-agent; an OpenCode sub-agent is a child session with its own id). A session-start with `source: "compact"` drops the thread's list, because compaction removed the pushed rows from context.
 
-**Capture** — the agent ends its turn. The Stop hook reads the last assistant message (`reply`, else the tail of a Claude transcript) and files every line of the form `fael decision|issue|note: <text> [files: a,b]` at column 0, outside a code fence, through the same validation as `fael add` (secrets, ids, size, paths). `[files: …]` is required and never inferred from the session's edits. A line that cannot be filed is dropped and becomes one hint on the next push — never a turn. The same lines seen twice in one session file once. This is the whole default Stop behaviour: `block` is always `false`. A sub-agent's stop (`agent` set — Claude Code `SubagentStop`) files its own `reply` the same way and does nothing else: no work or bug rule, no sync, no transcript fallback (the transcript is the parent's).
+**Capture** — the agent ends its turn. The Stop hook reads the last assistant message (`reply`, else the tail of a Claude transcript) and files every line of the form `fael decision|issue|note: <text> [files: a,b]` at column 0, outside a code fence, through the same validation as `fael add` (secrets, ids, size, paths). `[files: …]` is required and never inferred from the session's edits. A line that cannot be filed is dropped and becomes one hint on the next push — never a turn. The same lines seen twice in one session file once. `block` is always `false`: fael never stops a turn. A sub-agent's stop (`agent` set — Claude Code `SubagentStop`) files its own `reply` the same way and does nothing else: no bug rule, no sync, no transcript fallback (the transcript is the parent's).
 
-**Enforce** (opt-in, `[capture] block = true`) — the agent tries to end a turn:
-```
-client ─(edit event)─▶ append {"path","at"} to ~/.local/state/fael/sessions/<session+worktree>.jsonl
+The edit hook appends `{"path","at"}` to `~/.local/state/fael/sessions/<session+worktree>.jsonl` — per-machine runtime state, never in `.fael/`; `fael add` without `--files` files the session's edits since its newest row. The `session` string sent with `edit` must equal the one sent with `stop`.
 
-client ─(stop event)─▶ edits recorded this session?
-                          │yes                                │no
-                          ▼                                   ▼
-                any edit after the session's        git commits since start
-                newest row (or any, if none)?       and no row this session?
-                          │                                   │
-                   no ─▶ allow  yes ─┐            no ─▶ allow  yes ─┐
-                                     ▼                              ▼
-                        block once per last row — a markdown list of the files
-                        (or commits) and the exact command, --files prefilled
-```
-Edits, not commits, are the primary signal: many agents are told never to commit, and a commit-only rule never fires for them. Git is only the fallback for edits the hook never saw (a shell `sed`, a heredoc). Measuring from the newest row, not the session start, keeps a row filed early from covering hours of work after it; a new row reopens one more block. The edit list is per-machine runtime state, never in `.fael/`. The `session` string sent with `edit` must equal the one sent with `stop`.
+**Bug line** — a bug or risk announcement in the turn's text (the transcript tail after the latest user message) with no issue row since the words stashes one line for the next push, shown once; never a turn. The phrases come from the `[lang] marker` packs (`english` + `thai` by default, `marker = []` switches the rule off), never from hardcoded lists. The Stop-block mode (`[capture] block = true`) was removed 2026-10-03: 55 blocks, 12 followed by a row; an old config key is ignored.
 
-Session start, and a stop that lets the turn through, start one detached `fael sync` per session and newest row when `fael.remote` is set (`[sync] auto`): fail-quiet, never awaited, the hook still exits 0. Session start goes first, so teammates' rows reach the session's reads (not its kickoff context, already built) and a Stop with no new row starts nothing.
-In the default mode the same signals only stash one line for the next push (shown once). A bug announcement blocks only without an issue row since the words — and the phrases that count as one come from the `[lang] marker` packs (`english` + `thai` by default, `marker = []` switches the rule off), never from hardcoded lists.
+Session start, and every stop, start one detached `fael sync` per session and newest row when `fael.remote` is set (`[sync] auto`): fail-quiet, never awaited, the hook still exits 0. Session start goes first, so teammates' rows reach the session's reads (not its kickoff context, already built) and a Stop with no new row starts nothing.
 
 **Session start:**
 ```

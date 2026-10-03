@@ -27,13 +27,12 @@ th{color:var(--mute);font-weight:500}td.n{text-align:right}</style></head><body>
 </section>
 <section><h2>3. Did fael add friction?</h2>
 <ul>
-<li>Extra rounds after the agent thought it was done: <b>0</b></li>
 <li>Memory written from replies (<code>fael decision: …</code> lines): 0 stored · 0 rejected</li>
 <li>Rows written outside replies (<code>add</code> over CLI or MCP, synced teammate rows included): 0</li>
 <li>Sessions that edited files: 0, of which 0 left no row</li>
 <li>Asks: reject ×0 · warning ×1</li>
 </ul>
-<p>Extra rounds come only from <code>[capture] block = true</code> in <code>.fael/config.toml</code>; the default (<code>false</code>) never adds one.</p>
+<p>fael never blocks a turn, so it adds no round after the agent is done.</p>
 </section>
 <footer><p>Offline, no scripts. Estimates carry ~ — they come from text length, not a tokenizer.</p></footer>
 </main></body></html>

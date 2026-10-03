@@ -260,15 +260,12 @@ fn friction(h: &mut String, s: &Stats) {
     let _ = write!(
         h,
         "<section><h2>3. Did fael add friction?</h2>\n<ul>\n\
-         <li>Extra rounds after the agent thought it was done: <b>{}</b></li>\n\
          <li>Memory written from replies (<code>fael decision: …</code> lines): {} stored · {} rejected</li>\n\
          <li>Rows written outside replies (<code>add</code> over CLI or MCP, synced teammate rows included): {}</li>\n\
          <li>Sessions that edited files: {}, of which {} left no row</li>\n\
          <li>Asks: reject ×{} · warning ×{}</li>\n</ul>\n\
-         <p>Extra rounds come only from <code>[capture] block = true</code> in \
-         <code>.fael/config.toml</code>; the default (<code>false</code>) never adds one.</p>\n\
+         <p>fael never blocks a turn, so it adds no round after the agent is done.</p>\n\
          </section>\n",
-        c.post_stop_rounds,
         c.reply_stored,
         c.reply_rejected,
         c.manual_adds,

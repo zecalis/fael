@@ -1,9 +1,8 @@
-//! Stop-event risk signals (chunk 7): Weak mentions never block — they join
-//! the work block or surface once on the next push. Quoted code never
-//! signals, transcripts scan past the latest user message only, and an issue
-//! filed before the words does not clear them.
+//! Stop-event bug and risk signals: never a block — the line surfaces once on
+//! the next push. Quoted code never signals, transcripts scan past the latest
+//! user message only, and an issue filed before the words does not clear them.
 
-use super::{fael, fael_at, json, repo, repo_blocking, state};
+use super::{fael, flagged, json, repo};
 
 #[test]
 fn stop_weak_risk_never_blocks_shows_once_on_next_push() {
@@ -39,74 +38,6 @@ fn stop_weak_risk_never_blocks_shows_once_on_next_push() {
 }
 
 #[test]
-fn stop_weak_risk_joins_work_block() {
-    let d = repo_blocking();
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "decision", "old choice", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    std::thread::sleep(std::time::Duration::from_millis(20));
-    std::fs::write(d.join("src/b.rs"), "//\n").unwrap();
-    let edit = format!(
-        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","files":["src/b.rs"]}}"#,
-        json(&d)
-    );
-    assert!(fael(&d, &["hook", "edit"], &edit).0);
-
-    // one block carrying both the edited file and the risk — not two blocks
-    let stop = format!(
-        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"config and schema are out of sync"}}"#,
-        json(&d)
-    );
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &stop);
-    assert!(
-        ok && out.contains("1 file(s) edited") && out.contains("out of sync"),
-        "{out}"
-    );
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &stop);
-    assert!(ok && out.contains(r#""block":false"#), "{out}");
-}
-
-#[test]
-fn stop_weak_work_block_does_not_consume_the_bug_slot() {
-    let d = repo_blocking();
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "decision", "old choice", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    std::thread::sleep(std::time::Duration::from_millis(20));
-    std::fs::write(d.join("src/b.rs"), "//\n").unwrap();
-    let edit = format!(
-        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","files":["src/b.rs"]}}"#,
-        json(&d)
-    );
-    assert!(fael(&d, &["hook", "edit"], &edit).0);
-
-    // a Weak mention rides the work block — recorded as work, not the bug slot
-    let weak = format!(
-        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"config and schema are out of sync"}}"#,
-        json(&d)
-    );
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &weak);
-    assert!(
-        ok && out.contains("1 file(s) edited") && out.contains("out of sync"),
-        "{out}"
-    );
-
-    // the later real report must still block: the Weak block did not consume it
-    let strong = format!(
-        r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","text":"I found a bug in login"}}"#,
-        json(&d)
-    );
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &strong);
-    assert!(ok && out.contains("fael add issue"), "{out}");
-}
-
-#[test]
 fn stop_ignores_markers_in_code_and_quotes() {
     let d = repo();
     let (ok, _, err) = fael(
@@ -128,6 +59,7 @@ fn stop_ignores_markers_in_code_and_quotes() {
         );
         let (ok, out, _) = fael(&d, &["hook", "stop"], &input);
         assert!(ok && out.contains(r#""block":false"#), "{text}: {out}");
+        assert!(!flagged(&d, r#""2020-01-01T00:00:00Z""#), "{text}");
     }
 }
 
@@ -147,7 +79,7 @@ fn transcript_line(role: &str, text: &str, ts: &str) -> String {
 
 #[test]
 fn stop_reads_transcript_only_after_latest_user_message() {
-    let d = repo_blocking();
+    let d = repo();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -156,7 +88,7 @@ fn stop_reads_transcript_only_after_latest_user_message() {
     assert!(ok, "{err}");
     let base = fael_core::now_ms() + 120_000;
 
-    // control: a lone bug report with no user message blocks
+    // control: a lone bug report with no user message is flagged
     let alone = d.join("alone.jsonl");
     std::fs::write(
         &alone,
@@ -168,8 +100,8 @@ fn stop_reads_transcript_only_after_latest_user_message() {
     )
     .unwrap();
     let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&alone));
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &input);
-    assert!(ok && out.contains("fael add issue"), "{out}");
+    assert!(fael(&d, &["hook", "stop"], &input).0);
+    assert!(flagged(&d, &json(&alone)));
 
     // the same words before the latest user message are last turn's planning
     let t = d.join("t.jsonl");
@@ -191,24 +123,14 @@ fn stop_reads_transcript_only_after_latest_user_message() {
         .join("\n"),
     )
     .unwrap();
-    // a row for the silence itself: the work rule must let through on the
-    // row, so the allow below proves the old planning words stayed quiet
-    // (and not a stray init commit racing the session start at 1s granularity)
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "note", "renamed the helper", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
-    let s2 = state(&d).join("s2");
-    let (ok, out, _) = fael_at(&s2, &d, &["hook", "stop"], &input);
-    assert!(ok && out.contains(r#""block":false"#), "{out}");
+    assert!(fael(&d, &["hook", "stop"], &input).0);
+    assert!(!flagged(&d, &json(&t)));
 }
 
 #[test]
 fn stop_issue_before_match_does_not_clear_signal() {
-    let d = repo_blocking();
+    let d = repo();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -237,6 +159,6 @@ fn stop_issue_before_match_does_not_clear_signal() {
     );
     assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &input);
-    assert!(ok && out.contains("fael add issue"), "{out}");
+    assert!(fael(&d, &["hook", "stop"], &input).0);
+    assert!(flagged(&d, &json(&t)));
 }

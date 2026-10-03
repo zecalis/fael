@@ -56,7 +56,6 @@ export const Fael = async ({ client, directory }) => {
     return starts.get(id);
   };
   const briefs = new Map();
-  const blocked = new Set();
   // the user line (Reply.notice) goes to a toast, never into the agent's
   // context; an OpenCode without the toast API simply shows nothing
   const say = (r) => {
@@ -118,11 +117,8 @@ export const Fael = async ({ client, directory }) => {
     },
 
     // OpenCode has no Stop hook: on idle the last message goes to fael, which
-    // files its `fael <kind>:` lines and, by default, never answers with a
-    // block. Only the opt-in `[capture] block = true` mode does — that becomes
-    // a prompt back. A non-blocking stop context has no mid-turn channel here —
-    // prompting it would start a turn the user cannot cancel with Esc — so it
-    // is dropped rather than re-prompted.
+    // files its `fael <kind>:` lines and never answers with a prompt — one
+    // would start a turn the user cannot cancel with Esc.
     event: async ({ event }) => {
       const id = event.properties?.sessionID;
       if (!id) return;
@@ -148,15 +144,8 @@ export const Fael = async ({ client, directory }) => {
         session: await start(id),
         text,
         reply,
-        stop_active: blocked.delete(id),
       });
       say(r);
-      if (r.block && r.reason) {
-        blocked.add(id);
-        await client.session
-          .prompt({ path: { id }, body: { parts: [{ type: "text", text: r.reason }] } })
-          .catch(() => {});
-      }
     },
   };
 };

@@ -5,10 +5,10 @@
 //! no key — plus the reject and warning paths. Run before self-heal (3b–e) as
 //! the baseline, and re-run unchanged after it: no ask type may rise and
 //! rejects must fall. Post-3d/3e totals, same sequence — reject 4 (R6 ×1, R7
-//! ×3) · warning 1 (R8) · stop-block 1 (R9) · repeat 0, against the recorded
-//! baseline of reject 5 · warning 1 · stop-block 1 · repeat 0.
+//! ×3) · warning 1 (R8), against the recorded baseline of reject 5 · warning 1.
+//! R9 (one stop-block) went with the Stop-block mode.
 
-use super::{fael, json, repo, stats_json};
+use super::{fael, repo, stats_json};
 
 /// The replay repo: `src/a.rs` + `src/b.rs` (the debt files) and `src/c.rs`
 /// (the keyed file), one writer, one branch throughout.
@@ -56,7 +56,6 @@ fn replay_debt_sequence_files_five_open_notes() {
     let v = stats_json(&d);
     assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
-    assert_eq!(v["asks"]["stop-block"]["events"], 0, "{v}");
 }
 
 /// R2 — `Supersedes <id>` in text, no flag (01M3HH57V): disjoint files, so
@@ -268,52 +267,4 @@ fn replay_long_untitled_warns_once() {
     let v = stats_json(&d);
     assert_eq!(v["asks"]["warning"]["events"], 1, "{v}");
     assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
-}
-
-/// R9 — one stop-block, then the row, then silence: pins stop-block counting
-/// across the replay (blocking policy is unchanged by chunk 3).
-#[test]
-fn replay_stop_block_then_row_then_silence() {
-    let d = {
-        let d = replay_repo();
-        std::fs::create_dir_all(d.join(".fael")).unwrap();
-        std::fs::write(d.join(".fael/config.toml"), "[capture]\nblock = true\n").unwrap();
-        d
-    };
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "decision",
-            "old",
-            "--files",
-            "doc:seed",
-            "--key",
-            "test:seed",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    std::thread::sleep(std::time::Duration::from_millis(5));
-    let t = d.join("t.jsonl");
-    std::fs::write(&t, "").unwrap();
-    let edit = format!(
-        r#"{{"cwd":{},"session":{},"files":[{}]}}"#,
-        json(&d),
-        json(&t),
-        json(&d.join("src/a.rs"))
-    );
-    let (ok, _, err) = fael(&d, &["hook", "edit"], &edit);
-    assert!(ok, "{err}");
-    let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &input);
-    assert!(ok && out.contains(r#""block":true"#), "{out}");
-    let (ok, _, err) = fael(&d, &["add", "note", "covered", "--files", "src/a.rs"], "");
-    assert!(ok, "{err}");
-    let (ok, out, _) = fael(&d, &["hook", "stop"], &input);
-    assert!(ok && out.contains(r#""block":false"#), "{out}");
-    let v = stats_json(&d);
-    assert_eq!(v["asks"]["stop-block"]["events"], 1, "{v}");
-    assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
-    assert_eq!(v["repeat_blocks"], 0, "{v}");
 }

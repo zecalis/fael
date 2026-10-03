@@ -2,7 +2,7 @@
 //! own `FAEL_STATE_DIR` through `Command::env`, so the tests run in parallel.
 //!
 //! Thin entry only — the suites sit next to this file:
-//! `stop` (turn-end blocks), `autosync` (once-per-session `fael sync`), `stop_lang` ([lang] marker/rows packs),
+//! `stop` (turn end: bug lines stashed, never a block), `autosync` (once-per-session `fael sync`), `stop_lang` ([lang] marker/rows packs),
 //! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
 //! `day` (PLAN-fael-sync chunk 3: `fael stats --day`),
@@ -133,13 +133,16 @@ fn repo() -> PathBuf {
     d
 }
 
-/// A repo that opted into the enforcement mode (`[capture] block = true`) —
-/// the Stop-block rules only apply there; the default mode never blocks.
-fn repo_blocking() -> PathBuf {
-    let d = repo();
-    std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "[capture]\nblock = true\n").unwrap();
-    d
+/// True when the next push in `session` (JSON-encoded) carries the bug line
+/// a stop stashed — the push takes it, so a second call is false.
+fn flagged(d: &Path, session: &str) -> bool {
+    let read = format!(
+        r#"{{"cwd":{},"session":{session},"files":["src/nothing.rs"]}}"#,
+        json(d)
+    );
+    let (ok, out, _) = fael(d, &["hook", "read"], &read);
+    assert!(ok, "{out}");
+    out.contains("possible problem")
 }
 
 fn state(d: &Path) -> PathBuf {

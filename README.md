@@ -46,7 +46,7 @@ How it behaves:
 - **Writing costs no extra turn.** The agent runs `fael add` in the same message as its next tool
   call. When a turn ends with no tool call left, it can close its reply with `fael
   decision|issue|note: … [files: …]` lines and fael files them — no turn is stopped or
-  re-prompted. Want the old enforcement (no row, no end of turn)? Opt in with `[capture] block = true`.
+  re-prompted.
 - **Memory finds them.** When an agent reads a file, the decisions and open bugs about *that file*
   come attached — nobody has to remember to search. Sub-agents too: one starts with an empty
   context and only a short brief, and the file it opens brings the memory the brief left out.

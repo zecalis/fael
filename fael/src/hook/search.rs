@@ -181,7 +181,6 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, response: &Value) 
     }
     Reply {
         block: false,
-        reason: None,
         context: (!context.is_empty()).then_some(context),
         notice,
     }

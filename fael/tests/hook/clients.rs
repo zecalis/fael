@@ -1,11 +1,19 @@
 //! Client shapes: codex apply_patch edits + last message, claude
 //! NotebookEdit paths.
 
-use super::{fael, repo_blocking, transcript};
+use super::{fael, flagged, json, repo, state, transcript};
+
+/// Every path the edit hook recorded, across sessions.
+fn recorded_edits(d: &std::path::Path) -> String {
+    std::fs::read_dir(state(d).join("sessions"))
+        .unwrap()
+        .map(|e| std::fs::read_to_string(e.unwrap().path()).unwrap())
+        .collect()
+}
 
 #[test]
 fn codex_apply_patch_edits_and_last_message() {
-    let d = repo_blocking();
+    let d = repo();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -19,26 +27,19 @@ fn codex_apply_patch_edits_and_last_message() {
         "tool_input": {"command": patch}})
     .to_string();
     assert!(fael(&d, &["hook", "edit", "--client", "codex"], &edit).0);
-    // a bug claim in the last message is checked before the edit rule
-    let stop = serde_json::json!({"cwd": d, "transcript_path": t, "stop_hook_active": false,
+    assert!(recorded_edits(&d).contains("src/b.rs"));
+    // a bug claim in the last message is flagged on the next push
+    let stop = serde_json::json!({"cwd": d, "transcript_path": t,
         "last_assistant_message": "Found a bug: the parser is broken on empty input."})
     .to_string();
     let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "codex"], &stop);
-    assert!(
-        ok && out.contains(r#""decision":"block""#) && out.contains("issue"),
-        "{out}"
-    );
-    // next turn's message is clean: the edit rule sees the apply_patch file
-    let stop = serde_json::json!({"cwd": d, "transcript_path": t,
-        "last_assistant_message": "Added b.rs."})
-    .to_string();
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "codex"], &stop);
-    assert!(ok && out.contains("--files src/b.rs"), "{out}");
+    assert!(ok && !out.contains("block"), "{out}");
+    assert!(flagged(&d, &json(&t)));
 }
 
 #[test]
 fn claude_notebook_edit_is_recorded() {
-    let d = repo_blocking();
+    let d = repo();
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],
@@ -51,7 +52,5 @@ fn claude_notebook_edit_is_recorded() {
         "tool_input": {"notebook_path": d.join("src/n.ipynb")}})
     .to_string();
     assert!(fael(&d, &["hook", "edit", "--client", "claude"], &edit).0);
-    let stop = serde_json::json!({"cwd": d, "transcript_path": t}).to_string();
-    let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "claude"], &stop);
-    assert!(ok && out.contains("src/n.ipynb"), "{out}");
+    assert!(recorded_edits(&d).contains("src/n.ipynb"));
 }

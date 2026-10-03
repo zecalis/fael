@@ -24,7 +24,6 @@ this session's `fael find <id>` printed it as `- [<id>]`, else look it up by key
 pub(crate) fn session_start(e: &Event) -> Reply {
     let no = || Reply {
         block: false,
-        reason: None,
         context: None,
         notice: None,
     };
@@ -139,7 +138,6 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     );
     Reply {
         block: false,
-        reason: None,
         context: Some(context),
         notice,
     }

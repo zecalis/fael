@@ -1,5 +1,5 @@
 //! Ask accounting (PLAN-fael-durable-log chunk 3a): every time fael costs
-//! the agent another round — a `rejected:` write, a stop-hook block, a warning
+//! the agent another round — a `rejected:` write or a warning
 //! line — lands in usage.jsonl with its ask type, so `fael stats` shows
 //! whether self-heal (chunk 3b–e) actually asks less. The read half (transcript
 //! tokens, metrics) lives in `askstats`; estimates stay labelled `est`, never
@@ -11,7 +11,7 @@ use super::state::{now_rfc3339, state_dir};
 use crate::core;
 use std::path::Path;
 
-pub(crate) use crate::core::stats::{ASK_BLOCK, ASK_REJECT, ASK_WARN};
+pub(crate) use crate::core::stats::{ASK_REJECT, ASK_WARN};
 
 /// Optional half of a usage row: what kind of ask this was (absent on plain
 /// pushes), the session it belongs to (absent outside hooks), the sub-agent
@@ -118,8 +118,8 @@ pub(crate) fn record_mcp(root: &Path, tool: &str, ask: &str, text: &str) {
     record_ask("mcp", ask, tool, Some(root), text);
 }
 
-/// One ask the agent has to answer: a reject, a stop-hook block (recorded by
-/// the hook itself through `UsageMeta`), or a warning line. `repo` is `None`
+/// One ask the agent has to answer: a reject or a warning line (a stop-hook
+/// block in usage rows written before that mode was removed). `repo` is `None`
 /// when the call never resolved one (parse errors before routing) — those rows
 /// still count, they just skip the temp-dir filter and the per-repo joins.
 pub(crate) fn record_ask(client: &str, ask: &str, event: &str, repo: Option<&Path>, text: &str) {

@@ -10,7 +10,7 @@ at the file it touches — never more rows. Rounds and tokens are a cost to keep
 
 Ship a feature only if it preserves/repairs context, retrieves the right context, cuts
 repeated agent work, or improves team reuse — and never starts an agent turn or
-re-prompts on idle (the opt-in `[capture] block = true` mode aside), adds no daemon,
+re-prompts on idle, adds no daemon,
 never guesses, never polices the developer's process (worktree, branch, git flow).
 Assigning and claiming inform. A claim is race-safe (of two agents, one wins) but only gates the claim — `--force` takes it over, no edit is ever blocked.
 Claims about value (README, docs, PRs) say only what `fael stats` shows — what fael handed over
