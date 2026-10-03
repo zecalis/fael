@@ -59,12 +59,19 @@ fn cross_line(s: &core::stats::Stats) -> Option<String> {
         )
     };
     (c.other_session.pushed > 0).then(|| {
-        format!(
+        let mut line = format!(
             "  across agents: {} · {} · {}",
             part("from another session", &c.other_session),
             part("another worktree", &c.other_worktree),
             part("written during the session", &c.written_during_session)
-        )
+        );
+        for (pair, r) in &c.by_client {
+            line += &format!(" · {}", part(pair, r));
+        }
+        if c.writer_unknown > 0 {
+            line += &format!(" · writer unknown {}", c.writer_unknown);
+        }
+        line
     })
 }
 
