@@ -322,7 +322,7 @@ Rows that only exist on another branch render with `@<branch>`; once merged they
 Tokens are the unit of value, and they are spent when reading, not when storing. So:
 
 - Storage is JSON, so any tool can parse it and it merges cleanly in git.
-- What an agent is shown (kickoff, push, `find`) is one markdown line per row: `- [id] kind #key text → files`. On real rows this adds 18.5% on top of the text, against 42.6% for raw JSON and 17.7% for TOON. The text is most of the size, so the savings come from choosing fewer rows, not from the format.
+- What an agent is shown (kickoff, push, `find`) is one markdown line per row: `- [id] kind #key text → files`. On real rows this adds 18.5% on top of the text, against 42.6% for raw JSON and 17.7% for TOON. The text is most of the size, so the savings come from choosing fewer rows, not from the format. One cut on top: a file push drops the file the agent just opened from each row's list (`→ also: <others> +N` past two), 14% fewer bytes over 25 file reads in one repo (2026-10-03, bytes not tokens).
 - Every output is cut to a token budget (configurable per repo). The estimate is computed at read time and never stored, because every model's tokenizer counts differently. `est_tokens` stays the anchor unit (ASCII ≈ 4 bytes/token, non-ASCII ≈ 1 char/token) — a ruler, not a scale; convert with the frozen exchange table below — no per-model config, no formula tuning.
 
   | model | EN (× est) | TH (× est) |

@@ -18,6 +18,7 @@ mod autosync;
 mod capture;
 mod clients;
 mod close_hint;
+mod compact;
 mod day;
 mod focus;
 mod handoff;

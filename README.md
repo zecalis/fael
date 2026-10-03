@@ -142,7 +142,7 @@ Rather review memory in PRs? `store = "tracked"` in `.fael/config.toml` also wri
 ## How it works
 
 ```
-agent reads src/pay.rs   →  fael attaches: "[bug] refund rounds down on JPY → src/pay.rs"
+agent reads src/pay.rs   →  fael attaches: "[bug] refund rounds down on JPY"
 agent fixes it, replies  →  "…done. fael decision: refunds round half-up, per finance [files: src/pay.rs]"
 fael                     →  files that line as a row — no extra turn, nothing blocked
 fael sync                →  the next agent, on any machine, sees it when it opens src/pay.rs

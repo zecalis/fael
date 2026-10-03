@@ -150,7 +150,7 @@ fn cut_body(
     let mut lines: Vec<String> = body
         .lines()
         .filter(|l| !l.starts_with("… +"))
-        .map(str::to_string)
+        .map(|l| super::also::drop_touched(l, files))
         .collect();
     lines.extend(counts(sel, n, files));
     (crate::find::branches::tag(lines.join("\n") + "\n", tags), n)
