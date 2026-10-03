@@ -112,8 +112,6 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     if let Some(line) = gone_line(&c.repo, &c.log, &all, &reader) {
         body.push_str(&line);
     }
-    let usage = memory_line(&body, c.repo.cfg.kickoff_tokens).unwrap_or_default();
-    body.push_str(&usage);
     let adopted = crate::journal::home(&c.repo).is_some();
     let mut context = match (body.is_empty(), adopted) {
         (true, false) => None,
