@@ -16,6 +16,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      --title = the ≤15-word headline lists show, the body is pulled by id;
      --replace old --with new re-files the --supersedes row with that one passage changed
      (no text; files, key and title carry over; old must occur in the body exactly once);
+     --to who routes an issue: it lists in full at the session start of whoever's git user.name
+     is `who` (lowercased); fael find --to who lists theirs;
+     working an open issue? fael claim <id> first — others then see (held @<branch>), never a lock;
      --force files a path that looks like a typo of an existing one;
      --dry-run prints the verdict the real add would act on without writing;
      a repeat on these files or key, \"Supersedes <id>\" in the text, and the

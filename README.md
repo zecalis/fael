@@ -5,26 +5,38 @@
 [![CI](https://github.com/zecalis/fael/actions/workflows/ci.yml/badge.svg)](https://github.com/zecalis/fael/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**The secretary for every agent on your team.** Every agent on your repo gets what git can't tell
-it — why a call was made, what was rejected, what's still open — next to the file it opens.
+**A shared work ledger for every agent on your repo.** Hand work from one session, agent or person to
+the next — a decision, a requirement, an issue assigned to someone, a claim, where a plan stopped —
+and it shows up where the next agent is working: on the file it opens, and at session start for what
+is routed to it.
 
-One person runs five agents; a team runs fifty — and each of those hands work to sub-agents. Every
-one of them starts from zero: it finds the same flaky test, re-asks why that function looks weird,
-and repeats the mistake the last agent already fixed.
-Memory tools that try to help stuff a summary of everything into context before the agent has said
-what it's about to do — the one row that mattered gets averaged away, and a summary of stale notes
-is still stale.
+One person runs five agents; a team runs fifty — and each of those hands work to sub-agents. They
+don't share a chat, so every one starts from zero: it finds the same flaky test, re-asks why that
+function looks weird, picks up the issue another agent is already on, and repeats the mistake the
+last agent already fixed. Tools that stuff a summary of everything into context before the agent has
+said what it's about to do average the one row that mattered away, and a summary of stale notes is
+still stale.
 
-fael works the other way round: like a good secretary, it takes the notes nobody else will and hands
-each agent **only what matters for the file in front of it**. The agent writes down what it decided
-or found **in the same reply, at no extra turn**, and when it opens a file it gets **only what was
-written about that file**. The file it touches is the question.
+fael works the other way round. The agent writes down what it decided or found **in the same
+message as its next tool call, at no extra turn**, and when it opens a file it gets **only what was
+written about that file**. The file it touches is the question. Work routed to an agent or a person
+lists in full at their session start.
 
-The team isn't only the people who write code. A PM, QA, EM or tech lead writes a requirement, a
-decision or an assignment once — through their own agent or the CLI — and every dev agent that
-touches that code later gets it, so the next feature doesn't forget what the last one agreed.
+What moves through it:
 
-fael gives the repo a memory that agents can't skip:
+- **Hand-offs.** `fael add note "pricing page: copy approved, layout half-done" --files
+  src/pricing.tsx --key pricing:page` — the next session or agent gets it when it opens that file or
+  its prompt names the key.
+- **Assignments.** `fael add issue "…" --to ploy` — lists in full at the session start of whoever's
+  git `user.name` is `ploy` (lowercased).
+- **Claims.** `fael claim <id>` — `fael find --kind issue` then shows `(held @<branch>)`, so another
+  agent picks something else. Never a lock.
+- **Requirements and decisions.** A PM, QA, EM or tech lead writes one once — through their own
+  agent or the CLI — and every dev agent that touches that code later gets it, so the next feature
+  doesn't forget what the last one agreed.
+- **Come-backs.** `--revisit <date|text>` brings a row back when it is due.
+
+How it behaves:
 
 - **Writing costs no extra turn.** The agent runs `fael add` in the same message as its next tool
   call. When a turn ends with no tool call left, it can close its reply with `fael
@@ -59,6 +71,8 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 | Agent notices a bug mid-task, then forgets it | It's filed on the spot, and shown to whoever touches that file next |
 | Two agents in parallel worktrees hit the same problem | The first files it; the second gets it when it opens the file — the same hour, before any commit (`fael stats` → `across agents` counts how often) |
 | A sub-agent finds something and its summary drops it | Its `fael issue: …` line is filed when it stops (Claude Code), and the parent gets it on that file |
+| Work is handed over in chat and lost between sessions | A hand-off note, an assigned issue or a claim sits in the ledger — the assignee sees it at session start |
+| Two agents pick the same issue | `fael claim <id>`: the second sees `(held @<branch>)` and picks another |
 | Knowledge stays in one person's chat history | It's in the clone — teammates and their agents get it on `fael sync` |
 | A PM's requirement lives in a ticket the agent never opens | `fael add decision … --files src/pay.rs` — it's in front of the agent the moment it opens the file |
 
