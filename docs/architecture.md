@@ -10,7 +10,7 @@
 > This page is the contract the code is built against —
 > when code and this page disagree, fix one of them in the same commit.
 
-fael is a memory log for agents that lives **inside the repo**: every agent (Claude Code, Codex, OpenCode, a chat
+fael is a shared work ledger for agents that lives **inside the repo**: every agent (Claude Code, Codex, OpenCode, a chat
 host speaking MCP, …) and every person on the team reads and writes the same log, git carries it between machines, and there is no server.
 
 Three ideas carry the whole design:
@@ -23,8 +23,10 @@ Three ideas carry the whole design:
 
 ## 0. Product invariant
 
-Fael maintains the **team's shared memory of work** — not a personal notebook, not a
-generic AI memory store, and not a process or git guard.
+Fael is the **team's shared work ledger**: the context of the work, and the work handed
+between sessions and agents — hand-offs, requirements, assigned issues (`--to`), claims,
+come-backs (`--revisit`). It is not a personal notebook, not a generic AI memory store, and not a
+process or git guard.
 
 The unit of value is work context:
 
@@ -38,7 +40,8 @@ The goal is not to store more memory — it is memory that **points the right wa
 what changed; fael keeps only what git and the code cannot say (why, what was rejected, what is
 unfinished), and retires a row once the code says it or contradicts it. It is measured by
 repeat mistakes (redoing what was decided or rejected), the share of pushed rows actually used,
-and how many open rows the code has outgrown. Rounds and tokens are a cost to keep low, never
+how many open rows the code has outgrown, and how much of what one agent wrote reached
+another (`fael stats` → `across agents`). Rounds and tokens are a cost to keep low, never
 a promise.
 
 A feature ships only if it does at least one of these **and** gives nothing back:
@@ -58,8 +61,9 @@ A feature must never:
   prompt the user cannot cancel
 - add a daemon or a server the local binary must babysit (§7)
 - guess when the log is ambiguous
-- police the developer's process — worktree, branch, or git flow. Fael maintains the
-  memory of work, never how the work is done.
+- police the developer's process — worktree, branch, or git flow. Fael carries the work
+  between agents, never decides how it is done: an assignment or a claim informs, it
+  never locks or gates.
 
 ## 1. Parts
 

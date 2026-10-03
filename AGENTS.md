@@ -2,8 +2,9 @@
 
 ## Product invariant
 
-Fael maintains the team's shared memory of work — not a personal notebook, not a
-generic AI memory store, and not a process or git guard. Value is work context
+Fael is the team's shared work ledger — context and hand-offs (decisions, requirements,
+assigned issues, claims, where a plan stopped) that pass between sessions and agents — not a
+personal notebook, not a generic AI memory store, and not a process or git guard. Value is work context
 (`task (key) → decision → evidence → outcome → closure`) in front of the right agent, once,
 at the file it touches — never more rows. Rounds and tokens are a cost to keep low, never a promise.
 
@@ -11,6 +12,7 @@ Ship a feature only if it preserves/repairs context, retrieves the right context
 repeated agent work, or improves team reuse — and never starts an agent turn or
 re-prompts on idle (the opt-in `[capture] block = true` mode aside), adds no daemon,
 never guesses, never polices the developer's process (worktree, branch, git flow).
+Assigning and claiming inform; they never lock or gate.
 Claims about value (README, docs, PRs) say only what `fael stats` shows — what fael handed over
 and how often it was in front of the agent at an edit (`value.by_event`, `value.cross_agent`).
 Never "saves tokens/rounds/time": fael cannot see the counterfactual.
