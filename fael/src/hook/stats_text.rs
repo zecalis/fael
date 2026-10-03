@@ -49,6 +49,25 @@ fn print_events(s: &core::stats::Stats) {
     }
 }
 
+/// One line on rows that crossed agents; nothing to say = no line.
+fn cross_line(s: &core::stats::Stats) -> Option<String> {
+    let c = &s.value.cross_agent;
+    let part = |label: &str, r: &core::stats::Reuse| {
+        format!(
+            "{label} {} ({} in context at edit)",
+            r.pushed, r.in_context_at_edit
+        )
+    };
+    (c.other_session.pushed > 0).then(|| {
+        format!(
+            "  across agents: {} · {} · {}",
+            part("from another session", &c.other_session),
+            part("another worktree", &c.other_worktree),
+            part("written during the session", &c.written_during_session)
+        )
+    })
+}
+
 /// The human `fael stats --day` text — format only, every number from core.
 pub(super) fn print_day(v: &core::stats::DayView) {
     let a = &v.all;
@@ -163,6 +182,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
         );
     }
     print_events(s);
+    if let Some(line) = cross_line(s) {
+        println!("{line}");
+    }
     let mut cl: Vec<_> = s.by_client.iter().collect();
     cl.sort_by_key(|a| std::cmp::Reverse(a.1.events));
     for (k, c) in cl {

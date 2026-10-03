@@ -105,6 +105,7 @@ fn json_shape_keys_and_types_are_frozen() {
     let value = ["handoffs_picked_up", "in_context_at_edit", "issues_closed"];
     let mut value_keys = value.to_vec();
     value_keys.insert(0, "by_event");
+    value_keys.insert(1, "cross_agent");
     assert_eq!(keys(&v["value"]), value_keys, "{v}");
     assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
     assert!(v["value"]["by_event"].is_object(), "{v}");

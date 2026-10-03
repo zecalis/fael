@@ -25,6 +25,8 @@ pub struct Value {
     /// counting only lines stamped at or after the client's first `in-context`
     /// line (see `EventValue`).
     pub by_event: BTreeMap<String, EventValue>,
+    /// Rows one agent wrote and another was handed (`cross.rs`).
+    pub cross_agent: super::cross::CrossAgent,
 }
 
 /// One push event's hit rate (`in_context_at_edit / pushed`), over the usage
@@ -111,6 +113,7 @@ fn pairs(parsed: &Parsed, windowed: bool) -> Pairs<'_> {
 pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
     let (_, in_context) = pairs(parsed, false);
     let (pushed, in_window) = pairs(parsed, true);
+    let cross_agent = super::cross::cross_agent(parsed, logs, &pushed, &in_window);
     let mut by_event: BTreeMap<String, EventValue> = BTreeMap::new();
     for event in pushed.values() {
         by_event.entry(event.to_string()).or_default().pushed += 1;
@@ -165,6 +168,7 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
         issues_closed: closed.len(),
         handoffs_picked_up: handoffs,
         by_event,
+        cross_agent,
     }
 }
 
