@@ -9,6 +9,7 @@
 
 mod derive;
 mod paths;
+mod receipt;
 mod refs;
 mod urgent;
 

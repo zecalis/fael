@@ -25,6 +25,8 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         let (log, wide, btags) = super::refs::resolve_wide(&r, base, t);
         return match wide {
             super::refs::Wide::One(row) => {
+                // the body was just printed — the next push must not say it again
+                super::hook::note_seen(&super::session::hook_session(&r.root), &r.root, &[&row.id]);
                 show_one(a, &log, &row, &super::journal::overlay(jtags, btags))
             }
             super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
