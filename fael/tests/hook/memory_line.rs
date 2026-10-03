@@ -1,6 +1,6 @@
-//! The `memory: ~<used>/<budget> tokens · <n> rows` line on push and
-//! session-start: an estimate that rides context already being injected,
-//! shown only when rows were said.
+//! The `memory: ~<used>/<budget> tokens · <n> rows` line on push: an
+//! estimate that rides context already being injected, shown only when rows
+//! were said. Session start never carries it.
 
 use super::{fael, json, repo};
 use std::path::Path;
@@ -41,20 +41,13 @@ fn push_without_rows_has_no_line() {
 }
 
 #[test]
-fn session_start_says_it_only_when_rows_are_listed() {
+fn session_start_never_says_it() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    // a plain issue is counted, not listed — no rows, no line
-    add(&d, &["anyone plain", "--files", "src/a.rs"]);
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok && !out.contains("memory:"), "{out}");
-    // an urgent unowned issue lists in full — now the line appears
+    // an urgent unowned issue lists in full — still no line
     add(&d, &["hot unowned", "--files", "src/a.rs", "--urgent"]);
     let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
     assert!(ok && out.contains("hot unowned"), "{out}");
-    assert!(
-        out.contains("memory: ~") && out.contains("tokens · 1 row"),
-        "{out}"
-    );
+    assert!(!out.contains("memory:"), "{out}");
 }

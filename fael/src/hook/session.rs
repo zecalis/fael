@@ -5,7 +5,7 @@ use super::asks::hook_meta;
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::state::{head_branch, prune_sessions, seen_path, session_key, state_dir};
-use super::usage::{memory_line, record_usage};
+use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
 
@@ -269,13 +269,18 @@ fn todo<'a>(
 /// The one-line count summary, generated from the log, not prose. Zero open
 /// issues = no line (chunk 1); zero segments are skipped, the total always
 /// shows: `fael: 2 to you (1 urgent) · 1 urgent unassigned · 7 open — …`.
+/// Kept short: it rides every session start, and the file-touch push of
+/// each counted issue is the agent's to notice, not this line's to explain.
 fn count_line(t: &Todo) -> Option<String> {
     if t.total == 0 {
         return None;
     }
     let mut parts = vec![];
     if t.to_you > 0 {
-        parts.push(format!("{} to you ({} urgent)", t.to_you, t.to_you_urgent));
+        parts.push(match t.to_you_urgent {
+            0 => format!("{} to you", t.to_you),
+            u => format!("{} to you ({u} urgent)", t.to_you),
+        });
     }
     if t.hot > 0 {
         parts.push(format!("{} urgent unassigned", t.hot));
@@ -289,7 +294,7 @@ fn count_line(t: &Todo) -> Option<String> {
         if t.total == 1 { "issue" } else { "issues" }
     ));
     Some(format!(
-        "fael: {} — fael find --kind issue (MCP find kind=issue); each also pushes when you touch its file\n",
+        "fael: {} — fael find --kind issue (MCP find kind=issue)\n",
         parts.join(" · ")
     ))
 }
