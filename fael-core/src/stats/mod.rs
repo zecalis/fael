@@ -10,6 +10,7 @@
 
 mod aggregate;
 mod capture;
+mod cross;
 mod day;
 mod metrics;
 mod parse;
@@ -21,6 +22,7 @@ pub use aggregate::{
     Stats, TopRow, aggregate,
 };
 pub use capture::Capture;
+pub use cross::{CrossAgent, Reuse};
 pub use day::{
     BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
