@@ -18,7 +18,12 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
             .supersedes
             .as_deref()
             .map_or(String::new(), |s| format!(" · supersedes {s}"));
-        println!("{} → {}{old}", row.id, rel.display());
+        // a routed row says what to paste to its receiver: whoever gets the
+        // line (a person, or an agent that knows fael) runs it and reads the row
+        let to = row.to_who().map_or(String::new(), |t| {
+            format!(" · to {t}: tell them `fael find {}`", row.id)
+        });
+        println!("{} → {}{old}{to}", row.id, rel.display());
     }
 }
 

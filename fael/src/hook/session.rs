@@ -58,7 +58,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     focus::write(&c.session, &c.repo.root, &f);
     let work = core::on_work(&f, &all, &c.repo.cfg.anchor_prefixes);
     let open: Vec<&core::Row> = all.iter().copied().filter(|r| r.kind == "issue").collect();
-    let t = todo(open, &reader, &work);
+    let t = todo(open, &reader, e.client.as_deref(), &work);
     let decisions: Vec<_> = if c.repo.cfg.session_decisions == 0 {
         vec![]
     } else {
@@ -221,7 +221,14 @@ struct Todo<'a> {
     total: usize,
 }
 
-fn todo<'a>(open: Vec<&'a core::Row>, reader: &str, work: &[&core::Row]) -> Todo<'a> {
+/// `client` is the agent's own name (`opencode`, `codex`, `claude`): an issue
+/// `--to opencode` reaches every OpenCode session in the repo, whoever runs it.
+fn todo<'a>(
+    open: Vec<&'a core::Row>,
+    reader: &str,
+    client: Option<&str>,
+    work: &[&core::Row],
+) -> Todo<'a> {
     let total = open.len();
     let mut mine = vec![];
     let mut unowned = vec![];
@@ -229,7 +236,10 @@ fn todo<'a>(open: Vec<&'a core::Row>, reader: &str, work: &[&core::Row]) -> Todo
     let mut to_you_urgent = 0;
     for r in open {
         match r.to_who() {
-            Some(t) if core::to_matches(t, reader) => {
+            Some(t)
+                if core::to_matches(t, reader)
+                    || client.is_some_and(|c| t.eq_ignore_ascii_case(c)) =>
+            {
                 to_you_urgent += usize::from(r.urgent_value().is_some());
                 mine.push(r);
             }

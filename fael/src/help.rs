@@ -17,7 +17,10 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      --replace old --with new re-files the --supersedes row with that one passage changed
      (no text; files, key and title carry over; old must occur in the body exactly once);
      --to who routes an issue: it lists in full at the session start of whoever's git user.name
-     is `who` (lowercased); fael find --to who lists theirs;
+     is `who` (lowercased), or of every session of the agent client named `who` (opencode, codex,
+     claude); fael find --to who lists theirs. The receipt prints the line to paste to them;
+     key it `<topic>:handoff` and `fael stats` counts it when picked up; the receiver closes it
+     with how it went (fael close <id> \"...\") and the sender reads that on fael find --all;
      working an open issue? fael claim <id> first — others then see (held @<branch>), never a lock;
      --force files a path that looks like a typo of an existing one;
      --dry-run prints the verdict the real add would act on without writing;
