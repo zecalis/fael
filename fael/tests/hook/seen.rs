@@ -192,3 +192,21 @@ fn compaction_starts_the_seen_list_over() {
     start("compact");
     assert!(read_a(&d, "").contains("ctx tenant keys"));
 }
+
+/// `find <id>` prints the body — the next read push of that file must not say
+/// the same row again (it used to return before marking it seen).
+#[test]
+fn find_by_id_marks_seen() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "issue", "by id login loops", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let (ok, out, _) = fael_env(&d, &["find", &id], "", &[("CLAUDE_CODE_SESSION_ID", "s1")]);
+    assert!(ok && out.contains("by id login loops"), "{out}");
+    assert!(!read_a(&d, "").contains("by id login loops"));
+}

@@ -12,7 +12,13 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
         println!("{}", row.to_line());
     } else {
         let rel = path.strip_prefix(&r.root).unwrap_or(path);
-        println!("{} → {}", row.id, rel.display());
+        // the first word stays the full id (callers and tests take it as is); a
+        // supersede, flagged or self-healed, says which row it replaced
+        let old = row
+            .supersedes
+            .as_deref()
+            .map_or(String::new(), |s| format!(" · supersedes {s}"));
+        println!("{} → {}{old}", row.id, rel.display());
     }
 }
 
