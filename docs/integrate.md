@@ -1,8 +1,8 @@
 # Integrate fael into an agent
 
 fael needs four calls from an agent's lifecycle. Each is one process spawn:
-Event JSON on stdin, Reply JSON on stdout, always exit 0 (about 2–3 ms each; `session-start` about 10 ms
-because it runs one `git check-ignore`). Claude Code and Codex use a built-in adapter
+Event JSON on stdin, Reply JSON on stdout, always exit 0 (about 10 ms each on a repo with a thousand rows; `session-start` about 100 ms,
+once per session). Claude Code and Codex use a built-in adapter
 (`--client claude|codex`), and OpenCode gets a generated plugin
 ([`fael/skill/opencode.js`](../fael/skill/opencode.js), the reference implementation of
 this page). Any other agent calls the neutral format:

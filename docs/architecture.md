@@ -16,7 +16,7 @@ host speaking MCP, …) and every person on the team reads and writes the same l
 Three ideas carry the whole design:
 
 1. **The log is the truth; everything else is derived** — like Redis's append-only file or a Kafka topic.
-2. **Agents are made to write, not asked** — hooks refuse to end a turn that committed work without a memory row.
+2. **Agents write in the same message, never a turn of their own** — `fael add` beside the next tool call, or `fael <kind>:` lines closing the reply; refusing to end a turn without a row is opt-in (`[capture] block = true`).
 3. **Memory comes to the agent** — when an agent reads a file, the rows about that file are attached to the read.
 
 ---
