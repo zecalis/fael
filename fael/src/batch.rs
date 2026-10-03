@@ -7,6 +7,13 @@ use crate::hook::{ASK_WARN, record_asks, record_cli_reject, record_row_asks};
 use crate::{core, write};
 use std::process::ExitCode;
 
+/// A routed row says what to paste to its receiver: whoever gets the line (a
+/// person, or an agent that knows fael) runs it and reads the row.
+pub(crate) fn paste_line(row: &Row) -> Option<String> {
+    let t = row.to_who()?;
+    Some(format!("to {t}: tell them `fael find {}`", row.id))
+}
+
 pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::path::Path) {
     if a.has("json") {
         println!("{}", row.to_line());
@@ -18,11 +25,7 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
             .supersedes
             .as_deref()
             .map_or(String::new(), |s| format!(" · supersedes {s}"));
-        // a routed row says what to paste to its receiver: whoever gets the
-        // line (a person, or an agent that knows fael) runs it and reads the row
-        let to = row.to_who().map_or(String::new(), |t| {
-            format!(" · to {t}: tell them `fael find {}`", row.id)
-        });
+        let to = paste_line(row).map_or(String::new(), |p| format!(" · {p}"));
         println!("{} → {}{old}{to}", row.id, rel.display());
     }
 }
