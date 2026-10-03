@@ -104,6 +104,39 @@ fn a_grep_hit_list_pushes_the_files_it_names() {
 }
 
 #[test]
+fn a_hit_list_skips_data_files_but_a_named_one_counts() {
+    let d = repo();
+    seed(&d);
+    std::fs::write(d.join("src/index.json"), "{}\n").unwrap();
+    backdate(&d.join("src/index.json"));
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "font index stale",
+            "--files",
+            "src/index.json",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let out = bash(
+        &d,
+        "s1",
+        "grep -rn x src",
+        "src/a.rs:1:// x\nsrc/index.json:1:x\n",
+    );
+    assert!(
+        out.contains("login loops") && !out.contains("font index stale"),
+        "{out}"
+    );
+    // a file the call names is intent, whatever its extension
+    let out = bash(&d, "s2", "cat src/index.json", "{}");
+    assert!(out.contains("font index stale"), "{out}");
+}
+
+#[test]
 fn only_readers_and_real_files_push() {
     let d = repo();
     seed(&d);

@@ -36,7 +36,19 @@ pub(crate) const SHELL_EDIT: &str = "shell-edit";
 /// Codex `output`).
 const HIT_KEYS: [&str; 5] = ["filenames", "stdout", "content", "output", "result"];
 
-/// Files touched by one search/shell tool call. `input` is `tool_input`,
+/// Data and generated files: a search that merely matched inside one reveals
+/// no intent about it. Only the hit list is filtered — a file the call names
+/// (`cat package.json`, a Grep `path`) still counts.
+// ponytail: extension list, not a gitignore walk — add an extension when a noisy one shows up
+fn is_data(p: &str) -> bool {
+    const EXT: [&str; 5] = ["json", "lock", "map", "svg", "csv"];
+    Path::new(p)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| EXT.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// Files touched by one search/shell call. `input` is `tool_input`,
 /// `response` is `tool_response` (a string, or an object with `stdout`,
 /// `content`, `output`, `result` or `filenames`).
 pub(crate) fn touched(tool: &str, input: &Value, response: &Value, cwd: &Path) -> Vec<String> {
@@ -106,7 +118,10 @@ pub(crate) fn touched(tool: &str, input: &Value, response: &Value, cwd: &Path) -
         }
         for l in lines.into_iter().take(MAX_LINES) {
             // `path:line:text`, or a bare path (`grep -l`, `rg -l`, files_with_matches)
-            add(l.split_once(':').map_or(l, |(p, _)| p).trim());
+            let p = l.split_once(':').map_or(l, |(p, _)| p).trim();
+            if !is_data(p) {
+                add(p);
+            }
         }
     }
     out
