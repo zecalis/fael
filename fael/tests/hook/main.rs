@@ -80,6 +80,12 @@ fn fael_at_env(
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)
         .env("HOME", state.join("home"));
+    // hook-session ids never inherit from the test runner's own shell
+    // (an OpenCode/Codex shell exports FAEL_SESSION/CODEX_THREAD_ID) —
+    // tests that file inside a session say so in `envs`
+    c.env_remove("FAEL_SESSION")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID");
     for (k, v) in envs {
         c.env(k, v);
     }

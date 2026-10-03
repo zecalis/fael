@@ -11,14 +11,17 @@ use std::path::{Path, PathBuf};
 /// session or its stem; else the raw value (clients that key
 /// by it directly); empty = outside any hook session, seen-ids stay off.
 ///
-/// The env is `$FAEL_SESSION` first, then `$CLAUDE_CODE_SESSION_ID` — the
-/// OpenCode plugin's `shell.env` hook sets the former inside OpenCode's own
-/// shell commands only, so it is the fresher signal; the latter can be
-/// inherited when opencode runs inside a Claude Code shell, tagging the row
-/// with the outer session. A local MCP server is spawned once per OpenCode
-/// instance, so MCP `add` calls still land outside any session.
+/// The env is `$FAEL_SESSION` first, then `$CLAUDE_CODE_SESSION_ID`, then
+/// `$CODEX_THREAD_ID` — the OpenCode plugin's `shell.env` hook sets the former
+/// inside OpenCode's own shell commands only, so it is the fresher signal; the
+/// Claude one can be inherited when opencode runs inside a Claude Code shell,
+/// tagging the row with the outer session. Codex exposes `CODEX_THREAD_ID` to
+/// its shell tool executions (but not to stdio MCP servers: openai/codex#19937),
+/// so a `fael add` from a Codex shell joins the same way. A local MCP server is
+/// spawned once per OpenCode instance, so MCP `add` calls still land outside
+/// any session.
 fn env_session() -> String {
-    for k in ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID"] {
+    for k in ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] {
         let v = std::env::var(k).unwrap_or_default();
         if !v.is_empty() {
             return v;
@@ -119,8 +122,8 @@ pub(crate) fn active_edits(root: &Path) -> Vec<(String, i64)> {
 
 /// Files for a row filed now: the caller's own session edits newer than the
 /// newest row, order kept, deduped. The caller's session is the hook env
-/// (`FAEL_SESSION` from the OpenCode `shell.env` hook, else
-/// `CLAUDE_CODE_SESSION_ID`) — the hook keys Claude by transcript path, so an
+/// (`FAEL_SESSION` from the OpenCode `shell.env` hook, `CLAUDE_CODE_SESSION_ID`,
+/// or `CODEX_THREAD_ID` from a Codex shell) — the hook keys Claude by transcript path, so an
 /// edit line matches on that file's stem too; without it, only a single
 /// active session counts — two agents in one checkout must never file rows on
 /// each other's files. Empty = the caller keeps the old "files is required"
