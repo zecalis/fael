@@ -45,10 +45,20 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "claim",
         "mark an open issue held by this branch",
-        "fael claim <id>
+        "fael claim <id> [--force]
     (find --kind issue then shows (held @<branch>) so another agent picks
-     something else; never a lock — a second claim moves it with a warning;
+     something else; two agents racing for one issue: the first wins, the
+     second is told who holds it — --force takes it over, and so does a hold
+     whose branch no longer exists; it gates the claim, never your edits;
      closing the issue ends it)",
+    ),
+    (
+        "next",
+        "claim the best free issue and print it",
+        "fael next
+    (open, not waiting, routed to nobody or to you, not held by a live branch;
+     yours first, then urgent, then newest; an issue routed to someone else or
+     to an agent client (--to opencode): fael claim <id>)",
     ),
     (
         "find",

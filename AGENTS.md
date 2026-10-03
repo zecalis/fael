@@ -12,7 +12,7 @@ Ship a feature only if it preserves/repairs context, retrieves the right context
 repeated agent work, or improves team reuse — and never starts an agent turn or
 re-prompts on idle (the opt-in `[capture] block = true` mode aside), adds no daemon,
 never guesses, never polices the developer's process (worktree, branch, git flow).
-Assigning and claiming inform; they never lock or gate.
+Assigning and claiming inform. A claim is race-safe (of two agents, one wins) but only gates the claim — `--force` takes it over, no edit is ever blocked.
 Claims about value (README, docs, PRs) say only what `fael stats` shows — what fael handed over
 and how often it was in front of the agent at an edit (`value.by_event`, `value.cross_agent`).
 Never "saves tokens/rounds/time": fael cannot see the counterfactual.
