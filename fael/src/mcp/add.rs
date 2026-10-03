@@ -62,6 +62,8 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                 Ok((row, _, w)) => {
                     record_row_asks("mcp", "mcp-add", &r.root, &row, &w);
                     out.push(format!("recorded {}", row.id));
+                    out.extend(crate::batch::paste_line(&row));
+                    out.extend(crate::batch::launch_line(&row));
                     warns.extend(w);
                 }
                 Err(e) => {
@@ -97,7 +99,17 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         },
     )?;
     record_row_asks("mcp", "mcp-add", &r.root, &row, &warns);
-    Ok((done(&row.id, &warns), warns))
+    // the id stays alone on the first line, callers read it from there
+    let mut text = done(&row.id, &[]);
+    let routed = [
+        crate::batch::paste_line(&row),
+        crate::batch::launch_line(&row),
+    ];
+    for l in routed.iter().flatten().chain(&warns) {
+        text.push('\n');
+        text.push_str(l);
+    }
+    Ok((text, warns))
 }
 
 fn row_err(e: String, i: usize) -> String {
