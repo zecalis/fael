@@ -129,6 +129,36 @@ fn add_rows_batch_partial() {
     assert!(!log.contains("bad kind row"), "{log}");
 }
 
+/// A routed row over MCP gets the CLI's paste line, under the id line the
+/// callers parse.
+#[test]
+fn add_to_a_client_prints_the_paste_line() {
+    let (_, wt) = main_and_worktree();
+    let r = mcp_tool(
+        &wt,
+        "add",
+        &[
+            serde_json::json!({"kind": "issue", "text": "review this", "files": ["src/a.rs"], "to": "opencode"}),
+        ],
+    );
+    let body = r[0]["result"]["content"][0]["text"].as_str().unwrap();
+    let mut lines = body.lines();
+    let id = lines.next().unwrap()["recorded ".len()..].to_string();
+    assert_eq!(
+        lines.next(),
+        Some(format!("to opencode: tell them `fael find {id}`").as_str()),
+        "{body}"
+    );
+    let r = mcp(
+        &wt,
+        &[
+            serde_json::json!({"rows": [{"kind": "issue", "text": "batch review", "files": ["src/a.rs"], "to": "codex"}]}),
+        ],
+    );
+    let body = r[0]["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(body.contains("to codex: tell them `fael find "), "{body}");
+}
+
 /// PLAN-fael-id-refs chunk-2: MCP `add`/`close` carry the same phantom info
 /// line as the CLI — the row is still recorded, never rejected.
 #[test]
