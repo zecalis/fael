@@ -10,16 +10,6 @@ use std::path::{Path, PathBuf};
 
 use super::metrics::real_in;
 
-/// One stop-hook block row: did a memory row follow it? The session joins a
-/// block to the round after it; row times come from the repo logs in
-/// `aggregate`, never from here.
-pub struct StopBlock {
-    pub repo: String,
-    pub event: String,
-    pub ms: i64,
-    pub session: String,
-}
-
 /// One usage event with the day view's fields — the caller filters by day.
 /// `real_input` is the round's input-side real tokens (in + cache-create +
 /// cache-read) when the row carried transcript `usage`; `None` = unmeasured.
@@ -44,7 +34,6 @@ pub struct Parsed {
     /// Repos each row id was pushed from — row statuses resolve through
     /// those repos' logs.
     pub id_repos: HashMap<String, Vec<String>>,
-    pub blocks: Vec<StopBlock>,
     /// Kept rows feed the ask metrics in `aggregate`.
     pub kept: Vec<serde_json::Value>,
     /// Per-event rows feed the day view in `day`.
@@ -58,12 +47,7 @@ impl Parsed {
     pub fn repos(&self) -> Vec<&str> {
         let mut out: Vec<&str> = self.first_seen.keys().map(String::as_str).collect();
         let mut seen: HashSet<&str> = out.iter().copied().collect();
-        for r in self
-            .blocks
-            .iter()
-            .map(|b| b.repo.as_str())
-            .chain(self.id_repos.values().flatten().map(String::as_str))
-        {
+        for r in self.id_repos.values().flatten().map(String::as_str) {
             if seen.insert(r) {
                 out.push(r);
             }
@@ -83,7 +67,6 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
         by_client: HashMap::new(),
         by_id: HashMap::new(),
         id_repos: HashMap::new(),
-        blocks: vec![],
         kept: vec![],
         rows: vec![],
         first_seen: HashMap::new(),
@@ -119,14 +102,6 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
                 .entry(repo.to_string())
                 .and_modify(|f| *f = (*f).min(ms))
                 .or_insert(ms);
-            if ev.starts_with("stop-") {
-                p.blocks.push(StopBlock {
-                    repo: repo.to_string(),
-                    event: ev.clone(),
-                    ms,
-                    session: v["session"].as_str().unwrap_or("").to_string(),
-                });
-            }
             p.rows.push(UsageRow {
                 ms,
                 repo: repo.to_string(),

@@ -1,8 +1,7 @@
 //! Per-repo panel builders for the day view — one scope (a repo's usage
-//! rows, its log, today's stop-blocks) in, one `DayPanels` out. Pure.
+//! rows and its log) in, one `DayPanels` out. Pure.
 
-use super::super::aggregate::block_followed;
-use super::super::parse::{StopBlock, UsageRow};
+use super::super::parse::UsageRow;
 use super::{BUCKET_MIN, BUCKETS, Context, Ctx, Delivered, ForYou, Health, LAST_N, LastRow};
 use super::{DayPanels, Memory, STALE_DAYS, Timeline};
 use crate::{Log, Row, closed, is_alias_row, is_carrier_row, superseded, to_matches, ts_ms};
@@ -12,7 +11,6 @@ pub(super) fn panels(
     rows: &[&UsageRow],
     by_id: &HashMap<&str, &Row>,
     log: &Log,
-    blocks: &[&StopBlock],
     ctx: &Ctx,
 ) -> DayPanels {
     DayPanels {
@@ -20,7 +18,7 @@ pub(super) fn panels(
         context: context_of(rows),
         memory: memory_of(log, ctx.noon, ctx.tz_min),
         for_you: for_you_of(log, ctx.me, &ctx.day),
-        health: health_of(log, blocks, ctx.now_ms),
+        health: health_of(log, ctx.now_ms),
         timeline: timeline_of(rows, ctx.start_ms),
     }
 }
@@ -164,15 +162,13 @@ fn due_by(v: &str, day: &str) -> bool {
     v.len() == 7 && b[4] == b'-' && v <= &day[..7]
 }
 
-pub(super) fn health_of(log: &Log, blocks: &[&StopBlock], now_ms: i64) -> Health {
-    let ignored = blocks.iter().filter(|b| !block_followed(log, b)).count();
+pub(super) fn health_of(log: &Log, now_ms: i64) -> Health {
     let cutoff = now_ms - STALE_DAYS * 86_400_000;
     let stale = open_issues(log)
         .iter()
         .filter(|r| ts_ms(&r.ts).is_some_and(|t| t < cutoff))
         .count();
     Health {
-        ignored_blocks: ignored,
         stale_issues: stale,
     }
 }

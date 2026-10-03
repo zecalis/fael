@@ -56,7 +56,6 @@ fn replay_debt_sequence_files_five_open_notes() {
     let v = stats_json(&d);
     assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
-    assert_eq!(v["asks"]["stop-block"]["events"], 0, "{v}");
 }
 
 /// R2 — `Supersedes <id>` in text, no flag (01M3HH57V): disjoint files, so

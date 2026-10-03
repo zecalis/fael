@@ -67,7 +67,6 @@ fn reply_lines_are_filed_and_nothing_blocks() {
     assert_eq!(v["capture"]["reply_stored"], 2, "{out}");
     assert_eq!(v["capture"]["reply_rejected"], 0, "{out}");
     assert_eq!(v["capture"]["reply_lines"], 2, "{out}");
-    assert_eq!(v["capture"]["post_stop_rounds"], 0, "{out}");
 }
 
 #[test]

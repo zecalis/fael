@@ -110,7 +110,7 @@ fn day_json_shape_is_frozen() {
         ["all", "day", "repos", "schema", "tz_offset"],
         "{j}"
     );
-    assert_eq!(j["schema"], 1, "{j}");
+    assert_eq!(j["schema"], 2, "{j}");
     assert_eq!(
         keys(&j["all"]),
         [
@@ -143,11 +143,7 @@ fn day_json_shape_is_frozen() {
         ["added", "closed", "open_issues", "superseded"],
         "{j}"
     );
-    assert_eq!(
-        keys(&j["all"]["health"]),
-        ["ignored_blocks", "stale_issues"],
-        "{j}"
-    );
+    assert_eq!(keys(&j["all"]["health"]), ["stale_issues"], "{j}");
     assert_eq!(
         keys(&j["all"]["timeline"]),
         ["bucket_min", "delivered", "fael_tokens"],
@@ -202,11 +198,8 @@ fn panels_join_usage_with_the_log() {
         warnings: vec![],
     };
     let logs: HashMap<String, Log> = [("/r".to_string(), log)].into_iter().collect();
-    // one push of I1 (title + file resolve), two stop events: 07:00 was
-    // followed by rows, 11:30 was ignored
-    let text = use_row("2026-09-29T09:30:00Z", "/r", "claude", "read", 10, "\"I1\"")
-        + &use_row("2026-09-29T07:00:00Z", "/r", "claude", "stop-warn", 1, "")
-        + &use_row("2026-09-29T11:30:00Z", "/r", "claude", "stop-warn", 1, "");
+    // one push of I1 (title + file resolve)
+    let text = use_row("2026-09-29T09:30:00Z", "/r", "claude", "read", 10, "\"I1\"");
     let v = day(&parsed_of(&text), &logs, Some("kire-abc1"), now, 0);
     assert_eq!(v.all.delivered.rows, 1);
     assert_eq!(v.all.delivered.last[0].title, "Fix auth");
@@ -220,7 +213,6 @@ fn panels_join_usage_with_the_log() {
     assert_eq!(f.rows, 2);
     assert_eq!(f.from.get("ploy-x"), Some(&2));
     assert_eq!((f.urgent, f.revisit_due), (1, 1));
-    assert_eq!(v.all.health.ignored_blocks, 1);
     assert_eq!(v.all.health.stale_issues, 1);
 }
 

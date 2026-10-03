@@ -16,7 +16,7 @@ fn reject_cli_counts_with_command_event() {
     assert_eq!(u[0]["client"], "cli", "{u:?}");
     let v = stats_json(&d);
     assert_eq!(v["asks"]["reject"]["events"], 1, "{v}");
-    assert_eq!(v["asks"]["stop-block"]["events"], 0, "{v}");
+    assert!(v["asks"].get("stop-block").is_none(), "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
 }
 

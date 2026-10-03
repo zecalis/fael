@@ -7,7 +7,7 @@
 
 mod panels;
 
-use super::parse::{Parsed, StopBlock, UsageRow};
+use super::parse::{Parsed, UsageRow};
 use crate::{Log, is_alias_row, is_carrier_row, ts_ms};
 use panels::{context_of, for_you_of, health_of, memory_of, timeline_of};
 use serde::Serialize;
@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, HashMap};
 
 /// Schema of the `DayView` JSON shape below — versioned on its own, apart
 /// from `STATS_SCHEMA`: bumping one never bumps the other.
-pub const DAY_SCHEMA: u32 = 1;
+pub const DAY_SCHEMA: u32 = 2;
 /// Timeline resolution: 15-minute buckets, 96 per day.
 pub const BUCKET_MIN: usize = 15;
 pub const BUCKETS: usize = 96;
@@ -74,7 +74,6 @@ pub struct ForYou {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Health {
-    pub ignored_blocks: usize,
     pub stale_issues: usize,
 }
 
@@ -175,14 +174,9 @@ pub fn day(
             .filter(|r| r.repo.as_str() == repo.as_str())
             .copied()
             .collect();
-        let blocks: Vec<&StopBlock> = parsed
-            .blocks
-            .iter()
-            .filter(|b| b.repo == *repo && day_number(b.ms, tz_min) == noon)
-            .collect();
         repos.push(RepoDay {
             repo: repo.clone(),
-            panels: panels::panels(&rows, &panels::lookup(log), log, &blocks, &ctx),
+            panels: panels::panels(&rows, &panels::lookup(log), log, &ctx),
         });
     }
     DayView {
@@ -205,7 +199,7 @@ pub(super) struct Ctx<'a> {
 
 /// The `all` rollup: context/timeline recomputed from the usage union (so
 /// `share` is exact, not averaged), the log panels from `union` (the repos'
-/// logs deduped by id), `delivered` and `ignored_blocks` summed, `last`
+/// logs deduped by id), `delivered` summed, `last`
 /// newest-first.
 fn sum_all(today: &[&UsageRow], repos: &[RepoDay], union: &Log, ctx: &Ctx) -> DayPanels {
     let mut all = DayPanels {
@@ -217,10 +211,7 @@ fn sum_all(today: &[&UsageRow], repos: &[RepoDay], union: &Log, ctx: &Ctx) -> Da
         context: context_of(today),
         memory: memory_of(union, ctx.noon, ctx.tz_min),
         for_you: for_you_of(union, ctx.me, &ctx.day),
-        health: Health {
-            ignored_blocks: 0,
-            stale_issues: health_of(union, &[], ctx.now_ms).stale_issues,
-        },
+        health: health_of(union, ctx.now_ms),
         timeline: timeline_of(today, ctx.start_ms),
     };
     let mut latest: HashMap<&str, i64> = HashMap::new();
@@ -248,7 +239,6 @@ fn sum_all(today: &[&UsageRow], repos: &[RepoDay], union: &Log, ctx: &Ctx) -> Da
     for v in repos {
         all.delivered.rows += v.panels.delivered.rows;
         merge_map(&mut all.delivered.by_client, &v.panels.delivered.by_client);
-        all.health.ignored_blocks += v.panels.health.ignored_blocks;
     }
     all
 }

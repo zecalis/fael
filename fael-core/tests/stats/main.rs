@@ -52,24 +52,21 @@ fn json_shape_keys_and_types_are_frozen() {
             "est_tokens",
             "events",
             "non_english_rows",
-            "repeat_blocks",
             "retired",
             "rounds",
             "schema",
             "skipped_temp",
-            "stop_blocks",
             "top_rows",
             "value",
         ],
         "{v}"
     );
-    assert_eq!(v["schema"], 1, "{v}");
+    assert_eq!(v["schema"], 2, "{v}");
     assert_eq!(
         keys(&v["capture"]),
         [
             "manual_adds",
             "no_row_sessions",
-            "post_stop_rounds",
             "reply_lines",
             "reply_rejected",
             "reply_stored",
@@ -78,19 +75,12 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    for k in [
-        "events",
-        "bytes",
-        "est_tokens",
-        "skipped_temp",
-        "repeat_blocks",
-    ] {
+    for k in ["events", "bytes", "est_tokens", "skipped_temp"] {
         assert!(v[k].is_u64(), "{k}: {v}");
     }
     for k in [
         "by_event",
         "by_client",
-        "stop_blocks",
         "constants",
         "rounds",
         "non_english_rows",
@@ -110,10 +100,9 @@ fn json_shape_keys_and_types_are_frozen() {
     assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
     assert!(v["value"]["by_event"].is_object(), "{v}");
     assert!(v["top_rows"].is_array(), "{v}");
-    assert!(v.get("real_tokens").is_none(), "no samples, so absent: {v}");
     assert!(v.get("rows").is_none(), "no --rows, so absent: {v}");
-    assert_eq!(keys(&v["asks"]), ["reject", "stop-block", "warning"], "{v}");
-    for k in ["reject", "stop-block", "warning"] {
+    assert_eq!(keys(&v["asks"]), ["reject", "warning"], "{v}");
+    for k in ["reject", "warning"] {
         assert!(
             v["asks"][k]["events"].is_u64() && v["asks"][k]["bytes"].is_u64(),
             "{k}: {v}"
@@ -129,11 +118,7 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    assert_eq!(
-        keys(&v["rounds"]),
-        ["after_block", "rows_added", "since"],
-        "{v}"
-    );
+    assert_eq!(keys(&v["rounds"]), ["rows_added", "since"], "{v}");
     assert_eq!(keys(&v["non_english_rows"]), ["non_english", "rows"], "{v}");
     let top = v["top_rows"].as_array().unwrap();
     assert_eq!(top.len(), 2, "{v}");
@@ -156,24 +141,18 @@ fn json_rows_shape_with_flag() {
     );
 }
 
+/// Schema 2: usage rows from the removed Stop-block mode stay counted as
+/// events, but no stop-block field reads them any more.
 #[test]
-fn json_real_tokens_shape_after_a_block() {
+fn old_stop_block_rows_surface_nowhere() {
     let text = concat!(
-        "{\"ts\":\"2026-09-28T00:00:01Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"event\":\"read\",\"ask\":\"stop-block\",\"session\":\"s1\",\"bytes\":10,\"est_tokens\":3,\"ids\":[]}\n",
+        "{\"ts\":\"2026-09-28T00:00:01Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"event\":\"stop-work\",\"ask\":\"stop-block\",\"session\":\"s1\",\"bytes\":10,\"est_tokens\":3,\"ids\":[]}\n",
         "{\"ts\":\"2026-09-28T00:00:02Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"event\":\"read\",\"session\":\"s1\",\"bytes\":10,\"est_tokens\":3,\"ids\":[],\"real_tokens\":{\"input_tokens\":100,\"cache_creation_input_tokens\":200,\"cache_read_input_tokens\":300,\"output_tokens\":5}}\n",
     );
     let v = value_of(text, false);
-    assert_eq!(
-        keys(&v["real_tokens"]),
-        [
-            "avg_cache_create",
-            "avg_cache_read",
-            "avg_input",
-            "avg_output",
-            "post_block_rounds"
-        ],
-        "{v}"
-    );
-    assert_eq!(v["real_tokens"]["post_block_rounds"], 1, "{v}");
-    assert_eq!(v["real_tokens"]["avg_input"], 100, "{v}");
+    assert_eq!(v["events"], 2, "{v}");
+    assert_eq!(keys(&v["asks"]), ["reject", "warning"], "{v}");
+    for k in ["real_tokens", "stop_blocks", "repeat_blocks"] {
+        assert!(v.get(k).is_none(), "{k}: {v}");
+    }
 }

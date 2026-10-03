@@ -131,10 +131,7 @@ pub(super) fn print_day(v: &core::stats::DayView) {
         }
         None => println!("  for you: hidden (no writer set)"),
     }
-    println!(
-        "  health: {} ignored block(s) · {} stale issue(s)",
-        a.health.ignored_blocks, a.health.stale_issues
-    );
+    println!("  health: {} stale issue(s)", a.health.stale_issues);
     for r in &v.repos {
         println!(
             "  repo {}: {} delivered · {} fael tokens · +{} rows",
@@ -155,16 +152,15 @@ fn short_list(items: &[String], pre: &str, post: &str) -> String {
     }
 }
 fn print_capture(c: &core::stats::Capture) {
-    if c.reply_lines + c.manual_adds + c.sessions_with_edits + c.post_stop_rounds == 0 {
+    if c.reply_lines + c.manual_adds + c.sessions_with_edits == 0 {
         return;
     }
     println!(
-        "  capture: reply ×{} ({} stored, {} rejected) · manual adds ×{} · post-stop rounds ×{} · {} of {} edited session(s) left no row",
+        "  capture: reply ×{} ({} stored, {} rejected) · manual adds ×{} · {} of {} edited session(s) left no row",
         c.reply_lines,
         c.reply_stored,
         c.reply_rejected,
         c.manual_adds,
-        c.post_stop_rounds,
         c.sessions_with_edits_no_row,
         c.sessions_with_edits
     );
@@ -211,28 +207,15 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             );
         }
     }
-    for (k, o) in &s.stop_blocks {
-        println!(
-            "  {k}: {} block(s) → {} followed by a row",
-            o.blocks, o.followed_by_row
-        );
-    }
     let ask = |k: &str| s.asks.get(k).map(|a| (a.events, a.bytes)).unwrap_or((0, 0));
     let (rn, rb) = ask(core::stats::ASK_REJECT);
-    let (bn, _) = ask(core::stats::ASK_BLOCK);
     let (wn, wb) = ask(core::stats::ASK_WARN);
-    println!("  asks: reject ×{rn} ({rb} bytes) · stop-block ×{bn} · warning ×{wn} ({wb} bytes)");
+    println!("  asks: reject ×{rn} ({rb} bytes) · warning ×{wn} ({wb} bytes)");
     print_capture(&s.capture);
     if s.retired.pushed > 0 {
         println!(
             "  retired at touch: {} of {} pushed row(s) closed or superseded within a day of a push",
             s.retired.at_touch, s.retired.pushed
-        );
-    }
-    if s.repeat_blocks > 0 {
-        println!(
-            "  repeat stop-blocks: ×{} (a block followed a block in one session before any row)",
-            s.repeat_blocks
         );
     }
     println!(
@@ -242,12 +225,6 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
         s.constants.mcp_schema_bytes,
         s.constants.mcp_schema_est
     );
-    if !s.stop_blocks.is_empty() {
-        println!(
-            "  rounds: ~{} row(s) took their own round after a block, of {} added since {}",
-            s.rounds.after_block, s.rounds.rows_added, s.rounds.since
-        );
-    }
     if s.non_english_rows.rows > 0 && !lang_rows.is_empty() {
         let langs = lang_rows.join("/");
         let label = if langs == "english" {
@@ -258,17 +235,6 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
         println!(
             "  rows not in {label}: {} of {}",
             s.non_english_rows.non_english, s.non_english_rows.rows
-        );
-    }
-    if let Some(r) = &s.real_tokens {
-        println!(
-            "  post-block rounds: {} sample(s), avg ~{} input-side tokens (in {} + create {} + read {}; out {} avg) — the round after a block, not tokens fael used",
-            r.post_block_rounds,
-            r.avg_input + r.avg_cache_create + r.avg_cache_read,
-            r.avg_input,
-            r.avg_cache_create,
-            r.avg_cache_read,
-            r.avg_output
         );
     }
 }

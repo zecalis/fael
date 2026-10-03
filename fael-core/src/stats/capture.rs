@@ -30,10 +30,6 @@ pub struct Silent {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Capture {
-    /// Stop-hook blocks — each one cost the agent a round after it thought it
-    /// was done. Cumulative, like `stop_blocks`; history only — the
-    /// Stop-block mode was removed 2026-10-03.
-    pub post_stop_rounds: usize,
     /// Capture lines the Stop hook saw in replies (stored + rejected).
     pub reply_lines: usize,
     pub reply_stored: usize,
@@ -115,7 +111,6 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
     no_row.sort_by_key(|(k, s)| (std::cmp::Reverse(s.1), *k));
     let at = |ms: i64| rfc3339(ms.max(0) as u64);
     Capture {
-        post_stop_rounds: parsed.blocks.len(),
         reply_lines: stored + rejected,
         reply_stored: stored,
         reply_rejected: rejected,
@@ -172,7 +167,6 @@ mod tests {
             r#"{"ts":"2026-09-30T00:01:00.000Z","repo":"/w/r","client":"claude","event":"capture","capture":"rejected","session":"s1"}"#,
             r#"{"ts":"2026-09-30T01:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","session":"s2","ids":[]}"#,
             r#"{"ts":"2026-09-30T02:00:00.000Z","repo":"/w/r","client":"claude","event":"read","session":"s3","ids":[]}"#,
-            r#"{"ts":"2026-09-30T00:00:30.000Z","repo":"/w/r","client":"claude","event":"stop-work","ask":"stop-block","session":"s1"}"#,
             // two worktrees, one journal: s4's window holds only s5's row
             r#"{"ts":"2026-09-30T03:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","branch":"feat/a","session":"s4","ids":[]}"#,
             r#"{"ts":"2026-09-30T03:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","branch":"feat/b","session":"s5","ids":[]}"#,
@@ -198,7 +192,6 @@ mod tests {
         assert_eq!(
             c,
             Capture {
-                post_stop_rounds: 1,
                 reply_lines: 2,
                 reply_stored: 1,
                 reply_rejected: 1,
