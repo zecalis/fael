@@ -7,11 +7,27 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Chunk 6e: the hook session string behind this call — the same key the push
-/// reads. Resolved like `derive()`: the recorded session equal to
-/// `$CLAUDE_CODE_SESSION_ID` or its stem; else the raw value (clients that key
+/// reads. Resolved like `derive()`: the recorded session equal to the env
+/// session or its stem; else the raw value (clients that key
 /// by it directly); empty = outside any hook session, seen-ids stay off.
+///
+/// The env is `$CLAUDE_CODE_SESSION_ID` first, then `$FAEL_SESSION` — the
+/// OpenCode plugin's `shell.env` hook sets the latter to the same RFC 3339
+/// string the usage lines use, because OpenCode exports no session id to the
+/// shell itself. A local MCP server is spawned once per OpenCode instance, so
+/// MCP `add` calls still land outside any session.
+fn env_session() -> String {
+    for k in ["CLAUDE_CODE_SESSION_ID", "FAEL_SESSION"] {
+        let v = std::env::var(k).unwrap_or_default();
+        if !v.is_empty() {
+            return v;
+        }
+    }
+    String::new()
+}
+
 pub(crate) fn hook_session(root: &Path) -> String {
-    let env = std::env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
+    let env = env_session();
     if env.is_empty() {
         return String::new();
     }
@@ -101,8 +117,9 @@ pub(crate) fn active_edits(root: &Path) -> Vec<(String, i64)> {
 }
 
 /// Files for a row filed now: the caller's own session edits newer than the
-/// newest row, order kept, deduped. The caller's session is
-/// `CLAUDE_CODE_SESSION_ID` — the hook keys Claude by transcript path, so an
+/// newest row, order kept, deduped. The caller's session is the hook env
+/// (`CLAUDE_CODE_SESSION_ID`, else `FAEL_SESSION` from the OpenCode
+/// `shell.env` hook) — the hook keys Claude by transcript path, so an
 /// edit line matches on that file's stem too; without it, only a single
 /// active session counts — two agents in one checkout must never file rows on
 /// each other's files. Empty = the caller keeps the old "files is required"
@@ -112,15 +129,18 @@ pub(crate) fn active_edits(root: &Path) -> Vec<(String, i64)> {
 // required", never toward wrong files. Rows would need a session to do better.
 pub(crate) fn derive(root: &Path, log: &core::Log) -> Vec<String> {
     let mut sessions = active_sessions(root);
-    let mine = match std::env::var("CLAUDE_CODE_SESSION_ID") {
-        Ok(id) if !id.is_empty() => sessions.into_iter().find(|e| {
+    let id = env_session();
+    let mine = if !id.is_empty() {
+        sessions.into_iter().find(|e| {
             e.iter().any(|(.., s)| {
                 s.as_deref()
                     .is_some_and(|s| s == id || Path::new(s).file_stem().is_some_and(|f| *f == *id))
             })
-        }),
-        _ if sessions.len() == 1 => sessions.pop(),
-        _ => None,
+        })
+    } else if sessions.len() == 1 {
+        sessions.pop()
+    } else {
+        None
     };
     let last = core::last_row_ms(log, 0);
     let mut seen = HashSet::new();

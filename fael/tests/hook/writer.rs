@@ -46,6 +46,48 @@ fn a_row_carries_the_writer_session_id_never_a_path() {
 }
 
 #[test]
+fn fael_session_tags_a_row_like_claude_code_session_id() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let session = "2026-09-26T00:00:00.000Z";
+    let input = format!(
+        r#"{{"cwd":{},"session":{},"tool_input":{{"file_path":{}}}}}"#,
+        json(&d),
+        serde_json::Value::String(session.into()),
+        json(&d.join("src/a.rs"))
+    );
+    let (ok, _, err) = fael_env(&d, &["hook", "edit", "--client", "opencode"], &input, &[]);
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "note", "first", "--files", "src/a.rs"],
+        "",
+        &[("FAEL_SESSION", session)],
+    );
+    assert!(ok, "{err}");
+    let log = log_text(&d);
+    assert!(log.contains(&format!(r#""session":"{session}""#)), "{log}");
+}
+
+#[test]
+fn claude_code_session_id_wins_over_fael_session() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "note", "first", "--files", "src/a.rs"],
+        "",
+        &[
+            ("CLAUDE_CODE_SESSION_ID", "abc-123"),
+            ("FAEL_SESSION", "2026-09-26T00:00:00.000Z"),
+        ],
+    );
+    assert!(ok, "{err}");
+    let log = log_text(&d);
+    assert!(log.contains(r#""session":"abc-123""#), "{log}");
+}
+
+#[test]
 fn outside_a_session_a_row_has_no_session() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
@@ -55,6 +97,7 @@ fn outside_a_session_a_row_has_no_session() {
         .current_dir(&d)
         .env("FAEL_STATE_DIR", d.join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
         .output()
         .unwrap();
     assert!(o.status.success());

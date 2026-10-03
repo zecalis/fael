@@ -78,6 +78,18 @@ export const Fael = async ({ client, directory }) => {
       if (briefs.get(id)) output.system.push(briefs.get(id));
     },
 
+    // bash tool env: OpenCode exports no session id to the shell, so hand
+    // `fael add` its hook session (the same RFC 3339 `start(id)` string the
+    // usage lines use) via FAEL_SESSION. PTY shells carry no sessionID — no-op.
+    "shell.env": async (input, output) => {
+      const id = input?.sessionID;
+      if (!id) return;
+      try {
+        output.env ??= {};
+        output.env.FAEL_SESSION = await start(id);
+      } catch {}
+    },
+
     "tool.execute.after": async (input, output) => {
       const session = await start(input.sessionID);
       if (SEARCH.has(input.tool)) {
