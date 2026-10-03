@@ -32,6 +32,7 @@ fn close_on_a_bumped_id_points_at_the_newest_version() {
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap();
@@ -67,6 +68,7 @@ fn closing_the_newest_version_closes_the_chain_it_supersedes() {
                 to: None,
                 urgent: UrgentChange::Keep,
                 revisit: None,
+                fh: None,
             },
         )
         .unwrap()
@@ -143,6 +145,7 @@ fn closing_a_superseded_row_past_its_closed_head_repairs_a_stuck_chain() {
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap()
@@ -190,6 +193,7 @@ fn bump_rewrites_only_the_moved_row() {
             to: Some("Ploy".into()),
             urgent: UrgentChange::Before(a.id.clone()),
             revisit: None,
+            fh: None,
         },
     )
     .unwrap();
@@ -225,6 +229,7 @@ fn bump_rewrites_only_the_moved_row() {
             to: None,
             urgent: UrgentChange::Remove,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap();
@@ -258,6 +263,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
             to: None,
             urgent: UrgentChange::End,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap_err();
@@ -274,6 +280,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
             to: Some("ploy".into()),
             urgent: UrgentChange::Keep,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap();
@@ -291,6 +298,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap_err();
@@ -308,6 +316,7 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
             to: None,
             urgent: UrgentChange::Keep,
             revisit: None,
+            fh: None,
         },
     )
     .unwrap_err();

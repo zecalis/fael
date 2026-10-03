@@ -67,7 +67,9 @@ fn reject_mcp_counts_with_tool_event() {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("mcp")
         .env("FAEL_STATE_DIR", d.join("state"))
+        .env_remove("FAEL_SESSION")
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
         .current_dir(&d)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -134,6 +136,8 @@ fn warning_add_carries_row_and_session() {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
     c.args(["add", "note", &text, "--files", "src/a.rs", "--json"])
         .current_dir(&d)
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .env("CLAUDE_CODE_SESSION_ID", "sess-add-1");
     super::state_env(&mut c, &d);
     let o = c.output().unwrap();

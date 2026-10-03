@@ -28,6 +28,8 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         return Ok((done(&row.id, &warns), warns));
     }
     let log = read(r);
+    let id = need(a, "id")?;
+    let fh = crate::filehash::stamp(&r.root, &core::resolve(&log, &id)?.files);
     let urgent = match (
         a["urgent"].as_bool().unwrap_or(false),
         s(a, "urgent_before"),
@@ -45,12 +47,13 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         &log,
         &r.cfg,
         &crate::stamp(r),
-        &need(a, "id")?,
+        &id,
         core::BumpOpts {
             to: s(a, "to"),
             urgent,
             revisit: s(a, "revisit"),
             held: None,
+            fh: Some(fh),
         },
     )?;
     Ok((done(&row.id, &warns), warns))

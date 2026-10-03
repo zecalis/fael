@@ -9,6 +9,7 @@ mod args;
 mod batch;
 mod claim;
 mod close_key;
+mod filehash;
 mod find;
 mod help;
 mod hook;
@@ -142,7 +143,6 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
 }
 
 pub(crate) use args::Args;
-
 pub(crate) struct Repo {
     pub(crate) root: PathBuf,
     pub(crate) cwd: PathBuf,

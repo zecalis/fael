@@ -101,6 +101,14 @@ impl Row {
         self.extra.get("session").and_then(|v| v.as_str())
     }
 
+    /// The file hashes this row carries: `extra.fh`, a map from each real
+    /// file in `files` to its 12-hex git blob id at write time
+    /// (PLAN-fael-file-hash chunk 1). `None` on rows written before `fh`,
+    /// or whose files were all anchors, globs or unreadable.
+    pub fn file_hashes(&self) -> Option<&Map<String, Value>> {
+        self.extra.get("fh").and_then(|v| v.as_object())
+    }
+
     /// When to look at this row again: the `revisit` field, falling back to
     /// a hand-written `revisit` in `extra` (forward-compat read).
     pub fn revisit(&self) -> Option<&str> {
