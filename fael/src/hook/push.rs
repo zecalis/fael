@@ -147,10 +147,18 @@ fn cut_body(
     tags: &crate::find::branches::BranchMap,
 ) -> (String, usize) {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
+    let mut row = 0; // render keeps `sel.shown` order: the k-th row line is shown[k]
     let mut lines: Vec<String> = body
         .lines()
         .filter(|l| !l.starts_with("… +"))
-        .map(|l| super::also::drop_touched(l, files))
+        .map(|l| {
+            let l = super::also::drop_touched(l, files);
+            if !l.starts_with("- [") {
+                return l;
+            }
+            row += 1;
+            super::also::label(&l, sel.tier(row - 1))
+        })
         .collect();
     lines.extend(counts(sel, n, files));
     (crate::find::branches::tag(lines.join("\n") + "\n", tags), n)
@@ -294,7 +302,12 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         let _ = f.write_all(out.as_bytes());
     }
     let usage = memory_line(&body, policy.budget).unwrap_or_default();
-    let context = format!("fael mem for {}:\n{body}{usage}", files.join(", "));
+    // the cut goes on top too: the count lines sit under the rows, past where a reader stops
+    let more = match sel.hidden(n).total() {
+        0 => String::new(),
+        h => format!(" ({n} of {})", n + h),
+    };
+    let context = format!("fael mem for {}{more}:\n{body}{usage}", files.join(", "));
     // an edit is where a row goes stale: the agent is changing the code the
     // row describes, with both in front of it — the one moment to retire it.
     // ponytail: every edit push with rows; once per session if it costs too much
