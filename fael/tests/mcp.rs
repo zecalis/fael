@@ -149,6 +149,12 @@ fn add_to_a_client_prints_the_paste_line() {
         Some(format!("to opencode: tell them `fael find {id}`").as_str()),
         "{body}"
     );
+    assert!(
+        lines
+            .next()
+            .is_some_and(|l| l.starts_with("start it: opencode run \"")),
+        "{body}"
+    );
     let r = mcp(
         &wt,
         &[
@@ -157,6 +163,7 @@ fn add_to_a_client_prints_the_paste_line() {
     );
     let body = r[0]["result"]["content"][0]["text"].as_str().unwrap();
     assert!(body.contains("to codex: tell them `fael find "), "{body}");
+    assert!(body.contains("start it: codex exec \""), "{body}");
 }
 
 /// PLAN-fael-id-refs chunk-2: MCP `add`/`close` carry the same phantom info

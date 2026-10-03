@@ -31,7 +31,9 @@ What moves through it:
   git `user.name` is `ploy` (lowercased). `--to opencode` (or `codex`, `claude`) reaches every
   session of that agent in the repo — Claude hands a review to OpenCode, and what it answers comes
   back as the close line (`fael find --all`). The receipt prints the line to paste to the other
-  agent. fael never wakes an agent: it reads the row when it next starts or touches the file.
+  agent and, for an agent, the command that starts it on the row (`opencode run "…"`) — fael
+  prints it, you or your agent runs it, in the worktree you chose. fael never wakes an agent:
+  it reads the row when it next starts or touches the file.
 - **Claims.** `fael claim <id>` — `fael find --kind issue` then shows `(held @<branch>)`, so another
   agent picks something else. Never a lock.
 - **Requirements and decisions.** A PM, QA, EM or tech lead writes one once — through their own

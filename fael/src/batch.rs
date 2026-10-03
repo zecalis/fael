@@ -14,6 +14,23 @@ pub(crate) fn paste_line(row: &Row) -> Option<String> {
     Some(format!("to {t}: tell them `fael find {}`", row.id))
 }
 
+/// A row routed to an agent client also says how to start that agent on it, in
+/// its headless mode. fael only prints the line — the sender (or its agent)
+/// runs it, in the worktree it chose; nothing here starts a turn.
+pub(crate) fn launch_line(row: &Row) -> Option<String> {
+    let id = &row.id;
+    let task = format!(
+        "fael claim {id}, do what fael find {id} says, then fael close {id} '<what you did, how>'"
+    );
+    let cmd = match row.to_who()? {
+        "opencode" => format!("opencode run \"{task}\""),
+        "codex" => format!("codex exec \"{task}\""),
+        "claude" => format!("claude -p \"{task}\""),
+        _ => return None,
+    };
+    Some(format!("start it: {cmd}"))
+}
+
 pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::path::Path) {
     if a.has("json") {
         println!("{}", row.to_line());
@@ -27,6 +44,7 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
             .map_or(String::new(), |s| format!(" · supersedes {s}"));
         let to = paste_line(row).map_or(String::new(), |p| format!(" · {p}"));
         println!("{} → {}{old}{to}", row.id, rel.display());
+        launch_line(row).iter().for_each(|l| println!("{l}"));
     }
 }
 

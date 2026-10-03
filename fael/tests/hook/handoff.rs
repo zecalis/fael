@@ -25,6 +25,14 @@ fn session_start_lists_an_issue_routed_to_the_agent_client() {
     assert!(ok, "{err}");
     // the receipt hands the sender a line to paste to the receiver
     let id = out.split_whitespace().next().unwrap();
+    // an agent client also gets the headless command that starts it on the row
+    let task = format!(
+        "fael claim {id}, do what fael find {id} says, then fael close {id} '<what you did, how>'"
+    );
+    assert!(
+        out.contains(&format!("start it: opencode run \"{task}\"")),
+        "{out}"
+    );
     assert!(
         out.contains(&format!("to opencode: tell them `fael find {id}`")),
         "{out}"
@@ -37,4 +45,23 @@ fn session_start_lists_an_issue_routed_to_the_agent_client() {
     assert!(oc.contains("1 to you"), "{oc}");
     assert!(!cl.contains("review the key order"), "{cl}");
     assert!(!cl.contains("to you"), "{cl}");
+}
+
+#[test]
+fn a_person_gets_no_launch_line() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let args = [
+        "add",
+        "issue",
+        "check the rounding",
+        "--files",
+        "src/a.rs",
+        "--to",
+        "ploy",
+    ];
+    let (ok, out, err) = fael(&d, &args, "");
+    assert!(ok, "{err}");
+    assert!(out.contains("to ploy: tell them"), "{out}");
+    assert!(!out.contains("start it:"), "{out}");
 }
