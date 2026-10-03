@@ -1,4 +1,21 @@
-//! The file list of a pushed row line, minus the file the agent just opened.
+//! The file list of a pushed row line, minus the file the agent just opened,
+//! and the label of a row that came by its directory or key, not the file.
+
+/// Mark a row line by how it reached the push: a tier-1 row is about a
+/// neighbouring file, a tier-2 row shares a key with a row about this file.
+/// Neither is about the opened file itself, so the agent should not read it
+/// as one. Tier 0 (the file or its zone) stays unmarked.
+pub(super) fn label(line: &str, tier: usize) -> String {
+    let tag = match tier {
+        1 => "(same dir) ",
+        2 => "(same key) ",
+        _ => return line.to_string(),
+    };
+    match line.strip_prefix("- [").and_then(|r| r.split_once("] ")) {
+        Some((id, rest)) => format!("- [{id}] {tag}{rest}"),
+        None => line.to_string(),
+    }
+}
 
 /// A row line names every file its row is about; the agent just opened one of
 /// them and knows it. Keep the others as `→ also: …` — a row about nothing else

@@ -151,6 +151,13 @@ pub struct Hidden {
     pub keys: Vec<(String, usize)>,
 }
 
+impl Hidden {
+    /// Every hidden row, whichever call reaches it.
+    pub fn total(&self) -> usize {
+        self.file + self.dirs + self.keys.iter().map(|(_, n)| n).sum::<usize>()
+    }
+}
+
 impl Selection<'_> {
     /// The rows hidden after render printed `rendered` of `shown`: the cap cut
     /// (`omitted`) plus the token-budget cut (`shown[rendered..]`), each routed
@@ -175,6 +182,12 @@ impl Selection<'_> {
             }
         }
         h
+    }
+
+    /// L1 tier of the `i`-th shown row: 0 exact file/zone, 1 same-dir, 2
+    /// shared key — what a push labels so a derived row reads as one.
+    pub fn tier(&self, i: usize) -> usize {
+        self.tiers.get(i).copied().unwrap_or(0)
     }
 
     /// How many rows `fael find --files <f>` reaches beyond what rendered —

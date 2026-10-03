@@ -264,7 +264,7 @@ fn a_shell_write_pushes_as_an_edit() {
     let out = bash(&d, "w1", cmd, "");
     // b.rs was named, not written — its row may still come through the
     // edit's same-directory tier, never as an edited file
-    assert!(out.contains(r"fael mem for src/a.rs:\n"), "{out}");
+    assert!(out.contains(r"fael mem for src/a.rs (1 of 2):\n"), "{out}");
     assert!(out.contains("login loops"), "{out}");
     assert!(
         out.contains("fael close"),
@@ -290,7 +290,7 @@ fn a_shell_write_and_read_push_both() {
     let (ok, _, err) = fael(&d, &["add", "issue", "cache misses", "--files", "c.rs"], "");
     assert!(ok, "{err}");
     let out = bash(&d, "wr", "sed -i '' s/x/y/ src/a.rs && cat c.rs", "");
-    let edit = out.find(r"fael mem for src/a.rs:\n").expect(&out);
+    let edit = out.find(r"fael mem for src/a.rs (1 of 2):\n").expect(&out);
     let hint = out.find("fael close").expect(&out);
     let read = out.find(r"fael mem for c.rs:\n").expect(&out);
     assert!(
