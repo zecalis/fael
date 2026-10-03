@@ -18,7 +18,7 @@ function hook(event, e) {
   }
 }
 
-const EDIT = new Set(["edit", "write", "multiedit", "apply_patch"]);
+const EDIT = new Set(["edit", "write", "apply_patch"]);
 const SEARCH = new Set(["grep", "glob", "bash"]);
 
 // apply_patch (patchText) carries no filePath: read the paths off the patch

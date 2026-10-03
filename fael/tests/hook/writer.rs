@@ -93,6 +93,33 @@ fn fael_session_wins_over_claude_code_session_id() {
 }
 
 #[test]
+fn codex_thread_id_tags_a_row_like_claude_code_session_id() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    // Codex exposes CODEX_THREAD_ID to its shell tool executions (but not to
+    // stdio MCP servers: openai/codex#19937); the edit hook keys the session
+    // by the hook payload's session id, so a `fael add` from that shell joins
+    let thread = "019dba93-8214-7d50-a089-9690b4ce6b9e";
+    let input = format!(
+        r#"{{"cwd":{},"session_id":{},"tool_input":{{"command":"*** Update File: {}"}}}}"#,
+        json(&d),
+        serde_json::json!(thread),
+        json(&d.join("src/a.rs"))
+    );
+    let (ok, _, err) = fael_env(&d, &["hook", "edit", "--client", "codex"], &input, &[]);
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "note", "first", "--files", "src/a.rs"],
+        "",
+        &[("CODEX_THREAD_ID", thread)],
+    );
+    assert!(ok, "{err}");
+    let log = log_text(&d);
+    assert!(log.contains(&format!(r#""session":"{thread}""#)), "{log}");
+}
+
+#[test]
 fn outside_a_session_a_row_has_no_session() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
@@ -103,6 +130,7 @@ fn outside_a_session_a_row_has_no_session() {
         .env("FAEL_STATE_DIR", d.join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap();
     assert!(o.status.success());
