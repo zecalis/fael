@@ -103,8 +103,11 @@ fn json_shape_keys_and_types_are_frozen() {
         "{v}"
     );
     let value = ["handoffs_picked_up", "in_context_at_edit", "issues_closed"];
-    assert_eq!(keys(&v["value"]), value, "{v}");
+    let mut value_keys = value.to_vec();
+    value_keys.insert(0, "by_event");
+    assert_eq!(keys(&v["value"]), value_keys, "{v}");
     assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
+    assert!(v["value"]["by_event"].is_object(), "{v}");
     assert!(v["top_rows"].is_array(), "{v}");
     assert!(v.get("real_tokens").is_none(), "no samples, so absent: {v}");
     assert!(v.get("rows").is_none(), "no --rows, so absent: {v}");

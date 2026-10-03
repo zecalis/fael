@@ -28,7 +28,7 @@ pub use day::{
 pub use metrics::ASK_ORDER;
 pub use parse::{Parsed, StopBlock, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
-pub use value::Value;
+pub use value::{EventValue, Value};
 
 /// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
 /// JSON map and the recording side share, so the two cannot drift.

@@ -24,6 +24,31 @@ fn value_line(s: &core::stats::Stats) -> Option<String> {
     (!parts.is_empty()).then(|| format!("fael since {}: {}", s.rounds.since, parts.join(" · ")))
 }
 
+/// ` · hit 7/638 rows (1%)` beside an event's cost: rows still in context at
+/// an edit over rows this event handed over first (a lower bound — see
+/// `core::stats::EventValue`); empty when the event pushed no row.
+fn hit_suffix(s: &core::stats::Stats, event: &str) -> String {
+    match s.value.by_event.get(event) {
+        Some(e) if e.pushed > 0 => format!(
+            " · hit {}/{} rows ({}%)",
+            e.in_context_at_edit,
+            e.pushed,
+            e.in_context_at_edit * 100 / e.pushed
+        ),
+        _ => String::new(),
+    }
+}
+
+/// One line per usage event: count, cost, and the hit rate beside it.
+fn print_events(s: &core::stats::Stats) {
+    let mut ev: Vec<_> = s.by_event.iter().collect();
+    ev.sort_by_key(|a| std::cmp::Reverse(a.1.events));
+    for (k, c) in ev {
+        let hit = hit_suffix(s, k);
+        println!("  {k}: ×{} (~{} tokens){hit}", c.events, c.est_tokens);
+    }
+}
+
 /// The human `fael stats --day` text — format only, every number from core.
 pub(super) fn print_day(v: &core::stats::DayView) {
     let a = &v.all;
@@ -137,11 +162,7 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             s.skipped_temp
         );
     }
-    let mut ev: Vec<_> = s.by_event.iter().collect();
-    ev.sort_by_key(|a| std::cmp::Reverse(a.1.events));
-    for (k, c) in ev {
-        println!("  {k}: ×{} (~{} tokens)", c.events, c.est_tokens);
-    }
+    print_events(s);
     let mut cl: Vec<_> = s.by_client.iter().collect();
     cl.sort_by_key(|a| std::cmp::Reverse(a.1.events));
     for (k, c) in cl {
