@@ -21,21 +21,22 @@ pub struct Value {
     /// Distinct `*:handoff` rows a push handed to an agent.
     pub handoffs_picked_up: usize,
     /// Which push event earns its tokens: each (session, row) pair is
-    /// attributed once, to the event of the push that first handed it over.
-    /// The `pushed` values sum to every distinct pair pushed and the
-    /// `in_context_at_edit` values to the field above.
+    /// attributed once, to the event of the push that first handed it over,
+    /// counting only lines stamped at or after the client's first `in-context`
+    /// line (see `EventValue`).
     pub by_event: BTreeMap<String, EventValue>,
 }
 
-/// One push event's hit rate (`in_context_at_edit / pushed`). Read it with
-/// three limits: a lower bound (an `in-context` line exists only when the
+/// One push event's hit rate (`in_context_at_edit / pushed`), over the usage
+/// lines at or after each client's first `in-context` line (earlier pushes
+/// could never score, so they are left out of both numbers — the sums can be
+/// lower than the plain totals). Read it with three limits: a lower bound (an `in-context` line exists only when the
 /// agent edits the row's file, so a read-only session scores every row it was
 /// handed as a miss); first push claims the pair, and a push never repeats a
 /// row its session already holds, so a later event carries only what is new
 /// and an `edit` push, made at the edit, can only hit on a later edit; and
-/// events are not independent across clients (a client whose hooks never
-/// write `in-context` lines scores 0). Cost per event is `Stats::by_event` —
-/// not repeated here.
+/// a client that has never written an `in-context` line has no entry at all.
+/// Cost per event is `Stats::by_event` — not repeated here.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct EventValue {
     /// Distinct (session, row) pairs this event handed over first.
@@ -44,14 +45,44 @@ pub struct EventValue {
     pub in_context_at_edit: usize,
 }
 
-pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
+/// (session, row) pairs a push handed over, each with the event of the first
+/// push that said it, and the pairs found in context at an edit.
+type Pairs<'a> = (
+    HashMap<(&'a str, &'a str, &'a str), &'a str>,
+    HashSet<(&'a str, &'a str, &'a str)>,
+);
+
+/// Join `in-context` lines to the pushes before them. `windowed` keeps only
+/// usage lines stamped at or after the first `in-context` line of their
+/// client: before that no hook could have written one, so a push there can
+/// never score — counting it would bury the hit rate under sessions the
+/// metric did not exist for.
+// ponytail: window start = the client's first in-context line, a little after
+// the release that added them; a rate read this way is slightly low, never high
+fn pairs(parsed: &Parsed, windowed: bool) -> Pairs<'_> {
     // the seen list behind an `in-context` line also holds rows the agent
     // filed or found itself: only a row a push said first counts.
     // ponytail: usage.jsonl is append-only, so file order is time order.
+    let mut first: HashMap<&str, &str> = HashMap::new();
+    for v in parsed.kept.iter().filter(|v| v["event"] == "in-context") {
+        if let (Some(c), Some(ts)) = (v["client"].as_str(), v["ts"].as_str()) {
+            first
+                .entry(c)
+                .and_modify(|t| *t = (*t).min(ts))
+                .or_insert(ts);
+        }
+    }
+    let capable = |v: &serde_json::Value| {
+        !windowed
+            || match (v["client"].as_str(), v["ts"].as_str()) {
+                (Some(c), Some(ts)) => first.get(c).is_some_and(|f| ts >= *f),
+                _ => false,
+            }
+    };
     // the value is the event of the first push that said the row
     let mut pushed: HashMap<(&str, &str, &str), &str> = HashMap::new();
     let mut in_context: HashSet<(&str, &str, &str)> = HashSet::new();
-    for v in &parsed.kept {
+    for v in parsed.kept.iter().filter(|v| capable(v)) {
         let (Some(repo), Some(session)) = (v["repo"].as_str(), v["session"].as_str()) else {
             continue;
         };
@@ -74,11 +105,17 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
             }
         }
     }
+    (pushed, in_context)
+}
+
+pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
+    let (_, in_context) = pairs(parsed, false);
+    let (pushed, in_window) = pairs(parsed, true);
     let mut by_event: BTreeMap<String, EventValue> = BTreeMap::new();
     for event in pushed.values() {
         by_event.entry(event.to_string()).or_default().pushed += 1;
     }
-    for k in &in_context {
+    for k in &in_window {
         by_event
             .entry(pushed[k].to_string())
             .or_default()
@@ -181,7 +218,12 @@ mod tests {
         // s1 was pushed H1, D1, I1: in context at edit D1 twice (counts once)
         // and I1; D2 the agent filed itself, never pushed — no count. s2 is
         // pushed D1 too. A session-less line never joins.
-        let usage = r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/r","client":"claude","event":"session-start","bytes":9,"est_tokens":2,"ids":["H1","D1"],"session":"s1"}
+        // claude wrote its first in-context line on 09-25 (the feature exists
+        // from then); codex only at 00:04, so its 00:00:10 read of D1 in s3
+        // predates the feature and stays out of by_event
+        let usage = r#"{"ts":"2026-09-25T00:00:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["Z9"],"session":"s0"}
+{"ts":"2026-09-26T00:00:10.000Z","repo":"/work/r","client":"codex","event":"read","bytes":9,"est_tokens":2,"ids":["D1"],"session":"s3"}
+{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/r","client":"claude","event":"session-start","bytes":9,"est_tokens":2,"ids":["H1","D1"],"session":"s1"}
 {"ts":"2026-09-26T00:00:30.000Z","repo":"/work/r","client":"claude","event":"read","bytes":9,"est_tokens":2,"ids":["I1"],"session":"s1"}
 {"ts":"2026-09-26T00:01:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["D1","I1","D2"],"session":"s1"}
 {"ts":"2026-09-26T00:02:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["D1"],"session":"s1"}
@@ -191,7 +233,7 @@ mod tests {
 "#;
         let parsed = super::super::parse::parse(usage, std::path::Path::new("/s/usage.jsonl"), &[]);
         // in-context lines are no injection
-        assert_eq!(parsed.n, 3);
+        assert_eq!(parsed.n, 4);
         let logs = HashMap::from([("/work/r".to_string(), log)]);
         let v = super::value(&parsed, &logs);
         assert_eq!(
@@ -202,7 +244,8 @@ mod tests {
         // read. Hits: (s1,D1) session-start, (s1,I1) and (s2,D1) read.
         let ev = |e: &str| (v.by_event[e].pushed, v.by_event[e].in_context_at_edit);
         assert_eq!((ev("session-start"), ev("read")), ((2, 1), (2, 2)));
-        // each pair counts once: the sums are the plain totals
+        // each pair counts once, and the codex pair before its window is out
+        assert!(!v.by_event.contains_key("codex"));
         assert_eq!(v.by_event.values().map(|e| e.pushed).sum::<usize>(), 4);
         assert_eq!(
             v.by_event
