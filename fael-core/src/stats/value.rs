@@ -6,7 +6,7 @@
 use super::parse::Parsed;
 use crate::{Log, ts_ms};
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// `retired.at_touch` and `capture.reply_stored` join the line from their
 /// own blocks — not copied here, so `--json` carries each number once.
@@ -20,13 +20,36 @@ pub struct Value {
     pub issues_closed: usize,
     /// Distinct `*:handoff` rows a push handed to an agent.
     pub handoffs_picked_up: usize,
+    /// Which push event earns its tokens: each (session, row) pair is
+    /// attributed once, to the event of the push that first handed it over.
+    /// The `pushed` values sum to every distinct pair pushed and the
+    /// `in_context_at_edit` values to the field above.
+    pub by_event: BTreeMap<String, EventValue>,
+}
+
+/// One push event's hit rate (`in_context_at_edit / pushed`). Read it with
+/// three limits: a lower bound (an `in-context` line exists only when the
+/// agent edits the row's file, so a read-only session scores every row it was
+/// handed as a miss); first push claims the pair, and a push never repeats a
+/// row its session already holds, so a later event carries only what is new
+/// and an `edit` push, made at the edit, can only hit on a later edit; and
+/// events are not independent across clients (a client whose hooks never
+/// write `in-context` lines scores 0). Cost per event is `Stats::by_event` —
+/// not repeated here.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct EventValue {
+    /// Distinct (session, row) pairs this event handed over first.
+    pub pushed: usize,
+    /// Of those, rows still in context when the agent edited their file.
+    pub in_context_at_edit: usize,
 }
 
 pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
     // the seen list behind an `in-context` line also holds rows the agent
     // filed or found itself: only a row a push said first counts.
     // ponytail: usage.jsonl is append-only, so file order is time order.
-    let mut pushed: HashSet<(&str, &str, &str)> = HashSet::new();
+    // the value is the event of the first push that said the row
+    let mut pushed: HashMap<(&str, &str, &str), &str> = HashMap::new();
     let mut in_context: HashSet<(&str, &str, &str)> = HashSet::new();
     for v in &parsed.kept {
         let (Some(repo), Some(session)) = (v["repo"].as_str(), v["session"].as_str()) else {
@@ -42,11 +65,24 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
             in_context.extend(
                 ids("in_context")
                     .map(|id| (repo, session, id))
-                    .filter(|k| pushed.contains(k)),
+                    .filter(|k| pushed.contains_key(k)),
             );
         } else {
-            pushed.extend(ids("ids").map(|id| (repo, session, id)));
+            let event = v["event"].as_str().unwrap_or("unknown");
+            for id in ids("ids") {
+                pushed.entry((repo, session, id)).or_insert(event);
+            }
         }
+    }
+    let mut by_event: BTreeMap<String, EventValue> = BTreeMap::new();
+    for event in pushed.values() {
+        by_event.entry(event.to_string()).or_default().pushed += 1;
+    }
+    for k in &in_context {
+        by_event
+            .entry(pushed[k].to_string())
+            .or_default()
+            .in_context_at_edit += 1;
     }
     // repos in one clone share the journal: dedup closes and rows by id
     let mut closed: HashSet<&str> = HashSet::new();
@@ -91,6 +127,7 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
         in_context_at_edit: in_context.len(),
         issues_closed: closed.len(),
         handoffs_picked_up: handoffs,
+        by_event,
     }
 }
 
@@ -160,6 +197,19 @@ mod tests {
         assert_eq!(
             (v.in_context_at_edit, v.issues_closed, v.handoffs_picked_up),
             (3, 2, 1)
+        );
+        // s1: H1 and D1 came from session-start, I1 from read; s2: D1 from
+        // read. Hits: (s1,D1) session-start, (s1,I1) and (s2,D1) read.
+        let ev = |e: &str| (v.by_event[e].pushed, v.by_event[e].in_context_at_edit);
+        assert_eq!((ev("session-start"), ev("read")), ((2, 1), (2, 2)));
+        // each pair counts once: the sums are the plain totals
+        assert_eq!(v.by_event.values().map(|e| e.pushed).sum::<usize>(), 4);
+        assert_eq!(
+            v.by_event
+                .values()
+                .map(|e| e.in_context_at_edit)
+                .sum::<usize>(),
+            v.in_context_at_edit
         );
     }
 }

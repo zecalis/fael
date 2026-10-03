@@ -57,7 +57,7 @@ shape is a breaking change: ship the reader first.
 | `real_tokens` | object, else absent | mean cost of the round after a stop-block: `post_block_rounds`, `avg_input`, `avg_cache_create`, `avg_cache_read`, `avg_output` |
 | `capture` | object | reply capture and what the Stop hook still costs (fields below) |
 | `retired` | object | `pushed` = distinct rows a `read`/`edit` push handed over · `at_touch` = of those, closed or superseded (a bump is a supersede) within a day after one of those pushes — how many rows the edit-push ask retires where they went stale |
-| `value` | object | the line `fael stats` prints first: `in_context_at_edit` = distinct (session, row) pairs from `in-context` rows whose row an earlier push of that session handed over (a row the agent filed or found itself does not count) · `issues_closed` = issues closed at or after the repo's first usage, a close `fael compact` folded into its row included (deduped by id) · `handoffs_picked_up` = distinct `*:handoff`-keyed rows a push handed over. The text line adds `retired.at_touch` and `capture.reply_stored` |
+| `value` | object | the line `fael stats` prints first: `in_context_at_edit` = distinct (session, row) pairs from `in-context` rows whose row an earlier push of that session handed over (a row the agent filed or found itself does not count) · `issues_closed` = issues closed at or after the repo's first usage, a close `fael compact` folded into its row included (deduped by id) · `handoffs_picked_up` = distinct `*:handoff`-keyed rows a push handed over · `by_event` = map push event → `{pushed, in_context_at_edit}`: each (session, row) pair counts once, for the event of the push that first handed it over, so `pushed` sums to every distinct pair pushed and `in_context_at_edit` to the field above — hit rate per event with three limits: a lower bound (an `in-context` line exists only when the agent edits the row's file, so a read-only session scores every row a miss); the first push claims the pair and a push never repeats a row the session already holds, so a later event carries only what is new, and an `edit` push can only hit on a later edit; a client whose hooks never write `in-context` lines scores 0. The cost per event is the top-level `by_event`. The text line adds `retired.at_touch` and `capture.reply_stored` |
 | `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
 
 `capture` (PLAN-fael-dev-adoption): `post_stop_rounds` = Stop-hook blocks, cumulative (each cost a
@@ -125,6 +125,7 @@ newest-first across repos.
 ## Changelog
 
 - `1` (2026-10-01): added `value` (the value line) and `in-context` usage rows; no bump.
+- `1` (2026-10-03): added `value.by_event` (hit rate per push event); no bump. The text `fael stats` prints it beside each event's cost.
 
 - `1` (2026-10-01): `--since` cuts the input to a window and the temp filter also skips `/tmp`; same shape, no bump.
 - `1` (2026-10-01): added `retired` (pushed rows closed or superseded within a day of a push); no bump.
