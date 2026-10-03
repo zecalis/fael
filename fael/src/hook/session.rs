@@ -109,8 +109,9 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     if let Some(line) = count_line(&t) {
         body.push_str(&line);
     }
-    // no `memory: ~used/budget` line here (push keeps it): the brief's rows
-    // are the reader's own work, their cost is in `fael stats`
+    if let Some(line) = gone_line(&c.repo, &c.log, &all, &reader) {
+        body.push_str(&line);
+    }
     let adopted = crate::journal::home(&c.repo).is_some();
     let mut context = match (body.is_empty(), adopted) {
         (true, false) => None,
@@ -293,6 +294,39 @@ fn count_line(t: &Todo) -> Option<String> {
     Some(format!(
         "fael: {} — fael find --kind issue (MCP find kind=issue)\n",
         parts.join(" · ")
+    ))
+}
+
+/// Open issues this reader holds whose branch is gone from the clone — the
+/// work merged (or was dropped) and nobody closed the issue with its answer.
+/// Says what is true, never "merged": a deleted branch is all fael sees. A
+/// file read per hold, no git spawn; no journal = no claims = no line.
+// ponytail: a squash-merged branch kept locally still counts as alive, and a
+// hold made under the same name on another machine reads as gone here —
+// add an ancestry check (a git spawn) only if the miss shows up in use.
+fn gone_line(
+    repo: &crate::Repo,
+    log: &core::Log,
+    open: &[&core::Row],
+    reader: &str,
+) -> Option<String> {
+    let common = repo.journal.as_deref().and_then(Path::parent)?;
+    let gone: Vec<(&core::Row, &str)> = open
+        .iter()
+        .filter(|r| r.kind == "issue" && r.by == reader)
+        .filter_map(|r| r.held().map(|h| (*r, h)))
+        .filter(|(_, h)| !crate::journal::branch_alive(common, h))
+        .collect();
+    let (first, branch) = gone.first()?;
+    let ab = core::abbrev(log);
+    let id = ab.short(&first.id);
+    let more = match gone.len() {
+        1 => String::new(),
+        n => format!(" +{} more", n - 1),
+    };
+    Some(format!(
+        "fael: {id} held @{branch}{more} — branch gone, issue still open: \
+         fael close {id} \"<what shipped, where>\" (MCP close), or fael claim {id} --force\n"
     ))
 }
 

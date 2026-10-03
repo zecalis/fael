@@ -233,3 +233,50 @@ fn full_cut_line_asks_for_the_rest_in_one_call() {
     );
     assert!(out.contains(&want), "{out}");
 }
+
+/// The hold outlived its branch (merged and deleted, or dropped) while the
+/// issue stayed open: the holder's session start says so, once, with the
+/// close command — nobody else's does.
+#[test]
+fn session_start_names_my_open_hold_whose_branch_is_gone() {
+    use std::io::Write;
+    let d = repo();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
+    let start = |email: &str| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+            .args(["hook", "session-start", "--client", "claude"])
+            .current_dir(&d)
+            .env("FAEL_STATE_DIR", d.join("state"))
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "user.email")
+            .env("GIT_CONFIG_VALUE_0", email)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let input = serde_json::json!({ "cwd": d }).to_string();
+        c.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+        String::from_utf8_lossy(&c.wait_with_output().unwrap().stdout).into_owned()
+    };
+    git(&d, &["switch", "-q", "-c", "feat/done"]);
+    let (id, _) = issue(&d, "ship the widget", "src/a.rs", &[]);
+    assert!(fael(&d, &["claim", &id]).0);
+    // the branch still exists: nothing to say
+    assert!(!start("t@example.com").contains("branch gone"));
+    git(&d, &["switch", "-q", "feat/one"]);
+    git(&d, &["branch", "-q", "-D", "feat/done"]);
+    let out = start("t@example.com");
+    assert!(
+        out.contains("held @feat/done — branch gone, issue still open")
+            && out.contains("fael close "),
+        "{out}"
+    );
+    // another reader did not hold it
+    assert!(!start("other@example.com").contains("branch gone"));
+    // closed: the line goes
+    let (_, list, _) = fael(&d, &["find", "--kind", "issue"]);
+    let cur = list.split("- [").nth(1).unwrap().split(']').next().unwrap();
+    assert!(fael(&d, &["close", cur, "shipped in #1"]).0);
+    assert!(!start("t@example.com").contains("branch gone"));
+}
