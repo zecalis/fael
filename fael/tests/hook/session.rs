@@ -306,7 +306,7 @@ fn session_start_lists_to_me_above_the_count() {
     assert!(!out.contains("answer them"), "{out}");
     assert!(!out.contains("answer anyone"), "{out}");
     assert!(
-        out.contains("1 to you (0 urgent) · 3 open issues — fael find --kind issue"),
+        out.contains("1 to you · 3 open issues — fael find --kind issue"),
         "{out}"
     );
     let (mine, count) = (
@@ -342,9 +342,7 @@ fn session_start_lists_mine_then_hot_urgent() {
     assert!(!out.contains("theirs plain"), "{out}");
     assert!(!out.contains("anyone plain"), "{out}");
     assert!(
-        out.contains(
-            "1 to you (0 urgent) · 1 urgent unassigned · 5 open issues — fael find --kind issue"
-        ),
+        out.contains("1 to you · 1 urgent unassigned · 5 open issues — fael find --kind issue"),
         "{out}"
     );
     // routing first, then urgency: mine above hot above the count line
