@@ -20,6 +20,7 @@ mod clients;
 mod close_hint;
 mod day;
 mod focus;
+mod handoff;
 mod memory_line;
 mod notify;
 mod precision;
