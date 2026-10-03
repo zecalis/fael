@@ -26,9 +26,10 @@ touches that code later gets it, so the next feature doesn't forget what the las
 
 fael gives the repo a memory that agents can't skip:
 
-- **Writing costs no extra turn.** The agent ends its reply with `fael decision|issue|note: …
-  [files: …]` lines and fael files them — no turn is stopped or re-prompted. Want the old
-  enforcement (no row, no end of turn)? Opt in with `[capture] block = true`.
+- **Writing costs no extra turn.** The agent runs `fael add` in the same message as its next tool
+  call. When a turn ends with no tool call left, it can close its reply with `fael
+  decision|issue|note: … [files: …]` lines and fael files them — no turn is stopped or
+  re-prompted. Want the old enforcement (no row, no end of turn)? Opt in with `[capture] block = true`.
 - **Memory finds them.** When an agent reads a file, the decisions and open bugs about *that file*
   come attached — nobody has to remember to search. Sub-agents too: one starts with an empty
   context and only a short brief, and the file it opens brings the memory the brief left out.
@@ -47,7 +48,7 @@ fael gives the repo a memory that agents can't skip:
   shared at once by every worktree, so PRs never carry log lines to conflict on. `fael sync` carries
   them to teammates through your own remote (`refs/fael/*`). No server, no account.
 
-Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; hooks run in 2–3 ms.
+Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; a hook call takes about 10 ms on a repo with a thousand rows (a session start, once, about 100 ms).
 
 ## What you get
 
@@ -56,10 +57,29 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 | Each session starts from zero | Session opens with what the last one left: open bugs, recent decisions |
 | "Why is it like this?" — ask again, guess again | The reason sits next to the file, from the agent that made the call |
 | Agent notices a bug mid-task, then forgets it | It's filed on the spot, and shown to whoever touches that file next |
-| Two agents in parallel worktrees hit the same problem | The first files it; the second gets it when it opens the file — the same hour, before any commit |
+| Two agents in parallel worktrees hit the same problem | The first files it; the second gets it when it opens the file — the same hour, before any commit (`fael stats` → `across agents` counts how often) |
 | A sub-agent finds something and its summary drops it | Its `fael issue: …` line is filed when it stops (Claude Code), and the parent gets it on that file |
 | Knowledge stays in one person's chat history | It's in the clone — teammates and their agents get it on `fael sync` |
 | A PM's requirement lives in a ticket the agent never opens | `fael add decision … --files src/pay.rs` — it's in front of the agent the moment it opens the file |
+
+## Does it help? Check your own numbers
+
+fael does not claim to save tokens, turns or time: it cannot see what an agent would have done
+without it. It reports what it handed over, so you can judge on your own repo:
+
+```bash
+fael stats
+```
+
+- `hit N/M rows` per event — rows still in front of the agent when it edited that file. A lower
+  bound: a read-only session scores every row a miss.
+- `across agents` — rows one agent wrote that another was handed, and how many were written while
+  the receiver was working. If you run agents in parallel worktrees, watch this one.
+- `retired at touch`, `issues closed`, `handoffs picked up` — rows closed or picked up.
+
+Most useful when several agents (or people) work in one repo and return to the same files over
+days. Little to gain from one short session in a repo you will not touch again.
+Definitions: [docs/stats.md](docs/stats.md).
 
 ## Install
 

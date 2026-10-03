@@ -72,7 +72,7 @@ cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc 
 
 ## Project rules
 
-- **Hooks stay fast** — every hook is a process spawn on every tool call (about 2–3 ms today).
+- **Hooks stay fast** — every hook is a process spawn on every tool call (about 10 ms on a repo with a thousand rows, measured with `hyperfine -N`).
   Measure with `hyperfine` before and after anything that touches the hook path.
 - **Hooks fail open** — `fael hook …` always exits 0 and never blocks an agent because fael itself broke.
 - **The log format is a contract** — [docs/format.md](docs/format.md) is versioned; a change there is
