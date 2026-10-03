@@ -91,7 +91,7 @@ fn stats_json_matches_golden_values() {
             "non_english_rows": {"rows": 0, "non_english": 0},
             "capture": {"post_stop_rounds": 0, "reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
-            "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}}},
+            "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0}},
         }),
         "{out}"
     );
