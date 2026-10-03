@@ -10,6 +10,7 @@
 mod derive;
 mod paths;
 mod refs;
+mod replace;
 mod urgent;
 
 use std::io::Write;
