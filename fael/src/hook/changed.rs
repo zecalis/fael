@@ -6,7 +6,7 @@
 //! `fh`, or a file that resolves nowhere, is unknown, never changed.
 
 use crate::core;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Files bigger than this are never hashed on the push path (the stamp side
@@ -14,20 +14,22 @@ use std::path::Path;
 /// even when stamped: hashing it would break the 5 ms push ceiling.
 const MAX_BYTES: u64 = 1024 * 1024;
 
-/// Said under the rows of an edit push (see `push`).
-/// The usage event `fael-core::stats` reads as "in context at edit".
+/// The generic clause of the legacy hint: said for rows with no verdict.
 const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
 
-/// The row's verdict against the worktree: `Some(true)` when any stamped file
-/// differs, `Some(false)` when every stamped file matches, `None` when the
-/// row carries no `fh` or a file resolves nowhere (gone, renamed in a cycle,
-/// unreadable — `[Gone]` owns the gone case, never "changed").
-///
-/// Chunk-3 (shadow `changed:` usage) calls this per shown row — one disk
-/// read per stamped file, no git spawn, so it stays on the 5 ms push path.
-/// Rows with no verdict (`None`) land in neither shadow list.
-pub(crate) fn changed(row: &core::Row, root: &Path, al: &core::Aliases) -> Option<bool> {
-    changed_cached(row, root, al, &mut HashMap::new())
+/// One blob cache per push, so each file is read once however many rows name
+/// it (hub files carry dozens of rows) and the edit hint and the shadow split
+/// share the reads.
+pub(crate) type Blobs = HashMap<String, Option<String>>;
+
+/// A row against the worktree. `Changed` carries the first stamped file (as it
+/// lives now) that differs; `Unknown` is a row with no `fh` or a file that
+/// resolves nowhere (gone, renamed in a cycle, unreadable or over the push cap
+/// — `[Gone]` owns the gone case, never "changed").
+enum Verdict {
+    Changed(String),
+    Same,
+    Unknown,
 }
 
 /// The shadow split for a push's usage line (PLAN-fael-file-hash chunk 3):
@@ -35,55 +37,54 @@ pub(crate) fn changed(row: &core::Row, root: &Path, al: &core::Aliases) -> Optio
 /// and full ids of the shown rows whose files all still match. Rows with no
 /// verdict ride in neither list — never guessed as changed. Nothing renders:
 /// the caller records the two lists on the usage line only.
-pub(crate) fn partition(
+fn partition(
     rows: &[&core::Row],
     root: &Path,
     al: &core::Aliases,
+    blobs: &mut Blobs,
 ) -> (Vec<String>, Vec<String>) {
     let mut changed_ids = vec![];
     let mut unchanged_ids = vec![];
     for r in rows {
-        match changed(r, root, al) {
-            Some(true) => changed_ids.push(r.id.clone()),
-            Some(false) => unchanged_ids.push(r.id.clone()),
-            None => {}
+        match verdict(r, root, al, blobs) {
+            Verdict::Changed(_) => changed_ids.push(r.id.clone()),
+            Verdict::Same => unchanged_ids.push(r.id.clone()),
+            Verdict::Unknown => {}
         }
     }
     (changed_ids, unchanged_ids)
 }
 
-/// `changed` with a shared blob cache, so one push reads each file once
-/// however many rows name it (hub files carry dozens of rows).
-fn changed_cached(
-    row: &core::Row,
-    root: &Path,
-    al: &core::Aliases,
-    blobs: &mut HashMap<String, Option<String>>,
-) -> Option<bool> {
-    let fh = row.file_hashes()?;
-    if fh.is_empty() {
-        return None;
-    }
+fn verdict(row: &core::Row, root: &Path, al: &core::Aliases, blobs: &mut Blobs) -> Verdict {
+    let Some(fh) = row.file_hashes().filter(|fh| !fh.is_empty()) else {
+        return Verdict::Unknown;
+    };
     let mut unknown = false;
     for (f, v) in fh {
-        let (Some(want), Some(target)) = (v.as_str(), resolve(al, f)) else {
+        let (Some(want), Some(target)) = (v.as_str(), resolve(al, root, f)) else {
             unknown = true;
             continue;
         };
         match file_verdict(want, &target, root, blobs) {
-            Some(true) => return Some(true),
+            Some(true) => return Verdict::Changed(target),
             Some(false) => {}
             None => unknown = true,
         }
     }
-    if unknown { None } else { Some(false) }
+    if unknown {
+        Verdict::Unknown
+    } else {
+        Verdict::Same
+    }
 }
 
-/// Where `f` lives now: through L1 renames, else itself. `None` when the
+/// Where `f` lives now: through L1 renames, else itself — a path that exists
+/// again after being renamed away (a split) is read as itself. `None` when the
 /// renames cycle, so there is no single answer — unknown, never changed.
-fn resolve(al: &core::Aliases, f: &str) -> Option<String> {
+fn resolve(al: &core::Aliases, root: &Path, f: &str) -> Option<String> {
     match al.current(f) {
-        Some(t) => Some(t),
+        Some(t) if !root.join(f).is_file() => Some(t),
+        Some(_) => Some(f.to_string()),
         None if al.forward(f).len() > 1 => None,
         None => Some(f.to_string()),
     }
@@ -91,12 +92,7 @@ fn resolve(al: &core::Aliases, f: &str) -> Option<String> {
 
 /// One stamped file against disk: `None` when it is gone, a directory,
 /// unreadable, or over the push cap below — never guessed as changed.
-fn file_verdict(
-    want: &str,
-    target: &str,
-    root: &Path,
-    blobs: &mut HashMap<String, Option<String>>,
-) -> Option<bool> {
+fn file_verdict(want: &str, target: &str, root: &Path, blobs: &mut Blobs) -> Option<bool> {
     let blob = blobs
         .entry(target.to_string())
         .or_insert_with(|| blob_at(root, target));
@@ -119,47 +115,89 @@ fn blob_at(root: &Path, target: &str) -> Option<String> {
     core::blob_id_stream(&mut file, MAX_BYTES).ok().flatten()
 }
 
-/// The edit hint: tier-0 rows whose files changed since the row was written
-/// are named (at most two) with the retire ready to run; rows whose files all
-/// match earn no hint; rows with no verdict keep the legacy hint (named open
-/// issues, else the generic clause). `None` when no hint is earned.
-pub(crate) fn stale_hint(
-    log: &core::Log,
-    tiered: &[(&core::Row, usize)],
-    files: &[String],
+/// The said rows' ids plus their shadow split (PLAN-fael-file-hash chunk 3):
+/// what fit the budget, of which `changed` files moved since the row was
+/// written and `unchanged` still match — rows with no verdict ride neither.
+pub(crate) fn split_said(
+    sel: &core::Selection<'_>,
+    n: usize,
     root: &Path,
     al: &core::Aliases,
+    blobs: &mut Blobs,
+) -> (Vec<String>, (Vec<String>, Vec<String>)) {
+    let said: Vec<&core::Row> = sel.shown.iter().take(n).copied().collect();
+    let shown: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
+    (shown, partition(&said, root, al, blobs))
+}
+
+/// The tier-0 rows of an edit push the agent has in front of it — said now
+/// (`said`) or by an earlier push this session (`told`) — through `stale_hint`.
+/// A row cut by the cap or the budget was never said, so it is never named.
+pub(crate) fn edit_hint(
+    log: &core::Log,
+    t0: &[(&core::Row, usize)],
+    told: &HashSet<String>,
+    said: &[&core::Row],
+    root: &Path,
+    al: &core::Aliases,
+    blobs: &mut Blobs,
 ) -> Option<String> {
-    let mut blobs = HashMap::new();
-    let mut changed_rows: Vec<&core::Row> = vec![];
+    let rows: Vec<&core::Row> = t0
+        .iter()
+        .filter(|(r, tier)| {
+            *tier == 0 && (told.contains(&r.id) || said.iter().any(|s| s.id == r.id))
+        })
+        .map(|(r, _)| *r)
+        .collect();
+    stale_hint(log, &rows, root, al, blobs)
+}
+
+/// The edit hint over the tier-0 rows already in the agent's context: rows
+/// whose files changed since the row was written are named (at most two, each
+/// with the changed file and the retire ready to run); rows whose files all
+/// match earn no hint; rows with no verdict keep the legacy hint (named open
+/// issues, else the generic clause) — beside the named rows only for open
+/// issues. `None` when no hint is earned.
+///
+/// The edit hook runs after the write (PostToolUse), so "changed since the row
+/// was written" includes the edit just made: a row filed before it is the one
+/// to re-check.
+fn stale_hint(
+    log: &core::Log,
+    rows: &[&core::Row],
+    root: &Path,
+    al: &core::Aliases,
+    blobs: &mut Blobs,
+) -> Option<String> {
+    let mut changed_rows: Vec<(&core::Row, String)> = vec![];
     let mut unknown_rows: Vec<&core::Row> = vec![];
-    for (r, tier) in tiered {
-        if *tier != 0 {
-            continue;
-        }
-        match changed_cached(r, root, al, &mut blobs) {
-            Some(true) => changed_rows.push(r),
-            Some(false) => {}
-            None => unknown_rows.push(r),
+    for r in rows {
+        match verdict(r, root, al, blobs) {
+            Verdict::Changed(f) => changed_rows.push((r, f)),
+            Verdict::Same => {}
+            Verdict::Unknown => unknown_rows.push(r),
         }
     }
+    changed_rows.truncate(2);
     if !changed_rows.is_empty() {
-        changed_rows.truncate(2);
-        return Some(changed_hint(log, &changed_rows, files));
+        unknown_rows.retain(|r| r.kind == "issue");
     }
-    if unknown_rows.is_empty() {
-        return None;
+    let mut lines = vec![];
+    if !changed_rows.is_empty() {
+        lines.push(changed_hint(log, &changed_rows));
     }
-    Some(legacy_hint(log, &unknown_rows))
+    if !unknown_rows.is_empty() {
+        lines.push(legacy_hint(log, &unknown_rows));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
 /// `src/a.rs changed since <id> was written` — one line per row, each with
 /// the bump, the supersede re-file and the close ready to run.
-fn changed_hint(log: &core::Log, rows: &[&core::Row], files: &[String]) -> String {
+fn changed_hint(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
     let ab = core::abbrev(log);
-    let file = files.join(", ");
     rows.iter()
-        .map(|r| {
+        .map(|(r, file)| {
             let s = ab.short(&r.id);
             format!(
                 "fael: {file} changed since {s} was written — still true? `fael bump {s}` · wrong now? re-file with `--supersedes {s}` · done? `fael close {s} \"now in <file>\"`"

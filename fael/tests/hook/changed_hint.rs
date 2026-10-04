@@ -147,3 +147,71 @@ fn rename_resolves_to_the_new_bytes() {
     assert_eq!(shorts.len(), 1, "{out}");
     assert!(id.starts_with(shorts[0]), "{out}\n{id}");
 }
+
+/// The hint names the stamped file that differs, not the file being edited.
+#[test]
+fn hint_names_the_file_that_changed() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/c.rs"), "// c v1\n").unwrap();
+    add(&d, "decision", "pair choice", "src/a.rs,src/c.rs");
+    std::fs::write(d.join("src/c.rs"), "// c v2\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    let hint = out
+        .lines()
+        .find(|l| l.contains("changed since"))
+        .expect(&out);
+    assert!(hint.starts_with("fael: src/c.rs changed since"), "{hint}");
+}
+
+/// A changed row does not hide the ready close of a no-verdict issue.
+#[test]
+fn changed_row_keeps_the_legacy_issue_close() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    add(&d, "issue", "old problem predates hashes", "src/a.rs");
+    strip_fh(&d, "predates hashes");
+    add(&d, "decision", "stamped module choice", "src/a.rs");
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    assert_eq!(named(&out).len(), 1, "{out}");
+    assert!(out.contains("done with one?"), "{out}");
+}
+
+/// A hub file past the row cap says only its count line: no row was said, so
+/// the hint has no row to name (a row never shown cannot be judged).
+#[test]
+fn hint_skips_rows_the_cap_cut() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    for i in 0..14 {
+        add(
+            &d,
+            "decision",
+            &format!("hub choice number {i}"),
+            "src/a.rs",
+        );
+    }
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    assert!(out.contains("0 of 14"), "{out}");
+    assert!(!out.contains("changed since"), "{out}");
+}
+
+/// A path renamed away and then recreated is read as itself, not through the
+/// rename to the file it became.
+#[test]
+fn recreated_path_is_read_as_itself() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    let id = add(&d, "decision", "split module choice", "src/a.rs");
+    std::fs::rename(d.join("src/a.rs"), d.join("src/b.rs")).unwrap();
+    let (ok, _, err) = fael(&d, &["mv", "src/a.rs", "src/b.rs"], "");
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// brand new a\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    let shorts = named(&out);
+    assert_eq!(shorts.len(), 1, "{out}");
+    assert!(id.starts_with(shorts[0]), "{out}\n{id}");
+    assert!(out.contains("fael: src/a.rs changed since"), "{out}");
+}
