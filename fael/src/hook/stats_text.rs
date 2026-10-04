@@ -61,6 +61,18 @@ fn said_line(s: &core::stats::Stats) -> Option<String> {
     (!parts.is_empty()).then(|| format!("  acted on after said: {}", parts.join(" · ")))
 }
 
+/// What push could say about the shown rows' files (a count of what it could
+/// not say, never of savings); no push measured it = no line.
+fn verdict_line(s: &core::stats::Stats) -> Option<String> {
+    let v = &s.file_verdict;
+    (v.changed + v.unchanged + v.no_verdict > 0).then(|| {
+        format!(
+            "  file verdict at push: {} changed · {} unchanged · {} none (no stamp, over the 1 MiB push cap, or gone)",
+            v.changed, v.unchanged, v.no_verdict
+        )
+    })
+}
+
 /// One line on rows that crossed agents; nothing to say = no line.
 fn cross_line(s: &core::stats::Stats) -> Option<String> {
     let c = &s.value.cross_agent;
@@ -271,6 +283,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             "  retired at touch: {} of {} pushed row(s) closed or superseded within a day of a push",
             s.retired.at_touch, s.retired.pushed
         );
+    }
+    if let Some(line) = verdict_line(s) {
+        println!("{line}");
     }
     if let Some(line) = said_line(s) {
         println!("{line}");

@@ -20,6 +20,7 @@ mod retire;
 mod said;
 mod unused;
 mod value;
+mod verdict;
 
 pub use aggregate::{
     AskCount, Constants, Count, NonEnglish, Rounds, RowStatus, STATS_SCHEMA, Stats, TopRow,
@@ -39,6 +40,7 @@ pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{KINDS, KindYield};
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
+pub use verdict::FileVerdict;
 
 /// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
 /// JSON map and the recording side share, so the two cannot drift.

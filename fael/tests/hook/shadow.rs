@@ -166,6 +166,32 @@ fn over_cap_files_have_no_verdict() {
     assert!(!context.contains("changed since"), "{context}");
 }
 
+/// 01M43517 part 3: `fael stats` counts the shown rows each way — the over-cap
+/// row is the silent failure, visible as `no_verdict`; a legacy line without
+/// the keys (not measured) adds nothing.
+#[test]
+fn stats_counts_rows_shown_with_no_verdict() {
+    let d = repo();
+    std::fs::write(d.join("src/big.bin"), vec![b'x'; 2 * 1024 * 1024]).unwrap();
+    add(&d, "decision", "big asset choice", "src/big.bin");
+    let (_, usage) = push(&d, "read", "s1", "src/big.bin");
+    assert_eq!(ids(&usage, "unchanged"), Vec::<String>::new(), "{usage}");
+    let (ok, out, err) = fael(&d, &["stats", "--json"], "");
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).expect(&out);
+    assert_eq!(
+        v["file_verdict"],
+        serde_json::json!({"changed": 0, "unchanged": 0, "no_verdict": 1}),
+        "{out}"
+    );
+    let (ok, text, err) = fael(&d, &["stats"], "");
+    assert!(ok, "{err}");
+    assert!(
+        text.contains("file verdict at push: 0 changed · 0 unchanged · 1 none"),
+        "{text}"
+    );
+}
+
 #[test]
 fn stats_still_counts_shadowed_pushes() {
     let d = repo();

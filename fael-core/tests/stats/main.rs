@@ -51,6 +51,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "constants",
             "est_tokens",
             "events",
+            "file_verdict",
             "incidents",
             "non_english_rows",
             "retired",
@@ -103,18 +104,6 @@ fn json_shape_keys_and_types_are_frozen() {
     ] {
         assert!(v[k].is_object(), "{k}: {v}");
     }
-    assert_eq!(keys(&v["retired"]), ["at_touch", "pushed"], "{v}");
-    assert!(
-        v["retired"]["pushed"].is_u64() && v["retired"]["at_touch"].is_u64(),
-        "{v}"
-    );
-    let value = ["handoffs_picked_up", "in_context_at_edit", "issues_closed"];
-    let mut value_keys = value.to_vec();
-    value_keys.insert(0, "by_event");
-    value_keys.insert(1, "cross_agent");
-    assert_eq!(keys(&v["value"]), value_keys, "{v}");
-    assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
-    assert!(v["value"]["by_event"].is_object(), "{v}");
     assert!(v["top_rows"].is_array(), "{v}");
     assert!(v.get("rows").is_none(), "no --rows, so absent: {v}");
     assert_eq!(keys(&v["asks"]), ["reject", "warning"], "{v}");
@@ -140,6 +129,29 @@ fn json_shape_keys_and_types_are_frozen() {
     assert_eq!(top.len(), 2, "{v}");
     assert_eq!(keys(&top[0]), ["id", "pushes"], "{v}");
     assert!(top[0]["id"].is_string() && top[0]["pushes"].is_u64(), "{v}");
+}
+
+#[test]
+fn json_shape_retired_value_and_verdict_are_frozen() {
+    let v = value_of(BASE_ROWS, false);
+    assert_eq!(keys(&v["retired"]), ["at_touch", "pushed"], "{v}");
+    assert!(
+        v["retired"]["pushed"].is_u64() && v["retired"]["at_touch"].is_u64(),
+        "{v}"
+    );
+    let value = ["handoffs_picked_up", "in_context_at_edit", "issues_closed"];
+    let mut value_keys = value.to_vec();
+    value_keys.insert(0, "by_event");
+    value_keys.insert(1, "cross_agent");
+    assert_eq!(keys(&v["value"]), value_keys, "{v}");
+    assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
+    assert!(v["value"]["by_event"].is_object(), "{v}");
+    // BASE_ROWS predate the shadow keys: nothing measured, all zero
+    assert_eq!(
+        v["file_verdict"],
+        serde_json::json!({"changed": 0, "unchanged": 0, "no_verdict": 0}),
+        "{v}"
+    );
 }
 
 #[test]
