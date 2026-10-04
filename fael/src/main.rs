@@ -335,7 +335,7 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
     let (row, path, warns) = write::bump(&r, a, id)?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "bump", Some(&r.root), &warns);
-    batch::written(a, &r, &row, &path);
+    batch::moved(a, &r, &row, &path, a.has("to"));
     Ok(())
 }
 
@@ -346,7 +346,7 @@ fn claim(a: &Args, id: &str) -> Result<(), String> {
     let (row, path, warns) = claim::claim(&r, id, a.has("force"))?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "claim", Some(&r.root), &warns);
-    batch::written(a, &r, &row, &path);
+    batch::moved(a, &r, &row, &path, false);
     Ok(())
 }
 
@@ -358,7 +358,7 @@ fn next(a: &Args) -> Result<(), String> {
     let (row, path, warns) = claim::next(&r, &writer(&r))?;
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "next", Some(&r.root), &warns);
-    batch::written(a, &r, &row, &path);
+    batch::moved(a, &r, &row, &path, false);
     if !a.has("json") {
         println!(
             "{}",
