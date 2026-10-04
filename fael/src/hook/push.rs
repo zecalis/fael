@@ -279,8 +279,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     );
     // usage counts only what was actually said — ids cut off never reached
     // any context, so stats must not count them. Same said rows feed the
-    // shadow split (PLAN-fael-file-hash chunk 3: usage-line only).
-    let (shown, shadow) = split_said(&sel, n, &c.repo.root, &al, &mut blobs);
+    // shadow split on a read (PLAN-fael-file-hash chunk 3: usage-line only).
+    let (shown, shadow) = split_said(&sel, n, edit, &c.repo.root, &al, &mut blobs);
     if let Some(mut f) = seen {
         // only what fit the budget was said; the cut rows may push on a later read
         let out: String = shown.iter().map(|id| format!("{id}\n")).collect();
@@ -314,7 +314,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &context,
         &shown,
         &meta,
-        Some(shadow),
+        shadow,
     );
     Reply {
         block: false,

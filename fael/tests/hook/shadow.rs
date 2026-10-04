@@ -1,6 +1,8 @@
-//! PLAN-fael-file-hash chunk 3 (shadow): every read/edit push records the
+//! PLAN-fael-file-hash chunk 3 (shadow): every read push records the
 //! `changed` / `unchanged` verdict split on its usage line, while the
-//! rendered context stays byte-identical (nothing new is displayed).
+//! rendered context stays byte-identical (nothing new is displayed). An edit
+//! push records none: the hook runs after the write, so the edited file would
+//! always read as changed.
 
 use super::{fael, json, repo, strip_fh};
 use std::path::Path;
@@ -8,7 +10,7 @@ use std::path::Path;
 /// A push of `file` in a fresh session; returns the rendered context plus
 /// the push's usage line (the `read`/`edit` event row, never `in-context`).
 /// Reads and edits take the same `tool_input.file_path` shape (one file per
-/// push — see `close_hint`); only the hint behaviour differs by event.
+/// push — see `close_hint`); only the hint and the shadow differ by event.
 fn push(d: &Path, event: &str, session: &str, file: &str) -> (String, serde_json::Value) {
     let input = format!(
         r#"{{"cwd":{},"session_id":"{session}","tool_input":{{"file_path":{}}}}}"#,
@@ -65,20 +67,32 @@ fn read_push_marks_matching_files_unchanged_with_no_display() {
 }
 
 #[test]
-fn edit_push_marks_edited_files_changed_with_no_extra_display() {
+fn read_push_marks_a_changed_file_changed_with_no_display() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    let id = add(&d, "decision", "retry uses backoff here", "src/a.rs");
+    std::fs::write(d.join("src/a.rs"), "// v2 edited\n").unwrap();
+    let (context, usage) = push(&d, "read", "s1", "src/a.rs");
+    assert_eq!(ids(&usage, "changed"), vec![id], "{usage}");
+    assert_eq!(ids(&usage, "unchanged"), Vec::<String>::new(), "{usage}");
+    for banned in ["changed", "\"changed\"", "\"unchanged\"", "unchanged:"] {
+        assert!(!context.contains(banned), "{banned} in:\n{context}");
+    }
+}
+
+/// The hook runs after the write, so an edit's own bytes would make every
+/// edited file read as changed: an edit push records the hint, not the split.
+#[test]
+fn edit_push_records_no_shadow() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     let id = add(&d, "decision", "retry uses backoff here", "src/a.rs");
     std::fs::write(d.join("src/a.rs"), "// v2 edited\n").unwrap();
     let (context, usage) = push(&d, "edit", "s1", "src/a.rs");
-    assert_eq!(ids(&usage, "ids"), vec![id.clone()], "{usage}");
-    assert_eq!(ids(&usage, "changed"), vec![id], "{usage}");
-    assert_eq!(ids(&usage, "unchanged"), Vec::<String>::new(), "{usage}");
-    // the chunk-2 hint still names the row, but no shadow key leaks out
+    assert_eq!(ids(&usage, "ids"), vec![id], "{usage}");
+    assert!(usage.get("changed").is_none(), "{usage}");
+    assert!(usage.get("unchanged").is_none(), "{usage}");
     assert!(context.contains("changed since"), "{context}");
-    for banned in ["\"changed\"", "\"unchanged\"", "unchanged:"] {
-        assert!(!context.contains(banned), "{banned} in:\n{context}");
-    }
 }
 
 #[test]
@@ -87,15 +101,11 @@ fn legacy_rows_land_in_neither_list() {
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     let id = add(&d, "decision", "old choice predates hashes", "src/a.rs");
     strip_fh(&d, "predates hashes");
-    let (context, usage) = push(&d, "edit", "s1", "src/a.rs");
+    let (context, usage) = push(&d, "read", "s1", "src/a.rs");
     assert_eq!(ids(&usage, "ids"), vec![id], "{usage}");
     assert_eq!(ids(&usage, "changed"), Vec::<String>::new(), "{usage}");
     assert_eq!(ids(&usage, "unchanged"), Vec::<String>::new(), "{usage}");
-    // no verdict, so the legacy hint still runs (chunk 2 keeps it)
-    assert!(
-        context.contains("a row above the code now says or contradicts?"),
-        "{context}"
-    );
+    assert!(context.contains("old choice predates hashes"), "{context}");
 }
 
 #[test]
@@ -109,10 +119,10 @@ fn changed_and_unchanged_files_split_across_pushes() {
     let changed_id = add(&d, "decision", "first module choice", "src/a.rs");
     let same_id = add(&d, "decision", "second module choice", "src/b.rs");
     std::fs::write(d.join("src/a.rs"), "// v2 edited\n").unwrap();
-    let (_, usage) = push(&d, "edit", "s1", "src/a.rs");
+    let (_, usage) = push(&d, "read", "s1", "src/a.rs");
     assert_eq!(ids(&usage, "changed"), vec![changed_id], "{usage}");
     assert_eq!(ids(&usage, "unchanged"), Vec::<String>::new(), "{usage}");
-    let (_, usage) = push(&d, "edit", "s2", "src/b.rs");
+    let (_, usage) = push(&d, "read", "s2", "src/b.rs");
     assert_eq!(ids(&usage, "changed"), Vec::<String>::new(), "{usage}");
     assert_eq!(ids(&usage, "unchanged"), vec![same_id], "{usage}");
 }
@@ -127,7 +137,7 @@ fn changed_row_and_legacy_row_share_one_push() {
     let legacy_id = add(&d, "decision", "old choice predates hashes", "src/a.rs");
     strip_fh(&d, "predates hashes");
     std::fs::write(d.join("src/a.rs"), "// v2 edited\n").unwrap();
-    let (context, usage) = push(&d, "edit", "s1", "src/a.rs");
+    let (context, usage) = push(&d, "read", "s1", "src/a.rs");
     let mut shown = ids(&usage, "ids");
     shown.sort();
     let mut want = vec![changed_id.clone(), legacy_id];
@@ -148,7 +158,7 @@ fn over_cap_files_have_no_verdict() {
     let d = repo();
     std::fs::write(d.join("src/big.bin"), vec![b'x'; 2 * 1024 * 1024]).unwrap();
     let id = add(&d, "decision", "big asset choice", "src/big.bin");
-    let (context, usage) = push(&d, "edit", "s1", "src/big.bin");
+    let (context, usage) = push(&d, "read", "s1", "src/big.bin");
     assert!(context.contains("big asset choice"), "{context}");
     assert_eq!(ids(&usage, "ids"), vec![id], "{usage}");
     assert_eq!(ids(&usage, "changed"), Vec::<String>::new(), "{usage}");
@@ -160,11 +170,17 @@ fn over_cap_files_have_no_verdict() {
 fn stats_still_counts_shadowed_pushes() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    add(&d, "decision", "retry uses backoff here", "src/a.rs");
-    push(&d, "read", "s1", "src/a.rs");
+    let id = add(&d, "decision", "retry uses backoff here", "src/a.rs");
+    let (_, usage) = push(&d, "read", "s1", "src/a.rs");
+    assert!(usage.get("changed").is_some(), "{usage}"); // the line really carries the keys
     // the state dir is scratch (under temp), so temp repos are kept (01M3CRR6A)
     let (ok, out, err) = fael(&d, &["stats", "--json"], "");
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).expect(&out);
-    assert!(v["events"].as_u64().unwrap_or(0) >= 1, "{out}");
+    // the `add` line and the shadowed read line, one event each
+    assert_eq!(v["events"], 2, "{out}");
+    assert_eq!(v["by_event"]["read"]["events"], 1, "{out}");
+    assert_eq!(v["by_event"]["add"]["events"], 1, "{out}");
+    assert_eq!(v["top_rows"][0]["id"], id.as_str(), "{out}");
+    assert_eq!(v["top_rows"][0]["pushes"], 1, "{out}");
 }

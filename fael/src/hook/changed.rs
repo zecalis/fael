@@ -22,6 +22,9 @@ const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `f
 /// share the reads.
 pub(crate) type Blobs = HashMap<String, Option<String>>;
 
+/// The shadow split: full ids of the `changed` rows and of the `unchanged` rows.
+pub(crate) type Split = (Vec<String>, Vec<String>);
+
 /// A row against the worktree. `Changed` carries the first stamped file (as it
 /// lives now) that differs; `Unknown` is a row with no `fh` or a file that
 /// resolves nowhere (gone, renamed in a cycle, unreadable or over the push cap
@@ -37,12 +40,7 @@ enum Verdict {
 /// and full ids of the shown rows whose files all still match. Rows with no
 /// verdict ride in neither list — never guessed as changed. Nothing renders:
 /// the caller records the two lists on the usage line only.
-fn partition(
-    rows: &[&core::Row],
-    root: &Path,
-    al: &core::Aliases,
-    blobs: &mut Blobs,
-) -> (Vec<String>, Vec<String>) {
+fn partition(rows: &[&core::Row], root: &Path, al: &core::Aliases, blobs: &mut Blobs) -> Split {
     let mut changed_ids = vec![];
     let mut unchanged_ids = vec![];
     for r in rows {
@@ -115,19 +113,21 @@ fn blob_at(root: &Path, target: &str) -> Option<String> {
     core::blob_id_stream(&mut file, MAX_BYTES).ok().flatten()
 }
 
-/// The said rows' ids plus their shadow split (PLAN-fael-file-hash chunk 3):
-/// what fit the budget, of which `changed` files moved since the row was
-/// written and `unchanged` still match — rows with no verdict ride neither.
+/// The said rows' ids plus, on a read, their shadow split (PLAN-fael-file-hash
+/// chunk 3): what fit the budget, of which `changed` files moved since the row
+/// was written and `unchanged` still match — rows with no verdict ride
+/// neither. An edit gets no split: the file on disk already holds the edit.
 pub(crate) fn split_said(
     sel: &core::Selection<'_>,
     n: usize,
+    edit: bool,
     root: &Path,
     al: &core::Aliases,
     blobs: &mut Blobs,
-) -> (Vec<String>, (Vec<String>, Vec<String>)) {
+) -> (Vec<String>, Option<Split>) {
     let said: Vec<&core::Row> = sel.shown.iter().take(n).copied().collect();
     let shown: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    (shown, partition(&said, root, al, blobs))
+    (shown, (!edit).then(|| partition(&said, root, al, blobs)))
 }
 
 /// The tier-0 rows of an edit push the agent has in front of it — said now
