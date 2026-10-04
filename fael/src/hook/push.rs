@@ -173,7 +173,13 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         hinted: &hinted,
     };
     let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
-    let sel = core::select(tiered, &focus, &policy);
+    let mut sel = core::select(tiered, &focus, &policy);
+    // a hub's peek rides its count line, once per file per session — each
+    // re-read would otherwise drip PUSH_HUB_PEEK more rows
+    let count = format!("{}|file", files.join(","));
+    if !out.fresh(&Kind::Count { keys: vec![count] }) {
+        sel.drop_peek();
+    }
     let notes = stashed(&c, &files);
     let has_notes = notes.is_some();
     let mut blobs = Blobs::new();
@@ -229,8 +235,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
 /// The lines of the rows under their header, then the `bodies:` line and the count
 /// lines — each said once per session (01M42F5B); `told` drops a count line
 /// this session already heard. Only what fit the budget
-/// was said; the cut rows may push on a later read. A hub file with no Now
-/// row says its count line under the header alone (PUSH_HUB_ROWS), or
+/// was said; the cut rows may push on a later read. A hub file says its
+/// PUSH_HUB_PEEK rows and count line once; with no Now row left it says
 /// nothing once this session was told.
 fn row_lines(
     told: &Outbox,

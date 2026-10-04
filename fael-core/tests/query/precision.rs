@@ -188,10 +188,11 @@ fn one_to_one_rename_stays_exact() {
 
 /// Case "hot-file flood" (01M3S6NAH): 30 exact-tier decisions on one doc, two
 /// about kickoff. No structural signal says which row matches the edit, so
-/// the freshest five were a guess — past `PUSH_HUB_ROWS` none push off the
-/// Focus (issue push:hub-files); the count line names `fael find --files`.
+/// the freshest five were a guess — past `PUSH_HUB_ROWS` only a
+/// `PUSH_HUB_PEEK` of them push off the Focus (issue push:hub-files): a
+/// header with no row said nothing; the count line names `fael find --files`.
 #[test]
-fn hot_file_pushes_no_off_focus_rows() {
+fn hot_file_pushes_only_a_peek_off_focus() {
     let rows = (1..=30)
         .map(|n| {
             let text = if n == 2 || n == 5 {
@@ -204,5 +205,5 @@ fn hot_file_pushes_no_off_focus_rows() {
         .collect();
     let l = log_of(rows);
     let got = injected(&l, &["docs/architecture.md"], &Aliases::default(), false);
-    assert!(got.is_empty(), "{got:?}");
+    assert_eq!(got.len(), PUSH_HUB_PEEK, "{got:?}");
 }

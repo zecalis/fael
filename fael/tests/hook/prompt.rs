@@ -18,27 +18,27 @@ fn prompt_points_at_named_key_once() {
         );
         fael(&d, &["hook", "prompt", "--client", "claude"], &input)
     };
-    let (ok, out, _) = ask("s1", "is there credit code yet?");
+    let (ok, out, _) = ask("s1", "is there credit ledger code yet?");
     assert!(
         ok && out.contains("UserPromptSubmit")
             // 01M3XKB7G: the line names the word that fired, so a misfire is
             // judgeable from the line and from the usage journal
-            && out.contains("vela:credit-ledger (1, via \\\"credit\\\")"),
+            && out.contains("vela:credit-ledger (1, via \\\"credit ledger\\\")"),
         "{out}"
     );
     // pointer only — the row itself never rides the prompt
     assert!(!out.contains("append-only"), "{out}");
     // once per session
-    let (ok, out, _) = ask("s1", "credit again");
+    let (ok, out, _) = ask("s1", "credit ledger again");
     assert!(ok && out.is_empty(), "{out}");
     // a fresh session: no exact head = silent (a trailing segment is no
     // head), the exact one still points
     let (ok, out, _) = ask("s2", "credits ledger");
     assert!(ok && out.is_empty(), "{out}");
-    let (ok, out, _) = ask("s2", "the credit layer");
+    let (ok, out, _) = ask("s2", "the credit ledger");
     assert!(ok && out.contains("vela:credit-ledger"), "{out}");
     // no session = no once-only list, so no hint
-    let (ok, out, _) = ask("", "credit");
+    let (ok, out, _) = ask("", "credit ledger");
     assert!(ok && out.is_empty(), "{out}");
 }
 
@@ -102,7 +102,7 @@ fn prompt_skips_a_key_rows_already_seen() {
     );
     assert!(ok, "{err}");
     // not asked before, so `.keys` is empty — only the `.seen` skip can mute it
-    let (ok, out, _) = ask("s1", "credit");
+    let (ok, out, _) = ask("s1", "credit ledger");
     assert!(ok && out.is_empty(), "{out}");
 }
 

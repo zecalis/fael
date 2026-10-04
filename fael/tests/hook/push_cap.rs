@@ -118,24 +118,26 @@ fn read_push_omitted_rows_push_later_in_session() {
 }
 
 #[test]
-fn read_push_hub_file_says_only_now_rows_and_the_count() {
+fn read_push_hub_file_peeks_once_beside_now_rows() {
     let d = repo();
     seed(&d, 15);
-    // 15 off-Focus decisions: any 5 by freshness is a guess — the issue
-    // renders, the rest is one line naming the exact call
+    // 15 off-Focus decisions: any 5 by freshness is a guess, none at all says
+    // nothing — the issue renders, a peek of 3, the rest one line naming the
+    // exact call
     let (ok, out) = read(&d, None);
     assert!(ok, "{out}");
-    assert_eq!(shown(&out), 1, "{out}");
+    assert_eq!(shown(&out), 1 + 3, "{out}");
     assert!(out.contains("login loops"), "{out}");
+    assert!(out.contains("(4 of 16)"), "{out}");
     assert!(
-        out.contains("… +15 more about this file — fael find --files src/a.rs"),
+        out.contains("… +12 more about this file — fael find --files src/a.rs"),
         "{out}"
     );
-    // the count line is said once per file per session (01M42F5B): with no
-    // Now row left (the issue was said) and the count told, the push is silent
+    // the peek rides the count line, once per file per session (01M42F5B): a
+    // re-read drips no more rows and, the count told, the push is silent
     let (ok, first) = read(&d, Some("hub1"));
     assert!(
-        ok && first.contains("… +15 more about this file"),
+        ok && first.contains("… +12 more about this file"),
         "{first}"
     );
     let (ok, again) = read(&d, Some("hub1"));
@@ -292,11 +294,11 @@ fn count_line_is_said_once_per_file_per_session() {
     let d = repo();
     seed(&d, 15);
     let (_, first) = read(&d, Some("c1"));
-    assert!(first.contains("… +15 more about this file"), "{first}");
+    assert!(first.contains("… +12 more about this file"), "{first}");
     let (_, again) = read(&d, Some("c1"));
     assert!(!again.contains("more about"), "{again}");
     let (_, other) = read(&d, Some("c2"));
-    assert!(other.contains("… +15 more about this file"), "{other}");
+    assert!(other.contains("… +12 more about this file"), "{other}");
 }
 
 /// A decision on `file` whose title is shorter than its text: it has a body.
