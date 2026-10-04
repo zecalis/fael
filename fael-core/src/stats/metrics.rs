@@ -3,7 +3,7 @@
 //! numbers out.
 
 use super::{ASK_REJECT, ASK_WARN};
-use crate::{Config, Log, row_language_check, ts_ms};
+use crate::{Config, Log, is_carrier_row, row_language_check, ts_ms};
 use std::collections::{HashMap, HashSet};
 
 /// Ask kinds in fixed order — the same vocabulary `usage.jsonl` stores under
@@ -31,11 +31,12 @@ pub(super) fn ask_totals(rows: &[serde_json::Value]) -> Vec<(&'static str, usize
         .collect()
 }
 
-/// Rows filed at or after `since_ms` (the repo's first usage).
+/// Rows filed at or after `since_ms` (the repo's first usage). Carriers
+/// (bump, restore, alias events) move rows, they file none.
 pub(super) fn added_since(log: &Log, since_ms: i64) -> usize {
     log.rows
         .iter()
-        .filter(|r| ts_ms(&r.ts).is_some_and(|t| t >= since_ms))
+        .filter(|r| !is_carrier_row(r) && ts_ms(&r.ts).is_some_and(|t| t >= since_ms))
         .count()
 }
 
@@ -46,7 +47,7 @@ pub(super) fn non_english_share(logs: &HashMap<String, Log>, cfg: &Config) -> (u
     let mut seen = HashSet::new();
     let (mut n, mut foreign_rows) = (0usize, 0usize);
     for log in logs.values() {
-        for r in &log.rows {
+        for r in log.rows.iter().filter(|r| !is_carrier_row(r)) {
             if !seen.insert(r.id.as_str()) {
                 continue;
             }

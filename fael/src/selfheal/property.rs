@@ -297,3 +297,16 @@ fn hold_and_kept_open_supersede_nothing() {
         }
     }
 }
+
+#[test]
+fn carriers_are_never_open_rows() {
+    let row = mk(1, "me", "note", "kept", vec!["src/a.rs".into()], None);
+    let mut ev = core::Row::bumped("me", &row.id);
+    ev.id = format!("01GEN{:022}", 2);
+    let log = core::Log {
+        rows: vec![row, ev],
+        ..Default::default()
+    };
+    let open: Vec<&str> = open_rows(&log).iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(open, [log.rows[0].id.as_str()]);
+}

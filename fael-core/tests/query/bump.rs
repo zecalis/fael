@@ -357,8 +357,11 @@ fn urgent_before_restore_and_purge_resolve_past_a_bump_event_sharing_the_prefix(
     let (dir, cfg, st) = setup("rest-prefix");
     let mut o = keep();
     o.urgent = UrgentChange::End;
-    let hot = bump(&dir, &cfg, &st, &issue(&dir, &cfg, &st, "hot", None).id, o).unwrap();
-    collide(&dir, &hot.id);
+    // plant first: an event is a snapshot, so one sorting after the urgent
+    // bump would clear it — bump_row steps past the planted one
+    let r = issue(&dir, &cfg, &st, "hot", None);
+    collide(&dir, &r.id);
+    let hot = bump(&dir, &cfg, &st, &r.id, o).unwrap();
     let s = &hot.id[..25];
     let before = resolve_urgent(&view(&dir), &Urgent::Before(s.into())).unwrap();
     assert!(before < hot.urgent);
