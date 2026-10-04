@@ -6,7 +6,8 @@
 //! message and edits as apply_patch). OpenCode's plugin speaks neutral.
 //!
 //! Thin entry only — the events live in `hook/`:
-//! `protocol` (neutral Event/Reply + shared ctx), `claude` (client adapters),
+//! `protocol` (neutral Event + shared ctx), `say` (the one door to the agent's
+//! context: Reply, Outbox, Kind and its noise policy), `claude` (client adapters),
 //! `stop` (turn-end work/bug rule), `capture` (the reply's `fael <kind>:` lines), `session` (session-start kickoff),
 //! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `prompt` (the open-key pointer on a user prompt), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
@@ -30,7 +31,9 @@ mod markers;
 mod prompt;
 mod protocol;
 mod push;
-mod said;
+mod say;
+#[cfg(test)]
+mod say_contract;
 mod search;
 mod session;
 mod state;

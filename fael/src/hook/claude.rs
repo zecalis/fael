@@ -86,7 +86,7 @@ fn user_line(r: &super::protocol::Reply, codex: bool) -> Option<&str> {
 /// only when there is one; nothing at all prints nothing.
 fn print_reply(event: &str, r: super::protocol::Reply, codex: bool) {
     let mut out = serde_json::Map::new();
-    if let Some(ctx) = &r.context {
+    if let Some(ctx) = r.context() {
         out.insert(
             "hookSpecificOutput".into(),
             serde_json::json!({"hookEventName": event, "additionalContext": ctx}),

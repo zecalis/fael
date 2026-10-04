@@ -30,6 +30,7 @@ mod notify;
 mod precision;
 mod prompt;
 mod push_cap;
+mod replay;
 mod search;
 mod seen;
 mod session;
