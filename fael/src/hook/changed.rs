@@ -9,8 +9,9 @@ use crate::core;
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Files bigger than this are never hashed (filehash.rs stamps at most this).
-/// A stamped file that grew past it changed — no read needed to say so.
+/// Files bigger than this are never hashed on the push path (the stamp side
+/// covers up to 16 MiB — 01M42CGE). A file over this cap has no verdict here,
+/// even when stamped: hashing it would break the 5 ms push ceiling.
 const MAX_BYTES: u64 = 1024 * 1024;
 
 /// Said under the rows of an edit push (see `push`).
@@ -22,12 +23,33 @@ const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `f
 /// row carries no `fh` or a file resolves nowhere (gone, renamed in a cycle,
 /// unreadable — `[Gone]` owns the gone case, never "changed").
 ///
-/// Chunk-2 wires this with no direct caller — `stale_hint` below shares one
-/// blob cache across the push's rows instead; chunk-3 (shadow `changed:`
-/// usage) calls this per shown row. The `allow(dead_code)` goes away then.
-#[allow(dead_code)]
+/// Chunk-3 (shadow `changed:` usage) calls this per shown row — one disk
+/// read per stamped file, no git spawn, so it stays on the 5 ms push path.
+/// Rows with no verdict (`None`) land in neither shadow list.
 pub(crate) fn changed(row: &core::Row, root: &Path, al: &core::Aliases) -> Option<bool> {
     changed_cached(row, root, al, &mut HashMap::new())
+}
+
+/// The shadow split for a push's usage line (PLAN-fael-file-hash chunk 3):
+/// full ids of the shown rows whose files changed since the row was written,
+/// and full ids of the shown rows whose files all still match. Rows with no
+/// verdict ride in neither list — never guessed as changed. Nothing renders:
+/// the caller records the two lists on the usage line only.
+pub(crate) fn partition(
+    rows: &[&core::Row],
+    root: &Path,
+    al: &core::Aliases,
+) -> (Vec<String>, Vec<String>) {
+    let mut changed_ids = vec![];
+    let mut unchanged_ids = vec![];
+    for r in rows {
+        match changed(r, root, al) {
+            Some(true) => changed_ids.push(r.id.clone()),
+            Some(false) => unchanged_ids.push(r.id.clone()),
+            None => {}
+        }
+    }
+    (changed_ids, unchanged_ids)
 }
 
 /// `changed` with a shared blob cache, so one push reads each file once
@@ -67,8 +89,8 @@ fn resolve(al: &core::Aliases, f: &str) -> Option<String> {
     }
 }
 
-/// One stamped file against disk: `None` when it is gone, a directory or
-/// unreadable; `Some(true)` without reading when it grew past the stamp cap.
+/// One stamped file against disk: `None` when it is gone, a directory,
+/// unreadable, or over the push cap below — never guessed as changed.
 fn file_verdict(
     want: &str,
     target: &str,
@@ -82,17 +104,19 @@ fn file_verdict(
 }
 
 /// The 12-hex blob id on disk, or `None` when there is nothing hashable.
-/// `Some("")` marks a file that grew past the stamp cap — anything compares
-/// unequal to it, so it reads as changed without the read.
+/// Files over `MAX_BYTES` have no verdict: the stamp side covers up to 16
+/// MiB, but hashing that much on the push path would break its 5 ms ceiling
+/// (01M42CGE) — unknown keeps the legacy hint, never a false "changed".
 fn blob_at(root: &Path, target: &str) -> Option<String> {
     let md = std::fs::metadata(root.join(target)).ok()?;
     if !md.is_file() {
         return None;
     }
     if md.len() > MAX_BYTES {
-        return Some(String::new());
+        return None;
     }
-    Some(core::blob_id(&std::fs::read(root.join(target)).ok()?))
+    let mut file = std::fs::File::open(root.join(target)).ok()?;
+    core::blob_id_stream(&mut file, MAX_BYTES).ok().flatten()
 }
 
 /// The edit hint: tier-0 rows whose files changed since the row was written

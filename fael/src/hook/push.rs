@@ -3,13 +3,14 @@
 //! and say each row once per session.
 
 use super::asks::hook_meta;
-use super::changed::stale_hint;
+use super::changed::{partition, stale_hint};
 use super::protocol::{Event, Reply, ctx};
 use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
-use super::usage::{memory_line, record_usage, usage_row};
+use super::usage::{memory_line, record_usage_shadow, usage_row};
 use crate::{aliases, core};
 use std::collections::HashSet;
 use std::io::{Read, Write};
+use std::path::Path;
 
 /// The edit hint lives in `changed` (PLAN-fael-file-hash chunk 2): tier-0 rows
 /// whose files changed since the row was written are named, the rest earn no
@@ -186,6 +187,20 @@ fn repo_files(c: &super::protocol::Ctx, raw: &[String]) -> Vec<String> {
     files
 }
 
+/// The said rows' ids plus their shadow split (PLAN-fael-file-hash chunk 3):
+/// what fit the budget, of which `changed` files moved since the row was
+/// written and `unchanged` still match — rows with no verdict ride neither.
+fn split_said(
+    sel: &core::Selection<'_>,
+    n: usize,
+    root: &Path,
+    al: &core::Aliases,
+) -> (Vec<String>, (Vec<String>, Vec<String>)) {
+    let said: Vec<&core::Row> = sel.shown.iter().take(n).copied().collect();
+    let shown: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
+    (shown, partition(&said, root, al))
+}
+
 pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let no = Reply::default;
     let c = match ctx(e) {
@@ -259,7 +274,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         if !lines.is_empty() {
             let context = lines.join("\n");
             let meta = hook_meta(&c, None, true);
-            record_usage(&c.client, event, &c.repo.root, &context, &[], &meta);
+            record_usage_shadow(&c.client, event, &c.repo.root, &context, &[], &meta, None);
             return Reply {
                 context: Some(context),
                 ..Reply::default()
@@ -274,8 +289,9 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &c.tags,
     );
     // usage counts only what was actually said — ids cut off never reached
-    // any context, so stats must not count them
-    let shown: Vec<String> = sel.shown.iter().take(n).map(|r| r.id.clone()).collect();
+    // any context, so stats must not count them. Same said rows feed the
+    // shadow split (PLAN-fael-file-hash chunk 3: usage-line only).
+    let (shown, shadow) = split_said(&sel, n, &c.repo.root, &al);
     if let Some(mut f) = seen {
         // only what fit the budget was said; the cut rows may push on a later read
         let out: String = shown.iter().map(|id| format!("{id}\n")).collect();
@@ -298,7 +314,15 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         None => context,
     };
     let meta = hook_meta(&c, None, true);
-    record_usage(&c.client, event, &c.repo.root, &context, &shown, &meta);
+    record_usage_shadow(
+        &c.client,
+        event,
+        &c.repo.root,
+        &context,
+        &shown,
+        &meta,
+        Some(shadow),
+    );
     Reply {
         block: false,
         context: Some(context),

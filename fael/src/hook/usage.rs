@@ -24,6 +24,30 @@ pub(crate) fn record_usage(
     asks::append_row(usage_row(client, event, repo, text, ids, meta));
 }
 
+/// The read/edit push's shadow verdicts (PLAN-fael-file-hash chunk 3): the
+/// shown rows whose files changed since the row was written, and the shown
+/// rows whose files all still match. Usage-line only — `text` (the rendered
+/// context) is byte-identical with or without it, so `stats` counts and the
+/// chunk-4 gate read the same rows either way. `None` when nothing was said
+/// (no keys — there is nothing to verdict); `Some` always writes both keys,
+/// possibly empty, so the gate can count "each side ≥ 30" straight from JSON.
+pub(crate) fn record_usage_shadow(
+    client: &str,
+    event: &str,
+    repo: &Path,
+    text: &str,
+    ids: &[String],
+    meta: &UsageMeta,
+    shadow: Option<(Vec<String>, Vec<String>)>,
+) {
+    let mut row = usage_row(client, event, repo, text, ids, meta);
+    if let Some((changed, unchanged)) = shadow {
+        row["changed"] = changed.into();
+        row["unchanged"] = unchanged.into();
+    }
+    asks::append_row(row);
+}
+
 /// One usage row, every key `record_usage` writes — shared with the 0-byte
 /// `in-context-at-edit` row so the two shapes cannot drift.
 pub(crate) fn usage_row(
