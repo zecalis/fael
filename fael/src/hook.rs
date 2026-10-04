@@ -23,6 +23,7 @@ mod asks;
 mod askstats;
 mod autosync;
 mod capture;
+mod changed;
 mod claude;
 mod focus;
 mod markers;

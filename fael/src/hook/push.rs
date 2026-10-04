@@ -3,6 +3,7 @@
 //! and say each row once per session.
 
 use super::asks::hook_meta;
+use super::changed::stale_hint;
 use super::protocol::{Event, Reply, ctx};
 use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
 use super::usage::{memory_line, record_usage, usage_row};
@@ -10,30 +11,11 @@ use crate::{aliases, core};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
-/// Said under the rows of an edit push (see `push`).
+/// The edit hint lives in `changed` (PLAN-fael-file-hash chunk 2): tier-0 rows
+/// whose files changed since the row was written are named, the rest earn no
+/// hint, rows with no verdict keep the legacy clause.
 /// The usage event `fael-core::stats` reads as "in context at edit".
 const IN_CONTEXT: &str = "in-context";
-const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
-
-/// The edit hint. With open issues about this very file in context (shown
-/// now or by an earlier push this session — a Read before the Edit already
-/// said them), name up to two with the close ready to run: the agent only
-/// writes the why. Decisions and notes never get one — an edit rarely ends
-/// them — but the generic clause still covers them.
-fn stale_hint(log: &core::Log, issues: &[&core::Row]) -> String {
-    if issues.is_empty() {
-        return STALE_HINT.to_string();
-    }
-    let ab = core::abbrev(log);
-    let calls: Vec<String> = issues
-        .iter()
-        .map(|r| format!("fael close {} \"<why>\"", ab.short(&r.id)))
-        .collect();
-    format!(
-        "fael: done with one? {} — any other row the code now says or contradicts: `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`",
-        calls.join(" · ")
-    )
-}
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
@@ -239,25 +221,24 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         budget: c.repo.cfg.push_tokens,
         background: core::PUSH_BACKGROUND,
     };
-    let mut tiered = core::push_tiered(
-        &c.log,
-        &files,
-        &aliases::load(&c.repo, &c.log, false),
-        !edit,
-    );
-    // a row already pushed into this context window is still there — say it
-    // once. The lock spans read → append, so a batch of parallel reads queues
-    // up behind the first instead of each pushing the same row.
-    // tier 0 only: an issue about a neighbouring file is not this edit's to close
-    let ready: Vec<&core::Row> = tiered
-        .iter()
-        .filter(|(r, tier)| edit && *tier == 0 && r.kind == "issue")
-        .map(|(r, _)| *r)
-        .take(2)
-        .collect();
+    let al = aliases::load(&c.repo, &c.log, false);
+    let mut tiered = core::push_tiered(&c.log, &files, &al, !edit);
+    // an edit is where a row goes stale: the agent is changing the code the
+    // row describes, with both in front of it — the one moment to retire it.
+    // tier 0 only: an issue about a neighbouring file is not this edit's to
+    // close. Computed before the seen filter: a Read before the Edit already
+    // said the row, yet the edit still offers its retire.
+    let hint: Option<String> = if edit {
+        stale_hint(&c.log, &tiered, &files, &c.repo.root, &al)
+    } else {
+        None
+    };
     let mut seen = (!c.session.is_empty())
         .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
         .flatten();
+    // a row already pushed into this context window is still there — say it
+    // once. The lock spans read → append, so a batch of parallel reads queues
+    // up behind the first instead of each pushing the same row.
     if let Some(f) = &mut seen {
         let mut old = String::new();
         let _ = f.read_to_string(&mut old);
@@ -272,10 +253,9 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let notes = take_stashed(&c, &files);
     // a hub file with no Now row still says its count line (PUSH_HUB_ROWS)
     if sel.shown.is_empty() && sel.omitted == 0 {
-        // a ready close for an issue already in context, or a stashed line,
+        // a retire for a row already in context, or a stashed line,
         // still gets said, even with no rows to join
-        let ready = (!ready.is_empty()).then(|| stale_hint(&c.log, &ready));
-        let lines: Vec<String> = ready.into_iter().chain(notes).collect();
+        let lines: Vec<String> = hint.clone().into_iter().chain(notes).collect();
         if !lines.is_empty() {
             let context = lines.join("\n");
             let meta = hook_meta(&c, None, true);
@@ -308,13 +288,10 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         h => format!(" ({n} of {})", n + h),
     };
     let context = format!("fael mem for {}{more}:\n{body}{usage}", files.join(", "));
-    // an edit is where a row goes stale: the agent is changing the code the
-    // row describes, with both in front of it — the one moment to retire it.
     // ponytail: every edit push with rows; once per session if it costs too much
-    let context = if edit {
-        format!("{context}{}\n", stale_hint(&c.log, &ready))
-    } else {
-        context
+    let context = match hint {
+        Some(h) => format!("{context}{h}\n"),
+        None => context,
     };
     let context = match notes {
         Some(n) => format!("{context}\n{n}"),

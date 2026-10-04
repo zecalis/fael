@@ -4,6 +4,7 @@
 //! Thin entry only — the suites sit next to this file:
 //! `stop` (turn end: bug lines stashed, never a block), `autosync` (once-per-session `fael sync`), `stop_lang` ([lang] marker/rows packs),
 //! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
+//! `changed_hint` (PLAN-fael-file-hash chunk 2: the edit hint names changed rows),
 //! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
 //! `day` (PLAN-fael-sync chunk 3: `fael stats --day`),
 //! `push_cap` (read-push row cap + omitted line),
@@ -16,6 +17,7 @@
 mod adopted;
 mod autosync;
 mod capture;
+mod changed_hint;
 mod clients;
 mod close_hint;
 mod compact;
@@ -193,4 +195,34 @@ fn transcript(d: &Path, name: &str) -> PathBuf {
 
 fn json(v: &Path) -> String {
     serde_json::Value::String(v.to_string_lossy().into_owned()).to_string()
+}
+
+/// Drop the `fh` map from every log line whose text contains `needle`, so the
+/// row reads as written before hashes existed (PLAN-fael-file-hash chunk 2:
+/// stamped rows whose files still match earn no hint — the legacy hint only
+/// runs for rows with no verdict).
+fn strip_fh(d: &Path, needle: &str) {
+    let log = d.join(".fael/log");
+    let mut stack = vec![log];
+    while let Some(p) = stack.pop() {
+        for e in std::fs::read_dir(&p).unwrap().flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|x| x == "jsonl")
+                && !path.to_string_lossy().ends_with(".close.jsonl")
+            {
+                let text = std::fs::read_to_string(&path).unwrap();
+                let mut out = vec![];
+                for line in text.lines() {
+                    let mut v: serde_json::Value = serde_json::from_str(line).unwrap();
+                    if v["text"].as_str().is_some_and(|t| t.contains(needle)) {
+                        v.as_object_mut().unwrap().remove("fh");
+                    }
+                    out.push(serde_json::to_string(&v).unwrap());
+                }
+                std::fs::write(&path, out.join("\n") + "\n").unwrap();
+            }
+        }
+    }
 }
