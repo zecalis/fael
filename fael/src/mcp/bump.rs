@@ -29,7 +29,6 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     }
     let log = read(r);
     let id = need(a, "id")?;
-    let fh = crate::filehash::stamp(&r.root, &core::resolve(&log, &id)?.files);
     let urgent = match (
         a["urgent"].as_bool().unwrap_or(false),
         s(a, "urgent_before"),
@@ -41,6 +40,10 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         (false, None, true) => core::UrgentChange::Remove,
         _ => return Err("rejected: urgent, urgent_before and not_urgent pick one — the queue takes a single position".into()),
     };
+    let routing = s(a, "to").is_some()
+        || s(a, "revisit").is_some()
+        || !matches!(urgent, core::UrgentChange::Keep);
+    let fh = crate::filehash::for_bump(&r.root, &log, &id, routing)?;
     let (row, _, warns) = core::bump_row(
         &r.fael,
         r.journal.as_deref(),

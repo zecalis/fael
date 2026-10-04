@@ -172,7 +172,7 @@ pub(crate) fn add_row(
 fn root_relative(r: &crate::Repo, args: &[String], files: &mut [String]) -> Vec<String> {
     let mut warns = vec![];
     for (arg, f) in args.iter().zip(files.iter_mut()) {
-        if hook::is_anchor(f) || crate::filehash::is_glob(f) || r.root.join(&*f).exists() {
+        if hook::is_anchor(f) || core::is_glob(f) || r.root.join(&*f).exists() {
             continue;
         }
         if let Ok(v) = core::normalize_files(std::slice::from_ref(arg), &r.root, &r.root)
@@ -256,7 +256,9 @@ pub(crate) fn bump(
     // bare `--revisit` names no date or text — that only filters on `find`
     let revisit = parse_revisit(a.has("revisit"), a.one("revisit"))?;
     let log = crate::read(r);
-    let fh = crate::filehash::stamp(&r.root, &core::resolve(&log, id)?.files);
+    let moves =
+        a.one("to").is_some() || revisit.is_some() || !matches!(urgent, core::UrgentChange::Keep);
+    let fh = crate::filehash::for_bump(&r.root, &log, id, moves)?;
     core::bump_row(
         &r.fael,
         r.journal.as_deref(),
@@ -292,7 +294,7 @@ pub(crate) fn check(
     let in_edits: HashSet<&str> = edits.iter().map(|(p, _)| p.as_str()).collect();
     let mut missing: Vec<&str> = vec![];
     for f in files {
-        if hook::is_anchor(f) || crate::filehash::is_glob(f) || root.join(f).exists() {
+        if hook::is_anchor(f) || core::is_glob(f) || root.join(f).exists() {
             continue;
         }
         if al.forward(f).iter().any(|p| root.join(p).exists()) {

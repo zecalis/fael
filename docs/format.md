@@ -49,7 +49,7 @@ Reference implementation: [`fael-core`](../fael-core/src).
 | `revisit` | no | a date `YYYY-MM`/`YYYY-MM-DD` or free text (`mdl lands`) — a date ≤ today lists the row first at kickoff whatever its files; free text only counts (`fael find --revisit` lists it); `find --kind issue` lists a row whose revisit is free text or a date ahead after the ready ones, shown `(waiting: …)` |
 | `supersedes` | no | id of an older row this one replaces |
 | `held` | no | the branch working on an issue, set by `fael claim` and carried through later bumps — a claim is race-safe (one winner per clone) but gates only the claim, never an edit; `find` shows `(held @<branch>)` |
-| `fh` | no | file hashes at write time: an object mapping each real file in `files` to the first 12 hex of its git blob id (`sha1("blob <len>\0" + LF-normalised bytes)`), so the same file hashes the same on a CRLF checkout and an LF one. Files are capped at 8 per row and 1 MiB each, in `files` order; anchors, globs, directories and missing files get no key. `fael add` and `fael bump` restamp it; `fael claim` carries the old map forward — a claim is not a check. It lets fael tell "this file changed since the row was written" without a git spawn (`docs/architecture.md`) |
+| `fh` | no | file hashes at write time: an object mapping each real file in `files` to the first 12 hex of its git blob id (`sha1("blob <len>\0" + bytes)`), with CRLF read as LF in a text file so the same file hashes the same on a CRLF checkout and an LF one; a binary file (a NUL in its first 8000 bytes) is hashed raw. It equals `git hash-object` when the repo stores LF. Files are capped at 8 per row and 1 MiB each, in `files` order; anchors, globs, directories and missing files get no key. `fael add` and a bare `fael bump` restamp it; `fael claim` and a bump that only moves the row (`--to`, `--urgent`, `--revisit`) carry the old map forward — neither is a check. It lets fael tell "this file changed since the row was written" without a git spawn (`docs/architecture.md`) |
 | `client` `model` `session` `branch` `sha` | no | filled in by tools, never by the agent · `session` is the hook session id that filed the row (the transcript UUID, never a path), absent outside a hook session |
 
 **Close row** — in `<writer>/<yyyy-mm>.close.jsonl`. Any kind can be closed; a close never edits the row.
@@ -98,7 +98,7 @@ its rows itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md
 that parses (§Readers) — including legacy rows without `files` and rows from newer versions.
 
 A writer must reject a row before writing it when: `files` is empty or not repo-relative · `kind` is not allowed ·
-`key` breaks the pattern · the serialised line is over 10 KiB (bytes) · it looks like a secret.
+`key` breaks the pattern · the serialised line is over 10 KiB (bytes, not counting `fh`) · it looks like a secret.
 
 To append:
 1. take an exclusive lock on `.fael/.lock`
