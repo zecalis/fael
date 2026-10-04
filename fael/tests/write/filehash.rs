@@ -108,10 +108,35 @@ fn more_than_eight_files_stamp_the_first_eight() {
 }
 
 #[test]
+fn large_file_is_stamped_like_git_and_crlf_like_lf() {
+    let d = repo();
+    let line = "fn f() { let x = 1; }\n";
+    let lf = line.repeat(100_000); // ~2 MiB, past the old 1 MiB cap
+    std::fs::write(d.join("src/big.rs"), &lf).unwrap();
+    std::fs::write(d.join("src/bigcrlf.rs"), lf.replace('\n', "\r\n")).unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "large",
+            "--files",
+            "src/big.rs,src/bigcrlf.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let map = fh(&d, "large");
+    assert_eq!(map["src/big.rs"], git_blob(&d, "src/big.rs").as_str());
+    assert_eq!(map["src/bigcrlf.rs"], map["src/big.rs"]);
+}
+
+#[test]
 fn oversize_file_is_not_stamped() {
     let d = repo();
-    let big = vec![b'x'; 1024 * 1024 + 1];
-    std::fs::write(d.join("src/big.rs"), &big).unwrap();
+    // sparse: one byte past the 16 MiB cap, without writing 16 MiB
+    let big = std::fs::File::create(d.join("src/big.rs")).unwrap();
+    big.set_len(16 * 1024 * 1024 + 1).unwrap();
     std::fs::write(d.join("src/ok.rs"), "//\n").unwrap();
     assert!(
         fael(

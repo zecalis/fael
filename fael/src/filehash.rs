@@ -1,5 +1,5 @@
 //! Stamp each real file a row names with its blob digest at write time
-//! (PLAN-fael-file-hash chunk 1). Core hashes the bytes (`core::blob_id`);
+//! (PLAN-fael-file-hash chunk 1). Core hashes the stream (`core::blob_id_stream`);
 //! reading the disk is this side's job — the same side that reads the
 //! worktree for `write::check`. `claim` must not call this: a claim is not a
 //! check, so it passes the row's old map through instead.
@@ -7,18 +7,17 @@
 use crate::core;
 use crate::hook::is_anchor;
 use serde_json::{Map, Value};
-use std::io::Read;
 use std::path::Path;
 
 /// At most this many files per row, in `files` order (format.md §Rows).
 const MAX_FILES: usize = 8;
-/// Files larger than this are not hashed — a row never needs to own a blob
-/// that big, and reading it would slow the write.
-const MAX_BYTES: u64 = 1024 * 1024;
+/// Files larger than this are not hashed — the stream keeps memory flat, but
+/// two passes over a huge file would still slow the write.
+const MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 /// A `path → 12-hex blob id` map for every real file in `files`, in order.
 /// Anchors, globs (no such file on disk), directories, missing files and
-/// files over 1 MiB are left out — no key, not an empty value. Empty when
+/// files over 16 MiB are left out — no key, not an empty value. Empty when
 /// nothing qualifies.
 pub(crate) fn stamp(root: &Path, files: &[String]) -> Map<String, Value> {
     let mut out = Map::new();
@@ -64,19 +63,14 @@ pub(crate) fn stamp_row(root: &Path, row: &mut core::Row) {
 }
 
 /// The 12-hex blob id of one regular file under `root`, or `None` when it is
-/// missing, a directory or over `MAX_BYTES`. The read is capped too, so a file
-/// that grows after the size check is still never read whole.
+/// missing, a directory or over `MAX_BYTES`. The stream is capped too, so a
+/// file that grows after the size check is still never read whole.
 fn blob_at(root: &Path, f: &str) -> Option<String> {
     let p = root.join(f);
     let md = std::fs::metadata(&p).ok()?;
     if !md.is_file() || md.len() > MAX_BYTES {
         return None;
     }
-    let mut bytes = Vec::with_capacity(md.len() as usize);
-    std::fs::File::open(&p)
-        .ok()?
-        .take(MAX_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    (bytes.len() as u64 <= MAX_BYTES).then(|| core::blob_id(&bytes))
+    let mut file = std::fs::File::open(&p).ok()?;
+    core::blob_id_stream(&mut file, MAX_BYTES).ok().flatten()
 }
