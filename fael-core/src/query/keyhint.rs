@@ -26,10 +26,13 @@ const HINT_MAX_KEYS: usize = 3;
 /// key and "fael" hit `fael:store`. Nor does a word that is any open key's
 /// namespace, wherever it sits (01M42G02E): `plan:vela:handoff` fired on
 /// every prompt saying "vela", `plan:fael-*` on every "fael" (01M42FPP) — the
-/// app's name is the area, never the topic.
+/// app's name is the area, never the topic. `stop` (`[hint] stop`, 01M42GFH)
+/// is the repo's own list of such words — a generic head like "workspace" —
+/// excluded the same way, ASCII case-insensitive; a key named whole still
+/// hints.
 /// Open = some row on the key is neither closed nor superseded. At most
 /// `HINT_MAX_KEYS`, best match first, most used first as the tie-break.
-pub fn key_hints(log: &Log, prompt: &str) -> Vec<(KeyUse, Vec<String>)> {
+pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<String>)> {
     let (closed, gone) = (select::closed(log), select::superseded(log));
     let keys = super::lookup::tally(log.rows.iter().filter(|r| {
         !closed.contains(r.id.as_str())
@@ -46,7 +49,7 @@ pub fn key_hints(log: &Log, prompt: &str) -> Vec<(KeyUse, Vec<String>)> {
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|w| w.len() >= 4 && !w.bytes().all(|b| b.is_ascii_digit()))
         .map(str::to_ascii_lowercase)
-        .filter(|w| !areas.contains(w))
+        .filter(|w| !areas.contains(w) && !stop.iter().any(|s| s.eq_ignore_ascii_case(w)))
         .collect();
     // nested fns, not closures: a returning closure would need lifetimes spelled out
     fn segs(key: &str) -> Vec<String> {
