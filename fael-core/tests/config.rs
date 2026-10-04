@@ -44,3 +44,19 @@ fn hint_stop_default_empty_and_parse_lowercased() {
     let c = Config::from_toml("[hint]\nstop = [\"Workspace\", \" file \", \"\"]").unwrap();
     assert_eq!(c.hint_stop, ["workspace", "file"]);
 }
+
+#[test]
+fn hint_stop_edges_empty_ok_wrong_type_fails_loudly() {
+    // an explicit empty list and a `[hint]` table without `stop` both stop nothing
+    for toml in ["[hint]\nstop = []", "[hint]"] {
+        assert!(
+            Config::from_toml(toml).unwrap().hint_stop.is_empty(),
+            "{toml}"
+        );
+    }
+    // a bare string is not a list: reject it, never silently stop nothing
+    for toml in ["[hint]\nstop = \"workspace\"", "[hint]\nstop = [1]"] {
+        let e = Config::from_toml(toml).unwrap_err();
+        assert!(e.contains("stop"), "{toml}: {e}");
+    }
+}
