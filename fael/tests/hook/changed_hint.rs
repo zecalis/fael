@@ -311,6 +311,36 @@ fn a_row_this_session_filed_is_not_asked_about() {
     assert!(other.contains("changed since"), "{other}");
 }
 
+/// Claude keys the hook by its transcript path while the row carries the bare
+/// session id (the path's stem): the same session still is not asked.
+#[test]
+fn a_row_this_session_filed_is_not_asked_about_by_transcript_path() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "decision", "mine by path", "--files", "src/a.rs"],
+        "",
+        &[("CLAUDE_CODE_SESSION_ID", "s3")],
+    );
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    let edit = |id: &str| {
+        let input = format!(
+            r#"{{"cwd":{},"session_id":"{id}","transcript_path":"/h/.claude/projects/p/{id}.jsonl","tool_input":{{"file_path":{}}}}}"#,
+            json(&d),
+            json(&d.join("src/a.rs"))
+        );
+        let (ok, out, err) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
+        assert!(ok, "{err}");
+        out
+    };
+    let mine = edit("s3");
+    assert!(!mine.contains("changed since"), "{mine}");
+    let other = edit("s4");
+    assert!(other.contains("changed since"), "{other}");
+}
+
 /// Stamped at ~2 MiB (over the push path's 1 MiB read cap, under the 16 MiB
 /// stamp cap): the edit push does not hash it, so the row has no verdict and
 /// the generic hint stands — never "changed", never silence.
