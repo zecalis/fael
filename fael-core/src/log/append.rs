@@ -3,7 +3,7 @@
 
 use super::{Log, is_month};
 use crate::{
-    Config, Row, Stamp, Store, closed, resolve, reverted, superseded, validate, validate_alias,
+    Config, Row, Stamp, Store, closed, resolve_row, reverted, superseded, validate, validate_alias,
     validate_close, warnings,
 };
 use std::collections::HashSet;
@@ -108,7 +108,7 @@ pub fn add_row(
     supersedes: Option<&str>,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
     if let Some(s) = supersedes {
-        row.supersedes = Some(resolve(log, s)?.id.clone());
+        row.supersedes = Some(resolve_row(log, s)?.id.clone());
     }
     stamp.apply(&mut row);
     let (path, mut warns) = write_both(fael, journal, cfg, |d| add(d, &row, cfg))?;
@@ -172,7 +172,7 @@ pub fn close_row(
     id: &str,
     why: &str,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
-    let target = crate::resolve_row(log, id)?;
+    let target = resolve_row(log, id)?;
     // a second close row adds nothing but noise to an append-only log
     if closed(log).contains(target.id.as_str()) {
         return Err(format!("rejected: {} is already closed", target.id));

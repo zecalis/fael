@@ -26,7 +26,7 @@ pub(crate) fn base(r: &Repo, a: &Args, kind: &str) -> Result<Base, String> {
         return Err("rejected: --replace needs the text to replace, not an empty string".into());
     }
     let log = crate::read(r);
-    let row = core::resolve(&log, &id)?;
+    let row = core::resolve_row(&log, &id)?;
     if row.kind != kind {
         return Err(format!(
             "rejected: {id} is a {} — add {} with --replace, or retype the body to change its kind",

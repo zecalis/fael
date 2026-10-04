@@ -316,3 +316,32 @@ fn close_and_bump_resolve_past_a_bump_event_sharing_the_prefix() {
     let (c, _, _) = close_row(&dir, None, &view(&dir), &cfg, &st, short, "done").unwrap();
     assert_eq!(c.reference.as_deref(), Some(r.id.as_str()));
 }
+
+#[test]
+fn supersedes_resolves_past_a_bump_event_sharing_the_prefix() {
+    // `--supersedes <short>` names a content row, like close and bump: a
+    // bump event sharing the prefix never makes it ambiguous, and an event
+    // id is never a row to replace
+    let (dir, cfg, st) = setup("sup-prefix");
+    let r = issue(&dir, &cfg, &st, "hot", None);
+    let mut ev = Row::bumped("tester-0000", &r.id);
+    let last = if r.id.ends_with('0') { "1" } else { "0" };
+    ev.id = format!("{}{last}", &r.id[..25]);
+    append(&dir, &ev, false).unwrap();
+    let new = Row::new("tester-0000", "issue", "hot, v2", vec!["src/a.rs".into()]);
+    let e = add_row(
+        &dir,
+        None,
+        &view(&dir),
+        &cfg,
+        &st,
+        new.clone(),
+        Some(&ev.id),
+    )
+    .unwrap_err();
+    assert!(e.contains("no row"), "{e}");
+    let v2 = add_row(&dir, None, &view(&dir), &cfg, &st, new, Some(&r.id[..25]))
+        .unwrap()
+        .0;
+    assert_eq!(v2.supersedes.as_deref(), Some(r.id.as_str()));
+}
