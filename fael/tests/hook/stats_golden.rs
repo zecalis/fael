@@ -92,6 +92,7 @@ fn stats_json_matches_golden_values() {
             "capture": {"reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
             "unused_rows": [],
+            "incidents": {},
             "said": {"row": {"said": 2, "earned": 0}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "count": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1}, "notice": {"said": 0, "earned": 0}},
             "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}},
         }),

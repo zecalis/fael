@@ -12,6 +12,7 @@ mod aggregate;
 mod capture;
 mod cross;
 mod day;
+mod incident;
 mod metrics;
 mod overlap;
 mod parse;
@@ -30,6 +31,7 @@ pub use day::{
     BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
+pub use incident::{INCIDENT_KEY, Incidents};
 pub use metrics::ASK_ORDER;
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, since, since_arg};
