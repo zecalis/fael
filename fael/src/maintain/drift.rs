@@ -2,7 +2,7 @@
 //! after the row was written. The code moved on, so the row may now restate
 //! it (close it: the code says it) or contradict it (supersede it). A fact from
 //! git, never a verdict — the reader checks each row against the code. A row
-//! checked and still true gets `fael bump <id>` (same text, new version), which
+//! checked and still true gets `fael bump <id>` (same id, restamped), which
 //! restarts its count. One `git log` spawn for the whole log; no git = no note.
 
 use crate::core;

@@ -221,10 +221,10 @@ fn config(path: &Path) -> Result<Config, String> {
     Config::from_toml(&s).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Read the log — tree + journal union, tree wins on duplicate ids; skipped
-/// lines go to stderr as one summary, never fail the command.
+/// Read the log — tree + journal union, bumps folded (sync reads it raw:
+/// `journal::merged`); skipped lines go to stderr, never fail the command.
 pub(crate) fn read(r: &Repo) -> Log {
-    journal::merged(r)
+    core::fold_bumps(journal::merged(r))
 }
 
 /// Writer id from git identity; no email → hostname hash, with a warning.

@@ -121,3 +121,34 @@ fn sync_never_moves_the_branch_or_the_working_tree() {
     let all = git_out(&remote, &["ls-remote", remote.to_str().unwrap()]);
     assert!(!all.contains("refs/heads/"), "a branch ref appeared: {all}");
 }
+
+/// A bump travels as its event: the other clone folds it onto the same id,
+/// and the ref carries the row as written plus the event — never a folded row.
+#[test]
+fn a_bump_syncs_as_an_event_under_the_same_id() {
+    let remote = bare("bump");
+    let a = repo("bump-a", "Alice", "alice@example.com");
+    let b = clone(&a, "bump-b", "Bob", "bob@example.com");
+    point(&a, &remote);
+    point(&b, &remote);
+    let id = add(&a, "row bumped on the first clone");
+    let (ok, out, err) = fael(&a, &["bump", &id, "--to", "ploy"]);
+    assert!(ok, "{err}");
+    assert!(out.starts_with(&id), "the bump keeps the id: {out}");
+    assert!(sync(&a).0);
+    assert!(sync(&b).0);
+    let got = rows(&b);
+    let row = got
+        .iter()
+        .find(|r| r["id"] == id.as_str())
+        .expect("arrives");
+    assert_eq!(row["to"], "ploy", "{row}");
+    assert_eq!(got.len(), 1, "the event never lists: {got:?}");
+    let body = ref_body(&remote, &fael_refs(&remote)[0]);
+    let raw = body
+        .lines()
+        .find(|l| l.contains(&format!("\"id\":\"{id}\"")))
+        .unwrap();
+    assert!(!raw.contains("ploy"), "the row ships as written: {raw}");
+    assert!(body.contains(&format!("\"bumps\":\"{id}\"")), "{body}");
+}

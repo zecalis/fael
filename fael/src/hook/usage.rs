@@ -162,7 +162,7 @@ pub(crate) fn memory_line(body: &str, budget: usize) -> Option<String> {
 fn repo_log(repo: &str) -> core::Log {
     crate::repo_at(Path::new(repo))
         .map(|r| crate::read(&r))
-        .unwrap_or_else(|_| core::read(&Path::new(repo).join(".fael")))
+        .unwrap_or_else(|_| core::fold_bumps(core::read(&Path::new(repo).join(".fael"))))
 }
 
 /// What `fael stats` and `fael report` read: `usage.jsonl` cut to `since`,

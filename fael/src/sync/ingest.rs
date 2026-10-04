@@ -78,7 +78,7 @@ pub(super) fn others(r: &Repo, remote: &str, repo_id: &str, own: &str) -> Result
     }
     out.purged
         .extend(trees.iter().flat_map(|f| f.purged.clone()));
-    let mut log = crate::read(r);
+    let mut log = crate::journal::merged(r); // raw: never ship a folded row
     for f in trees {
         out.seen
             .extend(f.rows.iter().chain(&f.closes).map(|x| x.id.clone()));

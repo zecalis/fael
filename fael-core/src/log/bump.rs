@@ -1,13 +1,14 @@
-//! `bump_row` — change routing/urgency/revisit on an open row as a new
-//! version (MVCC-style). Split out of `append.rs` at the 400-line ratchet;
-//! the actual write stays in `append::add_row`.
+//! `bump_row` — change routing/urgency/revisit on an open row under its own
+//! id: one bump event appended, folded onto the row by `fold_bumps`. Split
+//! out of `append.rs` at the 400-line ratchet.
 
-use super::Log;
-use super::append::add_row;
+use super::{Log, write_both};
 use crate::{
-    Config, Row, Stamp, Urgent, UrgentChange, closed, resolve, resolve_urgent, superseded,
+    Config, Row, Stamp, Urgent, UrgentChange, append, closed, resolve, resolve_urgent, superseded,
+    validate_bump,
 };
 use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// What `bump_row` changes — bundled so the arg count stays under the lint
@@ -25,11 +26,12 @@ pub struct BumpOpts {
     pub fh: Option<Map<String, Value>>,
 }
 
-/// The same kind, title, text, files and key, new `to`/`urgent`/`revisit`,
-/// superseding the old row — the one add path every adapter (CLI, MCP, a
-/// server) goes through, so the old version hides through `superseded()` with
-/// no new visibility rule. Text and files never change through bump — file a
-/// new row for new content.
+/// The same row under the same id, new `to`/`urgent`/`revisit`: one bump
+/// event appended (a carrier, `Row::bumped`) that `fold_bumps` lays onto the
+/// row in memory — the one write path every adapter (CLI, MCP, a server)
+/// goes through. The event is a snapshot of the moved fields, so the newest
+/// alone decides. Text and files never change through bump — file a new row
+/// for new content. Returns the row as folded.
 pub fn bump_row(
     fael: &Path,
     journal: Option<&Path>,
@@ -52,39 +54,99 @@ pub fn bump_row(
             old.id
         ));
     }
-    let to = match opts.to {
+    let mut ev = Row::bumped(&stamp.by, &old.id);
+    ev.to = match opts.to {
         None => old.to.clone(),
         Some(t) => {
             let t = t.trim().to_lowercase();
             (!t.is_empty()).then_some(t)
         }
     };
-    let urgent = match opts.urgent {
+    ev.urgent = match opts.urgent {
         UrgentChange::Keep => old.urgent,
         UrgentChange::End => resolve_urgent(log, &Urgent::End)?,
         UrgentChange::Before(t) => resolve_urgent(log, &Urgent::Before(t))?,
         UrgentChange::Remove => None,
     };
-    let revisit = match opts.revisit {
+    ev.revisit = match opts.revisit {
         None => old.revisit.clone(),
         Some(v) => {
             let v = v.trim().to_string();
             (!v.is_empty()).then_some(v)
         }
     };
-    let mut row = Row::new(&stamp.by, &old.kind, &old.text, old.files.clone());
-    row.key = old.key.clone();
-    row.title = old.title.clone();
-    row.to = to;
-    row.urgent = urgent;
-    row.revisit = revisit;
+    // the queue holds issues — the check `validate` runs on an add row
+    if old.kind != "issue" && ev.urgent.is_some() {
+        return Err(
+            "rejected: urgent is for issues — file it as kind issue or drop --urgent".into(),
+        );
+    }
     if let Some(h) = opts.held.as_deref().or(old.held()) {
-        row.extra.insert("held".into(), h.into());
+        ev.extra.insert("held".into(), h.into());
     }
     if let Some(fh) = opts.fh
         && !fh.is_empty()
     {
-        row.extra.insert("fh".into(), Value::Object(fh));
+        ev.extra.insert("fh".into(), Value::Object(fh));
     }
-    add_row(fael, journal, log, cfg, stamp, row, Some(&old.id))
+    stamp.apply(&mut ev);
+    let (path, warns) = write_both(fael, journal, cfg, |d| {
+        validate_bump(&ev, cfg)?;
+        append(d, &ev, false)
+    })?;
+    let mut row = old;
+    apply(&mut row, &ev);
+    Ok((row, path, warns))
+}
+
+/// Lay every bump event onto the row it names, oldest first, so the newest
+/// wins — the view every query reads. Raw readers (sync, compact) skip this:
+/// they carry the events as rows and must never ship a folded row.
+pub fn fold_bumps(mut log: Log) -> Log {
+    let mut evs: Vec<Row> = log
+        .rows
+        .iter()
+        .filter(|r| r.bumps.is_some())
+        .cloned()
+        .collect();
+    if evs.is_empty() {
+        return log;
+    }
+    evs.sort_by(|a, b| a.id.cmp(&b.id));
+    let at: HashMap<String, usize> = log
+        .rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| !crate::is_carrier_row(r))
+        .map(|(i, r)| (r.id.clone(), i))
+        .collect();
+    for ev in &evs {
+        if let Some(&i) = ev.bumps.as_deref().and_then(|t| at.get(t)) {
+            apply(&mut log.rows[i], ev);
+        }
+    }
+    log
+}
+
+/// The moved fields from `ev` onto `row`: the snapshot ones (`to`, `urgent`,
+/// `revisit`, `held`, `fh` — absent clears) and the write stamp (`ts`, plus
+/// `sha`/`branch` when the bump had them), so a bump still reads as the
+/// check it is to drift and the fh verdict. `id`, `by` and `session` stay
+/// the row's own: who wrote it does not change.
+fn apply(row: &mut Row, ev: &Row) {
+    row.to = ev.to.clone();
+    row.urgent = ev.urgent;
+    row.revisit = ev.revisit.clone();
+    row.ts = ev.ts.clone();
+    for k in ["held", "fh"] {
+        match ev.extra.get(k) {
+            Some(v) => row.extra.insert(k.into(), v.clone()),
+            None => row.extra.remove(k),
+        };
+    }
+    for k in ["sha", "branch"] {
+        if let Some(v) = ev.extra.get(k) {
+            row.extra.insert(k.into(), v.clone());
+        }
+    }
 }

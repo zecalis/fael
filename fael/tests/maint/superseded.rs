@@ -15,7 +15,18 @@ fn doctor_flags_a_chain_hidden_by_a_closed_head() {
     let (ok, out, err) = fael(&d, &["add", "issue", "hot", "--files", "src/a.rs"]);
     assert!(ok, "{err}");
     let a = out.split_whitespace().next().unwrap().to_string();
-    let (ok, out, err) = fael(&d, &["bump", &a, "--to", "ploy"]);
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "hot, re-filed",
+            "--files",
+            "src/a.rs",
+            "--supersedes",
+            &a,
+        ],
+    );
     assert!(ok, "{err}");
     let b = out.split_whitespace().next().unwrap().to_string();
     // the legacy trap: a pre-chain-close binary appended only B's close row,
