@@ -3,20 +3,14 @@
 //! and say each row once per session.
 
 use super::asks::hook_meta;
-use super::changed::{partition, stale_hint};
+use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::protocol::{Event, Reply, ctx};
+use super::said::{record_in_context, remember, say_only};
 use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
-use super::usage::{memory_line, record_usage_shadow, usage_row};
+use super::usage::{memory_line, record_usage_shadow};
 use crate::{aliases, core};
 use std::collections::HashSet;
-use std::io::{Read, Write};
-use std::path::Path;
-
-/// The edit hint lives in `changed` (PLAN-fael-file-hash chunk 2): tier-0 rows
-/// whose files changed since the row was written are named, the rest earn no
-/// hint, rows with no verdict keep the legacy clause.
-/// The usage event `fael-core::stats` reads as "in context at edit".
-const IN_CONTEXT: &str = "in-context";
+use std::io::Read;
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
@@ -187,20 +181,6 @@ fn repo_files(c: &super::protocol::Ctx, raw: &[String]) -> Vec<String> {
     files
 }
 
-/// The said rows' ids plus their shadow split (PLAN-fael-file-hash chunk 3):
-/// what fit the budget, of which `changed` files moved since the row was
-/// written and `unchanged` still match — rows with no verdict ride neither.
-fn split_said(
-    sel: &core::Selection<'_>,
-    n: usize,
-    root: &Path,
-    al: &core::Aliases,
-) -> (Vec<String>, (Vec<String>, Vec<String>)) {
-    let said: Vec<&core::Row> = sel.shown.iter().take(n).copied().collect();
-    let shown: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    (shown, partition(&said, root, al))
-}
-
 pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let no = Reply::default;
     let c = match ctx(e) {
@@ -240,14 +220,11 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let mut tiered = core::push_tiered(&c.log, &files, &al, !edit);
     // an edit is where a row goes stale: the agent is changing the code the
     // row describes, with both in front of it — the one moment to retire it.
-    // tier 0 only: an issue about a neighbouring file is not this edit's to
-    // close. Computed before the seen filter: a Read before the Edit already
-    // said the row, yet the edit still offers its retire.
-    let hint: Option<String> = if edit {
-        stale_hint(&c.log, &tiered, &files, &c.repo.root, &al)
-    } else {
-        None
-    };
+    // The candidates are the tier-0 rows (an issue about a neighbouring file
+    // is not this edit's to close) taken before the seen filter: a Read before
+    // the Edit already said the row, yet the edit still offers its retire.
+    let t0: Vec<(&core::Row, usize)> = if edit { tiered.clone() } else { vec![] };
+    let (mut told, mut hinted) = (HashSet::new(), HashSet::new());
     let mut seen = (!c.session.is_empty())
         .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
         .flatten();
@@ -257,30 +234,33 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     if let Some(f) = &mut seen {
         let mut old = String::new();
         let _ = f.read_to_string(&mut old);
+        (told, hinted) = read_seen(&old);
         let old: HashSet<&str> = old.lines().collect();
         if edit {
             record_in_context(&c, &tiered, &old, f);
         }
         tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     }
+    let ask = Ask {
+        log: &c.log,
+        root: &c.repo.root,
+        al: &al,
+        session: &c.session,
+        told: &told,
+        hinted: &hinted,
+    };
     let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     let sel = core::select(tiered, &focus, &policy);
     let notes = take_stashed(&c, &files);
+    let mut blobs = Blobs::new();
     // a hub file with no Now row still says its count line (PUSH_HUB_ROWS)
     if sel.shown.is_empty() && sel.omitted == 0 {
         // a retire for a row already in context, or a stashed line,
         // still gets said, even with no rows to join
-        let lines: Vec<String> = hint.clone().into_iter().chain(notes).collect();
-        if !lines.is_empty() {
-            let context = lines.join("\n");
-            let meta = hook_meta(&c, None, true);
-            record_usage_shadow(&c.client, event, &c.repo.root, &context, &[], &meta, None);
-            return Reply {
-                context: Some(context),
-                ..Reply::default()
-            };
-        }
-        return no();
+        let hint = edit
+            .then(|| edit_hint(&ask, &t0, &[], &mut blobs))
+            .flatten();
+        return say_only(&c, event, seen, hint, notes);
     }
     let (body, n) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
@@ -290,13 +270,15 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     );
     // usage counts only what was actually said — ids cut off never reached
     // any context, so stats must not count them. Same said rows feed the
-    // shadow split (PLAN-fael-file-hash chunk 3: usage-line only).
-    let (shown, shadow) = split_said(&sel, n, &c.repo.root, &al);
-    if let Some(mut f) = seen {
-        // only what fit the budget was said; the cut rows may push on a later read
-        let out: String = shown.iter().map(|id| format!("{id}\n")).collect();
-        let _ = f.write_all(out.as_bytes());
-    }
+    // shadow split on a read (PLAN-fael-file-hash chunk 3: usage-line only).
+    let (shown, shadow) = split_said(&sel, n, edit, &c.repo.root, &al, &mut blobs);
+    // ponytail: every edit push with rows names a row once per session
+    let said = &sel.shown[..n.min(sel.shown.len())];
+    let hint = edit
+        .then(|| edit_hint(&ask, &t0, said, &mut blobs))
+        .flatten();
+    // only what fit the budget was said; the cut rows may push on a later read
+    remember(seen, &shown, hint.as_ref());
     let usage = memory_line(&body, policy.budget).unwrap_or_default();
     // the cut goes on top too: the count lines sit under the rows, past where a reader stops
     let more = match sel.hidden(n).total() {
@@ -304,9 +286,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         h => format!(" ({n} of {})", n + h),
     };
     let context = format!("fael mem for {}{more}:\n{body}{usage}", files.join(", "));
-    // ponytail: every edit push with rows; once per session if it costs too much
     let context = match hint {
-        Some(h) => format!("{context}{h}\n"),
+        Some(h) => format!("{context}{}\n", h.text),
         None => context,
     };
     let context = match notes {
@@ -321,46 +302,13 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         &context,
         &shown,
         &meta,
-        Some(shadow),
+        shadow,
     );
     Reply {
         block: false,
         context: Some(context),
         notice: whisper(&c, &sel.shown[..n.min(sel.shown.len())], &files),
     }
-}
-
-/// PLAN-fael-visible-secretary chunk 5: decisions and issues about this very
-/// file (tier 0) already in the agent's context when it edited it. Its own
-/// 0-byte usage line under `in_context`, never `ids` (nothing was pushed).
-/// The seen list also holds rows the agent filed or found itself, so stats
-/// counts only ids an earlier push of the session handed over. Each id once
-/// per session: an `@<id>` line in the seen list (never a row id) marks it.
-fn record_in_context(
-    c: &super::protocol::Ctx,
-    tiered: &[(&core::Row, usize)],
-    seen: &HashSet<&str>,
-    f: &mut std::fs::File,
-) {
-    let ids: Vec<&str> = tiered
-        .iter()
-        .filter(|(r, tier)| {
-            *tier == 0
-                && matches!(r.kind.as_str(), "decision" | "issue")
-                && seen.contains(r.id.as_str())
-                && !seen.contains(format!("@{}", r.id).as_str())
-        })
-        .map(|(r, _)| r.id.as_str())
-        .collect();
-    if ids.is_empty() {
-        return;
-    }
-    let marks: String = ids.iter().map(|id| format!("@{id}\n")).collect();
-    let _ = f.write_all(marks.as_bytes());
-    let meta = hook_meta(c, None, false);
-    let mut row = usage_row(&c.client, IN_CONTEXT, &c.repo.root, "", &[], &meta);
-    row["in_context"] = ids.into();
-    super::asks::append_row(row);
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the user hears which decision or

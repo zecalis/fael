@@ -2,7 +2,7 @@
 //! files changed since the row was written, earns no hint when every such
 //! file still matches, and keeps the legacy hint for rows with no verdict.
 
-use super::{fael, json, repo, strip_fh};
+use super::{fael, fael_env, json, repo, strip_fh};
 use std::path::Path;
 
 /// An edit of `file` in a fresh session; returns the hook's stdout.
@@ -28,15 +28,32 @@ fn add(d: &Path, kind: &str, text: &str, files: &str) -> String {
     out.split_whitespace().next().unwrap().to_string()
 }
 
-/// Short ids the hint named (`changed since <short> was written`).
+/// Short ids the hint named (`changed since <short> was written`), several
+/// to a line when two rows share one.
 fn named(out: &str) -> Vec<&str> {
     out.lines()
-        .filter(|l| l.contains("changed since"))
-        .map(|l| {
-            let l = l.split("changed since ").nth(1).unwrap();
-            l.split(" was written").next().unwrap()
-        })
+        .flat_map(|l| l.split("changed since ").skip(1))
+        .map(|l| l.split(" was written").next().unwrap())
         .collect()
+}
+
+/// An edit that may say nothing: the hook's context, empty when it was silent.
+fn edit_or_silent(d: &Path, session: &str, file: &str) -> String {
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"{session}","tool_input":{{"file_path":{}}}}}"#,
+        json(d),
+        json(&d.join(file))
+    );
+    let (ok, out, err) = fael(d, &["hook", "edit", "--client", "claude"], &input);
+    assert!(ok, "{err}");
+    serde_json::from_str::<serde_json::Value>(&out)
+        .ok()
+        .and_then(|v| {
+            v["hookSpecificOutput"]["additionalContext"]
+                .as_str()
+                .map(String::from)
+        })
+        .unwrap_or_default()
 }
 
 #[test]
@@ -101,6 +118,10 @@ fn changed_hint_names_at_most_two() {
         .map(|id| shorts.iter().any(|s| id.starts_with(s)))
         .collect();
     assert_eq!(hit.iter().filter(|h| **h).count(), 2, "{shorts:?}\n{out}");
+    // two rows share one line and one command tail
+    let lines = out.lines().filter(|l| l.contains("changed since")).count();
+    assert_eq!(lines, 1, "{out}");
+    assert!(out.contains("`fael bump <id>`"), "{out}");
 }
 
 #[test]
@@ -146,4 +167,139 @@ fn rename_resolves_to_the_new_bytes() {
     let shorts = named(&out);
     assert_eq!(shorts.len(), 1, "{out}");
     assert!(id.starts_with(shorts[0]), "{out}\n{id}");
+}
+
+/// The hint names the stamped file that differs, not the file being edited.
+#[test]
+fn hint_names_the_file_that_changed() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/c.rs"), "// c v1\n").unwrap();
+    add(&d, "decision", "pair choice", "src/a.rs,src/c.rs");
+    std::fs::write(d.join("src/c.rs"), "// c v2\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    let hint = out
+        .lines()
+        .find(|l| l.contains("changed since"))
+        .expect(&out);
+    assert!(hint.starts_with("fael: src/c.rs changed since"), "{hint}");
+}
+
+/// A changed row does not hide the ready close of a no-verdict issue.
+#[test]
+fn changed_row_keeps_the_legacy_issue_close() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    add(&d, "issue", "old problem predates hashes", "src/a.rs");
+    strip_fh(&d, "predates hashes");
+    add(&d, "decision", "stamped module choice", "src/a.rs");
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    assert_eq!(named(&out).len(), 1, "{out}");
+    assert!(out.contains("done with one?"), "{out}");
+}
+
+/// A hub file past the row cap says only its count line: no row was said, so
+/// the hint has no row to name (a row never shown cannot be judged).
+#[test]
+fn hint_skips_rows_the_cap_cut() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    for i in 0..14 {
+        add(
+            &d,
+            "decision",
+            &format!("hub choice number {i}"),
+            "src/a.rs",
+        );
+    }
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    assert!(out.contains("0 of 14"), "{out}");
+    assert!(!out.contains("changed since"), "{out}");
+}
+
+/// A path renamed away and then recreated is read as itself, not through the
+/// rename to the file it became.
+#[test]
+fn recreated_path_is_read_as_itself() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    let id = add(&d, "decision", "split module choice", "src/a.rs");
+    std::fs::rename(d.join("src/a.rs"), d.join("src/b.rs")).unwrap();
+    let (ok, _, err) = fael(&d, &["mv", "src/a.rs", "src/b.rs"], "");
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// brand new a\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    let shorts = named(&out);
+    assert_eq!(shorts.len(), 1, "{out}");
+    assert!(id.starts_with(shorts[0]), "{out}\n{id}");
+    assert!(out.contains("fael: src/a.rs changed since"), "{out}");
+}
+
+/// An edit hint names a row once per session: the next edit of the same file
+/// would only repeat the ask. A new session asks again.
+#[test]
+fn a_named_row_is_not_named_twice_in_a_session() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    add(&d, "decision", "retry uses backoff here", "src/a.rs");
+    std::fs::write(d.join("src/a.rs"), "// v2\n").unwrap();
+    assert!(edit_or_silent(&d, "s1", "src/a.rs").contains("changed since"));
+    std::fs::write(d.join("src/a.rs"), "// v3\n").unwrap();
+    let again = edit_or_silent(&d, "s1", "src/a.rs");
+    assert!(!again.contains("changed since"), "{again}");
+    assert!(edit_or_silent(&d, "s2", "src/a.rs").contains("changed since"));
+}
+
+/// A row with no verdict gets its generic clause, and an open issue its ready
+/// close, once per session too.
+#[test]
+fn legacy_hints_are_said_once_per_session() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    add(&d, "decision", "old choice predates hashes", "src/a.rs");
+    add(&d, "issue", "old problem predates hashes", "src/a.rs");
+    strip_fh(&d, "predates hashes");
+    let first = edit_or_silent(&d, "s1", "src/a.rs");
+    assert!(first.contains("done with one?"), "{first}");
+    let again = edit_or_silent(&d, "s1", "src/a.rs");
+    assert!(!again.contains("done with one?"), "{again}");
+    assert!(!again.contains("a row above"), "{again}");
+}
+
+#[test]
+fn the_generic_clause_is_said_once_per_session() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    add(&d, "decision", "old choice predates hashes", "src/a.rs");
+    strip_fh(&d, "predates hashes");
+    assert!(edit_or_silent(&d, "s1", "src/a.rs").contains("a row above"));
+    assert!(!edit_or_silent(&d, "s1", "src/a.rs").contains("a row above"));
+}
+
+/// The agent that just filed a row is not asked whether it is still true after
+/// its own edit; another session is.
+#[test]
+fn a_row_this_session_filed_is_not_asked_about() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    let (ok, _, err) = fael_env(
+        &d,
+        &[
+            "add",
+            "decision",
+            "mine this session",
+            "--files",
+            "src/a.rs",
+        ],
+        "",
+        &[("CLAUDE_CODE_SESSION_ID", "s1")],
+    );
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    let mine = edit_or_silent(&d, "s1", "src/a.rs");
+    assert!(!mine.contains("changed since"), "{mine}");
+    let other = edit_or_silent(&d, "s2", "src/a.rs");
+    assert!(other.contains("changed since"), "{other}");
 }

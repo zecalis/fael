@@ -21,16 +21,20 @@ pub(crate) fn record_usage(
     ids: &[String],
     meta: &UsageMeta,
 ) {
-    asks::append_row(usage_row(client, event, repo, text, ids, meta));
+    record_usage_shadow(client, event, repo, text, ids, meta, None);
 }
 
-/// The read/edit push's shadow verdicts (PLAN-fael-file-hash chunk 3): the
-/// shown rows whose files changed since the row was written, and the shown
-/// rows whose files all still match. Usage-line only — `text` (the rendered
+/// The read push's shadow verdicts (PLAN-fael-file-hash chunk 3): the shown
+/// rows whose files changed since the row was written, and the shown rows
+/// whose files all still match. Usage-line only — `text` (the rendered
 /// context) is byte-identical with or without it, so `stats` counts and the
-/// chunk-4 gate read the same rows either way. `None` when nothing was said
-/// (no keys — there is nothing to verdict); `Some` always writes both keys,
-/// possibly empty, so the gate can count "each side ≥ 30" straight from JSON.
+/// chunk-4 gate read the same rows either way. `None` when there is no verdict
+/// to record: nothing was said, or an edit push (the hook runs after the
+/// write, so every file the agent just edited would read as changed — the
+/// label chunk 4 weighs sits on reads). `Some` always writes both keys,
+/// possibly empty, so the gate can count "each side ≥ 30" straight from JSON;
+/// `unchanged` is not `ids` minus `changed` — a row with no verdict is in
+/// neither.
 pub(crate) fn record_usage_shadow(
     client: &str,
     event: &str,

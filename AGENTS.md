@@ -18,6 +18,20 @@ and how often it was in front of the agent at an edit (`value.by_event`, `value.
 Never "saves tokens/rounds/time": fael cannot see the counterfactual.
 Full statement: `docs/architecture.md` §0.
 
+## Push lines — said once, silent when nothing is earned
+
+Any line a hook puts in front of the agent (a hint, an ask, a count, a notice) follows both
+rules, or it is dropped, not shipped "for now":
+
+* **Once per session.** Spend a key in the session's seen list (`hook/said.rs`: a row id, or
+  `~<key>` for a hint) when the line is said; skip it while the key is there. A new session
+  asks again; no session id means no memory and fails open. The edit hook runs after the
+  write, so the same words on every later edit are noise whatever their truth.
+* **Two tests per new line.** One where there is nothing to say and the push stays silent; one
+  where a second push in the same session does not repeat it — see `fael/tests/hook/changed_hint.rs`
+  (`unchanged_files_earn_no_hint`, `a_named_row_is_not_named_twice_in_a_session`). A line with
+  only a "says it" test does not merge.
+
 ## Memory — `.fael/log/`
 
 `.fael/log/` is fael's local, append-only memory, excluded from git. The old
