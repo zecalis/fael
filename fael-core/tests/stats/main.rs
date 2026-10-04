@@ -184,3 +184,28 @@ fn old_stop_block_rows_surface_nowhere() {
         assert!(v.get(k).is_none(), "{k}: {v}");
     }
 }
+
+#[test]
+fn carriers_never_count_as_rows_added() {
+    // a bump moves a row, a restore reverts an edge: neither files a row
+    let tmp = vec![PathBuf::from("/tmp")];
+    let parsed = parse(BASE_ROWS, Path::new("/work/state/usage.jsonl"), &tmp);
+    let row = fael_core::Row::new("me", "note", "kept", vec!["src/a.rs".into()]);
+    let mut ev = fael_core::Row::bumped("me", &row.id);
+    ev.id = fael_core::ulid();
+    let log = fael_core::Log {
+        rows: vec![row, ev],
+        ..Default::default()
+    };
+    let logs = HashMap::from([("/work/real".to_string(), log)]);
+    let s = aggregate(
+        &parsed,
+        &logs,
+        &Config::default(),
+        (1, 2, 3, 4).into(),
+        false,
+    );
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!(v["rounds"]["rows_added"], 1, "{v}");
+    assert_eq!(v["non_english_rows"]["rows"], 1, "{v}");
+}

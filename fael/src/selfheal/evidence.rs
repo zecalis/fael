@@ -164,15 +164,15 @@ pub(crate) fn auto_key(log: &core::Log, files: &[String]) -> Option<String> {
     }
 }
 
-/// Open rows: neither closed nor superseded. Self-heal only ever touches
-/// these — history stays history.
+/// Open rows: neither closed nor superseded, never a carrier (an event,
+/// not a row to replace). Self-heal only ever touches these.
 pub(crate) fn open_rows(log: &core::Log) -> Vec<&core::Row> {
-    let closed = core::closed(log);
-    let supd = core::superseded(log);
-    log.rows
-        .iter()
-        .filter(|r| !closed.contains(r.id.as_str()) && !supd.contains(r.id.as_str()))
-        .collect()
+    let hide: BTreeSet<&str> = core::closed(log)
+        .union(&core::superseded(log))
+        .copied()
+        .collect();
+    let open = |r: &&core::Row| !core::is_carrier_row(r) && !hide.contains(r.id.as_str());
+    log.rows.iter().filter(open).collect()
 }
 
 fn rel_eq(a: &str, b: &str) -> Rel {
