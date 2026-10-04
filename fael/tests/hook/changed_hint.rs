@@ -303,3 +303,23 @@ fn a_row_this_session_filed_is_not_asked_about() {
     let other = edit_or_silent(&d, "s2", "src/a.rs");
     assert!(other.contains("changed since"), "{other}");
 }
+
+/// Stamped at ~2 MiB (over the push path's 1 MiB read cap, under the 16 MiB
+/// stamp cap): the edit push does not hash it, so the row has no verdict and
+/// the generic hint stands — never "changed", never silence.
+#[test]
+fn file_over_the_push_cap_is_unknown_not_changed() {
+    let d = repo();
+    std::fs::write(
+        d.join("src/big.rs"),
+        "fn f() { let x = 1; }\n".repeat(100_000),
+    )
+    .unwrap();
+    add(&d, "decision", "big generated table choice", "src/big.rs");
+    let out = edit(&d, "s1", "src/big.rs");
+    assert!(!out.contains("changed since"), "{out}");
+    assert!(
+        out.contains("a row above the code now says or contradicts?"),
+        "{out}"
+    );
+}
