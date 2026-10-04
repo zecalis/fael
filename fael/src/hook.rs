@@ -30,6 +30,7 @@ mod markers;
 mod prompt;
 mod protocol;
 mod push;
+mod said;
 mod search;
 mod session;
 mod state;

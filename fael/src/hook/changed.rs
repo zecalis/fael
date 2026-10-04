@@ -130,26 +130,65 @@ pub(crate) fn split_said(
     (shown, (!edit).then(|| partition(&said, root, al, blobs)))
 }
 
+/// What an edit push knows about the session: rows already in the agent's
+/// context (`told`), rows an earlier edit hint already named (`hinted`, the
+/// `~<id>` lines of the seen list; `~*` is the generic clause), and who is
+/// asking (`session`, so its own rows are left out).
+pub(crate) struct Ask<'a> {
+    pub log: &'a core::Log,
+    pub root: &'a Path,
+    pub al: &'a core::Aliases,
+    pub session: &'a str,
+    pub told: &'a HashSet<String>,
+    pub hinted: &'a HashSet<String>,
+}
+
+/// The generic clause's key in the seen list (no row id starts with `*`).
+const GENERIC: &str = "*";
+
+/// The hint text and the keys it spent: the caller appends `~<key>` for each,
+/// so the same row is never named twice in a session.
+pub(crate) struct Hint {
+    pub text: String,
+    pub spent: Vec<String>,
+}
+
+/// The seen list split into the ids said and the keys already hinted.
+/// `@<id>` lines (in-context at edit) are neither.
+pub(crate) fn read_seen(old: &str) -> (HashSet<String>, HashSet<String>) {
+    let (mut told, mut hinted) = (HashSet::new(), HashSet::new());
+    for l in old.lines() {
+        if let Some(k) = l.strip_prefix('~') {
+            hinted.insert(k.to_string());
+        } else if !l.starts_with('@') {
+            told.insert(l.to_string());
+        }
+    }
+    (told, hinted)
+}
+
 /// The tier-0 rows of an edit push the agent has in front of it — said now
-/// (`said`) or by an earlier push this session (`told`) — through `stale_hint`.
-/// A row cut by the cap or the budget was never said, so it is never named.
+/// (`said`) or by an earlier push this session (`ask.told`) — through
+/// `stale_hint`. A row cut by the cap or the budget was never said, so it is
+/// never named, and neither is a row this very session filed: the agent just
+/// wrote it, so asking whether it is still true after its own edit says
+/// nothing new.
 pub(crate) fn edit_hint(
-    log: &core::Log,
+    ask: &Ask,
     t0: &[(&core::Row, usize)],
-    told: &HashSet<String>,
     said: &[&core::Row],
-    root: &Path,
-    al: &core::Aliases,
     blobs: &mut Blobs,
-) -> Option<String> {
+) -> Option<Hint> {
     let rows: Vec<&core::Row> = t0
         .iter()
         .filter(|(r, tier)| {
-            *tier == 0 && (told.contains(&r.id) || said.iter().any(|s| s.id == r.id))
+            *tier == 0
+                && (ask.told.contains(&r.id) || said.iter().any(|s| s.id == r.id))
+                && (ask.session.is_empty() || r.session() != Some(ask.session))
         })
         .map(|(r, _)| *r)
         .collect();
-    stale_hint(log, &rows, root, al, blobs)
+    stale_hint(ask, &rows, blobs)
 }
 
 /// The edit hint over the tier-0 rows already in the agent's context: rows
@@ -157,70 +196,85 @@ pub(crate) fn edit_hint(
 /// with the changed file and the retire ready to run); rows whose files all
 /// match earn no hint; rows with no verdict keep the legacy hint (named open
 /// issues, else the generic clause) — beside the named rows only for open
-/// issues. `None` when no hint is earned.
+/// issues. A row or clause said by an earlier edit hint this session is not
+/// said again. `None` when no hint is earned.
 ///
 /// The edit hook runs after the write (PostToolUse), so "changed since the row
 /// was written" includes the edit just made: a row filed before it is the one
-/// to re-check.
-fn stale_hint(
-    log: &core::Log,
-    rows: &[&core::Row],
-    root: &Path,
-    al: &core::Aliases,
-    blobs: &mut Blobs,
-) -> Option<String> {
+/// to re-check — once, since the next edit would only repeat the same ask.
+fn stale_hint(ask: &Ask, rows: &[&core::Row], blobs: &mut Blobs) -> Option<Hint> {
     let mut changed_rows: Vec<(&core::Row, String)> = vec![];
     let mut unknown_rows: Vec<&core::Row> = vec![];
     for r in rows {
-        match verdict(r, root, al, blobs) {
-            Verdict::Changed(f) => changed_rows.push((r, f)),
-            Verdict::Same => {}
+        match verdict(r, ask.root, ask.al, blobs) {
+            Verdict::Changed(f) if !ask.hinted.contains(&r.id) => changed_rows.push((r, f)),
+            Verdict::Changed(_) | Verdict::Same => {}
             Verdict::Unknown => unknown_rows.push(r),
         }
     }
     changed_rows.truncate(2);
-    if !changed_rows.is_empty() {
-        unknown_rows.retain(|r| r.kind == "issue");
-    }
+    let named = !changed_rows.is_empty();
     let mut lines = vec![];
-    if !changed_rows.is_empty() {
-        lines.push(changed_hint(log, &changed_rows));
+    let mut spent: Vec<String> = vec![];
+    if named {
+        lines.push(changed_hint(ask.log, &changed_rows));
+        spent.extend(changed_rows.iter().map(|(r, _)| r.id.clone()));
     }
-    if !unknown_rows.is_empty() {
-        lines.push(legacy_hint(log, &unknown_rows));
+    let issues: Vec<&core::Row> = unknown_rows
+        .iter()
+        .filter(|r| r.kind == "issue" && !ask.hinted.contains(&r.id))
+        .take(2)
+        .copied()
+        .collect();
+    if !issues.is_empty() {
+        lines.push(close_hint(ask.log, &issues, !named));
+        spent.extend(issues.iter().map(|r| r.id.clone()));
+        if !named {
+            spent.push(GENERIC.to_string());
+        }
+    } else if !named && !unknown_rows.is_empty() && !ask.hinted.contains(GENERIC) {
+        lines.push(STALE_HINT.to_string());
+        spent.push(GENERIC.to_string());
     }
-    (!lines.is_empty()).then(|| lines.join("\n"))
+    (!lines.is_empty()).then(|| Hint {
+        text: lines.join("\n"),
+        spent,
+    })
 }
 
-/// `src/a.rs changed since <id> was written` — one line per row, each with
-/// the bump, the supersede re-file and the close ready to run.
+/// `src/a.rs changed since <id> was written`, each with the bump, the
+/// supersede re-file and the close ready to run. Two rows share one line and
+/// one command tail (`<id>` stands for either) — the same words said once.
 fn changed_hint(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
     let ab = core::abbrev(log);
-    rows.iter()
-        .map(|(r, file)| {
-            let s = ab.short(&r.id);
-            format!(
-                "fael: {file} changed since {s} was written — still true? `fael bump {s}` · wrong now? re-file with `--supersedes {s}` · done? `fael close {s} \"now in <file>\"`"
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let said: Vec<String> = rows
+        .iter()
+        .map(|(r, file)| format!("{file} changed since {} was written", ab.short(&r.id)))
+        .collect();
+    let s = match rows {
+        [(r, _)] => ab.short(&r.id).to_string(),
+        _ => "<id>".to_string(),
+    };
+    format!(
+        "fael: {} — still true? `fael bump {s}` · wrong now? re-file with `--supersedes {s}` · done? `fael close {s} \"now in <file>\"`",
+        said.join(" · ")
+    )
 }
 
-/// The pre-hash hint, kept for rows with no verdict: open issues in context
-/// get the ready close (at most two), anything else the generic clause.
-fn legacy_hint(log: &core::Log, rows: &[&core::Row]) -> String {
-    let issues: Vec<&&core::Row> = rows.iter().filter(|r| r.kind == "issue").take(2).collect();
-    if issues.is_empty() {
-        return STALE_HINT.to_string();
-    }
+/// The ready close for open issues with no verdict (at most two). `tail`
+/// adds the generic ask for any other row — left off when named rows beside
+/// it already carry the commands.
+fn close_hint(log: &core::Log, issues: &[&core::Row], tail: bool) -> String {
     let ab = core::abbrev(log);
     let calls: Vec<String> = issues
         .iter()
         .map(|r| format!("fael close {} \"<why>\"", ab.short(&r.id)))
         .collect();
+    let calls = calls.join(" · ");
+    if !tail {
+        return format!("fael: done with one? {calls}");
+    }
     format!(
-        "fael: done with one? {} — any other row the code now says or contradicts: `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`",
-        calls.join(" · ")
+        "fael: done with one? {calls} — any other row the code now says or contradicts: `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`"
     )
 }
