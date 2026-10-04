@@ -6,6 +6,7 @@ use super::capture::{Capture, capture};
 use super::metrics::{added_since, ask_totals, non_english_share};
 use super::parse::Parsed;
 use super::retire::{Retired, retired};
+use super::unused::{UnusedRow, unused};
 use super::value::{Value, value};
 use crate::{Config, Log, closed, rfc3339, superseded};
 use serde::Serialize;
@@ -96,6 +97,9 @@ pub struct Stats {
     pub retired: Retired,
     /// The value line `fael stats` prints first (`value.rs`).
     pub value: Value,
+    /// Open decisions/issues pushed ≥ `UNUSED_PUSHES` times, never in context
+    /// at an edit — for a human to close or bump (`unused.rs`).
+    pub unused_rows: Vec<UnusedRow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -161,6 +165,7 @@ pub fn aggregate(
         capture,
         retired,
         value,
+        unused_rows: unused(parsed, logs),
         rows: with_rows.then(|| row_statuses(&parsed.by_id, &parsed.id_repos, logs)),
     }
 }

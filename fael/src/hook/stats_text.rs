@@ -151,6 +151,21 @@ fn short_list(items: &[String], pre: &str, post: &str) -> String {
         format!("{pre}{}{post}", items.join(", "))
     }
 }
+
+/// Open rows pushed over and over, never in context at an edit — the human's
+/// to-do (report only: what a push says does not change).
+fn print_unused(rows: &[core::stats::UnusedRow]) {
+    for r in rows.iter().take(10) {
+        println!(
+            "  unused {} {}: pushed ×{}, never in context at an edit — fael close {} \"<why>\" · or re-file: fael add {} \"<text>\" --files <files> --supersedes {}",
+            r.kind, r.id, r.pushes, r.id, r.kind, r.id
+        );
+    }
+    if rows.len() > 10 {
+        println!("  … +{} more (--json: unused_rows)", rows.len() - 10);
+    }
+}
+
 fn print_capture(c: &core::stats::Capture) {
     if c.reply_lines + c.manual_adds + c.sessions_with_edits == 0 {
         return;
@@ -193,9 +208,7 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     for (k, c) in cl {
         println!("  client {k}: ×{} (~{} tokens)", c.events, c.est_tokens);
     }
-    for t in s.top_rows.iter().take(10) {
-        println!("  row {}: pushed ×{}", t.id, t.pushes);
-    }
+    print_unused(&s.unused_rows);
     if let Some(rows) = &s.rows {
         for r in rows {
             println!(

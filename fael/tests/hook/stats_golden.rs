@@ -46,7 +46,7 @@ fn stats_text_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2\n  row B: pushed ×2\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -61,7 +61,7 @@ fn stats_rows_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2\n  row B: pushed ×2\n  row A: pushed ×2 (unknown)\n  row B: pushed ×2 (unknown)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown)\n  row B: pushed ×2 (unknown)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -89,6 +89,7 @@ fn stats_json_matches_golden_values() {
             "non_english_rows": {"rows": 0, "non_english": 0},
             "capture": {"reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
+            "unused_rows": [],
             "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0}},
         }),
         "{out}"
