@@ -267,3 +267,28 @@ fn a_bump_on_the_head_of_a_legacy_chain_keeps_its_id_and_closes_the_chain() {
     let closed = closed(&l);
     assert!(closed.contains(a.id.as_str()) && closed.contains(b.id.as_str()));
 }
+
+#[test]
+fn a_bump_always_sorts_after_the_rows_last_event() {
+    // two bumps in one ms used to order by the ULID's random half; an event
+    // stamped ahead (clock skew) stands in for that tie deterministically
+    let (dir, cfg, st) = setup("bump-tie");
+    let r = issue(&dir, &cfg, &st, "hot", None);
+    let mut ahead = Row::bumped("tester-0000", &r.id);
+    ahead.id = ulid_at(now_ms() + 60_000);
+    ahead.to = Some("vela".into());
+    append(&dir, &ahead, false).unwrap();
+    let up = BumpOpts {
+        to: Some("ploy".into()),
+        ..keep()
+    };
+    let b = bump(&dir, &cfg, &st, &r.id, up).unwrap();
+    assert_eq!(b.to.as_deref(), Some("ploy"));
+    let l = view(&dir);
+    let listed = find(&l, &Filter::default());
+    assert_eq!(
+        listed[0].to.as_deref(),
+        Some("ploy"),
+        "the newest bump wins"
+    );
+}
