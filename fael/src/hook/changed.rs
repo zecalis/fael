@@ -187,11 +187,19 @@ pub(crate) fn edit_hint(
         .filter(|(r, tier)| {
             *tier == 0
                 && (ask.told.contains(&r.id) || said.iter().any(|s| s.id == r.id))
-                && (ask.session.is_empty() || r.session() != Some(ask.session))
+                && (ask.session.is_empty() || !own_row(r, ask.session))
         })
         .map(|(r, _)| *r)
         .collect();
     stale_hint(ask, &rows, blobs)
+}
+
+/// Did the hook's session file `r`? Claude keys the hook by its transcript
+/// path while the row carries the bare session id — the path's stem — so
+/// either counts (as stats attribute it, 01M3V9QAN).
+fn own_row(r: &core::Row, session: &str) -> bool {
+    r.session()
+        .is_some_and(|s| s == session || Path::new(session).file_stem().is_some_and(|f| *f == *s))
 }
 
 /// The edit hint over the tier-0 rows already in the agent's context: rows
