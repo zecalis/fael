@@ -33,12 +33,16 @@ fn seed(d: &Path, n: usize) {
 }
 
 fn read(d: &Path, session: Option<&str>) -> (bool, String) {
+    read_file(d, session, "src/a.rs")
+}
+
+fn read_file(d: &Path, session: Option<&str>, file: &str) -> (bool, String) {
     let input = match session {
         Some(s) => format!(
-            r#"{{"cwd":{},"session":"{s}","files":["src/a.rs"]}}"#,
+            r#"{{"cwd":{},"session":"{s}","files":["{file}"]}}"#,
             json(d)
         ),
-        None => format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(d)),
+        None => format!(r#"{{"cwd":{},"files":["{file}"]}}"#, json(d)),
     };
     let (ok, out, _) = fael(d, &["hook", "read"], &input);
     (ok, out)
@@ -96,12 +100,15 @@ fn read_push_hub_file_says_only_now_rows_and_the_count() {
         out.contains("… +15 more about this file — fael find --files src/a.rs"),
         "{out}"
     );
-    // no Now row left (the issue was said): the count line still says itself
+    // the count line is said once per file per session (01M42F5B): with no
+    // Now row left (the issue was said) and the count told, the push is silent
+    let (ok, first) = read(&d, Some("hub1"));
+    assert!(
+        ok && first.contains("… +15 more about this file"),
+        "{first}"
+    );
     let (ok, again) = read(&d, Some("hub1"));
-    assert!(ok, "{again}");
-    let (ok, again) = read(&d, Some("hub1"));
-    assert!(ok && shown(&again) == 0, "{again}");
-    assert!(again.contains("… +15 more about this file"), "{again}");
+    assert!(ok && !again.contains("context"), "{again}");
 }
 
 #[test]
@@ -235,4 +242,72 @@ fn read_push_drops_shared_key_rows_outside_focus() {
     assert!(!out.contains("#auth:session —"), "{out}");
     let (ok, found, _) = fael(&d, &["find", "--key", "auth:session"], "");
     assert!(ok && found.contains("elsewhere"), "{found}");
+}
+
+/// PLAN-fael-say-gate chunk 2: rows that all fit name no cut, so no count line.
+#[test]
+fn count_line_says_nothing_without_a_cut() {
+    let d = repo();
+    seed(&d, 2);
+    let (ok, out) = read(&d, Some("c0"));
+    assert!(ok && shown(&out) == 3, "{out}");
+    assert!(!out.contains("more about"), "{out}");
+}
+
+/// PLAN-fael-say-gate chunk 2 (01M42F5B): the count line is said once per
+/// file per session; a new session hears it again.
+#[test]
+fn count_line_is_said_once_per_file_per_session() {
+    let d = repo();
+    seed(&d, 15);
+    let (_, first) = read(&d, Some("c1"));
+    assert!(first.contains("… +15 more about this file"), "{first}");
+    let (_, again) = read(&d, Some("c1"));
+    assert!(!again.contains("more about"), "{again}");
+    let (_, other) = read(&d, Some("c2"));
+    assert!(other.contains("… +15 more about this file"), "{other}");
+}
+
+/// A decision on `file` whose title is shorter than its text: it has a body.
+fn titled(d: &Path, file: &str) {
+    std::fs::write(d.join(file), "// x\n").unwrap();
+    let (ok, _, err) = fael(
+        d,
+        &[
+            "add",
+            "decision",
+            "the cache keys include the tenant so two tenants never share a row",
+            "--title",
+            "cache keys include the tenant",
+            "--files",
+            file,
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+}
+
+/// PLAN-fael-say-gate chunk 2: rows with no body earn no `bodies:` line.
+#[test]
+fn bodies_line_says_nothing_without_a_body() {
+    let d = repo();
+    seed(&d, 1);
+    let (ok, out) = read(&d, Some("b0"));
+    assert!(ok && shown(&out) == 2, "{out}");
+    assert!(!out.contains("bodies:"), "{out}");
+}
+
+/// PLAN-fael-say-gate chunk 2 (01M42F5B): the `bodies:` line is said once per
+/// session, whatever file the next row with a body sits on.
+#[test]
+fn bodies_line_is_said_once_per_session() {
+    let d = repo();
+    titled(&d, "src/a.rs");
+    titled(&d, "src/b.rs");
+    let (_, a) = read_file(&d, Some("b1"), "src/a.rs");
+    assert!(a.contains("bodies: fael find <id>"), "{a}");
+    let (_, b) = read_file(&d, Some("b1"), "src/b.rs");
+    assert!(shown(&b) == 1 && !b.contains("bodies:"), "{b}");
+    let (_, b) = read_file(&d, Some("b2"), "src/b.rs");
+    assert!(b.contains("bodies: fael find <id>"), "{b}");
 }

@@ -1,5 +1,5 @@
-//! The session-start event: kickoff rows for the repo plus the report line,
-//! and the one-line warning when `.fael/log` is gitignored by mistake.
+//! The session-start event: kickoff rows for the repo, and the one-line
+//! warning when `.fael/log` is gitignored by mistake.
 
 use super::asks::hook_meta;
 use super::focus;
@@ -9,18 +9,6 @@ use super::state::{head_branch, prune_sessions, seen_path, session_key, state_di
 use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
-
-/// The one line that makes agents report (decision mugea7lt) — the hook only
-/// catches what an agent says, this is what gets it said. Same line in the MCP
-/// `add` description and the installed skill.
-const ISSUE_LINE: &str = "- fael: saw something broken, inconsistent or likely to break? \
-`fael add issue \"<what>\" --files <path>` right there — do not wait for the end of the task";
-
-/// The id rule (ids:integrity) — an id typed from memory once survived end to
-/// end, "verified" by a find that only matched text. Same rule in the
-/// installed skill and `fael find --help`.
-const ID_LINE: &str = "- fael: never type an id from memory — verified only after \
-this session's `fael find <id>` printed it as `- [<id>]`, else look it up by key/text first";
 
 pub(crate) fn session_start(e: &Event) -> Reply {
     let no = Reply::default;
@@ -115,17 +103,14 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let said = &shown[..n.min(shown.len())];
     let ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    // the rows, the rules (any rows, or an adopted repo), then each warning
-    let rules = adopted || !body.is_empty();
+    // the rows, then each warning — the report and id rules live in the
+    // skill, paid once per session already (PLAN-fael-say-gate chunk 2)
     let mut out = Outbox::open(None);
     out.say(Line {
         kind: Kind::Brief { ids: ids.clone() },
         text: body,
         action: None,
     });
-    if rules {
-        out.say(Line::notice(format!("{ISSUE_LINE}\n{ID_LINE}\n")));
-    }
     for warn in warnings(&c.repo, adopted) {
         out.say(Line::notice(format!("{warn}\n")));
     }

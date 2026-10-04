@@ -44,6 +44,18 @@ fn all() -> Vec<Line> {
             "fael: the prompt names open key(s) auth:login — fael find --key <key>",
             Some("fael find --key <key>"),
         ),
+        line(
+            Kind::Count {
+                files: "src/hub.rs".into(),
+            },
+            "… +6 more about this file — fael find --files src/hub.rs\n",
+            Some("fael find --files"),
+        ),
+        line(
+            Kind::Bodies,
+            "bodies: fael find <id> (MCP: find id=<id>)\n",
+            Some("fael find <id>"),
+        ),
         Line::notice("fael: a stashed line\n".into()),
     ]
 }
@@ -54,7 +66,9 @@ fn slot(k: &Kind) -> usize {
         Kind::Brief { .. } => 1,
         Kind::Ask { .. } => 2,
         Kind::Pointer { .. } => 3,
-        Kind::Notice => 4,
+        Kind::Count { .. } => 4,
+        Kind::Bodies => 5,
+        Kind::Notice => 6,
     }
 }
 

@@ -3,7 +3,7 @@
 //! and say each row once per session.
 
 use super::asks::hook_meta;
-use super::changed::{Ask, Blobs, Hint, edit_hint, read_seen, split_said};
+use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
@@ -113,31 +113,36 @@ fn counts(sel: &core::Selection, rendered: usize, files: &[String]) -> Vec<Strin
 }
 
 /// Render the selected rows with the token budget — the hard cap after the
-/// row cap — swapping render's budget cut line for the count lines above
+/// row cap — dropping render's budget cut line for the count lines above
 /// (render itself is untouched, so find keeps its own cut line). Returns the
-/// tagged body and how many rows were actually said (usage counts only those).
+/// tagged rows, how many rows were actually said (usage counts only those),
+/// and render's `bodies:` line, said on its own.
 fn cut_body(
     body: String,
     sel: &core::Selection,
     files: &[String],
     tags: &crate::find::branches::BranchMap,
-) -> (String, usize) {
+) -> (String, usize, Option<String>) {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let mut row = 0; // render keeps `sel.shown` order: the k-th row line is shown[k]
-    let mut lines: Vec<String> = body
-        .lines()
-        .filter(|l| !l.starts_with("… +"))
-        .map(|l| {
-            let l = super::also::drop_touched(l, files);
-            if !l.starts_with("- [") {
-                return l;
-            }
+    let mut bodies = None;
+    let mut out = String::new();
+    for l in body.lines().filter(|l| !l.starts_with("… +")) {
+        if l.starts_with("bodies: ") {
+            bodies = Some(format!("{l}\n"));
+            continue;
+        }
+        let l = super::also::drop_touched(l, files);
+        let l = if l.starts_with("- [") {
             row += 1;
             super::also::label(&l, sel.tier(row - 1))
-        })
-        .collect();
-    lines.extend(counts(sel, n, files));
-    (crate::find::branches::tag(lines.join("\n") + "\n", tags), n)
+        } else {
+            l
+        };
+        out.push_str(&l);
+        out.push('\n');
+    }
+    (crate::find::branches::tag(out, tags), n, bodies)
 }
 
 /// A `scheme:ref` anchor (opaque, never a filesystem path) — the same rule
@@ -249,14 +254,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let sel = core::select(tiered, &focus, &policy);
     let notes = take_stashed(&c, &files);
     let mut blobs = Blobs::new();
-    // a hub file with no Now row still says its count line (PUSH_HUB_ROWS)
-    if sel.shown.is_empty() && sel.omitted == 0 {
-        let hint = edit
-            .then(|| edit_hint(&ask, &t0, &[], &mut blobs))
-            .flatten();
-        return say_alone(&c, event, out, hint, notes);
-    }
-    let (body, n) = cut_body(
+    let (body, n, bodies) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
         &sel,
         &files,
@@ -268,74 +266,100 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let (shown, shadow) = split_said(&sel, n, edit, &c.repo.root, &al, &mut blobs);
     // ponytail: every edit push with rows names a row once per session
     let said = &sel.shown[..n.min(sel.shown.len())];
+    // a retire for a row already in context, or a stashed line, still gets
+    // said with no rows to join
     let hint = edit
         .then(|| edit_hint(&ask, &t0, said, &mut blobs))
         .flatten();
-    let usage = memory_line(&body, policy.budget).unwrap_or_default();
+    say_rows(
+        &mut out,
+        &sel,
+        &files,
+        (body, n, bodies),
+        &shown,
+        policy.budget,
+    );
+    if let Some(h) = hint {
+        out.say(Line {
+            kind: Kind::Ask { ids: h.spent },
+            text: format!("{}\n", h.text),
+            // every form of the hint offers it
+            action: Some("fael close".into()),
+        });
+    }
+    if let Some(n) = notes {
+        out.say(Line::notice(format!("{n}\n")));
+    }
+    let mut r = out.reply();
+    if let Some(context) = r.context() {
+        let meta = hook_meta(&c, None, true);
+        record_usage_shadow(
+            &c.client,
+            event,
+            &c.repo.root,
+            context,
+            &shown,
+            &meta,
+            // no row said, nothing to split
+            shadow.filter(|_| n > 0),
+        );
+    }
+    r.notice = whisper(&c, said, &files);
+    r
+}
+
+/// The rows under their header, then the `bodies:` line and the count
+/// lines — each said once per session (01M42F5B). Only what fit the budget
+/// was said; the cut rows may push on a later read. A hub file with no Now
+/// row says its count line under the header alone (PUSH_HUB_ROWS), or
+/// nothing once this session was told.
+fn say_rows(
+    out: &mut Outbox,
+    sel: &core::Selection,
+    files: &[String],
+    (body, n, bodies): (String, usize, Option<String>),
+    shown: &[String],
+    budget: usize,
+) {
     // the cut goes on top too: the count lines sit under the rows, past where a reader stops
     let more = match sel.hidden(n).total() {
         0 => String::new(),
         h => format!(" ({n} of {})", n + h),
     };
-    // only what fit the budget was said; the cut rows may push on a later read
-    out.say(Line {
-        kind: Kind::Row { ids: shown.clone() },
-        text: format!("fael mem for {}{more}:\n{body}{usage}", files.join(", ")),
-        action: None,
-    });
-    if let Some(h) = hint {
-        out.say(ask_line(h, "\n"));
+    let header = format!("fael mem for {}{more}:\n", files.join(", "));
+    // with nothing selected or omitted there is no cut to name
+    let lines = if sel.shown.is_empty() && sel.omitted == 0 {
+        vec![]
+    } else {
+        counts(sel, n, files)
+    };
+    let mut count = Line {
+        kind: Kind::Count {
+            files: files.join(","),
+        },
+        text: lines.iter().map(|l| format!("{l}\n")).collect(),
+        action: Some("fael find --".into()),
+    };
+    if n > 0 {
+        let usage = memory_line(&body, budget).unwrap_or_default();
+        out.say(Line {
+            kind: Kind::Row {
+                ids: shown.to_vec(),
+            },
+            text: format!("{header}{body}{usage}"),
+            action: None,
+        });
+    } else if !count.text.is_empty() {
+        count.text = format!("{header}{}", count.text);
     }
-    if let Some(n) = notes {
-        out.say(Line::notice(format!("\n{n}")));
+    if let Some(text) = bodies {
+        out.say(Line {
+            kind: Kind::Bodies,
+            text,
+            action: Some("fael find <id>".into()),
+        });
     }
-    let mut r = out.reply();
-    let context = r.context().unwrap_or_default();
-    let meta = hook_meta(&c, None, true);
-    record_usage_shadow(
-        &c.client,
-        event,
-        &c.repo.root,
-        context,
-        &shown,
-        &meta,
-        shadow,
-    );
-    r.notice = whisper(&c, said, &files);
-    r
-}
-
-/// A retire for a row already in context, or a stashed line, still gets
-/// said with no rows to join.
-fn say_alone(
-    c: &super::protocol::Ctx,
-    event: &str,
-    mut out: Outbox,
-    hint: Option<Hint>,
-    notes: Option<String>,
-) -> Reply {
-    let sep = if hint.is_some() { "\n" } else { "" };
-    if let Some(h) = hint {
-        out.say(ask_line(h, ""));
-    }
-    if let Some(n) = notes {
-        out.say(Line::notice(format!("{sep}{n}")));
-    }
-    let r = out.reply();
-    if let Some(said) = r.context() {
-        let meta = hook_meta(c, None, true);
-        record_usage_shadow(&c.client, event, &c.repo.root, said, &[], &meta, None);
-    }
-    r
-}
-
-/// The edit hint as an `Ask` line: every form of it offers `fael close`.
-fn ask_line(h: Hint, end: &str) -> Line {
-    Line {
-        kind: Kind::Ask { ids: h.spent },
-        text: format!("{}{end}", h.text),
-        action: Some("fael close".into()),
-    }
+    out.say(count);
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the user hears which decision or

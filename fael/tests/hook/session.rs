@@ -97,7 +97,7 @@ fn session_start_decisions_opt_in() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    // zero open issues + default config = no count line, only the report line
+    // zero open issues + default config = no count line
     let (ok, _, err) = fael(
         &d,
         &[
@@ -354,11 +354,12 @@ fn session_start_lists_mine_then_hot_urgent() {
     assert!(mine < hot && hot < count, "{out}");
 }
 
-/// PLAN-fael-id-refs chunk-4 (ids:integrity): the agent rule ships in the
-/// session-start text and in the help — an id is verified only after find
-/// printed it, never typed from memory.
+/// PLAN-fael-id-refs chunk-4 (ids:integrity): an id is verified only after
+/// find printed it, never typed from memory. PLAN-fael-say-gate chunk 2: the
+/// rule rides the skill, the help and the reject of an id that does not
+/// exist — never the session-start text, and neither does the report rule.
 #[test]
-fn session_start_states_the_id_rule() {
+fn id_rule_rides_the_reject_not_the_session_start() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let (ok, _, err) = fael(
@@ -369,7 +370,12 @@ fn session_start_states_the_id_rule() {
     assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{}}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok && out.contains("never type an id from memory"), "{out}");
+    assert!(ok && out.contains("1 open issue"), "{out}");
+    for rule in ["never type an id from memory", "saw something broken"] {
+        assert!(!out.contains(rule), "{rule} in:\n{out}");
+    }
+    let (ok, _, err) = fael(&d, &["close", "01ZZZZZZZZ", "done"], "");
+    assert!(!ok && err.contains("never from memory"), "{err}");
     let (ok, out, _) = fael(&d, &["find", "--help"], "");
     assert!(ok && out.contains("never type one from memory"), "{out}");
     let (ok, out, _) = fael(&d, &["doctor", "--help"], "");

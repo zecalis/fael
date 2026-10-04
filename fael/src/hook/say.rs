@@ -68,6 +68,10 @@ pub(crate) enum Kind {
     Ask { ids: Vec<String> },
     /// The prompt hint: open keys the prompt names.
     Pointer { keys: Vec<String> },
+    /// A push's count lines (`… +N more — fael find …`): once per file set.
+    Count { files: String },
+    /// `bodies: fael find <id> …` under a push whose rows have bodies.
+    Bodies,
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -95,7 +99,9 @@ pub(crate) struct Policy {
 pub(crate) fn policy(k: &Kind) -> Policy {
     let (once, needs_action) = match k {
         Kind::Row { .. } => (Once::Key, false),
-        Kind::Ask { .. } | Kind::Pointer { .. } => (Once::Key, true),
+        Kind::Ask { .. } | Kind::Pointer { .. } | Kind::Count { .. } | Kind::Bodies => {
+            (Once::Key, true)
+        }
         Kind::Brief { .. } | Kind::Notice => (Once::Event, false),
     };
     Policy { once, needs_action }
@@ -108,6 +114,8 @@ impl Kind {
             Kind::Row { ids } | Kind::Brief { ids } => ids.clone(),
             Kind::Ask { ids } => ids.iter().map(|i| format!("~{i}")).collect(),
             Kind::Pointer { keys } => keys.clone(),
+            Kind::Count { files } => vec![format!("~count:{files}")],
+            Kind::Bodies => vec!["~bodies".into()],
             Kind::Notice => vec![],
         }
     }
@@ -168,6 +176,15 @@ impl Outbox {
         self.spent.iter().any(|k| k == key) || self.seen.lines().any(|l| l == key)
     }
 
+    /// False when a line of `kind` would be dropped for its spent keys.
+    fn fresh(&self, kind: &Kind) -> bool {
+        let keys = kind.keys();
+        policy(kind).once != Once::Key
+            || self.file.is_none()
+            || keys.is_empty()
+            || keys.iter().any(|k| !self.is_spent(k))
+    }
+
     /// Add `l`, unless it is empty, lacks the command its kind needs, or every
     /// key it would spend is already spent.
     pub(crate) fn say(&mut self, l: Line) {
@@ -176,12 +193,16 @@ impl Outbox {
         if l.text.is_empty() || (p.needs_action && !acted) {
             return;
         }
+        if !self.fresh(&l.kind) {
+            return;
+        }
         if p.once == Once::Key && self.file.is_some() {
-            let all = l.kind.keys();
-            let new: Vec<String> = all.iter().filter(|k| !self.is_spent(k)).cloned().collect();
-            if new.is_empty() && !all.is_empty() {
-                return;
-            }
+            let new: Vec<String> = l
+                .kind
+                .keys()
+                .into_iter()
+                .filter(|k| !self.is_spent(k))
+                .collect();
             self.spent.extend(new);
         }
         self.text.push_str(&l.text);

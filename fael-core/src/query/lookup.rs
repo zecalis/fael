@@ -21,7 +21,7 @@ pub fn resolve<'a>(log: &'a Log, prefix: &str) -> Result<&'a Row, String> {
     match hits.as_slice() {
         [r] => Ok(r),
         [] => Err(format!(
-            "rejected: no row with id {prefix:?} — copy the id from fael find"
+            "rejected: no row with id {prefix:?} — copy the id from fael find (this session's output, never from memory)"
         )),
         _ => Err(format!(
             "rejected: id {prefix:?} matches {} rows ({}) — use more characters",
