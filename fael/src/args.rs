@@ -102,6 +102,20 @@ impl Args {
             .collect()
     }
 
+    /// `--revisit` on `add`/`bump` always needs a value — bare `--revisit` only
+    /// filters on `find`. Shared by the CLI entry and `bump` so the two never
+    /// drift apart.
+    pub(crate) fn revisit_value(&self) -> Result<Option<String>, String> {
+        match (self.has("revisit"), self.one("revisit")) {
+            (false, _) => Ok(None),
+            (true, Some(v)) => Ok(Some(v)),
+            (true, None) => Err(
+                "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
+                    .into(),
+            ),
+        }
+    }
+
     /// `--limit N` / `--offset M` for pull paging (chunk 5): at most N ranked
     /// rows, skipping M first. Offset without limit pages budget cuts too.
     pub(crate) fn paging(&self) -> Result<(Option<usize>, usize), String> {

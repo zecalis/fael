@@ -21,20 +21,6 @@ pub(crate) struct AddOpts {
     pub force: bool,
 }
 
-/// `--revisit` on `add`/`bump` always needs a value — bare `--revisit` only
-/// filters on `find`. Shared by the CLI entry and `bump` so the two never
-/// drift apart.
-pub(crate) fn parse_revisit(has: bool, one: Option<String>) -> Result<Option<String>, String> {
-    match (has, one) {
-        (false, _) => Ok(None),
-        (true, Some(v)) => Ok(Some(v)),
-        (true, None) => Err(
-            "rejected: --revisit needs a value — a date YYYY-MM[-DD] or text like \"mdl lands\""
-                .into(),
-        ),
-    }
-}
-
 /// A row built, healed and validated — everything short of the write. Shared
 /// by `add_row` and dry runs, so a preview can never drift from the real add.
 pub(crate) struct Pending {
@@ -78,7 +64,9 @@ pub(crate) fn prepare(
     let st = crate::stamp(r);
     let mut row = core::Row::new(&st.by, kind, text, files);
     crate::session::tag_writer(&r.root, &mut row); // "written by A, used by B" needs the writer
-    crate::filehash::stamp_row(&r.root, &mut row); // the file as it stood when the row was written
+    // the file as it stood when the row was written; one info line for any
+    // real file left out (over 16 MiB, unreadable, past the 8th) — never a reject
+    warns.extend(crate::filehash::stamp_row(&r.root, &mut row));
     row.key = key;
     // a headline lists show; the body stays in `text` for `find <id>` / `--full`
     row.title = title
@@ -254,12 +242,12 @@ pub(crate) fn bump(
         }
     };
     // bare `--revisit` names no date or text — that only filters on `find`
-    let revisit = parse_revisit(a.has("revisit"), a.one("revisit"))?;
+    let revisit = a.revisit_value()?;
     let log = crate::read(r);
     let moves =
         a.one("to").is_some() || revisit.is_some() || !matches!(urgent, core::UrgentChange::Keep);
-    let fh = crate::filehash::for_bump(&r.root, &log, id, moves)?;
-    core::bump_row(
+    let (fh, note) = crate::filehash::for_bump(&r.root, &log, id, moves)?;
+    let (row, path, mut warns) = core::bump_row(
         &r.fael,
         r.journal.as_deref(),
         &log,
@@ -273,7 +261,9 @@ pub(crate) fn bump(
             held: None,
             fh: Some(fh),
         },
-    )
+    )?;
+    warns.extend(note);
+    Ok((row, path, warns))
 }
 
 /// Check a files list against evidence before the row is written. Accepted

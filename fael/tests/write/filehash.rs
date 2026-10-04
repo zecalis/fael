@@ -268,3 +268,129 @@ fn json_shows_fh_but_lists_do_not() {
     let (_, full, _) = fael(&d, &["find", "--files", "src/a.rs", "--json"], "");
     assert!(full.contains("\"fh\""), "{full}");
 }
+
+/// The one info line `add`/bare `bump` print when a real file gets no key.
+const NOTE: &str = "fael: not stamped (no file-hash verdict at push): ";
+
+/// A sparse file one byte past the 16 MiB stamp cap, without writing 16 MiB.
+fn sparse_over_cap(d: &Path, rel: &str) {
+    let big = std::fs::File::create(d.join(rel)).unwrap();
+    big.set_len(16 * 1024 * 1024 + 1).unwrap();
+}
+
+#[test]
+fn oversize_file_is_named_in_the_receipt_and_the_row_is_still_recorded() {
+    let d = repo();
+    sparse_over_cap(&d, "src/big.bin");
+    std::fs::write(d.join("src/ok.rs"), "//\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "note", "sized", "--files", "src/big.bin,src/ok.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(
+        err.contains(&format!("{NOTE}src/big.bin (over 16 MiB)")),
+        "{err}"
+    );
+    assert!(
+        !err.contains("src/ok.rs"),
+        "a stamped file is not named: {err}"
+    );
+    // the row is filed, and the receipt still starts with its id
+    assert!(row_json(&d, "sized")["fh"].get("src/ok.rs").is_some());
+    assert!(out.split_whitespace().next().unwrap().len() >= 26, "{out}");
+}
+
+#[test]
+fn ninth_real_file_is_named_as_past_the_cap() {
+    let d = repo();
+    for i in 0..9 {
+        std::fs::write(d.join(format!("src/f{i}.rs")), format!("// {i}\n")).unwrap();
+    }
+    let files: Vec<String> = (0..9).map(|i| format!("src/f{i}.rs")).collect();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", "many", "--files", &files.join(",")],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(
+        err.contains(&format!("{NOTE}src/f8.rs (past the 8-file cap)")),
+        "{err}"
+    );
+    assert!(
+        !err.contains("src/f7.rs"),
+        "only the 9th is left out: {err}"
+    );
+    assert_eq!(fh(&d, "many").as_object().unwrap().len(), 8);
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_file_is_named() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = repo();
+    let p = d.join("src/locked.rs");
+    std::fs::write(&p, "//\n").unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(&p).is_ok() {
+        return; // running as root: the mode bits do not bite
+    }
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", "locked", "--files", "src/locked.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(
+        err.contains(&format!("{NOTE}src/locked.rs (unreadable)")),
+        "{err}"
+    );
+    assert!(row_json(&d, "locked").get("fh").is_none());
+}
+
+#[test]
+fn a_normal_row_and_the_legitimate_gaps_print_no_extra_line() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    std::fs::create_dir_all(d.join("src/emptydir")).unwrap();
+    let (ok, out, err) = fael(&d, &["add", "note", "plain", "--files", "src/a.rs"], "");
+    assert!(ok && !err.contains("not stamped"), "{err}");
+    assert_eq!(out.lines().count(), 1, "{out}");
+    // anchors, globs, directories and missing files are not the author's gap
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "gaps",
+            "--files",
+            "plan:foo,src/*.rs,src/emptydir,src/gone.rs",
+            "--force",
+        ],
+        "",
+    );
+    assert!(ok && !err.contains("not stamped"), "{err}");
+}
+
+#[test]
+fn bare_bump_says_what_it_left_out_but_claim_and_routing_bump_do_not() {
+    let d = repo();
+    sparse_over_cap(&d, "src/big.bin");
+    let (ok, out, err) = fael(&d, &["add", "issue", "x", "--files", "src/big.bin"], "");
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let (ok, out, err) = fael(&d, &["claim", &id], "");
+    assert!(ok && !err.contains("not stamped"), "{err}");
+    let claimed = out.split_whitespace().next().unwrap().to_string();
+    let (ok, out, err) = fael(&d, &["bump", &claimed, "--urgent"], "");
+    assert!(ok && !err.contains("not stamped"), "{err}");
+    let routed = out.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = fael(&d, &["bump", &routed], "");
+    assert!(ok, "{err}");
+    assert!(
+        err.contains(&format!("{NOTE}src/big.bin (over 16 MiB)")),
+        "{err}"
+    );
+}
