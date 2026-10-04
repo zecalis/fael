@@ -30,7 +30,7 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     if c.session.is_empty() {
         return Reply::default();
     }
-    let hints = core::key_hints(&c.log, text);
+    let hints = core::key_hints(&c.log, text, &c.repo.cfg.hint_stop);
     if hints.is_empty() {
         return Reply::default();
     }

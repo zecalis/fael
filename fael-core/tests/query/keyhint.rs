@@ -6,7 +6,7 @@ use super::row;
 use fael_core::*;
 
 fn keys_of(log: &Log, prompt: &str) -> Vec<String> {
-    key_hints(log, prompt)
+    key_hints(log, prompt, &[])
         .into_iter()
         .map(|(k, _)| k.key)
         .collect()
@@ -37,7 +37,7 @@ fn exact_segment_points_most_used_first() {
         keys_of(&l, "ยังไม่มีโค้ด Credit เลยใช่ไหม"),
         ["vela:credit-ledger", "vela:credit-layer"]
     );
-    let h = key_hints(&l, "credit");
+    let h = key_hints(&l, "credit", &[]);
     assert_eq!(h[0].0.count, 2);
     // 01M3XKB7G: the hint names the word that matched
     assert_eq!(h[0].1, ["credit"]);
@@ -130,7 +130,7 @@ fn growing_topic_keeps_hinting() {
     // a prompt naming a trailing segment too lifts that key over head-only
     // matches of the same strength ('ledger' hits credit-ledger AND ledger-run,
     // but credit-ledger met one more word) — the ties below sort by usage, name
-    let h = key_hints(&l, "credit ledger merge");
+    let h = key_hints(&l, "credit ledger merge", &[]);
     assert_eq!(h[0].0.key, "vela:credit-ledger");
     assert_eq!(h[0].1, ["credit", "ledger"]);
     assert_eq!(h[1].0.key, "vela:credit-layer");
@@ -178,4 +178,30 @@ fn namespace_word_never_names_a_head() {
     // the specific word still points, and a key typed whole always does
     assert_eq!(keys_of(&l, "workbench"), ["vela:workbench-grid"]);
     assert_eq!(keys_of(&l, "read plan:vela:handoff"), ["plan:vela:handoff"]);
+}
+
+/// 01M42GFH: `[hint] stop` words never name a head, ASCII case-insensitive,
+/// the same exclusion as a namespace word; a key typed whole still hints.
+#[test]
+fn stop_word_never_names_a_head() {
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000060", "vela:workspace-icons"),
+            k("A0000000000000000000000061", "vela:credit-ledger"),
+        ],
+        ..Log::default()
+    };
+    let stop = ["Workspace".to_string()];
+    let keys = |p: &str| -> Vec<String> {
+        key_hints(&l, p, &stop)
+            .into_iter()
+            .map(|(k, _)| k.key)
+            .collect()
+    };
+    assert_eq!(keys_of(&l, "the workspace"), ["vela:workspace-icons"]);
+    assert!(keys("the WORKSPACE layout").is_empty());
+    // other heads are untouched, and a key typed whole still points
+    assert_eq!(keys("workspace credit"), ["vela:credit-ledger"]);
+    assert_eq!(keys("see vela:workspace-icons"), ["vela:workspace-icons"]);
 }

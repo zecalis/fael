@@ -37,3 +37,10 @@ fn removed_capture_block_key_still_parses() {
     // the Stop-block mode is gone; a config that opted in must not break
     assert!(Config::from_toml("[capture]\nblock = true").is_ok());
 }
+
+#[test]
+fn hint_stop_default_empty_and_parse_lowercased() {
+    assert!(Config::from_toml("").unwrap().hint_stop.is_empty());
+    let c = Config::from_toml("[hint]\nstop = [\"Workspace\", \" file \", \"\"]").unwrap();
+    assert_eq!(c.hint_stop, ["workspace", "file"]);
+}

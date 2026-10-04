@@ -84,6 +84,12 @@ pub struct Config {
     /// (default) = the hooks report to the user in one line per beat (brief,
     /// reminder, receipt) on a channel the agent never reads; `false` = off.
     pub notify_user: bool,
+    /// `[hint] stop` (01M42GFH): prompt words the key hint never matches, ASCII
+    /// case-insensitive — generic English heads like "workspace" that would
+    /// fire `vela:workspace-icons` on every prompt saying them. Fed from the
+    /// `via "<word>"` the hint line prints. Empty = no word is stopped. A key
+    /// typed whole in the prompt still hints.
+    pub hint_stop: Vec<String>,
 }
 
 impl Default for Config {
@@ -108,6 +114,7 @@ impl Default for Config {
             cross_key: CrossKey::Warn,
             sync_auto: true,
             notify_user: true,
+            hint_stop: vec![],
         }
     }
 }
@@ -118,6 +125,14 @@ impl Default for Config {
 #[serde(default)]
 struct Notify {
     user: Option<bool>,
+}
+
+/// `[hint]` in `.fael/config.toml` — outside `from_toml` only to keep that
+/// function under the line lint.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Hint {
+    stop: Vec<String>,
 }
 
 impl Config {
@@ -139,6 +154,7 @@ impl Config {
             selfheal: Selfheal,
             sync: Sync,
             notify: Notify,
+            hint: Hint,
         }
 
         #[derive(Deserialize, Default)]
@@ -213,6 +229,13 @@ impl Config {
             cross_key: check_cross_key(f.selfheal.cross_key)?,
             sync_auto: f.sync.auto.unwrap_or(d.sync_auto),
             notify_user: f.notify.user.unwrap_or(d.notify_user),
+            hint_stop: f
+                .hint
+                .stop
+                .iter()
+                .map(|w| w.trim().to_ascii_lowercase())
+                .filter(|w| !w.is_empty())
+                .collect(),
         })
     }
 }

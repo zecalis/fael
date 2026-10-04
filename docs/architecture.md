@@ -217,6 +217,8 @@ row_bytes = 10240             # hard cap, never above 10 KiB
 auto = true                   # session start and Stop run `fael sync` once per session and newest row when fael.remote is set; false = manual only
 [notify]
 user = true                   # one line per beat for the user only (Claude systemMessage, OpenCode toast); false = off
+[hint]
+stop = []                     # prompt words the key hint never matches, case-insensitive; copy the word from the hint's `via "<word>"` when it is a generic head (e.g. ["workspace"]). A key typed whole still hints
 [lang]
 marker = ["english", "thai"]  # Stop-hook phrase packs (default); [] switches the bug rule off
 rows = ["english"]            # accepted row-writing languages; anything else warns once, never rejects ([] switches the check off)
