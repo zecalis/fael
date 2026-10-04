@@ -199,8 +199,8 @@ fn changed_row_keeps_the_legacy_issue_close() {
     assert!(out.contains("done with one?"), "{out}");
 }
 
-/// A hub file past the row cap says only its count line: no row was said, so
-/// the hint has no row to name (a row never shown cannot be judged).
+/// A hub file past the row cap says its peek and the count line: the hint
+/// names only rows the push said (a row never shown cannot be judged).
 #[test]
 fn hint_skips_rows_the_cap_cut() {
     let d = repo();
@@ -215,8 +215,15 @@ fn hint_skips_rows_the_cap_cut() {
     }
     std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
-    assert!(out.contains("0 of 14"), "{out}");
-    assert!(!out.contains("changed since"), "{out}");
+    assert!(out.contains("3 of 14"), "{out}");
+    let ids = named(&out);
+    assert!(!ids.is_empty(), "{out}");
+    for id in ids {
+        assert!(
+            out.contains(&format!("- [{id}]")),
+            "{id} never shown: {out}"
+        );
+    }
 }
 
 /// A path renamed away and then recreated is read as itself, not through the

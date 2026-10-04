@@ -119,11 +119,18 @@ pub const PUSH_BACKGROUND: Background = Background::CountLine;
 /// A hub file (a spec, a plan, PRODUCT.md) is cited by more open rows than
 /// the cap holds, and off the Focus those File rows rank by freshness only —
 /// any `push_rows` of them is a guess (issue push:hub-files: 72% of vela's
-/// read-push rows touched such a file). Past this many File rows none render:
-/// Now rows still do, the rest is the `fael find --files` count line.
-/// `push_rows` itself stays (decision push:rows). Counted per push, so a
-/// Grep hit list whose files add up past it is cut the same way.
+/// read-push rows touched such a file). Past this many File rows only
+/// `PUSH_HUB_PEEK` of them render beside the Now rows, the rest is the
+/// `fael find --files` count line. `push_rows` itself stays (decision
+/// push:rows). Counted per push, so a Grep hit list whose files add up past
+/// it is cut the same way.
 pub const PUSH_HUB_ROWS: usize = 8;
+
+/// File rows a hub push still renders: a header saying `(0 of 29)` told the
+/// agent rows exist and none of what they say (vela, 2026-10-04). Parked rows
+/// (a revisit waiting) go first — a plan is where they wait — then the
+/// freshest.
+pub const PUSH_HUB_PEEK: usize = 3;
 
 /// What `select` did, split into classes that each have one exact next call:
 /// `omitted` rows (the row cap cut tier-0 rows — `fael find --files <f>`
@@ -140,6 +147,8 @@ pub struct Selection<'a> {
     tiers: Vec<usize>,
     pub omitted: usize,
     pub background_dirs: usize,
+    /// The hub's File rows at the tail of `shown` (`PUSH_HUB_PEEK` at most).
+    pub peek: usize,
 }
 
 /// The rows that did not render, split by the exact `fael find` call that
@@ -159,6 +168,14 @@ impl Hidden {
 }
 
 impl Selection<'_> {
+    /// Move the hub peek back into `omitted`: the push said it once already.
+    pub fn drop_peek(&mut self) {
+        let keep = self.shown.len() - self.peek;
+        self.shown.truncate(keep);
+        self.tiers.truncate(keep);
+        self.omitted += std::mem::take(&mut self.peek);
+    }
+
     /// The rows hidden after render printed `rendered` of `shown`: the cap cut
     /// (`omitted`) plus the token-budget cut (`shown[rendered..]`), each routed
     /// by its L1 tier — tier 0 to `fael find --files <f>`, tier 1 to
@@ -253,6 +270,7 @@ pub fn select<'a>(
             tiers,
             omitted: 0,
             background_dirs: 0,
+            peek: 0,
         };
     }
     let mut now: Vec<(&Row, usize)> = vec![];
@@ -268,13 +286,19 @@ pub fn select<'a>(
         }
     }
     // Now rows always show; the cap only limits how much of File joins them,
-    // and a hub's File rows join not at all (PUSH_HUB_ROWS)
-    let room = if file.len() > PUSH_HUB_ROWS {
-        0
+    // and a hub's File rows join only PUSH_HUB_PEEK deep
+    let room = policy.max_rows.saturating_sub(now.len());
+    let hub = file.len() > PUSH_HUB_ROWS;
+    let room = if hub {
+        let day = super::revisit::today();
+        // stable: inside each half the cmp_rows order holds
+        file.sort_by_key(|(r, _)| !super::revisit::row_waiting(r, &day));
+        room.min(PUSH_HUB_PEEK)
     } else {
-        policy.max_rows.saturating_sub(now.len())
+        room
     };
     let omitted = file.len().saturating_sub(room);
+    let peek = if hub { room.min(file.len()) } else { 0 };
     now.extend(file.into_iter().take(room));
     let (shown, tiers) = now.into_iter().unzip();
     Selection {
@@ -282,5 +306,6 @@ pub fn select<'a>(
         tiers,
         omitted,
         background_dirs,
+        peek,
     }
 }

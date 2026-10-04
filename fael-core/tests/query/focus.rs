@@ -285,18 +285,24 @@ fn select_never_cuts_now_rows() {
 }
 
 #[test]
-fn select_hub_file_shows_only_now_rows() {
+fn select_hub_file_peeks_past_now_rows() {
     // a plan cited by more rows than PUSH_HUB_ROWS: freshness alone would
-    // pick 5 off-topic rows — only the issue and the Focus-keyed row render
+    // fill the cap with off-topic rows, yet (0 of 29) told the agent nothing —
+    // the issue and the Focus-keyed row render, then PUSH_HUB_PEEK File rows,
+    // a parked one (revisit waiting) ahead of the freshest
     let hub = |n: usize| {
         let mut l = Log::default();
         for i in 0..n {
-            l.rows.push(row(
+            let mut r = row(
                 &format!("D00000000000000000000001{i:02}"),
                 "decision",
                 &["PLAN.md"],
                 None,
-            ));
+            );
+            if i == 0 {
+                r.revisit = Some("when print pr2 starts".into());
+            }
+            l.rows.push(r);
         }
         l.rows.push(row(
             "I0000000000000000000000020",
@@ -318,9 +324,11 @@ fn select_hub_file_shows_only_now_rows() {
     };
     let l = hub(PUSH_HUB_ROWS + 1);
     let sel = select(query(&l, "PLAN.md", true), &focus, &policy(5));
-    assert_eq!(ids(&sel.shown), ["20", "21"]);
-    assert_eq!(sel.omitted, PUSH_HUB_ROWS + 1);
-    assert_eq!(sel.findable_after(2), PUSH_HUB_ROWS + 1);
+    assert_eq!(ids(&sel.shown), ["20", "21", "00", "08", "07"]);
+    assert_eq!(sel.omitted, PUSH_HUB_ROWS + 1 - PUSH_HUB_PEEK);
+    // a wider cap still stops at the peek on a hub
+    let sel = select(query(&l, "PLAN.md", true), &focus, &policy(20));
+    assert_eq!(sel.shown.len(), 2 + PUSH_HUB_PEEK);
     // at the threshold the file is no hub: the cap fills as before
     let l = hub(PUSH_HUB_ROWS);
     let sel = select(query(&l, "PLAN.md", true), &focus, &policy(5));
