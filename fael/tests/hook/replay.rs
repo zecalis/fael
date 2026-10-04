@@ -140,7 +140,7 @@ fn step(hook: &'static str, body: serde_json::Value) -> Step {
     }
 }
 
-fn script(d: &Path) -> Vec<Step> {
+fn script() -> Vec<Step> {
     use serde_json::json;
     let read = |f: &str| json!({"session": S, "files": [f]});
     let edit = read;
@@ -199,7 +199,7 @@ fn script(d: &Path) -> Vec<Step> {
         step(
             "search",
             json!({"session": S, "tool": "Bash",
-                   "tool_input": {"command": format!("printf x >> {}", d.join("src/b.rs").display())}}),
+                   "tool_input": {"command": "printf x >> src/b.rs"}}),
         ),
         step("session-start", json!({"session": "s2"})),
         step("read", json!({"session": "s2", "files": ["src/c.rs"]})),
@@ -207,12 +207,14 @@ fn script(d: &Path) -> Vec<Step> {
     ]
 }
 
-/// Run the script; one block per step, then the usage lines' events and token sum.
+/// Run the script; one block per step, then the usage lines' events and token
+/// sum. Every path in the script is repo-relative: the snapshot never holds a
+/// path whose spelling differs by OS.
 fn replay() -> String {
     let d = fixture();
     let state = d.join(".state");
     let mut out = String::new();
-    for (i, s) in script(&d).into_iter().enumerate() {
+    for (i, s) in script().into_iter().enumerate() {
         let mut body: serde_json::Value = serde_json::from_str(&s.body).unwrap();
         body["cwd"] = serde_json::from_str(&json(&d)).unwrap();
         let (ok, stdout, err) = fael_at(&state, &d, &["hook", s.hook], &body.to_string());

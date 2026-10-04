@@ -148,7 +148,7 @@ fael mem for src/c.rs:
 memory: ~18/800 tokens · 1 row
 bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true)
 
-## 26 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"printf x >> <REPO>/src/b.rs"}}
+## 26 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"printf x >> src/b.rs"}}
 context:
 fael mem for src/b.rs (1 of 10):
 - [01K00000000000000000B] issue b leaks a handle
