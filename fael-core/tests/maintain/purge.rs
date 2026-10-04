@@ -61,6 +61,31 @@ fn purge_by_prefix_takes_close_events_with_it() {
 }
 
 #[test]
+fn purge_takes_bump_events_with_it() {
+    let (fael, journal, _) = two_stores("01M3QA00000000000000000006");
+    let mut ev = Row::bumped(W, "01M3QA00000000000000000006");
+    ev.id = "01M3QA00000000000000000007".into();
+    let mut other = Row::bumped(W, "01M3QA0000000000000000000X");
+    other.id = "01M3QA00000000000000000008".into();
+    let f = month_file(&fael, W, MONTH, false);
+    let base = read_all(&f);
+    write_lines(&f, &[base.trim_end().into(), ev.to_line(), other.to_line()]);
+    let log = Log {
+        rows: vec![row("01M3QA00000000000000000006", "note", &["a.rs"]), ev],
+        closes: vec![],
+        warnings: vec![],
+    };
+    let out = purge_row(&fael, Some(&journal), &log, "01M3QA00000000000000000006").unwrap();
+    assert_eq!(out.rows, 3, "the row in both stores plus its bump event");
+    let left = read_all(&f);
+    assert!(!left.contains("01M3QA00000000000000000006"), "{left}");
+    assert!(
+        left.contains("01M3QA00000000000000000008"),
+        "another row's event stays: {left}"
+    );
+}
+
+#[test]
 fn purge_refuses_live_edges() {
     let (fael, journal, _) = two_stores("01M3QA00000000000000000004");
     let mut b = row("01M3QA00000000000000000005", "note", &["a.rs"]);
