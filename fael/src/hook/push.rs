@@ -160,7 +160,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
             .flatten(),
     );
     if edit {
-        out.record_in_context(&c, &tiered);
+        out.record_in_context(&c, &tiered, &files);
     }
     let (told, hinted) = read_seen(out.seen());
     tiered.retain(|(r, _)| !out.has(&r.id));
@@ -208,6 +208,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     if let Some(context) = r.context() {
         let meta = UsageMeta {
             said: r.said(),
+            files: if edit { &files } else { &[] },
             ..hook_meta(&c, None, true)
         };
         record_usage_shadow(

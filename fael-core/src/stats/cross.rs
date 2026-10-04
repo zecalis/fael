@@ -38,11 +38,14 @@ pub struct CrossAgent {
     /// can place them: rows from clients that give `fael add` no session id,
     /// and rows older than the tag.
     pub writer_unknown: usize,
+    /// Sessions that edited one file within `OVERLAP_WINDOW_MS` of each other,
+    /// from the `files` on edit usage lines (see `SameFile`).
+    pub same_file: super::overlap::SameFile,
 }
 
 /// Usage lines name a Claude session by its transcript path, rows by that
 /// file's stem; other clients use one string for both.
-fn stem(s: &str) -> &str {
+pub(super) fn stem(s: &str) -> &str {
     let f = s.rsplit(['/', '\\']).next().unwrap_or(s);
     f.strip_suffix(".jsonl").unwrap_or(f)
 }
@@ -90,7 +93,10 @@ pub(super) fn cross_agent(
             )
         })
         .collect();
-    let mut out = CrossAgent::default();
+    let mut out = CrossAgent {
+        same_file: super::overlap::same_file(parsed),
+        ..CrossAgent::default()
+    };
     for key @ (repo, session, id) in pushed.keys() {
         let session = stem(session);
         let Some(row) = by_id.get(repo).and_then(|m| m.get(id)) else {

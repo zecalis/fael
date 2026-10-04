@@ -123,6 +123,10 @@ pub(crate) fn usage_row(
     {
         row["branch"] = b.into();
     }
+    // an edit names its files: two sessions at one file is only visible here
+    if !meta.files.is_empty() {
+        row["files"] = meta.files.into();
+    }
     if let Some(real) = meta.real
         && let Ok(t) = serde_json::to_value(real)
     {
