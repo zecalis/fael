@@ -6,12 +6,17 @@
 //! `fh`, or a file that resolves nowhere, is unknown, never changed.
 
 use crate::core;
+// files bigger than this are never stamped; a stamped file that grew past it
+// changed — no read needed to say so
+use crate::filehash::MAX_BYTES as STAMP_MAX;
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Files bigger than this are never hashed (filehash.rs stamps at most this).
-/// A stamped file that grew past it changed — no read needed to say so.
-const MAX_BYTES: u64 = 1024 * 1024;
+/// The push path hashes at most this much per file: it has 5 ms and no git.
+/// A file between this and `STAMP_MAX` is unknown here — hashing 16 MiB would
+/// take ~20 ms — and the generic hint stands in; doctor, off the hot path, can
+/// still compare it.
+const PUSH_MAX: u64 = 1024 * 1024;
 
 /// Said under the rows of an edit push (see `push`).
 /// The usage event `fael-core::stats` reads as "in context at edit".
@@ -81,18 +86,25 @@ fn file_verdict(
     blob.as_ref().map(|now| now != want)
 }
 
-/// The 12-hex blob id on disk, or `None` when there is nothing hashable.
-/// `Some("")` marks a file that grew past the stamp cap — anything compares
-/// unequal to it, so it reads as changed without the read.
+/// The 12-hex blob id on disk, or `None` when there is nothing hashable here
+/// (gone, a directory, or over `PUSH_MAX`). `Some("")` marks a file that grew
+/// past the stamp cap — anything compares unequal to it, so it reads as
+/// changed without the read.
 fn blob_at(root: &Path, target: &str) -> Option<String> {
-    let md = std::fs::metadata(root.join(target)).ok()?;
+    let p = root.join(target);
+    let md = std::fs::metadata(&p).ok()?;
     if !md.is_file() {
         return None;
     }
-    if md.len() > MAX_BYTES {
+    if md.len() > STAMP_MAX {
         return Some(String::new());
     }
-    Some(core::blob_id(&std::fs::read(root.join(target)).ok()?))
+    if md.len() > PUSH_MAX {
+        return None;
+    }
+    core::blob_id_stream(&mut std::fs::File::open(&p).ok()?, PUSH_MAX)
+        .ok()
+        .flatten()
 }
 
 /// The edit hint: tier-0 rows whose files changed since the row was written
