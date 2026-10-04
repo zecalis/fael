@@ -1,6 +1,7 @@
-//! `[Shipped]` (PLAN-fael-durable-log chunk 2): open notes filed on a branch
-//! whose PR merged after the row was born — the work already landed, so the
-//! note is stale. Split out of `maintain.rs` next to `orphan.rs`/`merged.rs`:
+//! `[Shipped]` (PLAN-fael-durable-log chunk 2): open status notes filed on a
+//! branch whose PR merged after the row was born — the work already landed,
+//! so the note is stale. A note that is not a status (a rule, a fact) is
+//! listed as `[Shipped kept]` and never closed (`status.rs`). Split out of `maintain.rs` next to `orphan.rs`/`merged.rs`:
 //! the `gh`/`git` half must never live in core (core spawns no processes).
 //!
 //! Judged by branch **name**, never sha: squash and rebase drop the row's sha
@@ -14,6 +15,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use super::merged::Merge;
+use super::status;
 
 enum Verdict {
     Shipped(Option<u64>),
@@ -47,6 +49,15 @@ impl Landed {
         }
     }
 
+    /// `short-id (branch #N)` — what a kept note is called, with no close
+    /// command: whether it is finished is the reader's call.
+    fn example_keep(&self) -> String {
+        match self.number {
+            Some(n) => format!("{} ({} #{n})", self.short, self.branch),
+            None => format!("{} ({})", self.short, self.branch),
+        }
+    }
+
     /// The `why` `--fix` passes to `fael close` for this note.
     fn close_text(&self) -> String {
         match self.number {
@@ -70,6 +81,7 @@ pub(super) fn problems(
         return vec![];
     }
     let mut sure: Vec<Landed> = vec![];
+    let mut kept: Vec<Landed> = vec![];
     let mut maybe: Vec<Landed> = vec![];
     let w = core::abbrev(log);
     for row in core::find(log, &core::Filter::default()) {
@@ -88,6 +100,9 @@ pub(super) fn problems(
             number: n,
         };
         match decide(prs.get(branch), git.contains(branch), birth_ms(row)) {
+            // landed, but the note is not a status of that work: a rule or a
+            // fact outlives the merge, so it is listed, never `--fix` closed
+            Verdict::Shipped(n) if !status::is_status(row) => kept.push(landed(n)),
             Verdict::Shipped(n) => sure.push(landed(n)),
             Verdict::Maybe(n) => maybe.push(landed(n)),
             Verdict::No => {}
@@ -111,6 +126,23 @@ pub(super) fn problems(
                 ),
             )
             .with_closes(closes),
+        );
+    }
+    if !kept.is_empty() {
+        let eg: Vec<String> = kept.iter().take(5).map(Landed::example_keep).collect();
+        out.push(
+            core::Problem::info(
+                core::ProblemKind::ShippedKept,
+                format!(
+                    "{} open note(s) sit on a landed branch but do not read as a status of \
+                     that work (no PR opened / chunk done / what shipped / not yet committed \
+                     in the opening) — left open, `--fix` never closes them; a rule or fact \
+                     stays, a finished one: `fael close <id>` (e.g. {})",
+                    kept.len(),
+                    eg.join("; ")
+                ),
+            )
+            .with_ids(kept.iter().map(|l| l.id.clone()).collect()),
         );
     }
     if !maybe.is_empty() {

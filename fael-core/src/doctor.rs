@@ -86,6 +86,11 @@ pub enum Kind {
     /// --merged` says the branch landed, no `mergedAt`) — shown as
     /// `[Shipped?]` so the reader confirms before closing.
     ShippedMaybe,
+    /// open notes on a landed branch that do not read as a status of the work
+    /// (a standing rule, a fact, a half-done note) — listed so the reader
+    /// decides, never `--fix` closed (issue 01M4164E). Judged by the note's
+    /// opening in `maintain/status.rs`, never a guess past what it says.
+    ShippedKept,
     /// open rows with a letter outside every accepted `[lang] rows` script —
     /// the add-time warning the agent skipped, repeated here so one translate
     /// batch can supersede them all (PLAN-fael-languages chunk 2); judged by

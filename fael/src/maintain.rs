@@ -10,6 +10,7 @@ mod orphan;
 mod phantom;
 mod rows;
 mod shipped;
+mod status;
 
 use crate::{Args, core, repo};
 use std::path::PathBuf;
@@ -206,13 +207,13 @@ fn show(rep: &core::DoctorReport, json: bool) {
     }
 }
 
-/// The `[Shipped?]` label for the unconfirmed variant — every other kind
-/// renders as its debug name.
+/// The `[Shipped?]` / `[Shipped kept]` labels for the two Shipped variants —
+/// every other kind renders as its debug name.
 fn kind_label(k: &core::ProblemKind) -> String {
-    if *k == core::ProblemKind::ShippedMaybe {
-        "Shipped?".into()
-    } else {
-        format!("{k:?}")
+    match k {
+        core::ProblemKind::ShippedMaybe => "Shipped?".into(),
+        core::ProblemKind::ShippedKept => "Shipped kept".into(),
+        _ => format!("{k:?}"),
     }
 }
 

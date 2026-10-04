@@ -171,7 +171,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "check the log; --fix repairs what it can",
         "fael doctor [--fix] [--fat]
      (check the log and the repo for problems; --fix repairs what it can, including
-      closing the confirmed [Shipped] notes; [Phantom] flags citations of ids
+      closing the confirmed [Shipped] status notes — rules and facts on a landed
+      branch are listed as [Shipped kept], never closed; [Phantom] flags citations of ids
       with no row behind them — in rows, in close reasons and in the prose of
       every *.md in the repo (fenced code skipped); [Secret] flags a row that
       holds a token — rotate it, then `fael purge <id>` (never --fix); --json prints each

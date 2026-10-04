@@ -56,7 +56,16 @@ fn doctor(d: &Path, gh_json: &str) -> (bool, String) {
 fn file_rows(d: &Path, branch: &str) {
     git(d, &["checkout", "-qb", branch]);
     std::fs::write(d.join("src/a.rs"), "").unwrap();
-    let (ok, _, err) = fael(d, &["add", "note", "landed work", "--files", "src/a.rs"]);
+    let (ok, _, err) = fael(
+        d,
+        &[
+            "add",
+            "note",
+            "chunk 1 done: landed work",
+            "--files",
+            "src/a.rs",
+        ],
+    );
     assert!(ok, "{err}");
     let (ok, _, err) = fael(
         d,
@@ -191,4 +200,57 @@ fn handoff_and_revisit_notes_never_ship() {
     assert!(ok && !out.contains("fixed: closed"), "{out}");
     let (ok, out) = doctor(&d, gh);
     assert!(ok && !out.contains("[Shipped"), "{out}");
+}
+
+/// The shapes named in 01M4164E: standing rules and facts filed from a branch
+/// that later landed, plus a `half done` note — none is a status of the work.
+const KEPT: &[&str] = &[
+    "Benchmark rows removed from usage.jsonl; benchmarks must isolate state. Rule: point FAEL_STATE_DIR at a scratch dir.",
+    "Worktrees keep their own target dir. Do NOT set CARGO_TARGET_DIR to a shared dir.",
+    "Verify branch with git branch --show-current before git push, as happened when a commit landed on fix/other instead",
+    "OpenCode exports no session env var to shell or MCP (read from the bundled code, not yet run).",
+    "The earlier row is half done on this branch: the rule was left out",
+];
+
+#[test]
+fn doctor_lists_but_never_closes_rules_and_facts() {
+    let d = repo();
+    let gh = r#"[{"headRefName":"feat/mixed","mergedAt":"2099-01-01T00:00:00Z","number":50}]"#;
+    git(&d, &["checkout", "-qb", "feat/mixed"]);
+    let status = "PR opened for the doctor fix, branch feat/mixed";
+    // one file per row: a shared file would let add's self-heal supersede them
+    for (i, text) in KEPT.iter().copied().chain([status]).enumerate() {
+        let file = format!("src/f{i}.rs");
+        std::fs::write(d.join(&file), "").unwrap();
+        let (ok, _, err) = fael(&d, &["add", "note", text, "--files", &file]);
+        assert!(ok, "{err}");
+    }
+    // repair the fresh repo's `.gitattributes` first, so only [Shipped*] is left
+    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
+    assert!(ok);
+    // the report names what it closes and what it leaves alone, separately
+    let (ok, out) = doctor(&d, gh);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("note [Shipped] [--fix]: 1 open note(s)")
+            && out.contains("note [Shipped kept]: 5 open note(s)")
+            && out.contains("`--fix` never closes them"),
+        "{out}"
+    );
+    // --fix closes only the status note; every rule/fact stays open
+    let (ok, out) = doctor_args(&d, gh, &["doctor", "--fix"]);
+    assert!(ok && out.contains("shipped in #50"), "{out}");
+    assert_eq!(out.matches("fixed: closed").count(), 1, "{out}");
+    let (_, out, _) = fael(&d, &["find", "--kind", "note"]);
+    assert!(!out.contains("PR opened"), "{out}");
+    for text in KEPT {
+        let head = text.split(['.', ':', ';', ',']).next().unwrap();
+        assert!(out.contains(head), "{head}: {out}");
+    }
+    // still listed afterwards, still not closed by a second --fix
+    let (ok, out) = doctor_args(&d, gh, &["doctor", "--fix"]);
+    assert!(
+        ok && out.contains("note [Shipped kept]: 5 open note(s)") && !out.contains("fixed: closed"),
+        "{out}"
+    );
 }
