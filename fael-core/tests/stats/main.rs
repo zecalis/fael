@@ -57,6 +57,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "schema",
             "skipped_temp",
             "top_rows",
+            "unused_rows",
             "value",
         ],
         "{v}"

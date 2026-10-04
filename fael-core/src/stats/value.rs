@@ -54,6 +54,28 @@ type Pairs<'a> = (
     HashSet<(&'a str, &'a str, &'a str)>,
 );
 
+/// Each client's first `in-context` line ts: before it no hook could write one.
+pub(super) fn window_start(parsed: &Parsed) -> HashMap<&str, &str> {
+    let mut first: HashMap<&str, &str> = HashMap::new();
+    for v in parsed.kept.iter().filter(|v| v["event"] == "in-context") {
+        if let (Some(c), Some(ts)) = (v["client"].as_str(), v["ts"].as_str()) {
+            first
+                .entry(c)
+                .and_modify(|t| *t = (*t).min(ts))
+                .or_insert(ts);
+        }
+    }
+    first
+}
+
+/// A usage line stamped at or after its client's window start.
+pub(super) fn in_window(first: &HashMap<&str, &str>, v: &serde_json::Value) -> bool {
+    match (v["client"].as_str(), v["ts"].as_str()) {
+        (Some(c), Some(ts)) => first.get(c).is_some_and(|f| ts >= *f),
+        _ => false,
+    }
+}
+
 /// Join `in-context` lines to the pushes before them. `windowed` keeps only
 /// usage lines stamped at or after the first `in-context` line of their
 /// client: before that no hook could have written one, so a push there can
@@ -65,22 +87,8 @@ fn pairs(parsed: &Parsed, windowed: bool) -> Pairs<'_> {
     // the seen list behind an `in-context` line also holds rows the agent
     // filed or found itself: only a row a push said first counts.
     // ponytail: usage.jsonl is append-only, so file order is time order.
-    let mut first: HashMap<&str, &str> = HashMap::new();
-    for v in parsed.kept.iter().filter(|v| v["event"] == "in-context") {
-        if let (Some(c), Some(ts)) = (v["client"].as_str(), v["ts"].as_str()) {
-            first
-                .entry(c)
-                .and_modify(|t| *t = (*t).min(ts))
-                .or_insert(ts);
-        }
-    }
-    let capable = |v: &serde_json::Value| {
-        !windowed
-            || match (v["client"].as_str(), v["ts"].as_str()) {
-                (Some(c), Some(ts)) => first.get(c).is_some_and(|f| ts >= *f),
-                _ => false,
-            }
-    };
+    let first = window_start(parsed);
+    let capable = |v: &serde_json::Value| !windowed || in_window(&first, v);
     // the value is the event of the first push that said the row
     let mut pushed: HashMap<(&str, &str, &str), &str> = HashMap::new();
     let mut in_context: HashSet<(&str, &str, &str)> = HashSet::new();

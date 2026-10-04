@@ -166,6 +166,52 @@ fn stats_rows_shows_pushes_status_and_noise() {
     );
 }
 
+/// PLAN-fael-say-gate chunk 5: an open decision pushed 20 times with no
+/// `in-context` line is listed with the commands to retire it; one that was in
+/// context once, or pushed 19 times, is not. Report only.
+#[test]
+fn stats_lists_open_rows_pushed_often_and_never_in_context() {
+    let d = repo();
+    let state = d.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let id = |text: &str| {
+        let (ok, out, err) = fael(&d, &["add", "decision", text, "--files", "src/a.rs"], "");
+        assert!(ok, "{err}");
+        out.split_whitespace().next().unwrap().to_string()
+    };
+    let (idle, hit, few) = (id("idle choice"), id("hit choice"), id("few choice"));
+    let line = |event: &str, ids: &str, ctx: &str| {
+        format!(
+            r#"{{"ts":"2026-09-26T00:00:00.000Z","repo":{},"client":"claude","event":"{event}","bytes":1,"est_tokens":1,"ids":[{ids}],"in_context":[{ctx}]}}"#,
+            json(&d)
+        )
+    };
+    let mut body = line("in-context", "", &format!("\"{hit}\"")) + "\n";
+    for (row, n) in [(&idle, 20), (&hit, 20), (&few, 19)] {
+        for _ in 0..n {
+            body += &(line("read", &format!("\"{row}\""), "") + "\n");
+        }
+    }
+    std::fs::write(state.join("usage.jsonl"), body).unwrap();
+    let (ok, out, _) = fael_at(&state, &d, &["stats"], "");
+    assert!(ok, "{out}");
+    assert!(
+        out.contains(&format!(
+            "unused decision {idle}: pushed ×20, never in context at an edit — fael close {idle}"
+        )) && out.contains(&format!("--supersedes {idle}")),
+        "{out}"
+    );
+    assert!(!out.contains(&hit) && !out.contains(&few), "{out}");
+    let (ok, out, _) = fael_at(&state, &d, &["stats", "--json"], "");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(
+        ok && v["unused_rows"]
+            == serde_json::json!([{"id": idle, "kind": "decision", "pushes": 20}]),
+        "{out}"
+    );
+}
+
 #[test]
 fn stats_counts_rows_not_in_english() {
     // PLAN-fael-languages chunk 2: the aggregate line reads "rows not in
