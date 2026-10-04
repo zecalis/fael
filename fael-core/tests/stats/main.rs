@@ -51,6 +51,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "constants",
             "est_tokens",
             "events",
+            "incidents",
             "non_english_rows",
             "retired",
             "rounds",

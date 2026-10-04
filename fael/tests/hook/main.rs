@@ -25,6 +25,7 @@ mod compact;
 mod day;
 mod focus;
 mod handoff;
+mod incident;
 mod memory_line;
 mod notify;
 mod overlap;

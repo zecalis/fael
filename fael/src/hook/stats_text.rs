@@ -87,6 +87,22 @@ fn cross_line(s: &core::stats::Stats) -> Option<String> {
     })
 }
 
+/// Incidents a human filed (`incident:<kind>` keys), the newest 4 weeks;
+/// none filed = no line.
+fn incident_line(s: &core::stats::Stats) -> Option<String> {
+    let weeks: Vec<String> = s
+        .incidents
+        .iter()
+        .rev()
+        .take(4)
+        .map(|(week, kinds)| {
+            let k: Vec<String> = kinds.iter().map(|(k, n)| format!("{k} ×{n}")).collect();
+            format!("week of {week}: {}", k.join(", "))
+        })
+        .collect();
+    (!weeks.is_empty()).then(|| format!("  incidents filed: {}", weeks.join(" · ")))
+}
+
 /// The human `fael stats --day` text — format only, every number from core.
 pub(super) fn print_day(v: &core::stats::DayView) {
     let a = &v.all;
@@ -224,6 +240,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             f.session_pairs,
             f.sessions_seen
         );
+    }
+    if let Some(line) = incident_line(s) {
+        println!("{line}");
     }
     let mut cl: Vec<_> = s.by_client.iter().collect();
     cl.sort_by_key(|a| std::cmp::Reverse(a.1.events));

@@ -3,6 +3,7 @@
 //! the per-session constants. No spawn, no clock, no filesystem here.
 
 use super::capture::{Capture, capture};
+use super::incident::{Incidents, incidents};
 use super::metrics::{added_since, ask_totals, non_english_share};
 use super::parse::Parsed;
 use super::retire::{Retired, retired};
@@ -104,6 +105,8 @@ pub struct Stats {
     /// Yield per line kind: what hooks said, and what the same session acted
     /// on after (`said.rs`) — an upper bound, read only to cut.
     pub said: BTreeMap<String, KindYield>,
+    /// Rows a human keyed `incident:<kind>`, per week (`incident.rs`).
+    pub incidents: Incidents,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -171,6 +174,7 @@ pub fn aggregate(
         value,
         unused_rows: unused(parsed, logs),
         said: yields(parsed, logs),
+        incidents: incidents(parsed, logs),
         rows: with_rows.then(|| row_statuses(&parsed.by_id, &parsed.id_repos, logs)),
     }
 }
