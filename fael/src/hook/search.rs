@@ -165,23 +165,14 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, response: &Value) 
         .into_iter()
         .filter(|f| !wrote.contains(f))
         .collect();
-    let mut context = String::new();
-    let mut notice = None;
+    let mut out = Reply::default();
     for (files, event) in [(wrote, SHELL_EDIT), (read, "search")] {
         if files.is_empty() {
             continue;
         }
         let e = Event { files, ..e.clone() };
-        let r = push(&e, event);
-        if let Some(c) = r.context {
-            context.push_str(&c);
-        }
         // one line per beat: the edit side's reminder wins
-        notice = notice.or(r.notice);
+        out = out.and(push(&e, event));
     }
-    Reply {
-        block: false,
-        context: (!context.is_empty()).then_some(context),
-        notice,
-    }
+    out
 }

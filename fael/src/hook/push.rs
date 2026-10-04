@@ -3,14 +3,13 @@
 //! and say each row once per session.
 
 use super::asks::hook_meta;
-use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
-use super::protocol::{Event, Reply, ctx};
-use super::said::{record_in_context, remember, say_only};
+use super::changed::{Ask, Blobs, Hint, edit_hint, read_seen, split_said};
+use super::protocol::{Event, ctx};
+use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
 use super::usage::{memory_line, record_usage_shadow};
 use crate::{aliases, core};
 use std::collections::HashSet;
-use std::io::Read;
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
@@ -224,23 +223,20 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     // is not this edit's to close) taken before the seen filter: a Read before
     // the Edit already said the row, yet the edit still offers its retire.
     let t0: Vec<(&core::Row, usize)> = if edit { tiered.clone() } else { vec![] };
-    let (mut told, mut hinted) = (HashSet::new(), HashSet::new());
-    let mut seen = (!c.session.is_empty())
-        .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
-        .flatten();
     // a row already pushed into this context window is still there — say it
     // once. The lock spans read → append, so a batch of parallel reads queues
     // up behind the first instead of each pushing the same row.
-    if let Some(f) = &mut seen {
-        let mut old = String::new();
-        let _ = f.read_to_string(&mut old);
-        (told, hinted) = read_seen(&old);
-        let old: HashSet<&str> = old.lines().collect();
-        if edit {
-            record_in_context(&c, &tiered, &old, f);
-        }
-        tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
+    let mut out = Outbox::open(
+        (!c.session.is_empty())
+            .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
+            .flatten(),
+    );
+    if edit {
+        out.record_in_context(&c, &tiered);
     }
+    let (told, hinted) = read_seen(out.seen());
+    let old: HashSet<&str> = out.seen().lines().collect();
+    tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
@@ -255,12 +251,10 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let mut blobs = Blobs::new();
     // a hub file with no Now row still says its count line (PUSH_HUB_ROWS)
     if sel.shown.is_empty() && sel.omitted == 0 {
-        // a retire for a row already in context, or a stashed line,
-        // still gets said, even with no rows to join
         let hint = edit
             .then(|| edit_hint(&ask, &t0, &[], &mut blobs))
             .flatten();
-        return say_only(&c, event, seen, hint, notes);
+        return say_alone(&c, event, out, hint, notes);
     }
     let (body, n) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
@@ -277,37 +271,70 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let hint = edit
         .then(|| edit_hint(&ask, &t0, said, &mut blobs))
         .flatten();
-    // only what fit the budget was said; the cut rows may push on a later read
-    remember(seen, &shown, hint.as_ref());
     let usage = memory_line(&body, policy.budget).unwrap_or_default();
     // the cut goes on top too: the count lines sit under the rows, past where a reader stops
     let more = match sel.hidden(n).total() {
         0 => String::new(),
         h => format!(" ({n} of {})", n + h),
     };
-    let context = format!("fael mem for {}{more}:\n{body}{usage}", files.join(", "));
-    let context = match hint {
-        Some(h) => format!("{context}{}\n", h.text),
-        None => context,
-    };
-    let context = match notes {
-        Some(n) => format!("{context}\n{n}"),
-        None => context,
-    };
+    // only what fit the budget was said; the cut rows may push on a later read
+    out.say(Line {
+        kind: Kind::Row { ids: shown.clone() },
+        text: format!("fael mem for {}{more}:\n{body}{usage}", files.join(", ")),
+        action: None,
+    });
+    if let Some(h) = hint {
+        out.say(ask_line(h, "\n"));
+    }
+    if let Some(n) = notes {
+        out.say(Line::notice(format!("\n{n}")));
+    }
+    let mut r = out.reply();
+    let context = r.context().unwrap_or_default();
     let meta = hook_meta(&c, None, true);
     record_usage_shadow(
         &c.client,
         event,
         &c.repo.root,
-        &context,
+        context,
         &shown,
         &meta,
         shadow,
     );
-    Reply {
-        block: false,
-        context: Some(context),
-        notice: whisper(&c, &sel.shown[..n.min(sel.shown.len())], &files),
+    r.notice = whisper(&c, said, &files);
+    r
+}
+
+/// A retire for a row already in context, or a stashed line, still gets
+/// said with no rows to join.
+fn say_alone(
+    c: &super::protocol::Ctx,
+    event: &str,
+    mut out: Outbox,
+    hint: Option<Hint>,
+    notes: Option<String>,
+) -> Reply {
+    let sep = if hint.is_some() { "\n" } else { "" };
+    if let Some(h) = hint {
+        out.say(ask_line(h, ""));
+    }
+    if let Some(n) = notes {
+        out.say(Line::notice(format!("{sep}{n}")));
+    }
+    let r = out.reply();
+    if let Some(said) = r.context() {
+        let meta = hook_meta(c, None, true);
+        record_usage_shadow(&c.client, event, &c.repo.root, said, &[], &meta, None);
+    }
+    r
+}
+
+/// The edit hint as an `Ask` line: every form of it offers `fael close`.
+fn ask_line(h: Hint, end: &str) -> Line {
+    Line {
+        kind: Kind::Ask { ids: h.spent },
+        text: format!("{}{end}", h.text),
+        action: Some("fael close".into()),
     }
 }
 

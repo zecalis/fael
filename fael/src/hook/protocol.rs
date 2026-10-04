@@ -1,9 +1,10 @@
 //! Neutral protocol (SPEC §9) — Event in, Reply out — plus the shared
 //! `Ctx` every event resolves before doing anything else.
 
+pub(crate) use super::say::Reply;
 use super::{push::push, session::session_start, stop::stop};
 use crate::{Repo, core, repo_at};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::io::Read as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -53,21 +54,6 @@ pub(crate) struct Event {
     pub(crate) source: Option<String>,
 }
 
-/// Neutral Reply (SPEC §9).
-#[derive(Debug, Default, Serialize)]
-pub(crate) struct Reply {
-    // ponytail: always false since the Stop-block mode went; kept on the wire
-    // so an integration that reads `block` keeps parsing
-    pub(crate) block: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) context: Option<String>,
-    /// One line for the user, never the agent (PLAN-fael-visible-secretary
-    /// chunk 4): Claude's `systemMessage`, an OpenCode toast. A client with
-    /// no such channel drops it — it must never land in `context`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) notice: Option<String>,
-}
-
 pub(crate) fn cmd(event: &str, client: Option<String>) -> ExitCode {
     let mut stdin = String::new();
     if std::io::stdin().read_to_string(&mut stdin).is_err() {
@@ -109,11 +95,7 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
             eprintln!(
                 "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search|prompt"
             );
-            Reply {
-                block: false,
-                context: None,
-                notice: None,
-            }
+            Reply::default()
         }
     };
     println!(

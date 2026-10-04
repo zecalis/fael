@@ -7,11 +7,14 @@
 
 use super::asks::hook_meta;
 use super::protocol::{Event, Reply, ctx};
+use super::say::{Kind, Line, Outbox};
 use super::state::{lock_seen, seen_path, session_key, state_dir};
 use super::usage::record_usage;
 use crate::core;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+
+/// The call the pointer offers.
+const FIND: &str = "fael find --key <key>";
 
 /// Keys this session was already pointed at, one per line.
 fn hinted_path(session: &str, root: &Path) -> PathBuf {
@@ -31,11 +34,10 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     if hints.is_empty() {
         return Reply::default();
     }
-    let Some(mut f) = lock_seen(&hinted_path(&c.session, &c.repo.root)) else {
+    let Some(f) = lock_seen(&hinted_path(&c.session, &c.repo.root)) else {
         return Reply::default();
     };
-    let mut done = String::new();
-    let _ = f.read_to_string(&mut done);
+    let mut out = Outbox::open(Some(f));
     // also what this session already pushed or found (01M3XKB7M): the .seen
     // list holds those row ids — a key whose rows are all in it is already
     // in context, so pointing at it would repeat what the agent just read.
@@ -45,34 +47,36 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     let new: Vec<_> = hints
         .iter()
         .filter(|(k, _)| {
-            !done.lines().any(|l| l == k.key) && !rows_all_seen(&c.log, &k.key, &seen_ids)
+            !out.seen().lines().any(|l| l == k.key) && !rows_all_seen(&c.log, &k.key, &seen_ids)
         })
         .collect();
     if new.is_empty() {
         return Reply::default();
     }
-    let out: String = new.iter().map(|(k, _)| format!("{}\n", k.key)).collect();
-    let _ = f.write_all(out.as_bytes());
     let list: Vec<String> = new
         .iter()
         .map(|(k, words)| format!("{} ({}, via \"{}\")", k.key, k.count, words.join(" ")))
         .collect();
-    let line = format!(
-        "fael: the prompt names open key(s) {} — fael find --key <key> (MCP: find key=<key>) before assuming there is no prior work",
-        list.join(", ")
-    );
+    out.say(Line {
+        kind: Kind::Pointer {
+            keys: new.iter().map(|(k, _)| k.key.clone()).collect(),
+        },
+        text: format!(
+            "fael: the prompt names open key(s) {} — {FIND} (MCP: find key=<key>) before assuming there is no prior work",
+            list.join(", ")
+        ),
+        action: Some(FIND.into()),
+    });
+    let r = out.reply();
     record_usage(
         &c.client,
         "prompt",
         &c.repo.root,
-        &line,
+        r.context().unwrap_or_default(),
         &[],
         &hook_meta(&c, None, false),
     );
-    Reply {
-        context: Some(line),
-        ..Reply::default()
-    }
+    r
 }
 
 /// The session's seen list, empty when there is none.

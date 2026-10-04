@@ -23,7 +23,7 @@ Full statement: `docs/architecture.md` §0.
 Any line a hook puts in front of the agent (a hint, an ask, a count, a notice) follows both
 rules, or it is dropped, not shipped "for now":
 
-* **Once per session.** Spend a key in the session's seen list (`hook/said.rs`: a row id, or
+* **Once per session.** Spend a key in the session's seen list (`hook/say.rs`: a row id, or
   `~<key>` for a hint) when the line is said; skip it while the key is there. A new session
   asks again; no session id means no memory and fails open. The edit hook runs after the
   write, so the same words on every later edit are noise whatever their truth.

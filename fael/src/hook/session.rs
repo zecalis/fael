@@ -4,6 +4,7 @@
 use super::asks::hook_meta;
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
+use super::say::{Kind, Line, Outbox};
 use super::state::{head_branch, prune_sessions, seen_path, session_key, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core, home};
@@ -22,11 +23,7 @@ const ID_LINE: &str = "- fael: never type an id from memory — verified only af
 this session's `fael find <id>` printed it as `- [<id>]`, else look it up by key/text first";
 
 pub(crate) fn session_start(e: &Event) -> Reply {
-    let no = || Reply {
-        block: false,
-        context: None,
-        notice: None,
-    };
+    let no = Reply::default;
     let c = match ctx(e) {
         Some(c) => c,
         None => return no(),
@@ -113,35 +110,41 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         body.push_str(&line);
     }
     let adopted = crate::journal::home(&c.repo).is_some();
-    let mut context = match (body.is_empty(), adopted) {
-        (true, false) => None,
-        (true, true) => Some(format!("{ISSUE_LINE}\n{ID_LINE}\n")),
-        (false, _) => Some(format!("{body}{ISSUE_LINE}\n{ID_LINE}\n")),
-    };
-    for warn in warnings(&c.repo, adopted) {
-        context = Some(format!("{}{warn}\n", context.unwrap_or_default()));
-    }
-    let Some(context) = context else { return no() };
     // like the read/edit push: usage counts only the ids render actually
     // said — rows the budget cut off never reached any context
-    let n = context.lines().filter(|l| l.starts_with("- [")).count();
-    let notice = brief_line(&c, &shown[..n.min(shown.len())]);
-    let shown: Vec<String> = shown.iter().take(n).map(|r| r.id.clone()).collect();
+    let n = body.lines().filter(|l| l.starts_with("- [")).count();
+    let said = &shown[..n.min(shown.len())];
+    let ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
+    // the rows, the rules (any rows, or an adopted repo), then each warning
+    let rules = adopted || !body.is_empty();
+    let mut out = Outbox::open(None);
+    out.say(Line {
+        kind: Kind::Brief { ids: ids.clone() },
+        text: body,
+        action: None,
+    });
+    if rules {
+        out.say(Line::notice(format!("{ISSUE_LINE}\n{ID_LINE}\n")));
+    }
+    for warn in warnings(&c.repo, adopted) {
+        out.say(Line::notice(format!("{warn}\n")));
+    }
+    let mut r = out.reply();
+    let Some(context) = r.context() else {
+        return no();
+    };
     // the session just began — no round completed yet, so no real tokens
     let meta = hook_meta(&c, None, false);
     record_usage(
         &c.client,
         "session-start",
         &c.repo.root,
-        &context,
-        &shown,
+        context,
+        &ids,
         &meta,
     );
-    Reply {
-        block: false,
-        context: Some(context),
-        notice,
-    }
+    r.notice = brief_line(&c, said);
+    r
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the brief's line for the user — the
