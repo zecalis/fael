@@ -96,7 +96,7 @@ pub(crate) fn for_bump(
     id: &str,
     routing: bool,
 ) -> Result<(Map<String, Value>, Option<String>), String> {
-    let old = core::resolve(log, id)?;
+    let old = core::resolve_row(log, id)?;
     Ok(if routing {
         (old.file_hashes().cloned().unwrap_or_default(), None)
     } else {

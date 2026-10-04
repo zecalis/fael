@@ -4,8 +4,8 @@
 
 use super::{Log, write_both};
 use crate::{
-    Config, Row, Stamp, Urgent, UrgentChange, append, closed, resolve, resolve_urgent, superseded,
-    validate_bump,
+    Config, Row, Stamp, Urgent, UrgentChange, append, closed, resolve_row, resolve_urgent,
+    superseded, validate_bump,
 };
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -41,7 +41,7 @@ pub fn bump_row(
     id: &str,
     opts: BumpOpts,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
-    let old = resolve(log, id)?.clone();
+    let old = resolve_row(log, id)?.clone();
     if closed(log).contains(old.id.as_str()) {
         return Err(format!(
             "rejected: {} is already closed — bump an open row",
