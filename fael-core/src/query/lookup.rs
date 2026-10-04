@@ -154,9 +154,14 @@ each with --key area:topic, so one can be superseded alone"
         .collect();
     if !real.is_empty() && row.files.len() == real.len() && real.iter().all(|f| f.ends_with(".md"))
     {
-        r.push(
-            "files name only *.md docs and no anchor — this row leaves kickoff when the docs move or go; add the code it is about, or an anchor (doc:<name>)".into(),
-        );
+        // the anchor ready to paste, so a row only a doc can cite (product
+        // direction, a plan) gets it right the first time
+        let anchors: Vec<String> = real.iter().map(|f| md_anchor(f)).collect();
+        r.push(format!(
+            "files name only *.md docs and no anchor — this row leaves kickoff when the docs move or go; add the code it is about, or an anchor: --files {},{}",
+            row.files.join(","),
+            anchors.join(",")
+        ));
     }
     // a long row is usually several decisions in one: reversing one then
     // means superseding them all, so the nudge is to split, not to trim
@@ -200,6 +205,17 @@ fn chunk_stem(k: &str) -> Option<&str> {
 
 /// Warnings for a row about to be added — never a reject: a key domain the repo did not declare,
 /// a new key close to an existing one, text over `warn.row_tokens`.
+/// The anchor a doc stands for: `PLAN-vela.md` → `plan:vela` (the plan
+/// convention, AGENTS.md), any other `PRODUCT.md` → `doc:product`.
+fn md_anchor(f: &str) -> String {
+    let stem = f.rsplit('/').next().unwrap_or(f).trim_end_matches(".md");
+    let lower = stem.to_ascii_lowercase();
+    match lower.strip_prefix("plan-") {
+        Some(name) => format!("plan:{name}"),
+        None => format!("doc:{lower}"),
+    }
+}
+
 pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
     let mut w = vec![];
     if let Some(k) = &row.key {
