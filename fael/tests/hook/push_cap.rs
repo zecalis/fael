@@ -3,7 +3,7 @@
 //! rows are counted by the exact call that reaches each class — the file, the
 //! query's directory (same-dir), or the key (shared key).
 
-use super::{fael, json, repo};
+use super::{fael, json, repo, strip_fh};
 use std::path::Path;
 
 /// An issue plus `n` decisions on `src/a.rs`; past `PUSH_HUB_ROWS` (8)
@@ -125,6 +125,9 @@ fn edit_hides_same_dir_neighbour_but_names_the_dir_call() {
         let (ok, _, err) = fael(&d, &["add", "decision", text, "--files", f], "");
         assert!(ok, "{err}");
     }
+    // stamped rows whose files still match earn no hint (PLAN-fael-file-hash
+    // chunk 2) — strip `fh` so this still exercises the legacy retire ask
+    strip_fh(&d, "on a");
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
     assert!(ok, "{out}");

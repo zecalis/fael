@@ -1,8 +1,13 @@
 //! PLAN-fael-close-helpers chunk 1: the edit push names the open issues it
 //! about the file in context, with the `fael close <short id>` call ready to
 //! run; chunk 2's `close --key` lands on the turn's receipt.
+//!
+//! PLAN-fael-file-hash chunk 2 narrows this to rows with no file verdict:
+//! rows stamped with `fh` whose files still match earn no hint at all (see
+//! `changed_hint`), so these tests strip `fh` to exercise the legacy path
+//! with rows that read as written before hashes existed.
 
-use super::{fael, fael_env, json, repo};
+use super::{fael, fael_env, json, repo, strip_fh};
 
 /// An edit of `src/a.rs` in session `s1`; returns the hook's stdout.
 fn edit_a(d: &std::path::Path) -> String {
@@ -28,6 +33,7 @@ fn edit_hint_names_open_issues_with_a_ready_close() {
         let (ok, _, err) = fael(&d, &["add", "issue", t, "--files", "src/a.rs"], "");
         assert!(ok, "{err}");
     }
+    strip_fh(&d, "problem");
     let out = edit_a(&d);
     let hint = out
         .lines()
@@ -64,6 +70,7 @@ fn edit_hint_stays_generic_without_an_open_issue() {
         "",
     );
     assert!(ok, "{err}");
+    strip_fh(&d, "pick x");
     let out = edit_a(&d);
     assert!(out.contains("pick x"), "{out}");
     assert!(!out.contains("done with one?"), "{out}");
@@ -82,6 +89,7 @@ fn edit_after_read_still_offers_the_ready_close() {
         "",
     );
     assert!(ok, "{err}");
+    strip_fh(&d, "seen on read");
     let id = out.split_whitespace().next().unwrap().to_string();
     let input = format!(
         r#"{{"cwd":{},"session_id":"s1","tool_input":{{"file_path":{}}}}}"#,
