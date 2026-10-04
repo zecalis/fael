@@ -70,6 +70,37 @@ fn read_push_caps_at_five_with_next_call() {
     assert!(!out.contains("narrow the filter"), "{out}");
 }
 
+/// PLAN-fael-say-gate chunk 6: a push whose rows fill `push_tokens` has no
+/// budget for the stashed risk line — it is cut, not lost, the count line
+/// still names the call to the cut rows, and a later push with room says it
+/// once.
+#[test]
+fn a_full_budget_cuts_the_stashed_notice_not_the_count_and_a_later_push_says_it() {
+    let d = repo();
+    seed(&d, 7);
+    // a session that starts after the seeded issue, or the issue clears the signal
+    let s = "2099-01-01T00:00:00Z";
+    let stop = format!(
+        r#"{{"cwd":{},"session":"{s}","text":"the schema and the docs are out of sync"}}"#,
+        json(&d)
+    );
+    assert!(fael(&d, &["hook", "stop"], &stop).0);
+    let cfg = d.join(".fael/config.toml");
+    std::fs::write(&cfg, "[budget]\npush_tokens = 60\n").unwrap();
+    let (ok, out) = read(&d, Some(s));
+    assert!(ok, "{out}");
+    assert!(shown(&out) > 0 && shown(&out) < 8, "{out}");
+    assert!(out.contains("fael find --files src/a.rs"), "{out}");
+    assert!(!out.contains("possible problem"), "{out}");
+    // room again: the cut rows and the kept notice come, once
+    std::fs::write(&cfg, "[budget]\npush_tokens = 800\n").unwrap();
+    let (ok, out) = read(&d, Some(s));
+    assert!(ok && out.matches("possible problem").count() == 1, "{out}");
+    assert!(out.contains("out of sync"), "{out}");
+    let (ok, out) = read(&d, Some(s));
+    assert!(ok && !out.contains("possible problem"), "{out}");
+}
+
 #[test]
 fn read_push_omitted_rows_push_later_in_session() {
     let d = repo();

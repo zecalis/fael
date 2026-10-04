@@ -214,8 +214,9 @@ impl Outbox {
     /// and rows, bodies and counts are never cut (a count is the pointer to
     /// what the budget cut): over the budget the stashed notice goes first,
     /// then the edit hint, each whole. A cut line keeps its keys, so a later
-    /// push may say it.
-    pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) {
+    /// push may say it. True when a notice was said, so the caller takes it
+    /// off disk.
+    pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
         let cost = |ls: &[Line]| ls.iter().map(|l| core::est_tokens(&l.text)).sum::<usize>();
         while cost(&keep) > budget {
@@ -228,9 +229,11 @@ impl Outbox {
                 None => break,
             };
         }
+        let notice = keep.iter().any(|l| matches!(l.kind, Kind::Notice));
         for l in keep {
             self.say(l);
         }
+        notice
     }
 
     /// Spend the keys and build the reply — no context when nothing was said.

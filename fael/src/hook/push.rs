@@ -6,7 +6,7 @@ use super::asks::hook_meta;
 use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
-use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
+use super::state::{clear_stash, edits_path, lock_seen, peek_stash, record_edits, seen_path};
 use super::usage::{memory_line, record_usage_shadow};
 use crate::{aliases, core};
 use std::collections::HashSet;
@@ -19,16 +19,18 @@ fn risk_line(marker: &str, files: &[String]) -> String {
     )
 }
 
-/// Take the lines stop stashed for this push — the Weak risk mention and the
-/// capture-reject hint, each shown once, whether or not rows join them.
-/// Joined, or `None` when there are none. Stop stashed them for the session's
-/// own thread — a sub-agent's push leaves them there.
-fn take_stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
+/// The lines stop stashed for this push — the Weak risk mention and the
+/// capture-reject hint, whether or not rows join them. Joined, or `None` when
+/// there are none. Only looked at: `push` clears them once they were said, so
+/// a push with no budget left leaves them for the next. Stop stashed them for
+/// the session's own thread — a sub-agent's push leaves them there.
+fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
     if c.session.is_empty() || !c.agent.is_empty() {
         return None;
     }
-    let risk = take_risk(&c.session, &c.repo.root).map(|m| risk_line(&m, files));
-    let hint = take_hint(&c.session, &c.repo.root).map(|h| format!("fael: {h}"));
+    let (risk, hint) = peek_stash(&c.session, &c.repo.root);
+    let risk = risk.map(|m| risk_line(&m, files));
+    let hint = hint.map(|h| format!("fael: {h}"));
     let lines: Vec<String> = risk.into_iter().chain(hint).collect();
     (!lines.is_empty()).then(|| lines.join("\n"))
 }
@@ -252,7 +254,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     };
     let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     let sel = core::select(tiered, &focus, &policy);
-    let notes = take_stashed(&c, &files);
+    let notes = stashed(&c, &files);
+    let has_notes = notes.is_some();
     let mut blobs = Blobs::new();
     let (body, n, bodies) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
@@ -280,7 +283,9 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     }));
     lines.extend(notes.map(|n| Line::notice(format!("{n}\n"))));
     // the hint and the stashed notice share the budget the rows left
-    out.say_within(policy.budget, lines);
+    if out.say_within(policy.budget, lines) && has_notes {
+        clear_stash(&c.session, &c.repo.root);
+    }
     let mut r = out.reply();
     if let Some(context) = r.context() {
         let meta = hook_meta(&c, None, true);
