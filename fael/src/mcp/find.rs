@@ -68,7 +68,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // a non-id-shaped `id` keeps the old prefix shortcut: an exact id or
     // unique prefix pulls that row's body, else the call is rejected
     if let Some(id) = s(a, "id") {
-        let row = core::resolve(&log, &id)?;
+        let row = core::resolve_row(&log, &id)?;
         let shown = row.id.clone();
         let text = crate::find::branches::tag(core::render_full(&log, &[row], 10_000), &branch_of);
         return Ok((text, vec![shown]));
