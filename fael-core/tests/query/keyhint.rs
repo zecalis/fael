@@ -158,3 +158,24 @@ fn namespace_and_trailing_segments_never_match() {
     assert_eq!(keys_of(&l, "store"), ["fael:store"]);
     assert_eq!(keys_of(&l, "adjustment"), ["vela:adjustment-scope"]);
 }
+
+/// 01M42G02E / 01M42FPP: a word that is some open key's namespace is the
+/// area — it names no key, even where it sits as another key's head.
+#[test]
+fn namespace_word_never_names_a_head() {
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000050", "plan:vela:handoff"),
+            k("A0000000000000000000000051", "vela:workbench-grid"),
+            k("A0000000000000000000000052", "plan:fael-durable-log"),
+            k("A0000000000000000000000053", "fael:store"),
+        ],
+        ..Log::default()
+    };
+    assert!(keys_of(&l, "fix the vela build").is_empty());
+    assert!(keys_of(&l, "fael plan handoff").is_empty());
+    // the specific word still points, and a key typed whole always does
+    assert_eq!(keys_of(&l, "workbench"), ["vela:workbench-grid"]);
+    assert_eq!(keys_of(&l, "read plan:vela:handoff"), ["plan:vela:handoff"]);
+}
