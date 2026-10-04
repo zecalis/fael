@@ -7,7 +7,7 @@ use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::counts::counts;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
-use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
+use super::state::{clear_stash, edits_path, lock_seen, peek_stash, record_edits, seen_path};
 use super::usage::{memory_line, record_usage_shadow};
 use crate::{aliases, core};
 
@@ -19,16 +19,18 @@ fn risk_line(marker: &str, files: &[String]) -> String {
     )
 }
 
-/// Take the lines stop stashed for this push — the Weak risk mention and the
-/// capture-reject hint, each shown once, whether or not rows join them.
-/// Joined, or `None` when there are none. Stop stashed them for the session's
-/// own thread — a sub-agent's push leaves them there.
-fn take_stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
+/// The lines stop stashed for this push — the Weak risk mention and the
+/// capture-reject hint, whether or not rows join them. Joined, or `None` when
+/// there are none. Only looked at: `push` clears them once they were said, so
+/// a push with no budget left leaves them for the next. Stop stashed them for
+/// the session's own thread — a sub-agent's push leaves them there.
+fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
     if c.session.is_empty() || !c.agent.is_empty() {
         return None;
     }
-    let risk = take_risk(&c.session, &c.repo.root).map(|m| risk_line(&m, files));
-    let hint = take_hint(&c.session, &c.repo.root).map(|h| format!("fael: {h}"));
+    let (risk, hint) = peek_stash(&c.session, &c.repo.root);
+    let risk = risk.map(|m| risk_line(&m, files));
+    let hint = hint.map(|h| format!("fael: {h}"));
     let lines: Vec<String> = risk.into_iter().chain(hint).collect();
     (!lines.is_empty()).then(|| lines.join("\n"))
 }
@@ -172,7 +174,8 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     };
     let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     let sel = core::select(tiered, &focus, &policy);
-    let notes = take_stashed(&c, &files);
+    let notes = stashed(&c, &files);
+    let has_notes = notes.is_some();
     let mut blobs = Blobs::new();
     let (body, n, bodies) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
@@ -191,22 +194,15 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let hint = edit
         .then(|| edit_hint(&ask, &t0, said, &mut blobs))
         .flatten();
-    say_rows(
-        &mut out,
-        &sel,
-        &files,
-        (body, n, bodies),
-        &shown,
-        policy.budget,
-    );
-    if let Some(h) = hint {
-        out.say(Line {
-            kind: Kind::Ask { ids: h.spent },
-            text: format!("{}\n", h.text),
-        });
-    }
-    if let Some(n) = notes {
-        out.say(Line::notice(format!("{n}\n")));
+    let mut lines = row_lines(&out, &sel, &files, (body, n, bodies), &shown, policy.budget);
+    lines.extend(hint.map(|h| Line {
+        kind: Kind::Ask { ids: h.spent },
+        text: format!("{}\n", h.text),
+    }));
+    lines.extend(notes.map(|n| Line::notice(format!("{n}\n"))));
+    // the hint and the stashed notice share the budget the rows left
+    if out.say_within(policy.budget, lines) && has_notes {
+        clear_stash(&c.session, &c.repo.root);
     }
     let mut r = out.reply();
     if let Some(context) = r.context() {
@@ -222,23 +218,25 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
             shadow.filter(|_| n > 0),
         );
     }
-    r.notice = whisper(&c, said, &files);
+    r.notice = super::tally::whisper(&c, said, &files);
     r
 }
 
-/// The rows under their header, then the `bodies:` line and the count
-/// lines — each said once per session (01M42F5B). Only what fit the budget
+/// The lines of the rows under their header, then the `bodies:` line and the count
+/// lines — each said once per session (01M42F5B); `told` drops a count line
+/// this session already heard. Only what fit the budget
 /// was said; the cut rows may push on a later read. A hub file with no Now
 /// row says its count line under the header alone (PUSH_HUB_ROWS), or
 /// nothing once this session was told.
-fn say_rows(
-    out: &mut Outbox,
+fn row_lines(
+    told: &Outbox,
     sel: &core::Selection,
     files: &[String],
     (body, n, bodies): (String, usize, Option<String>),
     shown: &[String],
     budget: usize,
-) {
+) -> Vec<Line> {
+    let mut out = vec![];
     // the cut goes on top too: the count lines sit under the rows, past where a reader stops
     let more = match sel.hidden(n).total() {
         0 => String::new(),
@@ -255,7 +253,7 @@ fn say_rows(
     .into_iter()
     .map(|(what, l)| (format!("{}|{what}", files.join(",")), l))
     .filter(|(k, _)| {
-        out.fresh(&Kind::Count {
+        told.fresh(&Kind::Count {
             keys: vec![k.clone()],
         })
     })
@@ -268,7 +266,7 @@ fn say_rows(
     };
     if n > 0 {
         let usage = memory_line(&body, budget).unwrap_or_default();
-        out.say(Line {
+        out.push(Line {
             kind: Kind::Row {
                 ids: shown.to_vec(),
             },
@@ -278,45 +276,11 @@ fn say_rows(
         count.text = format!("{header}{}", count.text);
     }
     if let Some(text) = bodies {
-        out.say(Line {
+        out.push(Line {
             kind: Kind::Bodies,
             text,
         });
     }
-    out.say(count);
-}
-
-/// PLAN-fael-visible-secretary chunk 4: the user hears which decision or
-/// issue the agent was just reminded of — one line, the first such row, at
-/// most once per file per session. Every reminded id also goes to the
-/// tally for the turn's receipt. Notes and repo kinds stay quiet: a
-/// reminder is a choice made or a problem known, never a row count.
-fn whisper(c: &super::protocol::Ctx, said: &[&core::Row], files: &[String]) -> Option<String> {
-    if !c.repo.cfg.notify_user {
-        return None;
-    }
-    let hits: Vec<&core::Row> = said
-        .iter()
-        .copied()
-        .filter(|r| matches!(r.kind.as_str(), "decision" | "issue"))
-        .collect();
-    let ids: Vec<&str> = hits.iter().map(|r| r.id.as_str()).collect();
-    super::tally::note(&c.session, &c.repo.root, "reminded", &ids);
-    let first = hits.first()?;
-    if !super::tally::first_whisper(&c.session, &c.repo.root, files) {
-        return None;
-    }
-    let label = match &first.key {
-        Some(k) => format!("#{k}"),
-        None => core::abbrev(&c.log).short(&first.id).to_string(),
-    };
-    let more = match hits.len() {
-        1 => String::new(),
-        n => format!(" +{} more", n - 1),
-    };
-    Some(format!(
-        "fael: reminded agent — {label} \"{}\" ({}){more}",
-        first.display_title(),
-        files.join(", ")
-    ))
+    out.push(count);
+    out
 }

@@ -130,21 +130,24 @@ pub(crate) fn prune_sessions(dir: &Path) {
     }
 }
 
-/// Take the stashed risk note, if any — the file is gone after this call.
-pub(crate) fn take_risk(session: &str, root: &Path) -> Option<String> {
-    take(&risk_path(session, root))
+/// The stashed risk note and capture-reject hint, if any — left on disk until
+/// `clear_stash`, so a push that had no budget for them leaves them for the next.
+pub(crate) fn peek_stash(session: &str, root: &Path) -> (Option<String>, Option<String>) {
+    let peek = |path: &Path| {
+        let s = std::fs::read_to_string(path).ok()?;
+        let s = s.trim().to_string();
+        (!s.is_empty()).then_some(s)
+    };
+    (
+        peek(&risk_path(session, root)),
+        peek(&hint_path(session, root)),
+    )
 }
 
-/// Take the stashed capture-reject hint, if any — same once-only rule.
-pub(crate) fn take_hint(session: &str, root: &Path) -> Option<String> {
-    take(&hint_path(session, root))
-}
-
-fn take(path: &Path) -> Option<String> {
-    let s = std::fs::read_to_string(path).ok()?;
-    let _ = std::fs::remove_file(path);
-    let s = s.trim().to_string();
-    (!s.is_empty()).then_some(s)
+/// Delete both stashes — once their line was said, never before.
+pub(crate) fn clear_stash(session: &str, root: &Path) {
+    let _ = std::fs::remove_file(risk_path(session, root));
+    let _ = std::fs::remove_file(hint_path(session, root));
 }
 
 /// One `{"path","at"[, "worktree","session"]}` line per edit event, in order —
