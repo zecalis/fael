@@ -41,7 +41,7 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "bump",
         "same text/files, new to/urgent/revisit",
         "fael bump <id> [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent]
-    (same text/files, new version — text and files never change through bump)",
+    (same id, text and files — one bump event; text and files never change through bump)",
     ),
     (
         "claim",

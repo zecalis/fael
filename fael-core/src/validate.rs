@@ -133,6 +133,29 @@ pub fn validate_restore(row: &Row, cfg: &Config) -> Result<(), String> {
     check_common(row, cfg)
 }
 
+/// Check a bump event (`fael bump`, `fael claim`) before it is written: a
+/// carrier — no kind, no files, closes and restores nothing — naming the row
+/// it moves. Whether that row is open is decided in `bump_row`.
+pub fn validate_bump(row: &Row, cfg: &Config) -> Result<(), String> {
+    if !row.kind.is_empty() || !row.files.is_empty() {
+        return Err(
+            "rejected: a bump row carries no kind and no files — it only moves a row".into(),
+        );
+    }
+    if row.reference.is_some() || row.restores.is_some() {
+        return Err(
+            "rejected: a bump row closes and restores nothing — it only moves a row".into(),
+        );
+    }
+    if row.bumps.as_deref().is_none_or(|e| e.trim().is_empty()) {
+        return Err("rejected: bump needs the id of the row it moves — `fael bump <id>`".into());
+    }
+    if row.urgent.is_some_and(|u| !u.is_finite()) {
+        return Err("rejected: urgent must be a finite number".into());
+    }
+    check_common(row, cfg)
+}
+
 fn check_common(row: &Row, cfg: &Config) -> Result<(), String> {
     if row.text.trim().is_empty() {
         return Err("rejected: text is required — write it so it stands alone months later".into());

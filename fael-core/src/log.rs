@@ -15,7 +15,7 @@ mod restore;
 pub use adopt::{Adopted, adopt_tree};
 pub use append::{MONTH_MAX, add, add_row, append, close, close_row, mv_row, needs_seal};
 pub(crate) use append::{lock, tmp_rename, write_both};
-pub use bump::{BumpOpts, bump_row};
+pub use bump::{BumpOpts, bump_row, fold_bumps};
 pub use purge::{Purged, purge_row};
 pub use restore::{Restored, restore_row};
 

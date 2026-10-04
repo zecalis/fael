@@ -148,7 +148,8 @@ fn union(r: &crate::Repo) -> (crate::core::Log, HashSet<String>) {
     (log, only)
 }
 
-/// The union read, untagged — what the hooks, the write path and `doctor` use.
+/// The union read, untagged and raw (bump events not folded) — sync ships
+/// it; the hooks, the write path and `doctor` go through `crate::read`.
 pub(crate) fn merged(r: &crate::Repo) -> crate::core::Log {
     union(r).0
 }
@@ -183,6 +184,7 @@ pub(crate) fn branch_alive(common: &Path, branch: &str) -> bool {
 // — `store = "local"` already makes those rows journal-only.
 pub(crate) fn read(r: &crate::Repo) -> (crate::core::Log, BranchMap) {
     let (log, only) = union(r);
+    let log = crate::core::fold_bumps(log);
     let cur = head_branch(&r.root);
     let common = r.journal.as_deref().and_then(Path::parent);
     let shared = std::fs::symlink_metadata(&r.fael).is_ok_and(|m| m.file_type().is_symlink());

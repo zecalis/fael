@@ -222,7 +222,7 @@ pub(crate) fn close_row(
     Ok((row, path, warns))
 }
 
-/// `fael bump <id>` — new `to`/`urgent`/`revisit` as a new version superseding the old row.
+/// `fael bump <id>` — new `to`/`urgent`/`revisit` on the same row, under its id (a bump event).
 /// At most one of `--urgent` (back of the queue), `--urgent-before <id>`
 /// (just above that row), `--not-urgent` (leave the queue); none keeps the
 /// old number. Absent `--revisit` keeps the old date/text; a value sets it.

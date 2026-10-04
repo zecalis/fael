@@ -41,7 +41,7 @@ impl Own<'_> {
     /// second failure is the caller's next `fael sync`.
     pub(super) fn push(&self, o: &Others) -> Result<Pushed, String> {
         let r = self.r;
-        let mut log = crate::read(r);
+        let mut log = crate::journal::merged(r); // raw: never ship a folded row
         let imported = imported_ids(r);
         let carried = |rows: &[core::Row]| carried(rows, self.by, &imported, o);
         let (rows0, closes0) = (carried(&log.rows), carried(&log.closes));

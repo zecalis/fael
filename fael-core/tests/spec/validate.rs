@@ -145,3 +145,29 @@ fn validate_rejects_non_canonical_files() {
         );
     }
 }
+
+/// A bump event (format.md §Bump) is a carrier naming the row it moves: no
+/// kind, no files, a `bumps` id; anything else is rejected before writing.
+#[test]
+fn bump_event_is_a_carrier_naming_its_row() {
+    let cfg = Config::default();
+    let ev = Row::bumped("tester-0000", "01J8ZQ3K4M7N2P5R8T1V4X6Y9A");
+    assert!(validate_bump(&ev, &cfg).is_ok());
+    assert_eq!(ev.text, "01J8ZQ3K4M7N2P5R8T1V4X6Y9A bumped");
+    let mut kinded = ev.clone();
+    kinded.kind = "note".into();
+    assert!(
+        validate_bump(&kinded, &cfg)
+            .unwrap_err()
+            .contains("no kind")
+    );
+    let mut blank = ev.clone();
+    blank.bumps = Some(" ".into());
+    assert!(
+        validate_bump(&blank, &cfg)
+            .unwrap_err()
+            .contains("id of the row")
+    );
+    // an add row's validate never lets an event through as a result
+    assert!(validate(&ev, &cfg).is_err());
+}

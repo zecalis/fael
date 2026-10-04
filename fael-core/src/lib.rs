@@ -41,8 +41,8 @@ pub use id::{
 pub use lang::{Hit, Lang, by_name, marker_hit, row_language_check};
 pub use log::{
     Adopted, BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, adopt_tree, append,
-    bump_row, close, close_row, decode_text, is_month, mv_row, needs_seal, parse, purge_row, read,
-    read_imported, restore_row,
+    bump_row, close, close_row, decode_text, fold_bumps, is_month, mv_row, needs_seal, parse,
+    purge_row, read, read_imported, restore_row,
 };
 pub use query::{
     Abbrev, Background, Bucket, Cut, EXPAND_MAX, Filter, Focus, Hidden, KeyUse, MdRef,
@@ -57,7 +57,8 @@ pub use query::{
 };
 pub use row::{Row, Stamp};
 pub use validate::{
-    normalize_files, secret, valid_key, validate, validate_alias, validate_close, validate_restore,
+    normalize_files, secret, valid_key, validate, validate_alias, validate_bump, validate_close,
+    validate_restore,
 };
 
 /// Core kinds with fixed meaning; a repo adds more through `Config::kinds`.

@@ -23,7 +23,8 @@ fn urgent_and_bump_round_trip() {
         "",
     );
     assert!(!ok && err.contains("urgent is for issues"), "{err}");
-    // bump the second above the first: half the top → 0.5, only it rewritten
+    // bump the second above the first: half the top → 0.5, only it moved,
+    // under its own id (one bump event, no new version)
     let id_b = row_json(&d, "second hot")["id"]
         .as_str()
         .unwrap()
@@ -35,11 +36,11 @@ fn urgent_and_bump_round_trip() {
     let (ok, out, err) = fael(&d, &["bump", &id_b, "--urgent-before", &id_a], "");
     assert!(ok, "{err}");
     let id_b2 = out.split_whitespace().next().unwrap().to_string();
-    assert_ne!(id_b, id_b2);
+    assert_eq!(id_b, id_b2);
     let b2 = row_json(&d, "second hot");
     assert_eq!(b2["urgent"].as_f64(), Some(0.5));
-    assert_eq!(b2["id"].as_str().unwrap(), id_b2);
-    assert_eq!(b2["supersedes"].as_str().unwrap(), id_b);
+    assert_eq!(b2["id"].as_str().unwrap(), id_b);
+    assert!(b2.get("supersedes").is_none(), "{b2}");
     // the queue order follows the new number, rendered on the line
     let (_, out, _) = fael(&d, &["find", "--kind", "issue"], "");
     assert!(out.contains("second hot (urgent 0.5)"), "{out}");

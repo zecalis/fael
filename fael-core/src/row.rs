@@ -67,6 +67,13 @@ pub struct Row {
     /// keep it in `extra`, no `v` bump.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restores: Option<String>,
+    /// The row this bump event moves (`fael bump`, `fael claim`): its id,
+    /// which stays the row's id. Set only on bump event rows (no kind, no
+    /// files), which carry the row's new `to`/`urgent`/`revisit`/`held`/`fh`;
+    /// `fold_bumps` lays the newest onto the row in memory. Top-level like
+    /// `to`, same compat: old readers skip the carrier, no `v` bump.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bumps: Option<String>,
     #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
     #[serde(flatten)]
@@ -225,6 +232,21 @@ impl Row {
             by: by.into(),
             text: format!("{target} restored — supersede by {edge} reverted"),
             restores: Some(edge.into()),
+            ..Row::default()
+        }
+    }
+
+    /// A fresh v1 bump event for row `target` — a carrier like `restored`,
+    /// its `text` naming the row in full for readers that predate the rule.
+    pub fn bumped(by: &str, target: &str) -> Row {
+        let ms = now_ms();
+        Row {
+            v: Some(1),
+            id: ulid_at(ms),
+            ts: rfc3339(ms),
+            by: by.into(),
+            text: format!("{target} bumped"),
+            bumps: Some(target.into()),
             ..Row::default()
         }
     }
