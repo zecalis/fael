@@ -30,6 +30,9 @@ const HINT_MAX_KEYS: usize = 3;
 /// is the repo's own list of such words — a generic head like "workspace" —
 /// excluded the same way, ASCII case-insensitive; a key named whole still
 /// hints.
+/// A head alone names a key only when the key has no other nameable segment
+/// or the head is a family (two or more open keys share it); a lone key with
+/// more segments needs a second one named (3-char words count there).
 /// Open = some row on the key is neither closed nor superseded. At most
 /// `HINT_MAX_KEYS`, best match first, most used first as the tie-break.
 pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<String>)> {
@@ -45,9 +48,10 @@ pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<S
         .filter_map(|k| k.key.split_once(':'))
         .map(|(ns, _)| ns.to_ascii_lowercase())
         .collect();
+    // 3 chars may meet a trailing segment (`api` in `public-api`), never a head
     let words: std::collections::HashSet<String> = prompt
         .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| w.len() >= 4 && !w.bytes().all(|b| b.is_ascii_digit()))
+        .filter(|w| w.len() >= 3 && !w.bytes().all(|b| b.is_ascii_digit()))
         .map(str::to_ascii_lowercase)
         .filter(|w| !areas.contains(w) && !stop.iter().any(|s| s.eq_ignore_ascii_case(w)))
         .collect();
@@ -58,6 +62,12 @@ pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<S
             .split([':', '-', '_', '.', '/'])
             .map(|s| s.to_ascii_lowercase())
             .collect()
+    }
+    // a head several open keys share is a topic (`credit` over credit-*);
+    // the head of a lone key is just its first word (`public` in public-api)
+    let mut family: std::collections::HashMap<String, usize> = Default::default();
+    for k in &keys {
+        *family.entry(segs(&k.key).swap_remove(0)).or_default() += 1;
     }
     let mut hit: Vec<(KeyUse, Vec<String>, bool)> = vec![];
     for k in &keys {
@@ -72,8 +82,15 @@ pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<S
         let whole = names_key(prompt, &k.key);
         // otherwise the head must match for the key to count at all — the
         // trailing segments only ever raise its rank
-        let head_named = s.first().is_some_and(|h| named.iter().any(|n| n == h));
-        if !whole && !head_named {
+        let head_named = s
+            .first()
+            .is_some_and(|h| h.len() >= 4 && named.iter().any(|n| n == h));
+        // a lone key's head alone is a common word more often than its topic
+        // (vela: "public" → public-api, "rule" → rule-loop): it needs a
+        // second segment named too
+        let nameable = s.iter().filter(|g| !g.bytes().all(|b| b.is_ascii_digit()));
+        let lone = family.get(&s[0]).is_some_and(|n| *n < 2) && nameable.count() > 1;
+        if !whole && (!head_named || lone && named.len() < 2) {
             continue;
         }
         hit.push((k.clone(), named, whole));

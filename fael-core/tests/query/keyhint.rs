@@ -156,7 +156,9 @@ fn namespace_and_trailing_segments_never_match() {
     assert!(keys_of(&l, "data scope").is_empty());
     assert!(keys_of(&l, "the fael log").is_empty());
     assert_eq!(keys_of(&l, "store"), ["fael:store"]);
-    assert_eq!(keys_of(&l, "adjustment"), ["vela:adjustment-scope"]);
+    // a lone key needs a second segment named beside its head
+    assert!(keys_of(&l, "adjustment").is_empty());
+    assert_eq!(keys_of(&l, "adjustment scope"), ["vela:adjustment-scope"]);
 }
 
 /// 01M42G02E / 01M42FPP: a word that is some open key's namespace is the
@@ -176,7 +178,7 @@ fn namespace_word_never_names_a_head() {
     assert!(keys_of(&l, "fix the vela build").is_empty());
     assert!(keys_of(&l, "fael plan handoff").is_empty());
     // the specific word still points, and a key typed whole always does
-    assert_eq!(keys_of(&l, "workbench"), ["vela:workbench-grid"]);
+    assert_eq!(keys_of(&l, "workbench grid"), ["vela:workbench-grid"]);
     assert_eq!(keys_of(&l, "read plan:vela:handoff"), ["plan:vela:handoff"]);
 }
 
@@ -199,9 +201,39 @@ fn stop_word_never_names_a_head() {
             .map(|(k, _)| k.key)
             .collect()
     };
-    assert_eq!(keys_of(&l, "the workspace"), ["vela:workspace-icons"]);
-    assert!(keys("the WORKSPACE layout").is_empty());
+    assert_eq!(keys_of(&l, "the workspace icons"), ["vela:workspace-icons"]);
+    assert!(keys("the WORKSPACE icons").is_empty());
     // other heads are untouched, and a key typed whole still points
-    assert_eq!(keys("workspace credit"), ["vela:credit-ledger"]);
+    assert_eq!(keys("workspace credit ledger"), ["vela:credit-ledger"]);
     assert_eq!(keys("see vela:workspace-icons"), ["vela:workspace-icons"]);
+}
+
+/// The vela report: a lone key's head is a common word more often than its
+/// topic — "public" named public-api, "rule" named rule-loop on prompts about
+/// neither. A lone key needs a second segment (a 3-char one counts there); a
+/// head several keys share still names the family alone; a one-segment key
+/// needs nothing more.
+#[test]
+fn lone_key_needs_a_second_segment() {
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000070", "vela:public-api"),
+            k("A0000000000000000000000071", "vela:rule-loop"),
+            k("A0000000000000000000000072", "vela:credit-ledger"),
+            k("A0000000000000000000000073", "vela:credit-layer"),
+            k("A0000000000000000000000074", "fael:store"),
+        ],
+        ..Log::default()
+    };
+    assert!(keys_of(&l, "make the rule public").is_empty());
+    assert_eq!(keys_of(&l, "the public api"), ["vela:public-api"]);
+    assert_eq!(keys_of(&l, "rule loop"), ["vela:rule-loop"]);
+    // 3 chars never make a head
+    assert!(keys_of(&l, "api").is_empty());
+    assert_eq!(
+        keys_of(&l, "credit"),
+        ["vela:credit-layer", "vela:credit-ledger"]
+    );
+    assert_eq!(keys_of(&l, "store"), ["fael:store"]);
 }

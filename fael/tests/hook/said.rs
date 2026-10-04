@@ -170,7 +170,7 @@ fn a_pointer_earns_on_an_mcp_find_by_its_key() {
         ],
     );
     let input = format!(
-        r#"{{"cwd":{},"session_id":"s1","prompt":"is there credit code yet?"}}"#,
+        r#"{{"cwd":{},"session_id":"s1","prompt":"is there credit ledger code yet?"}}"#,
         json(&d)
     );
     let (ok, out, _) = fael(&d, &["hook", "prompt", "--client", "claude"], &input);
