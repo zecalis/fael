@@ -240,3 +240,56 @@ fn bump_and_claim_never_say_the_filed_supersede() {
         );
     }
 }
+
+/// `find <id>` pulls a content row, never a carrier: a bump event sharing
+/// the short id's prefix (filed right after its row) must not turn the pull
+/// into a text search (CLI) or an ambiguity error (MCP).
+#[test]
+fn find_by_short_id_looks_past_a_bump_event_sharing_the_prefix() {
+    use std::io::Write;
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["add", "issue", "pull me", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let (_, json, _) = fael(&d, &["find", &id, "--json"]);
+    let row: serde_json::Value = serde_json::from_str(json.lines().next().unwrap()).unwrap();
+    let last = if id.ends_with('0') { "1" } else { "0" };
+    let ev = serde_json::json!({
+        "v": 1, "id": format!("{}{last}", &id[..25]), "ts": row["ts"],
+        "by": row["by"], "text": format!("{id} bumped"), "bumps": id,
+    });
+    let log = std::fs::read_dir(d.join(".git/fael/log"))
+        .unwrap()
+        .flatten()
+        .flat_map(|w| std::fs::read_dir(w.path()).unwrap().flatten())
+        .map(|e| e.path())
+        .find(|p| {
+            p.to_string_lossy().ends_with(".jsonl") && !p.to_string_lossy().contains(".close.")
+        })
+        .unwrap();
+    let mut f = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
+    writeln!(f, "{ev}").unwrap();
+    let short = &id[..25];
+    let (ok, out, err) = fael(&d, &["find", short]);
+    assert!(ok && out.contains("pull me"), "{out}{err}");
+    let req = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"tools/call",
+        "params":{"name":"find","arguments":{"id":short}}});
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .arg("mcp")
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .current_dir(&d)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    c.stdin
+        .take()
+        .unwrap()
+        .write_all(format!("{req}\n").as_bytes())
+        .unwrap();
+    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
+    let r: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+    assert_eq!(r["result"]["isError"], false, "{out}");
+    let text = r["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("pull me"), "{text}");
+}

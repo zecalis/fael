@@ -3,7 +3,7 @@
 //! lists the id-shaped tokens prose cites. Pure — no git spawn (core never
 //! spawns); branch escalation lives on the binary side (`fael/src/refs.rs`).
 
-use crate::{Log, Row, looks_like_id};
+use crate::{Log, Row, is_carrier_row, looks_like_id};
 use std::collections::HashMap;
 
 /// Union-scope existence of one token: exact id or case-insensitive prefix
@@ -16,19 +16,23 @@ pub enum Ref<'a> {
     Missing,
 }
 
-/// Existence by exact id or case-insensitive prefix. `log.rows` decide first:
-/// the abbreviation `abbrev()` prints and `resolve()` matches reach only the
-/// rows, so a close row must never turn a row's unique prefix into `Many` —
-/// that would make `find` reject an id it just printed. Only when no row
-/// matches do the closes answer, so a close row's own id still exists
+/// Existence by exact id or case-insensitive prefix. Content rows decide
+/// first: a close row, or a carrier (a bump event filed right after its
+/// row), must never turn a row's unique prefix into `Many` — that would make
+/// `find` reject an id it just printed. Only when no content row matches do
+/// the carriers answer, then the closes, so their own ids still exist
 /// (`One`/`Many`), never `Missing`. Empty tokens never match.
 pub fn ref_state<'a>(log: &'a Log, tok: &str) -> Ref<'a> {
     if tok.is_empty() {
         return Ref::Missing;
     }
-    let mut hits = prefix_hits(&log.rows, tok);
+    let carrier = |r: &&Row| is_carrier_row(r);
+    let mut hits = prefix_hits(log.rows.iter().filter(|r| !carrier(r)), tok);
     if hits.is_empty() {
-        hits = prefix_hits(&log.closes, tok);
+        hits = prefix_hits(log.rows.iter().filter(carrier), tok);
+    }
+    if hits.is_empty() {
+        hits = prefix_hits(log.closes.iter(), tok);
     }
     match hits.len() {
         0 => Ref::Missing,
@@ -38,13 +42,12 @@ pub fn ref_state<'a>(log: &'a Log, tok: &str) -> Ref<'a> {
 }
 
 /// Rows whose id is `tok` or starts with it (case-insensitive).
-fn prefix_hits<'a>(rows: &'a [Row], tok: &str) -> Vec<&'a Row> {
-    rows.iter()
-        .filter(|r| {
-            r.id.get(..tok.len())
-                .is_some_and(|p| p.eq_ignore_ascii_case(tok))
-        })
-        .collect()
+fn prefix_hits<'a>(rows: impl Iterator<Item = &'a Row>, tok: &str) -> Vec<&'a Row> {
+    rows.filter(|r| {
+        r.id.get(..tok.len())
+            .is_some_and(|p| p.eq_ignore_ascii_case(tok))
+    })
+    .collect()
 }
 
 /// Id-shaped tokens in prose, deduped (case-insensitively), in order. Split

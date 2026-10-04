@@ -42,7 +42,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // text search (a text query equalling a unique id prefix means the id)
     if forced.is_none()
         && let Some(t) = text
-        && let Ok(row) = core::resolve(&log, t)
+        && let Ok(row) = core::resolve_row(&log, t)
     {
         found(&r.root, &row.id);
         return show_one(a, &log, row, &branch_of);

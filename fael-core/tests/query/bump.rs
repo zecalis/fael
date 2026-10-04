@@ -311,6 +311,9 @@ fn close_and_bump_resolve_past_a_bump_event_sharing_the_prefix() {
     assert_eq!(resolve_row(&l, short).unwrap().id, r.id);
     let e = resolve_row(&l, &ev.id).unwrap_err();
     assert!(e.contains("no row"), "{e}");
+    // `find`'s lookup: the prefix names the row, the event id still exists
+    assert!(matches!(ref_state(&l, short), Ref::One(x) if x.id == r.id));
+    assert!(matches!(ref_state(&l, &ev.id), Ref::One(x) if x.id == ev.id));
     let b = bump(&dir, &cfg, &st, short, keep()).unwrap();
     assert_eq!(b.id, r.id);
     let (c, _, _) = close_row(&dir, None, &view(&dir), &cfg, &st, short, "done").unwrap();
