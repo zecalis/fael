@@ -311,3 +311,38 @@ fn bodies_line_is_said_once_per_session() {
     let (_, b) = read_file(&d, Some("b2"), "src/b.rs");
     assert!(b.contains("bodies: fael find <id>"), "{b}");
 }
+
+/// Each count line is said once per what it counts: a read tells the file's
+/// count, and a later edit of that file (edits keep the same-dir tier reads
+/// skip) still says its new `… more in src/` line.
+#[test]
+fn a_new_count_line_is_said_after_the_file_count() {
+    let d = repo();
+    seed(&d, 15);
+    std::fs::write(d.join("src/z.rs"), "// z\n").unwrap();
+    for i in 0..10 {
+        let (ok, _, err) = fael(
+            &d,
+            &["add", "decision", &format!("z {i}"), "--files", "src/z.rs"],
+            "",
+        );
+        assert!(ok, "{err}");
+    }
+    let (_, first) = read(&d, Some("n1"));
+    assert!(first.contains("more about this file"), "{first}");
+    assert!(!first.contains("more in src/"), "{first}");
+    let input = format!(
+        r#"{{"cwd":{},"session":"n1","files":["src/a.rs"]}}"#,
+        json(&d)
+    );
+    let (ok, edit, err) = fael(&d, &["hook", "edit"], &input);
+    assert!(ok, "{err}");
+    // no row left to say: the header rides the first count line still unsaid
+    assert!(shown(&edit) == 0, "{edit}");
+    assert!(
+        edit.contains(r#""context":"fael mem for src/a.rs (0 of "#)
+            && edit.contains("):\\n… +10 more in src/ — fael find --files src/\\n"),
+        "{edit}"
+    );
+    assert!(!edit.contains("more about this file"), "{edit}");
+}

@@ -356,8 +356,9 @@ fn session_start_lists_mine_then_hot_urgent() {
 
 /// PLAN-fael-id-refs chunk-4 (ids:integrity): an id is verified only after
 /// find printed it, never typed from memory. PLAN-fael-say-gate chunk 2: the
-/// rule rides the skill, the help and the reject of an id that does not
-/// exist — never the session-start text, and neither does the report rule.
+/// rule rides the skill's description, the help and the reject of an id that
+/// does not exist — never the session-start text, and neither does the
+/// report rule.
 #[test]
 fn id_rule_rides_the_reject_not_the_session_start() {
     let d = repo();
@@ -373,6 +374,18 @@ fn id_rule_rides_the_reject_not_the_session_start() {
     assert!(ok && out.contains("1 open issue"), "{out}");
     for rule in ["never type an id from memory", "saw something broken"] {
         assert!(!out.contains(rule), "{rule} in:\n{out}");
+    }
+    // the skill's description is always in context, its body only once invoked
+    let skill = include_str!("../../skill/SKILL.md");
+    let description = skill
+        .lines()
+        .find(|l| l.starts_with("description: "))
+        .unwrap();
+    for rule in ["likely to break", "never from memory"] {
+        assert!(
+            description.contains(rule),
+            "{rule} missing in:\n{description}"
+        );
     }
     let (ok, _, err) = fael(&d, &["close", "01ZZZZZZZZ", "done"], "");
     assert!(!ok && err.contains("never from memory"), "{err}");

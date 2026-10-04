@@ -4,12 +4,12 @@
 
 use super::asks::hook_meta;
 use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
+use super::counts::counts;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{edits_path, lock_seen, record_edits, seen_path, take_hint, take_risk};
 use super::usage::{memory_line, record_usage_shadow};
 use crate::{aliases, core};
-use std::collections::HashSet;
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
@@ -31,85 +31,6 @@ fn take_stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
     let hint = take_hint(&c.session, &c.repo.root).map(|h| format!("fael: {h}"));
     let lines: Vec<String> = risk.into_iter().chain(hint).collect();
     (!lines.is_empty()).then(|| lines.join("\n"))
-}
-
-/// The directory calls that reach the hidden same-dir ring: every distinct
-/// parent of the queried files, each with a trailing `/` (a directory query).
-/// `None` when no file sits in a directory (root-level files).
-fn dirs_arg(files: &[String]) -> Option<String> {
-    let mut dirs: Vec<&str> = files
-        .iter()
-        .filter_map(|f| f.rsplit_once('/').map(|(d, _)| d))
-        .collect();
-    dirs.sort_unstable();
-    dirs.dedup();
-    (!dirs.is_empty()).then(|| {
-        dirs.iter()
-            .map(|d| format!("{d}/"))
-            .collect::<Vec<_>>()
-            .join(",")
-    })
-}
-
-/// The count lines under the rendered rows — one per class, each naming the
-/// exact call that reaches it: tier-0 cuts by the file (the row cap and the
-/// budget cut), the same-dir ring by the query's directory, and each hidden
-/// key (folded into one line past the first). `rendered` is how many rows render actually said. `hidden` routes the
-/// budget cut by each row's L1 tier too, so a budget-cut same-dir or
-/// shared-key row (a Now row the cap never touched) names the right call.
-fn counts(sel: &core::Selection, rendered: usize, files: &[String]) -> Vec<String> {
-    let mut out = vec![];
-    let hidden = sel.hidden(rendered);
-    if hidden.file > 0 {
-        let what = if files.len() == 1 {
-            "this file"
-        } else {
-            "these files"
-        };
-        out.push(format!(
-            "… +{} more about {what} — fael find --files {}",
-            hidden.file,
-            crate::find::quoted(&files.join(","))
-        ));
-    }
-    if hidden.dirs > 0
-        && let Some(dirs) = dirs_arg(files)
-    {
-        out.push(format!(
-            "… +{} more in {dirs} — fael find --files {}",
-            hidden.dirs,
-            crate::find::quoted(&dirs)
-        ));
-    }
-    match hidden.keys.as_slice() {
-        [] => {}
-        [(key, n)] => out.push(format!(
-            "… +{n} more with #{key} — fael find --key {}",
-            crate::find::quoted(key)
-        )),
-        // one line however many keys: a file whose rows carry a dozen keys
-        // used to spend more tokens on the footer than on the rows
-        many => {
-            let mut top = many.to_vec();
-            top.sort_by_key(|a| std::cmp::Reverse(a.1)); // stable: ties keep encounter order
-            let named: Vec<String> = top
-                .iter()
-                .take(3)
-                .map(|(k, n)| format!("#{k} ({n})"))
-                .collect();
-            let rest = match many.len() - named.len() {
-                0 => String::new(),
-                r => format!(", +{r} keys"),
-            };
-            out.push(format!(
-                "… +{} more under {} keys: {}{rest} — fael find --key <key>",
-                many.iter().map(|(_, n)| n).sum::<usize>(),
-                many.len(),
-                named.join(", ")
-            ));
-        }
-    }
-    out
 }
 
 /// Render the selected rows with the token budget — the hard cap after the
@@ -240,8 +161,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         out.record_in_context(&c, &tiered);
     }
     let (told, hinted) = read_seen(out.seen());
-    let old: HashSet<&str> = out.seen().lines().collect();
-    tiered.retain(|(r, _)| !old.contains(r.id.as_str()));
+    tiered.retain(|(r, _)| !out.has(&r.id));
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
@@ -283,8 +203,6 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
         out.say(Line {
             kind: Kind::Ask { ids: h.spent },
             text: format!("{}\n", h.text),
-            // every form of the hint offers it
-            action: Some("fael close".into()),
         });
     }
     if let Some(n) = notes {
@@ -327,18 +245,26 @@ fn say_rows(
         h => format!(" ({n} of {})", n + h),
     };
     let header = format!("fael mem for {}{more}:\n", files.join(", "));
-    // with nothing selected or omitted there is no cut to name
-    let lines = if sel.shown.is_empty() && sel.omitted == 0 {
+    // with nothing selected or omitted there is no cut to name; a line this
+    // session was told is left out, a new kind of cut is still said
+    let lines: Vec<(String, String)> = if sel.shown.is_empty() && sel.omitted == 0 {
         vec![]
     } else {
         counts(sel, n, files)
-    };
+    }
+    .into_iter()
+    .map(|(what, l)| (format!("{}|{what}", files.join(",")), l))
+    .filter(|(k, _)| {
+        out.fresh(&Kind::Count {
+            keys: vec![k.clone()],
+        })
+    })
+    .collect();
     let mut count = Line {
         kind: Kind::Count {
-            files: files.join(","),
+            keys: lines.iter().map(|(k, _)| k.clone()).collect(),
         },
-        text: lines.iter().map(|l| format!("{l}\n")).collect(),
-        action: Some("fael find --".into()),
+        text: lines.iter().map(|(_, l)| format!("{l}\n")).collect(),
     };
     if n > 0 {
         let usage = memory_line(&body, budget).unwrap_or_default();
@@ -347,7 +273,6 @@ fn say_rows(
                 ids: shown.to_vec(),
             },
             text: format!("{header}{body}{usage}"),
-            action: None,
         });
     } else if !count.text.is_empty() {
         count.text = format!("{header}{}", count.text);
@@ -356,7 +281,6 @@ fn say_rows(
         out.say(Line {
             kind: Kind::Bodies,
             text,
-            action: Some("fael find <id>".into()),
         });
     }
     out.say(count);

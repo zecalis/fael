@@ -62,14 +62,17 @@ impl Reply {
 pub(crate) enum Kind {
     /// The rows of a read/edit/search push (the body under `fael mem for …`).
     Row { ids: Vec<String> },
-    /// The session-start rows.
-    Brief { ids: Vec<String> },
+    /// The session-start rows: said once per new or compacted context, never
+    /// spent — the next read of a briefed file may push its rows again.
+    Brief,
     /// The edit hint: re-check rows already in context (`*` = the generic clause).
     Ask { ids: Vec<String> },
     /// The prompt hint: open keys the prompt names.
     Pointer { keys: Vec<String> },
-    /// A push's count lines (`… +N more — fael find …`): once per file set.
-    Count { files: String },
+    /// A push's count lines (`… +N more — fael find …`): each once per file
+    /// set and what it counts (this file, a dir, a key), so a new kind of cut
+    /// on a later push is still said.
+    Count { keys: Vec<String> },
     /// `bodies: fael find <id> …` under a push whose rows have bodies.
     Bodies,
     /// A line fael raises on its own: a stashed risk or capture reject, a
@@ -90,44 +93,46 @@ pub(crate) enum Once {
 #[derive(Debug)]
 pub(crate) struct Policy {
     pub(crate) once: Once,
-    /// The line must offer a command (`Line::action`), or it is dropped.
-    pub(crate) needs_action: bool,
+    /// The command the line must offer, found in its text, or it is dropped.
+    /// Set here, never by the caller that writes the text.
+    pub(crate) command: Option<&'static str>,
 }
 
 /// The noise policy, in one place. A new `Kind` does not compile until it
-/// has an arm here and a fixture in `say_contract`.
+/// has an arm here; `say_contract::every_kind_has_a_fixture` fails until it
+/// has a fixture there.
 pub(crate) fn policy(k: &Kind) -> Policy {
-    let (once, needs_action) = match k {
-        Kind::Row { .. } => (Once::Key, false),
-        Kind::Ask { .. } | Kind::Pointer { .. } | Kind::Count { .. } | Kind::Bodies => {
-            (Once::Key, true)
-        }
-        Kind::Brief { .. } | Kind::Notice => (Once::Event, false),
+    let (once, command) = match k {
+        Kind::Row { .. } => (Once::Key, None),
+        Kind::Ask { .. } => (Once::Key, Some("fael close")),
+        Kind::Pointer { .. } => (Once::Key, Some("fael find --key")),
+        Kind::Count { .. } => (Once::Key, Some("fael find --")),
+        Kind::Bodies => (Once::Key, Some("fael find <id>")),
+        Kind::Brief | Kind::Notice => (Once::Event, None),
     };
-    Policy { once, needs_action }
+    Policy { once, command }
 }
 
 impl Kind {
     /// The seen-list lines this kind names — spent only under `Once::Key`.
     pub(crate) fn keys(&self) -> Vec<String> {
         match self {
-            Kind::Row { ids } | Kind::Brief { ids } => ids.clone(),
+            Kind::Row { ids } => ids.clone(),
             Kind::Ask { ids } => ids.iter().map(|i| format!("~{i}")).collect(),
             Kind::Pointer { keys } => keys.clone(),
-            Kind::Count { files } => vec![format!("~count:{files}")],
+            Kind::Count { keys } => keys.iter().map(|k| format!("~count:{k}")).collect(),
             Kind::Bodies => vec!["~bodies".into()],
-            Kind::Notice => vec![],
+            Kind::Brief | Kind::Notice => vec![],
         }
     }
 }
 
 /// One thing to say. `text` goes into the context verbatim (it carries its
-/// own line breaks); `action` is the command it offers, found in `text`.
+/// own line breaks).
 #[derive(Clone)]
 pub(crate) struct Line {
     pub(crate) kind: Kind,
     pub(crate) text: String,
-    pub(crate) action: Option<String>,
 }
 
 impl Line {
@@ -136,7 +141,6 @@ impl Line {
         Line {
             kind: Kind::Notice,
             text,
-            action: None,
         }
     }
 }
@@ -147,6 +151,8 @@ impl Line {
 pub(crate) struct Outbox {
     file: Option<File>,
     seen: String,
+    /// `seen`'s lines, parsed once.
+    lines: HashSet<String>,
     spent: Vec<String>,
     text: String,
 }
@@ -161,6 +167,7 @@ impl Outbox {
         }
         Outbox {
             file,
+            lines: seen.lines().map(String::from).collect(),
             seen,
             spent: vec![],
             text: String::new(),
@@ -172,39 +179,42 @@ impl Outbox {
         &self.seen
     }
 
+    /// True when `line` was in the seen list at `open`.
+    pub(crate) fn has(&self, line: &str) -> bool {
+        self.lines.contains(line)
+    }
+
     fn is_spent(&self, key: &str) -> bool {
-        self.spent.iter().any(|k| k == key) || self.seen.lines().any(|l| l == key)
+        self.has(key) || self.spent.iter().any(|k| k == key)
+    }
+
+    /// The keys `kind` would spend now; `None` when a line of it would be
+    /// dropped because every one is already spent.
+    fn fresh_keys(&self, kind: &Kind) -> Option<Vec<String>> {
+        if policy(kind).once != Once::Key || self.file.is_none() {
+            return Some(vec![]);
+        }
+        let keys = kind.keys();
+        let new: Vec<String> = keys.iter().filter(|k| !self.is_spent(k)).cloned().collect();
+        (keys.is_empty() || !new.is_empty()).then_some(new)
     }
 
     /// False when a line of `kind` would be dropped for its spent keys.
-    fn fresh(&self, kind: &Kind) -> bool {
-        let keys = kind.keys();
-        policy(kind).once != Once::Key
-            || self.file.is_none()
-            || keys.is_empty()
-            || keys.iter().any(|k| !self.is_spent(k))
+    pub(crate) fn fresh(&self, kind: &Kind) -> bool {
+        self.fresh_keys(kind).is_some()
     }
 
     /// Add `l`, unless it is empty, lacks the command its kind needs, or every
     /// key it would spend is already spent.
     pub(crate) fn say(&mut self, l: Line) {
-        let p = policy(&l.kind);
-        let acted = l.action.as_deref().is_some_and(|a| l.text.contains(a));
-        if l.text.is_empty() || (p.needs_action && !acted) {
+        let acted = policy(&l.kind).command.is_none_or(|c| l.text.contains(c));
+        if l.text.is_empty() || !acted {
             return;
         }
-        if !self.fresh(&l.kind) {
+        let Some(new) = self.fresh_keys(&l.kind) else {
             return;
-        }
-        if p.once == Once::Key && self.file.is_some() {
-            let new: Vec<String> = l
-                .kind
-                .keys()
-                .into_iter()
-                .filter(|k| !self.is_spent(k))
-                .collect();
-            self.spent.extend(new);
-        }
+        };
+        self.spent.extend(new);
         self.text.push_str(&l.text);
     }
 
@@ -231,14 +241,14 @@ impl Outbox {
     /// Each id once per session: an `@<id>` line in the seen list marks it.
     pub(crate) fn record_in_context(&mut self, c: &Ctx, tiered: &[(&core::Row, usize)]) {
         let Some(f) = &mut self.file else { return };
-        let seen: HashSet<&str> = self.seen.lines().collect();
+        let seen = &self.lines;
         let ids: Vec<&str> = tiered
             .iter()
             .filter(|(r, tier)| {
                 *tier == 0
                     && matches!(r.kind.as_str(), "decision" | "issue")
                     && seen.contains(r.id.as_str())
-                    && !seen.contains(format!("@{}", r.id).as_str())
+                    && !seen.contains(&format!("@{}", r.id))
             })
             .map(|(r, _)| r.id.as_str())
             .collect();
