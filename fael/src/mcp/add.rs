@@ -64,6 +64,8 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                     out.push(format!("recorded {}", row.id));
                     out.extend(crate::batch::paste_line(&row));
                     out.extend(crate::batch::launch_line(&row));
+                    // like a single add: each row's info/warning lines sit under its id
+                    out.extend(w.iter().cloned());
                     warns.extend(w);
                 }
                 Err(e) => {
@@ -75,9 +77,8 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             }
         }
         // like the CLI batch: any rejection turns the call into an error —
-        // the saved rows stay saved, their warnings ride along
+        // the saved rows stay saved, their warnings already sit under their ids
         if failed > 0 {
-            out.extend(warns);
             return Err(out.join("\n"));
         }
         // chunk 6e rides inside write::add_row — the saved ids are already seen

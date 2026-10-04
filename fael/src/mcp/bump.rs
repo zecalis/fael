@@ -43,8 +43,8 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let routing = s(a, "to").is_some()
         || s(a, "revisit").is_some()
         || !matches!(urgent, core::UrgentChange::Keep);
-    let fh = crate::filehash::for_bump(&r.root, &log, &id, routing)?;
-    let (row, _, warns) = core::bump_row(
+    let (fh, note) = crate::filehash::for_bump(&r.root, &log, &id, routing)?;
+    let (row, _, mut warns) = core::bump_row(
         &r.fael,
         r.journal.as_deref(),
         &log,
@@ -59,5 +59,6 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             fh: Some(fh),
         },
     )?;
+    warns.extend(note);
     Ok((done(&row.id, &warns), warns))
 }

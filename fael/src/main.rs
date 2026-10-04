@@ -288,7 +288,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         }
     };
     // bare `--revisit` names no date or text — that only filters on `find`
-    let revisit = write::parse_revisit(a.has("revisit"), a.one("revisit"))?;
+    let revisit = a.revisit_value()?;
     let opts = write::AddOpts {
         key: a.one("key").or(base.as_ref().and_then(|b| b.key.clone())),
         to: a.one("to"),
