@@ -163,7 +163,7 @@ pub(crate) fn decide(
 /// (0 or several).
 fn decide_flag(log: &core::Log, cands: &[Candidate], flag: Option<&str>) -> Verdict {
     let f = flag.unwrap_or_default();
-    if core::resolve(log, f).is_ok() {
+    if core::resolve_row(log, f).is_ok() {
         // the caller named it and it resolved — full justification, nothing
         // to expose, so this never wraps below
         return Verdict::FlagPassthrough;

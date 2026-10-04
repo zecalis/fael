@@ -42,6 +42,16 @@ fn issue(dir: &Path, cfg: &Config, st: &Stamp, text: &str, prev: Option<&str>) -
     add_row(dir, None, &view(dir), cfg, st, r, prev).unwrap().0
 }
 
+/// A bump event for `id` sharing its first 25 chars — a bump in the same ms
+/// as the add (a script that adds then claims) — appended raw.
+fn collide(dir: &Path, id: &str) -> Row {
+    let mut ev = Row::bumped("tester-0000", id);
+    let last = if id.ends_with('0') { "1" } else { "0" };
+    ev.id = format!("{}{last}", &id[..25]);
+    append(dir, &ev, false).unwrap();
+    ev
+}
+
 #[test]
 fn bump_keeps_the_id_and_folds_on_read() {
     let (dir, cfg, st) = setup("bump-id");
@@ -300,11 +310,7 @@ fn close_and_bump_resolve_past_a_bump_event_sharing_the_prefix() {
     // rows only, so that id still names the row — and an event id names none
     let (dir, cfg, st) = setup("bump-prefix");
     let r = issue(&dir, &cfg, &st, "hot", None);
-    let mut ev = Row::bumped("tester-0000", &r.id);
-    let last = if r.id.ends_with('0') { "1" } else { "0" };
-    ev.id = format!("{}{last}", &r.id[..25]);
-    ev.to = Some("ploy".into());
-    append(&dir, &ev, false).unwrap();
+    let ev = collide(&dir, &r.id);
     let short = &r.id[..25];
     let l = view(&dir);
     assert!(resolve(&l, short).is_err(), "the raw lookup sees two rows");
@@ -327,10 +333,7 @@ fn supersedes_resolves_past_a_bump_event_sharing_the_prefix() {
     // id is never a row to replace
     let (dir, cfg, st) = setup("sup-prefix");
     let r = issue(&dir, &cfg, &st, "hot", None);
-    let mut ev = Row::bumped("tester-0000", &r.id);
-    let last = if r.id.ends_with('0') { "1" } else { "0" };
-    ev.id = format!("{}{last}", &r.id[..25]);
-    append(&dir, &ev, false).unwrap();
+    let ev = collide(&dir, &r.id);
     let new = Row::new("tester-0000", "issue", "hot, v2", vec!["src/a.rs".into()]);
     let e = add_row(
         &dir,
@@ -347,4 +350,41 @@ fn supersedes_resolves_past_a_bump_event_sharing_the_prefix() {
         .unwrap()
         .0;
     assert_eq!(v2.supersedes.as_deref(), Some(r.id.as_str()));
+}
+
+#[test]
+fn urgent_before_restore_and_purge_resolve_past_a_bump_event_sharing_the_prefix() {
+    let (dir, cfg, st) = setup("rest-prefix");
+    let mut o = keep();
+    o.urgent = UrgentChange::End;
+    let hot = bump(&dir, &cfg, &st, &issue(&dir, &cfg, &st, "hot", None).id, o).unwrap();
+    collide(&dir, &hot.id);
+    let s = &hot.id[..25];
+    let before = resolve_urgent(&view(&dir), &Urgent::Before(s.into())).unwrap();
+    assert!(before < hot.urgent);
+    let old = issue(&dir, &cfg, &st, "old", None);
+    issue(&dir, &cfg, &st, "new", Some(&old.id));
+    collide(&dir, &old.id);
+    let back = restore_row(
+        &dir,
+        None,
+        &view(&dir),
+        &cfg,
+        &st,
+        Some(&old.id[..25]),
+        None,
+    );
+    if let Err(e) = back {
+        panic!("the short id names the row: {e}");
+    }
+    let gone = issue(&dir, &cfg, &st, "gone", None);
+    collide(&dir, &gone.id);
+    let out = purge_row(&dir, None, &view(&dir), &gone.id[..25]).unwrap();
+    assert_eq!((out.id, out.rows), (gone.id, 2), "the row and its event");
+    // a carrier no content row matches is still purgeable by its own id
+    let ev = collide(&dir, &issue(&dir, &cfg, &st, "kept", None).id);
+    assert_eq!(
+        purge_row(&dir, None, &view(&dir), &ev.id).unwrap().id,
+        ev.id
+    );
 }

@@ -244,14 +244,11 @@ fn bump_and_claim_never_say_the_filed_supersede() {
 /// `find <id>` pulls a content row, never a carrier: a bump event sharing
 /// the short id's prefix (filed right after its row) must not turn the pull
 /// into a text search (CLI) or an ambiguity error (MCP).
-#[test]
-fn find_by_short_id_looks_past_a_bump_event_sharing_the_prefix() {
+/// A bump event for `id` whose id shares its first 25 chars — what a bump
+/// in the same ms as the add would write — appended to the journal.
+fn plant_event(d: &Path, id: &str) {
     use std::io::Write;
-    let d = repo();
-    let (ok, out, err) = fael(&d, &["add", "issue", "pull me", "--files", "src/a.rs"]);
-    assert!(ok, "{err}");
-    let id = out.split_whitespace().next().unwrap().to_string();
-    let (_, json, _) = fael(&d, &["find", &id, "--json"]);
+    let (_, json, _) = fael(d, &["find", id, "--json"]);
     let row: serde_json::Value = serde_json::from_str(json.lines().next().unwrap()).unwrap();
     let last = if id.ends_with('0') { "1" } else { "0" };
     let ev = serde_json::json!({
@@ -269,6 +266,44 @@ fn find_by_short_id_looks_past_a_bump_event_sharing_the_prefix() {
         .unwrap();
     let mut f = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
     writeln!(f, "{ev}").unwrap();
+}
+
+#[test]
+fn a_supersedes_flag_sharing_a_bump_events_prefix_is_never_rescued_elsewhere() {
+    // self-heal checks the flag with the same lookup add uses: a short id
+    // that also prefixes a bump event still names its row, so the text's
+    // mention of another open row never redirects the edge
+    let d = repo();
+    let id_of = |out: &str| out.split_whitespace().next().unwrap().to_string();
+    let (ok, a, err) = fael(&d, &["add", "issue", "pull me", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let (ok, b, err) = fael(&d, &["add", "issue", "other", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let (a, b) = (id_of(&a), id_of(&b));
+    plant_event(&d, &a);
+    let text = format!("v2, supersedes {b}");
+    let args = [
+        "add",
+        "issue",
+        &text,
+        "--supersedes",
+        &a[..25],
+        "--files",
+        "src/a.rs",
+    ];
+    let (ok, out, err) = fael(&d, &args);
+    assert!(ok, "{err}");
+    assert!(out.contains(&format!("supersedes {a}")), "{out}{err}");
+}
+
+#[test]
+fn find_by_short_id_looks_past_a_bump_event_sharing_the_prefix() {
+    use std::io::Write;
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["add", "issue", "pull me", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    plant_event(&d, &id);
     let short = &id[..25];
     let (ok, out, err) = fael(&d, &["find", short]);
     assert!(ok && out.contains("pull me"), "{out}{err}");

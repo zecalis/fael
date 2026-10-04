@@ -1,6 +1,6 @@
 use super::Filter;
 use super::matching::{all_words, file_match, glob, is_md, lenient};
-use crate::{Aliases, Log, Row, anchor, is_alias_row, is_carrier_row, resolve, to_matches};
+use crate::{Aliases, Log, Row, anchor, is_alias_row, is_carrier_row, resolve_row, to_matches};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::Path;
@@ -85,7 +85,7 @@ pub fn resolve_urgent(log: &Log, opt: &Urgent) -> Result<Option<f64>, String> {
         Urgent::Unset => Ok(None),
         Urgent::End => Ok(Some(q.last().map_or(1.0, |(u, _)| u + 1.0))),
         Urgent::Before(id) => {
-            let t = resolve(log, id)?;
+            let t = resolve_row(log, id)?;
             if t.kind != "issue" {
                 return Err(format!(
                     "rejected: the urgent queue holds issues — {id:?} is {}",
