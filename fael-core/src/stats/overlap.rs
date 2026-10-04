@@ -160,4 +160,16 @@ mod tests {
         // a.rs: s1+s2; b.rs: s1+s2, s1+s3, s2+s3; c.rs: s1 alone
         assert_eq!((c.sessions_seen, c.files, c.session_pairs), (3, 2, 3));
     }
+
+    #[test]
+    fn a_chain_pairs_neighbours_only_and_log_order_does_not_matter() {
+        // s1 -9min- s2 -9min- s3: s1 and s3 are 18 minutes apart, so no pair;
+        // the lines are written out of time order (a merged or synced log)
+        let a = "\"a.rs\"";
+        let u = line("2026-10-04T00:18:00.000Z", "edit", "s3", "/w", a)
+            + &line("2026-10-04T00:00:00.000Z", "edit", "s1", "/w", a)
+            + &line("2026-10-04T00:09:00.000Z", "edit", "s2", "/w", a);
+        let c = count(&u);
+        assert_eq!((c.sessions_seen, c.files, c.session_pairs), (3, 1, 2));
+    }
 }
