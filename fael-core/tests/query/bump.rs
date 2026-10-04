@@ -221,3 +221,74 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
     let e = bump(&dir, &cfg, &st, &newer.id, keep()).unwrap_err();
     assert!(e.contains("already closed"), "{e}");
 }
+
+#[test]
+fn an_event_ahead_of_its_row_still_folds_and_an_orphan_is_ignored() {
+    // sync can land the event before the row it names, or the row may never
+    // arrive (another writer's ref not fetched yet): fold by id, not by order
+    let row = Row::new("tester-0000", "issue", "hot", vec!["src/a.rs".into()]);
+    let mut ev = Row::bumped("tester-0000", &row.id);
+    ev.to = Some("ploy".into());
+    let mut orphan = Row::bumped("tester-0000", "01M0000000000000000000GONE");
+    orphan.to = Some("vela".into());
+    let log = Log {
+        rows: vec![ev, orphan, row.clone()],
+        closes: vec![],
+        warnings: vec![],
+    };
+    let l = fold_bumps(log);
+    let listed = find(&l, &Filter::default());
+    assert_eq!(listed.len(), 1, "carriers never list: {listed:?}");
+    assert_eq!(listed[0].id, row.id);
+    assert_eq!(listed[0].to.as_deref(), Some("ploy"));
+}
+
+#[test]
+fn a_bump_on_the_head_of_a_legacy_chain_keeps_its_id_and_closes_the_chain() {
+    // a log written before bump events: B is a supersede-bump of A. A new
+    // binary bumps B in place, and closing B still closes A with it
+    let (dir, cfg, st) = setup("bump-legacy");
+    let a = issue(&dir, &cfg, &st, "hot", None);
+    let b = issue(&dir, &cfg, &st, "hot", Some(&a.id));
+    let up = BumpOpts {
+        to: Some("ploy".into()),
+        ..keep()
+    };
+    let moved = bump(&dir, &cfg, &st, &b.id, up).unwrap();
+    assert_eq!(moved.id, b.id);
+    let l = view(&dir);
+    let listed = find(&l, &Filter::default());
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert_eq!(listed[0].id, b.id);
+    assert_eq!(listed[0].to.as_deref(), Some("ploy"));
+    assert_eq!(listed[0].supersedes.as_deref(), Some(a.id.as_str()));
+    close_row(&dir, None, &l, &cfg, &st, &b.id, "done").unwrap();
+    let l = view(&dir);
+    let closed = closed(&l);
+    assert!(closed.contains(a.id.as_str()) && closed.contains(b.id.as_str()));
+}
+
+#[test]
+fn a_bump_always_sorts_after_the_rows_last_event() {
+    // two bumps in one ms used to order by the ULID's random half; an event
+    // stamped ahead (clock skew) stands in for that tie deterministically
+    let (dir, cfg, st) = setup("bump-tie");
+    let r = issue(&dir, &cfg, &st, "hot", None);
+    let mut ahead = Row::bumped("tester-0000", &r.id);
+    ahead.id = ulid_at(now_ms() + 60_000);
+    ahead.to = Some("vela".into());
+    append(&dir, &ahead, false).unwrap();
+    let up = BumpOpts {
+        to: Some("ploy".into()),
+        ..keep()
+    };
+    let b = bump(&dir, &cfg, &st, &r.id, up).unwrap();
+    assert_eq!(b.to.as_deref(), Some("ploy"));
+    let l = view(&dir);
+    let listed = find(&l, &Filter::default());
+    assert_eq!(
+        listed[0].to.as_deref(),
+        Some("ploy"),
+        "the newest bump wins"
+    );
+}

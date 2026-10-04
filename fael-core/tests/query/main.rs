@@ -2,7 +2,7 @@
 //!
 //! Thin entry only — the suites sit next to this file:
 //! `select` (find/brief/push/gone/kickoff/`to`), `render` (render/tokens),//! `paging` (limit/offset page + cut line), `lookup` (resolve/keys/warnings/glob), `keyhint` (prompt → open key, exact segment only),
-//! `urgent` (queue/6-step rank), `bump` (MVCC-style new versions),
+//! `urgent` (queue/6-step rank), `bump` (one event per bump, folded onto the same id),
 //! `title` (title/body split, `--title` fallback,
 //! `render_full`), `revisit` (`--revisit` dates vs text, due kickoff, `find --revisit`),
 //! `focus` (push buckets + row cap), `precision` (push golden fixture: tiers + injected ids).

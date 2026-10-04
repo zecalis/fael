@@ -1,5 +1,5 @@
 //! urgent queue + the 6-step rank — fractional ordering and one ordering for
-//! every list (bump's new versions live in `bump.rs`).
+//! every list (bump events live in `bump.rs`).
 
 use super::ids;
 use fael_core::*;

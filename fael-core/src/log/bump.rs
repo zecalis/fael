@@ -55,6 +55,19 @@ pub fn bump_row(
         ));
     }
     let mut ev = Row::bumped(&stamp.by, &old.id);
+    // the fold orders events by id: a bump in the same ms as the row's last
+    // one would sort by its random half, so step past it. ponytail: two
+    // writers in one ms still order arbitrarily — deterministically, so
+    // clones still converge
+    let last = log
+        .rows
+        .iter()
+        .filter(|r| r.bumps.as_deref() == Some(&old.id));
+    if let Some(last) = last.map(|r| r.id.as_str()).max()
+        && ev.id.as_str() <= last
+    {
+        ev.id = crate::ulid_at(crate::ulid_ms(last).unwrap_or(0) + 1);
+    }
     ev.to = match opts.to {
         None => old.to.clone(),
         Some(t) => {

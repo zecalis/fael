@@ -91,11 +91,14 @@ fn mcp_bump_moves_urgent() {
         .find(|v| v["text"].as_str().unwrap().contains("mcp second"))
         .unwrap();
     assert_eq!(second["urgent"].as_f64(), Some(0.5), "{second}");
-    let hot = rows
+    // one row under the CLI id even with --all: the bump wrote no version
+    let hot: Vec<_> = rows
         .iter()
         .filter(|v| v["text"].as_str().unwrap().contains("cli hot"))
-        .max_by_key(|v| v["id"].as_str().unwrap_or("").to_string())
-        .unwrap();
+        .collect();
+    assert_eq!(hot.len(), 1, "{hot:?}");
+    let hot = hot[0];
+    assert_eq!(hot["id"].as_str().unwrap(), id);
     assert!(hot.get("urgent").is_none(), "{hot}");
     assert_eq!(hot["to"].as_str().unwrap(), "ploy");
 }
@@ -157,14 +160,15 @@ fn mcp_bump_sets_revisit() {
     let text = |n: usize| r[n]["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text(1).contains("revisit row"), "{}", text(1));
     assert!(text(2).contains("revisit row"), "{}", text(2));
-    // the CLI sees the new date on the live version (no --all: the
-    // superseded version still carries the old date)
-    let (_, out, _) = fael(&d, &["find", "--json", "--revisit"]);
+    // the CLI sees the new date on the same id — and only one row, even
+    // with --all: the bump wrote no version carrying the old date
+    let (_, out, _) = fael(&d, &["find", "--json", "--revisit", "--all"]);
     let rows: Vec<serde_json::Value> = out
         .lines()
         .filter_map(|l| serde_json::from_str(l).ok())
         .collect();
     assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["id"].as_str().unwrap(), id);
     assert_eq!(rows[0]["revisit"].as_str().unwrap(), "2999-01");
 }
 

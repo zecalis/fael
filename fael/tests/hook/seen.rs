@@ -210,3 +210,32 @@ fn find_by_id_marks_seen() {
     assert!(ok && out.contains("by id login loops"), "{out}");
     assert!(!read_a(&d, "").contains("by id login loops"));
 }
+
+/// A bump keeps the id, so the session that was already told about a row is
+/// not told again after it moves — while a row filed meanwhile still arrives.
+#[test]
+fn a_bumped_row_is_not_pushed_again() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "issue", "bumped login loops", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    assert!(read_a(&d, "").contains("bumped login loops"));
+    for args in [&["bump", &id, "--to", "ploy"][..], &["bump", &id]] {
+        let (ok, _, err) = fael(&d, args, "");
+        assert!(ok, "{err}");
+    }
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "issue", "fresh login loops", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let out = read_a(&d, "");
+    assert!(out.contains("fresh login loops"), "{out}");
+    assert!(!out.contains("bumped login loops"), "{out}");
+}

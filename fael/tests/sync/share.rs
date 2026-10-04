@@ -152,3 +152,29 @@ fn a_bump_syncs_as_an_event_under_the_same_id() {
     assert!(!raw.contains("ploy"), "the row ships as written: {raw}");
     assert!(body.contains(&format!("\"bumps\":\"{id}\"")), "{body}");
 }
+
+/// Two clones bump one row before either syncs: after a full round both fold
+/// the same newest event — the later bump wins on both sides.
+#[test]
+fn concurrent_bumps_converge_on_the_newest_event() {
+    let remote = bare("bump2");
+    let a = repo("bump2-a", "Alice", "alice@example.com");
+    let b = clone(&a, "bump2-b", "Bob", "bob@example.com");
+    point(&a, &remote);
+    point(&b, &remote);
+    let id = add(&a, "row bumped on both clones");
+    assert!(sync(&a).0);
+    assert!(sync(&b).0);
+    let (ok, _, err) = fael(&a, &["bump", &id, "--to", "ploy"]);
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&b, &["bump", &id, "--to", "vela"]);
+    assert!(ok, "{err}");
+    for d in [&a, &b, &a] {
+        assert!(sync(d).0);
+    }
+    let (ra, rb) = (rows(&a), rows(&b));
+    assert_eq!(ra.len(), 1, "{ra:?}");
+    assert_eq!(ra[0]["id"], id.as_str());
+    assert_eq!(ra[0]["to"], "vela", "the later bump wins: {ra:?}");
+    assert_eq!(ra, rb, "both clones fold to the same row");
+}
