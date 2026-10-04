@@ -23,7 +23,10 @@ const HINT_MAX_KEYS: usize = 3;
 /// Pairs each `KeyUse` with the prompt words that named it, lowercased, in
 /// key order — the hint line shows them, so a misfire is judgeable.
 /// The namespace never matches: in vela "data scope" hit every `vela:*-scope`
-/// key and "fael" hit `fael:store`.
+/// key and "fael" hit `fael:store`. Nor does a word that is any open key's
+/// namespace, wherever it sits (01M42G02E): `plan:vela:handoff` fired on
+/// every prompt saying "vela", `plan:fael-*` on every "fael" (01M42FPP) — the
+/// app's name is the area, never the topic.
 /// Open = some row on the key is neither closed nor superseded. At most
 /// `HINT_MAX_KEYS`, best match first, most used first as the tie-break.
 pub fn key_hints(log: &Log, prompt: &str) -> Vec<(KeyUse, Vec<String>)> {
@@ -34,10 +37,16 @@ pub fn key_hints(log: &Log, prompt: &str) -> Vec<(KeyUse, Vec<String>)> {
             && !crate::is_carrier_row(r)
             && !crate::is_alias_row(r)
     }));
+    let areas: std::collections::HashSet<String> = keys
+        .iter()
+        .filter_map(|k| k.key.split_once(':'))
+        .map(|(ns, _)| ns.to_ascii_lowercase())
+        .collect();
     let words: std::collections::HashSet<String> = prompt
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|w| w.len() >= 4 && !w.bytes().all(|b| b.is_ascii_digit()))
         .map(str::to_ascii_lowercase)
+        .filter(|w| !areas.contains(w))
         .collect();
     // nested fns, not closures: a returning closure would need lifetimes spelled out
     fn segs(key: &str) -> Vec<String> {
