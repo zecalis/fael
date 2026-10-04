@@ -103,13 +103,13 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let said = &shown[..n.min(shown.len())];
     let ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    // the rows, then each warning — the report and id rules live in the
-    // skill, paid once per session already (PLAN-fael-say-gate chunk 2)
+    // the rows, then each warning — the report rule rides the skill's
+    // description (always loaded), the id rule that and the reject of an id
+    // that does not exist (PLAN-fael-say-gate chunk 2)
     let mut out = Outbox::open(None);
     out.say(Line {
-        kind: Kind::Brief { ids: ids.clone() },
+        kind: Kind::Brief,
         text: body,
-        action: None,
     });
     for warn in warnings(&c.repo, adopted) {
         out.say(Line::notice(format!("{warn}\n")));

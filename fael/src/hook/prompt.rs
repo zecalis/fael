@@ -46,9 +46,7 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     let seen_ids: Vec<&str> = seen.lines().collect();
     let new: Vec<_> = hints
         .iter()
-        .filter(|(k, _)| {
-            !out.seen().lines().any(|l| l == k.key) && !rows_all_seen(&c.log, &k.key, &seen_ids)
-        })
+        .filter(|(k, _)| !out.has(&k.key) && !rows_all_seen(&c.log, &k.key, &seen_ids))
         .collect();
     if new.is_empty() {
         return Reply::default();
@@ -65,17 +63,19 @@ pub(crate) fn prompt(e: &Event) -> Reply {
             "fael: the prompt names open key(s) {} — {FIND} (MCP: find key=<key>) before assuming there is no prior work",
             list.join(", ")
         ),
-        action: Some(FIND.into()),
     });
     let r = out.reply();
-    record_usage(
-        &c.client,
-        "prompt",
-        &c.repo.root,
-        r.context().unwrap_or_default(),
-        &[],
-        &hook_meta(&c, None, false),
-    );
+    // usage counts only a line that reached the agent
+    if let Some(context) = r.context() {
+        record_usage(
+            &c.client,
+            "prompt",
+            &c.repo.root,
+            context,
+            &[],
+            &hook_meta(&c, None, false),
+        );
+    }
     r
 }
 
