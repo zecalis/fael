@@ -201,3 +201,78 @@ fn a_pointer_earns_on_an_mcp_find_by_its_key() {
     let pull = call(serde_json::json!({"id": &id[..10]}));
     assert_eq!(pull["q"], serde_json::json!({"id": id}), "{pull}");
 }
+
+/// An issue on `src/a.rs` per key (filed on this branch, so session start puts
+/// its key in the Focus) and a decision sibling on another file with that key
+/// (tier 2 — kinds differ, or self-heal would supersede one). A tight budget
+/// cuts the siblings, so the count names the key call. Returns the read push.
+fn keyed(d: &Path, keys: &[&str]) -> String {
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::create_dir_all(d.join("lib")).unwrap();
+    for (i, k) in keys.iter().enumerate() {
+        let lib = format!("lib/z{i}.rs");
+        std::fs::write(d.join(&lib), "// z\n").unwrap();
+        add(
+            d,
+            &[
+                "add",
+                "issue",
+                &format!("on a {i}"),
+                "--files",
+                "src/a.rs",
+                "--key",
+                k,
+            ],
+        );
+        let long = format!("sibling {i} with enough words to blow a tight push budget wide open");
+        add(d, &["add", "decision", &long, "--files", &lib, "--key", k]);
+    }
+    let cfg = d.join(".fael/config.toml");
+    let body = std::fs::read_to_string(&cfg).unwrap();
+    std::fs::write(&cfg, body + "[budget]\npush_tokens = 1\n").unwrap();
+    let input = format!(r#"{{"cwd":{},"session_id":"s1"}}"#, json(d));
+    let (ok, _, err) = fael(d, &["hook", "session-start", "--client", "claude"], &input);
+    assert!(ok, "{err}");
+    push(d, "read")
+}
+
+/// The key forms of the count line: `+N more with #<key> — fael find --key
+/// <key>` earns on that key, never on a file pull; `+N more under N keys: …
+/// — fael find --key <key>` earns on any key pull, while the file line beside
+/// it does not.
+#[test]
+fn a_count_line_earns_on_the_key_it_names() {
+    let env = [("FAEL_SESSION", "s1")];
+    let find = |d: &Path, args: &[&str]| {
+        let (ok, _, err) = fael_env(d, args, "", &env);
+        assert!(ok, "{err}");
+    };
+    let d = repo();
+    let out = keyed(&d, &["auth:session"]);
+    assert!(
+        out.contains("+1 more with #auth:session — fael find --key auth:session"),
+        "{out}"
+    );
+    find(&d, &["find", "--files", "lib/z0.rs"]);
+    assert_eq!(
+        yield_of(&d, "count"),
+        (1, 0),
+        "a file pull is not the key call"
+    );
+    find(&d, &["find", "--key", "auth:session"]);
+    assert_eq!(yield_of(&d, "count"), (1, 1));
+    let d = repo();
+    let out = keyed(&d, &["auth:session", "db:migrate"]);
+    assert!(
+        out.contains("more about this file — fael find --files src/a.rs"),
+        "{out}"
+    );
+    assert!(out.contains("+2 more under 2 keys:"), "{out}");
+    assert_eq!(yield_of(&d, "count"), (2, 0));
+    find(&d, &["find", "--key", "auth:session"]);
+    assert_eq!(
+        yield_of(&d, "count"),
+        (2, 1),
+        "the keys line, not the file line"
+    );
+}
