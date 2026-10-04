@@ -199,3 +199,44 @@ fn close_and_mv_reject_a_flag_they_never_read() {
     let (ok, _, err) = fael(&d, &["close", &id, "done"]);
     assert!(ok, "close was not rejected, so it still works: {err}");
 }
+
+/// A bump or claim moves the row in place: it never says `supersedes` (the
+/// edge the row was filed with is not something this call replaced), and
+/// only a bump that routes it repeats the receiver lines.
+#[test]
+fn bump_and_claim_never_say_the_filed_supersede() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["add", "issue", "hot", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let a = out.split_whitespace().next().unwrap().to_string();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "hot, v2",
+            "--files",
+            "src/a.rs",
+            "--supersedes",
+            &a,
+        ],
+    );
+    assert!(ok, "{err}");
+    let b = out.split_whitespace().next().unwrap().to_string();
+    let (ok, out, err) = fael(&d, &["bump", &b, "--to", "opencode"]);
+    assert!(ok, "{err}");
+    assert!(out.starts_with(&b) && !out.contains("supersedes"), "{out}");
+    assert!(
+        out.contains("to opencode: tell them") && out.contains("start it:"),
+        "a routing bump is a hand-off: {out}"
+    );
+    for args in [&["bump", &b][..], &["claim", &b]] {
+        let (ok, out, err) = fael(&d, args);
+        assert!(ok, "{args:?}: {err}");
+        assert!(out.starts_with(&b) && !out.contains("supersedes"), "{out}");
+        assert!(
+            !out.contains("tell them") && !out.contains("start it:"),
+            "{args:?} is not a hand-off: {out}"
+        );
+    }
+}

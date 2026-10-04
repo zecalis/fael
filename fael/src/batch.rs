@@ -48,6 +48,30 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
     }
 }
 
+/// [`written`] for a row moved in place (`bump`, `claim`, `next`): the id
+/// is the row's own, so its `supersedes` is the edge it was filed with, not
+/// something this call replaced — never said. The receiver lines only when
+/// this call `routed` it (`bump --to`): a claim is not a hand-off.
+pub(crate) fn moved(
+    a: &crate::Args,
+    r: &crate::Repo,
+    row: &Row,
+    path: &std::path::Path,
+    routed: bool,
+) {
+    if a.has("json") {
+        println!("{}", row.to_line());
+        return;
+    }
+    let rel = path.strip_prefix(&r.root).unwrap_or(path);
+    let to = paste_line(row).filter(|_| routed);
+    let to = to.map_or(String::new(), |p| format!(" · {p}"));
+    println!("{} → {}{to}", row.id, rel.display());
+    if routed {
+        launch_line(row).iter().for_each(|l| println!("{l}"));
+    }
+}
+
 /// Chunk 6b: batch add — a JSON array on stdin, one object per row
 /// (`{kind, text, files[], key?, to?, title?, revisit?, urgent?,
 /// urgent_before?, supersedes?, force?}`). Every row runs the same
