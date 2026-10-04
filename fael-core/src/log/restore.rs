@@ -4,7 +4,7 @@
 //! edge and appends the row.
 
 use super::{Log, write_both};
-use crate::{Config, Row, Stamp, abbrev, append, closed, resolve, reverted, validate_restore};
+use crate::{Config, Row, Stamp, abbrev, append, closed, resolve_row, reverted, validate_restore};
 use std::path::{Path, PathBuf};
 
 /// What `restore_row` did. `row`/`path` are `Some` only when an edge was
@@ -93,7 +93,7 @@ fn pick_edge(log: &Log, target: Option<&str>, edge: Option<&str>) -> Result<Pick
         (None, Some(e)) => edge_from(log, e).map(|(a, b)| Pick::Revert(a, b)),
         (Some(t), Some(e)) => {
             let (a, b) = edge_from(log, e)?;
-            let want = resolve(log, t)?.id.clone();
+            let want = resolve_row(log, t)?.id.clone();
             if b != want {
                 return Err(format!(
                     "rejected: --edge {e} reverts {b}, not {want} — drop one of the two"
@@ -106,7 +106,7 @@ fn pick_edge(log: &Log, target: Option<&str>, edge: Option<&str>) -> Result<Pick
 
 /// The still-active edge into `target` — or `Open` when none is left.
 fn edge_into(log: &Log, target: &str) -> Result<Pick, String> {
-    let b = resolve(log, target)?.id.clone();
+    let b = resolve_row(log, target)?.id.clone();
     let rev = reverted(log);
     let mut active: Vec<&str> = log
         .rows
@@ -129,7 +129,7 @@ fn edge_into(log: &Log, target: &str) -> Result<Pick, String> {
 /// The edge an `--edge` names — its superseder plus its target. A row that
 /// supersedes nothing names no edge.
 fn edge_from(log: &Log, edge: &str) -> Result<(String, String), String> {
-    let a = resolve(log, edge)?;
+    let a = resolve_row(log, edge)?;
     match a.supersedes.as_deref() {
         Some(b) => Ok((a.id.clone(), b.to_string())),
         None => Err(format!(

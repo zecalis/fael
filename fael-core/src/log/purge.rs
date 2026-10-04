@@ -20,7 +20,7 @@
 //! copies in teammates' journals when `fael.remote` is set.
 
 use super::{Log, collect_files, lock, month_of, tmp_rename};
-use crate::{Row, decode_text, resolve};
+use crate::{Row, decode_text, resolve, resolve_row};
 use std::path::{Path, PathBuf};
 
 /// What `purge_row` removed: the row's add lines and bump events (`rows`),
@@ -93,10 +93,12 @@ pub fn purge_row(
     Ok(out)
 }
 
-/// The target row — or a pointer at `fael restore` when the id names a close
-/// event, which purge never removes on its own.
+/// The target row — a content row first, so a bump event sharing a short id
+/// never makes it ambiguous, else a carrier by its own id — or a pointer at
+/// `fael restore` when the id names a close event, which purge never removes
+/// on its own.
 fn resolve_target(log: &Log, id: &str) -> Result<Row, String> {
-    match resolve(log, id) {
+    match resolve_row(log, id).or_else(|_| resolve(log, id)) {
         Ok(r) => Ok(r.clone()),
         Err(e) => {
             if log.closes.iter().any(|c| c.id == id) {

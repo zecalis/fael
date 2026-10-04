@@ -248,7 +248,7 @@ fn text_targets<'a>(log: &'a core::Log, open: &[&'a core::Row], text: &str) -> V
         }
         // resolution is exact-id or unique prefix, same as --supersedes, so a
         // word that merely looks like an id resolves to nothing and disarms
-        let Ok(r) = core::resolve(log, t) else {
+        let Ok(r) = core::resolve_row(log, t) else {
             armed = false;
             continue;
         };
@@ -269,7 +269,7 @@ fn mentions<'a>(log: &'a core::Log, open: &[&'a core::Row], text: &str) -> BTree
         if t.is_empty() {
             continue;
         }
-        let Ok(r) = core::resolve(log, t) else {
+        let Ok(r) = core::resolve_row(log, t) else {
             continue;
         };
         if open.iter().any(|o| o.id == r.id) {
