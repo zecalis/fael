@@ -24,7 +24,7 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      with how it went (fael close <id> \"...\") and the sender reads that on fael find --all;
      working an open issue? fael claim <id> first — others then see (held @<branch>), never a lock;
      --force files a path that looks like a typo of an existing one;
-     --dry-run prints the verdict the real add would act on without writing;
+     --dry-run prints the verdict and the row the real add would write, writing nothing;
      a repeat on these files or key, \"Supersedes <id>\" in the text, and the
      only key on these files are filled in for you;
      batch: fael add --json - < rows.json (a JSON array; a bad row reports alone, the rest save);

@@ -164,8 +164,28 @@ fn dry_run_noop_on_fresh_files() {
         "",
     );
     assert!(ok);
-    assert_eq!(out.trim(), "dry-run Noop (none)", "{out:?}");
+    assert_eq!(
+        out.trim(),
+        "dry-run Noop (none)\nwould add: note fresh → src/b.rs",
+        "{out:?}"
+    );
     assert_eq!(log_bytes(&d), before);
+}
+
+/// A kind the real add rejects is rejected by the dry run too — never a Noop.
+#[test]
+fn dry_run_rejects_unknown_kind() {
+    let d = repo();
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "idea", "x", "--files", "src/b.rs", "--dry-run"],
+        "",
+    );
+    assert!(!ok, "{out}");
+    assert!(
+        err.contains("kind must be one of decision|issue|note"),
+        "{err}"
+    );
 }
 
 /// `--json` prints the machine verdict: names only, evidence as enum names.

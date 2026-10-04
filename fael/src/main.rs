@@ -303,11 +303,11 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     // `--dry-run` prints the Verdict the real add would act on and writes
     // nothing — same `prepare` as the real add, so the two can never disagree
     if a.has("dry-run") {
-        let (p, _, _) = write::prepare(&r, kind, text, &files, opts)?;
+        let (p, _, log) = write::prepare(&r, kind, text, &files, opts)?;
         p.warns.iter().for_each(|w| eprintln!("{w}"));
         println!(
             "{}",
-            crate::selfheal::verdict_text(&p.evaluated, a.has("json"))
+            crate::selfheal::verdict_text(&p.evaluated, a.has("json"), (&log, &p.row))
         );
         return Ok(());
     }

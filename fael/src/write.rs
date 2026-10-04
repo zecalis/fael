@@ -113,6 +113,8 @@ pub(crate) fn prepare(
         warns.push(format!("key {k} — the only key on these files"));
         row.key = Some(k);
     }
+    // the write-time checks too, so a dry run rejects what the add would
+    core::validate(&row, &r.cfg)?;
     let out = Pending {
         row,
         evaluated,

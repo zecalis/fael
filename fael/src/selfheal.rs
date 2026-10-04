@@ -82,13 +82,20 @@ pub(crate) fn verdict_json(ev: &Evaluated) -> serde_json::Value {
     })
 }
 
-/// Dry-run stdout in one call: the JSON verdict with `--json`, else one line.
-pub(crate) fn verdict_text(ev: &Evaluated, json: bool) -> String {
+/// Dry-run stdout in one call: the JSON verdict with `--json`, else the
+/// verdict line and the row the add would write — as `find` lists it, minus
+/// the id (the real add mints its own).
+pub(crate) fn verdict_text(
+    ev: &Evaluated,
+    json: bool,
+    (log, row): (&fael_core::Log, &fael_core::Row),
+) -> String {
     if json {
-        verdict_json(ev).to_string()
-    } else {
-        verdict_line(ev)
+        return verdict_json(ev).to_string();
     }
+    let line = fael_core::render(log, &[row], usize::MAX);
+    let line = line.split_once("] ").map_or(line.as_str(), |(_, l)| l);
+    format!("{}\nwould add: {}", verdict_line(ev), line.trim_end())
 }
 
 /// One stdout line for `add --dry-run`: the verdict `heal` would act on, with
