@@ -27,9 +27,3 @@ Each row is read months later with no chat: one or two standalone sentences.
 invent one; left out, it is this session's edited files.
 An id is verified only once this session's `fael find` printed it as `- [<id>]` — never type
 one from memory. A listed id is a prefix of the full id `add` prints — either works.
-
-Something worth keeping and no row yet? End your reply with one line per memory:
-fael decision: <one sentence> [files: a,b]
-fael issue: <one sentence> [files: a,b]
-fael note: <one sentence> [files: a,b]
-fael files each one after your reply; no extra turn. `[files: …]` is required.
