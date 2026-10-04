@@ -1,7 +1,7 @@
 //! The session-start event: kickoff rows for the repo, and the one-line
 //! warning when `.fael/log` is gitignored by mistake.
 
-use super::asks::hook_meta;
+use super::asks::{UsageMeta, hook_meta};
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
@@ -119,7 +119,10 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         return no();
     };
     // the session just began — no round completed yet, so no real tokens
-    let meta = hook_meta(&c, None, false);
+    let meta = UsageMeta {
+        said: r.said(),
+        ..hook_meta(&c, None, false)
+    };
     record_usage(
         &c.client,
         "session-start",

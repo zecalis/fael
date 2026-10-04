@@ -52,6 +52,42 @@ pub(crate) fn record_usage_shadow(
     asks::append_row(row);
 }
 
+/// A pull that showed rows (`find`, `mcp-find`, `kickoff`; PLAN-fael-say-gate
+/// chunk 3): the outcome a Pointer, Count or Bodies line earns on. The shown
+/// ids go under `found`, never `ids` (those count as pushes), and stats keeps
+/// the line out of the injection totals. The query's key, files and id only —
+/// free text is never stored (`find-misses.jsonl` holds the misses).
+pub(crate) fn record_found(
+    client: &str,
+    event: &str,
+    root: &Path,
+    found: &[String],
+    (key, files, id): (Option<&str>, &[String], Option<&str>),
+) {
+    if found.is_empty() {
+        return;
+    }
+    let session = crate::session::hook_session(root);
+    let meta = UsageMeta {
+        session: (!session.is_empty()).then_some(session.as_str()),
+        ..UsageMeta::default()
+    };
+    let mut row = usage_row(client, event, root, "", &[], &meta);
+    row["found"] = found.into();
+    let mut q = serde_json::json!({});
+    if let Some(k) = key {
+        q["key"] = k.into();
+    }
+    if !files.is_empty() {
+        q["files"] = files.into();
+    }
+    if let Some(i) = id {
+        q["id"] = i.into();
+    }
+    row["q"] = q;
+    asks::append_row(row);
+}
+
 /// One usage row, every key `record_usage` writes — shared with the 0-byte
 /// `in-context-at-edit` row so the two shapes cannot drift.
 pub(crate) fn usage_row(
@@ -91,6 +127,11 @@ pub(crate) fn usage_row(
         && let Ok(t) = serde_json::to_value(real)
     {
         row["real_tokens"] = t;
+    }
+    if !meta.said.is_empty()
+        && let Ok(s) = serde_json::to_value(meta.said)
+    {
+        row["said"] = s;
     }
     row
 }

@@ -8,7 +8,7 @@ use super::fael_at;
 use std::path::{Path, PathBuf};
 
 /// Three usage rows with distinct event/client counts (deterministic order)
-/// plus one torn line. Counts: read x2, edit x1, claude x2, codex x1,
+/// plus one torn line and one pull (`found`, no injection). Counts: read x2, edit x1, claude x2, codex x1,
 // A x2, B x2.
 fn golden_state() -> PathBuf {
     let state =
@@ -16,8 +16,10 @@ fn golden_state() -> PathBuf {
     std::fs::create_dir_all(&state).unwrap();
     let rows = [
         r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["A"]}"#,
-        r#"{"ts":"2026-09-26T00:01:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":20,"est_tokens":5,"ids":["A","B"]}"#,
+        r#"{"ts":"2026-09-26T00:01:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":20,"est_tokens":5,"ids":["A","B"],"session":"s1","said":[{"kind":"row","key":"A"},{"kind":"row","key":"B"},{"kind":"bodies"}]}"#,
         r#"{"ts":"2026-09-26T00:02:00.000Z","repo":"/work/real","client":"codex","event":"edit","bytes":30,"est_tokens":7,"ids":["B"]}"#,
+        // a pull's outcome line: earns the bodies line, counts as no injection
+        r#"{"ts":"2026-09-26T00:03:00.000Z","repo":"/work/real","client":"cli","event":"find","bytes":0,"est_tokens":0,"ids":[],"session":"s1","found":["B"],"q":{"id":"B"}}"#,
         "not json",
     ];
     std::fs::write(state.join("usage.jsonl"), rows.join("\n") + "\n").unwrap();
@@ -46,7 +48,7 @@ fn stats_text_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -61,7 +63,7 @@ fn stats_rows_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown)\n  row B: pushed ×2 (unknown)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown)\n  row B: pushed ×2 (unknown)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -90,6 +92,7 @@ fn stats_json_matches_golden_values() {
             "capture": {"reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
             "unused_rows": [],
+            "said": {"row": {"said": 2, "earned": 0}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "count": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1}, "notice": {"said": 0, "earned": 0}},
             "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0}},
         }),
         "{out}"

@@ -133,7 +133,7 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
 /// Whether row `r` came from this session: rows carry the writer's session
 /// as the transcript's file stem (`Row::session`), usage carries the hook's
 /// key (a path for Claude), so compare stems. No writer session → branch.
-fn mine(r: &Row, session: &str, branch: Option<&str>) -> bool {
+pub(super) fn mine(r: &Row, session: &str, branch: Option<&str>) -> bool {
     match r.session() {
         Some(w) => Path::new(session).file_stem().is_some_and(|s| *s == *w),
         None => branch.is_none() || r.branch().is_none() || r.branch() == branch,

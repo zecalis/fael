@@ -17,6 +17,16 @@ pub(super) fn find(a: &Value) -> Result<String, String> {
             // chunk 6e: ids just shown are already in this session's context
             let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
             crate::hook::note_seen(&crate::session::hook_session(&r.root), &r.root, &ids);
+            // `id` or `ids: [...]` pulls bodies: the ids shown, never what was typed
+            let id = (s(a, "id").is_some() || a["ids"].is_array()).then(|| shown.join(","));
+            let q = (s(a, "key"), files(a), id);
+            crate::hook::record_found(
+                "mcp",
+                "mcp-find",
+                &r.root,
+                &shown,
+                (q.0.as_deref(), &q.1, q.2.as_deref()),
+            );
             Ok(text)
         }
     }

@@ -2,7 +2,7 @@
 //! spawn on this path), record the edit, cap the push at `budget.push_rows`,
 //! and say each row once per session.
 
-use super::asks::hook_meta;
+use super::asks::{UsageMeta, hook_meta};
 use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::counts::counts;
 use super::protocol::{Event, ctx};
@@ -206,7 +206,10 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     }
     let mut r = out.reply();
     if let Some(context) = r.context() {
-        let meta = hook_meta(&c, None, true);
+        let meta = UsageMeta {
+            said: r.said(),
+            ..hook_meta(&c, None, true)
+        };
         record_usage_shadow(
             &c.client,
             event,

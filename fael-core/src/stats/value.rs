@@ -57,7 +57,15 @@ type Pairs<'a> = (
 /// Each client's first `in-context` line ts: before it no hook could write one.
 pub(super) fn window_start(parsed: &Parsed) -> HashMap<&str, &str> {
     let mut first: HashMap<&str, &str> = HashMap::new();
-    for v in parsed.kept.iter().filter(|v| v["event"] == "in-context") {
+    // a notes-only line (`in_context_notes`, say-gate chunk 3) opens no window
+    let decided =
+        |v: &&serde_json::Value| v["in_context"].as_array().is_some_and(|a| !a.is_empty());
+    for v in parsed
+        .kept
+        .iter()
+        .filter(|v| v["event"] == "in-context")
+        .filter(decided)
+    {
         if let (Some(c), Some(ts)) = (v["client"].as_str(), v["ts"].as_str()) {
             first
                 .entry(c)
@@ -232,8 +240,10 @@ mod tests {
         // pushed D1 too. A session-less line never joins.
         // claude wrote its first in-context line on 09-25 (the feature exists
         // from then); codex only at 00:04, so its 00:00:10 read of D1 in s3
-        // predates the feature and stays out of by_event
+        // predates the feature and stays out of by_event — a notes-only
+        // in-context line (00:00:05, say-gate chunk 3) opens no window
         let usage = r#"{"ts":"2026-09-25T00:00:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["Z9"],"session":"s0"}
+{"ts":"2026-09-26T00:00:05.000Z","repo":"/work/r","client":"codex","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":[],"in_context_notes":["N1"]}
 {"ts":"2026-09-26T00:00:10.000Z","repo":"/work/r","client":"codex","event":"read","bytes":9,"est_tokens":2,"ids":["D1"],"session":"s3"}
 {"ts":"2026-09-26T00:00:00.000Z","repo":"/work/r","client":"claude","event":"session-start","bytes":9,"est_tokens":2,"ids":["H1","D1"],"session":"s1"}
 {"ts":"2026-09-26T00:00:30.000Z","repo":"/work/r","client":"claude","event":"read","bytes":9,"est_tokens":2,"ids":["I1"],"session":"s1"}

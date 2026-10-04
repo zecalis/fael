@@ -47,7 +47,7 @@ pub(crate) use asks::{
     ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp, record_row_asks,
 };
 pub(crate) use protocol::cmd;
-pub(crate) use usage::{aggregate, load, stats};
+pub(crate) use usage::{aggregate, load, record_found, stats};
 
 // What the binary shares: `write` reads session edits and checks anchors,
 // `maintain` asks where the gitignore rule comes from.

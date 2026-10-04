@@ -17,13 +17,14 @@ pub(crate) use crate::core::stats::{ASK_REJECT, ASK_WARN};
 /// pushes), the session it belongs to (absent outside hooks), the sub-agent
 /// whose context it landed in (absent on the session's own thread), and the
 /// real tokens of the round that just ended (absent without a transcript
-/// `usage`).
+/// `usage`), and what the reply said per kind (`Reply::said`, absent when empty).
 #[derive(Default)]
 pub(crate) struct UsageMeta<'a> {
     pub ask: Option<&'a str>,
     pub session: Option<&'a str>,
     pub agent: Option<&'a str>,
     pub real: Option<RealTokens>,
+    pub said: &'a [super::say::Said],
 }
 
 /// Append one usage row, fail-open like the rest of this module: accounting
@@ -56,6 +57,7 @@ pub(crate) fn hook_meta<'a>(c: &'a Ctx, ask: Option<&'a str>, real: bool) -> Usa
         session: session_meta(&c.session),
         agent: (!c.agent.is_empty()).then_some(c.agent.as_str()),
         real: real.then(|| transcript_usage(&c.session)).flatten(),
+        said: &[],
     }
 }
 

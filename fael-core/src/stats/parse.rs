@@ -86,8 +86,9 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
             p.skipped += 1;
             continue;
         }
-        // nothing reached any context: `value` reads it, no count does
-        if v["event"] == "in-context" {
+        // nothing reached any context: `value` reads it, no count does — nor
+        // a pull's outcome line (`found`, say-gate chunk 3): the yield reads it
+        if v["event"] == "in-context" || v.get("found").is_some() {
             p.kept.push(v);
             continue;
         }

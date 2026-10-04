@@ -31,6 +31,7 @@ mod precision;
 mod prompt;
 mod push_cap;
 mod replay;
+mod said;
 mod search;
 mod seen;
 mod session;

@@ -307,3 +307,37 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_count() {
     // no budget at all still says the rows and the count
     assert!(run(0).0.contains("fael find --files"));
 }
+
+/// Usage records what was said (chunk 3): a said line names its kind, a
+/// dropped one names nothing, and `Reply::and` (a shell call's edit side, then
+/// its read side) keeps both sides' entries in order.
+#[test]
+fn said_names_each_line_said_and_and_keeps_both_sides() {
+    let kinds = |r: &Reply| -> Vec<String> {
+        let v = serde_json::to_value(r.said()).unwrap();
+        let k = |e: &serde_json::Value| e["kind"].as_str().unwrap().to_string();
+        v.as_array().unwrap().iter().map(k).collect()
+    };
+    let (mut both, mut want) = (Reply::default(), vec![]);
+    for l in all() {
+        let mut out = Outbox::open(None);
+        out.say(Line {
+            text: String::new(),
+            ..l.clone()
+        });
+        assert!(out.reply().said().is_empty(), "{:?}", l.kind);
+        let mut out = Outbox::open(None);
+        out.say(l);
+        let r = out.reply();
+        want.extend(kinds(&r));
+        both = both.and(r);
+    }
+    assert_eq!(kinds(&both), want);
+    want.dedup();
+    assert_eq!(
+        want,
+        [
+            "row", "brief", "ask", "pointer", "count", "bodies", "notice"
+        ]
+    );
+}

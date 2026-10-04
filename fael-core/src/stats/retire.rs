@@ -23,7 +23,7 @@ pub struct Retired {
 
 /// When each row left the open list, per repo: its close, or the row that
 /// superseded it (reverted edges skipped). The first retirement wins.
-fn retire_times(log: &Log) -> HashMap<&str, i64> {
+pub(super) fn retire_times(log: &Log) -> HashMap<&str, i64> {
     let mut out: HashMap<&str, i64> = HashMap::new();
     let rev = reverted(log);
     let events = log

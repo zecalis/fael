@@ -20,7 +20,17 @@ Every number comes from two inputs, joined as pure functions in
   An edit writes one 0-byte `event: "in-context"` row when decisions or issues
   about that very file were already in the session's context — their ids go
   under `in_context`, never `ids` (nothing was pushed), each id once per
-  session. It is no injection: no count above includes it. Torn lines are
+  session. Notes in context at that edit ride the same row under
+  `in_context_notes` (nothing in `value` reads them). It is no injection: no
+  count above includes it. A hook reply also carries `said` — one
+  `{kind, key?}` per line it said: `row` (row id), `ask` (row id, `*`
+  for the generic clause), `pointer` (key), `count` (one per count line:
+  `<files>|file`, `<files>|dir:<dirs>`, `<files>|key:<key>` or `<files>|keys`),
+  `brief` (no key — its rows are the line's `ids`),
+  `bodies` and `notice` (no key). A pull that showed rows (`find`,
+  `mcp-find`, `kickoff`) writes a 0-byte row with the shown ids under `found`
+  (not `ids`) and its query's `key`/`files`/`id` under `q` — never free text;
+  like `in-context` it is no injection. Torn lines are
   skipped; temp-dir repos (the OS temp dir and `/tmp`, where agent
   scratchpads live) are skipped unless the state dir itself is scratch.
   `--since <YYYY-MM-DD | RFC 3339>` keeps only the lines stamped at or after
@@ -57,6 +67,7 @@ shape is a breaking change: ship the reader first.
 | `capture` | object | reply capture, manual adds and silent sessions (fields below) |
 | `retired` | object | `pushed` = distinct rows a `read`/`edit` push handed over · `at_touch` = of those, closed or superseded (a bump is a supersede) within a day after one of those pushes — how many rows the edit-push ask retires where they went stale |
 | `value` | object | the line `fael stats` prints first: `in_context_at_edit` = distinct (session, row) pairs from `in-context` rows whose row an earlier push of that session handed over (a row the agent filed or found itself does not count) · `issues_closed` = issues closed at or after the repo's first usage, a close `fael compact` folded into its row included (deduped by id) · `handoffs_picked_up` = distinct `*:handoff`-keyed rows a push handed over · `by_event` = map push event → `{pushed, in_context_at_edit}`: each (session, row) pair counts once, for the event of the push that first handed it over — hit rate per event, over the usage lines stamped at or after each client's first `in-context` line (before it no hook could write one, so those pushes could never score and are left out of both numbers; a client with no such line has no entry, and the sums can be lower than the plain totals). Three limits: a lower bound (an `in-context` line exists only when the agent edits the row's file, so a read-only session scores every row a miss); the first push claims the pair and a push never repeats a row the session already holds, so a later event carries only what is new, and an `edit` push can only hit on a later edit. The cost per event is the top-level `by_event`. · `cross_agent` = `{other_session, other_worktree, written_during_session, other_client, by_client, writer_unknown}`, each of the first four and each `by_client` value `{pushed, in_context_at_edit}`: pushed (session, row) pairs whose row names a writer session (`fael add` inside a hook session tags it; older rows and rows filed outside a session do not count), over the same window as `by_event` — `other_session` = the writer is not the session handed the row · `other_worktree` = and the writer session's usage lines name a worktree the receiver is not in (a writer with no usage lines is unknown, not counted) · `written_during_session` = and the row was written after the receiver's first usage line (two agents at once, one's row reaching the other); the three are not exclusive; `other_client` = and both sessions' usage lines name a client (the agent's, not `cli`/`mcp`) and they differ — `by_client` splits it `"<writer>→<receiver>"`, e.g. `claude→opencode`; `writer_unknown` = pushed pairs whose row names no writer session, which none of the above can place (a client that gives `fael add` no session id, or a row older than the tag) — read it first: a row it hides is never counted as crossing; `in_context_at_edit` = of those pairs, rows still in context when the agent edited their file. A count of what crossed agents, never of what it saved. The text line adds `retired.at_touch` and `capture.reply_stored` |
+| `said` | map kind → `{said, earned}` | yield per line kind a hook says, every kind listed (zeros included): `row`, `note` (a `row` entry whose row is a note), `brief`, `ask`, `pointer`, `count`, `bodies`, `notice`. `said` = `said` entries of that kind; `earned` = of those, acted on later in the same session — `row`/`note`/`brief`: the id in an `in-context` row (`in_context` or `in_context_notes`) or closed/superseded within a day · `ask`: the id closed, superseded or bumped within a day (`*` is not counted) · `pointer`: a pull whose `q.key` is that key · `count`: a pull by the call the line printed — for `file`/`dir:` a `q.files` path naming one of its files or a directory over one (at a `/` boundary: `src` covers `src/a.rs`), for `key:<key>` that `q.key`, for `keys` any `q.key` · `bodies`: a pull by id · `notice`: a row the session filed after it. An upper bound (the agent may have done it anyway): read it only to cut a kind, never as proof one works |
 | `unused_rows` | `[{id, kind, pushes}]` × ≤20 | open decisions and issues handed over ≥ 20 times (counted over the usage lines stamped at or after each client's first `in-context` line) with no `in-context` line ever naming them, pushes desc then id asc — a row to close, bump or `--supersede`. A note never lists (`in-context` does not measure notes). Never-seen-used, not proven useless: a read-only session writes no `in-context` line. The text line prints the first 10 with the commands; nothing to list = no line |
 | `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
 
@@ -123,6 +134,7 @@ newest-first across repos.
 
 Newest first.
 
+- `2` (2026-10-04): added `said` (yield per line kind); usage rows gain `said`, `in_context_notes` and the pull rows (`found`, `q`), none of which changes an existing count; no bump.
 - `2` (2026-10-04): added `unused_rows`; no bump. The text `fael stats` prints it in place of the top-10 `row X: pushed ×N` lines (`top_rows` in `--json` is unchanged).
 - `2` (2026-10-03): the Stop-block mode is gone (fael never blocks a turn), so
   every field that read its usage rows went with it: `stop_blocks`,
