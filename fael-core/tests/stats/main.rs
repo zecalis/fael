@@ -54,6 +54,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "non_english_rows",
             "retired",
             "rounds",
+            "said",
             "schema",
             "skipped_temp",
             "top_rows",
@@ -63,6 +64,19 @@ fn json_shape_keys_and_types_are_frozen() {
         "{v}"
     );
     assert_eq!(v["schema"], 2, "{v}");
+    // every kind listed, zeros included
+    assert_eq!(
+        keys(&v["said"]),
+        [
+            "ask", "bodies", "brief", "count", "note", "notice", "pointer", "row"
+        ],
+        "{v}"
+    );
+    assert_eq!(
+        v["said"]["row"],
+        serde_json::json!({"said": 0, "earned": 0}),
+        "{v}"
+    );
     assert_eq!(
         keys(&v["capture"]),
         [

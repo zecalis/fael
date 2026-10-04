@@ -49,6 +49,18 @@ fn print_events(s: &core::stats::Stats) {
     }
 }
 
+/// Yield per line kind (PLAN-fael-say-gate chunk 3), in `KINDS` order, the
+/// kinds never said left out; nothing said = no line.
+fn said_line(s: &core::stats::Stats) -> Option<String> {
+    let parts: Vec<String> = core::stats::KINDS
+        .iter()
+        .filter_map(|k| s.said.get(*k).map(|y| (k, y)))
+        .filter(|(_, y)| y.said > 0)
+        .map(|(k, y)| format!("{k} {}/{} ({}%)", y.earned, y.said, y.earned * 100 / y.said))
+        .collect();
+    (!parts.is_empty()).then(|| format!("  acted on after said: {}", parts.join(" · ")))
+}
+
 /// One line on rows that crossed agents; nothing to say = no line.
 fn cross_line(s: &core::stats::Stats) -> Option<String> {
     let c = &s.value.cross_agent;
@@ -230,6 +242,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             "  retired at touch: {} of {} pushed row(s) closed or superseded within a day of a push",
             s.retired.at_touch, s.retired.pushed
         );
+    }
+    if let Some(line) = said_line(s) {
+        println!("{line}");
     }
     println!(
         "  constants per session: SKILL.md {} bytes (~{} est) + MCP schema {} bytes (~{} est)",

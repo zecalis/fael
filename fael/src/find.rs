@@ -3,8 +3,11 @@
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
 pub(crate) mod branches;
+mod kickoff;
 pub(crate) mod many;
 pub(crate) mod misses;
+
+pub(crate) use kickoff::kickoff;
 
 use super::{Args, aliases};
 use fael_core::{self as core, Filter, Log, Row};
@@ -27,6 +30,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             super::refs::Wide::One(row) => {
                 // the body was just printed — the next push must not say it again
                 super::hook::note_seen(&super::session::hook_session(&r.root), &r.root, &[&row.id]);
+                found(&r.root, &row.id);
                 show_one(a, &log, &row, &super::journal::overlay(jtags, btags))
             }
             super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
@@ -40,6 +44,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         && let Some(t) = text
         && let Ok(row) = core::resolve(&log, t)
     {
+        found(&r.root, &row.id);
         return show_one(a, &log, row, &branch_of);
     }
     let query = forced.as_ref().or(text);
@@ -96,6 +101,13 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         },
         &branch_of,
     )?;
+    super::hook::record_found(
+        "cli",
+        "find",
+        &r.root,
+        &shown,
+        (f.key.as_deref(), &files, None),
+    );
     // the issue list is where grouping and claiming are needed — said here,
     // not in the skill every session pays for; a paged call keeps its cut line last
     let unpaged = limit.is_none() && offset == 0;
@@ -117,6 +129,17 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             .for_each(|c| println!("{}", c.to_line()));
     }
     Ok(())
+}
+
+/// A body pulled by id: the outcome a `bodies:` line earns on.
+fn found(root: &std::path::Path, id: &str) {
+    super::hook::record_found(
+        "cli",
+        "find",
+        root,
+        &[id.to_string()],
+        (None, &[], Some(id)),
+    );
 }
 
 /// `find --groups`: every match, grouped by shared files — what to fix in one
@@ -146,56 +169,11 @@ fn groups(a: &Args, log: &Log, f: &Filter, branch_of: &branches::BranchMap) -> R
 const ISSUE_TIP: &str =
     "fix together: fael find --kind issue --groups · working one? fael claim <id> first";
 
-pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
-    let r = super::repo()?;
-    let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
-    let (base, jtags) = super::journal::read(&r);
-    let (log, branch_of) = working_or_branches(a, base, jtags, &r);
-    let al = aliases::load(&r, &log, true);
-    let (limit, offset) = a.paging()?;
-    let f = Filter {
-        files: al.expand_all(&files),
-        limit,
-        offset,
-        ..Filter::default()
-    };
-    // kickoff ranks the full set itself, so it pages after — same helper as query()
-    let (rows, total) = core::page(
-        core::kickoff(&log, &f, &r.root, &al, &r.cfg.anchor_prefixes),
-        limit,
-        offset,
-    );
-    let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
-    let _ = show(
-        a,
-        a.has("full"),
-        &log,
-        &rows,
-        // an explicit --limit wins over the token budget, same as find
-        limit.map_or(r.cfg.kickoff_tokens, |_| usize::MAX),
-        core::Cut {
-            total,
-            offset,
-            next: &|n| format!("{base} --offset {n}"),
-        },
-        &branch_of,
-    )?;
-    // free-text revisits never list — one count line points at them
-    // (due dates list in full above, so they need no line)
-    if !a.has("json") && offset == 0 {
-        let n = core::waiting(&log).len();
-        if n > 0 {
-            print!("{}", core::waiting_line(n));
-        }
-    }
-    Ok(())
-}
-
 /// The union log, or the union log plus unmerged branches' rows when
 /// `--branches` is passed (HEAD wins on duplicate ids — a merged-then-listed
 /// row never doubles, never tags). Read/edit push never pass the flag: no git
 /// spawn belongs on the 5 ms push path.
-fn working_or_branches(
+pub(super) fn working_or_branches(
     a: &Args,
     log: Log,
     journal: branches::BranchMap,
@@ -212,7 +190,7 @@ fn working_or_branches(
     }
 }
 
-fn show(
+pub(super) fn show(
     a: &Args,
     full: bool,
     log: &Log,

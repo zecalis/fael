@@ -98,7 +98,9 @@ fn usage(d: &Path) -> Vec<serde_json::Value> {
     std::fs::read_to_string(root.join("state/usage.jsonl"))
         .unwrap_or_default()
         .lines()
-        .filter_map(|l| serde_json::from_str(l).ok())
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        // a find's outcome line (`found`) is no ask
+        .filter(|v| v.get("found").is_none())
         .collect()
 }
 

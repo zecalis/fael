@@ -5,7 +5,7 @@
 //! pushed or found (its `.seen` list) count too (01M3XKB7M): the agent does
 //! not need a pointer at a key it just read rows from.
 
-use super::asks::hook_meta;
+use super::asks::{UsageMeta, hook_meta};
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
 use super::state::{lock_seen, seen_path, session_key, state_dir};
@@ -73,7 +73,10 @@ pub(crate) fn prompt(e: &Event) -> Reply {
             &c.repo.root,
             context,
             &[],
-            &hook_meta(&c, None, false),
+            &UsageMeta {
+                said: r.said(),
+                ..hook_meta(&c, None, false)
+            },
         );
     }
     r

@@ -35,11 +35,20 @@ pub(crate) struct Reply {
     /// no such channel drops it — it must never land in `context`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) notice: Option<String>,
+    /// What `context` holds, line by line — usage only, never on the wire.
+    #[serde(skip)]
+    said: Vec<Said>,
 }
 
 impl Reply {
     pub(crate) fn context(&self) -> Option<&str> {
         self.context.as_deref()
+    }
+
+    /// The usage `said` list (PLAN-fael-say-gate chunk 3): one entry per key
+    /// of each line said, read back by `fael-core` stats as yield per kind.
+    pub(crate) fn said(&self) -> &[Said] {
+        &self.said
     }
 
     /// Two replies as one, in order (a shell call's edit side, then its read
@@ -49,10 +58,13 @@ impl Reply {
             (Some(a), Some(b)) => Some(a + &b),
             (a, b) => a.or(b),
         };
+        let mut said = self.said;
+        said.extend(next.said);
         Reply {
             block: false,
             context,
             notice: self.notice.or(next.notice),
+            said,
         }
     }
 }
@@ -127,6 +139,38 @@ impl Kind {
     }
 }
 
+/// One `said` entry: the kind's name and the id, key or count key it names.
+/// `Brief` names none (stats reads the line's `ids`), nor do `Bodies` and
+/// `Notice`.
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct Said {
+    kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key: Option<String>,
+}
+
+impl Kind {
+    fn said(&self) -> Vec<Said> {
+        let (kind, keys) = match self {
+            Kind::Row { ids } => ("row", ids.clone()),
+            Kind::Brief => ("brief", vec![]),
+            Kind::Ask { ids } => ("ask", ids.clone()),
+            Kind::Pointer { keys } => ("pointer", keys.clone()),
+            // `<files>|file`, `|dir:<dirs>`, `|key:<key>`, `|keys` — one per line
+            Kind::Count { keys } => ("count", keys.clone()),
+            Kind::Bodies => ("bodies", vec![]),
+            Kind::Notice => ("notice", vec![]),
+        };
+        match keys.is_empty() {
+            true => vec![Said { kind, key: None }],
+            false => keys
+                .into_iter()
+                .map(|k| Said { kind, key: Some(k) })
+                .collect(),
+        }
+    }
+}
+
 /// One thing to say. `text` goes into the context verbatim (it carries its
 /// own line breaks).
 #[derive(Clone)]
@@ -155,6 +199,7 @@ pub(crate) struct Outbox {
     lines: HashSet<String>,
     spent: Vec<String>,
     text: String,
+    said: Vec<Said>,
 }
 
 impl Outbox {
@@ -171,6 +216,7 @@ impl Outbox {
             seen,
             spent: vec![],
             text: String::new(),
+            said: vec![],
         }
     }
 
@@ -220,6 +266,7 @@ impl Outbox {
         self.spent
             .extend(self.fresh_keys(&l.kind).unwrap_or_default());
         self.text.push_str(&l.text);
+        self.said.extend(l.kind.said());
     }
 
     /// Say `lines` in order within `budget` tokens. What is said is charged,
@@ -260,36 +307,47 @@ impl Outbox {
             block: false,
             context: (!self.text.is_empty()).then_some(self.text),
             notice: None,
+            said: self.said,
         }
     }
 
     /// PLAN-fael-visible-secretary chunk 5: decisions and issues about this
     /// very file (tier 0) already in the agent's context when it edited it.
     /// Its own 0-byte usage line under `in_context`, never `ids` (nothing was
-    /// pushed). The seen list also holds rows the agent filed or found itself,
-    /// so stats counts only ids an earlier push of the session handed over.
-    /// Each id once per session: an `@<id>` line in the seen list marks it.
+    /// pushed). Notes ride the same line under `in_context_notes`
+    /// (PLAN-fael-say-gate chunk 3), so `value` keeps counting decisions and
+    /// issues only. The seen list also holds rows the agent filed or found
+    /// itself, so stats counts only ids an earlier push of the session handed
+    /// over. Each id once per session: an `@<id>` line in the seen list marks it.
     pub(crate) fn record_in_context(&mut self, c: &Ctx, tiered: &[(&core::Row, usize)]) {
         let Some(f) = &mut self.file else { return };
         let seen = &self.lines;
-        let ids: Vec<&str> = tiered
+        let (notes, ids): (Vec<&core::Row>, Vec<&core::Row>) = tiered
             .iter()
             .filter(|(r, tier)| {
                 *tier == 0
-                    && matches!(r.kind.as_str(), "decision" | "issue")
+                    && matches!(r.kind.as_str(), "decision" | "issue" | "note")
                     && seen.contains(r.id.as_str())
                     && !seen.contains(&format!("@{}", r.id))
             })
-            .map(|(r, _)| r.id.as_str())
-            .collect();
-        if ids.is_empty() {
+            .map(|(r, _)| *r)
+            .partition(|r| r.kind == "note");
+        if ids.is_empty() && notes.is_empty() {
             return;
         }
-        let marks: String = ids.iter().map(|id| format!("@{id}\n")).collect();
+        let id = |rs: &[&core::Row]| rs.iter().map(|r| r.id.clone()).collect::<Vec<_>>();
+        let marks: String = ids
+            .iter()
+            .chain(&notes)
+            .map(|r| format!("@{}\n", r.id))
+            .collect();
         let _ = f.write_all(marks.as_bytes());
         let meta = hook_meta(c, None, false);
         let mut row = usage_row(&c.client, IN_CONTEXT, &c.repo.root, "", &[], &meta);
-        row["in_context"] = ids.into();
+        row["in_context"] = id(&ids).into();
+        if !notes.is_empty() {
+            row["in_context_notes"] = id(&notes).into();
+        }
         super::asks::append_row(row);
     }
 }
