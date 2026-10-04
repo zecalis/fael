@@ -10,6 +10,7 @@ use super::retire::{Retired, retired};
 use super::said::{KindYield, yields};
 use super::unused::{UnusedRow, unused};
 use super::value::{Value, value};
+use super::verdict::{FileVerdict, file_verdict};
 use crate::{Config, Log, closed, rfc3339, superseded};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -107,6 +108,9 @@ pub struct Stats {
     pub said: BTreeMap<String, KindYield>,
     /// Rows a human keyed `incident:<kind>`, per week (`incident.rs`).
     pub incidents: Incidents,
+    /// Rows a push showed, by file-hash verdict: changed, unchanged, none
+    /// (`verdict.rs`) — what push could not say, never a saving.
+    pub file_verdict: FileVerdict,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -175,6 +179,7 @@ pub fn aggregate(
         unused_rows: unused(parsed, logs),
         said: yields(parsed, logs),
         incidents: incidents(parsed, logs),
+        file_verdict: file_verdict(parsed),
         rows: with_rows.then(|| row_statuses(&parsed.by_id, &parsed.id_repos, logs)),
     }
 }
