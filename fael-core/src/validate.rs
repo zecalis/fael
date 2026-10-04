@@ -138,11 +138,20 @@ fn check_common(row: &Row, cfg: &Config) -> Result<(), String> {
         return Err("rejected: text is required — write it so it stands alone months later".into());
     }
     let line = row.to_line();
+    // `fh` is fael's own stamp, not the author's text — it never counts toward
+    // the cap, so a row that fit before still fits and a bump can't fail on it
+    let size = match row.file_hashes() {
+        Some(_) => {
+            let mut bare = row.clone();
+            bare.extra.remove("fh");
+            bare.to_line().len()
+        }
+        None => line.len(),
+    };
     let limit = cfg.row_bytes.min(ROW_BYTES_MAX);
-    if line.len() > limit {
+    if size > limit {
         return Err(format!(
-            "rejected: row is {} bytes, limit is {limit} — trim the text or split it into rows",
-            line.len()
+            "rejected: row is {size} bytes, limit is {limit} — trim the text or split it into rows"
         ));
     }
     if let Some(what) = secret(&line) {

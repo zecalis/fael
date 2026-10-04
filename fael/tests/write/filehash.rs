@@ -127,7 +127,7 @@ fn oversize_file_is_not_stamped() {
 }
 
 #[test]
-fn claim_keeps_the_hash_and_bump_restamps() {
+fn claim_and_routing_bump_keep_the_hash_and_bare_bump_restamps() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     let (ok, out, err) = fael(&d, &["add", "issue", "x", "--files", "src/a.rs"], "");
@@ -135,20 +135,65 @@ fn claim_keeps_the_hash_and_bump_restamps() {
     let id = out.split_whitespace().next().unwrap().to_string();
     let before = fh(&d, "x");
 
-    // claim: the file is untouched, so even the same bytes are the point —
-    // but the map must survive a claim verbatim, never be recomputed
+    // the file moves on, then the row is claimed: a claim is not a check, so
+    // the map must be the old one, not a recompute of the edited bytes
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let (ok, out, err) = fael(&d, &["claim", &id], "");
     assert!(ok, "{err}");
     assert_eq!(fh(&d, "x"), before, "claim must carry the old map");
-    // claim superseded `id`; bump the version it filed
     let claimed = out.split_whitespace().next().unwrap().to_string();
 
-    // bump after an edit: the new version carries the new blob id
-    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
-    let (ok, _, err) = fael(&d, &["bump", &claimed], "");
+    // re-routing is not a check either
+    let (ok, out, err) = fael(&d, &["bump", &claimed, "--urgent"], "");
+    assert!(ok, "{err}");
+    assert_eq!(fh(&d, "x"), before, "a routing bump must carry the old map");
+    let routed = out.split_whitespace().next().unwrap().to_string();
+
+    // a bare bump is the "still true" check: it restamps from disk
+    let (ok, _, err) = fael(&d, &["bump", &routed], "");
     assert!(ok, "{err}");
     assert_eq!(fh(&d, "x")["src/a.rs"], git_blob(&d, "src/a.rs").as_str());
     assert_ne!(fh(&d, "x"), before);
+}
+
+#[test]
+fn bracketed_real_path_is_stamped() {
+    let d = repo();
+    std::fs::create_dir_all(d.join("src/[id]")).unwrap();
+    std::fs::write(d.join("src/[id]/page.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", "dynamic", "--files", "src/[id]/page.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(fh(&d, "dynamic").get("src/[id]/page.rs").is_some());
+}
+
+#[test]
+fn binary_hashes_like_git() {
+    let d = repo();
+    std::fs::write(d.join("src/b.bin"), b"\0a\r\nb\r\n").unwrap();
+    assert!(fael(&d, &["add", "note", "bin", "--files", "src/b.bin"], "").0);
+    assert_eq!(
+        fh(&d, "bin")["src/b.bin"],
+        git_blob(&d, "src/b.bin").as_str()
+    );
+}
+
+#[test]
+fn fh_does_not_count_toward_the_row_cap() {
+    let d = repo();
+    let files: Vec<String> = (0..8).map(|i| format!("src/long_name_{i:02}.rs")).collect();
+    for f in &files {
+        std::fs::write(d.join(f), "//\n").unwrap();
+    }
+    // 10_000 bytes of text leaves under 200 for the line's other fields — the
+    // eight stamped paths alone would overflow the 10 KiB cap
+    let text = format!("a{}", "b".repeat(9_900));
+    let (ok, _, err) = fael(&d, &["add", "note", &text, "--files", &files.join(",")], "");
+    assert!(ok, "{err}");
+    assert_eq!(fh(&d, "ab").as_object().unwrap().len(), 8);
 }
 
 #[test]

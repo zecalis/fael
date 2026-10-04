@@ -65,6 +65,12 @@ pub const CORE_KINDS: [&str; 3] = ["decision", "issue", "note"];
 pub const ROW_BYTES_MAX: usize = 10 * 1024;
 pub const KEY_MAX: usize = 64;
 
+/// A file glob (`*`, `?`, `[...]`) is a pattern, not a path — `find` matches
+/// it the same way, so it always passes the write check.
+pub fn is_glob(f: &str) -> bool {
+    f.contains(['*', '?', '['])
+}
+
 /// `scheme:ref` anchor (`doc:pricing`, `issue:#12`): a scheme of ≥ 2 chars `[a-z0-9+.-]`, starting
 /// with a letter, before the first `:` and before any `/`. Two chars minimum so `C:` stays a drive.
 /// Returns the ref — opaque to fael (`/` in it is not a path separator); it must be non-empty.
