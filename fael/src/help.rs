@@ -123,10 +123,10 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "delete a row for good",
         "fael purge <id>
     (permanently remove a leaked test row or a mistake: the row and its close
-     events go from every month file, tree and journal; refused when another
-     row supersedes or restores it, when the id names a close event (use
-     fael restore for those), when it lives in an immutable compact file, or
-     when the file has lines `read` would skip — run `fael doctor --fix` first;
+     and bump events go from every month file, tree and journal; refused when
+     another row supersedes or restores it, when the id names a close event
+     (use fael restore for those), when it lives in an immutable compact file,
+     or when the file has lines `read` would skip — run `fael doctor --fix` first;
      the next sync keeps it from coming back; copies already in a teammate's
      journal stay until purged there too)",
     ),

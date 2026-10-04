@@ -10,8 +10,9 @@
 //! - any copy lives in an immutable file (`compact.*`, `_import/*`)
 //! - a file to rewrite has lines `read` would skip → `fael doctor --fix` first
 //!
-//! The row's own close events go with it (a close without its row is a
-//! `[Phantom]` `doctor` would flag). Both stores are rewritten — the tree and
+//! The row's own close and bump events go with it (a close without its row
+//! is a `[Phantom]` `doctor` would flag; a bump event would keep the id
+//! syncing after the tombstone). Both stores are rewritten — the tree and
 //! the journal when the clone has one — following `compact` (locks, tmp +
 //! rename, same bytes to every root that held a source line). Copies already
 //! synced to other clones or remotes are out of reach; the CLI keeps the id as
@@ -22,8 +23,8 @@ use super::{Log, collect_files, lock, month_of, tmp_rename};
 use crate::{Row, decode_text, resolve};
 use std::path::{Path, PathBuf};
 
-/// What `purge_row` removed: the row's add lines (`rows`), its close events
-/// (`closes`), and every rewritten file (absolute paths).
+/// What `purge_row` removed: the row's add lines and bump events (`rows`),
+/// its close events (`closes`), and every rewritten file (absolute paths).
 #[derive(Debug, Default, PartialEq)]
 pub struct Purged {
     pub id: String,
@@ -140,9 +141,9 @@ fn refuse_blockers(log: &Log, tid: &str) -> Result<(), String> {
 
 /// Split one file into surviving lines and drop counts. Refuses immutable
 /// files and files with lines `read` would skip — purge never drops a byte
-/// silently. Add lines match by `id` in any file; close events match by `ref`
-/// in `.close.jsonl` files only (a stray `ref` on an add row is a citation,
-/// not lifecycle).
+/// silently. Add lines match by `id` in any file, bump events by `bumps`;
+/// close events match by `ref` in `.close.jsonl` files only (a stray `ref`
+/// on an add row is a citation, not lifecycle).
 fn scan_file(path: &Path, tid: &str) -> Result<Option<Scanned>, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if String::from_utf8(bytes.clone()).is_err() {
@@ -178,7 +179,7 @@ fn scan_file(path: &Path, tid: &str) -> Result<Option<Scanned>, String> {
                 path.display()
             )
         })?;
-        if row.id == tid {
+        if row.id == tid || row.bumps.as_deref() == Some(tid) {
             if close_file {
                 sc.closes += 1;
             } else {

@@ -6,7 +6,7 @@ use crate::{Args, core, hook};
 use std::path::Path;
 
 /// `fael purge <id>`: an exact id or unique prefix names the row; the row and
-/// its close events go from every month file, tree and journal. Refusals come
+/// its close and bump events go from every month file, tree and journal. Refusals come
 /// from core (`supersedes`/`restores` edges, close-event ids, immutable files,
 /// unreadable lines) and print as errors. The id is also kept as a tombstone
 /// (`sync::purged`): the next `fael sync` carries it in this writer's ref so the
