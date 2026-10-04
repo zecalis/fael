@@ -5,6 +5,7 @@
 //! `stop` (turn end: bug lines stashed, never a block), `autosync` (once-per-session `fael sync`), `stop_lang` ([lang] marker/rows packs),
 //! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `changed_hint` (PLAN-fael-file-hash chunk 2: the edit hint names changed rows),
+//! `shadow` (PLAN-fael-file-hash chunk 3: changed/unchanged shadow on usage),
 //! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
 //! `day` (PLAN-fael-sync chunk 3: `fael stats --day`),
 //! `push_cap` (read-push row cap + omitted line),
@@ -32,6 +33,7 @@ mod push_cap;
 mod search;
 mod seen;
 mod session;
+mod shadow;
 mod stats;
 mod stats_golden;
 mod stop;
