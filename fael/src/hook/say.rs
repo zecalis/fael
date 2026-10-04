@@ -185,18 +185,20 @@ impl Outbox {
             || keys.iter().any(|k| !self.is_spent(k))
     }
 
+    /// False for a line `say` would drop: empty, without the command its kind
+    /// needs, or with every key it would spend already spent.
+    fn sayable(&self, l: &Line) -> bool {
+        let acted = l.action.as_deref().is_some_and(|a| l.text.contains(a));
+        !l.text.is_empty() && (!policy(&l.kind).needs_action || acted) && self.fresh(&l.kind)
+    }
+
     /// Add `l`, unless it is empty, lacks the command its kind needs, or every
     /// key it would spend is already spent.
     pub(crate) fn say(&mut self, l: Line) {
-        let p = policy(&l.kind);
-        let acted = l.action.as_deref().is_some_and(|a| l.text.contains(a));
-        if l.text.is_empty() || (p.needs_action && !acted) {
+        if !self.sayable(&l) {
             return;
         }
-        if !self.fresh(&l.kind) {
-            return;
-        }
-        if p.once == Once::Key && self.file.is_some() {
+        if policy(&l.kind).once == Once::Key && self.file.is_some() {
             let new: Vec<String> = l
                 .kind
                 .keys()
@@ -206,6 +208,32 @@ impl Outbox {
             self.spent.extend(new);
         }
         self.text.push_str(&l.text);
+    }
+
+    /// Say `lines` in order within `budget` tokens. What is said is charged,
+    /// and rows, bodies and counts are never cut (a count is the pointer to
+    /// what the budget cut): over the budget the stashed notice goes first,
+    /// then the edit hint, each whole. A cut line keeps its keys, so a later
+    /// push may say it. True when a notice was said, so the caller takes it
+    /// off disk.
+    pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
+        let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
+        let cost = |ls: &[Line]| ls.iter().map(|l| core::est_tokens(&l.text)).sum::<usize>();
+        while cost(&keep) > budget {
+            let cut = keep
+                .iter()
+                .position(|l| matches!(l.kind, Kind::Notice))
+                .or_else(|| keep.iter().position(|l| matches!(l.kind, Kind::Ask { .. })));
+            match cut {
+                Some(i) => keep.remove(i),
+                None => break,
+            };
+        }
+        let notice = keep.iter().any(|l| matches!(l.kind, Kind::Notice));
+        for l in keep {
+            self.say(l);
+        }
+        notice
     }
 
     /// Spend the keys and build the reply — no context when nothing was said.

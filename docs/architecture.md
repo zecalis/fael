@@ -203,7 +203,7 @@ store = "local"               # journal only (default, tree log or not); "tracke
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800
-push_tokens = 800             # read/edit hook push
+push_tokens = 800             # read/edit hook push: rows first, then the edit hint and a stashed notice in what is left
 push_rows = 5               # at most this many rows per push (0 = token budget only)
 session_decisions = 0         # session-start lists this many freshest open decisions above the count line
 [warn]

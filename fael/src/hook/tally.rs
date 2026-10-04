@@ -5,6 +5,7 @@
 //! lines since its last `turn` marker into the receipt, then appends one.
 //! Per-machine state only — nothing here reaches a row or the agent.
 
+use super::protocol::Ctx;
 use super::state::seen_path;
 use crate::core;
 use std::io::Write;
@@ -151,4 +152,39 @@ fn receipt(turn: &str, log: &core::Log) -> Option<String> {
         parts.push(format!("{word} {} ({}{more})", ids.len(), named.join(", ")));
     }
     (!parts.is_empty()).then(|| format!("fael: this turn — {}", parts.join(" · ")))
+}
+
+/// PLAN-fael-visible-secretary chunk 4: the user hears which decision or
+/// issue the agent was just reminded of — one line, the first such row, at
+/// most once per file per session. Every reminded id also goes to the
+/// tally for the turn's receipt. Notes and repo kinds stay quiet: a
+/// reminder is a choice made or a problem known, never a row count.
+pub(super) fn whisper(c: &Ctx, said: &[&core::Row], files: &[String]) -> Option<String> {
+    if !c.repo.cfg.notify_user {
+        return None;
+    }
+    let hits: Vec<&core::Row> = said
+        .iter()
+        .copied()
+        .filter(|r| matches!(r.kind.as_str(), "decision" | "issue"))
+        .collect();
+    let ids: Vec<&str> = hits.iter().map(|r| r.id.as_str()).collect();
+    note(&c.session, &c.repo.root, "reminded", &ids);
+    let first = hits.first()?;
+    if !first_whisper(&c.session, &c.repo.root, files) {
+        return None;
+    }
+    let label = match &first.key {
+        Some(k) => format!("#{k}"),
+        None => core::abbrev(&c.log).short(&first.id).to_string(),
+    };
+    let more = match hits.len() {
+        1 => String::new(),
+        n => format!(" +{} more", n - 1),
+    };
+    Some(format!(
+        "fael: reminded agent — {label} \"{}\" ({}){more}",
+        first.display_title(),
+        files.join(", ")
+    ))
 }
