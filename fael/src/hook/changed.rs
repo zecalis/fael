@@ -11,8 +11,9 @@ use std::path::Path;
 
 /// Files bigger than this are never hashed on the push path (the stamp side
 /// covers up to 16 MiB — 01M42CGE). A file over this cap has no verdict here,
-/// even when stamped: hashing it would break the 5 ms push ceiling.
-const MAX_BYTES: u64 = 1024 * 1024;
+/// even when stamped: hashing it would break the 5 ms push ceiling. `doctor`
+/// reads the same number to list the rows this leaves without a verdict.
+pub(crate) const PUSH_MAX_BYTES: u64 = 1024 * 1024;
 
 /// The generic clause of the legacy hint: said for rows with no verdict.
 const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
@@ -98,7 +99,7 @@ fn file_verdict(want: &str, target: &str, root: &Path, blobs: &mut Blobs) -> Opt
 }
 
 /// The 12-hex blob id on disk, or `None` when there is nothing hashable.
-/// Files over `MAX_BYTES` have no verdict: the stamp side covers up to 16
+/// Files over `PUSH_MAX_BYTES` have no verdict: the stamp side covers up to 16
 /// MiB, but hashing that much on the push path would break its 5 ms ceiling
 /// (01M42CGE) — unknown keeps the legacy hint, never a false "changed".
 fn blob_at(root: &Path, target: &str) -> Option<String> {
@@ -106,11 +107,13 @@ fn blob_at(root: &Path, target: &str) -> Option<String> {
     if !md.is_file() {
         return None;
     }
-    if md.len() > MAX_BYTES {
+    if md.len() > PUSH_MAX_BYTES {
         return None;
     }
     let mut file = std::fs::File::open(root.join(target)).ok()?;
-    core::blob_id_stream(&mut file, MAX_BYTES).ok().flatten()
+    core::blob_id_stream(&mut file, PUSH_MAX_BYTES)
+        .ok()
+        .flatten()
 }
 
 /// The said rows' ids plus, on a read, their shadow split (PLAN-fael-file-hash

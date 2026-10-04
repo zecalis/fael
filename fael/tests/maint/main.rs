@@ -4,7 +4,7 @@
 //! Thin entry only — the suites sit next to this file:
 //! `doctor` (union/fix, gone, stale, phantom, quarantine), `notenglish`
 //! ([lang] rows foreign-row batch), `branches` (orphan + merged
-//! branch notes), `compact` (close folding), `import` (fapony legacy).
+//! branch notes), `noverdict` (rows on files over the push cap), `compact` (close folding), `import` (fapony legacy).
 
 mod branches;
 mod compact;
@@ -12,6 +12,7 @@ mod doctor;
 mod import;
 mod journal_only;
 mod notenglish;
+mod noverdict;
 mod shipped;
 mod superseded;
 

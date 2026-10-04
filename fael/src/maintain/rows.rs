@@ -5,7 +5,7 @@
 //! processes). Every row-based note carries the full ids a cleanup agent
 //! needs (`doctor --json` prints them) — not just the abbreviated examples.
 
-use super::{alive, drift, fat, merged, orphan, phantom, shipped};
+use super::{alive, drift, fat, merged, noverdict, orphan, phantom, shipped};
 use crate::core;
 use std::collections::HashSet;
 use std::path::Path;
@@ -49,6 +49,9 @@ pub(super) fn open_row_notes(
     // the safety net for rows the code outgrew: many commits on a row's
     // files since it was written — the reader checks each against the code
     out.extend(drift::problem(log, root));
+    // rows on a file over the push cap: `fh` is stamped but push never
+    // compares it, so the generic hint stands — one `metadata()` per file
+    out.extend(noverdict::problem(log, root));
     out
 }
 

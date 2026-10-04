@@ -6,6 +6,7 @@ mod alive;
 mod drift;
 mod fat;
 mod merged;
+mod noverdict;
 mod orphan;
 mod phantom;
 mod rows;

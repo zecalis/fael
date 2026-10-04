@@ -100,6 +100,12 @@ pub enum Kind {
     /// the code moved on, so the row may restate or contradict it; counted
     /// by `git log` in `doctor`, never in core (core never spawns processes)
     Drifted,
+    /// open rows that name a real file over the edit push's size cap — the
+    /// push never compares it, so it never says whether the file changed since
+    /// the row was written and the generic hint stands; `fael add` still
+    /// stamps up to 16 MiB. Judged by `metadata()` in `doctor`, never in core;
+    /// info-only and never `--fix`ed.
+    NoVerdict,
     /// per-rule self-heal precision from restore labels
     /// (PLAN-fael-selfheal-restore chunk 3): a `restores` row labels the edge
     /// it reverts as wrong, an explicit re-supersede after it as right;
