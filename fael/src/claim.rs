@@ -86,7 +86,7 @@ fn take(
     id: &str,
     force: bool,
 ) -> Result<Claimed, String> {
-    let old = core::resolve(log, id)?;
+    let old = core::resolve_row(log, id)?;
     if old.kind != "issue" {
         return Err(format!(
             "rejected: {} is a {} — claim takes an open issue",

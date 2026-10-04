@@ -1,16 +1,28 @@
 use super::Filter;
 use super::{est_tokens, glob};
-use crate::{Config, Log, Row, anchor};
+use crate::{Config, Log, Row, anchor, is_carrier_row};
 use std::collections::HashMap;
 
 /// A row by exact id or a unique prefix (like a git sha, case-insensitive).
 pub fn resolve<'a>(log: &'a Log, prefix: &str) -> Result<&'a Row, String> {
-    if let Some(r) = log.rows.iter().find(|r| r.id == prefix) {
+    resolve_among(log.rows.iter(), prefix)
+}
+
+/// [`resolve`] over content rows only — what `close` and `bump` act on. A
+/// carrier (bump, restore) is never their target, and a bump event filed
+/// right after its row shares the prefix an earlier output printed.
+pub fn resolve_row<'a>(log: &'a Log, prefix: &str) -> Result<&'a Row, String> {
+    resolve_among(log.rows.iter().filter(|r| !is_carrier_row(r)), prefix)
+}
+
+fn resolve_among<'a>(
+    rows: impl Iterator<Item = &'a Row> + Clone,
+    prefix: &str,
+) -> Result<&'a Row, String> {
+    if let Some(r) = rows.clone().find(|r| r.id == prefix) {
         return Ok(r);
     }
-    let hits: Vec<&Row> = log
-        .rows
-        .iter()
+    let hits: Vec<&Row> = rows
         .filter(|r| {
             !prefix.is_empty()
                 && r.id

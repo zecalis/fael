@@ -292,3 +292,27 @@ fn a_bump_always_sorts_after_the_rows_last_event() {
         "the newest bump wins"
     );
 }
+
+#[test]
+fn close_and_bump_resolve_past_a_bump_event_sharing_the_prefix() {
+    // a bump right after the row (a script that adds then claims) can share
+    // the short id an earlier output printed: close and bump look at content
+    // rows only, so that id still names the row — and an event id names none
+    let (dir, cfg, st) = setup("bump-prefix");
+    let r = issue(&dir, &cfg, &st, "hot", None);
+    let mut ev = Row::bumped("tester-0000", &r.id);
+    let last = if r.id.ends_with('0') { "1" } else { "0" };
+    ev.id = format!("{}{last}", &r.id[..25]);
+    ev.to = Some("ploy".into());
+    append(&dir, &ev, false).unwrap();
+    let short = &r.id[..25];
+    let l = view(&dir);
+    assert!(resolve(&l, short).is_err(), "the raw lookup sees two rows");
+    assert_eq!(resolve_row(&l, short).unwrap().id, r.id);
+    let e = resolve_row(&l, &ev.id).unwrap_err();
+    assert!(e.contains("no row"), "{e}");
+    let b = bump(&dir, &cfg, &st, short, keep()).unwrap();
+    assert_eq!(b.id, r.id);
+    let (c, _, _) = close_row(&dir, None, &view(&dir), &cfg, &st, short, "done").unwrap();
+    assert_eq!(c.reference.as_deref(), Some(r.id.as_str()));
+}

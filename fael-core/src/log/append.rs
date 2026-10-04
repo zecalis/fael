@@ -172,7 +172,7 @@ pub fn close_row(
     id: &str,
     why: &str,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
-    let target = resolve(log, id)?;
+    let target = crate::resolve_row(log, id)?;
     // a second close row adds nothing but noise to an append-only log
     if closed(log).contains(target.id.as_str()) {
         return Err(format!("rejected: {} is already closed", target.id));
