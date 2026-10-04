@@ -1,5 +1,6 @@
 //! doctor [Drifted] through the real binary: an open row whose file took 10+
-//! commits after it was written is listed; a row on an untouched file is not.
+//! commits after it was written is listed; a row on an untouched file is not,
+//! and a bare `fael bump` restarts the count.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -70,4 +71,14 @@ fn doctor_lists_rows_whose_files_moved_on() {
             && !out.contains("b holds"),
         "{out}"
     );
+    // checked and still true: a bare bump restarts the count on the same id
+    // (past the last commit's second — drift counts commits at or after it)
+    let (_, out) = fael(&d, &["find", "a holds", "--json"]);
+    let row: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+    let id = row["id"].as_str().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let (ok, out) = fael(&d, &["bump", id]);
+    assert!(ok && out.starts_with(id), "{out}");
+    let (_, out) = fael(&d, &["doctor"]);
+    assert!(!out.contains("[Drifted]"), "{out}");
 }

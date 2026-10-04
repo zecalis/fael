@@ -130,10 +130,8 @@ fn a_hold_whose_branch_is_gone_is_taken_over_without_force() {
     assert!(fael(&d, &["claim", &id]).0);
     git(&d, &["switch", "-q", "feat/one"]);
     git(&d, &["branch", "-q", "-D", "feat/dead"]);
-    // a claim files a new version: take the current id from the list
-    let (_, list, _) = fael(&d, &["find", "--kind", "issue"]);
-    let cur = list.split("- [").nth(1).unwrap().split(']').next().unwrap();
-    let (ok, _, err) = fael(&d, &["claim", cur]);
+    // a claim keeps the id: the same id takes the hold over
+    let (ok, _, err) = fael(&d, &["claim", &id]);
     assert!(
         ok && err.contains("was held @feat/dead (branch gone)"),
         "{err}"

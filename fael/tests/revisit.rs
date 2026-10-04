@@ -55,8 +55,8 @@ fn revisits(d: &Path) -> Vec<(String, String)> {
     revisits_with(d, true)
 }
 
-/// Live versions only — after a bump the superseded version still matches
-/// under `--all`, so bump assertions read here.
+/// Live rows only (no `--all`) — what an agent's plain `find --revisit`
+/// lists after a bump.
 fn live_revisits(d: &Path) -> Vec<(String, String)> {
     revisits_with(d, false)
 }
