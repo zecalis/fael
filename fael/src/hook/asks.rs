@@ -25,6 +25,9 @@ pub(crate) struct UsageMeta<'a> {
     pub agent: Option<&'a str>,
     pub real: Option<RealTokens>,
     pub said: &'a [super::say::Said],
+    /// The repo-relative files an edit touched (absent on every other line):
+    /// what lets stats see two sessions at one file.
+    pub files: &'a [String],
 }
 
 /// Append one usage row, fail-open like the rest of this module: accounting
@@ -58,6 +61,7 @@ pub(crate) fn hook_meta<'a>(c: &'a Ctx, ask: Option<&'a str>, real: bool) -> Usa
         agent: (!c.agent.is_empty()).then_some(c.agent.as_str()),
         real: real.then(|| transcript_usage(&c.session)).flatten(),
         said: &[],
+        files: &[],
     }
 }
 

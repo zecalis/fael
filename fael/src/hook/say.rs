@@ -9,7 +9,7 @@
 //! `@<id>` per in-context mark. The prompt's pointer list is its own file of
 //! bare keys. No session = no file: every line is said, nothing remembered.
 
-use super::asks::hook_meta;
+use super::asks::{UsageMeta, hook_meta};
 use super::protocol::Ctx;
 use super::usage::usage_row;
 use crate::core;
@@ -319,7 +319,12 @@ impl Outbox {
     /// issues only. The seen list also holds rows the agent filed or found
     /// itself, so stats counts only ids an earlier push of the session handed
     /// over. Each id once per session: an `@<id>` line in the seen list marks it.
-    pub(crate) fn record_in_context(&mut self, c: &Ctx, tiered: &[(&core::Row, usize)]) {
+    pub(crate) fn record_in_context(
+        &mut self,
+        c: &Ctx,
+        tiered: &[(&core::Row, usize)],
+        files: &[String],
+    ) {
         let Some(f) = &mut self.file else { return };
         let seen = &self.lines;
         let (notes, ids): (Vec<&core::Row>, Vec<&core::Row>) = tiered
@@ -342,7 +347,10 @@ impl Outbox {
             .map(|r| format!("@{}\n", r.id))
             .collect();
         let _ = f.write_all(marks.as_bytes());
-        let meta = hook_meta(c, None, false);
+        let meta = UsageMeta {
+            files,
+            ..hook_meta(c, None, false)
+        };
         let mut row = usage_row(&c.client, IN_CONTEXT, &c.repo.root, "", &[], &meta);
         row["in_context"] = id(&ids).into();
         if !notes.is_empty() {

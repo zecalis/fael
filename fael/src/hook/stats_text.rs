@@ -215,6 +215,16 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     if let Some(line) = cross_line(s) {
         println!("{line}");
     }
+    let f = &s.value.cross_agent.same_file;
+    if f.files > 0 {
+        println!(
+            "  same file within {} min: {} files · {} session pairs (of {} sessions with edits seen)",
+            core::stats::OVERLAP_WINDOW_MS / 60_000,
+            f.files,
+            f.session_pairs,
+            f.sessions_seen
+        );
+    }
     let mut cl: Vec<_> = s.by_client.iter().collect();
     cl.sort_by_key(|a| std::cmp::Reverse(a.1.events));
     for (k, c) in cl {

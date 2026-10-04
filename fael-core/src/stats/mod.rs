@@ -13,6 +13,7 @@ mod capture;
 mod cross;
 mod day;
 mod metrics;
+mod overlap;
 mod parse;
 mod retire;
 mod said;
@@ -30,6 +31,7 @@ pub use day::{
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
 pub use metrics::ASK_ORDER;
+pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{KINDS, KindYield};

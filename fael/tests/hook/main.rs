@@ -27,6 +27,7 @@ mod focus;
 mod handoff;
 mod memory_line;
 mod notify;
+mod overlap;
 mod precision;
 mod prompt;
 mod push_cap;
