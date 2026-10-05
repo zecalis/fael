@@ -2,7 +2,8 @@
 //! through search tools or the shell instead of `Read` (fresh agents made 0
 //! `Read` calls in 15 sessions). Nothing is guessed: a path counts only when
 //! it names a file that exists, and only a reader command (`cat`, `sed`,
-//! `grep`, `git show` …) makes its arguments a touch. Tool names match
+//! `grep`, `git show` …) makes its arguments a touch; a grep or glob hit list
+//! counts only when it names one file. Tool names match
 //! case-insensitively: Claude sends `Grep`/`Bash`/`Glob`, OpenCode `grep`/
 //! `bash`/`glob`, and Codex shell calls arrive as `Bash` (unified exec included).
 //! A shell call that wrote a file it names (`sed -i`, `python`, `> f`) pushes
@@ -15,7 +16,7 @@ use serde_json::Value;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-/// A hit list can name hundreds of files — the push looks at the first few.
+/// The most files one call pushes.
 const MAX_FILES: usize = 8;
 /// Output lines scanned for hit-list paths (each costs one `stat`).
 const MAX_LINES: usize = 200;
@@ -116,12 +117,22 @@ pub(crate) fn touched(tool: &str, input: &Value, response: &Value, cwd: &Path) -
                 }
             }
         }
+        // a match is not intent: a hit list over many files pushes nothing
+        // (100-280 tokens of rows on files the agent only matched in), one
+        // that names a single file pushes it like a named one
+        let mut hits: Vec<&str> = vec![];
         for l in lines.into_iter().take(MAX_LINES) {
             // `path:line:text`, or a bare path (`grep -l`, `rg -l`, files_with_matches)
             let p = l.split_once(':').map_or(l, |(p, _)| p).trim();
-            if !is_data(p) {
-                add(p);
+            if !is_data(p) && !hits.contains(&p) && is_file(p) {
+                hits.push(p);
             }
+            if hits.len() > 1 {
+                break;
+            }
+        }
+        if let [p] = hits[..] {
+            add(p);
         }
     }
     out
