@@ -60,7 +60,8 @@ pub fn phantom_md_refs(log: &Log, root: &Path) -> Vec<MdRef> {
 }
 
 /// Every `*.md` under `root`, sorted — the walk `multi_fael` takes, skipping
-/// `.git`/`target`/`node_modules` and `.fapony/done`. `DirEntry::file_type` never follows a
+/// `.git`/`target`/`node_modules`/`vendor` (third-party prose, not ours to fix)
+/// and `.fapony/done`. `DirEntry::file_type` never follows a
 /// symlink, so a symlinked directory is not descended into (a loop would hang
 /// `doctor`) — except `.fapony`, which this setup symlinks to a shared plan
 /// dir: it is followed once, and nothing inside it is.
@@ -87,7 +88,7 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         if ft.is_dir() {
             // `.fapony/done` holds archived plans: a record of what was true
             // then, not prose the next agent follows
-            if [".git", "target", "node_modules"]
+            if [".git", "target", "node_modules", "vendor"]
                 .contains(&e.file_name().to_string_lossy().as_ref())
                 || p.ends_with(".fapony/done")
             {

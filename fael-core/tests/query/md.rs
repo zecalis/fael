@@ -1,6 +1,6 @@
 //! `[Phantom]` in markdown (issue `ids:doctor-plans`): prose is scanned like a
 //! row's text, fenced code blocks are examples (never citations), and only
-//! `*.md` under the repo root is read — `.git`/`target`/`node_modules` and
+//! `*.md` under the repo root is read — `.git`/`target`/`node_modules`/`vendor` and
 //! archived plans (`.fapony/done`) never.
 
 use super::row;
@@ -66,6 +66,7 @@ fn only_markdown_counts_and_build_dirs_are_skipped() {
         ".fapony/done/PLAN-old.md",
         "target/gen.md",
         "node_modules/pkg/README.md",
+        "vendor/lib/README.md",
         ".git/HOOKS.md",
     ] {
         put(&r, path, &format!("prose citing {DEAD}\n"));
