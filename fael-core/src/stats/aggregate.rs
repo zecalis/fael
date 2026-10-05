@@ -236,11 +236,14 @@ fn row_statuses(parsed: &Parsed, logs: &HashMap<String, Log>) -> Vec<RowStatus> 
     ids.into_iter()
         .take(TOP)
         .map(|(id, pushes)| {
-            let status = parsed
-                .id_repos
-                .get(&id)
+            // cut-only rows never rode a push line, so `id_repos` lacks them —
+            // resolve those against every loaded log before calling them gone
+            let repos: Vec<&str> = match parsed.id_repos.get(&id) {
+                Some(rs) => rs.iter().map(String::as_str).collect(),
+                None => logs.keys().map(String::as_str).collect(),
+            };
+            let status = repos
                 .into_iter()
-                .flatten()
                 .filter_map(|repo| {
                     let log = logs.get(repo)?;
                     let (closed_set, superseded_set) = (closed(log), superseded(log));

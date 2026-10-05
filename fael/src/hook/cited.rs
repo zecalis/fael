@@ -98,14 +98,28 @@ fn note(client: &str, session: &str, agent: &str, root: &Path, text: &str) {
     append_row(row);
 }
 
-/// Row ids in the seen list whose first `SHORT` chars appear in `text` and
-/// that no `^<id>` mark covers yet.
+/// Row ids in the seen list the text names, that no `^<id>` mark covers yet:
+/// a full id cites itself; a short prefix cites only when no other seen id
+/// shares it — batch-filed siblings share the timestamp prefix, so a shared
+/// prefix is ambiguous, never a cite.
 fn candidates(seen: &str, text: &str) -> Vec<String> {
     let marked = |id: &str| seen.lines().any(|l| l.strip_prefix('^') == Some(id));
-    let mut out: Vec<String> = vec![];
+    let mut ids: Vec<&str> = vec![];
     for id in seen.lines() {
         let id_like = id.len() == ID_LEN && id.bytes().all(|b| b.is_ascii_alphanumeric());
-        if id_like && text.contains(&id[..SHORT]) && !marked(id) && !out.iter().any(|o| o == id) {
+        if id_like && !marked(id) && !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    let mut out: Vec<String> = vec![];
+    for (i, id) in ids.iter().enumerate() {
+        let named = text.contains(*id)
+            || (text.contains(&id[..SHORT])
+                && ids
+                    .iter()
+                    .enumerate()
+                    .all(|(j, o)| j == i || o[..SHORT] != id[..SHORT]));
+        if named {
             out.push(id.to_string());
         }
     }
@@ -139,5 +153,22 @@ mod tests {
             "never said"
         );
         assert!(candidates(&format!("{seen}^{id}\n"), id).is_empty(), "once");
+    }
+
+    #[test]
+    fn same_ms_siblings_cite_only_the_named_full_id() {
+        let (a, b) = (
+            crate::core::ulid_at(1_789_000_000_000),
+            crate::core::ulid_at(1_789_000_000_000),
+        );
+        assert_eq!(&a[..SHORT], &b[..SHORT], "one batch shares the prefix");
+        let seen = format!("{a}\n{b}\n");
+        let text = format!("see {a} here");
+        let short = format!("see {} here", &a[..SHORT]);
+        assert_eq!(candidates(&seen, &text), [a]);
+        assert!(
+            candidates(&seen, &short).is_empty(),
+            "a shared prefix is ambiguous"
+        );
     }
 }
