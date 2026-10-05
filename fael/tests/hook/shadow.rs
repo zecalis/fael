@@ -181,7 +181,7 @@ fn stats_counts_rows_shown_with_no_verdict() {
     let v: serde_json::Value = serde_json::from_str(&out).expect(&out);
     assert_eq!(
         v["file_verdict"],
-        serde_json::json!({"changed": 0, "unchanged": 0, "no_verdict": 1}),
+        serde_json::json!({"changed": 0, "unchanged": 0, "no_verdict": 1, "no_fh": 0, "retire": {"changed": {"pairs": 0, "retired": 0}, "unchanged": {"pairs": 0, "retired": 0}}}),
         "{out}"
     );
     let (ok, text, err) = fael(&d, &["stats"], "");

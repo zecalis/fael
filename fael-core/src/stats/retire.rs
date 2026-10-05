@@ -21,15 +21,13 @@ pub struct Retired {
     pub at_touch: usize,
 }
 
-/// When each row was handled, per repo: its close, the row that superseded
-/// it (reverted edges skipped), or a bump event — a bump keeps the row open
-/// but is the check the ask asked for, as the supersede it replaced was.
-/// The first retirement wins.
-pub(super) fn retire_times(log: &Log) -> HashMap<&str, i64> {
-    let mut out: HashMap<&str, i64> = HashMap::new();
+/// Every time a row was handled, per repo: its close, the row that
+/// superseded it (reverted edges skipped), or a bump event — a bump keeps the
+/// row open but is the check the ask asked for, as the supersede it replaced
+/// was. One entry per event, a row bumped twice has two.
+pub(super) fn retire_events(log: &Log) -> Vec<(&str, i64)> {
     let rev = reverted(log);
-    let events = log
-        .closes
+    log.closes
         .iter()
         .filter_map(|c| Some((c.reference.as_deref()?, ts_ms(&c.ts)?)))
         .chain(log.rows.iter().filter_map(|r| {
@@ -41,8 +39,14 @@ pub(super) fn retire_times(log: &Log) -> HashMap<&str, i64> {
             log.rows
                 .iter()
                 .filter_map(|r| Some((r.bumps.as_deref()?, ts_ms(&r.ts)?))),
-        );
-    for (id, ms) in events {
+        )
+        .collect()
+}
+
+/// When each row was first handled: the earliest of `retire_events`.
+pub(super) fn retire_times(log: &Log) -> HashMap<&str, i64> {
+    let mut out: HashMap<&str, i64> = HashMap::new();
+    for (id, ms) in retire_events(log) {
         out.entry(id)
             .and_modify(|m| *m = (*m).min(ms))
             .or_insert(ms);

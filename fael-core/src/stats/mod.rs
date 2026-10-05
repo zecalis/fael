@@ -18,6 +18,7 @@ mod outcomes;
 mod overlap;
 mod parse;
 mod retire;
+mod retire_split;
 mod said;
 mod tune;
 mod unused;
@@ -40,6 +41,7 @@ pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
+pub use retire_split::{Arm, RetireSplit};
 pub use said::{KINDS, KindYield};
 pub use tune::{
     ArmSize, Assoc, Coverage, DECAYS, DecayPoint, Group, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT,
@@ -48,7 +50,7 @@ pub use tune::{
 };
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
-pub use verdict::FileVerdict;
+pub use verdict::{FileVerdict, GATE_MIN_PAIRS};
 
 /// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
 /// JSON map and the recording side share, so the two cannot drift.

@@ -185,7 +185,7 @@ pub fn aggregate(
         unused_rows: unused(parsed, logs),
         said: yields(parsed, logs),
         incidents: incidents(parsed, logs),
-        file_verdict: file_verdict(parsed),
+        file_verdict: file_verdict(parsed, logs),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }
