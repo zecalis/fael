@@ -22,7 +22,7 @@ pub fn fix(fael: &Path, root: &Path, report: &Report) -> Result<Vec<String>, Str
             Kind::Union => {
                 let attrs = root.join(".gitattributes");
                 let mut s = std::fs::read_to_string(&attrs).unwrap_or_default();
-                if !s.lines().any(|l| l.contains("merge=union")) {
+                if !super::scan::has_union(&s) {
                     if !s.is_empty() && !s.ends_with('\n') {
                         s.push('\n');
                     }
@@ -37,8 +37,11 @@ pub fn fix(fael: &Path, root: &Path, report: &Report) -> Result<Vec<String>, Str
     let mut files: Vec<PathBuf> = files.into_iter().collect();
     files.sort();
     for f in files {
-        if let Some(action) = repair_file(fael, &f)? {
-            done.push(action);
+        // one unreadable/unwritable file must not abort the repair of the rest
+        match repair_file(fael, &f) {
+            Ok(Some(action)) => done.push(action),
+            Ok(None) => {}
+            Err(e) => done.push(format!("skipped, not repaired: {e}")),
         }
     }
     Ok(done)
