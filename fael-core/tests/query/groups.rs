@@ -30,6 +30,21 @@ fn shared_files_link_transitively() {
 }
 
 #[test]
+fn uppercase_md_never_links() {
+    let r = |id: &str, files: &[&str]| row(id, "issue", files, None);
+    let rows = [
+        r("A0000000000000000000000010", &["SPEC.MD"]),
+        r("A0000000000000000000000011", &["src/auth.rs", "SPEC.MD"]),
+        r("A0000000000000000000000012", &["src/auth.rs"]),
+    ];
+    let refs: Vec<&Row> = rows.iter().collect();
+    let g = groups(&refs);
+    let g: Vec<Vec<String>> = g.iter().map(|g| ids(g)).collect();
+    // 11-12 via auth.rs; 10 alone — SPEC.MD is prose, not a shared edit
+    assert_eq!(g, [vec!["11", "12"], vec!["10"]]);
+}
+
+#[test]
 fn render_names_the_shared_files() {
     let r = |id: &str, files: &[&str]| row(id, "issue", files, None);
     let rows = [
