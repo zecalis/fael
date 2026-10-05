@@ -41,11 +41,6 @@ fn edit_hint_names_open_issues_with_a_ready_close() {
         .expect(&out);
     // at most two ready closes, however many issues were shown
     assert_eq!(hint.matches("\"<why>\"").count(), 2, "{hint}");
-    // decisions and notes keep the generic clause on the same line
-    assert!(
-        hint.contains("--supersedes") && hint.contains("now in <file>"),
-        "{hint}"
-    );
     // ids are the short form the rows print, never a made-up one
     let shown: Vec<&str> = hint
         .split("fael close ")
@@ -60,7 +55,7 @@ fn edit_hint_names_open_issues_with_a_ready_close() {
 }
 
 #[test]
-fn edit_hint_stays_generic_without_an_open_issue() {
+fn edit_hint_names_a_decision_with_its_retire() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     // a decision is shown, but never gets a ready close
@@ -74,7 +69,8 @@ fn edit_hint_stays_generic_without_an_open_issue() {
     let out = edit_a(&d);
     assert!(out.contains("pick x"), "{out}");
     assert!(!out.contains("done with one?"), "{out}");
-    assert!(out.contains("fael close <id> \"now in <file>\""), "{out}");
+    assert!(!out.contains("fael close <id>"), "{out}");
+    assert!(out.contains("\"now in <file>\""), "{out}");
 }
 
 /// Claude Code reads a file before it may edit it: the read push already
