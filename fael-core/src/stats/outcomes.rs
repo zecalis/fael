@@ -125,7 +125,11 @@ impl<'a> Session<'a> {
                 } else {
                     &mut o.agent_pull
                 }) = true;
-            } else if o.cut_ms.is_some() && !induced {
+            }
+            // a `would_drop` row was said (shadow: the agent saw it), so its pull
+            // is the demand a `gate` cut would have drawn; every other cut row
+            // counts only while it is still unsaid
+            if !induced && o.cut_ms.is_some() && (!o.said || o.cut.contains("would_drop")) {
                 o.retrieved_ms.get_or_insert(p.ms);
             }
         }
@@ -286,6 +290,24 @@ mod tests {
         // cap cut: the agent came back and cited it, but no policy cut it
         assert_eq!((o["I"].retrieved_after_cut, o["I"].missed_push), (1, 0));
         assert_eq!(o["I"].cut["cap"], 1);
+    }
+
+    /// The shadow writer says the row and lists it in `would_drop` on one line:
+    /// the agent's own pull still reads as demand, a count-line pull does not.
+    #[test]
+    fn a_said_would_drop_row_pulled_by_the_agent_is_retrieved() {
+        let usage = line(
+            0,
+            r#""event":"search","ids":["S","T"],"said":[{"kind":"count","key":"a.rs|file"}],"would_drop":{"policy":"touch@1","ids":["S","T"]}"#,
+        ) + &line(1, r#""event":"find","found":["S"],"q":{"id":"S"}"#)
+            + &line(2, r#""event":"find","found":["T"],"q":{"files":["a.rs"]}"#)
+            + &line(3, r#""event":"outcome","ids":[],"cited":["S","T"]"#);
+        let o = run(&usage, "");
+        assert_eq!((o["S"].shown, o["S"].cut["would_drop"]), (1, 1));
+        assert_eq!(o["S"].pulled.agent_initiated, 1);
+        assert_eq!((o["S"].retrieved_after_cut, o["S"].missed_push), (1, 1));
+        assert_eq!(o["T"].pulled.fael_induced, 1);
+        assert_eq!((o["T"].retrieved_after_cut, o["T"].missed_push), (0, 0));
     }
 
     #[test]
