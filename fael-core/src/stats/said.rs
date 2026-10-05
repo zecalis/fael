@@ -80,6 +80,7 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 }
 
 /// Every kind a hook says, zeros included, so a kind never said still shows.
+/// `count` stays: usage from before the push dropped its count line still reads.
 pub const KINDS: [&str; 8] = [
     "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice",
 ];

@@ -15,7 +15,6 @@ fael mem for src/hub.rs (5 of 11):
 - [01K00000000000000000HUB001] issue hub row 1 says something about the hub
 - [01K00000000000000000HUB009] decision #hub:shape hub row 9 says something about the hub
 memory: ~133/800 tokens · 5 rows
-… +6 more about this file — fael find --files src/hub.rs
 
 notice:
 fael: reminded agent — 01K00000000000000000HUB01 "hub row 10 says something about the hub" (src/hub.rs) +4 more
@@ -96,7 +95,6 @@ fael mem for src/hub.rs (5 of 11):
 - [01K00000000000000000HUB001] issue hub row 1 says something about the hub
 - [01K00000000000000000HUB009] decision #hub:shape hub row 9 says something about the hub
 memory: ~133/800 tokens · 5 rows
-… +6 more about this file — fael find --files src/hub.rs
 
 ## 21 read {"session":"2025-12-01T00:00:00Z","agent":"sub1","files":["src/hub.rs"]}
 context:
@@ -107,7 +105,6 @@ fael mem for src/hub.rs (5 of 11):
 - [01K00000000000000000HUB001] issue hub row 1 says something about the hub
 - [01K00000000000000000HUB009] decision #hub:shape hub row 9 says something about the hub
 memory: ~133/800 tokens · 5 rows
-… +6 more about this file — fael find --files src/hub.rs
 
 ## 22 read {"session":"2025-12-01T00:00:00Z","agent":"sub1","files":["src/hub.rs"]}
 context:
@@ -128,7 +125,6 @@ fael mem for src/hub.rs (5 of 11):
 - [01K00000000000000000HUB001] issue hub row 1 says something about the hub
 - [01K00000000000000000HUB009] decision #hub:shape hub row 9 says something about the hub
 memory: ~133/800 tokens · 5 rows
-… +6 more about this file — fael find --files src/hub.rs
 
 ## 24 read {"files":["src/hub.rs"]}
 context:
@@ -139,7 +135,6 @@ fael mem for src/hub.rs (5 of 11):
 - [01K00000000000000000HUB001] issue hub row 1 says something about the hub
 - [01K00000000000000000HUB009] decision #hub:shape hub row 9 says something about the hub
 memory: ~133/800 tokens · 5 rows
-… +6 more about this file — fael find --files src/hub.rs
 
 ## 25 search {"session":"2025-12-01T00:00:00Z","tool":"Grep","tool_input":{"path":"src/c.rs"}}
 context:
@@ -153,7 +148,6 @@ context:
 fael mem for src/b.rs (1 of 10):
 - [01K00000000000000000B] issue b leaks a handle
 memory: ~18/800 tokens · 1 row
-… +9 more in src/ — fael find --files src/
 fael: done with one? fael close 01K00000000000000000B "<why>"
 
 ## 27 session-start {"session":"s2"}
@@ -169,5 +163,5 @@ bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true
 
 ## 29 prompt {"text":"fix the auth login flow"}
 ## usage
-26 lines · ~1863 tokens
+26 lines · ~1770 tokens
 session-start prompt read read read search read in-context edit in-context edit in-context edit edit capture read session-start read read read read read search shell-edit session-start read

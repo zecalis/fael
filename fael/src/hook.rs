@@ -9,7 +9,7 @@
 //! `protocol` (neutral Event + shared ctx), `say` (the one door to the agent's
 //! context: Reply, Outbox, Kind and its noise policy), `claude` (client adapters),
 //! `stop` (turn-end work/bug rule), `cited` (the `cited` outcome: a said id typed into a tool input or reply), `capture` (the reply's `fael <kind>:` lines), `session` (session-start kickoff),
-//! `push` (read/edit context), `counts` (its count lines), `search` (files a grep/glob/shell read touched), `prompt` (the open-key pointer on a user prompt), `focus` (session Focus written at start and
+//! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `prompt` (the open-key pointer on a user prompt), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
 //! `autosync` (session-start and turn-end `fael sync`, off-switch `[sync] auto`),
 //! `tally` (the user channel's per-session ledger: reminders, receipt),
@@ -27,7 +27,6 @@ mod capture;
 mod changed;
 mod cited;
 mod claude;
-mod counts;
 mod decision;
 mod focus;
 mod markers;

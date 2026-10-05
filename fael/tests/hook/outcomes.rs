@@ -151,7 +151,7 @@ fn the_claude_adapter_cites_from_its_tool_input() {
 }
 
 #[test]
-fn a_pull_by_the_count_line_is_induced_and_a_pull_by_id_is_the_agents() {
+fn a_pull_after_a_cap_cut_is_the_agents_own() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     for i in 0..7 {
@@ -170,7 +170,8 @@ fn a_pull_by_the_count_line_is_induced_and_a_pull_by_id_is_the_agents() {
         .iter()
         .map(|s| s["kind"].as_str().unwrap())
         .collect();
-    assert!(kinds.contains(&"count"), "{read}");
+    // no count line names the call to the cut rows: nothing fael said induces a pull
+    assert!(!kinds.contains(&"count"), "{read}");
     let cut: Vec<&str> = read["cut"]
         .as_array()
         .unwrap()
@@ -182,20 +183,20 @@ fn a_pull_by_the_count_line_is_induced_and_a_pull_by_id_is_the_agents() {
     // the agent asks for one cut row by id
     let (ok, _, err) = fael_env(&d, &["find", cut[0]], "", &env);
     assert!(ok, "{err}");
-    // the count line's own call brings back the rest
+    // and the rest by the file
     let (ok, _, err) = fael_env(&d, &["find", "--files", "src/a.rs"], "", &env);
     assert!(ok, "{err}");
     let o = &row(&d, cut[0])["outcomes"];
     assert_eq!(o["retrieved_after_cut"], 1, "{o}");
     assert_eq!(o["missed_push"], 0, "a cap cut is no policy cut: {o}");
     let o = &row(&d, cut[1])["outcomes"];
-    assert_eq!(o["retrieved_after_cut"], 0, "fael pointed there: {o}");
-    // a row said, then shown again by the count line's call
+    assert_eq!(o["retrieved_after_cut"], 1, "{o}");
+    // a row said, then shown again by the agent's own file pull
     let said_id = read["ids"][0].as_str().unwrap();
     let o = &row(&d, said_id)["outcomes"];
     assert_eq!(
         o["pulled"],
-        json!({"agent_initiated": 0, "fael_induced": 1})
+        json!({"agent_initiated": 1, "fael_induced": 0})
     );
 }
 

@@ -35,12 +35,6 @@ fn all() -> Vec<Line> {
             },
             "fael: the prompt names open key(s) auth:login — fael find --key <key>",
         ),
-        line(
-            Kind::Count {
-                keys: vec!["src/hub.rs|file".into()],
-            },
-            "… +6 more about this file — fael find --files src/hub.rs\n",
-        ),
         line(Kind::Bodies, "bodies: fael find <id> (MCP: find id=<id>)\n"),
         Line::notice("fael: a stashed line\n".into()),
     ]
@@ -52,9 +46,8 @@ fn slot(k: &Kind) -> usize {
         Kind::Brief => 1,
         Kind::Ask { .. } => 2,
         Kind::Pointer { .. } => 3,
-        Kind::Count { .. } => 4,
-        Kind::Bodies => 5,
-        Kind::Notice => 6,
+        Kind::Bodies => 4,
+        Kind::Notice => 5,
     }
 }
 
@@ -121,23 +114,15 @@ fn a_line_without_its_command_is_dropped() {
     }
 }
 
-/// A count line this session was told stays silent; a new kind of cut on
-/// the same file set is still said.
+/// A spent mark (the hub peek's) says nothing and is in the seen list the
+/// next push opens.
 #[test]
-fn a_new_count_line_is_said_beside_a_told_one() {
+fn a_spent_mark_says_nothing_and_is_seen_next_time() {
     let p = seen("s.seen");
-    let count = |keys: &[&str]| Line {
-        kind: Kind::Count {
-            keys: keys.iter().map(|k| k.to_string()).collect(),
-        },
-        text: "… +1 more — fael find --files x\n".into(),
-    };
-    assert!(said(lock_seen(&p), count(&["x|file"])).is_some());
     let mut out = Outbox::open(lock_seen(&p));
-    assert!(!out.fresh(&count(&["x|file"]).kind));
-    assert!(out.fresh(&count(&["x|dir:src/"]).kind));
-    out.say(count(&["x|file"]));
+    out.spend("~peek:x".into());
     assert!(out.reply().context().is_none());
+    assert!(Outbox::open(lock_seen(&p)).has("~peek:x"));
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
 }
 
@@ -171,20 +156,26 @@ fn two_replies_join_in_order_and_the_first_notice_wins() {
 }
 
 /// A seen list written before the say-gate (row ids, `~id`, `~*`, `@id`)
-/// still silences what it did, and the new `~count:` / `~bodies` keys are
-/// never read as a row this session was told.
+/// still silences what it did, and the `~count:` (dropped) / `~peek:` /
+/// `~bodies` keys are never read as a row this session was told.
 #[test]
 fn an_old_seen_list_reads_beside_the_new_keys() {
     let p = seen("s.seen");
     std::fs::create_dir_all(p.parent().unwrap()).unwrap();
     std::fs::write(
         &p,
-        "01OLD\n~01ASKED\n~*\n@01OLD\n~count:src/a.rs|file\n~bodies\n",
+        "01OLD\n~01ASKED\n~*\n@01OLD\n~count:src/a.rs|file\n~peek:src/a.rs\n~bodies\n",
     )
     .unwrap();
     let (told, hinted) = read_seen(&std::fs::read_to_string(&p).unwrap());
     assert_eq!(told, ["01OLD".to_string()].into());
-    for k in ["01ASKED", "*", "count:src/a.rs|file", "bodies"] {
+    for k in [
+        "01ASKED",
+        "*",
+        "count:src/a.rs|file",
+        "peek:src/a.rs",
+        "bodies",
+    ] {
         assert!(hinted.contains(k), "{k} not hinted");
     }
     let line = |kind: Kind, text: &str| Line {
@@ -238,15 +229,6 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             ),
             true,
         ),
-        (
-            line(
-                Kind::Count {
-                    keys: vec!["src/a.rs|file".into()],
-                },
-                "… +1 — fael find --files src/a.rs\n",
-            ),
-            false,
-        ),
         (line(Kind::Bodies, "bodies: fael find <id>\n"), false),
     ] {
         let before = out.fresh(&l.kind);
@@ -260,11 +242,11 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
 }
 
-/// PLAN-fael-say-gate chunk 6: rows, bodies and counts keep their say; over
+/// PLAN-fael-say-gate chunk 6: rows and bodies keep their say; over
 /// the budget the stashed notice goes first, then the edit hint, and a cut
 /// line spends no key (a later push may say it).
 #[test]
-fn over_the_budget_the_notice_goes_then_the_hint_never_the_count() {
+fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
     let pick = |slots: &[usize]| -> Vec<Line> {
         all()
             .into_iter()
@@ -272,7 +254,7 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_count() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 4, 2, 6]); // row, count, hint, notice
+    let lines = pick(&[0, 4, 2, 5]); // row, bodies, hint, notice
     let keep = cost(&pick(&[0, 4]));
     let run = |budget: usize| {
         let p = seen("s.seen");
@@ -295,17 +277,14 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_count() {
         !said.contains("fael close 01ASK") && !said.contains("a stashed line"),
         "{said}"
     );
-    assert!(
-        said.contains("fael find --files") && said.contains("01ROW"),
-        "{said}"
-    );
+    assert!(said.contains("bodies:") && said.contains("01ROW"), "{said}");
     // the cut hint kept its key
     assert!(
         keys.contains("~01ASK") && !keys_cut.contains("~01ASK"),
         "{keys} / {keys_cut}"
     );
-    // no budget at all still says the rows and the count
-    assert!(run(0).0.contains("fael find --files"));
+    // no budget at all still says the rows and the bodies line
+    assert!(run(0).0.contains("bodies:"));
 }
 
 /// Usage records what was said (chunk 3): a said line names its kind, a
@@ -334,10 +313,5 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
     }
     assert_eq!(kinds(&both), want);
     want.dedup();
-    assert_eq!(
-        want,
-        [
-            "row", "brief", "ask", "pointer", "count", "bodies", "notice"
-        ]
-    );
+    assert_eq!(want, ["row", "brief", "ask", "pointer", "bodies", "notice"]);
 }
