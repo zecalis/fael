@@ -285,3 +285,60 @@ fn fix_leaves_a_secret_row_byte_identical() {
     // still reported: detect-only, `doctor` keeps failing until purge
     assert!(after.problems.iter().any(|x| x.kind == ProblemKind::Secret));
 }
+
+#[test]
+fn commented_union_line_does_not_pass_the_gate() {
+    let r = tmp();
+    let fael = fael_of(&r);
+    fs::write(
+        r.join(".gitattributes"),
+        "# .fael/log/**/*.jsonl merge=union\n",
+    )
+    .unwrap();
+    write_lines(
+        &month_file(&fael, "tester-0000", "2026-07", false),
+        &[row("A0000000000000000000000001", "note", &["a.rs"]).to_line()],
+    );
+    let before = doctor_scan(&fael, &r, false, MONTH);
+    assert!(
+        before.problems.iter().any(|x| x.kind == ProblemKind::Union),
+        "{before:?}"
+    );
+    doctor_fix(&fael, &r, &before).unwrap();
+    let after = doctor_scan(&fael, &r, false, MONTH);
+    assert!(
+        after.problems.iter().all(|x| x.kind != ProblemKind::Union),
+        "{after:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_file_does_not_abort_the_other_repairs() {
+    use std::os::unix::fs::PermissionsExt;
+    let r = root();
+    let fael = fael_of(&r);
+    // sorts first, so it is hit before the repairable file
+    let locked = month_file(&fael, "a-0000", "2026-07", false);
+    write_lines(
+        &locked,
+        &[row("A0000000000000000000000001", "note", &["a.rs"]).to_line()],
+    );
+    let bad = month_file(&fael, "b-0000", "2026-07", false);
+    write_lines(
+        &bad,
+        &[
+            row("A0000000000000000000000002", "note", &["b.rs"]).to_line(),
+            "not json".into(),
+        ],
+    );
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    let before = doctor_scan(&fael, &r, false, MONTH);
+    let done = doctor_fix(&fael, &r, &before);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
+    let done = done.unwrap();
+    assert!(
+        done.iter().any(|d| d.contains("b-0000")),
+        "the readable file is still repaired: {done:?}"
+    );
+}

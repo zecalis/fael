@@ -77,9 +77,7 @@ pub fn scan(fael: &Path, root: &Path, log_ignored: bool, month: &str) -> Report 
     }
     // the cause of leftover conflict markers: without union every merge conflicts
     let attrs = root.join(".gitattributes");
-    let has_union = std::fs::read_to_string(&attrs)
-        .map(|s| s.lines().any(|l| l.contains("merge=union")))
-        .unwrap_or(false);
+    let has_union = std::fs::read_to_string(&attrs).is_ok_and(|s| has_union(&s));
     if !has_union {
         r.problems.push(Problem::error(
             Kind::Union,
@@ -239,6 +237,14 @@ fn scan_file(
             format!("{name}: ≥ 50 MiB, appends refuse — run `fael compact`"),
         ));
     }
+}
+
+/// A live `merge=union` attribute — a commented-out line does not count.
+pub(super) fn has_union(attrs: &str) -> bool {
+    attrs.lines().any(|l| {
+        let l = l.trim();
+        !l.starts_with('#') && l.split_whitespace().any(|t| t == "merge=union")
+    })
 }
 
 fn fmt_nums(ns: &[usize]) -> String {
