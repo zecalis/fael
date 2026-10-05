@@ -47,6 +47,7 @@ mod stop_lang;
 mod stop_risk;
 mod tags;
 mod tied;
+mod working_set;
 mod writer;
 
 use std::io::Write;

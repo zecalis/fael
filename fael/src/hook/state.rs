@@ -3,6 +3,7 @@
 //! tiny std-only time helpers the hook path uses instead of chrono.
 
 use crate::core;
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -54,6 +55,35 @@ pub(crate) fn seen_path(session: &str, agent: &str, root: &Path) -> PathBuf {
     let id = session_id(session);
     let key = session_key(&format!("{id}\0{}{sub}", root.to_string_lossy()));
     state_dir().join("sessions").join(format!("{key}.seen"))
+}
+
+/// `<seen file>.touched` — the files this context window has pushed on, one
+/// per line (the session's working set). Keyed like the seen list, so the
+/// lock `lock_seen` holds guards it too.
+pub(crate) fn touched_path(session: &str, agent: &str, root: &Path) -> PathBuf {
+    seen_path(session, agent, root).with_extension("touched")
+}
+
+/// The working set so far, then `files` added to it — one read and one append,
+/// so the caller's `touch` counts only what came before this push. Fails open:
+/// unreadable = empty, unwritable = not remembered.
+pub(crate) fn swap_touched(p: &Path, files: &[String]) -> HashSet<String> {
+    let before: HashSet<String> = std::fs::read_to_string(p)
+        .unwrap_or_default()
+        .lines()
+        .map(String::from)
+        .collect();
+    let new: String = files
+        .iter()
+        .filter(|f| !before.contains(*f))
+        .map(|f| format!("{f}\n"))
+        .collect();
+    if !new.is_empty()
+        && let Ok(mut f) = OpenOptions::new().create(true).append(true).open(p)
+    {
+        let _ = f.write_all(new.as_bytes());
+    }
+    before
 }
 
 /// Chunk 6e: ids this session already holds in context — just filed by `add`
@@ -215,7 +245,7 @@ fn systemtime_to_rfc3339(st: SystemTime) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{STALE_SECS, head_branch, prune_sessions};
+    use super::{STALE_SECS, head_branch, prune_sessions, swap_touched};
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -234,6 +264,37 @@ mod tests {
             .unwrap();
         prune_sessions(&d);
         assert!(!old.exists() && new.exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn swap_touched_returns_the_set_before_and_appends_only_new_files() {
+        let d = std::env::temp_dir().join(format!("fael-touched-{}", fael_core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join("s.touched");
+        let files = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // no file yet: an empty set, and the files are remembered
+        assert!(swap_touched(&p, &files(&["a", "b"])).is_empty());
+        // the push's own files are not in the set it is handed
+        let before = swap_touched(&p, &files(&["b", "c"]));
+        assert_eq!(before.len(), 2);
+        assert!(before.contains("a") && before.contains("b"));
+        // a known file is never appended twice
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "a\nb\nc\n");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Fail open: a path that cannot be read or written is an empty set, not a panic.
+    #[test]
+    fn swap_touched_fails_open() {
+        let d = std::env::temp_dir().join(format!("fael-touched-{}", fael_core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        // a directory cannot be read as a file, nor appended to
+        assert!(swap_touched(&d, &["a".to_string()]).is_empty());
+        // a parent that is a file: nothing can be created under it
+        let blocker = d.join("f");
+        std::fs::write(&blocker, "x").unwrap();
+        assert!(swap_touched(&blocker.join("s.touched"), &["a".to_string()]).is_empty());
         let _ = std::fs::remove_dir_all(&d);
     }
 

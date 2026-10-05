@@ -8,7 +8,10 @@ use super::counts::counts;
 use super::decision;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
-use super::state::{clear_stash, edits_path, lock_seen, peek_stash, record_edits, seen_path};
+use super::state::{
+    clear_stash, edits_path, lock_seen, peek_stash, record_edits, seen_path, swap_touched,
+    touched_path,
+};
 use super::usage::{memory_line, record_usage_shadow};
 use crate::{aliases, core};
 
@@ -163,6 +166,10 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     if edit {
         out.record_in_context(&c, &tiered, &files);
     }
+    // the working set before this push, read under the same lock; no session,
+    // no set — a row's `touch` is then unknown, not 0
+    let touched = (!c.session.is_empty())
+        .then(|| swap_touched(&touched_path(&c.session, &c.agent, &c.repo.root), &files));
     let (told, hinted) = read_seen(out.seen());
     tiered.retain(|(r, _)| !out.has(&r.id));
     let ask = Ask {
@@ -214,7 +221,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     }
     let mut r = out.reply();
     if let Some(context) = r.context() {
-        let decision = decision::record(trigger, &sel, n, &focus);
+        let decision = decision::record(trigger, &sel, n, &focus, touched.as_ref());
         let meta = UsageMeta {
             said: r.said(),
             files: &files,
