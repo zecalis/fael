@@ -29,16 +29,17 @@ pub struct KindYield {
 }
 
 /// A pull's query, from its `found` line.
-struct Pull<'a> {
-    ms: i64,
-    key: Option<&'a str>,
-    files: Vec<&'a str>,
-    id: bool,
+pub(super) struct Pull<'a> {
+    pub(super) ms: i64,
+    pub(super) key: Option<&'a str>,
+    pub(super) files: Vec<&'a str>,
+    /// The id a `find <id>` named.
+    pub(super) id: Option<&'a str>,
 }
 
 type Session<'a> = (&'a str, &'a str);
 
-fn strs<'a>(v: &'a serde_json::Value, k: &str) -> impl Iterator<Item = &'a str> {
+pub(super) fn strs<'a>(v: &'a serde_json::Value, k: &str) -> impl Iterator<Item = &'a str> {
     v[k].as_array()
         .into_iter()
         .flatten()
@@ -51,7 +52,7 @@ fn strs<'a>(v: &'a serde_json::Value, k: &str) -> impl Iterator<Item = &'a str> 
 /// three named — any key pull counts, an upper bound like the rest). The
 /// pull's files are normalised (`src/` reads `src`), so a path covers a file
 /// at a `/` boundary: `src` covers `src/a.rs`, `src/a` does not.
-fn counted(key: &str, p: &Pull) -> bool {
+pub(super) fn counted(key: &str, p: &Pull) -> bool {
     let (files, what) = key.split_once('|').unwrap_or((key, "file"));
     let covers = |f: &str| {
         let f = f.trim_end_matches('/');
@@ -89,7 +90,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 ms,
                 key: q["key"].as_str(),
                 files: strs(q, "files").collect(),
-                id: q["id"].is_string(),
+                id: q["id"].as_str(),
             });
         }
     }
@@ -142,7 +143,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "ask" => ("ask", retired(key)),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
                 "count" => ("count", pulled(&|p| counted(key, p))),
-                "bodies" => ("bodies", pulled(&|p| p.id)),
+                "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
                 "notice" => {
                     let filed = |l: &Log| {
                         l.rows.iter().any(|r| {
@@ -164,11 +165,11 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
 
-    fn rows(jsonl: &str) -> Vec<crate::Row> {
+    pub(in crate::stats) fn rows(jsonl: &str) -> Vec<crate::Row> {
         let (mut out, mut w) = (vec![], vec![]);
         crate::log::parse(jsonl.as_bytes(), "t.jsonl", &mut out, &mut w);
         out
@@ -244,7 +245,7 @@ mod tests {
             ms: 0,
             key,
             files: files.to_vec(),
-            id: false,
+            id: None,
         };
         let files = |p: &Pull| counted("src/a.rs,src/b.rs|file", p);
         assert!(files(&pull(&["src/b.rs"], None)), "a file it named");

@@ -63,7 +63,7 @@ fn stats_rows_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown)\n  row B: pushed ×2 (unknown)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown) · shown 1\n  row B: pushed ×2 (unknown) · shown 1 · pulled 1 (+0 fael-induced)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -80,7 +80,7 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         v,
         serde_json::json!({
-            "schema": 2,
+            "schema": 2, "outcomes_v": 1,
             "events": 3, "bytes": 60, "est_tokens": 15, "skipped_temp": 0,
             "by_event": {"read": {"events": 2, "est_tokens": 8}, "edit": {"events": 1, "est_tokens": 7}},
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
@@ -111,8 +111,10 @@ fn stats_json_rows_matches_golden_values() {
     assert_eq!(
         v["rows"],
         serde_json::json!([
-            {"id": "A", "pushes": 2, "status": "unknown", "noise": false},
-            {"id": "B", "pushes": 2, "status": "unknown", "noise": false},
+            {"id": "A", "pushes": 2, "status": "unknown", "noise": false,
+             "outcomes": {"shown": 1, "cut": {}, "cited": 0, "pulled": {"agent_initiated": 0, "fael_induced": 0}, "acted": 0, "retrieved_after_cut": 0, "missed_push": 0}},
+            {"id": "B", "pushes": 2, "status": "unknown", "noise": false,
+             "outcomes": {"shown": 1, "cut": {}, "cited": 0, "pulled": {"agent_initiated": 1, "fael_induced": 0}, "acted": 0, "retrieved_after_cut": 0, "missed_push": 0}},
         ]),
         "{out}"
     );

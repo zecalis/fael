@@ -5,6 +5,7 @@
 use super::capture::{Capture, capture};
 use super::incident::{Incidents, incidents};
 use super::metrics::{added_since, ask_totals, non_english_share};
+use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
 use super::parse::Parsed;
 use super::retire::{Retired, retired};
 use super::said::{KindYield, yields};
@@ -77,6 +78,8 @@ pub struct RowStatus {
     pub pushes: usize,
     pub status: String,
     pub noise: bool,
+    /// What happened to the row after fael said or cut it (`outcomes.rs`).
+    pub outcomes: RowOutcomes,
 }
 
 /// The whole of `fael stats --json`: one struct serialised as-is, so the CLI,
@@ -84,6 +87,8 @@ pub struct RowStatus {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Stats {
     pub schema: u32,
+    /// Version of the outcome definitions behind `rows[].outcomes`.
+    pub outcomes_v: u32,
     pub events: usize,
     pub bytes: usize,
     pub est_tokens: usize,
@@ -138,6 +143,7 @@ pub fn aggregate(
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     Stats {
         schema: STATS_SCHEMA,
+        outcomes_v: OUTCOMES_V,
         events: parsed.n,
         bytes: parsed.bytes,
         est_tokens: parsed.toks,
@@ -180,7 +186,7 @@ pub fn aggregate(
         said: yields(parsed, logs),
         incidents: incidents(parsed, logs),
         file_verdict: file_verdict(parsed),
-        rows: with_rows.then(|| row_statuses(&parsed.by_id, &parsed.id_repos, logs)),
+        rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }
 
@@ -210,24 +216,29 @@ fn counts(into: &HashMap<String, (usize, usize)>) -> BTreeMap<String, Count> {
         .collect()
 }
 
-/// Per-row push report: push counts against the row's current state, most
-/// pushed first. `noise` = pushed ≥ 10 times — the row keeps eating budget
-/// without being resolved. A repo that is gone (or never had the id) reads
-/// `unknown`.
-fn row_statuses(
-    by_id: &HashMap<String, usize>,
-    id_repos: &HashMap<String, Vec<String>>,
-    logs: &HashMap<String, Log>,
-) -> Vec<RowStatus> {
+/// Per-row push report: push counts against the row's current state and its
+/// observed outcomes, most pushed first. `noise` = pushed ≥ 10 times — the row
+/// keeps eating budget without being resolved. A repo that is gone (or never
+/// had the id) reads `unknown`. A row only ever cut has no pushes and ranks
+/// after the pushed ones.
+fn row_statuses(parsed: &Parsed, logs: &HashMap<String, Log>) -> Vec<RowStatus> {
     const TOP: usize = 20;
     const NOISE_PUSHES: usize = 10;
-    let mut ids: Vec<_> = by_id.iter().collect();
-    ids.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+    let mut outcomes = outcomes(parsed, logs);
+    let mut ids: Vec<(String, usize)> = parsed.by_id.iter().map(|(i, n)| (i.clone(), *n)).collect();
+    ids.extend(
+        outcomes
+            .keys()
+            .filter(|i| !parsed.by_id.contains_key(*i))
+            .map(|i| (i.clone(), 0)),
+    );
+    ids.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     ids.into_iter()
         .take(TOP)
         .map(|(id, pushes)| {
-            let status = id_repos
-                .get(id)
+            let status = parsed
+                .id_repos
+                .get(&id)
                 .into_iter()
                 .flatten()
                 .filter_map(|repo| {
@@ -237,7 +248,7 @@ fn row_statuses(
                         Some("closed")
                     } else if superseded_set.contains(id.as_str()) {
                         Some("superseded")
-                    } else if log.rows.iter().any(|r| &r.id == id) {
+                    } else if log.rows.iter().any(|r| r.id == id) {
                         Some("open")
                     } else {
                         None
@@ -247,10 +258,11 @@ fn row_statuses(
                 .unwrap_or("unknown")
                 .to_string();
             RowStatus {
-                id: id.clone(),
-                pushes: *pushes,
+                pushes,
                 status,
-                noise: *pushes >= NOISE_PUSHES,
+                noise: pushes >= NOISE_PUSHES,
+                outcomes: outcomes.remove(&id).unwrap_or_default(),
+                id,
             }
         })
         .collect()

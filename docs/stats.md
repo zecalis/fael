@@ -26,7 +26,7 @@ Every number comes from two inputs, joined as pure functions in
   and the `in-context` row of an edit, also carry `files` — the repo-relative
   files the push was about (every other line carries none); an edit where fael said
   nothing and had nothing in context writes no line at all. A push line is also its
-  decision record (PLAN-fael-learn-loop chunk 1; nothing in `stats` reads it yet):
+  decision record (PLAN-fael-learn-loop chunk 1; `rows[].outcomes` reads `cut`):
   `trigger` (`read` · `edit` · `shell-edit` · `search` (the client named
   the files, so how it found them is not ours to say) · a search's `reader-arg` / `hitlist` /
   `glob`), `policy` (`baseline@1`), `feat` (per row said, and the first 20 cut: `tier`, `hub`,
@@ -40,7 +40,9 @@ Every number comes from two inputs, joined as pure functions in
   `bodies` and `notice` (no key). A pull that showed rows (`find`,
   `mcp-find`, `kickoff`) writes a 0-byte row with the shown ids under `found`
   (not `ids`) and its query's `key`/`files`/`id` under `q` — never free text;
-  like `in-context` it is no injection. Torn lines are
+  like `in-context` it is no injection. So is an `outcome` row (PLAN-fael-learn-loop
+  chunk 2): `cited` lists the ids from the session's seen list that a tool input or
+  the closing reply typed, once per id per session. Torn lines are
   skipped; temp-dir repos (the OS temp dir and `/tmp`, where agent
   scratchpads live) are skipped unless the state dir itself is scratch.
   `--since <YYYY-MM-DD | RFC 3339>` keeps only the lines stamped at or after
@@ -81,7 +83,8 @@ shape is a breaking change: ship the reader first.
 | `unused_rows` | `[{id, kind, pushes}]` × ≤20 | open decisions and issues handed over ≥ 20 times (counted over the usage lines stamped at or after each client's first `in-context` line) with no `in-context` line ever naming them, pushes desc then id asc — a row to close, bump or `--supersede`. A note never lists (`in-context` does not measure notes). Never-seen-used, not proven useless: a read-only session writes no `in-context` line. The text line prints the first 10 with the commands; nothing to list = no line |
 | `incidents` | map week → map kind → u32 | incidents a human filed: rows keyed `incident:<kind>` or `incident:<kind>:<slug>` (e.g. `incident:duplicate-work:parser`, `incident:contradicted-decision:auth`), any row kind, counted by filing week — the week's Monday, `YYYY-MM-DD`, UTC — and by `<kind>`. Rows filed at or after the repo's first usage (so `--since` cuts them too), deduped by id; a superseded row is a rewrite of the same incident and drops out, a closed one still counts. Give each incident its own `<slug>`: a second row on one key supersedes the first. Never inferred — no row, no incident; no week listed = none filed. The text line prints the newest 4 weeks |
 | `file_verdict` | `{changed, unchanged, no_verdict}` | what a push could say about the files of the rows it showed (file-hash verdict), counted over the usage lines that carry the shadow keys — a read push writes `changed` and `unchanged` (id lists, possibly empty) beside `ids`; an edit push, the session-start push and every line from before the keys existed carry none and are **not measured**, never counted as `no_verdict`. Unit = distinct (repo, session, row id) pairs, the key `value.by_event` uses; each pair counts once, for the first measured line that showed it, so a duplicate id or a repeat push is one pair, and a measured line with no `session` is left out. `changed` = the id is in the line's `changed` list (a file changed since the row was written) · `unchanged` = in its `unchanged` list (every file still matches) · `no_verdict` = shown (in `ids`) and in neither list. The three sum to the measured pairs. `no_verdict` cannot split its reasons: the row has no `fh` stamp, a stamped file is over the 1 MiB push cap (`hook/changed.rs` `MAX_BYTES`, though the stamp covers up to 16 MiB), or the file is gone. A count of what push could not say, never of what it saved. The text line (`file verdict at push: …`) prints only when at least one pair was measured |
-| `rows` | array, only with `--rows` | `[{id, pushes, status, noise}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times |
+| `outcomes_v` | u32 | version of the outcome definitions behind `rows[].outcomes`, currently `1` — a changed definition bumps it |
+| `rows` | array, only with `--rows` | `[{id, pushes, status, noise, outcomes}]` × ≤20; `status` is `open` · `closed` · `superseded` · `unknown`; `noise` = pushed ≥ 10 times; rows only ever cut (`pushes` 0) rank after pushed ones. `outcomes` = what happened to the row after fael said or cut it, each a count of **sessions** (one session, one row = one observation, however many pushes repeated it), observations only — no weights, no causal claim: `shown` = sessions fael said it in · `cut` = map reason → sessions it was cut in (`cap`, `hub_peek`, `budget` are system limits; `gate` and `would_drop` are a policy's decision, none exists yet) · `cited` = said, then its id (≥ 8 chars) typed into a later tool input or the closing reply (`outcome` usage lines; a `fael …` shell command, a tool response and an id fael never said do not count) · `pulled` = `{agent_initiated, fael_induced}`: said, then a later `find`/`kickoff` showed it; `fael_induced` = the query is one a line fael said earlier in the session printed (a pointer's key, a count line's call, an edit hint's id), `agent_initiated` = anything else · `acted` = said, then closed, superseded or bumped within a day · `retrieved_after_cut` = cut (any reason), then the agent pulled it itself (never a `fael_induced` pull) while it was still unsaid · `missed_push` = a `gate`/`would_drop` row that was `retrieved_after_cut` and then cited or acted on (the rate is over gate-cut rows, not every cut). A pull that does not note the row in the session's seen list (`kickoff`) cannot be followed by a cite, so `missed_push` is a lower bound. `dup` (SPEC §B) is not measured yet |
 
 `capture` (PLAN-fael-dev-adoption): `reply_lines` = `fael <kind>:` lines seen in
 replies = `reply_stored` + `reply_rejected` · `manual_adds` = rows added since the repo's first usage that
@@ -146,6 +149,7 @@ newest-first across repos.
 
 Newest first.
 
+- `2` (2026-10-05): added `outcomes_v` and `rows[].outcomes` (shown, cut by reason, cited, pulled by provenance, acted, retrieved_after_cut, missed_push); usage gains the 0-byte `outcome` line (`cited`), which no count includes; no bump.
 - `2` (2026-10-04): added `file_verdict` (shown rows by file-hash verdict: `changed`, `unchanged`, `no_verdict`), read from the `changed`/`unchanged` keys read pushes already write on usage lines; lines without them are not measured; nothing a hook says changes; no bump.
 - `2` (2026-10-04): added `incidents` (rows keyed `incident:<kind>` per week); no bump.
 - `2` (2026-10-04): added `value.cross_agent.same_file` (sessions editing one file within 10 minutes of each other); edit and `in-context` usage lines gain `files`, which readers of older rows never see and old readers ignore; no bump.

@@ -14,6 +14,7 @@ mod cross;
 mod day;
 mod incident;
 mod metrics;
+mod outcomes;
 mod overlap;
 mod parse;
 mod retire;
@@ -34,6 +35,7 @@ pub use day::{
 };
 pub use incident::{INCIDENT_KEY, Incidents};
 pub use metrics::ASK_ORDER;
+pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};

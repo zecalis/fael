@@ -196,6 +196,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 client,
                 ..Event::default()
             };
+            super::cited::note_tool(&e, input);
             let reply = if event == "search" {
                 super::search::push_call(&e, &p.tool_name, input, &p.tool_response)
             } else {

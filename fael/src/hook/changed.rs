@@ -166,13 +166,13 @@ pub(crate) struct Hint {
 }
 
 /// The seen list split into the ids said and the keys already hinted.
-/// `@<id>` lines (in-context at edit) are neither.
+/// `@<id>` (in-context at edit) and `^<id>` (cited) lines are neither.
 pub(crate) fn read_seen(old: &str) -> (HashSet<String>, HashSet<String>) {
     let (mut told, mut hinted) = (HashSet::new(), HashSet::new());
     for l in old.lines() {
         if let Some(k) = l.strip_prefix('~') {
             hinted.insert(k.to_string());
-        } else if !l.starts_with('@') {
+        } else if !l.starts_with(['@', '^']) {
             told.insert(l.to_string());
         }
     }

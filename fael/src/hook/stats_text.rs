@@ -222,6 +222,34 @@ fn print_capture(c: &core::stats::Capture) {
 }
 
 /// The human `fael stats` text — format only, every number comes from core.
+/// ` · shown 2 · cut cap×1 · cited 1 · …`: only the outcomes the row has.
+fn outcomes_text(o: &core::stats::RowOutcomes) -> String {
+    let cut: Vec<String> = o.cut.iter().map(|(r, n)| format!("{r}×{n}")).collect();
+    let parts = [
+        (o.shown, format!("shown {}", o.shown)),
+        (cut.len(), format!("cut {}", cut.join(" "))),
+        (o.cited, format!("cited {}", o.cited)),
+        (
+            o.pulled.agent_initiated + o.pulled.fael_induced,
+            format!(
+                "pulled {} (+{} fael-induced)",
+                o.pulled.agent_initiated, o.pulled.fael_induced
+            ),
+        ),
+        (o.acted, format!("acted {}", o.acted)),
+        (
+            o.retrieved_after_cut,
+            format!("retrieved after cut {}", o.retrieved_after_cut),
+        ),
+        (o.missed_push, format!("missed push {}", o.missed_push)),
+    ];
+    parts
+        .iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(_, s)| format!(" · {s}"))
+        .collect()
+}
+
 pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
     if let Some(line) = value_line(s) {
         println!("{line}");
@@ -265,11 +293,12 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     if let Some(rows) = &s.rows {
         for r in rows {
             println!(
-                "  row {}: pushed ×{} ({}){}",
+                "  row {}: pushed ×{} ({}){}{}",
                 r.id,
                 r.pushes,
                 r.status,
-                if r.noise { " noise?" } else { "" }
+                if r.noise { " noise?" } else { "" },
+                outcomes_text(&r.outcomes)
             );
         }
     }
