@@ -10,11 +10,12 @@ mod assoc;
 mod cover;
 mod rate;
 mod replay;
+mod validate;
 
 use super::day::day_number;
 use super::outcomes::{OUTCOMES_V, Observation, observations};
 use super::parse::Parsed;
-use crate::query::{BASELINE, TOUCH, TOUCH_YIELD};
+use crate::query::{ARM_ALL, ARM_CANDIDATE, BASELINE, TOUCH, TOUCH_YIELD};
 use crate::{Log, Row, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -23,6 +24,7 @@ pub use assoc::{Assoc, Group};
 pub use cover::{Coverage, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT, MIN_DAYS};
 pub use rate::{Rate, wilson};
 pub use replay::Used;
+pub use validate::{ArmSize, Status, Validation};
 
 /// How many earlier sessions per history key count (`None` = all of them).
 pub const DECAYS: [Option<usize>; 5] = [None, Some(20), Some(50), Some(100), Some(200)];
@@ -45,6 +47,8 @@ pub(super) struct Ob<'a> {
     pub file: &'a str,
     pub trigger: &'a str,
     pub client: &'a str,
+    /// The session's arm of the validation experiment, `all` outside it.
+    pub arm: &'a str,
     pub class: Option<String>,
     pub line: usize,
     /// Rows the line said, the denominator of a push left silent.
@@ -53,7 +57,10 @@ pub(super) struct Ob<'a> {
 
 impl<'a> Ob<'a> {
     fn new(o: &'a Observation<'a>, rows: &HashMap<(&str, &str), &'a Row>) -> Option<Ob<'a>> {
-        let line = o.said_line.filter(|l| l["event"] == "search")?;
+        // a candidate session's said rows are what the gate left: not a replay input
+        let line = o
+            .said_line
+            .filter(|l| l["event"] == "search" && l["arm"] != ARM_CANDIDATE)?;
         let feat = &line["feat"][o.id];
         let feat = if feat.is_object() { feat } else { &NULL };
         let row = rows.get(&(o.repo, o.id)).copied();
@@ -81,6 +88,7 @@ impl<'a> Ob<'a> {
             file,
             trigger: line["trigger"].as_str().unwrap_or(""),
             client: line["client"].as_str().unwrap_or("?"),
+            arm: line["arm"].as_str().unwrap_or(ARM_ALL),
             class,
             line: std::ptr::from_ref(line) as usize,
             said_n: line["ids"].as_array().map_or(0, Vec::len),
@@ -173,6 +181,9 @@ pub struct Tune {
     pub days: Option<(String, String)>,
     pub all: Section,
     pub strata: Vec<Stratum>,
+    /// Candidate against holdout; absent while no push carries an arm.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation: Option<Validation>,
 }
 
 fn result(policy: String, obs: &[&Ob], drops: &[bool]) -> PolicyResult {
@@ -275,7 +286,7 @@ pub fn tune(parsed: &Parsed, logs: &HashMap<String, Log>, tz_min: i32) -> Tune {
     let pushes: Vec<cover::Push> = parsed
         .kept
         .iter()
-        .filter(|v| v["event"] == "search")
+        .filter(|v| v["event"] == "search" && v["arm"] != ARM_CANDIDATE)
         .filter_map(|v| {
             Some(cover::Push {
                 repo: v["repo"].as_str()?,
@@ -315,6 +326,7 @@ pub fn tune(parsed: &Parsed, logs: &HashMap<String, Log>, tz_min: i32) -> Tune {
         days: span.map(|(a, b)| (cover::civil(a), cover::civil(b))),
         all: section(&all_p, &all_o),
         strata,
+        validation: validate::validate(parsed, &seen, &obs, tz_min),
     }
 }
 

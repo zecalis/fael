@@ -67,6 +67,36 @@ pub fn touch_yield_drops(r: &crate::Row, touch: usize, hist: Option<(usize, usiz
         && hist.is_some_and(|(x, n)| n >= YIELD_MIN_N && x * 100 < YIELD_FLOOR_PCT * n)
 }
 
+/// A session's arm in the validation experiment (SPEC §E): `holdout` keeps
+/// `baseline@1`, `candidate` has the configured gate applied on search pushes,
+/// `all` = no experiment (no gate configured, or no session to assign).
+pub const ARM_ALL: &str = "all";
+pub const ARM_CANDIDATE: &str = "candidate";
+pub const ARM_HOLDOUT: &str = "holdout";
+
+/// The policies a repo may switch on (`push_policy`): the ones whose rule is a
+/// pure call on one said row and its working-set count, so the push can apply
+/// it and `tune` can replay it. `touch-yield@1` waits for the yield cache (§D).
+pub const GATES: [&str; 2] = ["baseline@1", "touch@1"];
+
+/// A session's arm and the gate it runs under `push_policy`. The holdout is
+/// by session (a per-push draw would mix inside one seen list): FNV-1a of the
+/// session id, mod 100, under `holdout_pct`. Pinned by a test — a session
+/// never changes arm.
+pub fn arm_of(push_policy: &str, holdout_pct: usize, session: &str) -> (&'static str, bool) {
+    if push_policy != TOUCH.name() || session.is_empty() {
+        return (ARM_ALL, false);
+    }
+    let h = session.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
+    if (h % 100) < holdout_pct as u64 {
+        (ARM_HOLDOUT, false)
+    } else {
+        (ARM_CANDIDATE, true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{PUSH_HUB_PEEK, PUSH_HUB_ROWS};
@@ -121,5 +151,26 @@ mod tests {
         assert!(!touch_yield_drops(&d, 0, Some((0, 4))), "too few sessions");
         assert!(!touch_yield_drops(&d, 0, None), "no evidence keeps the row");
         assert!(!touch_yield_drops(&d, 1, Some((0, 50))), "touched stays");
+    }
+
+    #[test]
+    fn the_holdout_is_by_session_and_never_moves() {
+        let arm = arm_of;
+        // no gate configured, or no session: no experiment
+        assert_eq!(arm("baseline@1", 20, "s1"), (ARM_ALL, false));
+        assert_eq!(arm("touch@1", 20, ""), (ARM_ALL, false));
+        // FNV-1a("s1") % 100 = 29, FNV-1a("s2") % 100 = 96: pinned
+        assert_eq!(arm("touch@1", 29, "s1"), (ARM_CANDIDATE, true));
+        assert_eq!(arm("touch@1", 30, "s1"), (ARM_HOLDOUT, false));
+        assert_eq!(arm("touch@1", 96, "s2"), (ARM_CANDIDATE, true));
+        assert_eq!(arm("touch@1", 97, "s2"), (ARM_HOLDOUT, false));
+        assert_eq!(arm("touch@1", 0, "s1"), (ARM_CANDIDATE, true));
+        assert_eq!(arm("touch@1", 100, "s1"), (ARM_HOLDOUT, false));
+        // about the asked share over many sessions
+        let held = (0..2000)
+            .map(|i| format!("sess-{i}"))
+            .filter(|s| arm("touch@1", 20, s).0 == ARM_HOLDOUT)
+            .count();
+        assert!((300..500).contains(&held), "{held} of 2000 at 20%");
     }
 }

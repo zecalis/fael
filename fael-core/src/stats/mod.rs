@@ -42,9 +42,9 @@ pub use parse::{Parsed, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{KINDS, KindYield};
 pub use tune::{
-    Assoc, Coverage, DECAYS, DecayPoint, Group, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT, MIN_DAYS,
-    PolicyResult, Rate, STRATUM_MIN_PUSHES, STRATUM_MIN_SESSIONS, Section, Sizes, Stratum, Tune,
-    Used, tune, wilson,
+    ArmSize, Assoc, Coverage, DECAYS, DecayPoint, Group, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT,
+    MIN_DAYS, PolicyResult, Rate, STRATUM_MIN_PUSHES, STRATUM_MIN_SESSIONS, Section, Sizes, Status,
+    Stratum, Tune, Used, Validation, tune, wilson,
 };
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};

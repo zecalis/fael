@@ -10,26 +10,82 @@ use std::collections::HashSet;
 /// becomes a payload dump.
 const MAX_CUT: usize = 20;
 
+/// What the session's arm did to one push (SPEC §E): the arm, the policy that
+/// decided it, and the rows that policy cut before `select`.
+pub(crate) struct Gate<'a> {
+    pub arm: &'static str,
+    pub policy: String,
+    pub cut: Vec<(&'a core::Row, usize)>,
+}
+
+impl<'a> Gate<'a> {
+    /// The session's gate for this push: its arm under the repo's
+    /// `push_policy`, applied on search pushes only (never an edit push).
+    pub fn for_push(
+        c: &super::protocol::Ctx,
+        event: &str,
+        tiered: &mut Vec<(&'a core::Row, usize)>,
+        touched: Option<&HashSet<String>>,
+    ) -> Gate<'a> {
+        let (arm, gated) =
+            core::arm_of(&c.repo.cfg.push_policy, c.repo.cfg.push_holdout, &c.session);
+        Gate::apply(arm, gated && event == "search", tiered, touched)
+    }
+
+    /// `arm` is the session's (`core::arm_of`); `on` = this push is one the
+    /// arm's gate applies to (a search push of a candidate session). Takes the
+    /// rows `touch@1` drops out of `tiered` — gated rows are never said, so a
+    /// later push may still say them — and reads the session's working set
+    /// before this push. No set (no session) gates nothing.
+    pub fn apply(
+        arm: &'static str,
+        on: bool,
+        tiered: &mut Vec<(&'a core::Row, usize)>,
+        touched: Option<&HashSet<String>>,
+    ) -> Gate<'a> {
+        let mut cut = vec![];
+        if let (true, Some(set)) = (on, touched) {
+            tiered.retain(|&(r, tier)| {
+                let touch = r.files.iter().filter(|p| set.contains(*p)).count();
+                let drop = core::touch_drops(r, touch);
+                if drop {
+                    cut.push((r, tier));
+                }
+                !drop
+            });
+        }
+        let policy = if on { core::TOUCH } else { core::BASELINE };
+        Gate {
+            arm,
+            policy: policy.name(),
+            cut,
+        }
+    }
+}
+
 /// The decision record of a push that said `said` of `sel.shown`. `trigger`
 /// is what made the push fire (`read`, `edit`, `shell-edit`, or a search's
 /// `reader-arg` / `hitlist` / `glob`). Rows past `said` are the token
 /// budget's cut; `select`'s own cuts carry their reason. `touched` is the
 /// session's working set before this push (`None` = no session): each row's
 /// `feat.touch` counts its files in it, and the said rows `touch@1` would have
-/// dropped ride `would_drop` — recorded only, the agent still saw them.
+/// dropped ride `would_drop` — recorded only, the agent still saw them. `gate` rows are the
+/// policy's own cut: first in `cut`, so the cap's cuts never push them out.
 pub(crate) fn record(
     trigger: &str,
     sel: &core::Selection,
     said: usize,
     focus: &core::Focus,
     touched: Option<&HashSet<String>>,
+    gate: &Gate,
 ) -> Value {
     let said = said.min(sel.shown.len());
     let budget = sel.shown[said..]
         .iter()
         .enumerate()
         .map(|(i, r)| (*r, sel.tier(said + i), core::CUT_BUDGET));
-    let cut: Vec<_> = sel.cut.iter().copied().chain(budget).collect();
+    let gated = gate.cut.iter().map(|&(r, t)| (r, t, core::CUT_GATE));
+    let cut: Vec<_> = gated.chain(sel.cut.iter().copied()).chain(budget).collect();
     let now = core::now_ms();
     let mut feat = serde_json::Map::new();
     let mut would_drop = vec![];
@@ -61,7 +117,8 @@ pub(crate) fn record(
     }
     let mut d = json!({
         "trigger": trigger,
-        "policy": core::BASELINE.name(),
+        "policy": gate.policy,
+        "arm": gate.arm,
         "feat": feat,
     });
     if !would_drop.is_empty() {
@@ -96,11 +153,12 @@ mod tests {
         };
         let focus = core::Focus::default();
         let sel = core::select(vec![(&old, 0)], &focus, &policy);
-        let d = record("read", &sel, 1, &focus, None);
+        let none = Gate::apply(core::ARM_ALL, false, &mut vec![], None);
+        let d = record("read", &sel, 1, &focus, None, &none);
         assert_eq!(d["feat"][&old.id]["age_d"], 3, "{d}");
         assert_eq!(d["feat"][&old.id]["kind"], "note", "{d}");
         // the token budget cut the one row: said 0, it is a budget cut
-        let d = record("read", &sel, 0, &focus, None);
+        let d = record("read", &sel, 0, &focus, None, &none);
         assert_eq!(d["cut"], json!([{"id": old.id, "r": "budget"}]), "{d}");
     }
 }

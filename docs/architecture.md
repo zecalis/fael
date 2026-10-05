@@ -201,6 +201,8 @@ kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
 store = "local"               # journal only (default, tree log or not); "tracked" also writes .fael/log to commit
+push_policy = "baseline@1"    # "touch@1" = the validation experiment: search pushes of candidate sessions lose the rows it cuts (usage `cut: gate`); a human's opt-in
+push_holdout = 20             # percent of sessions (by hash of the session id) that keep baseline@1 while a gate is on
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800

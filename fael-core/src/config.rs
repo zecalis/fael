@@ -48,6 +48,12 @@ pub struct Config {
     /// At most this many rows per read/edit push (PLAN-fael-push-focus
     /// chunk 1). 0 = no row cap, token budget only.
     pub push_rows: usize,
+    /// The push policy a repo runs on search pushes (`baseline@1` or
+    /// `touch@1`, `query::GATES`): anything but `baseline@1` is the
+    /// validation experiment (SPEC-fael-learn-loop §E), a human's opt-in.
+    pub push_policy: String,
+    /// Share of sessions (percent) held out on `baseline@1` while a gate is on.
+    pub push_holdout: usize,
     /// How many of the freshest open decisions session-start lists above the
     /// count line (PLAN-fael-direction chunk 1). 0 = count line only.
     pub session_decisions: usize,
@@ -103,6 +109,8 @@ impl Default for Config {
             find_tokens: 800,
             push_tokens: 800,
             push_rows: 5,
+            push_policy: "baseline@1".into(),
+            push_holdout: 20,
             session_decisions: 0,
             warn_row_tokens: 400,
             warn_row_chars: 1200,
@@ -127,6 +135,13 @@ struct Notify {
     user: Option<bool>,
 }
 
+/// `[sync]` in `.fael/config.toml` — outside `from_toml` for the same reason.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Sync {
+    auto: Option<bool>,
+}
+
 /// `[hint]` in `.fael/config.toml` — outside `from_toml` only to keep that
 /// function under the line lint.
 #[derive(Deserialize, Default)]
@@ -147,6 +162,8 @@ impl Config {
             anchor: Anchor,
             resolve: Option<bool>,
             store: Option<String>,
+            push_policy: Option<String>,
+            push_holdout: Option<usize>,
             budget: Budget,
             warn: Warn,
             limit: Limit,
@@ -157,11 +174,6 @@ impl Config {
             hint: Hint,
         }
 
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Sync {
-            auto: Option<bool>,
-        }
         #[derive(Deserialize, Default)]
         #[serde(default)]
         struct Budget {
@@ -200,6 +212,7 @@ impl Config {
         }
         let f: File = toml::from_str(s).map_err(|e| e.to_string())?;
         let d = Config::default();
+        let (push_policy, push_holdout) = check_push(f.push_policy, f.push_holdout, &d)?;
         let store = match f.store.as_deref() {
             None | Some("tracked") => Store::Tracked,
             Some("local") => Store::Local,
@@ -218,6 +231,8 @@ impl Config {
             find_tokens: f.budget.find_tokens.unwrap_or(d.find_tokens),
             push_tokens: f.budget.push_tokens.unwrap_or(d.push_tokens),
             push_rows: f.budget.push_rows.unwrap_or(d.push_rows),
+            push_policy,
+            push_holdout,
             session_decisions: f.budget.session_decisions.unwrap_or(d.session_decisions),
             warn_row_tokens: f.warn.row_tokens.unwrap_or(d.warn_row_tokens),
             warn_row_chars: f.warn.row_chars.unwrap_or(d.warn_row_chars),
@@ -237,6 +252,26 @@ impl Config {
                 .filter(|w| !w.is_empty())
                 .collect(),
         })
+    }
+}
+
+/// `push_policy` / `push_holdout` — an unknown policy or a share past 100 is a
+/// config error: a silent typo would run (or skip) the experiment.
+fn check_push(
+    policy: Option<String>,
+    holdout: Option<usize>,
+    d: &Config,
+) -> Result<(String, usize), String> {
+    let policy = policy.unwrap_or_else(|| d.push_policy.clone());
+    if !crate::query::GATES.contains(&policy.as_str()) {
+        return Err(format!(
+            "rejected: push_policy = {policy:?} — want one of {:?}",
+            crate::query::GATES
+        ));
+    }
+    match holdout.unwrap_or(d.push_holdout) {
+        h if h > 100 => Err("rejected: push_holdout is a percent, 0–100".into()),
+        h => Ok((policy, h)),
     }
 }
 

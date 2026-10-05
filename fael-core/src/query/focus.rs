@@ -163,6 +163,9 @@ pub const CUT_CAP: &str = "cap";
 pub const CUT_HUB_PEEK: &str = "hub_peek";
 /// Why render cut a row: the token budget ran out.
 pub const CUT_BUDGET: &str = "budget";
+/// Why the push cut a row before `select`: the session's policy (`push_policy`)
+/// dropped it. The only cut that is a policy's decision (SPEC §A).
+pub const CUT_GATE: &str = "gate";
 
 /// The rows that did not render, split by the exact `fael find` call that
 /// reaches each.

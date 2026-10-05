@@ -25,6 +25,7 @@ mod compact;
 mod day;
 mod decision;
 mod focus;
+mod gate;
 mod handoff;
 mod incident;
 mod memory_line;

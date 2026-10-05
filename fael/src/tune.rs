@@ -4,7 +4,9 @@
 //! a human reads the table and files a decision.
 
 use crate::args::Args;
-use crate::core::stats::{Coverage, PolicyResult, Rate, Section, Stratum, Tune};
+use crate::core::stats::{
+    ArmSize, Coverage, PolicyResult, Rate, Section, Status, Stratum, Tune, Validation,
+};
 use crate::{hook, report};
 
 pub(crate) fn tune(a: &Args) -> Result<(), String> {
@@ -153,6 +155,74 @@ pub(crate) fn text(t: &Tune) -> String {
     if t.strata.len() > 10 {
         out.push_str(&format!("  … +{} more (--json)\n", t.strata.len() - 10));
     }
+    t.validation
+        .iter()
+        .for_each(|v| out.push_str(&validation(v)));
+    out
+}
+
+/// The holdout checkpoint (SPEC §E): arm sizes per stratum with the balance
+/// guard, what the gate forfeits, and the verdict with its reasons.
+fn validation(v: &Validation) -> String {
+    let arm = |a: &ArmSize| {
+        format!(
+            "{} sessions · {} pushes · {} rows said",
+            a.sessions, a.search_pushes, a.rows_said
+        )
+    };
+    let mut out = format!(
+        "validation · candidate {} against holdout baseline@1 (session-level arms)\n",
+        v.candidate
+    );
+    for s in &v.strata {
+        let status = match s.status {
+            Status::Used => "used".to_string(),
+            Status::Insufficient => "insufficient · report only".to_string(),
+            Status::Unbalanced => "unbalanced · trigger mix differs, not compared".to_string(),
+        };
+        out.push_str(&format!(
+            "  {} / {} — {status} · trigger gap {:.0} pts\n    candidate {}\n    holdout   {}\n",
+            s.repo,
+            s.client,
+            s.max_trigger_gap_pp,
+            arm(&s.candidate),
+            arm(&s.holdout),
+        ));
+    }
+    let (c, h) = (&v.candidate_all, &v.holdout_all);
+    let p = |o: Option<f64>| o.map_or("—".to_string(), |x| format!("{x:.1}%"));
+    out.push_str(&format!(
+        "usable strata pooled:\n  candidate {} · gate cuts {}\n  holdout   {}\n",
+        arm(c),
+        c.gate_cuts,
+        arm(h)
+    ));
+    out.push_str(&format!(
+        "  exposure down {} (rows said per session)\n  retained (candidate replayed on holdout rows) cited {} · pulled {} · acted {}\n  missed_push {}\n  sessions that went back for a cut row: candidate {} · holdout {}\n",
+        p(v.exposure_cut_pct),
+        rate(&v.retained.cited),
+        rate(&v.retained.pulled),
+        rate(&v.retained.acted),
+        rate(&c.missed_push),
+        p(v.retrieved_pct.0),
+        p(v.retrieved_pct.1),
+    ));
+    out.push_str(&coverage(&c.coverage).replace("coverage:", "  candidate coverage:"));
+    out.push_str(&coverage(&h.coverage).replace("coverage:", "  holdout coverage:"));
+    v.warning
+        .iter()
+        .for_each(|w| out.push_str(&format!("warning: {w}\n")));
+    v.notes
+        .iter()
+        .for_each(|n| out.push_str(&format!("note: {n}\n")));
+    out.push_str(&format!("verdict: {}\n", v.verdict.result));
+    v.verdict
+        .why
+        .iter()
+        .for_each(|w| out.push_str(&format!("  - {w}\n")));
+    out.push_str(
+        "a human files the decision row (fael add decision) with this table; tune writes nothing\n",
+    );
     out
 }
 
@@ -197,6 +267,7 @@ mod tests {
             outcomes_v: 1,
             days: None,
             all: Section::default(),
+            validation: None,
             strata: (0..strata)
                 .map(|i| Stratum {
                     repo: format!("/r{i}"),
