@@ -35,8 +35,8 @@ pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, resolve
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
 pub use policy::{
-    ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, BASELINE, GATES, PolicyDef, TOUCH, TOUCH_YIELD,
-    YIELD_MIN_N, arm_of, touch_drops, touch_yield_drops,
+    ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, AUTO, BASELINE, GATES, PolicyDef, Stage, TOUCH,
+    TOUCH_YIELD, YIELD_MIN_N, arm_for, arm_in, arm_of, next_stage, touch_drops, touch_yield_drops,
 };
 pub use push::{push, push_tiered};
 pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};

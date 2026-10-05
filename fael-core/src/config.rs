@@ -48,11 +48,14 @@ pub struct Config {
     /// At most this many rows per read/edit push (PLAN-fael-push-focus
     /// chunk 1). 0 = no row cap, token budget only.
     pub push_rows: usize,
-    /// The push policy a repo runs on search pushes (`baseline@1` or
-    /// `touch@1`, `query::GATES`): anything but `baseline@1` is the
-    /// validation experiment (SPEC-fael-learn-loop §E), a human's opt-in.
+    /// The push policy a repo runs on search pushes (`query::GATES`): unset =
+    /// `auto`, the repo's own stage machine (shadow → canary → ramp, rolled
+    /// back on evidence); a set value is a human's pin and always wins —
+    /// `baseline@1` opts out, `touch@1` is the validation experiment
+    /// (SPEC-fael-learn-loop §E).
     pub push_policy: String,
-    /// Share of sessions (percent) held out on `baseline@1` while a gate is on.
+    /// Share of sessions (percent) held out on `baseline@1` while `touch@1`
+    /// is pinned. `auto` splits by stage instead.
     pub push_holdout: usize,
     /// How many of the freshest open decisions session-start lists above the
     /// count line (PLAN-fael-direction chunk 1). 0 = count line only.
@@ -109,7 +112,7 @@ impl Default for Config {
             find_tokens: 800,
             push_tokens: 800,
             push_rows: 5,
-            push_policy: "baseline@1".into(),
+            push_policy: crate::AUTO.into(),
             push_holdout: 20,
             session_decisions: 0,
             warn_row_tokens: 400,

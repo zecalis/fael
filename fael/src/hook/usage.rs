@@ -182,6 +182,12 @@ pub(crate) struct Usage {
 }
 
 pub(crate) fn load(since: Option<i64>) -> Usage {
+    load_where(since, &|_| true)
+}
+
+/// `load`, keeping only the lines (and logs) of repos `keep` accepts — a repo's
+/// evaluator never reads another repo's usage (SPEC-fael-learn-loop §E).
+pub(crate) fn load_where(since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
     let path = state_dir().join("usage.jsonl");
     let mut s = std::fs::read_to_string(&path).unwrap_or_default();
     if let Some(ms) = since {
@@ -196,9 +202,10 @@ pub(crate) fn load(since: Option<i64>) -> Usage {
         PathBuf::from("/tmp"),
         Path::new("/tmp").canonicalize().unwrap_or_default(),
     ];
-    let parsed = core::stats::parse(&s, &path, &tmp);
+    let mut parsed = core::stats::parse(&s, &path, &tmp);
+    parsed.kept.retain(|v| v["repo"].as_str().is_some_and(keep));
     let mut logs: HashMap<String, core::Log> = HashMap::new();
-    for repo in parsed.repos() {
+    for repo in parsed.repos().into_iter().filter(|r| keep(r)) {
         logs.entry(repo.to_string())
             .or_insert_with(|| repo_log(repo));
     }

@@ -45,6 +45,14 @@ pub(crate) fn note(session: &str, root: &Path, what: &str, items: &[&str]) {
 /// the turn's receipt, with the version it retired.
 pub(crate) fn note_filed(root: &Path, row: &core::Row) {
     let session = crate::session::hook_session(root);
+    // before the seen list takes `row` — and never for the evaluator's own
+    // stage-change row: fael would be counting its own write as evidence
+    if let (Some(old), false) = (
+        row.supersedes.as_deref(),
+        row.key.as_deref() == Some(super::stage::KEY),
+    ) {
+        super::cited::note_dup(&session, root, old);
+    }
     super::state::note_seen(&session, root, &[&row.id]);
     note(&session, root, "filed", &[&row.id]);
     if let Some(old) = row.supersedes.as_deref() {

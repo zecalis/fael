@@ -74,26 +74,121 @@ pub const ARM_ALL: &str = "all";
 pub const ARM_CANDIDATE: &str = "candidate";
 pub const ARM_HOLDOUT: &str = "holdout";
 
-/// The policies a repo may switch on (`push_policy`): the ones whose rule is a
-/// pure call on one said row and its working-set count, so the push can apply
-/// it and `tune` can replay it. `touch-yield@1` waits for the yield cache (§D).
-pub const GATES: [&str; 2] = ["baseline@1", "touch@1"];
+/// `push_policy` unset: the repo runs the stage machine (`Stage`). A set value
+/// is a human's pin and always wins — `baseline@1` is the opt-out.
+pub const AUTO: &str = "auto";
 
-/// A session's arm and the gate it runs under `push_policy`. The holdout is
-/// by session (a per-push draw would mix inside one seen list): FNV-1a of the
-/// session id, mod 100, under `holdout_pct`. Pinned by a test — a session
-/// never changes arm.
+/// The values `push_policy` takes: `auto`, or a policy whose rule is a pure
+/// call on one said row and its working-set count, so the push can apply it
+/// and `tune` can replay it. `touch-yield@1` waits for the yield cache (§D).
+pub const GATES: [&str; 3] = [AUTO, "baseline@1", "touch@1"];
+
+fn session_pct(session: &str) -> u64 {
+    let h = session.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
+    h % 100
+}
+
+/// A session's arm and the gate it runs under a pinned `push_policy`. The
+/// holdout is by session (a per-push draw would mix inside one seen list):
+/// FNV-1a of the session id, mod 100, under `holdout_pct`. Pinned by a test —
+/// a session never changes arm.
 pub fn arm_of(push_policy: &str, holdout_pct: usize, session: &str) -> (&'static str, bool) {
     if push_policy != TOUCH.name() || session.is_empty() {
         return (ARM_ALL, false);
     }
-    let h = session.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    });
-    if (h % 100) < holdout_pct as u64 {
+    if session_pct(session) < holdout_pct as u64 {
         (ARM_HOLDOUT, false)
     } else {
         (ARM_CANDIDATE, true)
+    }
+}
+
+/// Where a repo's `touch@1` stands under `push_policy = auto` (PLAN-fael-learn-loop
+/// chunk 6): `shadow` — every session sees everything, `would_drop` records;
+/// `canary` — 10% of sessions run the gate; `ramp` — 80%, the rest stay on
+/// `baseline@1` for a continuous comparison; `baseline` — rolled back, and
+/// sticky for that policy version (it re-enters only as a new `@version`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Shadow,
+    Canary,
+    Ramp,
+    Baseline,
+}
+
+impl Stage {
+    pub fn name(self) -> &'static str {
+        match self {
+            Stage::Shadow => "shadow",
+            Stage::Canary => "canary",
+            Stage::Ramp => "ramp",
+            Stage::Baseline => "baseline",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Stage> {
+        [Stage::Shadow, Stage::Canary, Stage::Ramp, Stage::Baseline]
+            .into_iter()
+            .find(|g| g.name() == s)
+    }
+
+    /// Percent of sessions on the candidate arm; the rest are the baseline arm.
+    /// `None` = no experiment, everyone sees the baseline push.
+    pub fn candidate_pct(self) -> Option<usize> {
+        match self {
+            Stage::Canary => Some(10),
+            Stage::Ramp => Some(80),
+            Stage::Shadow | Stage::Baseline => None,
+        }
+    }
+}
+
+/// A session's arm and gate in a stage. The candidate arm is the sessions
+/// whose hash is under the stage's share, so canary's sessions stay candidates
+/// when the repo ramps — a session never changes arm by a promotion. The
+/// baseline arm keeps the wire name `holdout` (`tune` reads it); it is not the
+/// permanent holdout, which is phase 2 (SPEC §E).
+pub fn arm_in(stage: Stage, session: &str) -> (&'static str, bool) {
+    match stage.candidate_pct() {
+        Some(pct) if !session.is_empty() => {
+            if session_pct(session) < pct as u64 {
+                (ARM_CANDIDATE, true)
+            } else {
+                (ARM_HOLDOUT, false)
+            }
+        }
+        _ => (ARM_ALL, false),
+    }
+}
+
+/// The arm and gate under the repo's `push_policy`: a pin wins, `auto` follows
+/// the resolved stage.
+pub fn arm_for(
+    push_policy: &str,
+    holdout_pct: usize,
+    stage: Stage,
+    session: &str,
+) -> (&'static str, bool) {
+    if push_policy == AUTO {
+        arm_in(stage, session)
+    } else {
+        arm_of(push_policy, holdout_pct, session)
+    }
+}
+
+/// The stage after a verdict (`validated` / `not_validated` / `insufficient_data`
+/// — the shadow replay's in `shadow`, the arms' in `canary` and `ramp`):
+/// `validated` moves one stage up, `not_validated` from anywhere is a rollback,
+/// `insufficient_data` holds, and `baseline` never moves.
+pub fn next_stage(from: Stage, verdict: &str) -> Stage {
+    match (from, verdict) {
+        (Stage::Baseline, _) => Stage::Baseline,
+        (_, "not_validated") => Stage::Baseline,
+        (Stage::Shadow, "validated") => Stage::Canary,
+        (Stage::Canary, "validated") => Stage::Ramp,
+        (s, _) => s,
     }
 }
 
@@ -151,6 +246,67 @@ mod tests {
         assert!(!touch_yield_drops(&d, 0, Some((0, 4))), "too few sessions");
         assert!(!touch_yield_drops(&d, 0, None), "no evidence keeps the row");
         assert!(!touch_yield_drops(&d, 1, Some((0, 50))), "touched stays");
+    }
+
+    #[test]
+    fn stages_walk_up_on_validated_and_fall_to_baseline_for_good() {
+        use Stage::*;
+        let n = next_stage;
+        assert_eq!(n(Shadow, "validated"), Canary);
+        assert_eq!(n(Canary, "validated"), Ramp);
+        assert_eq!(n(Ramp, "validated"), Ramp);
+        for s in [Shadow, Canary, Ramp] {
+            assert_eq!(n(s, "insufficient_data"), s, "holds");
+            assert_eq!(n(s, "not_validated"), Baseline, "rolls back from {s:?}");
+        }
+        for v in ["validated", "not_validated", "insufficient_data"] {
+            assert_eq!(n(Baseline, v), Baseline, "rollback is sticky");
+        }
+        assert_eq!(Stage::parse("ramp"), Some(Ramp));
+        assert_eq!(Stage::parse("auto"), None);
+    }
+
+    #[test]
+    fn a_stage_splits_sessions_and_a_promotion_moves_none_to_baseline() {
+        use Stage::*;
+        for s in [Shadow, Baseline] {
+            assert_eq!(arm_in(s, "s1"), (ARM_ALL, false), "{s:?} gates nothing");
+        }
+        assert_eq!(
+            arm_in(Canary, ""),
+            (ARM_ALL, false),
+            "no session, no experiment"
+        );
+        let cand = |st, n: usize| {
+            (0..n)
+                .filter(|i| arm_in(st, &format!("sess-{i}")).0 == ARM_CANDIDATE)
+                .count()
+        };
+        assert!((140..260).contains(&cand(Canary, 2000)), "~10% of 2000");
+        assert!((1500..1700).contains(&cand(Ramp, 2000)), "~80% of 2000");
+        // canary's candidates are still candidates at ramp
+        for i in 0..500 {
+            let s = format!("sess-{i}");
+            if arm_in(Canary, &s).1 {
+                assert!(arm_in(Ramp, &s).1, "{s}");
+            }
+        }
+        // FNV-1a("s1") % 100 = 29: out of canary, inside ramp
+        assert_eq!(arm_in(Canary, "s1"), (ARM_HOLDOUT, false));
+        assert_eq!(arm_in(Ramp, "s1"), (ARM_CANDIDATE, true));
+    }
+
+    #[test]
+    fn a_human_pin_wins_over_the_stage() {
+        use Stage::Ramp;
+        // baseline@1 opts out, whatever the stage says
+        assert_eq!(arm_for("baseline@1", 20, Ramp, "s1"), (ARM_ALL, false));
+        // touch@1 is the chunk 5 experiment, its own holdout share
+        assert_eq!(
+            arm_for("touch@1", 20, Stage::Shadow, "s1"),
+            (ARM_CANDIDATE, true)
+        );
+        assert_eq!(arm_for(AUTO, 20, Ramp, "s1"), arm_in(Ramp, "s1"));
     }
 
     #[test]

@@ -12,21 +12,49 @@ use crate::{hook, report};
 pub(crate) fn tune(a: &Args) -> Result<(), String> {
     a.only("tune", &["json", "since"])?;
     let u = hook::load(report::since(a)?);
-    let t = crate::core::stats::tune(&u.parsed, &u.logs, hook::local_tz_offset_min(), &scope);
+    let t = crate::core::stats::tune(
+        &u.parsed,
+        &u.logs,
+        hook::local_tz_offset_min(),
+        &crate::journal::scope,
+    );
+    let gates = stages(&u.parsed);
     if a.has("json") {
-        println!("{}", serde_json::to_string(&t).map_err(|e| e.to_string())?);
+        let mut v = serde_json::to_value(&t).map_err(|e| e.to_string())?;
+        v["push_gate"] = gates
+            .iter()
+            .map(|(repo, st)| serde_json::json!({"repo": repo, "stage": st.name()}))
+            .collect();
+        println!("{v}");
     } else {
-        print!("{}", text(&t));
+        print!("{}{}", text(&t), gate_text(&gates));
     }
     Ok(())
 }
 
-/// The repo a usage line's `repo` (a worktree root) belongs to: the journal all
-/// worktrees of one clone share, else the folder itself — read off `.git`, no
-/// git spawn, and an unreadable path keeps its raw value (SPEC §E).
-fn scope(repo: &str) -> String {
-    crate::journal::root(std::path::Path::new(repo))
-        .map_or_else(|| repo.to_string(), |j| j.display().to_string())
+/// Each repo in the usage, with the stage its `push_policy = auto` run is in
+/// (`shadow` when it has none yet).
+fn stages(p: &crate::core::stats::Parsed) -> Vec<(String, crate::core::Stage)> {
+    let mut by = std::collections::BTreeMap::new();
+    for r in p.repos() {
+        let scope = crate::journal::scope(r);
+        let stage = hook::stage_of_scope(&scope);
+        by.insert(scope, stage);
+    }
+    by.into_iter().collect()
+}
+
+/// A repo's stage is its own: the candidate share and the baseline arm that
+/// stage runs, and nothing about another repo.
+fn gate_text(gates: &[(String, crate::core::Stage)]) -> String {
+    let mut out = String::from("push gate (stage per repo, under push_policy = auto):\n");
+    for (repo, st) in gates {
+        let split = st.candidate_pct().map_or(String::new(), |c| {
+            format!(" · {c}% candidate / {}% baseline arm", 100 - c)
+        });
+        out.push_str(&format!("  {repo} — {}{split}\n", st.name()));
+    }
+    out
 }
 
 /// `1.9%` under ten, `51%` above — the interval's ends are rounded alike.
@@ -269,6 +297,7 @@ fn stratum(s: &Stratum) -> String {
 mod tests {
     use super::*;
     use crate::core::stats::Rate;
+    use crate::journal::scope;
 
     #[test]
     fn worktrees_of_one_clone_share_a_scope_and_a_plain_folder_is_its_own() {

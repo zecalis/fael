@@ -20,15 +20,21 @@ pub(crate) struct Gate<'a> {
 
 impl<'a> Gate<'a> {
     /// The session's gate for this push: its arm under the repo's
-    /// `push_policy`, applied on search pushes only (never an edit push).
+    /// `push_policy` (and, under `auto`, the repo's stage), applied on search
+    /// pushes only (never an edit push).
     pub fn for_push(
         c: &super::protocol::Ctx,
         event: &str,
         tiered: &mut Vec<(&'a core::Row, usize)>,
         touched: Option<&HashSet<String>>,
     ) -> Gate<'a> {
-        let (arm, gated) =
-            core::arm_of(&c.repo.cfg.push_policy, c.repo.cfg.push_holdout, &c.session);
+        let cfg = &c.repo.cfg;
+        // the stage file is read only under `auto`: a pin never consults it
+        let stage = match cfg.push_policy == core::AUTO {
+            true => super::stage::current(&c.repo.root),
+            false => core::Stage::Shadow,
+        };
+        let (arm, gated) = core::arm_for(&cfg.push_policy, cfg.push_holdout, stage, &c.session);
         Gate::apply(arm, gated && event == "search", tiered, touched)
     }
 
