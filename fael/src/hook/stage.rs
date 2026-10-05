@@ -2,8 +2,9 @@
 //! chunk 6, SPEC §D): `shadow → canary → ramp`, or `baseline` after a rollback.
 //! The push reads the resolved stage from one small state file beside the log
 //! (`cache/push-gate.json`); it never reads the log or the usage. The evaluator
-//! runs at session start and Stop — never on the push path — and only when the
-//! repo's search pushes since its last look reach `EVAL_EVERY`. A change of
+//! runs at Stop — never on the push path, nor at session start, which the
+//! agent waits on — and only when the repo's search pushes since its last look
+//! reach `EVAL_EVERY`; a look reads this and last month's usage (`usage_files`). A change of
 //! stage is filed as a `policy:push-gate` decision row first, and the state
 //! file moves only if that row was written: a policy changes through its row.
 //! State missing, torn, or for another policy version = `shadow`, never a guess.
@@ -34,6 +35,10 @@ struct State {
     stage: String,
     /// Bytes of `usage.jsonl` already counted — the next look reads only past it.
     usage_at: u64,
+    /// The live usage file's month at that look (`usage_files::live_month`):
+    /// an archive named from it on is that file, moved since.
+    #[serde(default)]
+    usage_month: String,
     /// Search pushes of this repo counted since the last evaluation.
     #[serde(default)]
     pending: usize,
@@ -105,7 +110,7 @@ pub(crate) fn evaluate_for(e: &Event) {
 /// Look at this repo's evidence once `EVAL_EVERY` new search pushes are in, and
 /// move its stage by the table in `core::next_stage`. Fail open throughout: a
 /// look that cannot finish changes nothing.
-pub(crate) fn evaluate(repo: &crate::Repo) {
+fn evaluate(repo: &crate::Repo) {
     if repo.cfg.push_policy != core::AUTO || journal::home(repo).is_none() {
         return;
     }
@@ -116,12 +121,13 @@ pub(crate) fn evaluate(repo: &crate::Repo) {
         return; // a rollback is final for this version
     }
     let me = journal::scope(&repo.root.to_string_lossy());
-    let (n, end) = new_pushes(&me, st.usage_at);
+    let (n, end, month) = new_pushes(&me, st.usage_at, &st.usage_month);
     st.pending += n;
     if st.pending < EVAL_EVERY {
         // count once, not again at every Stop: the next look starts at `end`
-        if n > 0 {
-            (st.policy, st.stage, st.usage_at) = (core::TOUCH.name(), from.name().into(), end);
+        if n > 0 || month != st.usage_month {
+            (st.policy, st.stage) = (core::TOUCH.name(), from.name().into());
+            (st.usage_at, st.usage_month) = (end, month);
             save(&file, &st);
         }
         return;
@@ -158,27 +164,32 @@ pub(crate) fn evaluate(repo: &crate::Repo) {
         policy: core::TOUCH.name(),
         stage: to.name().into(),
         usage_at: end,
+        usage_month: month,
         pending: 0,
     };
     save(&file, &st);
 }
 
-/// Search pushes of this repo past byte `from` of the usage log, and where the
-/// log ends now. A log shorter than `from` was pruned: count from its start.
-fn new_pushes(me: &str, from: u64) -> (usize, u64) {
-    let Ok(mut f) = std::fs::File::open(super::state::state_dir().join("usage.jsonl")) else {
-        return (0, from);
-    };
-    let from = match f.metadata() {
-        Ok(m) if m.len() >= from => from,
-        _ => 0,
-    };
-    let mut tail = Vec::new();
-    if f.seek(SeekFrom::Start(from)).is_err() || f.read_to_end(&mut tail).is_err() {
-        return (0, from);
+/// Search pushes of this repo past byte `from` of the live usage file, where
+/// it ends now, and its month. Archives named from the last look's `month` on
+/// are that live file moved since (`usage_files`): the oldest is read from
+/// `from`, any later one whole, then the new live file from its start.
+fn new_pushes(me: &str, from: u64, month: &str) -> (usize, u64, String) {
+    let live = super::usage_files::live();
+    // before reading: a move after this names its archive from this month on
+    let now = super::usage_files::live_month();
+    let mut text = Vec::new();
+    let moved = super::usage_files::archives_from(month);
+    for (i, a) in moved.iter().enumerate() {
+        tail(a, if i == 0 { from } else { 0 }, &mut text);
     }
+    let at = if moved.is_empty() { from } else { 0 };
+    // a live file shorter than `at` was cut by hand: count it from its start
+    let end = tail(&live, at, &mut text)
+        .or_else(|| tail(&live, 0, &mut text))
+        .unwrap_or(0);
     let mut mine: HashMap<String, bool> = HashMap::new();
-    let n = String::from_utf8_lossy(&tail)
+    let n = String::from_utf8_lossy(&text)
         .lines()
         .filter(|l| l.contains("\"event\":\"search\""))
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
@@ -190,7 +201,20 @@ fn new_pushes(me: &str, from: u64) -> (usize, u64) {
             })
         })
         .count();
-    (n, from + tail.len() as u64)
+    (n, end, now)
+}
+
+/// Append `file`'s bytes past `from` to `into`; its length, or `None` when it
+/// is missing or shorter than `from`.
+fn tail(file: &Path, from: u64, into: &mut Vec<u8>) -> Option<u64> {
+    let mut f = std::fs::File::open(file).ok()?;
+    let len = f.metadata().ok()?.len();
+    if len < from {
+        return None;
+    }
+    f.seek(SeekFrom::Start(from)).ok()?;
+    f.read_to_end(into).ok()?;
+    Some(len)
 }
 
 fn shadow_evidence(t: &core::stats::Tune) -> Value {

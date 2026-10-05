@@ -169,15 +169,15 @@ pub(super) fn with_rows() -> PathBuf {
     d
 }
 
-pub(super) fn session_start(d: &Path) {
-    start_as(&state(d), d, "evaluator", &[]);
+pub(super) fn stop_look(d: &Path) {
+    stop_as(&state(d), d, "evaluator", &[]);
 }
 
-/// A session start of repo `d` whose usage log is `state`'s — two repos feeding
-/// one machine-wide log, as real ones do.
-pub(super) fn start_as(state: &Path, d: &Path, session: &str, envs: &[(&str, &str)]) {
+/// A Stop of repo `d` — where the evaluator looks — whose usage log is
+/// `state`'s: two repos feeding one machine-wide log, as real ones do.
+pub(super) fn stop_as(state: &Path, d: &Path, session: &str, envs: &[(&str, &str)]) {
     let p = format!(r#"{{"cwd":{},"session":"{session}"}}"#, json(d));
-    let (ok, out, err) = super::fael_at_env(state, d, &["hook", "session-start"], &p, envs);
+    let (ok, out, err) = super::fael_at_env(state, d, &["hook", "stop"], &p, envs);
     assert!(ok, "{out}{err}");
 }
 
@@ -193,7 +193,7 @@ fn a_shadow_replay_that_clears_the_bars_promotes_to_canary_and_files_the_row_onc
     let d = with_rows();
     shadow_usage(&d, 40, false);
     assert_eq!(stage_now(&d), None);
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(stage_now(&d).as_deref(), Some("canary"));
     let rows = gate_rows(&d);
     assert_eq!(rows.len(), 1, "{rows:?}");
@@ -205,7 +205,7 @@ fn a_shadow_replay_that_clears_the_bars_promotes_to_canary_and_files_the_row_onc
     assert_eq!(body["arm_split"], json!({"candidate": 10, "baseline": 90}));
     assert!(body["validation"]["replay"].is_object(), "{body}");
     // nothing new since: the next session start does not look again
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(gate_rows(&d).len(), 1);
     // the repo's stage is on `fael tune`, which writes nothing
     let (_, out, _) = fael(&d, &["tune"], "");
@@ -219,7 +219,7 @@ fn a_shadow_replay_that_clears_the_bars_promotes_to_canary_and_files_the_row_onc
 fn a_shadow_replay_that_misses_a_bar_rolls_back_for_good() {
     let d = with_rows();
     shadow_usage(&d, 40, true); // the cut would have lost a row every session cited
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(stage_now(&d).as_deref(), Some("baseline"));
     let rows = gate_rows(&d);
     assert_eq!(rows.len(), 1, "{rows:?}");
@@ -229,7 +229,7 @@ fn a_shadow_replay_that_misses_a_bar_rolls_back_for_good() {
     );
     // more evidence does not reopen it: only a new version can
     shadow_usage(&d, 40, false);
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(stage_now(&d).as_deref(), Some("baseline"));
     assert_eq!(gate_rows(&d).len(), 1);
 }
@@ -238,7 +238,7 @@ fn a_shadow_replay_that_misses_a_bar_rolls_back_for_good() {
 fn too_little_evidence_holds_the_stage_and_files_nothing() {
     let d = with_rows();
     shadow_usage(&d, 13, false); // 104 pushes: enough to look, not enough to decide
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(stage_now(&d).as_deref(), Some("shadow"));
     assert!(gate_rows(&d).is_empty());
 }
@@ -252,7 +252,7 @@ fn a_pin_is_never_evaluated() {
     )
     .unwrap();
     shadow_usage(&d, 40, false);
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(stage_now(&d), None);
     assert!(gate_rows(&d).is_empty());
 }
@@ -305,7 +305,7 @@ fn a_canary_with_no_arm_data_yet_holds() {
     let d = with_rows();
     put_stage(&d, "touch@1", "canary");
     shadow_usage(&d, 40, false); // shadow lines only: no candidate or baseline arm in them
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(stage_now(&d).as_deref(), Some("canary"));
     assert!(gate_rows(&d).is_empty());
 }
@@ -320,14 +320,42 @@ fn pushes_are_counted_once_and_add_up_across_looks() {
             .unwrap()
     };
     shadow_usage(&d, 8, false); // 64 pushes and the probe: under the 100 that earn a look
-    session_start(&d);
-    session_start(&d); // nothing new: not counted twice
+    stop_look(&d);
+    stop_look(&d); // nothing new: not counted twice
     assert_eq!(pending(), 65);
     shadow_usage(&d, 8, false);
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(
         pending(),
         0,
         "130 pushes: looked, and the count starts over"
+    );
+}
+
+#[test]
+fn pushes_on_both_sides_of_a_monthly_move_are_counted_once() {
+    let d = with_rows();
+    let pending = || -> u64 {
+        let s = std::fs::read_to_string(gate_file(&d)).unwrap();
+        serde_json::from_str::<Value>(&s).unwrap()["pending"]
+            .as_u64()
+            .unwrap()
+    };
+    shadow_usage(&d, 8, false);
+    stop_look(&d);
+    assert_eq!(pending(), 65);
+    shadow_usage(&d, 2, false); // 16 more after the look (the probe repeats silently)
+    let month = &fael_core::rfc3339(fael_core::now_ms())[..7];
+    let archive = state(&d).join("usage").join(format!("{month}.jsonl"));
+    std::fs::create_dir_all(archive.parent().unwrap()).unwrap();
+    std::fs::rename(state(&d).join("usage.jsonl"), &archive).unwrap();
+    // a fresh seen list, or the probe repeats silently and writes no line
+    let _ = std::fs::remove_dir_all(state(&d).join("sessions"));
+    shadow_usage(&d, 2, false); // 17 in the new live file, probe included
+    stop_look(&d);
+    assert_eq!(
+        pending(),
+        98,
+        "the archive's tail and the new file, once each"
     );
 }

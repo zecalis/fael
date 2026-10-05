@@ -44,6 +44,7 @@ mod stats_text;
 mod stop;
 mod tally;
 mod usage;
+mod usage_files;
 mod verdict_text;
 
 pub(crate) use asks::{

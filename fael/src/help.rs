@@ -150,7 +150,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "tokens fael has put into context",
         "fael stats [--json] [--rows] [--day] [--misses] [--since d]
     (tokens fael has put into context, per machine;
-     --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on;
+     --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on,
+     all = every month; default = this and last month;
      --rows = per-row pushes against open/closed/superseded, flagging noise?, plus
      what followed (shown, cut by reason, cited, pulled, acted, retrieved after cut);
      --misses = the newest empty text searches (machine-local), each with the
@@ -167,7 +168,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      outcomes kept, rows the agent pulled itself after the cut, missed pushes — every
      rate as x/n with its 95% interval — plus coverage, outcome association, history
      fallback, the decay sweep and strata (repo x client). It names no winner and writes
-     nothing; --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on)",
+     nothing; --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on,
+     all = every month; default = this and last month)",
     ),
     (
         "report",
@@ -175,7 +177,7 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "fael report [--out f] [--open] [--since d]
     (one offline HTML page answering three questions: what memory reached the
      agents, what is noise, did fael add friction — every number is a field of
-     `fael stats --json` for the same --since; default --out is report.html in
+     `fael stats --json` for the same --since (default: this and last month); default --out is report.html in
      the state dir, never .fael/; --open hands it to the OS opener)",
     ),
     (

@@ -58,8 +58,9 @@ the `touch@1` replay over the repo's shadow pushes — exposure down ≥ 40%, ea
 arm keeps the wire name `holdout` on usage lines; it is not the permanent holdout, which is
 phase 2.
 
-The evaluator runs at session start and Stop (never on the push path), and only once 100
-new search pushes of the repo have come in since its last look. A stage change is filed
+The evaluator runs at Stop (never on the push path, nor at session start, which the agent
+waits on), and only once 100 new search pushes of the repo have come in since its last
+look; a look reads this and last month's usage, like `fael stats` with no `--since`. A stage change is filed
 first as a `policy:push-gate` decision row (`policy`, `from`, `to`, `arm_split`, `reason`,
 `validation`); only then does the state file beside the log (`cache/push-gate.json`) move.
 Missing, torn or other-version state reads as `shadow`. `fael tune` lists each repo's stage.

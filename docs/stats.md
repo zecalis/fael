@@ -45,8 +45,12 @@ Every number comes from two inputs, joined as pure functions in
   the closing reply typed, once per id per session. Torn lines are
   skipped; temp-dir repos (the OS temp dir and `/tmp`, where agent
   scratchpads live) are skipped unless the state dir itself is scratch.
-  `--since <YYYY-MM-DD | RFC 3339>` keeps only the lines stamped at or after
-  it, before anything is counted — first use per repo, rows added and
+  The live file is `usage.jsonl`; at the first write of a new month it moves
+  to `usage/<YYYY-MM>.jsonl` (the month of its last write), so a read never
+  has to open the whole history. With no `--since` a read covers the newest
+  archive and the live file — this and last month; `--since all` reads every
+  month. `--since <YYYY-MM-DD | RFC 3339>` opens the archives from that month
+  on and keeps only the lines stamped at or after it, before anything is counted — first use per repo, rows added and
   `capture` then all read as that window. `fael report` renders this same
   `Stats` (with `--rows`) as one offline HTML page.
 - the repos' logs (tree + journal union) — for row statuses, rows added

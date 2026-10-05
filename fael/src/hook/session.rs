@@ -19,8 +19,6 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     prune_sessions(&state_dir().join("sessions"));
     // detached: teammates' rows land before the first read, never awaited
     super::autosync::start(e);
-    // the repo's push-gate stage, looked at once enough new pushes are in
-    super::stage::evaluate(&c.repo);
     // a compacted context lost the rows pushed into it — tell them again
     if e.source.as_deref() == Some("compact") && !c.session.is_empty() {
         let _ = std::fs::remove_file(seen_path(&c.session, "", &c.repo.root));
