@@ -162,6 +162,18 @@ fn doctor_flags_shipped_maybe_from_git_only() {
             && !out.contains("[Shipped]:"),
         "{out}"
     );
+    // `--json` carries the full id, like `[Shipped]` (not only the short example)
+    let (_, out) = doctor_args(&d, "[]", &["doctor", "--json"]);
+    let ps: Vec<serde_json::Value> = serde_json::from_str(out.trim()).unwrap();
+    let maybe = ps
+        .iter()
+        .find(|p| {
+            p["detail"]
+                .as_str()
+                .is_some_and(|s| s.contains("no merge time"))
+        })
+        .expect("shipped? problem");
+    assert_eq!(maybe["ids"].as_array().map(Vec::len), Some(1), "{maybe}");
 }
 
 #[test]
