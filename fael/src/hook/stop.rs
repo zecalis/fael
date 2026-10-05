@@ -58,6 +58,7 @@ fn subagent_stop(e: &Event) -> Reply {
     if let (Some(c), Some(reply)) = (ctx(e), &e.reply)
         && adopted(&c)
     {
+        super::cited::note_reply(&c, reply);
         capture::collect(&c, reply);
     }
     Reply::default()
@@ -104,7 +105,10 @@ fn collect_reply(e: &Event, c: &super::protocol::Ctx) -> capture::Filed {
         t.is_file().then(|| capture::transcript_reply(t)).flatten()
     };
     match e.reply.clone().or_else(from_file) {
-        Some(reply) => capture::collect(c, &reply),
+        Some(reply) => {
+            super::cited::note_reply(c, &reply);
+            capture::collect(c, &reply)
+        }
         None => capture::Filed::default(),
     }
 }

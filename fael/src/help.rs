@@ -151,7 +151,8 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "fael stats [--json] [--rows] [--day] [--misses] [--since d]
     (tokens fael has put into context, per machine;
      --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on;
-     --rows = per-row pushes against open/closed/superseded, flagging noise?;
+     --rows = per-row pushes against open/closed/superseded, flagging noise?, plus
+     what followed (shown, cut by reason, cited, pulled, acted, retrieved after cut);
      --misses = the newest empty text searches (machine-local), each with the
      per-word counts — the data a vector index would be judged by;
      --day = today's panels per repo and summed (local day: FAEL_TZ_OFFSET

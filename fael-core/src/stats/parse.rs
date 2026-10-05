@@ -88,7 +88,9 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
         }
         // nothing reached any context: `value` reads it, no count does — nor
         // a pull's outcome line (`found`, say-gate chunk 3): the yield reads it
-        if v["event"] == "in-context" || v.get("found").is_some() {
+        // — nor an observed outcome (`outcome`, learn-loop chunk 2)
+        if matches!(v["event"].as_str(), Some("in-context" | "outcome")) || v.get("found").is_some()
+        {
             p.kept.push(v);
             continue;
         }

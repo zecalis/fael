@@ -6,7 +6,7 @@
 //!
 //! The session's seen list (per session + sub-agent + worktree, gone on
 //! compact) holds a row id per row said, `~<id>` per edit-hint ask (`~*`, the old generic clause, in older lists) and
-//! `@<id>` per in-context mark. The prompt's pointer list is its own file of
+//! `@<id>` per in-context mark and `^<id>` per cited id (`cited`). The prompt's pointer list is its own file of
 //! bare keys. No session = no file: every line is said, nothing remembered.
 
 use super::asks::{UsageMeta, hook_meta};

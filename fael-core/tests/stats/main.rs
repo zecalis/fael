@@ -54,6 +54,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "file_verdict",
             "incidents",
             "non_english_rows",
+            "outcomes_v",
             "retired",
             "rounds",
             "said",
@@ -159,12 +160,36 @@ fn json_rows_shape_with_flag() {
     let v = value_of(BASE_ROWS, true);
     let rows = v["rows"].as_array().unwrap();
     assert_eq!(rows.len(), 2, "{v}");
-    assert_eq!(keys(&rows[0]), ["id", "noise", "pushes", "status"], "{v}");
+    assert_eq!(
+        keys(&rows[0]),
+        ["id", "noise", "outcomes", "pushes", "status"],
+        "{v}"
+    );
     assert!(
         rows[0]["id"].is_string()
             && rows[0]["pushes"].is_u64()
             && rows[0]["status"].is_string()
             && rows[0]["noise"].is_boolean(),
+        "{v}"
+    );
+    // outcomes_v 1: the keys a reader of `tune` relies on
+    assert_eq!(v["outcomes_v"], 1, "{v}");
+    assert_eq!(
+        keys(&rows[0]["outcomes"]),
+        [
+            "acted",
+            "cited",
+            "cut",
+            "missed_push",
+            "pulled",
+            "retrieved_after_cut",
+            "shown"
+        ],
+        "{v}"
+    );
+    assert_eq!(
+        keys(&rows[0]["outcomes"]["pulled"]),
+        ["agent_initiated", "fael_induced"],
         "{v}"
     );
 }

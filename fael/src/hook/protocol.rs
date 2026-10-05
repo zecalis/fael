@@ -79,6 +79,9 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
         Ok(e) => e,
         Err(_) => return fail_open(event, None),
     };
+    if matches!(event, "read" | "edit" | "search") {
+        super::cited::note_tool(&e, &e.tool_input);
+    }
     let reply = match event {
         "stop" => stop(&e),
         "session-start" => session_start(&e),
