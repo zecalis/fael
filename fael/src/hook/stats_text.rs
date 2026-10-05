@@ -339,3 +339,28 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::outcomes_text;
+    use crate::core::stats::{Pulled, RowOutcomes};
+
+    #[test]
+    fn only_the_outcomes_a_row_has_are_printed() {
+        assert_eq!(outcomes_text(&RowOutcomes::default()), "");
+        let o = RowOutcomes {
+            shown: 2,
+            cut: [("cap".to_string(), 1), ("gate".to_string(), 3)].into(),
+            pulled: Pulled {
+                agent_initiated: 1,
+                fael_induced: 2,
+            },
+            missed_push: 1,
+            ..RowOutcomes::default()
+        };
+        assert_eq!(
+            outcomes_text(&o),
+            " · shown 2 · cut cap×1 gate×3 · pulled 1 (+2 fael-induced) · missed push 1"
+        );
+    }
+}

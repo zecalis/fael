@@ -198,3 +198,38 @@ fn a_pull_by_the_count_line_is_induced_and_a_pull_by_id_is_the_agents() {
         json!({"agent_initiated": 0, "fael_induced": 1})
     );
 }
+
+#[test]
+fn a_sub_agent_cites_from_its_own_reply_and_seen_list() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "decision",
+            "keep the parser pure",
+            "--files",
+            "src/a.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    // the sub-agent's own context was told the row
+    call(&d, "read", "s1", r#""agent":"a1","files":["src/a.rs"]"#);
+    let read = usage(&d).into_iter().find(|l| l["event"] == "read");
+    let id = read.expect("the sub-agent was told a row")["ids"][0]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // the session's own thread never was: its stop cites nothing
+    call(&d, "stop", "s1", &format!(r#""reply":"as {id} says""#));
+    assert!(cited(&d).is_empty(), "{:?}", usage(&d));
+    call(
+        &d,
+        "stop",
+        "s1",
+        &format!(r#""agent":"a1","reply":"as {id} says""#),
+    );
+    assert_eq!(cited(&d), [json!([id])]);
+}
