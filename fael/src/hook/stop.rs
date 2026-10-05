@@ -16,6 +16,7 @@ pub(crate) fn stop(e: &Event) -> Reply {
     }
     let mut r = decide(e);
     super::autosync::start(e);
+    super::stage::evaluate_for(e);
     r.notice = receipt(e);
     r
 }

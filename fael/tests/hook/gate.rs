@@ -114,7 +114,10 @@ fn tune_reports_the_experiment_and_says_insufficient_with_one_session() {
     assert!(ok, "{err}");
     assert!(out.contains("· candidate touch@1 against holdout"), "{out}");
     assert!(out.contains("verdict: insufficient_data"), "{out}");
-    assert!(out.contains("dup is not measured"), "{out}");
+    assert!(
+        out.contains("dup counts only rows filed after the writer"),
+        "{out}"
+    );
     let (_, json, _) = fael(&d, &["tune", "--json"], "");
     let t: Value = serde_json::from_str(&json).unwrap();
     assert_eq!(

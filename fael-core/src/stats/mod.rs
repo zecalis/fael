@@ -46,7 +46,7 @@ pub use said::{KINDS, KindYield};
 pub use tune::{
     ArmSize, Assoc, Coverage, DECAYS, DecayPoint, Group, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT,
     MIN_DAYS, PolicyResult, Rate, STRATUM_MIN_PUSHES, STRATUM_MIN_SESSIONS, Section, Sizes, Status,
-    Stratum, Tune, Used, Validation, tune, wilson,
+    Stratum, Tune, Used, Validation, Verdict, shadow_verdict, tune, wilson,
 };
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};

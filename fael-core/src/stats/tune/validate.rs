@@ -47,6 +47,9 @@ pub struct ArmSize {
     pub retrieved_sessions: Rate,
     /// The same, per row — the push-level diagnostic.
     pub retrieved_rows: usize,
+    /// Sessions whose new row self-heal linked to a row the session was never
+    /// shown (SPEC §B `dup`) — the writer is `hook::tally::note_filed`.
+    pub dup_sessions: Rate,
     pub triggers: BTreeMap<String, usize>,
     pub coverage: Coverage,
 }
@@ -70,6 +73,8 @@ pub struct Bars {
     pub retained: Retained,
     /// Sessions that went back for a cut row, percent: candidate, holdout.
     pub retrieved_pct: (Option<f64>, Option<f64>),
+    /// Sessions that filed a row duplicating one they were never shown, percent.
+    pub dup_pct: (Option<f64>, Option<f64>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -92,6 +97,15 @@ pub struct Verdict {
     pub result: &'static str,
     /// What missed, or what is missing; empty when validated.
     pub why: Vec<String>,
+}
+
+impl Verdict {
+    pub fn insufficient(why: &str) -> Verdict {
+        Verdict {
+            result: "insufficient_data",
+            why: vec![why.into()],
+        }
+    }
 }
 
 /// One repo's checkpoint: its own strata, its own pool, its own verdict.
@@ -177,13 +191,14 @@ fn bars(cs: &ArmSize, hs: &ArmSize, held: &[&Ob]) -> Bars {
         exposure_cut_pct: (per(hs) > 0.0).then(|| 100.0 * (1.0 - per(cs) / per(hs))),
         retained: result(TOUCH.name(), held, &replay::touch(held)).retained,
         retrieved_pct: (pct(&cs.retrieved_sessions), pct(&hs.retrieved_sessions)),
+        dup_pct: (pct(&cs.dup_sessions), pct(&hs.dup_sessions)),
     }
 }
 
 fn one<'a>(repo: String, r: RepoArms<'a>, held: impl Fn(&str) -> Vec<&'a Ob<'a>>) -> Validation {
     let mut strata = vec![];
     let (mut pc, mut ph) = (Acc::default(), Acc::default());
-    let (mut exposure, mut retrieved) = (vec![], (vec![], vec![]));
+    let (mut exposure, mut retrieved, mut dup) = (vec![], (vec![], vec![]), (vec![], vec![]));
     let mut retained = Retained::default();
     for (client, [c, h]) in &r.clients {
         let (cs, hs) = (c.size(), h.size());
@@ -205,6 +220,8 @@ fn one<'a>(repo: String, r: RepoArms<'a>, held: impl Fn(&str) -> Vec<&'a Ob<'a>>
             exposure.push((w, s.exposure_cut_pct));
             retrieved.0.push((w, s.retrieved_pct.0));
             retrieved.1.push((w, s.retrieved_pct.1));
+            dup.0.push((w, s.dup_pct.0));
+            dup.1.push((w, s.dup_pct.1));
             retained = Retained {
                 cited: sum(retained.cited, s.retained.cited),
                 pulled: sum(retained.pulled, s.retained.pulled),
@@ -244,10 +261,11 @@ fn one<'a>(repo: String, r: RepoArms<'a>, held: impl Fn(&str) -> Vec<&'a Ob<'a>>
             exposure_cut_pct: weighted(&exposure),
             retained,
             retrieved_pct,
+            dup_pct: (weighted(&dup.0), weighted(&dup.1)),
         },
         warning,
         notes: vec![
-            "dup is not measured (SPEC §B): the session-level safety gate rests on retrieved_after_cut alone".into(),
+            "dup counts only rows filed after the writer existed (SPEC §B): no `dup` line yet reads as 0%, not as proof".into(),
             "retained is the candidate replayed on holdout rows, an upper bound: a cut row may be said at a later push".into(),
         ],
         verdict: Verdict {
@@ -261,9 +279,13 @@ fn one<'a>(repo: String, r: RepoArms<'a>, held: impl Fn(&str) -> Vec<&'a Ob<'a>>
 
 mod decide;
 mod gather;
+mod shadow;
 use decide::decide;
 use gather::{Acc, RepoArms};
+pub use shadow::shadow_verdict;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_scope;
+#[cfg(test)]
+mod tests_shadow;

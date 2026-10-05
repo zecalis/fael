@@ -20,6 +20,7 @@ pub(super) struct Acc<'a> {
     pub(super) missed: usize,
     pub(super) retrieved: HashSet<(&'a str, &'a str)>,
     pub(super) retrieved_rows: usize,
+    pub(super) dup: HashSet<(&'a str, &'a str)>,
 }
 
 impl<'a> Acc<'a> {
@@ -33,6 +34,7 @@ impl<'a> Acc<'a> {
             missed_push: Rate::new(self.missed, self.gate_cuts),
             retrieved_sessions: Rate::new(self.retrieved.len(), coverage.sessions),
             retrieved_rows: self.retrieved_rows,
+            dup_sessions: Rate::new(self.dup.len(), coverage.sessions),
             triggers: self
                 .triggers
                 .iter()
@@ -49,6 +51,7 @@ impl<'a> Acc<'a> {
         self.missed += o.missed;
         self.retrieved.extend(&o.retrieved);
         self.retrieved_rows += o.retrieved_rows;
+        self.dup.extend(&o.dup);
         for (k, v) in &o.triggers {
             *self.triggers.entry(k).or_default() += v;
         }
@@ -115,6 +118,25 @@ pub(super) fn gather<'a>(
     }
     if by.is_empty() {
         return None;
+    }
+    // `dup` rides an outcome line of the session that filed the row
+    let dups = parsed
+        .kept
+        .iter()
+        .filter(|v| v["event"] == "outcome" && v["dup"].is_array());
+    for v in dups {
+        let (Some(repo), Some(session)) = (v["repo"].as_str(), v["session"].as_str()) else {
+            continue;
+        };
+        let (Some(&(client, arm)), Some(r)) = (
+            who.get(&(repo, session)),
+            memo.get(repo).and_then(|s| by.get_mut(s)),
+        ) else {
+            continue;
+        };
+        if let Some(c) = r.clients.get_mut(client) {
+            c[arm].dup.insert((repo, session));
+        }
     }
     for o in seen {
         let Some(&(client, arm)) = who.get(&(o.repo, o.session)) else {

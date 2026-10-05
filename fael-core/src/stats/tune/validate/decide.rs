@@ -4,7 +4,7 @@ use super::*;
 
 /// The primary bars one set of numbers misses; `who` prefixes each reason.
 /// `missed_push` is not here: it is judged on the repo pool only (SPEC §E).
-fn misses(b: &Bars, who: &str) -> Vec<String> {
+pub(super) fn misses(b: &Bars, who: &str) -> Vec<String> {
     let mut failed = vec![];
     match b.exposure_cut_pct {
         Some(e) if e >= MIN_EXPOSURE_CUT_PCT => {}
@@ -26,12 +26,20 @@ fn misses(b: &Bars, who: &str) -> Vec<String> {
             ));
         }
     }
-    if let (Some(cp), Some(hp)) = b.retrieved_pct
-        && cp > hp * (1.0 + MAX_RETRIEVED_OVER_PCT / 100.0)
-    {
-        failed.push(format!(
-            "{who}sessions going back for a cut row {cp:.1}% vs holdout {hp:.1}%, over +{MAX_RETRIEVED_OVER_PCT}%"
-        ));
+    for (what, (c, h)) in [
+        ("sessions going back for a cut row", b.retrieved_pct),
+        (
+            "sessions filing a row that duplicates one never shown",
+            b.dup_pct,
+        ),
+    ] {
+        if let (Some(cp), Some(hp)) = (c, h)
+            && cp > hp * (1.0 + MAX_RETRIEVED_OVER_PCT / 100.0)
+        {
+            failed.push(format!(
+                "{who}{what} {cp:.1}% vs holdout {hp:.1}%, over +{MAX_RETRIEVED_OVER_PCT}%"
+            ));
+        }
     }
     failed
 }

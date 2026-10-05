@@ -42,6 +42,7 @@ fn good() -> Validation {
                 acted: kept,
             },
             retrieved_pct: (Some(5.0), Some(5.0)),
+            dup_pct: (Some(2.0), Some(2.0)),
         },
         warning: None,
         notes: vec![],
@@ -87,6 +88,12 @@ fn every_frozen_bar_decides_the_verdict() {
     v.bars.retrieved_pct = (Some(6.1), Some(5.0)); // +22%
     assert!(is(&v, 2, "not_validated")[0].contains("going back"));
     v.bars.retrieved_pct = (Some(5.9), Some(5.0)); // +18%
+    is(&v, 2, "validated");
+    // sessions that filed a duplicate of an unseen row: same bar, same +20%
+    let mut v = good();
+    v.bars.dup_pct = (Some(2.5), Some(2.0)); // +25%
+    assert!(is(&v, 2, "not_validated")[0].contains("duplicates"));
+    v.bars.dup_pct = (Some(2.3), Some(2.0)); // +15%
     is(&v, 2, "validated");
     // an outcome with no event cannot fail (cited is rare, SPEC §5)
     let mut v = good();
@@ -220,4 +227,21 @@ fn worktrees_of_one_repo_are_one_stratum_and_scope_decides_what_pools() {
     assert_eq!(v.strata[0].candidate.sessions, 3);
     // without that scope the same lines are three repos
     assert_eq!(run(&text).validation.len(), 3);
+}
+
+#[test]
+fn a_dup_line_counts_once_per_session_in_its_arm() {
+    let dup = |session: &str| {
+        format!(
+            "{{\"ts\":\"2026-10-05T09:00:00.000Z\",\"repo\":\"/w/r\",\"session\":\"{session}\",\"event\":\"outcome\",\"ids\":[],\"dup\":[\"X\"]}}\n"
+        )
+    };
+    let mut text = usage("/w/r", "c1", "candidate", "hitlist", 0, 2)
+        + &usage("/w/r", "h1", "holdout", "hitlist", 1, 2)
+        + &usage("/w/r", "h2", "holdout", "hitlist", 2, 2);
+    // c1 twice, h1 once, a session no push carries an arm for: only the first two count
+    text += &(dup("c1") + &dup("c1") + &dup("h1") + &dup("nobody"));
+    let v = &run(&text).validation[0];
+    assert_eq!(v.strata[0].candidate.dup_sessions, Rate::new(1, 1));
+    assert_eq!(v.strata[0].holdout.dup_sessions, Rate::new(1, 2));
 }

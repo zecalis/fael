@@ -87,6 +87,13 @@ pub(crate) fn root(repo_root: &Path) -> Option<PathBuf> {
     Some(common.join("fael"))
 }
 
+/// The repo a usage line's `repo` (a worktree root) belongs to: the journal all
+/// worktrees of one clone share, else the folder itself — read off `.git`, no
+/// git spawn, and an unreadable path keeps its raw value (SPEC-fael-learn-loop §E).
+pub(crate) fn scope(repo: &str) -> String {
+    root(Path::new(repo)).map_or_else(|| repo.to_string(), |j| j.display().to_string())
+}
+
 /// The dir whose `log/` holds this clone's rows: the tree's `.fael/` when it
 /// has a row file, else the journal (`store = "local"`, or a fresh worktree
 /// with no `.fael/` of its own). `None` = fael was never adopted here.

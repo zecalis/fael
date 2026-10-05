@@ -98,6 +98,28 @@ fn note(client: &str, session: &str, agent: &str, root: &Path, text: &str) {
     append_row(row);
 }
 
+/// The `dup` outcome (SPEC §B): a row was filed over `old`, and `old` was never
+/// said to this session (not in its seen list — cut, or never pushed). Self-heal
+/// proved the link (a supersede), so this is a fact, not a guess; a link the
+/// session's own earlier row or a shown row explains is no dup. Empty session =
+/// no-op. Call before the new row joins the seen list.
+pub(crate) fn note_dup(session: &str, root: &Path, old: &str) {
+    if session.is_empty() {
+        return;
+    }
+    let seen = std::fs::read_to_string(seen_path(session, "", root)).unwrap_or_default();
+    if seen.lines().any(|l| l == old) {
+        return;
+    }
+    let meta = UsageMeta {
+        session: Some(session),
+        ..UsageMeta::default()
+    };
+    let mut row = usage_row("cli", "outcome", root, "", &[], &meta);
+    row["dup"] = vec![old].into();
+    append_row(row);
+}
+
 /// Row ids in the seen list the text names, that no `^<id>` mark covers yet:
 /// a full id cites itself; a short prefix cites only when no other seen id
 /// shares it — batch-filed siblings share the timestamp prefix, so a shared

@@ -38,6 +38,7 @@ mod say;
 mod say_contract;
 mod search;
 mod session;
+mod stage;
 mod state;
 mod stats_text;
 mod stop;
@@ -56,5 +57,6 @@ pub(crate) use usage::{aggregate, load, local_tz_offset_min, record_found, stats
 pub(crate) use changed::PUSH_MAX_BYTES;
 pub(crate) use push::is_anchor;
 pub(crate) use session::{deliberate, ignore_source};
+pub(crate) use stage::of_scope as stage_of_scope;
 pub(crate) use state::{Edit, note_seen, now_rfc3339, session_edits, state_dir};
 pub(crate) use tally::{note_closed, note_filed};

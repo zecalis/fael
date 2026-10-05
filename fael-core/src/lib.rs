@@ -45,16 +45,17 @@ pub use log::{
     purge_row, read, read_imported, restore_row,
 };
 pub use query::{
-    ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, Abbrev, BASELINE, Background, Bucket, CUT_BUDGET, CUT_CAP,
-    CUT_GATE, CUT_HUB_PEEK, Cut, EXPAND_MAX, Filter, Focus, Hidden, KeyUse, MdRef, PUSH_BACKGROUND,
-    PUSH_HUB_PEEK, PUSH_HUB_ROWS, PolicyDef, PushPolicy, Ref, Selection, TOUCH, Urgent,
-    UrgentChange, abbrev, arm_of, backtick_paths, brief, bucket, closed, cmp_rows, due, est_tokens,
-    expands, fat_reasons, find, fresh_ts, freshness, glob, gone, gone_files, groups, id_tokens,
-    is_date, json_note, key_hints, keys, kickoff, levenshtein, on_work, page, phantom_md_refs,
-    phantom_refs, push, push_tiered, query, ranked, ref_state, render, render_full,
-    render_full_page, render_groups, render_page, resolve, resolve_row, resolve_urgent, restored,
-    reverted, row_due, row_waiting, select, stale_refs, successors, superseded, today, touch_drops,
-    waiting, waiting_line, warnings, why_empty, with_due,
+    ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, AUTO, Abbrev, BASELINE, Background, Bucket, CUT_BUDGET,
+    CUT_CAP, CUT_GATE, CUT_HUB_PEEK, Cut, EXPAND_MAX, Filter, Focus, Hidden, KeyUse, MdRef,
+    PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, PolicyDef, PushPolicy, Ref, Selection, Stage,
+    TOUCH, Urgent, UrgentChange, abbrev, arm_for, arm_in, arm_of, backtick_paths, brief, bucket,
+    closed, cmp_rows, due, est_tokens, expands, fat_reasons, find, fresh_ts, freshness, glob, gone,
+    gone_files, groups, id_tokens, is_date, json_note, key_hints, keys, kickoff, levenshtein,
+    next_stage, on_work, page, phantom_md_refs, phantom_refs, push, push_tiered, query, ranked,
+    ref_state, render, render_full, render_full_page, render_groups, render_page, resolve,
+    resolve_row, resolve_urgent, restored, reverted, row_due, row_waiting, select, stale_refs,
+    successors, superseded, today, touch_drops, waiting, waiting_line, warnings, why_empty,
+    with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{

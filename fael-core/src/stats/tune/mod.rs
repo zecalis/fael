@@ -24,7 +24,7 @@ pub use assoc::{Assoc, Group};
 pub use cover::{Coverage, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT, MIN_DAYS};
 pub use rate::{Rate, wilson};
 pub use replay::Used;
-pub use validate::{ArmSize, Status, Validation};
+pub use validate::{ArmSize, Status, Validation, Verdict, shadow_verdict};
 
 /// How many earlier sessions per history key count (`None` = all of them).
 pub const DECAYS: [Option<usize>; 5] = [None, Some(20), Some(50), Some(100), Some(200)];
