@@ -4,7 +4,6 @@
 
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
-use super::counts::counts;
 use super::decision::{self, Gate};
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
@@ -40,7 +39,7 @@ fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
 }
 
 /// Render the selected rows with the token budget — the hard cap after the
-/// row cap — dropping render's budget cut line for the count lines above
+/// row cap — dropping render's budget cut line, the header names the cut
 /// (render itself is untouched, so find keeps its own cut line). Returns the
 /// tagged rows, how many rows were actually said (usage counts only those),
 /// and render's `bodies:` line, said on its own.
@@ -192,11 +191,13 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     };
     let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     let mut sel = core::select(tiered, &focus, &policy);
-    // a hub's peek rides its count line, once per file per session — each
-    // re-read would otherwise drip PUSH_HUB_PEEK more rows
-    let count = format!("{}|file", files.join(","));
-    if !out.fresh(&Kind::Count { keys: vec![count] }) {
+    // a hub peeks once per file per session — each re-read would otherwise
+    // drip PUSH_HUB_PEEK more rows
+    let peek = format!("~peek:{}", files.join(","));
+    if out.has(&peek) {
         sel.drop_peek();
+    } else if sel.peek > 0 {
+        out.spend(peek);
     }
     let notes = stashed(&c, &files);
     let has_notes = notes.is_some();
@@ -218,7 +219,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let hint = edit
         .then(|| edit_hint(&ask, &t0, said, &mut blobs))
         .flatten();
-    let mut lines = row_lines(&out, &sel, &files, (body, n, bodies), &shown, policy.budget);
+    let mut lines = row_lines(&sel, &files, (body, n, bodies), &shown, policy.budget);
     lines.extend(hint.map(|h| Line {
         kind: Kind::Ask { ids: h.spent },
         text: format!("{}\n", h.text),
@@ -258,65 +259,36 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     r
 }
 
-/// The lines of the rows under their header, then the `bodies:` line and the count
-/// lines — each said once per session (01M42F5B); `told` drops a count line
-/// this session already heard. Only what fit the budget
-/// was said; the cut rows may push on a later read. A hub file says its
-/// PUSH_HUB_PEEK rows and count line once; with no Now row left it says
-/// nothing once this session was told.
+/// The lines of the rows under their header, then the `bodies:` line. Only
+/// what fit the budget was said; the cut rows may push on a later read, and
+/// the header names the cut. No row said, nothing said: the `… +N more —
+/// fael find` count lines were dropped, 7 of 336 pulled (PLAN-fael-say-gate
+/// chunk 4).
 fn row_lines(
-    told: &Outbox,
     sel: &core::Selection,
     files: &[String],
     (body, n, bodies): (String, usize, Option<String>),
     shown: &[String],
     budget: usize,
 ) -> Vec<Line> {
-    let mut out = vec![];
-    // the cut goes on top too: the count lines sit under the rows, past where a reader stops
+    if n == 0 {
+        return vec![];
+    }
     let more = match sel.hidden(n).total() {
         0 => String::new(),
         h => format!(" ({n} of {})", n + h),
     };
     let header = format!("fael mem for {}{more}:\n", files.join(", "));
-    // with nothing selected or omitted there is no cut to name; a line this
-    // session was told is left out, a new kind of cut is still said
-    let lines: Vec<(String, String)> = if sel.shown.is_empty() && sel.omitted == 0 {
-        vec![]
-    } else {
-        counts(sel, n, files)
-    }
-    .into_iter()
-    .map(|(what, l)| (format!("{}|{what}", files.join(",")), l))
-    .filter(|(k, _)| {
-        told.fresh(&Kind::Count {
-            keys: vec![k.clone()],
-        })
-    })
-    .collect();
-    let mut count = Line {
-        kind: Kind::Count {
-            keys: lines.iter().map(|(k, _)| k.clone()).collect(),
+    let usage = memory_line(&body, budget).unwrap_or_default();
+    let mut out = vec![Line {
+        kind: Kind::Row {
+            ids: shown.to_vec(),
         },
-        text: lines.iter().map(|(_, l)| format!("{l}\n")).collect(),
-    };
-    if n > 0 {
-        let usage = memory_line(&body, budget).unwrap_or_default();
-        out.push(Line {
-            kind: Kind::Row {
-                ids: shown.to_vec(),
-            },
-            text: format!("{header}{body}{usage}"),
-        });
-    } else if !count.text.is_empty() {
-        count.text = format!("{header}{}", count.text);
-    }
-    if let Some(text) = bodies {
-        out.push(Line {
-            kind: Kind::Bodies,
-            text,
-        });
-    }
-    out.push(count);
+        text: format!("{header}{body}{usage}"),
+    }];
+    out.extend(bodies.map(|text| Line {
+        kind: Kind::Bodies,
+        text,
+    }));
     out
 }

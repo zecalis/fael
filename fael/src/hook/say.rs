@@ -81,10 +81,6 @@ pub(crate) enum Kind {
     Ask { ids: Vec<String> },
     /// The prompt hint: open keys the prompt names.
     Pointer { keys: Vec<String> },
-    /// A push's count lines (`… +N more — fael find …`): each once per file
-    /// set and what it counts (this file, a dir, a key), so a new kind of cut
-    /// on a later push is still said.
-    Count { keys: Vec<String> },
     /// `bodies: fael find <id> …` under a push whose rows have bodies.
     Bodies,
     /// A line fael raises on its own: a stashed risk or capture reject, a
@@ -118,7 +114,6 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Row { .. } => (Once::Key, None),
         Kind::Ask { .. } => (Once::Key, Some("fael close")),
         Kind::Pointer { .. } => (Once::Key, Some("fael find --key")),
-        Kind::Count { .. } => (Once::Key, Some("fael find --")),
         Kind::Bodies => (Once::Key, Some("fael find <id>")),
         Kind::Brief | Kind::Notice => (Once::Event, None),
     };
@@ -132,7 +127,6 @@ impl Kind {
             Kind::Row { ids } => ids.clone(),
             Kind::Ask { ids } => ids.iter().map(|i| format!("~{i}")).collect(),
             Kind::Pointer { keys } => keys.clone(),
-            Kind::Count { keys } => keys.iter().map(|k| format!("~count:{k}")).collect(),
             Kind::Bodies => vec!["~bodies".into()],
             Kind::Brief | Kind::Notice => vec![],
         }
@@ -156,8 +150,6 @@ impl Kind {
             Kind::Brief => ("brief", vec![]),
             Kind::Ask { ids } => ("ask", ids.clone()),
             Kind::Pointer { keys } => ("pointer", keys.clone()),
-            // `<files>|file`, `|dir:<dirs>`, `|key:<key>`, `|keys` — one per line
-            Kind::Count { keys } => ("count", keys.clone()),
             Kind::Bodies => ("bodies", vec![]),
             Kind::Notice => ("notice", vec![]),
         };
@@ -270,8 +262,7 @@ impl Outbox {
     }
 
     /// Say `lines` in order within `budget` tokens. What is said is charged,
-    /// and rows, bodies and counts are never cut (a count is the pointer to
-    /// what the budget cut): over the budget the stashed notice goes first,
+    /// and rows and bodies are never cut: over the budget the stashed notice goes first,
     /// then the edit hint, each whole. A cut line keeps its keys, so a later
     /// push may say it. True when a notice was said, so the caller takes it
     /// off disk.
@@ -293,6 +284,12 @@ impl Outbox {
             self.say(l);
         }
         notice
+    }
+
+    /// Spend `key` with no line said: a once-mark nothing reads aloud (the
+    /// hub peek, once per file per session).
+    pub(crate) fn spend(&mut self, key: String) {
+        self.spent.push(key);
     }
 
     /// Spend the keys and build the reply — no context when nothing was said.

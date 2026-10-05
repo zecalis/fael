@@ -87,7 +87,7 @@ pub fn on_work<'a>(focus: &Focus, rows: &[&'a Row], prefixes: &[String]) -> Vec<
 }
 
 /// Where one gathered row lands: Now shows first (budget still caps), File
-/// fills the row cap, Background never renders — one count line instead.
+/// fills the row cap, Background never renders — the push header counts it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bucket {
     Now,
@@ -99,7 +99,7 @@ pub enum Bucket {
 /// can become config later without touching callers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Background {
-    CountLine,
+    Counted,
     // Hidden, Rows — future config values
 }
 
@@ -113,15 +113,15 @@ pub struct PushPolicy {
     pub background: Background,
 }
 
-/// D2 — background rows never render: one count line with the exact next call.
-pub const PUSH_BACKGROUND: Background = Background::CountLine;
+/// D2 — background rows never render: the push header counts them.
+pub const PUSH_BACKGROUND: Background = Background::Counted;
 
 /// A hub file (a spec, a plan, PRODUCT.md) is cited by more open rows than
 /// the cap holds, and off the Focus those File rows rank by freshness only —
 /// any `push_rows` of them is a guess (issue push:hub-files: 72% of vela's
 /// read-push rows touched such a file). Past this many File rows only
-/// `PUSH_HUB_PEEK` of them render beside the Now rows, the rest is the
-/// `fael find --files` count line. `push_rows` itself stays (decision
+/// `PUSH_HUB_PEEK` of them render beside the Now rows, the rest only counted
+/// in the header. `push_rows` itself stays (decision
 /// push:rows). Counted per push, so a Grep hit list whose files add up past
 /// it is cut the same way.
 pub const PUSH_HUB_ROWS: usize = 8;
@@ -304,7 +304,7 @@ pub fn select<'a>(
             Bucket::Now => now.push((r, t)),
             Bucket::File => file.push((r, t)),
             Bucket::Background => match policy.background {
-                Background::CountLine => background_dirs += 1,
+                Background::Counted => background_dirs += 1,
             },
         }
     }
