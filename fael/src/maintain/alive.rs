@@ -1,7 +1,8 @@
 //! Files alive on a row's own branch. A row filed on a branch that has not
 //! merged names files the current checkout does not have yet — the work is
 //! alive there, not gone, so `[Gone]`/`[PartGone]` must not flag it. One
-//! `git ls-tree` per distinct branch, only for rows with a missing file.
+//! `git ls-tree` per row with a missing file, over just those paths — never the
+//! whole tree; each (branch, path) is asked once.
 //! ponytail: a merged branch still sitting in the clone keeps its files
 //! "alive" after main deletes them — `[Merged]` already says to delete it.
 
@@ -13,7 +14,8 @@ use std::path::Path;
 pub(super) struct BranchFiles<'a> {
     root: &'a Path,
     head: Option<String>,
-    trees: RefCell<HashMap<String, Option<HashSet<String>>>>,
+    /// `(branch, path)` → alive on that branch's tip; each path is asked once.
+    alive: RefCell<HashMap<(String, String), bool>>,
 }
 
 impl<'a> BranchFiles<'a> {
@@ -21,7 +23,7 @@ impl<'a> BranchFiles<'a> {
         BranchFiles {
             root,
             head: crate::git(root, &["rev-parse", "--abbrev-ref", "HEAD"]),
-            trees: RefCell::new(HashMap::new()),
+            alive: RefCell::new(HashMap::new()),
         }
     }
 
@@ -32,16 +34,33 @@ impl<'a> BranchFiles<'a> {
         let Some(b) = row.branch().filter(|b| Some(*b) != self.head.as_deref()) else {
             return gone;
         };
-        let mut trees = self.trees.borrow_mut();
-        let tree = trees.entry(b.to_string()).or_insert_with(|| {
-            [b.to_string(), format!("origin/{b}")].iter().find_map(|r| {
-                crate::git(self.root, &["ls-tree", "-r", "--name-only", r])
-                    .map(|s| s.lines().map(String::from).collect())
-            })
-        });
-        match tree {
-            Some(t) => gone.into_iter().filter(|f| !t.contains(*f)).collect(),
-            None => gone,
+        let mut alive = self.alive.borrow_mut();
+        let key = |f: &str| (b.to_string(), f.to_string());
+        let ask: Vec<&str> = gone
+            .iter()
+            .copied()
+            .filter(|f| !alive.contains_key(&key(f)))
+            .collect();
+        if !ask.is_empty() {
+            let found = self.on_tip(b, &ask);
+            for f in ask {
+                alive.insert(key(f), found.contains(f));
+            }
         }
+        gone.into_iter().filter(|f| !alive[&key(f)]).collect()
+    }
+
+    /// Which of `files` exist on `b`'s tip: one `ls-tree` over just those
+    /// paths, never the whole tree.
+    fn on_tip(&self, b: &str, files: &[&str]) -> HashSet<String> {
+        [b.to_string(), format!("origin/{b}")]
+            .iter()
+            .find_map(|r| {
+                let mut args = vec!["ls-tree", "-r", "--name-only", r.as_str(), "--"];
+                args.extend(files);
+                crate::git(self.root, &args)
+            })
+            .map(|s| s.lines().map(String::from).collect())
+            .unwrap_or_default()
     }
 }
