@@ -29,17 +29,20 @@ fn size(sessions: usize, pushes: usize, cuts: usize) -> ArmSize {
 fn good() -> Validation {
     let kept = Rate::new(90, 100);
     Validation {
+        repo: "/w/r".into(),
         candidate: "touch@1".into(),
         strata: vec![],
         candidate_all: size(40, 400, 250),
         holdout_all: size(40, 400, 0),
-        exposure_cut_pct: Some(50.0),
-        retained: Retained {
-            cited: kept,
-            pulled: kept,
-            acted: kept,
+        bars: Bars {
+            exposure_cut_pct: Some(50.0),
+            retained: Retained {
+                cited: kept,
+                pulled: kept,
+                acted: kept,
+            },
+            retrieved_pct: (Some(5.0), Some(5.0)),
         },
-        retrieved_pct: (Some(5.0), Some(5.0)),
         warning: None,
         notes: vec![],
         verdict: Verdict {
@@ -57,9 +60,10 @@ fn is(v: &Validation, used: usize, want: &str) -> Vec<String> {
 
 #[test]
 fn every_frozen_bar_decides_the_verdict() {
-    is(&good(), 2, "validated");
+    // one eligible stratum is enough: a single-client repo can validate
+    is(&good(), 1, "validated");
     // too little data is never a fail
-    is(&good(), 1, "insufficient_data");
+    is(&good(), 0, "insufficient_data");
     let mut v = good();
     v.candidate_all.gate_cuts = 199;
     is(&v, 2, "insufficient_data");
@@ -71,23 +75,56 @@ fn every_frozen_bar_decides_the_verdict() {
     is(&v, 2, "insufficient_data");
     // enough data, one bar missed: not_validated, and it names the bar
     let mut v = good();
-    v.exposure_cut_pct = Some(39.9);
+    v.bars.exposure_cut_pct = Some(39.9);
     assert!(is(&v, 2, "not_validated")[0].contains("exposure"));
     let mut v = good();
-    v.retained.acted = Rate::new(84, 100);
+    v.bars.retained.acted = Rate::new(84, 100);
     assert!(is(&v, 2, "not_validated")[0].contains("acted"));
     let mut v = good();
     v.candidate_all.missed_push = Rate::new(2, 250); // upper bound well over 2%
     assert!(is(&v, 2, "not_validated")[0].contains("missed_push"));
     let mut v = good();
-    v.retrieved_pct = (Some(6.1), Some(5.0)); // +22%
+    v.bars.retrieved_pct = (Some(6.1), Some(5.0)); // +22%
     assert!(is(&v, 2, "not_validated")[0].contains("going back"));
-    v.retrieved_pct = (Some(5.9), Some(5.0)); // +18%
+    v.bars.retrieved_pct = (Some(5.9), Some(5.0)); // +18%
     is(&v, 2, "validated");
     // an outcome with no event cannot fail (cited is rare, SPEC §5)
     let mut v = good();
-    v.retained.cited = Rate::new(0, 0);
+    v.bars.retained.cited = Rate::new(0, 0);
     is(&v, 2, "validated");
+}
+
+/// A used client stratum whose own bars are `b`.
+fn stratum(client: &str, b: Bars) -> StratumArms {
+    StratumArms {
+        repo: "/w/r".into(),
+        client: client.into(),
+        status: Status::Used,
+        max_trigger_gap_pp: 0.0,
+        candidate: size(20, 200, 125),
+        holdout: size(20, 200, 0),
+        bars: Some(b),
+    }
+}
+
+#[test]
+fn a_client_that_fails_fails_the_repo_though_the_pool_passes() {
+    let mut v = good();
+    let ok = v.bars.clone();
+    let bad = Bars {
+        exposure_cut_pct: Some(10.0),
+        ..ok.clone()
+    };
+    v.strata = vec![stratum("claude", ok), stratum("opencode", bad)];
+    let why = is(&v, 2, "not_validated");
+    assert!(why[0].starts_with("client opencode: exposure"), "{why:?}");
+    // one stratum is the pool: a miss is said once, not twice
+    v.strata.truncate(1);
+    v.strata[0].bars = Some(Bars {
+        exposure_cut_pct: Some(10.0),
+        ..v.bars.clone()
+    });
+    is(&v, 1, "validated");
 }
 
 fn usage(repo: &str, session: &str, arm: &str, trigger: &str, min: u32, n: usize) -> String {
@@ -101,6 +138,10 @@ fn usage(repo: &str, session: &str, arm: &str, trigger: &str, min: u32, n: usize
 }
 
 fn run(text: &str) -> Tune {
+    run_in(text, &|r| r.to_string())
+}
+
+fn run_in(text: &str, scope: &dyn Fn(&str) -> String) -> Tune {
     let p = parse(
         text,
         Path::new("/w/state/usage.jsonl"),
@@ -110,16 +151,16 @@ fn run(text: &str) -> Tune {
         rows: Vec::<Row>::new(),
         ..Log::default()
     };
-    tune(&p, &HashMap::from([("/w/r".to_string(), log)]), 0)
+    tune(&p, &HashMap::from([("/w/r".to_string(), log)]), 0, scope)
 }
 
 #[test]
 fn no_arm_means_no_validation_and_candidate_lines_stay_out_of_the_replay() {
     let t = run(&usage("/w/r", "s1", "all", "hitlist", 0, 1));
-    assert!(t.validation.is_none());
+    assert!(t.validation.is_empty());
     let t = run(&usage("/w/r", "s1", "candidate", "hitlist", 0, 1));
     assert_eq!(t.all.sizes.search_pushes, 0, "a gated arm is not replayed");
-    assert!(t.validation.is_some());
+    assert_eq!(t.validation.len(), 1);
 }
 
 #[test]
@@ -148,12 +189,35 @@ fn a_stratum_with_unlike_trigger_mixes_is_unbalanced_and_a_small_one_insufficien
         }
     }
     text += &usage("/w/r2", "tiny", "holdout", "hitlist", 0, 1);
-    let v = run(&text).validation.unwrap();
-    let s = |repo: &str| v.strata.iter().find(|s| s.repo == repo).unwrap();
-    assert_eq!(s("/w/r").status, Status::Unbalanced);
-    assert!(s("/w/r").max_trigger_gap_pp > 90.0);
-    assert_eq!(s("/w/r2").status, Status::Insufficient);
+    let t = run(&text);
+    // two repos, two verdicts: /w/r2 borrows nothing from /w/r
+    assert_eq!(t.validation.len(), 2);
+    let of = |repo: &str| t.validation.iter().find(|v| v.repo == repo).unwrap();
+    let (v, w) = (of("/w/r"), of("/w/r2"));
+    assert_eq!(v.strata[0].status, Status::Unbalanced);
+    assert!(v.strata[0].max_trigger_gap_pp > 90.0);
+    assert_eq!(w.strata[0].status, Status::Insufficient);
+    assert_eq!(w.strata.len(), 1, "{w:?}");
     assert_eq!(v.verdict.result, "insufficient_data", "{v:?}");
     assert_eq!(v.candidate, "touch@1");
     assert_eq!(v.candidate_all.sessions, 0, "only usable strata are pooled");
+}
+
+#[test]
+fn worktrees_of_one_repo_are_one_stratum_and_scope_decides_what_pools() {
+    let mut text = String::new();
+    for wt in ["/w/r-a", "/w/r-b", "/w/r-c"] {
+        text += &usage(wt, &format!("c{wt}"), "candidate", "hitlist", 0, 2);
+        text += &usage(wt, &format!("h{wt}"), "holdout", "hitlist", 1, 2);
+    }
+    let t = run_in(&text, &|r| {
+        r.rsplit_once('-').map_or(r, |(a, _)| a).to_string()
+    });
+    assert_eq!(t.validation.len(), 1);
+    let v = &t.validation[0];
+    assert_eq!(v.repo, "/w/r");
+    assert_eq!(v.strata.len(), 1, "one client in one repo = one stratum");
+    assert_eq!(v.strata[0].candidate.sessions, 3);
+    // without that scope the same lines are three repos
+    assert_eq!(run(&text).validation.len(), 3);
 }

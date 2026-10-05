@@ -12,13 +12,21 @@ use crate::{hook, report};
 pub(crate) fn tune(a: &Args) -> Result<(), String> {
     a.only("tune", &["json", "since"])?;
     let u = hook::load(report::since(a)?);
-    let t = crate::core::stats::tune(&u.parsed, &u.logs, hook::local_tz_offset_min());
+    let t = crate::core::stats::tune(&u.parsed, &u.logs, hook::local_tz_offset_min(), &scope);
     if a.has("json") {
         println!("{}", serde_json::to_string(&t).map_err(|e| e.to_string())?);
     } else {
         print!("{}", text(&t));
     }
     Ok(())
+}
+
+/// The repo a usage line's `repo` (a worktree root) belongs to: the journal all
+/// worktrees of one clone share, else the folder itself — read off `.git`, no
+/// git spawn, and an unreadable path keeps its raw value (SPEC §E).
+fn scope(repo: &str) -> String {
+    crate::journal::root(std::path::Path::new(repo))
+        .map_or_else(|| repo.to_string(), |j| j.display().to_string())
 }
 
 /// `1.9%` under ten, `51%` above — the interval's ends are rounded alike.
@@ -171,8 +179,8 @@ fn validation(v: &Validation) -> String {
         )
     };
     let mut out = format!(
-        "validation · candidate {} against holdout baseline@1 (session-level arms)\n",
-        v.candidate
+        "validation · repo {} · candidate {} against holdout baseline@1 (session-level arms)\n",
+        v.repo, v.candidate
     );
     for s in &v.strata {
         let status = match s.status {
@@ -192,20 +200,20 @@ fn validation(v: &Validation) -> String {
     let (c, h) = (&v.candidate_all, &v.holdout_all);
     let p = |o: Option<f64>| o.map_or("—".to_string(), |x| format!("{x:.1}%"));
     out.push_str(&format!(
-        "usable strata pooled:\n  candidate {} · gate cuts {}\n  holdout   {}\n",
+        "this repo's usable strata pooled:\n  candidate {} · gate cuts {}\n  holdout   {}\n",
         arm(c),
         c.gate_cuts,
         arm(h)
     ));
     out.push_str(&format!(
         "  exposure down {} (rows said per session)\n  retained (candidate replayed on holdout rows) cited {} · pulled {} · acted {}\n  missed_push {}\n  sessions that went back for a cut row: candidate {} · holdout {}\n",
-        p(v.exposure_cut_pct),
-        rate(&v.retained.cited),
-        rate(&v.retained.pulled),
-        rate(&v.retained.acted),
+        p(v.bars.exposure_cut_pct),
+        rate(&v.bars.retained.cited),
+        rate(&v.bars.retained.pulled),
+        rate(&v.bars.retained.acted),
         rate(&c.missed_push),
-        p(v.retrieved_pct.0),
-        p(v.retrieved_pct.1),
+        p(v.bars.retrieved_pct.0),
+        p(v.bars.retrieved_pct.1),
     ));
     out.push_str(&coverage(&c.coverage).replace("coverage:", "  candidate coverage:"));
     out.push_str(&coverage(&h.coverage).replace("coverage:", "  holdout coverage:"));
@@ -262,12 +270,33 @@ mod tests {
     use super::*;
     use crate::core::stats::Rate;
 
+    #[test]
+    fn worktrees_of_one_clone_share_a_scope_and_a_plain_folder_is_its_own() {
+        let t = std::env::temp_dir().join(format!("fael-scope-{}", std::process::id()));
+        let (main, wt, plain) = (t.join("main"), t.join("wt"), t.join("plain"));
+        std::fs::create_dir_all(main.join(".git/worktrees/wt")).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::create_dir_all(&plain).unwrap();
+        let g = main.join(".git/worktrees/wt");
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", g.display())).unwrap();
+        let (a, b) = (scope(main.to_str().unwrap()), scope(wt.to_str().unwrap()));
+        assert_eq!(a, b, "one clone, one repo");
+        assert_ne!(a, scope(plain.to_str().unwrap()));
+        assert_eq!(scope(plain.to_str().unwrap()), plain.to_str().unwrap());
+        assert_eq!(
+            scope("/no/such/dir"),
+            "/no/such/dir",
+            "unreadable keeps the raw value"
+        );
+        std::fs::remove_dir_all(t).unwrap();
+    }
+
     fn tune_of(strata: usize) -> Tune {
         Tune {
             outcomes_v: 1,
             days: None,
             all: Section::default(),
-            validation: None,
+            validation: vec![],
             strata: (0..strata)
                 .map(|i| Stratum {
                     repo: format!("/r{i}"),

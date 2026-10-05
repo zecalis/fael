@@ -57,19 +57,29 @@ impl<'a> Acc<'a> {
 
 /// [candidate, holdout]
 pub(super) type Pair<'a> = [Acc<'a>; 2];
-/// By (repo, client) stratum, and the candidate policies the pushes named.
-pub(super) type Gathered<'a> = (BTreeMap<(&'a str, &'a str), Pair<'a>>, BTreeSet<&'a str>);
 
-/// Every search push and observation of an arm, by (repo, client) stratum, and
-/// the candidate policies the pushes named. `None` = no push carries an arm.
+/// One repo scope: its client strata and the candidate policies its pushes named.
+#[derive(Default)]
+pub(super) struct RepoArms<'a> {
+    pub(super) clients: BTreeMap<&'a str, Pair<'a>>,
+    pub(super) policies: BTreeSet<&'a str>,
+}
+
+/// By repo scope. Nothing here is ever pooled across two scopes.
+pub(super) type Gathered<'a> = BTreeMap<String, RepoArms<'a>>;
+
+/// Every search push and observation of an arm, by repo scope and client
+/// stratum. `scope` maps the usage line's `repo` (a worktree root) to the
+/// repo it belongs to. `None` = no push carries an arm.
 pub(super) fn gather<'a>(
     parsed: &'a Parsed,
     seen: &[Observation<'a>],
     tz_min: i32,
+    scope: &dyn Fn(&str) -> String,
 ) -> Option<Gathered<'a>> {
-    let mut by: BTreeMap<(&str, &str), Pair> = BTreeMap::new();
+    let mut by = Gathered::new();
+    let mut memo: HashMap<&str, String> = HashMap::new();
     let mut who: HashMap<(&str, &str), (&str, usize)> = HashMap::new();
-    let mut policies = BTreeSet::new();
     for v in parsed.kept.iter().filter(|v| v["event"] == "search") {
         let arm = match v["arm"].as_str() {
             Some(ARM_CANDIDATE) => 0,
@@ -84,11 +94,14 @@ pub(super) fn gather<'a>(
             continue;
         };
         let client = v["client"].as_str().unwrap_or("?");
+        let r = by
+            .entry(memo.entry(repo).or_insert_with(|| scope(repo)).clone())
+            .or_default();
         if arm == 0 {
-            policies.extend(v["policy"].as_str());
+            r.policies.extend(v["policy"].as_str());
         }
         who.insert((repo, session), (client, arm));
-        let a = &mut by.entry((repo, client)).or_default()[arm];
+        let a = &mut r.clients.entry(client).or_default()[arm];
         a.pushes.push(Push {
             repo,
             client,
@@ -107,7 +120,10 @@ pub(super) fn gather<'a>(
         let Some(&(client, arm)) = who.get(&(o.repo, o.session)) else {
             continue;
         };
-        let a = &mut by.get_mut(&(o.repo, client))?[arm];
+        let Some(r) = memo.get(o.repo).and_then(|s| by.get_mut(s)) else {
+            continue;
+        };
+        let a = &mut r.clients.get_mut(client)?[arm];
         if o.cut.contains(crate::query::CUT_GATE) {
             a.gate_cuts += 1;
             a.missed += o.missed_push as usize;
@@ -118,5 +134,5 @@ pub(super) fn gather<'a>(
             a.retrieved_rows += 1;
         }
     }
-    Some((by, policies))
+    Some(by)
 }

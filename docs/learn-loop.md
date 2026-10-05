@@ -54,7 +54,9 @@ push_holdout = 20         # percent of sessions kept on baseline@1 (default 20)
 ## Reading `fael tune`
 
 `fael tune [--json] [--since d]` prints the replay tables, then, once any push carries an
-`arm`, a **validation** block:
+`arm`, one **validation** block **per repo** (the repo is the journal all worktrees of a clone
+share, else the folder itself — read off `.git`, no git spawn; data is never pooled across
+repos, so one repo's verdict borrows nothing from another's):
 
 - arm sizes per stratum (repo × client), with the trigger-mix guard: a gap above 10 points
   marks the stratum `unbalanced` and it is not compared; a stratum under 10 sessions or
@@ -65,13 +67,15 @@ push_holdout = 20         # percent of sessions kept on baseline@1 (default 20)
 - `missed_push` over gate cuts, with its 95% upper bound
 - sessions that went back for a cut row, candidate against holdout, and a warning when the
   session view and the per-push view disagree
-- one verdict
+- one verdict per repo: it needs ≥ 1 eligible stratum, and every eligible client stratum must
+  clear exposure / retained / going-back on its own (a passing pool never hides a failing
+  client); `missed_push` is judged on the repo pool only
 
 | Verdict | Meaning |
 |---|---|
 | `validated` | enough data, balanced, and every bar met: exposure down ≥ 40%, each outcome retained ≥ 85%, `missed_push` upper bound ≤ 2% of gate cuts, candidate sessions going back for a cut row no more than 20% above the holdout |
 | `not_validated` | enough data, a bar missed — keep `baseline@1`, the reasons are listed |
-| `insufficient_data` | not enough sessions/pushes/gate cuts, fewer than 2 usable strata, outside the coverage thresholds, or the candidate changed mid-window — this says nothing about the policy; keep collecting |
+| `insufficient_data` | not enough sessions/pushes/gate cuts, no usable stratum in the repo, outside the coverage thresholds, or the candidate changed mid-window — this says nothing about the policy; keep collecting |
 
 The thresholds were frozen before any data (decision `01M45DKB4`). `tune` applies them, never
 picks them, and writes nothing.
@@ -107,9 +111,8 @@ What phase 2 still needs: a rule interpreter for JSON definitions, the yield cac
 
 ## What to do next
 
-1. Merge the chunk 5 PR and ship a binary that writes `feat.touch` and `arm`.
-2. Set `push_policy = "touch@1"` in at least two strata (for example fael and vela).
-   Workload differs between repos; `validated` needs two usable strata.
+1. Ship a binary with the per-repo verdict (chunk 5 code).
+2. Set `push_policy = "touch@1"` in one repo (one is enough; each repo gets its own verdict).
 3. Run `fael tune` now and then. While it says `insufficient_data`, only collect.
 4. When it reaches `validated` or `not_validated`, file the decision row with the table
    (`fael add decision`, files `plan:fael-learn-loop`) and close chunk 5 with its id.
