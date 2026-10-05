@@ -4,7 +4,7 @@
 
 use super::working_set::{add, grep, id_of};
 use super::{fael, fael_env, json, repo, state};
-use serde_json::Value;
+use serde_json::{Value, json as jv};
 use std::path::Path;
 
 /// One search push says the decision (touch 0), the agent pulls it itself and
@@ -121,4 +121,102 @@ fn tune_says_so_when_there_is_nothing_to_replay() {
     assert!(!ok && err.contains("--since"), "{err}");
     let (ok, _, err) = fael(&d, &["tune", "--rows"], "");
     assert!(!ok && err.contains("tune takes no --rows"), "{err}");
+}
+
+/// Search pushes stamped `ts`, written straight into the usage log: the clock
+/// is the one thing the writers cannot be told.
+fn usage_at(d: &Path, stamps: &[&str]) {
+    std::fs::create_dir_all(state(d)).unwrap();
+    let lines: String = stamps
+        .iter()
+        .enumerate()
+        .map(|(i, ts)| {
+            format!(
+                "{{\"ts\":\"{ts}\",\"repo\":{},\"client\":\"claude\",\"session\":\"u{i}\",\"event\":\"search\",\"bytes\":0,\"est_tokens\":0,\"ids\":[]}}\n",
+                json(d)
+            )
+        })
+        .collect();
+    std::fs::write(state(d).join("usage.jsonl"), lines).unwrap();
+}
+
+fn tune_env(d: &Path, args: &[&str], env: &[(&str, &str)]) -> Value {
+    let mut a = vec!["tune", "--json"];
+    a.extend(args);
+    let (ok, out, err) = fael_env(d, &a, "", env);
+    assert!(ok, "{out}{err}");
+    serde_json::from_str(&out).unwrap()
+}
+
+#[test]
+fn coverage_days_follow_the_local_zone() {
+    let d = repo();
+    usage_at(
+        &d,
+        &["2026-10-05T23:30:00.000Z", "2026-10-06T00:30:00.000Z"],
+    );
+    let utc = tune_env(&d, &[], &[("FAEL_TZ_OFFSET", "Z")]);
+    assert_eq!(utc["all"]["coverage"]["distinct_days"], 2, "{utc}");
+    assert_eq!(utc["days"], jv!(["2026-10-05", "2026-10-06"]));
+    let bkk = tune_env(&d, &[], &[("FAEL_TZ_OFFSET", "+07:00")]);
+    assert_eq!(bkk["all"]["coverage"]["distinct_days"], 1, "{bkk}");
+    assert_eq!(bkk["days"], jv!(["2026-10-06", "2026-10-06"]));
+}
+
+#[test]
+fn since_cuts_the_window_tune_reads() {
+    let d = repo();
+    usage_at(
+        &d,
+        &["2026-10-01T09:00:00.000Z", "2026-10-05T09:00:00.000Z"],
+    );
+    let all = tune_env(&d, &[], &[]);
+    assert_eq!(all["all"]["sizes"]["search_pushes"], 2, "{all}");
+    let cut = tune_env(&d, &["--since", "2026-10-03"], &[]);
+    assert_eq!(cut["all"]["sizes"]["search_pushes"], 1, "{cut}");
+    assert_eq!(cut["days"], jv!(["2026-10-05", "2026-10-05"]));
+    let none = tune_env(&d, &["--since", "2099-01-01"], &[]);
+    assert_eq!(none["all"]["sizes"]["search_pushes"], 0, "{none}");
+    assert_eq!(none["days"], Value::Null);
+}
+
+/// Six sessions each search past `src/a.rs` and never touch the decision: the
+/// first five are history, so `touch-yield@1` holds the sixth's row back from
+/// the cut, and `touch@1` would have cut all six.
+fn quiet_sessions(d: &Path, n: usize) {
+    add(d, "decision", "keep the parser pure", "src/a.rs");
+    for i in 0..n {
+        grep(d, &format!("q{i}"), &["src/a.rs"]);
+    }
+}
+
+#[test]
+fn touch_yield_learns_across_sessions_written_by_the_real_hooks() {
+    let d = repo();
+    quiet_sessions(&d, 6);
+    let t = tune_env(&d, &[], &[]);
+    let dropped = |name: &str| {
+        t["all"]["policies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["policy"] == name)
+            .unwrap()["dropped"]
+            .clone()
+    };
+    assert_eq!(t["all"]["sizes"]["search_pushes"], 6, "{t}");
+    assert_eq!(dropped("touch@1"), 6, "{t}");
+    assert_eq!(dropped("touch-yield@1"), 1, "{t}");
+    assert_eq!(t["all"]["fallback_used"], jv!([1, 0, 0, 0, 5]), "{t}");
+}
+
+#[test]
+fn the_same_usage_prints_the_same_bytes() {
+    let d = repo();
+    quiet_sessions(&d, 7);
+    for args in [&["--json"][..], &[][..]] {
+        let (_, one, _) = fael(&d, &[&["tune"], args].concat(), "");
+        let (_, two, _) = fael(&d, &[&["tune"], args].concat(), "");
+        assert!(!one.is_empty() && one == two, "{one}\n--\n{two}");
+    }
 }

@@ -3,7 +3,7 @@ use crate::stats::parse::parse;
 use std::path::{Path, PathBuf};
 
 /// A usage line of `session` at minute `min` (a minute may pass 59: hours roll).
-fn line(session: &str, min: u32, rest: &str) -> String {
+pub(super) fn line(session: &str, min: u32, rest: &str) -> String {
     format!(
         "{{\"ts\":\"2026-10-05T{:02}:{:02}:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"{session}\",{rest}}}\n",
         min / 60,
@@ -12,17 +12,30 @@ fn line(session: &str, min: u32, rest: &str) -> String {
 }
 
 /// A search push that said `id` with `touch` of its files already touched.
-fn push(session: &str, min: u32, id: &str, touch: u32, extra: &str) -> String {
+pub(super) fn push(session: &str, min: u32, id: &str, touch: u32, extra: &str) -> String {
+    push_at(session, min, id, touch, "hitlist", r#"["a.rs"]"#, extra)
+}
+
+/// `push` with its trigger and `files` array chosen.
+pub(super) fn push_at(
+    session: &str,
+    min: u32,
+    id: &str,
+    touch: u32,
+    trigger: &str,
+    files: &str,
+    extra: &str,
+) -> String {
     line(
         session,
         min,
         &format!(
-            "\"event\":\"search\",\"trigger\":\"hitlist\",\"files\":[\"a.rs\"],\"ids\":[\"{id}\"],\"feat\":{{\"{id}\":{{\"tier\":0,\"hub\":false,\"kind\":\"decision\",\"age_d\":1,\"touch\":{touch}}}}}{extra}"
+            "\"event\":\"search\",\"trigger\":\"{trigger}\",\"files\":{files},\"ids\":[\"{id}\"],\"feat\":{{\"{id}\":{{\"tier\":0,\"hub\":false,\"kind\":\"decision\",\"age_d\":1,\"touch\":{touch}}}}}{extra}"
         ),
     )
 }
 
-fn cite(session: &str, min: u32, id: &str) -> String {
+pub(super) fn cite(session: &str, min: u32, id: &str) -> String {
     line(
         session,
         min,
@@ -30,7 +43,7 @@ fn cite(session: &str, min: u32, id: &str) -> String {
     )
 }
 
-fn pull(session: &str, min: u32, q: &str, id: &str) -> String {
+pub(super) fn pull(session: &str, min: u32, q: &str, id: &str) -> String {
     line(
         session,
         min,
@@ -38,7 +51,11 @@ fn pull(session: &str, min: u32, q: &str, id: &str) -> String {
     )
 }
 
-fn run(usage: &str, kinds: &[(&str, &str)]) -> Tune {
+pub(super) fn run(usage: &str, kinds: &[(&str, &str)]) -> Tune {
+    run_tz(usage, kinds, 0)
+}
+
+pub(super) fn run_tz(usage: &str, kinds: &[(&str, &str)], tz: i32) -> Tune {
     let row = |(id, kind): &(&str, &str)| {
         format!(
             "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"2026-10-04T00:00:00Z\",\"by\":\"w\",\"kind\":\"{kind}\",\"text\":\"t\",\"files\":[\"a.rs\"]}}\n"
@@ -53,10 +70,10 @@ fn run(usage: &str, kinds: &[(&str, &str)]) -> Tune {
         Path::new("/w/state/usage.jsonl"),
         &[PathBuf::from("/tmp")],
     );
-    tune(&p, &HashMap::from([("/w/r".to_string(), log)]), 0)
+    tune(&p, &HashMap::from([("/w/r".to_string(), log)]), tz)
 }
 
-fn pol<'a>(t: &'a Tune, name: &str) -> &'a PolicyResult {
+pub(super) fn pol<'a>(t: &'a Tune, name: &str) -> &'a PolicyResult {
     t.all.policies.iter().find(|p| p.policy == name).unwrap()
 }
 
