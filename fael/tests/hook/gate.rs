@@ -112,13 +112,13 @@ fn tune_reports_the_experiment_and_says_insufficient_with_one_session() {
     grep(&d);
     let (ok, out, err) = fael(&d, &["tune"], "");
     assert!(ok, "{err}");
-    assert!(out.contains("validation · candidate touch@1"), "{out}");
+    assert!(out.contains("· candidate touch@1 against holdout"), "{out}");
     assert!(out.contains("verdict: insufficient_data"), "{out}");
     assert!(out.contains("dup is not measured"), "{out}");
     let (_, json, _) = fael(&d, &["tune", "--json"], "");
     let t: Value = serde_json::from_str(&json).unwrap();
     assert_eq!(
-        t["validation"]["strata"][0]["candidate"]["gate_cuts"], 1,
+        t["validation"][0]["strata"][0]["candidate"]["gate_cuts"], 1,
         "{t}"
     );
     // no experiment, no block
@@ -126,4 +126,45 @@ fn tune_reports_the_experiment_and_says_insufficient_with_one_session() {
     grep(&d);
     let (_, out, _) = fael(&d, &["tune"], "");
     assert!(!out.contains("validation"), "{out}");
+}
+
+/// One Grep in `session` from repo `d`, its usage written to repo `a`'s state
+/// dir: two repos feeding the one machine-wide usage log, as real ones do.
+fn grep_into(a: &Path, d: &Path, session: &str) {
+    let p = format!(
+        r#"{{"cwd":{},"session_id":"{session}","tool_name":"Grep","tool_input":{{"pattern":"x"}},"tool_response":{{"filenames":{}}}}}"#,
+        json(d),
+        json!(["src/a.rs"])
+    );
+    let (ok, _, err) = super::fael_at(&state(a), d, &["hook", "search", "--client", "claude"], &p);
+    assert!(ok, "{err}");
+}
+
+#[test]
+fn tune_prints_one_validation_per_repo_and_json_is_an_array() {
+    let (a, b) = (seeded(), seeded());
+    for d in [&a, &b] {
+        config(d, 0);
+        grep_into(&a, d, "c1");
+        config(d, 100);
+        grep_into(&a, d, "h1");
+    }
+    let (ok, out, err) = fael(&a, &["tune"], "");
+    assert!(ok, "{err}");
+    assert_eq!(out.matches("validation · repo ").count(), 2, "{out}");
+    assert_eq!(
+        out.matches("verdict: insufficient_data").count(),
+        2,
+        "{out}"
+    );
+    let (_, json, _) = fael(&a, &["tune", "--json"], "");
+    let t: Value = serde_json::from_str(&json).unwrap();
+    let v = t["validation"].as_array().expect(&json);
+    assert_eq!(v.len(), 2, "{t}");
+    assert_ne!(v[0]["repo"], v[1]["repo"], "two repos, two scopes: {t}");
+    // each repo's own pushes, never the other's
+    for r in v {
+        assert_eq!(r["strata"][0]["candidate"]["sessions"], 1, "{t}");
+        assert_eq!(r["strata"][0]["holdout"]["sessions"], 1, "{t}");
+    }
 }

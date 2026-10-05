@@ -12,7 +12,8 @@ use crate::query::{ARM_HOLDOUT, TOUCH};
 use crate::stats::outcomes::Observation;
 use crate::stats::parse::Parsed;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
 
 /// Trigger shares of the two arms may differ by this many points (a guard that
 /// passes is not proof the arms compare).
@@ -60,14 +61,29 @@ pub enum Status {
     Unbalanced,
 }
 
+/// The primary bars' inputs for one stratum, or for a repo's used strata pooled.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct Bars {
+    /// Rows said per session, candidate against holdout, percent down.
+    pub exposure_cut_pct: Option<f64>,
+    /// What the gate forfeits: the candidate replayed on the holdout's rows.
+    pub retained: Retained,
+    /// Sessions that went back for a cut row, percent: candidate, holdout.
+    pub retrieved_pct: (Option<f64>, Option<f64>),
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StratumArms {
+    /// The repo scope (SPEC §E), not the worktree path of a usage line.
     pub repo: String,
     pub client: String,
     pub status: Status,
     pub max_trigger_gap_pp: f64,
     pub candidate: ArmSize,
     pub holdout: ArmSize,
+    /// Only a used stratum is compared.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bars: Option<Bars>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -78,19 +94,17 @@ pub struct Verdict {
     pub why: Vec<String>,
 }
 
+/// One repo's checkpoint: its own strata, its own pool, its own verdict.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Validation {
+    pub repo: String,
     pub candidate: String,
     pub strata: Vec<StratumArms>,
     pub candidate_all: ArmSize,
     pub holdout_all: ArmSize,
-    /// Rows said per session, candidate against holdout, weighted over the
-    /// usable strata by their search pushes.
-    pub exposure_cut_pct: Option<f64>,
-    /// What the gate forfeits: the candidate replayed on the holdout's rows.
-    pub retained: Retained,
-    /// Sessions that went back for a cut row, percent — weighted likewise.
-    pub retrieved_pct: (Option<f64>, Option<f64>),
+    /// The used strata pooled, weighted by their search pushes.
+    #[serde(flatten)]
+    pub bars: Bars,
     /// The session view and the push view point opposite ways.
     pub warning: Option<String>,
     pub notes: Vec<String>,
@@ -126,96 +140,52 @@ fn sum(a: Rate, b: Rate) -> Rate {
     Rate::new(a.x + b.x, a.n + b.n)
 }
 
-/// The verdict, from the pooled numbers alone — the frozen rule, applied.
-fn decide(v: &Validation, used: usize) -> Verdict {
-    let (c, h) = (&v.candidate_all, &v.holdout_all);
-    let mut missing = vec![];
-    if v.candidate.contains(',') {
-        missing.push(format!(
-            "the candidate policy changed in the window ({})",
-            v.candidate
-        ));
-    }
-    if used < 2 {
-        missing.push(format!("usable strata {used} < 2"));
-    }
-    for (name, a) in [("candidate", c), ("holdout", h)] {
-        if a.sessions < MIN_SESSIONS || a.search_pushes < MIN_PUSHES {
-            missing.push(format!(
-                "{name} arm {} sessions / {} search pushes, want ≥ {MIN_SESSIONS} / ≥ {MIN_PUSHES}",
-                a.sessions, a.search_pushes
-            ));
-        }
-        if !a.coverage.passes {
-            missing.push(format!("{name} arm outside the coverage thresholds"));
-        }
-    }
-    if c.gate_cuts < MIN_GATE_CUTS {
-        missing.push(format!("gate cuts {} < {MIN_GATE_CUTS}", c.gate_cuts));
-    }
-    if !missing.is_empty() {
-        return Verdict {
-            result: "insufficient_data",
-            why: missing,
-        };
-    }
-    let mut failed = vec![];
-    match v.exposure_cut_pct {
-        Some(e) if e >= MIN_EXPOSURE_CUT_PCT => {}
-        e => failed.push(format!(
-            "exposure down {} < {MIN_EXPOSURE_CUT_PCT}%",
-            e.map_or("—".into(), |e| format!("{e:.0}%"))
-        )),
-    }
-    let r = &v.retained;
-    for (name, rate) in [
-        ("cited", &r.cited),
-        ("pulled", &r.pulled),
-        ("acted", &r.acted),
-    ] {
-        // no event of a kind = nothing to keep or lose, said in the report
-        if let Some(p) = pct(rate).filter(|p| *p < MIN_RETAINED_PCT) {
-            failed.push(format!("{name} retained {p:.0}% < {MIN_RETAINED_PCT}%"));
-        }
-    }
-    if c.missed_push
-        .hi
-        .is_none_or(|hi| hi * 100.0 > MAX_MISSED_HI_PCT)
-    {
-        failed.push(format!(
-            "missed_push upper bound above {MAX_MISSED_HI_PCT}% of gate cuts"
-        ));
-    }
-    if let (Some(cp), Some(hp)) = v.retrieved_pct
-        && cp > hp * (1.0 + MAX_RETRIEVED_OVER_PCT / 100.0)
-    {
-        failed.push(format!(
-            "sessions going back for a cut row {cp:.1}% vs holdout {hp:.1}%, over +{MAX_RETRIEVED_OVER_PCT}%"
-        ));
-    }
-    Verdict {
-        result: if failed.is_empty() {
-            "validated"
-        } else {
-            "not_validated"
-        },
-        why: failed,
-    }
-}
-
-/// `None` when no push carries an arm: no experiment, nothing to report.
+/// One validation per repo scope; none while no push carries an arm. `scope`
+/// maps a usage line's `repo` to its repo (resolved once per distinct value).
 pub(super) fn validate(
     parsed: &Parsed,
     seen: &[Observation],
     obs: &[Ob],
     tz_min: i32,
-) -> Option<Validation> {
-    let (by, policies) = gather::gather(parsed, seen, tz_min)?;
+    scope: &dyn Fn(&str) -> String,
+) -> Vec<Validation> {
+    let memo = RefCell::new(HashMap::<String, String>::new());
+    let scope = |r: &str| {
+        let mut m = memo.borrow_mut();
+        m.entry(r.to_string()).or_insert_with(|| scope(r)).clone()
+    };
+    let Some(by) = gather::gather(parsed, seen, tz_min, &scope) else {
+        return vec![];
+    };
+    by.into_iter()
+        .map(|(repo, r)| {
+            let held = |client: &str| -> Vec<&Ob> {
+                let of =
+                    |o: &&Ob| o.arm == ARM_HOLDOUT && o.client == client && scope(o.o.repo) == repo;
+                obs.iter().filter(of).collect()
+            };
+            one(repo.clone(), r, held)
+        })
+        .collect()
+}
+
+/// A stratum's primary-bar inputs; the retained part is read off the holdout,
+/// which saw every row.
+fn bars(cs: &ArmSize, hs: &ArmSize, held: &[&Ob]) -> Bars {
+    let per = |a: &ArmSize| a.rows_said as f64 / a.sessions as f64;
+    Bars {
+        exposure_cut_pct: (per(hs) > 0.0).then(|| 100.0 * (1.0 - per(cs) / per(hs))),
+        retained: result(TOUCH.name(), held, &replay::touch(held)).retained,
+        retrieved_pct: (pct(&cs.retrieved_sessions), pct(&hs.retrieved_sessions)),
+    }
+}
+
+fn one<'a>(repo: String, r: RepoArms<'a>, held: impl Fn(&str) -> Vec<&'a Ob<'a>>) -> Validation {
     let mut strata = vec![];
     let (mut pc, mut ph) = (Acc::default(), Acc::default());
     let (mut exposure, mut retrieved) = (vec![], (vec![], vec![]));
     let mut retained = Retained::default();
-    for ((repo, client), [c, h]) in &by {
+    for (client, [c, h]) in &r.clients {
         let (cs, hs) = (c.size(), h.size());
         let gap = trigger_gap(&cs, &hs);
         let eligible = [&cs, &hs]
@@ -226,36 +196,30 @@ pub(super) fn validate(
             (true, true) => Status::Unbalanced,
             (true, false) => Status::Used,
         };
+        let mut b = None;
         if status == Status::Used {
             pc.merge(c);
             ph.merge(h);
+            let s = bars(&cs, &hs, &held(client));
             let w = (cs.search_pushes + hs.search_pushes) as f64;
-            let per = |a: &ArmSize| a.rows_said as f64 / a.sessions as f64;
-            exposure.push((
-                w,
-                (per(&hs) > 0.0).then(|| 100.0 * (1.0 - per(&cs) / per(&hs))),
-            ));
-            retrieved.0.push((w, pct(&cs.retrieved_sessions)));
-            retrieved.1.push((w, pct(&hs.retrieved_sessions)));
-            // what the gate forfeits is read off the holdout, which saw every row
-            let held: Vec<&Ob> = obs
-                .iter()
-                .filter(|o| o.arm == ARM_HOLDOUT && (o.o.repo, o.client) == (*repo, *client))
-                .collect();
-            let r = result(TOUCH.name(), &held, &replay::touch(&held)).retained;
+            exposure.push((w, s.exposure_cut_pct));
+            retrieved.0.push((w, s.retrieved_pct.0));
+            retrieved.1.push((w, s.retrieved_pct.1));
             retained = Retained {
-                cited: sum(retained.cited, r.cited),
-                pulled: sum(retained.pulled, r.pulled),
-                acted: sum(retained.acted, r.acted),
+                cited: sum(retained.cited, s.retained.cited),
+                pulled: sum(retained.pulled, s.retained.pulled),
+                acted: sum(retained.acted, s.retained.acted),
             };
+            b = Some(s);
         }
         strata.push(StratumArms {
-            repo: repo.to_string(),
+            repo: repo.clone(),
             client: client.to_string(),
             status,
             max_trigger_gap_pp: gap,
             candidate: cs,
             holdout: hs,
+            bars: b,
         });
     }
     let used = strata.iter().filter(|s| s.status == Status::Used).count();
@@ -271,13 +235,16 @@ pub(super) fn validate(
         _ => None,
     };
     let mut v = Validation {
-        candidate: policies.into_iter().collect::<Vec<_>>().join(","),
+        repo,
+        candidate: r.policies.into_iter().collect::<Vec<_>>().join(","),
         strata,
         candidate_all,
         holdout_all,
-        exposure_cut_pct: weighted(&exposure),
-        retained,
-        retrieved_pct,
+        bars: Bars {
+            exposure_cut_pct: weighted(&exposure),
+            retained,
+            retrieved_pct,
+        },
         warning,
         notes: vec![
             "dup is not measured (SPEC §B): the session-level safety gate rests on retrieved_after_cut alone".into(),
@@ -289,10 +256,14 @@ pub(super) fn validate(
         },
     };
     v.verdict = decide(&v, used);
-    Some(v)
+    v
 }
 
+mod decide;
 mod gather;
-use gather::Acc;
+use decide::decide;
+use gather::{Acc, RepoArms};
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_scope;

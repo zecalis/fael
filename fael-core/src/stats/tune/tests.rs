@@ -70,7 +70,9 @@ pub(super) fn run_tz(usage: &str, kinds: &[(&str, &str)], tz: i32) -> Tune {
         Path::new("/w/state/usage.jsonl"),
         &[PathBuf::from("/tmp")],
     );
-    tune(&p, &HashMap::from([("/w/r".to_string(), log)]), tz)
+    tune(&p, &HashMap::from([("/w/r".to_string(), log)]), tz, &|r| {
+        r.to_string()
+    })
 }
 
 pub(super) fn pol<'a>(t: &'a Tune, name: &str) -> &'a PolicyResult {

@@ -181,9 +181,9 @@ pub struct Tune {
     pub days: Option<(String, String)>,
     pub all: Section,
     pub strata: Vec<Stratum>,
-    /// Candidate against holdout; absent while no push carries an arm.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub validation: Option<Validation>,
+    /// Candidate against holdout, one per repo; empty while no push carries an arm.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub validation: Vec<Validation>,
 }
 
 fn result(policy: String, obs: &[&Ob], drops: &[bool]) -> PolicyResult {
@@ -271,8 +271,14 @@ fn section(pushes: &[&cover::Push], obs: &[&Ob]) -> Section {
 }
 
 /// Every search push and the rows it said, replayed. `tz_min` picks the local
-/// day coverage counts.
-pub fn tune(parsed: &Parsed, logs: &HashMap<String, Log>, tz_min: i32) -> Tune {
+/// day coverage counts; `scope` maps a usage line's `repo` (a worktree root)
+/// to the repo a verdict belongs to.
+pub fn tune(
+    parsed: &Parsed,
+    logs: &HashMap<String, Log>,
+    tz_min: i32,
+    scope: &dyn Fn(&str) -> String,
+) -> Tune {
     let rows: HashMap<(&str, &str), &Row> = logs
         .iter()
         .flat_map(|(repo, l)| {
@@ -326,7 +332,7 @@ pub fn tune(parsed: &Parsed, logs: &HashMap<String, Log>, tz_min: i32) -> Tune {
         days: span.map(|(a, b)| (cover::civil(a), cover::civil(b))),
         all: section(&all_p, &all_o),
         strata,
-        validation: validate::validate(parsed, &seen, &obs, tz_min),
+        validation: validate::validate(parsed, &seen, &obs, tz_min, scope),
     }
 }
 
