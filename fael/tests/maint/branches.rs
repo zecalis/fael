@@ -39,14 +39,16 @@ fn doctor_flags_orphan_branches() {
         )
     };
     // the PR closed unmerged: Orphan names the branch (text and json)
-    let (ok, out) = doctor(Some(r#"[{"mergedAt":null}]"#));
+    let (ok, out) = doctor(Some(r#"[{"headRefName":"feat/doomed","mergedAt":null}]"#));
     assert!(ok, "{out}");
     assert!(
         out.contains("note [Orphan]: 1 open row(s)") && out.contains("feat/doomed"),
         "{out}"
     );
     // merged after all: silent
-    let (ok, out) = doctor(Some(r#"[{"mergedAt":"2026-09-27T04:50:08Z"}]"#));
+    let (ok, out) = doctor(Some(
+        r#"[{"headRefName":"feat/doomed","mergedAt":"2026-09-27T04:50:08Z"}]"#,
+    ));
     assert!(ok && !out.contains("[Orphan]"), "{out}");
     // unparseable answer: skipped silently
     let (ok, out) = doctor(Some("not json"));

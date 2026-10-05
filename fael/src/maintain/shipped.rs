@@ -147,15 +147,18 @@ pub(super) fn problems(
     }
     if !maybe.is_empty() {
         let eg: Vec<String> = maybe.iter().take(5).map(Landed::example).collect();
-        out.push(core::Problem::info(
-            core::ProblemKind::ShippedMaybe,
-            format!(
-                "{} open note(s) on branch(es) that look merged but have no \
-                 merge time to confirm — check, then `fael close` (e.g. {})",
-                maybe.len(),
-                eg.join("; ")
-            ),
-        ));
+        out.push(
+            core::Problem::info(
+                core::ProblemKind::ShippedMaybe,
+                format!(
+                    "{} open note(s) on branch(es) that look merged but have no \
+                     merge time to confirm — check, then `fael close` (e.g. {})",
+                    maybe.len(),
+                    eg.join("; ")
+                ),
+            )
+            .with_ids(maybe.iter().map(|l| l.id.clone()).collect()),
+        );
     }
     out
 }
