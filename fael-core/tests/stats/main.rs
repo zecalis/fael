@@ -150,7 +150,7 @@ fn json_shape_retired_value_and_verdict_are_frozen() {
     // BASE_ROWS predate the shadow keys: nothing measured, all zero
     assert_eq!(
         v["file_verdict"],
-        serde_json::json!({"changed": 0, "unchanged": 0, "no_verdict": 0}),
+        serde_json::json!({"changed": 0, "unchanged": 0, "no_verdict": 0, "no_fh": 0, "retire": {"changed": {"pairs": 0, "retired": 0}, "unchanged": {"pairs": 0, "retired": 0}}}),
         "{v}"
     );
 }

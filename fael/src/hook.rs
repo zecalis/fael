@@ -44,6 +44,7 @@ mod stats_text;
 mod stop;
 mod tally;
 mod usage;
+mod verdict_text;
 
 pub(crate) use asks::{
     ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp, record_row_asks,
