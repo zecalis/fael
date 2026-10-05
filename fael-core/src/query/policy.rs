@@ -42,6 +42,31 @@ pub fn touch_drops(r: &crate::Row, touch: usize) -> bool {
     touch == 0 && r.kind != "issue" && !r.key.as_deref().is_some_and(|k| k.ends_with(":handoff"))
 }
 
+/// Shadow candidate (chunk 4): `touch@1` held back by what the row earned
+/// before. A said row is engaged when the agent cited it, pulled it itself or
+/// acted on it; its history is the first of (row, file, trigger), (row, file),
+/// (row), (class) with enough earlier sessions. The decay window (how many
+/// earlier sessions count) is a parameter `tune` sweeps: releasing the policy
+/// pins it as a new version.
+pub const TOUCH_YIELD: PolicyDef = PolicyDef {
+    id: "touch-yield",
+    version: 1,
+    rule: "drop a said row when touch@1 would, and the engaged share of the first of (row,file,trigger), (row,file), (row), (class) with at least 5 earlier sessions is under 10%; keep it when no level has 5",
+};
+
+/// Earlier sessions a history level needs before it speaks.
+pub const YIELD_MIN_N: usize = 5;
+/// The engaged share (percent) under which a history level calls a row low-yield.
+pub const YIELD_FLOOR_PCT: usize = 10;
+
+/// Would `touch-yield@1` drop `r`? `hist` = (engaged, sessions) of the first
+/// history level with enough sessions; `None` = no level had enough, and a row
+/// with no evidence is kept, never guessed at.
+pub fn touch_yield_drops(r: &crate::Row, touch: usize, hist: Option<(usize, usize)>) -> bool {
+    touch_drops(r, touch)
+        && hist.is_some_and(|(x, n)| n >= YIELD_MIN_N && x * 100 < YIELD_FLOOR_PCT * n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{PUSH_HUB_PEEK, PUSH_HUB_ROWS};
@@ -76,5 +101,25 @@ mod tests {
         assert!(!touch_drops(&row("issue", None), 0));
         assert!(!touch_drops(&row("note", Some("plan:x:handoff")), 0));
         assert!(touch_drops(&row("note", Some("plan:x:scope")), 0));
+    }
+
+    #[test]
+    fn touch_yield_1_is_pinned() {
+        assert_eq!(TOUCH_YIELD.name(), "touch-yield@1");
+        assert_eq!(
+            TOUCH_YIELD.rule,
+            "drop a said row when touch@1 would, and the engaged share of the first of (row,file,trigger), (row,file), (row), (class) with at least 5 earlier sessions is under 10%; keep it when no level has 5"
+        );
+        assert_eq!((YIELD_MIN_N, YIELD_FLOOR_PCT), (5, 10));
+        let d = crate::Row {
+            kind: "decision".into(),
+            ..crate::Row::default()
+        };
+        assert!(touch_yield_drops(&d, 0, Some((0, 5))));
+        assert!(!touch_yield_drops(&d, 0, Some((1, 10)))); // 10% is not under 10%
+        assert!(touch_yield_drops(&d, 0, Some((0, 100))));
+        assert!(!touch_yield_drops(&d, 0, Some((0, 4))), "too few sessions");
+        assert!(!touch_yield_drops(&d, 0, None), "no evidence keeps the row");
+        assert!(!touch_yield_drops(&d, 1, Some((0, 50))), "touched stays");
     }
 }

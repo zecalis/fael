@@ -215,8 +215,9 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     core::stats::aggregate(&u.parsed, &u.logs, cfg, asks::constants().into(), rows)
 }
 
-pub fn stats(json: bool, rows: bool, day_view: bool, since: Option<i64>) -> Result<(), String> {
-    let u = load(since);
+pub fn stats(a: &crate::args::Args) -> Result<(), String> {
+    let (json, rows, day_view) = (a.has("json"), a.has("rows"), a.has("day"));
+    let u = load(crate::report::since(a)?);
     if day_view {
         return day(json, &u);
     }
@@ -281,7 +282,7 @@ fn day(json: bool, u: &Usage) -> Result<(), String> {
 /// Minutes east of UTC for the day view: `FAEL_TZ_OFFSET` (`+07:00`,
 /// `+0700`, `+7`, `Z`) wins so tests and servers pin the day; otherwise the
 /// machine's `date +%z` (unix); UTC last.
-fn local_tz_offset_min() -> i32 {
+pub(crate) fn local_tz_offset_min() -> i32 {
     if let Ok(s) = std::env::var("FAEL_TZ_OFFSET")
         && let Some(m) = parse_tz_offset(&s)
     {

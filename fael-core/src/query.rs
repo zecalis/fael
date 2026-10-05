@@ -34,7 +34,9 @@ pub use keyhint::key_hints;
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, resolve_row, warnings};
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
-pub use policy::{BASELINE, PolicyDef, TOUCH, touch_drops};
+pub use policy::{
+    BASELINE, PolicyDef, TOUCH, TOUCH_YIELD, YIELD_MIN_N, touch_drops, touch_yield_drops,
+};
 pub use push::{push, push_tiered};
 pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};
 pub use render::{

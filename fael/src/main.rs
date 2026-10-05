@@ -26,6 +26,7 @@ mod schema;
 mod selfheal;
 mod session;
 mod sync;
+mod tune;
 mod write;
 
 use fael_core::{self as core, Config, Log};
@@ -102,13 +103,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             find::misses::print_recent(20);
             Ok(ExitCode::SUCCESS)
         }
-        ("stats", []) => hook::stats(
-            a.has("json"),
-            a.has("rows"),
-            a.has("day"),
-            report::since(&a)?,
-        )
-        .map(|()| ExitCode::SUCCESS),
+        ("stats", []) => hook::stats(&a).map(|()| ExitCode::SUCCESS),
+        ("tune", []) => tune::tune(&a).map(|()| ExitCode::SUCCESS),
         ("report", []) => report::report(&a).map(|()| ExitCode::SUCCESS),
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
