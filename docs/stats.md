@@ -145,10 +145,46 @@ summed; the log panels (`memory`, `for_you`,
 worktrees that share one journal count its rows once; `delivered.last` is
 newest-first across repos.
 
+## `fael tune [--json] [--since d]`
+
+Read-only replay (PLAN-fael-learn-loop chunk 4, SPEC §C). `core::stats::tune`
+prints `Tune`: candidate rules that only *cut* are replayed over the search
+pushes already in `usage.jsonl` and set beside `baseline@1`. It names no
+winner, picks no threshold and writes nothing — a human reads the table. `Stats`
+is untouched, so no `STATS_SCHEMA` bump; `Tune` carries its own `outcomes_v`.
+
+- **Unit.** One said search row in one session (the same observation
+  `rows[].outcomes` counts). A row is *replayable* when its push line recorded
+  `feat.touch` and the row is still in the log; the rest are counted in
+  `sizes.rows_said` but not replayed (older lines, no session: unknown, not 0).
+- **Candidates.** `touch@1` calls the pinned `touch_drops` on each row, and its
+  `dropped` must equal `sizes.recorded_would_drop` (what the shadow wrote).
+  `touch-yield@1` drops what `touch@1` would, unless the row was engaged
+  (cited, pulled by the agent itself, or acted on) in ≥10% of earlier sessions,
+  read from the first of (row,file,trigger), (row,file), (row), (class) that has
+  ≥5; with none it keeps the row. History is sessions that had *ended* before
+  the row was said. `decay` = how many earlier sessions per key count
+  (`none`, 20, 50, 100, 200).
+- **Rates** are `{x, n, lo, hi}` — `x/n` with its Wilson 95% interval, `null`
+  bounds when `n` is 0. `exposure` = rows still said / rows said; `retained`
+  = an outcome on rows the candidate keeps / that outcome on all of them;
+  `retrieved_after_cut.rows` = dropped rows the agent pulled itself,
+  `.sessions` = sessions that did (a pull fael induced is never evidence);
+  `missed_push` = dropped rows the agent pulled itself and then cited or acted on.
+- **Coverage** (provisional thresholds from decision `01M45DKB4`: ≥3 days, busiest
+  day ≤50%, busiest session ≤10% of search pushes) and **strata** (repo × client;
+  eligible at ≥10 sessions and ≥100 search pushes) are reported, never tuned.
+- **An upper bound.** The replay holds the session fixed: a row a candidate had
+  dropped would have stayed unseen and could have been said at a later push,
+  which the log cannot show. Read every cost as at most what the data says.
+- **Association** is a rate per feature value (and phi for a yes/no feature):
+  observed, not a cause. The causal test is the holdout (SPEC §E).
+
 ## Changelog
 
 Newest first.
 
+- `2` (2026-10-05): `fael tune` (read-only replay of candidate push rules, PLAN-fael-learn-loop chunk 4) reads the same usage lines and writes none; `Stats` is unchanged; no bump.
 - `2` (2026-10-05): added `outcomes_v` and `rows[].outcomes` (shown, cut by reason, cited, pulled by provenance, acted, retrieved_after_cut, missed_push); usage gains the 0-byte `outcome` line (`cited`), which no count includes; no bump.
 - `2` (2026-10-04): added `file_verdict` (shown rows by file-hash verdict: `changed`, `unchanged`, `no_verdict`), read from the `changed`/`unchanged` keys read pushes already write on usage lines; lines without them are not measured; nothing a hook says changes; no bump.
 - `2` (2026-10-04): added `incidents` (rows keyed `incident:<kind>` per week); no bump.

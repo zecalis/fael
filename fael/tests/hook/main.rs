@@ -47,6 +47,7 @@ mod stop_lang;
 mod stop_risk;
 mod tags;
 mod tied;
+mod tune;
 mod working_set;
 mod writer;
 

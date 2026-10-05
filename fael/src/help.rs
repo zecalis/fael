@@ -159,6 +159,17 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      like +07:00 wins, else the machine zone); --day --json prints DayView)",
     ),
     (
+        "tune",
+        "replay push-policy candidates against what fael said",
+        "fael tune [--json] [--since d]
+    (read-only: replays candidate rules that only cut — touch@1, touch-yield@1 — over the
+     search pushes already in usage.jsonl and sets each beside baseline@1: exposure, the
+     outcomes kept, rows the agent pulled itself after the cut, missed pushes — every
+     rate as x/n with its 95% interval — plus coverage, outcome association, history
+     fallback, the decay sweep and strata (repo x client). It names no winner and writes
+     nothing; --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on)",
+    ),
+    (
         "report",
         "one offline HTML page for a lead",
         "fael report [--out f] [--open] [--since d]

@@ -7,7 +7,7 @@ use super::{fael, fael_env, json, repo, state};
 use serde_json::{Value, json};
 use std::path::Path;
 
-fn add(d: &Path, kind: &str, text: &str, files: &str) {
+pub(super) fn add(d: &Path, kind: &str, text: &str, files: &str) {
     for f in files.split(',') {
         std::fs::write(d.join(f), "// x\n").unwrap();
     }
@@ -16,7 +16,7 @@ fn add(d: &Path, kind: &str, text: &str, files: &str) {
 }
 
 /// The id of the row whose text is `text` (`find --json` prints row lines).
-fn id_of(d: &Path, text: &str) -> String {
+pub(super) fn id_of(d: &Path, text: &str) -> String {
     let (_, out, _) = fael(d, &["find", text, "--json"], "");
     out.lines()
         .map(|l| serde_json::from_str::<Value>(l).expect(l))
@@ -53,7 +53,7 @@ fn read(d: &Path, session: &str, agent: &str, file: &str) {
 }
 
 /// A Grep whose hit list names `files`, through the Claude adapter.
-fn grep(d: &Path, session: &str, files: &[&str]) {
+pub(super) fn grep(d: &Path, session: &str, files: &[&str]) {
     let p = format!(
         r#"{{"cwd":{},"session_id":"{session}","tool_name":"Grep","tool_input":{{"pattern":"x"}},"tool_response":{{"filenames":{}}}}}"#,
         json(d),
