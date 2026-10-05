@@ -39,6 +39,18 @@ pub(super) struct Pull<'a> {
 
 type Session<'a> = (&'a str, &'a str);
 
+/// The session id a usage line carries: a hook's transcript path
+/// (`…/<id>.jsonl`) and a pull's bare `$CLAUDE_CODE_SESSION_ID` share the stem.
+fn session(v: &serde_json::Value) -> Option<&str> {
+    let s = v["session"].as_str()?;
+    Some(
+        std::path::Path::new(s)
+            .file_stem()
+            .and_then(|f| f.to_str())
+            .unwrap_or(s),
+    )
+}
+
 pub(super) fn strs<'a>(v: &'a serde_json::Value, k: &str) -> impl Iterator<Item = &'a str> {
     v[k].as_array()
         .into_iter()
@@ -76,7 +88,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
     let mut in_ctx: HashSet<(Session, &str)> = HashSet::new();
     let mut pulls: HashMap<Session, Vec<Pull>> = HashMap::new();
     for v in &parsed.kept {
-        let (Some(repo), Some(s)) = (v["repo"].as_str(), v["session"].as_str()) else {
+        let (Some(repo), Some(s)) = (v["repo"].as_str(), session(v)) else {
             continue;
         };
         if v["event"] == "in-context" {
@@ -110,7 +122,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
         ) else {
             continue;
         };
-        let s = v["session"].as_str().map(|s| (repo, s));
+        let s = session(v).map(|s| (repo, s));
         let log = logs.get(repo);
         let retired = |id: &str| {
             gone.get(repo)
@@ -201,6 +213,12 @@ pub(super) mod tests {
                 "{{\"ts\":\"2026-09-26T00:0{min}:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",{rest}}}\n"
             )
         };
+        // a pull knows only $CLAUDE_CODE_SESSION_ID, the hook's transcript stem
+        let pull = |min: u8, rest: &str| {
+            format!(
+                "{{\"ts\":\"2026-09-26T00:0{min}:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"s1\",\"event\":\"find\",{rest}}}\n"
+            )
+        };
         // a brief names no key: its rows are the line's ids
         let usage = line(
             0,
@@ -214,8 +232,8 @@ pub(super) mod tests {
         ) + &line(
             3,
             r#""event":"in-context","ids":[],"in_context":["D"],"in_context_notes":["N"]"#,
-        ) + &line(4, r#""event":"find","found":["D"],"q":{"key":"k:x"}"#)
-            + &line(5, r#""event":"find","found":["D"],"q":{"files":["b.rs"]}"#);
+        ) + &pull(4, r#""found":["D"],"q":{"key":"k:x"}"#)
+            + &pull(5, r#""found":["D"],"q":{"files":["b.rs"]}"#);
         let p = super::super::parse::parse(
             &usage,
             Path::new("/w/state/usage.jsonl"),
