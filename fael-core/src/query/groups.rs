@@ -2,6 +2,7 @@
 //! together in one PR. Union-find over the rows' files; no guessing beyond
 //! "the same path".
 
+use super::matching::is_md;
 use crate::{Log, Row};
 use std::collections::HashMap;
 
@@ -45,7 +46,7 @@ pub fn groups<'a>(rows: &[&'a Row]) -> Vec<Vec<&'a Row>> {
 }
 
 fn links(f: &str) -> bool {
-    crate::anchor(f).is_none() && !f.ends_with(".md")
+    crate::anchor(f).is_none() && !is_md(f)
 }
 
 /// The files a group's rows share (cited by two or more of them), sorted.
