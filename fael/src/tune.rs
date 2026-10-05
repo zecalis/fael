@@ -186,3 +186,50 @@ fn stratum(s: &Stratum) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::stats::Rate;
+
+    fn tune_of(strata: usize) -> Tune {
+        Tune {
+            outcomes_v: 1,
+            days: None,
+            all: Section::default(),
+            strata: (0..strata)
+                .map(|i| Stratum {
+                    repo: format!("/r{i}"),
+                    client: "claude".into(),
+                    eligible: false,
+                    section: Section::default(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_rate_shows_x_of_n_with_its_interval_and_no_n_is_a_dash() {
+        assert_eq!(rate(&Rate::new(0, 0)), "—");
+        assert_eq!(rate(&Rate::new(41, 2200)), "41/2200 1.9% [1.4–2.5%]");
+        assert_eq!(rate(&Rate::new(0, 20)), "0/20 0.0% [0.0–16%]");
+        assert_eq!(rate(&Rate::new(61, 120)), "61/120 51% [42–60%]");
+    }
+
+    #[test]
+    fn strata_print_ten_then_count_the_rest_and_one_stratum_prints_no_header() {
+        let out = text(&tune_of(12));
+        assert!(out.contains("by stratum"), "{out}");
+        assert!(out.contains("/r9") && !out.contains("/r10"), "{out}");
+        assert!(out.contains("… +2 more (--json)"), "{out}");
+        let one = text(&tune_of(1));
+        assert!(!one.contains("by stratum") && !one.contains("/r0"), "{one}");
+    }
+
+    #[test]
+    fn nothing_replayable_says_so_and_prints_no_policy_table() {
+        let out = text(&tune_of(0));
+        assert!(out.contains("nothing to replay"), "{out}");
+        assert!(!out.contains("baseline@1"), "{out}");
+    }
+}

@@ -320,3 +320,5 @@ pub fn tune(parsed: &Parsed, logs: &HashMap<String, Log>, tz_min: i32) -> Tune {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_edge;
