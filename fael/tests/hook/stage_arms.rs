@@ -6,8 +6,8 @@
 //! arm line here is synthetic, written the way the push writes it.
 
 use super::stage::{
-    ROWS, append, gate_file, gate_rows, probe_repo, put_stage, session_start, shadow_usage,
-    shadow_usage_into, stage_now, start_as, with_rows,
+    ROWS, append, gate_file, gate_rows, probe_repo, put_stage, shadow_usage, shadow_usage_into,
+    stage_now, stop_as, stop_look, with_rows,
 };
 use super::working_set::{add, grep, id_of};
 use super::{fael, fael_env, repo, state};
@@ -122,10 +122,10 @@ fn the_stages_chain_shadow_to_canary_to_ramp_and_fael_counts_none_of_its_own_row
     shadow_usage(&d, 40, false);
     // two sessions, so the second change's row replaces one the session never saw
     let envs = |s: &'static str| [("FAEL_SESSION", s)];
-    start_as(&state(&d), &d, "e1", &envs("e1"));
+    stop_as(&state(&d), &d, "e1", &envs("e1"));
     assert_eq!(stage_now(&d).as_deref(), Some("canary"));
     arm_usage(&d, (40, 40), (1, 1)); // 2.5% each way: the dup bar holds
-    start_as(&state(&d), &d, "e2", &envs("e2"));
+    stop_as(&state(&d), &d, "e2", &envs("e2"));
     assert_eq!(stage_now(&d).as_deref(), Some("ramp"));
     assert_eq!(
         gate_history(&d),
@@ -138,7 +138,7 @@ fn the_stages_chain_shadow_to_canary_to_ramp_and_fael_counts_none_of_its_own_row
     assert!(dups(&d).is_empty(), "{:?}", dups(&d));
     // a ramp that keeps validating stays a ramp and files nothing more
     arm_usage(&d, (40, 40), (1, 1));
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(stage_now(&d).as_deref(), Some("ramp"));
     assert_eq!(gate_history(&d).len(), 2);
 }
@@ -149,7 +149,7 @@ fn candidate_sessions_that_dup_more_than_the_baseline_arm_roll_the_repo_back() {
         let d = with_rows();
         put_stage(&d, "touch@1", from);
         arm_usage(&d, (40, 40), (12, 1)); // 30% against 2.5%
-        session_start(&d);
+        stop_look(&d);
         assert_eq!(stage_now(&d).as_deref(), Some("baseline"), "{from}");
         let rows = gate_rows(&d);
         assert_eq!(rows.len(), 1, "{rows:?}");
@@ -173,18 +173,18 @@ fn each_repo_is_judged_on_its_own_usage_in_one_shared_log() {
     // shadow: B's 40 good sessions must not promote A's thin 13
     shadow_usage_into(&a, &shared, 13, false);
     shadow_usage_into(&b, &shared, 40, false);
-    start_as(&state(&a), &a, "ea", &[]);
+    stop_as(&state(&a), &a, "ea", &[]);
     assert_eq!(stage_now(&a).as_deref(), Some("shadow"));
     assert!(gate_history(&a).is_empty());
-    start_as(&state(&a), &b, "eb", &[]);
+    stop_as(&state(&a), &b, "eb", &[]);
     assert_eq!(stage_now(&b).as_deref(), Some("canary"));
     assert!(gate_history(&a).is_empty(), "B's change is not A's row");
     // arms: A rolls back on its own dups while B, in the same log, ramps
     put_stage(&a, "touch@1", "canary");
     arm_usage_into(&a, &shared, (40, 40), (12, 1));
     arm_usage_into(&b, &shared, (40, 40), (1, 1));
-    start_as(&state(&a), &a, "ea2", &[]);
-    start_as(&state(&a), &b, "eb2", &[]);
+    stop_as(&state(&a), &a, "ea2", &[]);
+    stop_as(&state(&a), &b, "eb2", &[]);
     assert_eq!(stage_now(&a).as_deref(), Some("baseline"));
     assert_eq!(stage_now(&b).as_deref(), Some("ramp"));
 }
@@ -205,7 +205,7 @@ fn a_pruned_usage_log_and_a_torn_line_cost_nothing() {
         &state(&d).join("usage.jsonl"),
         r#"{"event":"search","repo":"#,
     ); // torn, no newline
-    session_start(&d);
+    stop_look(&d);
     assert_eq!(
         stage_now(&d).as_deref(),
         Some("canary"),
@@ -227,7 +227,7 @@ fn a_plain_folder_keeps_its_stage_beside_its_own_log() {
     }
     assert!(!p.join(".git").exists());
     shadow_usage(&p, 40, false);
-    session_start(&p);
+    stop_look(&p);
     let file = p.join(".fael/cache/push-gate.json");
     let s: Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
     assert_eq!(s["stage"], "canary", "{s}");
@@ -319,10 +319,10 @@ mod denied {
             set_mode(&d, 0o755);
             return;
         }
-        session_start(&d);
+        stop_look(&d);
         assert_eq!(stage_now(&d), None, "the row could not be written");
         set_mode(&d, 0o755);
-        session_start(&d);
+        stop_look(&d);
         assert_eq!(stage_now(&d).as_deref(), Some("canary"));
         assert_eq!(gate_history(&d), [("shadow".into(), "canary".into())]);
     }

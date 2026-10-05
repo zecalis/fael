@@ -18,14 +18,16 @@ pub(crate) struct Info {
     pub(crate) files: Vec<String>,
 }
 
-/// `--since` for `stats` and `report`: `None` when absent, an error naming the
-/// two accepted forms when unreadable.
+/// `--since` for `stats`, `tune` and `report`: `None` when absent (this and
+/// last month's usage, `usage_files`), `Some(0)` for `all`, an error naming the
+/// accepted forms when unreadable.
 pub(crate) fn since(a: &Args) -> Result<Option<i64>, String> {
     a.one("since")
-        .map(|s| {
-            core::stats::since_arg(&s).ok_or(format!(
-                "rejected: --since {s:?} — use YYYY-MM-DD or an RFC 3339 time"
-            ))
+        .map(|s| match s.as_str() {
+            "all" => Ok(0),
+            _ => core::stats::since_arg(&s).ok_or(format!(
+                "rejected: --since {s:?} — use YYYY-MM-DD, an RFC 3339 time or all"
+            )),
         })
         .transpose()
 }
@@ -63,9 +65,10 @@ pub(crate) fn report(a: &Args) -> Result<(), String> {
         }
     }
     let window = match a.one("since") {
+        Some(d) if d == "all" => "all recorded usage".into(),
         Some(d) => format!("since {d}"),
-        None if s.rounds.since.is_empty() => "all recorded usage".into(),
-        None => format!("since {} (first recorded use)", s.rounds.since),
+        None if s.rounds.since.is_empty() => "this and last month".into(),
+        None => format!("since {} (this and last month)", s.rounds.since),
     };
     let flag = a
         .one("since")

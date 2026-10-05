@@ -51,6 +51,7 @@ mod stop_risk;
 mod tags;
 mod tied;
 mod tune;
+mod usage_month;
 mod working_set;
 mod writer;
 

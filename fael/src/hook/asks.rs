@@ -7,7 +7,7 @@
 
 use super::askstats::{RealTokens, transcript_usage};
 use super::protocol::Ctx;
-use super::state::{now_rfc3339, state_dir};
+use super::state::now_rfc3339;
 use crate::core;
 use std::path::Path;
 
@@ -35,7 +35,8 @@ pub(crate) struct UsageMeta<'a> {
 /// Append one usage row, fail-open like the rest of this module: accounting
 /// must never fail the command it rode along with.
 pub(crate) fn append_row(row: serde_json::Value) {
-    let path = state_dir().join("usage.jsonl");
+    super::usage_files::rotate();
+    let path = super::usage_files::live();
     if let Some(parent) = path.parent()
         && std::fs::create_dir_all(parent).is_ok()
     {

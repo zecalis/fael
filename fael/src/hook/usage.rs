@@ -3,7 +3,7 @@
 //! numbers live in core so the desktop app shares them) and renders here.
 
 use super::asks::{self, UsageMeta};
-use super::state::{head_branch, now_rfc3339, state_dir};
+use super::state::{head_branch, now_rfc3339};
 use super::stats_text::{print_day, print_text};
 use crate::core;
 use std::collections::HashMap;
@@ -188,9 +188,10 @@ pub(crate) fn load(since: Option<i64>) -> Usage {
 /// `load`, keeping only the lines (and logs) of repos `keep` accepts — a repo's
 /// evaluator never reads another repo's usage (SPEC-fael-learn-loop §E).
 pub(crate) fn load_where(since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
-    let path = state_dir().join("usage.jsonl");
-    let mut s = std::fs::read_to_string(&path).unwrap_or_default();
-    if let Some(ms) = since {
+    let path = super::usage_files::live();
+    let mut s = super::usage_files::read(since);
+    // `--since all` (0) cuts nothing: skip the second parse of every line
+    if let Some(ms) = since.filter(|&ms| ms > 0) {
         s = core::stats::since(&s, ms);
     }
     // benchmark/test repos live in the OS temp dir (01M3CRR6A) — the boundary
