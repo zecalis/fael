@@ -25,9 +25,11 @@ pub(crate) struct UsageMeta<'a> {
     pub agent: Option<&'a str>,
     pub real: Option<RealTokens>,
     pub said: &'a [super::say::Said],
-    /// The repo-relative files an edit touched (absent on every other line):
-    /// what lets stats see two sessions at one file.
+    /// The repo-relative files a push was about (absent on every other line):
+    /// what lets stats see two sessions at one file, and the push's decision record.
     pub files: &'a [String],
+    /// A push's decision record (`decision::record`): its keys join the line.
+    pub decision: Option<&'a serde_json::Value>,
 }
 
 /// Append one usage row, fail-open like the rest of this module: accounting
@@ -62,6 +64,7 @@ pub(crate) fn hook_meta<'a>(c: &'a Ctx, ask: Option<&'a str>, real: bool) -> Usa
         real: real.then(|| transcript_usage(&c.session)).flatten(),
         said: &[],
         files: &[],
+        decision: None,
     }
 }
 

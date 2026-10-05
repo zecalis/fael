@@ -5,6 +5,7 @@
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::counts::counts;
+use super::decision;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{clear_stash, edits_path, lock_seen, peek_stash, record_edits, seen_path};
@@ -108,7 +109,7 @@ fn repo_files(c: &super::protocol::Ctx, raw: &[String]) -> Vec<String> {
     files
 }
 
-pub(crate) fn push(e: &Event, event: &str) -> Reply {
+pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let no = Reply::default;
     let c = match ctx(e) {
         Some(c) => c,
@@ -213,9 +214,11 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     }
     let mut r = out.reply();
     if let Some(context) = r.context() {
+        let decision = decision::record(trigger, &sel, n, &focus);
         let meta = UsageMeta {
             said: r.said(),
-            files: if edit { &files } else { &[] },
+            files: &files,
+            decision: Some(&decision),
             ..hook_meta(&c, None, true)
         };
         record_usage_shadow(

@@ -149,7 +149,20 @@ pub struct Selection<'a> {
     pub background_dirs: usize,
     /// The hub's File rows at the tail of `shown` (`PUSH_HUB_PEEK` at most).
     pub peek: usize,
+    /// More File rows than `PUSH_HUB_ROWS` — the push was a hub's.
+    pub hub: bool,
+    /// Every row `select` cut, with its L1 tier and why (`CUT_CAP` /
+    /// `CUT_HUB_PEEK`) — the decision record (SPEC-fael-learn-loop §A). The
+    /// token budget cuts later, at render, so it is not here.
+    pub cut: Vec<(&'a Row, usize, &'static str)>,
 }
+
+/// Why `select` cut a row: past the row cap …
+pub const CUT_CAP: &str = "cap";
+/// … or past the hub's peek (the cap would have kept it).
+pub const CUT_HUB_PEEK: &str = "hub_peek";
+/// Why render cut a row: the token budget ran out.
+pub const CUT_BUDGET: &str = "budget";
 
 /// The rows that did not render, split by the exact `fael find` call that
 /// reaches each.
@@ -171,8 +184,13 @@ impl Selection<'_> {
     /// Move the hub peek back into `omitted`: the push said it once already.
     pub fn drop_peek(&mut self) {
         let keep = self.shown.len() - self.peek;
-        self.shown.truncate(keep);
-        self.tiers.truncate(keep);
+        let tiers = self.tiers.split_off(keep);
+        let rows = self.shown.split_off(keep);
+        self.cut.extend(
+            rows.into_iter()
+                .zip(tiers)
+                .map(|(r, t)| (r, t, CUT_HUB_PEEK)),
+        );
         self.omitted += std::mem::take(&mut self.peek);
     }
 
@@ -271,6 +289,8 @@ pub fn select<'a>(
             omitted: 0,
             background_dirs: 0,
             peek: 0,
+            hub: false,
+            cut: vec![],
         };
     }
     let mut now: Vec<(&Row, usize)> = vec![];
@@ -287,25 +307,43 @@ pub fn select<'a>(
     }
     // Now rows always show; the cap only limits how much of File joins them,
     // and a hub's File rows join only PUSH_HUB_PEEK deep
-    let room = policy.max_rows.saturating_sub(now.len());
+    let cap_room = policy.max_rows.saturating_sub(now.len());
     let hub = file.len() > PUSH_HUB_ROWS;
     let room = if hub {
         let day = super::revisit::today();
         // stable: inside each half the cmp_rows order holds
         file.sort_by_key(|(r, _)| !super::revisit::row_waiting(r, &day));
-        room.min(PUSH_HUB_PEEK)
+        cap_room.min(PUSH_HUB_PEEK)
     } else {
-        room
+        cap_room
     };
-    let omitted = file.len().saturating_sub(room);
+    // past the peek the hub rule cut it, past the plain cap the cap did
+    let cut: Vec<_> = file
+        .split_off(room.min(file.len()))
+        .into_iter()
+        .enumerate()
+        .map(|(i, (r, t))| {
+            (
+                r,
+                t,
+                if room + i >= cap_room {
+                    CUT_CAP
+                } else {
+                    CUT_HUB_PEEK
+                },
+            )
+        })
+        .collect();
     let peek = if hub { room.min(file.len()) } else { 0 };
-    now.extend(file.into_iter().take(room));
+    now.extend(file);
     let (shown, tiers) = now.into_iter().unzip();
     Selection {
         shown,
         tiers,
-        omitted,
+        omitted: cut.len(),
         background_dirs,
         peek,
+        hub,
+        cut,
     }
 }
