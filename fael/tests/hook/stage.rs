@@ -8,11 +8,11 @@ use super::{fael, fael_env, json, repo, state};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
-fn gate_file(d: &Path) -> PathBuf {
+pub(super) fn gate_file(d: &Path) -> PathBuf {
     d.join(".git/fael/cache/push-gate.json")
 }
 
-fn put_stage(d: &Path, policy: &str, stage: &str) {
+pub(super) fn put_stage(d: &Path, policy: &str, stage: &str) {
     std::fs::create_dir_all(gate_file(d).parent().unwrap()).unwrap();
     std::fs::write(
         gate_file(d),
@@ -21,7 +21,7 @@ fn put_stage(d: &Path, policy: &str, stage: &str) {
     .unwrap();
 }
 
-fn stage_now(d: &Path) -> Option<String> {
+pub(super) fn stage_now(d: &Path) -> Option<String> {
     let s = std::fs::read_to_string(gate_file(d)).ok()?;
     serde_json::from_str::<Value>(&s).ok()?["stage"]
         .as_str()
@@ -87,22 +87,32 @@ fn the_stage_file_decides_the_arm_and_a_pin_or_a_bad_file_cannot_be_overruled_by
     assert_eq!(arm(&b, "s1"), all);
 }
 
-const ROWS: usize = 6;
+pub(super) const ROWS: usize = 6;
 
 /// `sessions` sessions × 8 search pushes over four days, each saying the
 /// repo's `ROWS` decisions untouched, in shadow (`arm: all`); with `cite`, each
 /// session then cites a row, so the cut would have lost what the agent used.
-fn shadow_usage(d: &Path, sessions: usize, cite: bool) {
-    let ids: Vec<String> = (0..ROWS).map(|i| id_of(d, &format!("rule {i}"))).collect();
-    // the repo as the hook writes it, whatever the temp dir resolves to
+pub(super) fn shadow_usage(d: &Path, sessions: usize, cite: bool) {
+    shadow_usage_into(d, &state(d).join("usage.jsonl"), sessions, cite);
+}
+
+/// The repo field of `d`'s usage lines, as its own hook writes it (whatever the
+/// temp dir resolves to) — read off a probe push.
+pub(super) fn probe_repo(d: &Path) -> Value {
     grep(d, "probe", &["src/f0.rs"]);
-    let path = state(d).join("usage.jsonl");
-    let probe = std::fs::read_to_string(&path)
+    std::fs::read_to_string(state(d).join("usage.jsonl"))
         .unwrap()
         .lines()
         .map(|l| serde_json::from_str::<Value>(l).unwrap())
         .find(|l| l["event"] == "search")
-        .unwrap();
+        .unwrap()["repo"]
+        .clone()
+}
+
+/// `shadow_usage` for repo `d`, written to any machine-wide usage log.
+pub(super) fn shadow_usage_into(d: &Path, path: &Path, sessions: usize, cite: bool) {
+    let ids: Vec<String> = (0..ROWS).map(|i| id_of(d, &format!("rule {i}"))).collect();
+    let probe = json!({"repo": probe_repo(d)});
     let feat: serde_json::Map<String, Value> = ids
         .iter()
         .map(|id| {
@@ -134,11 +144,19 @@ fn shadow_usage(d: &Path, sessions: usize, cite: bool) {
             text += &(o.to_string() + "\n");
         }
     }
-    let mut f = std::fs::OpenOptions::new().append(true).open(path).unwrap();
+    append(path, &text);
+}
+
+pub(super) fn append(path: &Path, text: &str) {
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
     std::io::Write::write_all(&mut f, text.as_bytes()).unwrap();
 }
 
-fn with_rows() -> PathBuf {
+pub(super) fn with_rows() -> PathBuf {
     let d = repo();
     for i in 0..ROWS {
         add(
@@ -151,13 +169,19 @@ fn with_rows() -> PathBuf {
     d
 }
 
-fn session_start(d: &Path) {
-    let p = format!(r#"{{"cwd":{},"session":"evaluator"}}"#, json(d));
-    let (ok, out, err) = fael(d, &["hook", "session-start"], &p);
+pub(super) fn session_start(d: &Path) {
+    start_as(&state(d), d, "evaluator", &[]);
+}
+
+/// A session start of repo `d` whose usage log is `state`'s — two repos feeding
+/// one machine-wide log, as real ones do.
+pub(super) fn start_as(state: &Path, d: &Path, session: &str, envs: &[(&str, &str)]) {
+    let p = format!(r#"{{"cwd":{},"session":"{session}"}}"#, json(d));
+    let (ok, out, err) = super::fael_at_env(state, d, &["hook", "session-start"], &p, envs);
     assert!(ok, "{out}{err}");
 }
 
-fn gate_rows(d: &Path) -> Vec<Value> {
+pub(super) fn gate_rows(d: &Path) -> Vec<Value> {
     let (_, out, _) = fael(d, &["find", "--key", "policy:push-gate", "--json"], "");
     out.lines()
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())

@@ -60,3 +60,19 @@ fn hint_stop_edges_empty_ok_wrong_type_fails_loudly() {
         assert!(e.contains("stop"), "{toml}: {e}");
     }
 }
+
+#[test]
+fn push_policy_unset_is_auto_and_a_pin_or_a_typo_is_judged() {
+    // unset = the repo's own stages; the share only matters for a pin
+    let d = Config::from_toml("").unwrap();
+    assert_eq!((d.push_policy.as_str(), d.push_holdout), (AUTO, 20));
+    for v in ["auto", "baseline@1", "touch@1"] {
+        let c = Config::from_toml(&format!("push_policy = \"{v}\"")).unwrap();
+        assert_eq!(c.push_policy, v);
+    }
+    // a silent typo would run (or skip) the experiment; the error names `auto`
+    let e = Config::from_toml("push_policy = \"touch@9\"").unwrap_err();
+    assert!(e.contains("push_policy") && e.contains("auto"), "{e}");
+    let e = Config::from_toml("push_holdout = 101").unwrap_err();
+    assert!(e.contains("push_holdout"), "{e}");
+}

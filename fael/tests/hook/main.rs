@@ -42,6 +42,7 @@ mod seen;
 mod session;
 mod shadow;
 mod stage;
+mod stage_arms;
 mod stats;
 mod stats_golden;
 mod stop;
