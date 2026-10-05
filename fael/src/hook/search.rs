@@ -49,16 +49,26 @@ fn is_data(p: &str) -> bool {
         .is_some_and(|e| EXT.contains(&e.to_ascii_lowercase().as_str()))
 }
 
-/// Files touched by one search/shell call. `input` is `tool_input`,
+/// Files touched by one search/shell call, and what made them a touch:
+/// `reader-arg` (a path the call names), `hitlist` (the one file a grep's
+/// output names) or `glob` (the same from a glob). `input` is `tool_input`,
 /// `response` is `tool_response` (a string, or an object with `stdout`,
 /// `content`, `output`, `result` or `filenames`).
-pub(crate) fn touched(tool: &str, input: &Value, response: &Value, cwd: &Path) -> Vec<String> {
+pub(crate) fn touched(
+    tool: &str,
+    input: &Value,
+    response: &Value,
+    cwd: &Path,
+) -> (Vec<String>, &'static str) {
     let is_file = |p: &str| !p.is_empty() && cwd.join(p).is_file();
     let mut out: Vec<String> = vec![];
+    // true when `p` was new
     let mut add = |p: &str| {
-        if out.len() < MAX_FILES && is_file(p) && !out.iter().any(|o| o == p) {
+        let new = out.len() < MAX_FILES && is_file(p) && !out.iter().any(|o| o == p);
+        if new {
             out.push(p.to_string());
         }
+        new
     };
     let tool = tool.to_ascii_lowercase();
     let mut listing = tool == "grep" || tool == "glob";
@@ -101,6 +111,7 @@ pub(crate) fn touched(tool: &str, input: &Value, response: &Value, cwd: &Path) -
             }
         }
     }
+    let mut from_hits = false;
     if listing {
         let mut lines: Vec<&str> = vec![];
         match response {
@@ -132,10 +143,15 @@ pub(crate) fn touched(tool: &str, input: &Value, response: &Value, cwd: &Path) -
             }
         }
         if let [p] = hits[..] {
-            add(p);
+            from_hits = add(p);
         }
     }
-    out
+    let trigger = match (from_hits, tool == "glob") {
+        (false, _) => "reader-arg",
+        (true, false) => "hitlist",
+        (true, true) => "glob",
+    };
+    (out, trigger)
 }
 
 /// Files a shell call wrote: a word of the command (quotes, brackets and
@@ -172,18 +188,16 @@ pub(crate) fn edited(tool: &str, input: &Value, cwd: &Path) -> Vec<String> {
 pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, response: &Value) -> Reply {
     let cwd = Path::new(e.cwd.as_deref().unwrap_or("."));
     let wrote = edited(tool, input, cwd);
-    let read: Vec<String> = touched(tool, input, response, cwd)
-        .into_iter()
-        .filter(|f| !wrote.contains(f))
-        .collect();
+    let (read, trigger) = touched(tool, input, response, cwd);
+    let read: Vec<String> = read.into_iter().filter(|f| !wrote.contains(f)).collect();
     let mut out = Reply::default();
-    for (files, event) in [(wrote, SHELL_EDIT), (read, "search")] {
+    for (files, event, trigger) in [(wrote, SHELL_EDIT, SHELL_EDIT), (read, "search", trigger)] {
         if files.is_empty() {
             continue;
         }
         let e = Event { files, ..e.clone() };
         // one line per beat: the edit side's reminder wins
-        out = out.and(push(&e, event));
+        out = out.and(push(&e, event, trigger));
     }
     out
 }

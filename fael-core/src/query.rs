@@ -16,6 +16,7 @@ mod keyhint;
 mod lookup;
 mod matching;
 mod md;
+mod policy;
 mod push;
 mod refs;
 mod render;
@@ -25,14 +26,15 @@ mod stale;
 
 pub use explain::{EXPAND_MAX, expands, json_note, why_empty};
 pub use focus::{
-    Background, Bucket, Focus, Hidden, PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, PushPolicy,
-    Selection, bucket, on_work, select,
+    Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_HUB_PEEK, Focus, Hidden, PUSH_BACKGROUND,
+    PUSH_HUB_PEEK, PUSH_HUB_ROWS, PushPolicy, Selection, bucket, on_work, select,
 };
 pub use groups::{groups, render_groups};
 pub use keyhint::key_hints;
 pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, resolve_row, warnings};
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
+pub use policy::{BASELINE, PolicyDef};
 pub use push::{push, push_tiered};
 pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};
 pub use render::{

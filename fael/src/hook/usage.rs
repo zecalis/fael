@@ -137,6 +137,11 @@ pub(crate) fn usage_row(
     {
         row["said"] = s;
     }
+    if let Some(d) = meta.decision.and_then(|d| d.as_object()) {
+        for (k, v) in d {
+            row[k] = v.clone();
+        }
+    }
     row
 }
 

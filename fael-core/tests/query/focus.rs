@@ -335,3 +335,45 @@ fn select_hub_file_peeks_past_now_rows() {
     assert_eq!(sel.shown.len(), 5);
     assert_eq!(sel.omitted, PUSH_HUB_ROWS - 3);
 }
+
+fn rows(n: usize) -> Vec<Row> {
+    (0..n)
+        .map(|i| row(&format!("A{i:025}"), "decision", &["src/a.rs"], None))
+        .collect()
+}
+
+fn why(rows: &[Row], max_rows: usize) -> (Vec<&'static str>, usize, bool) {
+    let tiered = rows.iter().map(|r| (r, 0)).collect();
+    let sel = select(tiered, &Focus::default(), &policy(max_rows));
+    (
+        sel.cut.iter().map(|c| c.2).collect(),
+        sel.shown.len(),
+        sel.hub,
+    )
+}
+
+/// PLAN-fael-learn-loop chunk 1: every row `select` cuts says why.
+#[test]
+fn select_names_why_each_row_was_cut() {
+    // under the hub threshold the cap alone cuts
+    assert_eq!(why(&rows(7), 5), (vec![CUT_CAP; 2], 5, false));
+    // a hub: the peek (3) shows, the cap (5) would have shown two more
+    let (cut, shown, hub) = why(&rows(12), 5);
+    assert!(hub && shown == 3, "{cut:?}");
+    assert_eq!(cut[..2], [CUT_HUB_PEEK; 2]);
+    assert_eq!(cut[2..], [CUT_CAP; 7]);
+    // no row cap, nothing cut
+    assert_eq!(why(&rows(12), 0), (vec![], 12, false));
+}
+
+#[test]
+fn drop_peek_moves_the_peek_to_cut_as_hub_peek() {
+    let r = rows(12);
+    let tiered = r.iter().map(|r| (r, 0)).collect();
+    let mut sel = select(tiered, &Focus::default(), &policy(5));
+    let before = sel.cut.len();
+    sel.drop_peek();
+    assert_eq!((sel.shown.len(), sel.cut.len() - before), (0, 3));
+    assert!(sel.cut[before..].iter().all(|c| c.2 == CUT_HUB_PEEK));
+    assert_eq!(sel.omitted, sel.cut.len());
+}

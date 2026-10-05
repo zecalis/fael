@@ -27,6 +27,7 @@ mod capture;
 mod changed;
 mod claude;
 mod counts;
+mod decision;
 mod focus;
 mod markers;
 mod prompt;

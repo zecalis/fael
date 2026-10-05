@@ -23,6 +23,7 @@ mod clients;
 mod close_hint;
 mod compact;
 mod day;
+mod decision;
 mod focus;
 mod handoff;
 mod incident;

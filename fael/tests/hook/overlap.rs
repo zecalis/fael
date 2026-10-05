@@ -1,7 +1,8 @@
 //! 01M411WF step 2: edit usage lines (and the `in-context` line the same edit
 //! writes) name the edited file, and `fael stats` counts two sessions that
 //! edited one file within the window under `value.cross_agent.same_file`.
-//! Reads carry no file: only an edit says a session is at the file.
+//! Reads name their file too (the decision record), but only an edit says a
+//! session is at the file: overlap counts edit lines only.
 
 use super::{fael, json, repo};
 use std::path::Path;
@@ -48,9 +49,6 @@ fn edit_lines_name_the_file_and_two_sessions_on_it_count() {
     hook(&d, "edit", "s2", "src/a.rs");
     let lines = usage(&d);
     let files = |v: &serde_json::Value| v["files"].clone();
-    for l in lines.iter().filter(|l| l["event"] == "read") {
-        assert!(l.get("files").is_none(), "a read names no file: {l}");
-    }
     let edits: Vec<_> = lines.iter().filter(|l| l["event"] == "edit").collect();
     assert_eq!(edits.len(), 1, "{lines:?}");
     assert_eq!(edits[0]["session"], "s2", "{lines:?}");

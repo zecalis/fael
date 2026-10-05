@@ -82,14 +82,15 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
     let reply = match event {
         "stop" => stop(&e),
         "session-start" => session_start(&e),
-        "read" | "edit" => push(&e, event),
+        "read" | "edit" => push(&e, event, event),
         "search" if e.files.is_empty() => super::search::push_call(
             &e,
             e.tool.as_deref().unwrap_or(""),
             &e.tool_input,
             &e.tool_response,
         ),
-        "search" => push(&e, event),
+        // the client named the files: how it found them is not ours to say
+        "search" => push(&e, event, "search"),
         "prompt" => super::prompt::prompt(&e),
         _ => {
             eprintln!(

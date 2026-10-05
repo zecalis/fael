@@ -199,7 +199,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             let reply = if event == "search" {
                 super::search::push_call(&e, &p.tool_name, input, &p.tool_response)
             } else {
-                push(&e, event)
+                push(&e, event, event)
             };
             print_reply("PostToolUse", reply, codex);
             ExitCode::SUCCESS

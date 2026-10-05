@@ -22,10 +22,16 @@ Every number comes from two inputs, joined as pure functions in
   under `in_context`, never `ids` (nothing was pushed), each id once per
   session. Notes in context at that edit ride the same row under
   `in_context_notes` (nothing in `value` reads them). It is no injection: no
-  count above includes it. An `edit` or `shell-edit` push line, and that
-  `in-context` row, also carry `files` — the repo-relative files the edit
-  touched (a read, and every other line, carry none); an edit where fael said
-  nothing and had nothing in context writes no line at all. A hook reply also carries `said` — one
+  count above includes it. A push line (`read`, `search`, `edit`, `shell-edit`),
+  and the `in-context` row of an edit, also carry `files` — the repo-relative
+  files the push was about (every other line carries none); an edit where fael said
+  nothing and had nothing in context writes no line at all. A push line is also its
+  decision record (PLAN-fael-learn-loop chunk 1; nothing in `stats` reads it yet):
+  `trigger` (`read` · `edit` · `shell-edit` · a search's `reader-arg` / `hitlist` /
+  `glob`), `policy` (`baseline@1`), `feat` (per row said or cut: `tier`, `hub`,
+  `kind`, `age_d`) and, when rows were cut, `cut` (`[{id, r}]`, at most 20,
+  `r` = `cap` · `hub_peek` · `budget`) with `cut_n` (all of them). A cut row is
+  a system limit, not a policy's verdict. A hook reply also carries `said` — one
   `{kind, key?}` per line it said: `row` (row id), `ask` (row id; `*` in
   older lines, the generic clause before every ask named its row), `pointer` (key), `count` (one per count line:
   `<files>|file`, `<files>|dir:<dirs>`, `<files>|key:<key>` or `<files>|keys`),
