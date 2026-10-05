@@ -171,14 +171,14 @@ pub fn marker_hit(text: &str, packs: &[&Lang], negations_extra: &[&str]) -> Opti
     None
 }
 
-/// The add-time language warning, or `None` when every alphabetic char in
-/// `text` and `title` falls in an accepted `[lang] rows` script. Never a
-/// reject — one reject costs a whole round — one warning line instead.
-/// Under the default `rows = ["english"]` the string is byte-identical to
-/// the old hardcoded one. Symbols (→, ≤) are not alphabetic; accented
-/// Latin (é) is in the english script. An empty `rows` switches the check
-/// off, mirroring `marker = []` — no accepted script would otherwise make
-/// every letter foreign and garble the message.
+/// The add-time language warning, or `None` when at most `FOREIGN_SHARE` of
+/// the alphabetic chars in `text`, and in `title`, fall outside every accepted
+/// `[lang] rows` script — one cited term (`ภ.ง.ด.3` in an English hand-off)
+/// is not the row's language. Never a reject — one reject costs a whole
+/// round — one warning line instead. Symbols (→, ≤) are not alphabetic;
+/// accented Latin (é) is in the english script. An empty `rows` switches the
+/// check off, mirroring `marker = []` — no accepted script would otherwise
+/// make every letter foreign and garble the message.
 pub fn row_language_check(cfg: &Config, title: Option<&str>, text: &str) -> Option<String> {
     if cfg.lang_rows.is_empty() {
         return None;
@@ -187,24 +187,33 @@ pub fn row_language_check(cfg: &Config, title: Option<&str>, text: &str) -> Opti
     // quoted text is a term cited verbatim (`ภาษี` in an English row), not
     // the row's language — only the prose outside code/quotes is judged
     let foreign = |s: &str| {
-        strip_quoted(s)
+        let letters: Vec<char> = strip_quoted(s)
             .chars()
-            .any(|c| c.is_alphabetic() && !packs.iter().any(|p| in_script(p, c)))
+            .filter(|c| c.is_alphabetic())
+            .collect();
+        let n = letters
+            .iter()
+            .filter(|&&c| !packs.iter().any(|p| in_script(p, c)))
+            .count();
+        n * FOREIGN_SHARE.1 > letters.len() * FOREIGN_SHARE.0
     };
-    if foreign(text) || title.is_some_and(foreign) {
-        let langs = packs.iter().map(|p| p.name).collect::<Vec<_>>().join("/");
-        // the default keeps the exact string old tests and stats pin
-        if langs == "english" {
-            Some("row not in English — write rows in English from now on".into())
-        } else {
-            Some(format!(
-                "row not in {langs} — write rows in {langs} from now on"
-            ))
-        }
-    } else {
-        None
+    if !foreign(text) && !title.is_some_and(foreign) {
+        return None;
     }
+    let langs = packs.iter().map(|p| p.name).collect::<Vec<_>>().join("/");
+    let langs = if langs == "english" {
+        "English"
+    } else {
+        &langs
+    };
+    Some(format!(
+        "row not in {langs} — write rows in {langs} from now on; cite a foreign term in `backticks`"
+    ))
 }
+
+/// The share of foreign letters a row may carry before it reads as written
+/// in another language (numerator, denominator): 1 in 5.
+const FOREIGN_SHARE: (usize, usize) = (1, 5);
 
 fn in_script(pack: &Lang, c: char) -> bool {
     pack.script.iter().any(|r| r.contains(&c))
