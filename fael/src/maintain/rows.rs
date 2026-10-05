@@ -5,7 +5,7 @@
 //! processes). Every row-based note carries the full ids a cleanup agent
 //! needs (`doctor --json` prints them) — not just the abbreviated examples.
 
-use super::{alive, drift, fat, merged, noverdict, orphan, phantom, shipped};
+use super::{alive, drift, fat, merged, noverdict, orphan, phantom, shipped, unstamped};
 use crate::core;
 use std::collections::HashSet;
 use std::path::Path;
@@ -52,6 +52,9 @@ pub(super) fn open_row_notes(
     // rows on a file over the push cap: `fh` is stamped but push never
     // compares it, so the generic hint stands — one `metadata()` per file
     out.extend(noverdict::problem(log, root));
+    // rows with no `fh` on a file push could compare: no stamp, no verdict —
+    // a bare `fael bump` restamps once the reader checked it is still true
+    out.extend(unstamped::problem(log, root));
     out
 }
 

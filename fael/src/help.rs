@@ -188,7 +188,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
       with no row behind them — in rows, in close reasons and in the prose of
       every *.md in the repo (fenced code skipped); [NoVerdict] lists rows on a
       file over the 1 MiB push cap — push never says whether it changed since the
-      row was written (note only, never --fix); [Secret] flags a row that
+      row was written (note only, never --fix); [Unstamped] lists rows with no
+      file stamp — `fael bump <id>` stamps one you checked is still true (note
+      only, never --fix); [Secret] flags a row that
       holds a token — rotate it, then `fael purge <id>` (never --fix); --json prints each
       problem's full row ids for a cleanup pass; --fat lists every fat row,
       including pre-self-heal legacy rows that stay collapsed to one line by

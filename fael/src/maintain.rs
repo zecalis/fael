@@ -12,6 +12,7 @@ mod phantom;
 mod rows;
 mod shipped;
 mod status;
+mod unstamped;
 
 use crate::{Args, core, repo};
 use std::path::PathBuf;
