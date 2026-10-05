@@ -155,7 +155,9 @@ fn thai_title_warns_once_and_files() {
         .collect();
     assert_eq!(
         warns,
-        ["row not in English — write rows in English from now on"],
+        [
+            "row not in English — write rows in English from now on; cite a foreign term in `backticks`"
+        ],
         "{err}"
     );
     assert!(texts(&d).contains("stale notes after merge"));

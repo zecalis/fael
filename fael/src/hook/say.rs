@@ -5,7 +5,7 @@
 //! private to this module, so no other path can put words in front of the agent.
 //!
 //! The session's seen list (per session + sub-agent + worktree, gone on
-//! compact) holds a row id per row said, `~<id>` / `~*` per edit-hint ask and
+//! compact) holds a row id per row said, `~<id>` per edit-hint ask (`~*`, the old generic clause, in older lists) and
 //! `@<id>` per in-context mark. The prompt's pointer list is its own file of
 //! bare keys. No session = no file: every line is said, nothing remembered.
 
@@ -77,7 +77,7 @@ pub(crate) enum Kind {
     /// The session-start rows: said once per new or compacted context, never
     /// spent — the next read of a briefed file may push its rows again.
     Brief,
-    /// The edit hint: re-check rows already in context (`*` = the generic clause).
+    /// The edit hint: re-check rows already in context, each named.
     Ask { ids: Vec<String> },
     /// The prompt hint: open keys the prompt names.
     Pointer { keys: Vec<String> },

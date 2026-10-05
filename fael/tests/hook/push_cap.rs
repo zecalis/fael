@@ -180,9 +180,9 @@ fn edit_hides_same_dir_neighbour_but_names_the_dir_call() {
     let (ok, found, _) = fael(&d, &["find", "--files", "src/"], "");
     assert!(ok && found.contains("neighbour"), "{found}");
     // an edit push asks to retire a row the code outgrew; a read push never does
-    assert!(out.contains("--supersedes <id>"), "{out}");
+    assert!(out.contains("--supersedes "), "{out}");
     let (ok, read, _) = fael(&d, &["hook", "read"], &input);
-    assert!(ok && !read.contains("--supersedes <id>"), "{read}");
+    assert!(ok && !read.contains("--supersedes "), "{read}");
 }
 
 #[test]

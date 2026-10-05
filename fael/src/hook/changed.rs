@@ -15,9 +15,6 @@ use std::path::Path;
 /// reads the same number to list the rows this leaves without a verdict.
 pub(crate) const PUSH_MAX_BYTES: u64 = 1024 * 1024;
 
-/// The generic clause of the legacy hint: said for rows with no verdict.
-const STALE_HINT: &str = "fael: a row above the code now says or contradicts? `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`";
-
 /// One blob cache per push, so each file is read once however many rows name
 /// it (hub files carry dozens of rows) and the edit hint and the shadow split
 /// share the reads.
@@ -45,7 +42,7 @@ fn partition(rows: &[&core::Row], root: &Path, al: &core::Aliases, blobs: &mut B
     let mut changed_ids = vec![];
     let mut unchanged_ids = vec![];
     for r in rows {
-        match verdict(r, root, al, blobs) {
+        match verdict(r, root, al, blobs, &[]) {
             Verdict::Changed(_) => changed_ids.push(r.id.clone()),
             Verdict::Same => unchanged_ids.push(r.id.clone()),
             Verdict::Unknown => {}
@@ -54,23 +51,36 @@ fn partition(rows: &[&core::Row], root: &Path, al: &core::Aliases, blobs: &mut B
     (changed_ids, unchanged_ids)
 }
 
-fn verdict(row: &core::Row, root: &Path, al: &core::Aliases, blobs: &mut Blobs) -> Verdict {
+/// `only` narrows the row to the stamped files that live at one of these
+/// paths now (an edit's files); empty reads every stamped file. A row with no
+/// stamp among them is unknown.
+fn verdict(
+    row: &core::Row,
+    root: &Path,
+    al: &core::Aliases,
+    blobs: &mut Blobs,
+    only: &[String],
+) -> Verdict {
     let Some(fh) = row.file_hashes().filter(|fh| !fh.is_empty()) else {
         return Verdict::Unknown;
     };
-    let mut unknown = false;
+    let (mut unknown, mut read) = (false, 0);
     for (f, v) in fh {
         let (Some(want), Some(target)) = (v.as_str(), resolve(al, root, f)) else {
-            unknown = true;
+            unknown |= only.is_empty();
             continue;
         };
+        if !only.is_empty() && !only.contains(&target) {
+            continue;
+        }
+        read += 1;
         match file_verdict(want, &target, root, blobs) {
             Some(true) => return Verdict::Changed(target),
             Some(false) => {}
             None => unknown = true,
         }
     }
-    if unknown {
+    if unknown || read == 0 {
         Verdict::Unknown
     } else {
         Verdict::Same
@@ -133,21 +143,20 @@ pub(crate) fn split_said(
     (shown, (!edit).then(|| partition(&said, root, al, blobs)))
 }
 
-/// What an edit push knows about the session: rows already in the agent's
+/// What an edit push knows about the session: the files it edited (`files`,
+/// the only ones a hint may call changed), rows already in the agent's
 /// context (`told`), rows an earlier edit hint already named (`hinted`, the
-/// `~<id>` lines of the seen list; `~*` is the generic clause), and who is
-/// asking (`session`, so its own rows are left out).
+/// `~<id>` lines of the seen list), and who is asking (`session`, so its own
+/// rows are left out).
 pub(crate) struct Ask<'a> {
     pub log: &'a core::Log,
     pub root: &'a Path,
+    pub files: &'a [String],
     pub al: &'a core::Aliases,
     pub session: &'a str,
     pub told: &'a HashSet<String>,
     pub hinted: &'a HashSet<String>,
 }
-
-/// The generic clause's key in the seen list (no row id starts with `*`).
-const GENERIC: &str = "*";
 
 /// The hint text and the keys it spent: the caller appends `~<key>` for each,
 /// so the same row is never named twice in a session.
@@ -203,12 +212,14 @@ fn own_row(r: &core::Row, session: &str) -> bool {
 }
 
 /// The edit hint over the tier-0 rows already in the agent's context: rows
-/// whose files changed since the row was written are named (at most two, each
-/// with the changed file and the retire ready to run); rows whose files all
-/// match earn no hint; rows with no verdict keep the legacy hint (named open
-/// issues, else the generic clause) — beside the named rows only for open
-/// issues. A row or clause said by an earlier edit hint this session is not
-/// said again. `None` when no hint is earned.
+/// whose edited file changed since the row was written are named (at most
+/// two, each with the changed file and the retire ready to run); rows whose
+/// edited file matches earn no hint; rows with no verdict are named too (two
+/// at most, issues first: an open issue with a ready close, any other row
+/// with the retire) — beside the changed rows only open issues. Every ask names its
+/// row: an ask with no id is one the agent cannot act on. A row said by an
+/// earlier edit hint this session is not said again. `None` when no hint is
+/// earned.
 ///
 /// The edit hook runs after the write (PostToolUse), so "changed since the row
 /// was written" includes the edit just made: a row filed before it is the one
@@ -216,37 +227,38 @@ fn own_row(r: &core::Row, session: &str) -> bool {
 fn stale_hint(ask: &Ask, rows: &[&core::Row], blobs: &mut Blobs) -> Option<Hint> {
     let mut changed_rows: Vec<(&core::Row, String)> = vec![];
     let mut unknown_rows: Vec<&core::Row> = vec![];
-    for r in rows {
-        match verdict(r, ask.root, ask.al, blobs) {
-            Verdict::Changed(f) if !ask.hinted.contains(&r.id) => changed_rows.push((r, f)),
-            Verdict::Changed(_) | Verdict::Same => {}
+    for r in rows.iter().filter(|r| !ask.hinted.contains(&r.id)) {
+        match verdict(r, ask.root, ask.al, blobs, ask.files) {
+            Verdict::Changed(f) => changed_rows.push((r, f)),
+            Verdict::Same => {}
             Verdict::Unknown => unknown_rows.push(r),
         }
     }
     changed_rows.truncate(2);
     let named = !changed_rows.is_empty();
+    // issues first, the only ones said beside changed rows; two at most
+    unknown_rows.sort_by_key(|r| r.kind != "issue");
+    unknown_rows.retain(|r| !named || r.kind == "issue");
+    unknown_rows.truncate(2);
+    let (issues, others): (Vec<&core::Row>, Vec<&core::Row>) =
+        unknown_rows.into_iter().partition(|r| r.kind == "issue");
     let mut lines = vec![];
-    let mut spent: Vec<String> = vec![];
     if named {
         lines.push(changed_hint(ask.log, &changed_rows));
-        spent.extend(changed_rows.iter().map(|(r, _)| r.id.clone()));
     }
-    let issues: Vec<&core::Row> = unknown_rows
-        .iter()
-        .filter(|r| r.kind == "issue" && !ask.hinted.contains(&r.id))
-        .take(2)
-        .copied()
-        .collect();
     if !issues.is_empty() {
-        lines.push(close_hint(ask.log, &issues, !named));
-        spent.extend(issues.iter().map(|r| r.id.clone()));
-        if !named {
-            spent.push(GENERIC.to_string());
-        }
-    } else if !named && !unknown_rows.is_empty() && !ask.hinted.contains(GENERIC) {
-        lines.push(STALE_HINT.to_string());
-        spent.push(GENERIC.to_string());
+        lines.push(close_hint(ask.log, &issues));
     }
+    if !others.is_empty() {
+        lines.push(retire_hint(ask.log, &others));
+    }
+    let spent: Vec<String> = changed_rows
+        .iter()
+        .map(|(r, _)| *r)
+        .chain(issues.iter().copied())
+        .chain(others.iter().copied())
+        .map(|r| r.id.clone())
+        .collect();
     (!lines.is_empty()).then(|| Hint {
         text: lines.join("\n"),
         spent,
@@ -272,20 +284,27 @@ fn changed_hint(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
     )
 }
 
-/// The ready close for open issues with no verdict (at most two). `tail`
-/// adds the generic ask for any other row — left off when named rows beside
-/// it already carry the commands.
-fn close_hint(log: &core::Log, issues: &[&core::Row], tail: bool) -> String {
+/// The ready close for open issues with no verdict (at most two).
+fn close_hint(log: &core::Log, issues: &[&core::Row]) -> String {
     let ab = core::abbrev(log);
     let calls: Vec<String> = issues
         .iter()
         .map(|r| format!("fael close {} \"<why>\"", ab.short(&r.id)))
         .collect();
-    let calls = calls.join(" · ");
-    if !tail {
-        return format!("fael: done with one? {calls}");
-    }
+    format!("fael: done with one? {}", calls.join(" · "))
+}
+
+/// The retire for other rows with no verdict (at most two), named like
+/// `changed_hint` names its rows: `<id>` in the commands stands for either.
+fn retire_hint(log: &core::Log, rows: &[&core::Row]) -> String {
+    let ab = core::abbrev(log);
+    let ids: Vec<&str> = rows.iter().map(|r| ab.short(&r.id)).collect();
+    let s = match ids[..] {
+        [one] => one,
+        _ => "<id>",
+    };
     format!(
-        "fael: done with one? {calls} — any other row the code now says or contradicts: `fael close <id> \"now in <file>\"` or re-file it with `--supersedes <id>`"
+        "fael: does the code now say or contradict {}? `fael close {s} \"now in <file>\"` · or re-file with `--supersedes {s}`",
+        ids.join(" · ")
     )
 }

@@ -26,8 +26,8 @@ Every number comes from two inputs, joined as pure functions in
   `in-context` row, also carry `files` — the repo-relative files the edit
   touched (a read, and every other line, carry none); an edit where fael said
   nothing and had nothing in context writes no line at all. A hook reply also carries `said` — one
-  `{kind, key?}` per line it said: `row` (row id), `ask` (row id, `*`
-  for the generic clause), `pointer` (key), `count` (one per count line:
+  `{kind, key?}` per line it said: `row` (row id), `ask` (row id; `*` in
+  older lines, the generic clause before every ask named its row), `pointer` (key), `count` (one per count line:
   `<files>|file`, `<files>|dir:<dirs>`, `<files>|key:<key>` or `<files>|keys`),
   `brief` (no key — its rows are the line's `ids`),
   `bodies` and `notice` (no key). A pull that showed rows (`find`,

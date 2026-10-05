@@ -166,11 +166,11 @@ fn default_rows_warn_byte_identical() {
     let c = cfg(&["english"]);
     assert_eq!(
         row_language_check(&c, Some("หัวข้อไทย"), "stale notes"),
-        Some("row not in English — write rows in English from now on".into())
+        Some("row not in English — write rows in English from now on; cite a foreign term in `backticks`".into())
     );
     assert_eq!(
         row_language_check(&c, None, "stale notes หัวข้อไทย"),
-        Some("row not in English — write rows in English from now on".into())
+        Some("row not in English — write rows in English from now on; cite a foreign term in `backticks`".into())
     );
     assert_eq!(
         row_language_check(&c, None, "stale notes after merge"),
@@ -183,6 +183,15 @@ fn default_rows_warn_byte_identical() {
     // a term quoted in backticks is cited verbatim, not the row's language
     assert_eq!(
         row_language_check(&c, Some("rename `ภาษี` field"), "the `ภาษี` label stays"),
+        None
+    );
+    // one cited term in English prose is not the row's language
+    assert_eq!(
+        row_language_check(
+            &c,
+            None,
+            "hand-off: the filing flow for ภ.ง.ด.3 is wired up, the export step still waits on review"
+        ),
         None
     );
 }
@@ -203,7 +212,7 @@ fn thai_rows_pass_when_allowed_cjk_still_warns() {
         row_language_check(&c, Some("หัวข้อไทย"), "stale notes หัวข้อไทย"),
         None
     );
-    let w = row_language_check(&c, None, "stale notes バグ").unwrap();
+    let w = row_language_check(&c, None, "stale notes バグがある").unwrap();
     assert!(w.contains("english/thai"), "{w}");
     // title counts, same as before
     assert!(row_language_check(&c, Some("バグ"), "plain text").is_some());

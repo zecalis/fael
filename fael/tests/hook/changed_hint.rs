@@ -1,6 +1,6 @@
 //! PLAN-fael-file-hash chunk 2: the edit hint names the tier-0 rows whose
-//! files changed since the row was written, earns no hint when every such
-//! file still matches, and keeps the legacy hint for rows with no verdict.
+//! edited file changed since the row was written, earns no hint when it still
+//! matches, and names rows with no verdict with their ready retire.
 
 use super::{fael, fael_env, json, repo, strip_fh};
 use std::path::Path;
@@ -135,18 +135,30 @@ fn issue_without_fh_keeps_the_named_close() {
     assert!(out.contains("done with one?"), "{out}");
 }
 
+/// The ask names the row it means: an ask with no id is one the agent
+/// cannot act on.
 #[test]
-fn decision_without_fh_keeps_the_generic_hint() {
+fn decision_without_fh_is_named_with_its_retire() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    add(&d, "decision", "old choice predates hashes", "src/a.rs");
+    let id = add(&d, "decision", "old choice predates hashes", "src/a.rs");
     strip_fh(&d, "predates hashes");
     let out = edit(&d, "s1", "src/a.rs");
     assert!(!out.contains("changed since"), "{out}");
-    assert!(
-        out.contains("a row above the code now says or contradicts?"),
-        "{out}"
-    );
+    assert_retire_names(&out, &id);
+}
+
+/// The no-verdict retire line names `id` by its short form, commands included.
+fn assert_retire_names(out: &str, id: &str) {
+    let hint = out
+        .lines()
+        .find(|l| l.contains("does the code now say or contradict"))
+        .expect(out);
+    let short = hint.split("contradict ").nth(1).unwrap();
+    let short = short.split('?').next().unwrap();
+    assert!(id.starts_with(short), "{hint}\n{id}");
+    assert!(hint.contains(&format!("fael close {short} ")), "{hint}");
+    assert!(hint.contains(&format!("--supersedes {short}")), "{hint}");
 }
 
 /// A row filed under the old path reads the bytes at the new one: renamed
@@ -169,20 +181,25 @@ fn rename_resolves_to_the_new_bytes() {
     assert!(id.starts_with(shorts[0]), "{out}\n{id}");
 }
 
-/// The hint names the stamped file that differs, not the file being edited.
+/// The hint asks only about the file this edit touched: another file of the
+/// row (a shared PLAN another worktree edited) is not this session's to judge.
 #[test]
-fn hint_names_the_file_that_changed() {
+fn hint_asks_only_about_the_edited_file() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     std::fs::write(d.join("src/c.rs"), "// c v1\n").unwrap();
     add(&d, "decision", "pair choice", "src/a.rs,src/c.rs");
     std::fs::write(d.join("src/c.rs"), "// c v2\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
+    assert!(out.contains("pair choice"), "{out}");
+    assert!(!out.contains("changed since"), "{out}");
+    std::fs::write(d.join("src/a.rs"), "// a v2\n").unwrap();
+    let out = edit(&d, "s2", "src/a.rs");
     let hint = out
         .lines()
         .find(|l| l.contains("changed since"))
         .expect(&out);
-    assert!(hint.starts_with("fael: src/c.rs changed since"), "{hint}");
+    assert!(hint.starts_with("fael: src/a.rs changed since"), "{hint}");
 }
 
 /// A changed row does not hide the ready close of a no-verdict issue.
@@ -259,8 +276,8 @@ fn a_named_row_is_not_named_twice_in_a_session() {
     assert!(edit_or_silent(&d, "s2", "src/a.rs").contains("changed since"));
 }
 
-/// A row with no verdict gets its generic clause, and an open issue its ready
-/// close, once per session too.
+/// A row with no verdict gets its retire, and an open issue its ready close,
+/// once per session too.
 #[test]
 fn legacy_hints_are_said_once_per_session() {
     let d = repo();
@@ -270,19 +287,21 @@ fn legacy_hints_are_said_once_per_session() {
     strip_fh(&d, "predates hashes");
     let first = edit_or_silent(&d, "s1", "src/a.rs");
     assert!(first.contains("done with one?"), "{first}");
+    assert!(first.contains("does the code now say"), "{first}");
     let again = edit_or_silent(&d, "s1", "src/a.rs");
     assert!(!again.contains("done with one?"), "{again}");
-    assert!(!again.contains("a row above"), "{again}");
+    assert!(!again.contains("does the code now say"), "{again}");
 }
 
 #[test]
-fn the_generic_clause_is_said_once_per_session() {
+fn a_no_verdict_row_is_named_once_per_session() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     add(&d, "decision", "old choice predates hashes", "src/a.rs");
     strip_fh(&d, "predates hashes");
-    assert!(edit_or_silent(&d, "s1", "src/a.rs").contains("a row above"));
-    assert!(!edit_or_silent(&d, "s1", "src/a.rs").contains("a row above"));
+    let ask = "does the code now say";
+    assert!(edit_or_silent(&d, "s1", "src/a.rs").contains(ask));
+    assert!(!edit_or_silent(&d, "s1", "src/a.rs").contains(ask));
 }
 
 /// The agent that just filed a row is not asked whether it is still true after
@@ -343,7 +362,7 @@ fn a_row_this_session_filed_is_not_asked_about_by_transcript_path() {
 
 /// Stamped at ~2 MiB (over the push path's 1 MiB read cap, under the 16 MiB
 /// stamp cap): the edit push does not hash it, so the row has no verdict and
-/// the generic hint stands — never "changed", never silence.
+/// the row is named with its retire — never "changed", never silence.
 #[test]
 fn file_over_the_push_cap_is_unknown_not_changed() {
     let d = repo();
@@ -352,11 +371,8 @@ fn file_over_the_push_cap_is_unknown_not_changed() {
         "fn f() { let x = 1; }\n".repeat(100_000),
     )
     .unwrap();
-    add(&d, "decision", "big generated table choice", "src/big.rs");
+    let id = add(&d, "decision", "big generated table choice", "src/big.rs");
     let out = edit(&d, "s1", "src/big.rs");
     assert!(!out.contains("changed since"), "{out}");
-    assert!(
-        out.contains("a row above the code now says or contradicts?"),
-        "{out}"
-    );
+    assert_retire_names(&out, &id);
 }

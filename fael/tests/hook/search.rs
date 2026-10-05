@@ -1,6 +1,7 @@
 //! Grep/Bash push: an agent that reads through the shell still gets the rows
 //! about the files it touched — from the command's arguments and from a
-//! grep's hit list, never from a path that is not a file on disk.
+//! grep's hit list when it names one file, never from a path that is not a
+//! file on disk.
 
 use super::{fael, json, repo, state};
 use std::path::Path;
@@ -76,29 +77,49 @@ fn a_shell_read_pushes_the_rows_of_its_file() {
 }
 
 #[test]
-fn a_grep_hit_list_pushes_the_files_it_names() {
+fn a_grep_hit_list_pushes_only_a_lone_file() {
     let d = repo();
     seed(&d);
+    // two matched files: a match is not intent, nothing pushes
     let out = bash(
         &d,
         "s1",
         "grep -rn x src",
         "src/a.rs:1:// x\nsrc/b.rs:1:// x\n",
     );
+    assert!(out.is_empty(), "{out}");
+    // every hit in one file: that file pushes
+    let out = bash(
+        &d,
+        "s2",
+        "grep -rn x src",
+        "src/a.rs:1:// x\nsrc/a.rs:2:// x\n",
+    );
     assert!(
-        out.contains("login loops") && out.contains("retry storms"),
+        out.contains("login loops") && !out.contains("retry storms"),
         "{out}"
     );
     // the Grep tool: files_with_matches lists bare paths
     let out = search(
         &d,
-        "s2",
+        "s3",
         "Grep",
         r#"{"pattern":"x","path":"src"}"#,
         r#"{"mode":"files_with_matches","filenames":["src/b.rs"],"numFiles":1}"#,
     );
     assert!(
         out.contains("retry storms") && !out.contains("login loops"),
+        "{out}"
+    );
+    // a file the grep names keeps pushing, whatever the hit list says
+    let out = bash(
+        &d,
+        "s4",
+        "grep -n x src/a.rs src/b.rs",
+        "src/a.rs:1:// x\nsrc/b.rs:1:// x\n",
+    );
+    assert!(
+        out.contains("login loops") && out.contains("retry storms"),
         "{out}"
     );
 }
@@ -151,7 +172,7 @@ fn only_readers_and_real_files_push() {
 }
 
 #[test]
-fn a_hit_list_is_capped() {
+fn a_wide_hit_list_pushes_nothing() {
     let d = repo();
     let mut hits = String::new();
     for i in 0..20 {
@@ -166,11 +187,7 @@ fn a_hit_list_is_capped() {
         hits.push_str(&format!("{f}:1:// x\n"));
     }
     let out = bash(&d, "s1", "grep -rn x src", &hits);
-    // only the first 8 hits are looked up
-    assert!(
-        out.contains("src/f7.rs") && !out.contains("src/f8.rs"),
-        "{out}"
-    );
+    assert!(out.is_empty(), "{out}");
 }
 
 #[test]

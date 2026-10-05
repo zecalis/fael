@@ -167,6 +167,7 @@ pub(crate) fn push(e: &Event, event: &str) -> Reply {
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
+        files: &files,
         al: &al,
         session: &c.session,
         told: &told,
