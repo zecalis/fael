@@ -11,6 +11,7 @@ pub const MAX_DAY_SHARE_PCT: usize = 50;
 pub const MAX_SESSION_SHARE_PCT: usize = 10;
 
 /// A search push, reduced to what coverage and arm sizes count.
+#[derive(Clone, Copy)]
 pub struct Push<'a> {
     pub repo: &'a str,
     pub client: &'a str,

@@ -26,8 +26,8 @@ mod stale;
 
 pub use explain::{EXPAND_MAX, expands, json_note, why_empty};
 pub use focus::{
-    Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_HUB_PEEK, Focus, Hidden, PUSH_BACKGROUND,
-    PUSH_HUB_PEEK, PUSH_HUB_ROWS, PushPolicy, Selection, bucket, on_work, select,
+    Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_GATE, CUT_HUB_PEEK, Focus, Hidden,
+    PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, PushPolicy, Selection, bucket, on_work, select,
 };
 pub use groups::{groups, render_groups};
 pub use keyhint::key_hints;
@@ -35,7 +35,8 @@ pub use lookup::{KeyUse, fat_reasons, keys, levenshtein, query, resolve, resolve
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
 pub use policy::{
-    BASELINE, PolicyDef, TOUCH, TOUCH_YIELD, YIELD_MIN_N, touch_drops, touch_yield_drops,
+    ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, BASELINE, GATES, PolicyDef, TOUCH, TOUCH_YIELD,
+    YIELD_MIN_N, arm_of, touch_drops, touch_yield_drops,
 };
 pub use push::{push, push_tiered};
 pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};

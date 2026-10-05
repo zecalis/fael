@@ -57,7 +57,7 @@ fn a_read_push_records_trigger_files_policy_and_row_features() {
     assert_eq!(l["files"], json!(["src/a.rs"]), "{l}");
     assert_eq!(l["policy"], "baseline@1", "{l}");
     assert!(l.get("cut").is_none() && l.get("cut_n").is_none(), "{l}");
-    assert!(l.get("arm").is_none(), "no arm before the holdout: {l}");
+    assert_eq!(l["arm"], "all", "no gate configured, no experiment: {l}");
     // every said row carries its features
     let ids = l["ids"].as_array().unwrap();
     assert_eq!(ids.len(), 2, "{l}");

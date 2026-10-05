@@ -174,6 +174,17 @@ is untouched, so no `STATS_SCHEMA` bump; `Tune` carries its own `outcomes_v`.
 - **Coverage** (provisional thresholds from decision `01M45DKB4`: ≥3 days, busiest
   day ≤50%, busiest session ≤10% of search pushes) and **strata** (repo × client;
   eligible at ≥10 sessions and ≥100 search pushes) are reported, never tuned.
+- **Validation** (PLAN-fael-learn-loop chunk 5, SPEC §E) appears once push lines
+  carry an `arm` — `push_policy = "touch@1"` in `.fael/config.toml`. Candidate
+  sessions are cut for real (`gate`); holdout sessions run `baseline@1`. The
+  replay tables above leave candidate-arm lines out (their rows are what the gate
+  left). The block prints arm sizes per stratum with the trigger-mix guard (> 10
+  points = `unbalanced`, not compared), exposure (rows said per session), what the
+  gate forfeits (the candidate replayed on holdout rows), `missed_push` over gate
+  cuts, and the sessions that went back for a cut row — then one verdict:
+  `validated`, `not_validated` or `insufficient_data`, with reasons. `dup` is not
+  measured, so the session gate rests on `retrieved_after_cut`. A human files the
+  decision row; `tune` writes nothing.
 - **An upper bound.** The replay holds the session fixed: a row a candidate had
   dropped would have stayed unseen and could have been said at a later push,
   which the log cannot show. Read every cost as at most what the data says.

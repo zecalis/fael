@@ -5,7 +5,7 @@
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::counts::counts;
-use super::decision;
+use super::decision::{self, Gate};
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{
@@ -112,6 +112,18 @@ fn repo_files(c: &super::protocol::Ctx, raw: &[String]) -> Vec<String> {
     files
 }
 
+/// Only adopted repos record an edit — `add` derives files from this list only there.
+fn note_edit(c: &super::protocol::Ctx, files: &[String]) {
+    if !c.session.is_empty() && crate::journal::home(&c.repo).is_some() {
+        record_edits(
+            &edits_path(&c.session, &c.repo.root),
+            &c.repo.root.to_string_lossy(),
+            &c.session,
+            files,
+        );
+    }
+}
+
 pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let no = Reply::default;
     let c = match ctx(e) {
@@ -124,14 +136,8 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     if files.is_empty() {
         return no();
     }
-    // only adopted repos — `add` derives files from this list only there
-    if edit && !c.session.is_empty() && crate::journal::home(&c.repo).is_some() {
-        record_edits(
-            &edits_path(&c.session, &c.repo.root),
-            &c.repo.root.to_string_lossy(),
-            &c.session,
-            &files,
-        );
+    if edit {
+        note_edit(&c, &files);
     }
     // L1 gather (renames resolve through the L1 cache only), then L3/L4 rank
     // + select against the session Focus: one small file read, no git spawn
@@ -172,6 +178,9 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         .then(|| swap_touched(&touched_path(&c.session, &c.agent, &c.repo.root), &files));
     let (told, hinted) = read_seen(out.seen());
     tiered.retain(|(r, _)| !out.has(&r.id));
+    // the validation experiment (SPEC-fael-learn-loop §E): a candidate session's
+    // search push loses the rows its gate cuts before `select` fills the cap
+    let gate = Gate::for_push(&c, event, &mut tiered, touched.as_ref());
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
@@ -220,8 +229,14 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         clear_stash(&c.session, &c.repo.root);
     }
     let mut r = out.reply();
-    if let Some(context) = r.context() {
-        let decision = decision::record(trigger, &sel, n, &focus, touched.as_ref());
+    // a push the gate left silent is still a decision: its cut rows are what
+    // `tune` measures. Nothing said, so nothing shown either.
+    if r.context().is_some() || !gate.cut.is_empty() {
+        let (context, n, shown) = match r.context() {
+            Some(c) => (c, n, &shown[..]),
+            None => ("", 0, &[][..]),
+        };
+        let decision = decision::record(trigger, &sel, n, &focus, touched.as_ref(), &gate);
         let meta = UsageMeta {
             said: r.said(),
             files: &files,
@@ -233,7 +248,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
             event,
             &c.repo.root,
             context,
-            &shown,
+            shown,
             &meta,
             // no row said, nothing to split
             shadow.filter(|_| n > 0),
