@@ -30,9 +30,9 @@ Every number comes from two inputs, joined as pure functions in
   `trigger` (`read` · `edit` · `shell-edit` · `search` (the client named
   the files, so how it found them is not ours to say) · a search's `reader-arg` / `hitlist` /
   `glob`), `policy` (`baseline@1`), `feat` (per row said, and the first 20 cut: `tier`, `hub`,
-  `kind`, `age_d`) and, when rows were cut, `cut` (`[{id, r}]`, at most 20,
+  `kind`, `age_d`, and `touch` = how many of the row's files this session's working set (the files its earlier pushes were on) already held — absent with no session) and, when rows were cut, `cut` (`[{id, r}]`, at most 20,
   `r` = `cap` · `hub_peek` · `budget`) with `cut_n` (all of them). A cut row is
-  a system limit, not a policy's verdict. A hook reply also carries `said` — one
+  a system limit, not a policy's verdict. `would_drop` (`{policy, ids}`, chunk 3) names the said rows the shadow policy `touch@1` would have cut — a row with `touch` 0 unless it is an issue or a handoff; recorded only, the agent saw them all. A hook reply also carries `said` — one
   `{kind, key?}` per line it said: `row` (row id), `ask` (row id; `*` in
   older lines, the generic clause before every ask named its row), `pointer` (key), `count` (one per count line:
   `<files>|file`, `<files>|dir:<dirs>`, `<files>|key:<key>` or `<files>|keys`),

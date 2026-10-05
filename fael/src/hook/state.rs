@@ -3,6 +3,7 @@
 //! tiny std-only time helpers the hook path uses instead of chrono.
 
 use crate::core;
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -54,6 +55,35 @@ pub(crate) fn seen_path(session: &str, agent: &str, root: &Path) -> PathBuf {
     let id = session_id(session);
     let key = session_key(&format!("{id}\0{}{sub}", root.to_string_lossy()));
     state_dir().join("sessions").join(format!("{key}.seen"))
+}
+
+/// `<seen file>.touched` — the files this context window has pushed on, one
+/// per line (the session's working set). Keyed like the seen list, so the
+/// lock `lock_seen` holds guards it too.
+pub(crate) fn touched_path(session: &str, agent: &str, root: &Path) -> PathBuf {
+    seen_path(session, agent, root).with_extension("touched")
+}
+
+/// The working set so far, then `files` added to it — one read and one append,
+/// so the caller's `touch` counts only what came before this push. Fails open:
+/// unreadable = empty, unwritable = not remembered.
+pub(crate) fn swap_touched(p: &Path, files: &[String]) -> HashSet<String> {
+    let before: HashSet<String> = std::fs::read_to_string(p)
+        .unwrap_or_default()
+        .lines()
+        .map(String::from)
+        .collect();
+    let new: String = files
+        .iter()
+        .filter(|f| !before.contains(*f))
+        .map(|f| format!("{f}\n"))
+        .collect();
+    if !new.is_empty()
+        && let Ok(mut f) = OpenOptions::new().create(true).append(true).open(p)
+    {
+        let _ = f.write_all(new.as_bytes());
+    }
+    before
 }
 
 /// Chunk 6e: ids this session already holds in context — just filed by `add`
