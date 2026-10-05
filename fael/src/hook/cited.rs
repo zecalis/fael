@@ -123,6 +123,8 @@ mod tests {
         assert!(!t("fael find 01M45R3J0A8Q39CQEH7YBCPA1N").contains("01M45R3J"));
         assert!(!t("cd x && FAEL_STATE_DIR=y /usr/bin/fael close 01M45R3J").contains("01M45R3J"));
         assert!(t("git commit -m 'fix per 01M45R3J'").contains("01M45R3J"));
+        // a bare `fael` word later in a quoted message is no command
+        assert!(t("echo 'x' && git commit -m \"a fael 01M45R3J\"").contains("01M45R3J"));
     }
 
     #[test]
@@ -131,6 +133,7 @@ mod tests {
         let seen = format!("{id}\nk:x\n");
         assert_eq!(candidates(&seen, "see 01M45R3J here"), [id]);
         assert!(candidates(&seen, "see 01M45R3K here").is_empty());
+        assert!(candidates(&seen, "see 01M45R3 here").is_empty(), "7 chars");
         assert!(
             candidates("k:x\n", "see 01M45R3J here").is_empty(),
             "never said"

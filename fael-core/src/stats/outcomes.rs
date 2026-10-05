@@ -230,7 +230,11 @@ mod tests {
             rows: super::super::said::tests::rows(&["A", "G", "H", "I", "N"].map(row).concat()),
             ..Log::default()
         };
-        log.closes = super::super::said::tests::rows(closes);
+        let (bumps, closes): (Vec<_>, Vec<_>) = super::super::said::tests::rows(closes)
+            .into_iter()
+            .partition(|r| r.bumps.is_some());
+        log.rows.extend(bumps);
+        log.closes = closes;
         let p = super::super::parse::parse(
             usage,
             Path::new("/w/state/usage.jsonl"),
@@ -302,5 +306,34 @@ mod tests {
         ) + &line(1, r#""event":"find","found":["G"],"q":{"id":"G"}"#);
         let o = run(&usage, "");
         assert_eq!((o["G"].retrieved_after_cut, o["G"].missed_push), (1, 0));
+    }
+
+    #[test]
+    fn sessions_count_once_each_and_the_day_window_holds() {
+        let in_s2 = |min: u8, rest: &str| line(min, rest).replace("\"s1\"", "\"s2\"");
+        let push = r#""event":"read","ids":["A","G"]"#;
+        // two sessions, each told A twice: two observations, not four
+        let usage = line(0, push) + &line(1, push) + &in_s2(2, push) + &in_s2(3, push);
+        // A closed 3 days after the first push: outside the window. G bumped inside it
+        let bump = "{\"v\":1,\"id\":\"B\",\"ts\":\"2026-10-05T05:00:00Z\",\"by\":\"w\",\"kind\":\"bump\",\"text\":\"t\",\"files\":[],\"bumps\":\"G\"}\n";
+        let o = run(&usage, &(close("A", "2026-10-08T00:00:00Z") + bump));
+        assert_eq!((o["A"].shown, o["A"].acted), (2, 0), "{:?}", o["A"]);
+        assert_eq!((o["G"].shown, o["G"].acted), (2, 2), "{:?}", o["G"]);
+    }
+
+    #[test]
+    fn an_outcome_line_is_no_injection() {
+        let usage = line(0, r#""event":"read","bytes":9,"est_tokens":2,"ids":["A"]"#)
+            + &line(
+                1,
+                r#""event":"outcome","bytes":0,"est_tokens":0,"ids":[],"cited":["A"]"#,
+            );
+        let p = super::super::parse::parse(
+            &usage,
+            Path::new("/w/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        assert_eq!((p.n, p.by_event.len()), (1, 1));
+        assert!(p.rows.len() == 1 && p.kept.len() == 2);
     }
 }

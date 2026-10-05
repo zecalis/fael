@@ -124,3 +124,77 @@ fn a_pull_is_agent_initiated_unless_fael_pointed_at_it() {
     );
     assert_eq!(o["cited"], 0, "a pull is no cite: {o}");
 }
+
+#[test]
+fn the_claude_adapter_cites_from_its_tool_input() {
+    let d = repo();
+    let id = said(&d);
+    let short = &id[..8];
+    // Claude Code's shape: `session_id`, an Edit's `tool_input` — the same
+    // seen list the neutral read above filled
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"s1","tool_name":"Edit","tool_input":{{"file_path":{},"new_string":"// per {short}"}}}}"#,
+        json(&d),
+        json(&d.join("src/b.rs"))
+    );
+    let (ok, out, err) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
+    assert!(ok, "{out}{err}");
+    assert_eq!(cited(&d), [json!([id])]);
+    // a Bash call reaches the same door through `search`
+    let bash = format!(
+        r#"{{"cwd":{},"session_id":"s2","tool_name":"Bash","tool_input":{{"command":"git commit -m 'fix {short}'"}},"tool_response":{{}}}}"#,
+        json(&d)
+    );
+    let (ok, out, err) = fael(&d, &["hook", "search", "--client", "claude"], &bash);
+    assert!(ok, "{out}{err}");
+    assert_eq!(cited(&d).len(), 1, "s2 was never told the row");
+}
+
+#[test]
+fn a_pull_by_the_count_line_is_induced_and_a_pull_by_id_is_the_agents() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    for i in 0..7 {
+        let t = format!("decision {i}");
+        let (ok, _, err) = fael(&d, &["add", "decision", &t, "--files", "src/a.rs"], "");
+        assert!(ok, "{err}");
+    }
+    call(&d, "read", "s1", r#""files":["src/a.rs"]"#);
+    let read = usage(&d)
+        .into_iter()
+        .find(|l| l["event"] == "read")
+        .unwrap();
+    let kinds: Vec<&str> = read["said"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["kind"].as_str().unwrap())
+        .collect();
+    assert!(kinds.contains(&"count"), "{read}");
+    let cut: Vec<&str> = read["cut"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap())
+        .collect();
+    assert!(cut.len() >= 2, "{read}");
+    let env = [("FAEL_SESSION", "s1")];
+    // the agent asks for one cut row by id
+    let (ok, _, err) = fael_env(&d, &["find", cut[0]], "", &env);
+    assert!(ok, "{err}");
+    // the count line's own call brings back the rest
+    let (ok, _, err) = fael_env(&d, &["find", "--files", "src/a.rs"], "", &env);
+    assert!(ok, "{err}");
+    let o = &row(&d, cut[0])["outcomes"];
+    assert_eq!(o["retrieved_after_cut"], 1, "{o}");
+    assert_eq!(o["missed_push"], 0, "a cap cut is no policy cut: {o}");
+    let o = &row(&d, cut[1])["outcomes"];
+    assert_eq!(o["retrieved_after_cut"], 0, "fael pointed there: {o}");
+    // a row said, then shown again by the count line's call
+    let said_id = read["ids"][0].as_str().unwrap();
+    let o = &row(&d, said_id)["outcomes"];
+    assert_eq!(
+        o["pulled"],
+        json!({"agent_initiated": 0, "fael_induced": 1})
+    );
+}
