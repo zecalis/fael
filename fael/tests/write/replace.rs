@@ -145,3 +145,56 @@ fn replace_rejects_what_it_cannot_place_exactly() {
     let (_, list, _) = fael(&d, &["find", "--files", "doc:a"], "");
     assert_eq!(list.matches("- [").count(), 1, "{list}");
 }
+
+/// The vela slip: one passage of a multi-topic decision reversed. The re-file
+/// keeps the old row's topic list — not a new fault, so it needs no --force,
+/// and the old row is superseded instead of left open beside a contradiction.
+#[test]
+fn replace_on_a_fat_row_needs_no_force() {
+    let d = repo();
+    let text = "no font width table · fixed column widths · thai digits";
+    let (ok, _, err) = add(
+        &d,
+        &[
+            "decision",
+            text,
+            "--files",
+            "doc:a",
+            "--key",
+            "print:layout",
+        ],
+    );
+    assert!(!ok && err.contains("rejected: nothing written"), "{err}");
+    let (ok, out, err) = add(
+        &d,
+        &[
+            "decision",
+            text,
+            "--files",
+            "doc:a",
+            "--key",
+            "print:layout",
+            "--force",
+        ],
+    );
+    assert!(ok, "{err}");
+    let old = out.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = add(
+        &d,
+        &[
+            "decision",
+            "--supersedes",
+            &old,
+            "--replace",
+            "no font width table",
+            "--with",
+            "a font width table",
+        ],
+    );
+    assert!(ok, "{err}");
+    let (_, list, _) = fael(&d, &["find", "--key", "print:layout", "--full"], "");
+    assert!(
+        list.contains("a font width table") && list.matches("- [").count() == 1,
+        "{list}"
+    );
+}

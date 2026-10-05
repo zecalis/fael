@@ -192,6 +192,7 @@ fn file(c: &Ctx, l: &Line) -> Result<String, String> {
         urgent: core::Urgent::Unset,
         supersedes: None,
         force: false,
+        gate: false,
     };
     // files are never empty here (parse rejects it), so `add` cannot infer them
     add_row(&c.repo, l.kind, &l.text, &l.files, opts).map(|(row, ..)| row.id)

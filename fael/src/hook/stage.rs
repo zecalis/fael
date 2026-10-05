@@ -264,6 +264,7 @@ fn file_change(
         urgent: core::Urgent::Unset,
         supersedes: None,
         force: false,
+        gate: false,
     };
     write::add_row(repo, "decision", &body.to_string(), &[KEY.into()], opts).map(|_| ())
 }

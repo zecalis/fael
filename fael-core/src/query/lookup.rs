@@ -1,4 +1,5 @@
 use super::Filter;
+use super::shape::{topic_list, untitled};
 use super::{est_tokens, glob};
 use crate::{Config, Log, Row, anchor, is_carrier_row};
 use std::collections::HashMap;
@@ -111,13 +112,6 @@ pub fn query<'a>(log: &'a Log, f: &Filter, cfg: &Config) -> (Vec<&'a Row>, usize
     (page, f.limit.map_or(budget, |_| usize::MAX), total)
 }
 
-/// Chars per clause below which `;`-separated chunks read as a topic list
-/// rather than prose sentences: three-plus separators warn only while the
-/// row stays short (`chars < seps * CHARS_PER_CLAUSE`). Calibrated against
-/// real ledger rows (604–949 chars, 3–5 seps, all single-topic, all silent).
-/// Char-based so Thai/CJK (no spaces) judge by the same ruler as English.
-const CHARS_PER_CLAUSE: usize = 100;
-
 /// The chunk-3 fat-row conditions as reason bodies (no `warning: ` prefix):
 /// a decision with no key, `·`/`;` joining topics, doc paths with no
 /// anchor, text over `warn.row_tokens`.
@@ -134,19 +128,7 @@ pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
         );
     }
     let chars = row.text.chars().count();
-    // `·` joins topics — two of them is a list of topics. `;` is also plain
-    // English clause punctuation inside one topic: three separators read as
-    // a topic list only while the clauses stay short — prose clauses run a
-    // sentence long, so the check is a density and a long row needs more
-    // `;` per char before it stops being prose
-    let mid = row.text.chars().filter(|&c| c == '·').count();
-    let seps = mid + row.text.chars().filter(|&c| c == ';').count();
-    if mid >= 2 || (seps >= 3 && chars < seps * CHARS_PER_CLAUSE) {
-        r.push(format!(
-            "text has {seps} topic separators (; / ·) — one topic per row: split it, \
-each with --key area:topic, so one can be superseded alone"
-        ));
-    }
+    r.extend(topic_list(row));
     // a condition written into the text lists as ready work: --revisit is
     // the field `find --kind issue` sorts waiting rows by. Warn, never parse.
     if row.text.contains("WHEN:") && row.revisit().is_none_or(|v| v.trim().is_empty()) {
@@ -307,16 +289,7 @@ fn shape_warnings(row: &Row, cfg: &Config) -> Vec<String> {
         .into_iter()
         .map(|r| format!("warning: {r}"))
         .collect();
-    // lists show the title, bodies are pulled by id — a long untitled row
-    // costs its full text on every push. Thai and CJK have no spaces between
-    // words, so chars count too.
-    let words = row.text.split_whitespace().count();
-    let chars = row.text.chars().count();
-    if (words > 60 || chars > 400) && row.title.as_deref().is_none_or(|t| t.trim().is_empty()) {
-        w.push(format!(
-            "warning: text is {words} words with no title — add --title \"<≤15-word headline>\" so lists stay skimmable"
-        ));
-    }
+    w.extend(untitled(row).map(|r| format!("warning: {r}")));
     if let Some(t) = row.title.as_deref() {
         let n = t.split_whitespace().count();
         if n > 15 {

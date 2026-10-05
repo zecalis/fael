@@ -28,6 +28,7 @@ mod restore;
 mod revisit;
 mod search;
 mod select;
+mod shape;
 mod stale;
 mod title;
 mod urgent;

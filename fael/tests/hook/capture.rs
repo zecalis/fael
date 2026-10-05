@@ -223,3 +223,16 @@ fn a_subagent_stop_files_its_reply_and_never_blocks() {
     let (_, out, _) = fael(&d, &["hook", "read"], &read);
     assert!(out.contains("race in the writer"), "{out}");
 }
+
+/// A capture line cannot carry a title: a long untitled line still files
+/// (the add gate is off for hook-filed rows) — rejecting it would lose it.
+#[test]
+fn a_long_untitled_line_still_files() {
+    let d = adopted(repo());
+    let long = vec!["tenant"; 70].join(" ");
+    stop_reply(&d, &format!("fael note: {long} [files: src/a.rs]"));
+    let (_, out, _) = fael(&d, &["stats", "--json"], "");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["capture"]["reply_stored"], 1, "{out}");
+    assert_eq!(v["capture"]["reply_rejected"], 0, "{out}");
+}

@@ -10,7 +10,8 @@ description: This repo's memory of what git and code do not say — why a choice
 Rows in English — title, key, body; `quote` foreign terms; the dev reads them through you, in their language.
 Add each in the same message as your next tool call or final edit — never a turn of its own.
 Rows about a file come back when you touch it. One the code now says or contradicts misleads:
-close it (`now in <file>`) or re-file it with `--supersedes <id>`, in that same message.
+close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage of it:
+`--replace "<old>" --with "<new>"`), in that same message.
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there, one per finding — do not wait for the end of the task.**
 In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).

@@ -44,7 +44,14 @@ fn doctor_flags_fat_rows_and_ignores_closed_ones() {
     // the plan's done criterion: open decision, no key, three separators
     let (ok, out, err) = fael(
         &d,
-        &["add", "decision", "a; b; c; d", "--files", "src/a.rs"],
+        &[
+            "add",
+            "decision",
+            "a; b; c; d",
+            "--files",
+            "src/a.rs",
+            "--force",
+        ],
     );
     assert!(ok, "{err}");
     let id = out.split_whitespace().next().unwrap().to_string();
@@ -88,7 +95,14 @@ fn doctor_collapses_legacy_fat_rows_until_fat_flag() {
     // one new fat row through the real write path
     let (ok, out, err) = fael(
         &d,
-        &["add", "decision", "a; b; c; d", "--files", "src/a.rs"],
+        &[
+            "add",
+            "decision",
+            "a; b; c; d",
+            "--files",
+            "src/a.rs",
+            "--force",
+        ],
     );
     assert!(ok, "{err}");
     let new_id = out.split_whitespace().next().unwrap().to_string();

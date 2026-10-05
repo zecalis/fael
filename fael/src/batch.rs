@@ -213,6 +213,7 @@ pub(crate) fn batch_row(v: &serde_json::Value) -> Result<BatchRow, String> {
             urgent,
             supersedes: one("supersedes"),
             force: v["force"].as_bool().unwrap_or(false),
+            gate: true,
         },
     })
 }

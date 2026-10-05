@@ -33,9 +33,13 @@ fn reject_missing_files_counts() {
 fn warning_cli_counts_once_per_line() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    // 70 words, no title: exactly the no-title warning, filed anyway
+    // 70 words, no title, --force: exactly the no-title warning, filed anyway
     let text = vec!["word"; 70].join(" ");
-    let (ok, _, err) = fael(&d, &["add", "note", &text, "--files", "src/a.rs"], "");
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", &text, "--files", "src/a.rs", "--force"],
+        "",
+    );
     assert!(ok, "{err}");
     assert!(err.contains("no title"), "{err}");
     let u = usage(&d);
@@ -134,11 +138,13 @@ fn warning_add_carries_row_and_session() {
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let text = vec!["word"; 70].join(" ");
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
-    c.args(["add", "note", &text, "--files", "src/a.rs", "--json"])
-        .current_dir(&d)
-        .env_remove("FAEL_SESSION")
-        .env_remove("CODEX_THREAD_ID")
-        .env("CLAUDE_CODE_SESSION_ID", "sess-add-1");
+    c.args([
+        "add", "note", &text, "--files", "src/a.rs", "--json", "--force",
+    ])
+    .current_dir(&d)
+    .env_remove("FAEL_SESSION")
+    .env_remove("CODEX_THREAD_ID")
+    .env("CLAUDE_CODE_SESSION_ID", "sess-add-1");
     super::state_env(&mut c, &d);
     let o = c.output().unwrap();
     assert!(o.status.success(), "{o:?}");
