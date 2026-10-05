@@ -109,7 +109,8 @@ fn doctor_collapses_legacy_fat_rows_until_fat_flag() {
     let mut s = std::fs::read_to_string(&logs[0]).unwrap();
     s.push_str(&format!(
         "{{\"v\":1,\"id\":\"{legacy_id}\",\"ts\":\"2023-11-14T22:13:20Z\",\"by\":\"t-0000\",\
-         \"kind\":\"decision\",\"text\":\"legacy; fat; row; here\",\"files\":[\"src/a.rs\"]}}\n"
+         \"kind\":\"decision\",\"text\":\"legacy; fat; row; here\",\"files\":[\"src/a.rs\"],\
+         \"fh\":{{\"src/a.rs\":\"e69de29bb2d1\"}}}}\n" // stamped, so [Unstamped] stays out of this test
     ));
     std::fs::write(&logs[0], s).unwrap();
     let (ok, _, _) = fael(&d, &["doctor", "--fix"]);

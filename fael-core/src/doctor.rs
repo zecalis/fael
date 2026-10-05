@@ -106,6 +106,13 @@ pub enum Kind {
     /// stamps up to 16 MiB. Judged by `metadata()` in `doctor`, never in core;
     /// info-only and never `--fix`ed.
     NoVerdict,
+    /// open rows with no `fh` that name a real file the push could compare —
+    /// written before file hashes, or before the path existed — so push has
+    /// no stamp and never gives them a verdict; a bare `fael bump <id>`
+    /// restamps from disk. Judged by `metadata()` in `doctor`, never in core;
+    /// info-only and never `--fix`ed (a bump asserts "still true", a human's
+    /// call).
+    Unstamped,
     /// per-rule self-heal precision from restore labels
     /// (PLAN-fael-selfheal-restore chunk 3): a `restores` row labels the edge
     /// it reverts as wrong, an explicit re-supersede after it as right;
