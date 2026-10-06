@@ -216,7 +216,11 @@ fn fh_does_not_count_toward_the_row_cap() {
     // 10_000 bytes of text leaves under 200 for the line's other fields — the
     // eight stamped paths alone would overflow the 10 KiB cap
     let text = format!("a{}", "b".repeat(9_900));
-    let (ok, _, err) = fael(&d, &["add", "note", &text, "--files", &files.join(",")], "");
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", &text, "--files", &files.join(","), "--force"],
+        "",
+    );
     assert!(ok, "{err}");
     assert_eq!(fh(&d, "ab").as_object().unwrap().len(), 8);
 }

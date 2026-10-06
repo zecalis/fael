@@ -292,3 +292,40 @@ fn fael_dir_isolates_the_log() {
     assert_eq!(log_bytes(&d), before);
     assert!(scratch.join("log").exists());
 }
+
+/// The shape gate runs before the write on every agent path: a dry run
+/// rejects what the add would, MCP rejects and writes nothing, `force` files.
+#[test]
+fn shape_gate_rejects_on_dry_run_and_mcp() {
+    let d = repo();
+    let list = "cache · retries · backoff";
+    let before = log_bytes(&d);
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", list, "--files", "src/a.rs", "--dry-run"],
+        "",
+    );
+    assert!(!ok && err.contains("topic separators"), "{err}");
+    let note = serde_json::json!({"kind": "note", "text": list, "files": ["src/a.rs"]});
+    let (is_err, text) = mcp(&d, "add", note.clone());
+    assert!(
+        is_err && text.contains("rejected: nothing written"),
+        "{text}"
+    );
+    // a batch row is judged alone: the bad one reports, the clean one saves
+    let rows = serde_json::json!({"rows": [note, {"kind": "note", "text": "clean", "files": ["src/a.rs"]}]});
+    let (is_err, text) = mcp(&d, "add", rows);
+    assert!(
+        is_err && text.contains("rejected: row 0") && text.contains("recorded"),
+        "{text}"
+    );
+    let (ok, out, _) = fael(&d, &["find", "--files", "src/a.rs"], "");
+    assert!(ok && out.matches("- [").count() == 1, "{out}");
+    assert_ne!(log_bytes(&d), before, "the clean row saved");
+    let (is_err, text) = mcp(
+        &d,
+        "add",
+        serde_json::json!({"kind": "note", "text": list, "files": ["src/a.rs"], "force": true}),
+    );
+    assert!(!is_err, "{text}");
+}

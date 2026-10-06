@@ -23,7 +23,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
      key it `<topic>:handoff` and `fael stats` counts it when picked up; the receiver closes it
      with how it went (fael close <id> \"...\") and the sender reads that on fael find --all;
      working an open issue? fael claim <id> first — others then see (held @<branch>), never a lock;
-     --force files a path that looks like a typo of an existing one;
+     a topic list (; / ·), a long text with no --title, or a plan key off the handoff
+     convention (plan:<name>:handoff; chunk-<n> only for a chunk run in parallel) is
+     rejected before the write — --force files it, or a path that looks like a typo;
      --dry-run prints the verdict and the row the real add would write, writing nothing;
      a repeat on these files or key, \"Supersedes <id>\" in the text, and the
      only key on these files are filled in for you;

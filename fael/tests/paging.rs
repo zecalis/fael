@@ -40,7 +40,7 @@ fn repo() -> PathBuf {
 }
 
 fn add_issue(d: &Path, text: &str) {
-    let (ok, _, err) = fael(d, &["add", "issue", text, "--files", "src/a.rs"]);
+    let (ok, _, err) = fael(d, &["add", "issue", text, "--files", "src/a.rs", "--force"]);
     assert!(ok, "{err}");
 }
 

@@ -40,7 +40,7 @@ fn repo() -> PathBuf {
 
 /// Add an issue, return its id.
 fn issue(d: &Path, text: &str, files: &str, extra: &[&str]) -> (String, String) {
-    let mut args = vec!["add", "issue", text, "--files", files, "--json"];
+    let mut args = vec!["add", "issue", text, "--files", files, "--json", "--force"];
     args.extend(extra);
     let (ok, out, err) = fael(d, &args);
     assert!(ok, "{err}");

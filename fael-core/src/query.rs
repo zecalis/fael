@@ -22,6 +22,7 @@ mod refs;
 mod render;
 mod revisit;
 mod select;
+mod shape;
 mod stale;
 
 pub use explain::{EXPAND_MAX, expands, json_note, why_empty};
@@ -48,6 +49,7 @@ pub use select::{
     Urgent, UrgentChange, brief, closed, cmp_rows, find, fresh_ts, freshness, gone, gone_files,
     kickoff, page, ranked, resolve_urgent, reverted, superseded,
 };
+pub use shape::add_gate;
 pub use stale::{backtick_paths, stale_refs};
 
 /// What `find` narrows by. Every field is optional; `files` holds normalised refs.

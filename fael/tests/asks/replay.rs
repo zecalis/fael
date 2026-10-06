@@ -255,16 +255,22 @@ fn replay_validation_rejects() {
     assert_eq!(stats_json(&d)["asks"]["reject"]["events"], 3);
 }
 
-/// R8 — a long untitled row: files with exactly one warning today; the
-/// warning stays (self-heal files, it never silences).
+/// R8 — a long untitled row: rejected before the write (a warning after it
+/// was never acted on); `--force` files it with exactly one warning.
 #[test]
 fn replay_long_untitled_warns_once() {
     let d = replay_repo();
     let text = vec!["word"; 70].join(" ");
     let (ok, _, err) = fael(&d, &["add", "note", &text, "--files", "src/a.rs"], "");
+    assert!(
+        !ok && err.contains("rejected: nothing written") && err.contains("no title"),
+        "{err}"
+    );
+    let add = ["add", "note", &text, "--files", "src/a.rs", "--force"];
+    let (ok, _, err) = fael(&d, &add, "");
     assert!(ok, "{err}");
     assert!(err.contains("no title"), "{err}");
     let v = stats_json(&d);
     assert_eq!(v["asks"]["warning"]["events"], 1, "{v}");
-    assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
+    assert_eq!(v["asks"]["reject"]["events"], 1, "{v}");
 }

@@ -295,6 +295,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         urgent,
         supersedes: a.one("supersedes"),
         force: a.has("force"),
+        gate: true,
     };
     // `--dry-run` prints the Verdict the real add would act on and writes
     // nothing — same `prepare` as the real add, so the two can never disagree

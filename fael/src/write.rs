@@ -19,6 +19,10 @@ pub(crate) struct AddOpts {
     pub urgent: core::Urgent,
     pub supersedes: Option<String>,
     pub force: bool,
+    /// Reject the shape faults the caller can fix in the same call
+    /// (`core::shape_rejects`) before writing. Off for hook-filed rows: a
+    /// capture line cannot carry a `--title`, so there it only warns.
+    pub gate: bool,
 }
 
 /// A row built, healed and validated — everything short of the write. Shared
@@ -47,6 +51,7 @@ pub(crate) fn prepare(
         urgent,
         supersedes,
         force,
+        gate,
     } = opts;
     let mut files = core::normalize_files(files_arg, &r.cwd, &r.root)?;
     let mut warns = root_relative(r, files_arg, &mut files);
@@ -115,6 +120,10 @@ pub(crate) fn prepare(
     }
     // the write-time checks too, so a dry run rejects what the add would
     core::validate(&row, &r.cfg)?;
+    if gate && !force {
+        // reject before the write, never warn after it: nobody went back
+        core::add_gate(&row, &log, &r.cfg, evaluated.heal.supersedes.as_deref())?;
+    }
     let out = Pending {
         row,
         evaluated,

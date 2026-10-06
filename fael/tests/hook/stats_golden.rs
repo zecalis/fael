@@ -37,7 +37,7 @@ fn normalize(out: &str, state: &Path) -> String {
 // Constants below mirror SKILL.md + the MCP schema (asks.rs `constants`).
 // If either source changes, update the numbers here deliberately.
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 2344 bytes (~590 est) + MCP schema 3609 bytes (~905 est)";
+    "  constants per session: SKILL.md 2400 bytes (~604 est) + MCP schema 3609 bytes (~905 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -86,7 +86,7 @@ fn stats_json_matches_golden_values() {
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"reject": {"events": 0, "bytes": 0}, "warning": {"events": 0, "bytes": 0}},
-            "constants": {"skill_bytes": 2344, "skill_est": 590, "mcp_schema_bytes": 3609, "mcp_schema_est": 905},
+            "constants": {"skill_bytes": 2400, "skill_est": 604, "mcp_schema_bytes": 3609, "mcp_schema_est": 905},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "capture": {"reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "no_row_sessions": []},
