@@ -118,6 +118,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             // ask (`--wiring` = the new binary's half)
             if cmd == "install" {
                 install::cmd(client, dry, replace, false)
+            } else if a.has("auto") {
+                install::auto::run()
             } else {
                 install::upgrade(client, dry, replace, a.has("yes"), a.has("wiring"))
             }

@@ -9,7 +9,8 @@
 //! repo, including ones fael has not adopted yet.
 //!
 //! Thin entry only — the clients live in `install/`:
-//! `hooks` (the shared hooks-JSON shape), `claude`, `codex`, `opencode`.
+//! `hooks` (the shared hooks-JSON shape), `claude`, `codex`, `opencode`, `upgrade`
+//! (the binary step) and `auto` (the detached self-update).
 
 /// `println!` unless the pass is `quiet` (`doctor` only counts what is pending).
 macro_rules! out {
@@ -20,6 +21,7 @@ macro_rules! out {
     };
 }
 
+pub(crate) mod auto;
 mod claude;
 mod codex;
 mod hooks;
