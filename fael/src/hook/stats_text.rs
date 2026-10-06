@@ -54,6 +54,7 @@ fn print_events(s: &core::stats::Stats) {
 fn said_line(s: &core::stats::Stats) -> Option<String> {
     let parts: Vec<String> = core::stats::KINDS
         .iter()
+        .chain(&core::stats::ASK_SPLIT)
         .filter_map(|k| s.said.get(*k).map(|y| (k, y)))
         .filter(|(_, y)| y.said > 0)
         .map(|(k, y)| format!("{k} {}/{} ({}%)", y.earned, y.said, y.earned * 100 / y.said))

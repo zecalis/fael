@@ -20,7 +20,7 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - `fael add decision "<the choice, why, what was rejected>" --files a,b` — never what code does or progress
 - `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
-- Work for someone else: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
+- Work for someone else, or your next session (the user moves to a new one): `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
 Each row is read months later with no chat: one or two standalone sentences.

@@ -126,6 +126,39 @@ fn a_spent_mark_says_nothing_and_is_seen_next_time() {
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
 }
 
+/// A `per_turn` kind speaks once per user turn even on a key not yet spent;
+/// the next turn may say it again. No turn marked = no limit.
+#[test]
+fn a_per_turn_kind_is_said_once_per_turn() {
+    for l in all().into_iter().filter(|l| policy(&l.kind).per_turn) {
+        let p = seen("s.seen");
+        let other = |id: &str| Line {
+            kind: Kind::Ask {
+                ids: vec![id.into()],
+            },
+            ..l.clone()
+        };
+        let in_turn = |t: &str, l: Line| {
+            let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
+            out.say(l);
+            out.reply().context().map(String::from)
+        };
+        assert!(in_turn("t1", other("01A")).is_some());
+        assert_eq!(
+            in_turn("t1", other("01B")),
+            None,
+            "{:?} twice in a turn",
+            l.kind
+        );
+        assert!(in_turn("t2", other("01B")).is_some());
+        // the held-back line spent nothing: 01B is asked once, in t2
+        let (_, hinted) = read_seen(&std::fs::read_to_string(&p).unwrap());
+        assert!(hinted.contains("01A") && hinted.contains("01B"));
+        assert!(said(lock_seen(&p), other("01C")).is_some());
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+}
+
 #[test]
 fn no_session_says_every_time() {
     for l in all() {

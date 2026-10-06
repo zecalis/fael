@@ -267,9 +267,9 @@ fn find_filters_by_writer_and_includes_closed() {
     let mine = find(serde_json::json!({"by": writer}));
     assert!(mine.contains("keeper row one"), "{mine}");
     let none = find(serde_json::json!({"by": "no-such-writer"}));
-    // an empty find counts each part alone, so the dead filter shows
+    // an empty find names the dead filter
     assert!(
-        none.starts_with("no rows match") && none.contains("by=no-such-writer ×0"),
+        none.starts_with("no rows match by=no-such-writer"),
         "{none}"
     );
 }

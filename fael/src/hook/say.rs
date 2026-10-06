@@ -104,20 +104,28 @@ pub(crate) struct Policy {
     /// The command the line must offer, found in its text, or it is dropped.
     /// Set here, never by the caller that writes the text.
     pub(crate) command: Option<&'static str>,
+    /// At most one line of it per user turn (prompt to prompt): a task that
+    /// edits ten files would otherwise ask after ten edits. A row not asked
+    /// keeps its key, so a later turn's edit may ask it.
+    pub(crate) per_turn: bool,
 }
 
 /// The noise policy, in one place. A new `Kind` does not compile until it
 /// has an arm here; `say_contract::every_kind_has_a_fixture` fails until it
 /// has a fixture there.
 pub(crate) fn policy(k: &Kind) -> Policy {
-    let (once, command) = match k {
-        Kind::Row { .. } => (Once::Key, None),
-        Kind::Ask { .. } => (Once::Key, Some("fael close")),
-        Kind::Pointer { .. } => (Once::Key, Some("fael find --key")),
-        Kind::Bodies => (Once::Key, Some("fael find <id>")),
-        Kind::Brief | Kind::Notice => (Once::Event, None),
+    let (once, command, per_turn) = match k {
+        Kind::Row { .. } => (Once::Key, None, false),
+        Kind::Ask { .. } => (Once::Key, Some("fael close"), true),
+        Kind::Pointer { .. } => (Once::Key, Some("fael find --key"), false),
+        Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
+        Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
-    Policy { once, command }
+    Policy {
+        once,
+        command,
+        per_turn,
+    }
 }
 
 impl Kind {
@@ -192,6 +200,9 @@ pub(crate) struct Outbox {
     spent: Vec<String>,
     text: String,
     said: Vec<Said>,
+    /// `~turn:<id>`, the once-mark of a `per_turn` kind for the user's turn
+    /// (`turn`); `None` when no prompt hook marked one — no per-turn limit.
+    turn: Option<String>,
 }
 
 impl Outbox {
@@ -209,7 +220,20 @@ impl Outbox {
             spent: vec![],
             text: String::new(),
             said: vec![],
+            turn: None,
         }
+    }
+
+    /// The user turn this push runs in (`state::read_turn`): a `per_turn`
+    /// kind is said once in it.
+    pub(crate) fn in_turn(mut self, turn: Option<String>) -> Self {
+        self.turn = turn.map(|t| format!("~turn:{t}"));
+        self
+    }
+
+    /// The turn mark `kind` would spend: `None` when it has no per-turn limit.
+    fn turn_key(&self, kind: &Kind) -> Option<&String> {
+        self.turn.as_ref().filter(|_| policy(kind).per_turn)
     }
 
     /// The seen list as it was at `open`.
@@ -239,7 +263,7 @@ impl Outbox {
 
     /// False when a line of `kind` would be dropped for its spent keys.
     pub(crate) fn fresh(&self, kind: &Kind) -> bool {
-        self.fresh_keys(kind).is_some()
+        self.fresh_keys(kind).is_some() && self.turn_key(kind).is_none_or(|t| !self.is_spent(t))
     }
 
     /// False for a line `say` would drop: empty, without the command its kind
@@ -257,6 +281,9 @@ impl Outbox {
         }
         self.spent
             .extend(self.fresh_keys(&l.kind).unwrap_or_default());
+        if let Some(t) = self.turn_key(&l.kind).cloned() {
+            self.spent.push(t);
+        }
         self.text.push_str(&l.text);
         self.said.extend(l.kind.said());
     }
