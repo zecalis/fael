@@ -116,6 +116,15 @@ pub fn upgrade(
     yes: bool,
     wiring: bool,
 ) -> Result<(), String> {
+    // the channel command mutates the system (brew/npm) — a typo'd --client
+    // must error before it runs, not after (review #253 finding 1)
+    if let Some(n) = client.as_deref()
+        && !CLIENTS.contains(&n)
+    {
+        return Err(format!(
+            "fael install: unknown client {n:?} — want claude|codex|opencode"
+        ));
+    }
     if let (false, Some(home)) = (wiring, crate::home()) {
         let mut fwd = vec![];
         if let Some(c) = &client {

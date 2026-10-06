@@ -6,7 +6,8 @@
 //! update and the new binary's wiring pass. What it did lands in
 //! `<state>/update.json`; the next session start says one Notice and takes the
 //! result out. Off: `FAEL_NO_AUTO_UPDATE=1` or `auto_update = false` in
-//! `~/.config/fael/config.toml`; a hand-run `fael upgrade` is never affected.
+//! `~/.config/fael/config.toml` — while off no check starts and a stored
+//! receipt is taken silently; a hand-run `fael upgrade` is never affected.
 // ponytail: the tag's age is "seen for a day" (ls-remote has no dates), so a
 // release lands one to two days after it is out; the log is appended, never
 // truncated (~1 KB a day); a failed update retries daily and says so each time.
@@ -32,6 +33,7 @@ struct State {
     /// `checked_at` of the check that first saw `to`
     seen_at: u64,
     /// `updated` | `available` | `failed` — said once, then taken
+    #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<String>,
     why: String,
     log: String,
@@ -46,9 +48,13 @@ fn load() -> State {
     serde_json::from_str(&s).unwrap_or_default()
 }
 
-fn save(s: &State) {
-    let _ = std::fs::create_dir_all(state_dir());
-    let _ = serde_json::to_string(s).map(|j| std::fs::write(path(), j));
+fn save(s: &State) -> bool {
+    let Ok(j) = serde_json::to_string(s) else {
+        return false;
+    };
+    std::fs::create_dir_all(state_dir())
+        .and_then(|()| std::fs::write(path(), j))
+        .is_ok()
 }
 
 fn now() -> u64 {
@@ -87,7 +93,10 @@ pub(crate) fn start() {
     };
     s.checked_at = now();
     s.log = log.display().to_string();
-    save(&s);
+    if !save(&s) {
+        // nowhere to stamp the check — spawning now would respawn every session
+        return;
+    }
     let _ = Command::new(exe)
         .args(["upgrade", "--auto"])
         .stdin(Stdio::null())
@@ -96,11 +105,53 @@ pub(crate) fn start() {
         .spawn();
 }
 
+/// The take in notice() happens under this guard: `create_new` is atomic, so
+/// of two sessions starting at once only one takes the receipt. A caller that
+/// finds a live holder defers (the holder says the line); a lock older than a
+/// minute is a crashed session's and gets stolen, so no crash hushes every
+/// session after it. Removed when the section ends.
+struct TakeGuard(PathBuf);
+
+impl Drop for TakeGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn take_guard(dir: &Path) -> Option<TakeGuard> {
+    let p = dir.join("update.lock");
+    for _ in 0..20 {
+        match OpenOptions::new().create_new(true).write(true).open(&p) {
+            Ok(_) => return Some(TakeGuard(p)),
+            Err(_) => {
+                let stale = std::fs::metadata(&p)
+                    .and_then(|m| m.modified())
+                    .map(|t| t.elapsed().map(|d| d.as_secs() > 60).unwrap_or(true))
+                    .unwrap_or(true);
+                if stale {
+                    let _ = std::fs::remove_file(&p);
+                } else {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Session start, next session: the one line for the last check's result, once.
+/// Opted out, the receipt is still taken but stays silent — re-enabling says
+/// nothing stale.
 pub(crate) fn notice() -> Option<String> {
+    // a contended lock means another session is taking it right now — defer,
+    // it says the line; only a lone holder takes
+    let _guard = take_guard(&state_dir())?;
     let mut s = load();
     let result = s.result.take()?;
     save(&s);
+    if off() {
+        return None;
+    }
     let (from, to) = (&s.from, &s.to);
     Some(match result.as_str() {
         "updated" => format!("fael: updated {from} → {to} · wiring current\n"),
@@ -114,7 +165,14 @@ pub(crate) fn notice() -> Option<String> {
 }
 
 /// `fael upgrade --auto`: the detached child. Silent unless there is something to say.
-pub(crate) fn run() -> Result<(), String> {
+/// Flags that scope a hand-run upgrade are rejected, never silently ignored
+/// (--dry-run would be the worst: a real update wearing dry-run).
+pub(crate) fn run(dry: bool, client: bool, replace: bool) -> Result<(), String> {
+    if dry || client || replace {
+        return Err(
+            "rejected: `upgrade --auto` takes no --dry-run, --client or --replace-fapony".into(),
+        );
+    }
     if off() {
         return Ok(());
     }
@@ -222,5 +280,109 @@ mod tests {
         assert_eq!(newest(ls, "0.29.0").as_deref(), Some("0.30.0"));
         assert_eq!(newest(ls, "0.30.0"), None, "already the newest");
         assert_eq!(newest("", "0.29.0"), None, "offline reads as nothing");
+    }
+
+    /// Scoped env override (no other unit test touches these keys).
+    struct Env(&'static str, Option<std::ffi::OsString>);
+
+    impl Env {
+        fn set(key: &'static str, val: &str) -> Self {
+            let old = std::env::var_os(key);
+            unsafe {
+                std::env::set_var(key, val);
+            }
+            Self(key, old)
+        }
+
+        fn remove(key: &'static str) -> Self {
+            let old = std::env::var_os(key);
+            unsafe {
+                std::env::remove_var(key);
+            }
+            Self(key, old)
+        }
+    }
+
+    impl Drop for Env {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.1 {
+                    Some(v) => std::env::set_var(self.0, v),
+                    None => std::env::remove_var(self.0),
+                }
+            }
+        }
+    }
+
+    /// Of two sessions starting at once only one holds the take guard; once
+    /// freed it retakes.
+    #[test]
+    fn the_take_guard_is_exclusive() {
+        let dir = std::env::temp_dir().join(format!("fael-guard-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let held = super::take_guard(&dir).expect("first take");
+        let rival = std::thread::spawn({
+            let dir = dir.clone();
+            move || super::take_guard(&dir)
+        })
+        .join()
+        .unwrap();
+        assert!(rival.is_none(), "two holders of one receipt");
+        drop(held);
+        assert!(super::take_guard(&dir).is_some(), "freed guard retakes");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A crashed session's lock is stolen, never hushes every session after it.
+    #[test]
+    fn a_stale_take_guard_is_stolen() {
+        let dir = std::env::temp_dir().join(format!("fael-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = std::fs::File::create(dir.join("update.lock")).unwrap();
+        let past = std::time::SystemTime::now() - std::time::Duration::from_secs(61);
+        f.set_modified(past).unwrap();
+        drop(f);
+        assert!(super::take_guard(&dir).is_some(), "stale lock not stolen");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Eight sessions starting on one stored receipt: exactly one says it.
+    #[test]
+    fn concurrent_notices_say_a_receipt_once() {
+        use std::sync::Barrier;
+        let base = std::env::temp_dir().join(format!("fael-take-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let state = base.join("state");
+        std::fs::create_dir_all(&state).unwrap();
+        std::fs::write(
+            state.join("update.json"),
+            r#"{"checked_at":1,"seen_at":0,"from":"0.30.0","to":"99.0.0","result":"updated"}"#,
+        )
+        .unwrap();
+        let _state_dir = Env::set("FAEL_STATE_DIR", state.to_str().unwrap());
+        let _cfg = Env::set("XDG_CONFIG_HOME", base.join("cfg").to_str().unwrap());
+        let _opt_out = Env::remove("FAEL_NO_AUTO_UPDATE");
+        let barrier = Barrier::new(8);
+        std::thread::scope(|s| {
+            let mut handles = vec![];
+            for _ in 0..8 {
+                handles.push(s.spawn(|| {
+                    barrier.wait();
+                    super::notice()
+                }));
+            }
+            let said: Vec<_> = handles
+                .into_iter()
+                .filter_map(|h| h.join().unwrap())
+                .collect();
+            assert_eq!(said.len(), 1, "{said:?}");
+            assert!(said[0].contains("updated 0.30.0 → 99.0.0"), "{}", said[0]);
+        });
+        let json = std::fs::read_to_string(state.join("update.json")).unwrap_or_default();
+        assert!(!json.contains("\"result\""), "{json}");
+        assert!(!state.join("update.lock").exists(), "guard left behind");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

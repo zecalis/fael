@@ -119,7 +119,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             if cmd == "install" {
                 install::cmd(client, dry, replace, false)
             } else if a.has("auto") {
-                install::auto::run()
+                install::auto::run(a.has("dry-run"), client.is_some(), replace)
             } else {
                 install::upgrade(client, dry, replace, a.has("yes"), a.has("wiring"))
             }
