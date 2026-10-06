@@ -9,7 +9,10 @@ const ON: &[(&str, &str)] = &[("FAEL_NO_AUTO_UPDATE", "")];
 
 fn start(d: &Path, envs: &[(&str, &str)]) -> String {
     let input = format!(r#"{{"cwd":{}}}"#, json(d));
-    let (ok, out, err) = fael_env(d, &["hook", "session-start"], &input, envs);
+    // the machine's own config dir never decides a test
+    let xdg = state(d).join("home/.config");
+    let envs = [&[("XDG_CONFIG_HOME", xdg.to_str().unwrap())][..], envs].concat();
+    let (ok, out, err) = fael_env(d, &["hook", "session-start"], &input, &envs);
     assert!(ok, "{err}");
     out
 }
@@ -43,9 +46,9 @@ fn both_switches_start_nothing() {
     start(&d, &[("FAEL_NO_AUTO_UPDATE", "1")]);
     assert_eq!(update_json(&d), "", "env switch");
 
-    let cfg = state(&d).join("home/.config/fael");
-    std::fs::create_dir_all(&cfg).unwrap();
-    std::fs::write(cfg.join("config.toml"), "auto_update = false\n").unwrap();
+    let xdg = state(&d).join("home/.config");
+    std::fs::create_dir_all(xdg.join("fael")).unwrap();
+    std::fs::write(xdg.join("fael/config.toml"), "auto_update = false\n").unwrap();
     start(&d, ON);
     assert_eq!(update_json(&d), "", "config switch");
 }
