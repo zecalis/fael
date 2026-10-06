@@ -73,7 +73,11 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         let text = crate::find::branches::tag(core::render_full(&log, &[row], 10_000), &branch_of);
         return Ok((text, vec![shown]));
     }
-    let files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
+    let text = s(a, "text");
+    // `text: "plan:x"` reads the anchor the way `kickoff` does (CLI parity)
+    let (text, anchor) = crate::find::text_or_anchor(&log, None, text.as_ref(), r);
+    let mut files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
+    files.extend(anchor);
     // `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`)
     let revisit = match (a["revisit"].as_bool(), s(a, "revisit")) {
         (_, Some(v)) => Some(v),
@@ -81,7 +85,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         _ => None,
     };
     let f = core::Filter {
-        text: s(a, "text"),
+        text: text.cloned(),
         files: aliases::load(r, &log, true).expand_all(&files),
         key: s(a, "key"),
         kind: s(a, "kind"),
