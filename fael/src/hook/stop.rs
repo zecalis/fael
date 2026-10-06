@@ -76,6 +76,9 @@ fn adopted(c: &super::protocol::Ctx) -> bool {
 /// is stashed for the next push. Never blocks — fael never starts a turn.
 fn decide(e: &Event) -> Reply {
     let no = Reply::default();
+    // before the reply's lines are filed: an issue they write clears the
+    // reply's marker, which counts as said at this stop
+    let stop_ms = core::now_ms() as i64;
     let Some(mut c) = ctx(e) else { return no };
     // no log in the tree or the journal = fael never adopted here — skip the
     // transcript read
@@ -92,7 +95,7 @@ fn decide(e: &Event) -> Reply {
     let Some(since_ms) = session_start(e) else {
         return no;
     };
-    if let Some(marker) = bug_marker(e, &c.log, since_ms, &c.repo.cfg) {
+    if let Some(marker) = bug_marker(e, &c.log, since_ms, stop_ms, &c.repo.cfg) {
         stash_risk(&c.session, &c.repo.root, &marker);
     }
     no
@@ -118,13 +121,24 @@ fn collect_reply(e: &Event, c: &super::protocol::Ctx) -> capture::Filed {
 /// after the latest user message — unless an issue row at or after the match
 /// already clears it. An issue filed before the words never does.
 /// Phrases come from the repo's `[lang] marker` packs (PLAN-fael-languages).
-fn bug_marker(e: &Event, log: &core::Log, since_ms: i64, cfg: &core::Config) -> Option<String> {
-    let (marker, at_ms) = match (&e.text, e.session.as_deref()) {
-        (Some(text), _) => (has_bug_marker(text, cfg)?, since_ms),
-        (None, Some(t)) if Path::new(t).is_file() => {
-            bug_signal_from_transcript(Path::new(t), since_ms, cfg)?
-        }
-        _ => return None,
+/// Claude may fire Stop before the final reply reaches the transcript, so
+/// the client's copy of it (`reply`) is read when the file has no match.
+fn bug_marker(
+    e: &Event,
+    log: &core::Log,
+    since_ms: i64,
+    stop_ms: i64,
+    cfg: &core::Config,
+) -> Option<String> {
+    let (marker, at_ms) = match &e.text {
+        Some(text) => (has_bug_marker(text, cfg)?, since_ms),
+        None => e
+            .session
+            .as_deref()
+            .map(Path::new)
+            .filter(|t| t.is_file())
+            .and_then(|t| bug_signal_from_transcript(t, since_ms, cfg))
+            .or_else(|| Some((has_bug_marker(e.reply.as_deref()?, cfg)?, stop_ms)))?,
     };
     let cleared = log
         .rows

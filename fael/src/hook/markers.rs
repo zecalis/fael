@@ -43,7 +43,7 @@ pub(super) fn read_tail(path: &Path) -> Option<String> {
 }
 
 /// Scan assistant text in a Claude transcript tail for a bug marker — only
-/// lines after the latest user message (a plan written an hour ago must not
+/// lines after the latest user prompt (a plan written an hour ago must not
 /// flag this turn). Returns the marker with its line timestamp (fallback:
 /// the session start, when the line carries none) — an issue row clears it
 /// only when stamped at or after that.
@@ -66,6 +66,15 @@ pub(crate) fn bug_signal_from_transcript(
         let m = &v["message"];
         let role = m["role"].as_str().unwrap_or("");
         if role != "assistant" && role != "user" {
+            continue;
+        }
+        // a tool result is a user line too, but not a new turn: text said
+        // between tool calls still belongs to this one
+        let prompt = m["content"].is_string()
+            || m["content"]
+                .as_array()
+                .is_some_and(|a| a.iter().any(|b| b["type"] == "text"));
+        if role == "user" && !prompt {
             continue;
         }
         // Claude Code stamps each line at the top level, not inside `message`
