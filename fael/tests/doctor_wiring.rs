@@ -93,12 +93,29 @@ fn session_start_writes_the_wiring_that_is_behind_and_says_so_once() {
     fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
     let out = session_start(&home, &repo);
     assert!(out.contains("wiring brought up to date"), "{out}");
-    assert!(!out.contains("fael upgrade"), "{out}");
+    assert!(
+        !out.contains("fael upgrade") && !out.contains("/hooks"),
+        "{out}"
+    );
     assert!(home.join(".claude/settings.json").is_file());
     assert!(!fael(&home, &repo, &["doctor"]).contains("[Wiring]"));
 
     let out = session_start(&home, &repo);
     assert!(!out.contains("wiring"), "wiring is current: {out}");
+}
+
+/// Codex's hooks run only once trusted: a changed hooks.json says so.
+#[test]
+fn session_start_tells_codex_to_trust_the_hooks_it_wrote() {
+    let (home, repo) = scratch();
+    std::fs::create_dir_all(home.join(".codex")).unwrap();
+    std::fs::write(repo.join("a.rs"), "").unwrap();
+    fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
+    let out = session_start(&home, &repo);
+    assert!(out.contains("Codex first needs /hooks"), "{out}");
+    assert!(home.join(".codex/hooks.json").is_file());
+    let out = session_start(&home, &repo);
+    assert!(!out.contains("/hooks"), "said once: {out}");
 }
 
 /// A config fael cannot write: the old warning stays, nothing is hidden.

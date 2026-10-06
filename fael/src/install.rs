@@ -225,12 +225,18 @@ pub fn pending() -> u32 {
 }
 
 /// Writes what `pending` counts, printing nothing (session-start, PLAN-fael-auto-update
-/// chunk 1). Only fael's own entries change, as in `install`; the count written.
-pub fn apply_pending() -> Result<u32, String> {
+/// chunk 1). Only fael's own entries change, as in `install`. Returns the count
+/// written and whether Codex's hooks changed — they stay off until the user trusts them.
+pub fn apply_pending() -> Result<(u32, bool), String> {
     let home = crate::home().ok_or("no home directory")?;
+    let hooks = home.join(".codex/hooks.json");
+    let before = std::fs::read_to_string(&hooks).ok();
     let c = quiet(home, false);
     run(&c, &detect(&c.home, false))?;
-    Ok(c.changed.get())
+    Ok((
+        c.changed.get(),
+        std::fs::read_to_string(&hooks).ok() != before,
+    ))
 }
 
 fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {

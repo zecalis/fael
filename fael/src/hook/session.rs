@@ -182,9 +182,14 @@ fn warnings(repo: &crate::Repo, adopted: bool) -> Vec<String> {
         let wrote = crate::install::apply_pending();
         let behind = crate::install::pending();
         match wrote {
-            Ok(n) if n > 0 && behind == 0 => out.push(format!(
-                "fael: client wiring brought up to date ({n} change(s) written) — \
-                 newer file pushes are on from the next session"
+            Ok((n, trust)) if n > 0 && behind == 0 => out.push(format!(
+                "fael: client wiring brought up to date ({n} change(s) written) — newer file \
+                 pushes are on from the next session{}",
+                if trust {
+                    "; Codex first needs /hooks to trust the new hooks"
+                } else {
+                    ""
+                }
             )),
             _ if behind > 0 => out.push(format!(
                 "fael: {behind} client wiring change(s) behind this binary — some file pushes stay \
