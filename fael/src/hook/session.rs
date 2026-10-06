@@ -19,6 +19,8 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     prune_sessions(&state_dir().join("sessions"));
     // detached: teammates' rows land before the first read, never awaited
     super::autosync::start(e);
+    // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
+    crate::install::auto::start();
     // a compacted context lost the rows pushed into it — tell them again
     if e.source.as_deref() == Some("compact") && !c.session.is_empty() {
         let _ = std::fs::remove_file(seen_path(&c.session, "", &c.repo.root));
@@ -111,7 +113,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         kind: Kind::Brief,
         text: body,
     });
-    for warn in warnings(&c.repo, adopted) {
+    for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
     }
     let mut r = out.reply();

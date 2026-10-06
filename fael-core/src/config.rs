@@ -306,3 +306,27 @@ fn check_lang(key: &str, names: Vec<String>) -> Result<Vec<String>, String> {
     }
     Ok(names)
 }
+
+/// `auto_update` in the per-machine `~/.config/fael/config.toml` (PLAN-fael-auto-update
+/// chunk 3): `false` stops session-start from updating the binary. A file that
+/// cannot be parsed reads as off — an opt-out that failed to load must not be ignored.
+pub fn auto_update_on(toml: &str) -> bool {
+    #[derive(Deserialize)]
+    struct Machine {
+        auto_update: Option<bool>,
+    }
+    toml::from_str::<Machine>(toml).is_ok_and(|m| m.auto_update.unwrap_or(true))
+}
+
+#[cfg(test)]
+mod machine_tests {
+    use super::auto_update_on;
+
+    #[test]
+    fn only_an_explicit_false_or_a_broken_file_turns_it_off() {
+        assert!(auto_update_on(""));
+        assert!(auto_update_on("auto_update = true\nother = 1"));
+        assert!(!auto_update_on("auto_update = false"));
+        assert!(!auto_update_on("auto_update = \"no\""));
+    }
+}

@@ -2,6 +2,7 @@
 //! own `FAEL_STATE_DIR` through `Command::env`, so the tests run in parallel.
 //!
 //! Thin entry only — the suites sit next to this file:
+//! `autoupdate` (session-start's daily self-update check and its one Notice),
 //! `stop` (turn end: bug lines stashed, never a block), `autosync` (once-per-session `fael sync`), `stop_lang` ([lang] marker/rows packs),
 //! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `changed_hint` (PLAN-fael-file-hash chunk 2: the edit hint names changed rows),
@@ -17,6 +18,7 @@
 
 mod adopted;
 mod autosync;
+mod autoupdate;
 mod capture;
 mod changed_hint;
 mod clients;
@@ -96,7 +98,9 @@ fn fael_at_env(
     c.args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)
-        .env("HOME", state.join("home"));
+        .env("HOME", state.join("home"))
+        // session-start would start the daily self-update check (autoupdate.rs turns it on)
+        .env("FAEL_NO_AUTO_UPDATE", "1");
     // hook-session ids never inherit from the test runner's own shell
     // (an OpenCode/Codex shell exports FAEL_SESSION/CODEX_THREAD_ID) —
     // tests that file inside a session say so in `envs`

@@ -28,7 +28,7 @@ impl Channel {
 
 /// The channel from where the binary sits. `exe` is canonical, so a brew
 /// symlink in `bin/` already points into the Cellar.
-pub(crate) fn detect(exe: &Path, cargo_home: &Path) -> Channel {
+pub(super) fn detect(exe: &Path, cargo_home: &Path) -> Channel {
     let p = exe.to_string_lossy().replace('\\', "/");
     if p.contains("/Cellar/") {
         Channel::Brew
@@ -44,7 +44,7 @@ pub(crate) fn detect(exe: &Path, cargo_home: &Path) -> Channel {
 /// The update command of a channel; `None` when there is nothing to run
 /// (an unknown channel, or an installer with no `fael-update` beside it —
 /// a pre-receipt install: run the installer once more).
-fn command(ch: &Channel, exe: &Path) -> Option<Vec<String>> {
+pub(super) fn command(ch: &Channel, exe: &Path) -> Option<Vec<String>> {
     let s = |v: &[&str]| Some(v.iter().map(|x| x.to_string()).collect());
     match ch {
         Channel::Brew => s(&["brew", "upgrade", "zecalis/tap/fael"]),
@@ -58,7 +58,7 @@ fn command(ch: &Channel, exe: &Path) -> Option<Vec<String>> {
     }
 }
 
-fn cargo_home(home: &Path) -> PathBuf {
+pub(super) fn cargo_home(home: &Path) -> PathBuf {
     std::env::var_os("CARGO_HOME")
         .filter(|h| !h.is_empty())
         .map(PathBuf::from)

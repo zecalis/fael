@@ -237,7 +237,7 @@ const COMMANDS: &[(&str, &str, &str)] = &[
         "upgrade",
         "update the binary, hooks and skills (alias: update)",
         "fael upgrade [--client claude|codex|opencode] [--dry-run] [--yes] [--replace-fapony]
-    (updates the binary by the channel it came from — brew, npm or the shell/ps1 installer's fael-update — then the new binary writes hooks and skills; asks first, --yes skips the question, --dry-run shows the channel, the command and the wiring changes; `fael update` is the same)",
+    (updates the binary by the channel it came from — brew, npm or the shell/ps1 installer's fael-update — then the new binary writes hooks and skills; asks first, --yes skips the question, --dry-run shows the channel, the command and the wiring changes; `fael update` is the same; session-start runs `--auto` itself once a day, detached — off with FAEL_NO_AUTO_UPDATE=1 or `auto_update = false` in ~/.config/fael/config.toml)",
     ),
 ];
 
