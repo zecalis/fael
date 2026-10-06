@@ -24,6 +24,7 @@ mod claude;
 mod codex;
 mod hooks;
 mod opencode;
+mod upgrade;
 
 use std::cell::Cell;
 use std::io::{BufRead, IsTerminal, Write};
@@ -104,6 +105,30 @@ impl Ctx {
     }
 }
 
+/// `fael upgrade`: update the binary by its channel (the new binary then writes
+/// the wiring), else just the wiring. `wiring` = that second call: skip the binary.
+pub fn upgrade(
+    client: Option<String>,
+    dry: bool,
+    replace: bool,
+    yes: bool,
+    wiring: bool,
+) -> Result<(), String> {
+    if let (false, Some(home)) = (wiring, crate::home()) {
+        let mut fwd = vec![];
+        if let Some(c) = &client {
+            fwd.extend(["--client".to_string(), c.clone()]);
+        }
+        if replace {
+            fwd.push("--replace-fapony".into());
+        }
+        if upgrade::binary(&home, &fwd, dry, yes)? {
+            return Ok(());
+        }
+    }
+    cmd(client, dry, replace, !yes)
+}
+
 pub fn cmd(client: Option<String>, dry: bool, replace: bool, ask: bool) -> Result<(), String> {
     let home = crate::home().ok_or("fael install: cannot find the home directory")?;
     // Configs never use current_exe(): under npx that is a disposable cache dir.
@@ -177,21 +202,41 @@ fn detect(home: &Path, cli: bool) -> Vec<&'static str> {
     CLIENTS.into_iter().filter(|n| found(n)).collect()
 }
 
-/// How many changes `fael install` would make right now, printing nothing —
-/// what `doctor` reports when the wiring is behind this binary. Claude's MCP
-/// entry is left out: reading it spawns the `claude` CLI, and `doctor` stays fast.
-pub fn pending() -> u32 {
-    let Some(home) = crate::home() else { return 0 };
-    let c = Ctx {
+/// A pass that prints nothing and skips Claude's MCP entry — reading it
+/// spawns the `claude` CLI. `pending` looks (`dry`), `apply_pending` writes.
+fn quiet(home: PathBuf, dry: bool) -> Ctx {
+    Ctx {
         exe: hook_exe().unwrap_or_else(|| "fael".into()),
-        dry: true,
+        dry,
         replace: false,
         quiet: true,
         changed: Cell::new(0),
         home,
-    };
+    }
+}
+
+/// How many changes `fael install` would make right now, printing nothing —
+/// what `doctor` reports when the wiring is behind this binary.
+pub fn pending() -> u32 {
+    let Some(home) = crate::home() else { return 0 };
+    let c = quiet(home, true);
     let _ = run(&c, &detect(&c.home, false));
     c.changed.get()
+}
+
+/// Writes what `pending` counts, printing nothing (session-start, PLAN-fael-auto-update
+/// chunk 1). Only fael's own entries change, as in `install`. Returns the count
+/// written and whether Codex's hooks changed — they stay off until the user trusts them.
+pub fn apply_pending() -> Result<(u32, bool), String> {
+    let home = crate::home().ok_or("no home directory")?;
+    let hooks = home.join(".codex/hooks.json");
+    let before = std::fs::read_to_string(&hooks).ok();
+    let c = quiet(home, false);
+    run(&c, &detect(&c.home, false))?;
+    Ok((
+        c.changed.get(),
+        std::fs::read_to_string(&hooks).ok() != before,
+    ))
 }
 
 fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {

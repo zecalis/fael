@@ -10,5 +10,5 @@ npm-scope = "@zecalis"
 tap = "zecalis/homebrew-tap"
 publish-jobs = ["homebrew", "npm"]
 install-path = "CARGO_HOME"
-install-updater = false
+install-updater = true
 allow-dirty = ["ci"]

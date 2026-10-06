@@ -87,18 +87,55 @@ fn session_start(home: &Path, repo: &Path) -> String {
 }
 
 #[test]
-fn session_start_says_the_wiring_is_behind_until_install() {
+fn session_start_writes_the_wiring_that_is_behind_and_says_so_once() {
     let (home, repo) = scratch();
     std::fs::write(repo.join("a.rs"), "").unwrap();
     fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
     let out = session_start(&home, &repo);
+    assert!(out.contains("wiring brought up to date"), "{out}");
     assert!(
-        out.contains("client wiring change(s) behind"),
-        "nothing installed yet: {out}"
+        !out.contains("fael upgrade") && !out.contains("/hooks"),
+        "{out}"
     );
-    assert!(out.contains("fael upgrade"), "{out}");
+    assert!(home.join(".claude/settings.json").is_file());
+    assert!(!fael(&home, &repo, &["doctor"]).contains("[Wiring]"));
 
-    fael(&home, &repo, &["install", "--client", "claude"]);
     let out = session_start(&home, &repo);
     assert!(!out.contains("wiring"), "wiring is current: {out}");
+}
+
+/// Codex's hooks run only once trusted: a changed hooks.json says so.
+#[test]
+fn session_start_tells_codex_to_trust_the_hooks_it_wrote() {
+    let (home, repo) = scratch();
+    std::fs::create_dir_all(home.join(".codex")).unwrap();
+    std::fs::write(repo.join("a.rs"), "").unwrap();
+    fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
+    let out = session_start(&home, &repo);
+    assert!(out.contains("Codex first needs /hooks"), "{out}");
+    assert!(home.join(".codex/hooks.json").is_file());
+    let out = session_start(&home, &repo);
+    assert!(!out.contains("/hooks"), "said once: {out}");
+}
+
+/// A config fael cannot write: the old warning stays, nothing is hidden.
+#[cfg(unix)]
+#[test]
+fn session_start_falls_back_to_the_warning_when_the_write_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let (home, repo) = scratch();
+    std::fs::write(repo.join("a.rs"), "").unwrap();
+    fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
+    let dir = home.join(".claude");
+    std::fs::write(dir.join("settings.json"), "{}").unwrap();
+    std::fs::set_permissions(
+        dir.join("settings.json"),
+        std::fs::Permissions::from_mode(0o444),
+    )
+    .unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let out = session_start(&home, &repo);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(out.contains("client wiring change(s) behind"), "{out}");
+    assert!(out.contains("fael upgrade"), "{out}");
 }
