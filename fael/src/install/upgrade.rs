@@ -30,11 +30,18 @@ impl Channel {
 /// symlink in `bin/` already points into the Cellar.
 pub(super) fn detect(exe: &Path, cargo_home: &Path) -> Channel {
     let p = exe.to_string_lossy().replace('\\', "/");
+    // exe arrives canonicalized; the home side may not be — a symlinked $HOME
+    // or $CARGO_HOME (macOS /tmp is a symlink to /private/tmp) would otherwise
+    // never match Installer and silently stop updating the binary.
+    let cargo_bin = cargo_home
+        .canonicalize()
+        .unwrap_or_else(|_| cargo_home.to_path_buf())
+        .join("bin");
     if p.contains("/Cellar/") {
         Channel::Brew
     } else if p.contains("/node_modules/@zecalis/fael/") {
         Channel::Npm
-    } else if exe.starts_with(cargo_home.join("bin")) {
+    } else if exe.starts_with(&cargo_bin) {
         Channel::Installer
     } else {
         Channel::Unknown
@@ -88,7 +95,9 @@ pub(crate) fn binary(home: &Path, args: &[String], dry: bool, yes: bool) -> Resu
         return Ok(false);
     }
     if !yes && std::io::stdin().is_terminal() {
-        print!("update the binary now, then its wiring? [y/N] ");
+        // one question only: the wiring is offered next (or the new binary
+        // writes it with --yes), never implied by this answer
+        print!("update the binary now? [y/N] ");
         let _ = std::io::stdout().flush();
         let mut line = String::new();
         let _ = std::io::stdin().lock().read_line(&mut line);
@@ -161,5 +170,21 @@ mod tests {
             "no fael-update beside it"
         );
         assert!(command(&Channel::Unknown, e).is_none());
+    }
+
+    /// A symlinked $HOME/$CARGO_HOME still reads as the installer channel —
+    /// the exe is canonicalized, so the home side must be too.
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_cargo_home_still_reads_as_the_installer() {
+        let base = std::env::temp_dir().join(format!("fael-canon-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let real = base.join("real");
+        std::fs::create_dir_all(real.join(".cargo/bin")).unwrap();
+        std::fs::write(real.join(".cargo/bin/fael"), "").unwrap();
+        std::os::unix::fs::symlink(&real, base.join("link")).unwrap();
+        let exe = real.join(".cargo/bin/fael").canonicalize().unwrap();
+        assert_eq!(detect(&exe, &base.join("link/.cargo")), Channel::Installer);
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

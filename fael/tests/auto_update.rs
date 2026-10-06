@@ -237,3 +237,74 @@ fn session_start_does_not_wait_for_the_update_and_the_next_one_says_it() {
     assert!(json().contains("\"result\":\"updated\""), "{}", json());
     assert!(session_start().contains("→ 99.0.0 · wiring current"));
 }
+
+/// Opted out, a stored receipt is taken silently: no line now, nothing stale
+/// when opting back in (notice() had no off() gate).
+#[test]
+fn off_takes_a_stored_receipt_silently() {
+    let base = world(
+        &["v99.0.0"],
+        r#"{"checked_at":1,"seen_at":0,"from":"0.30.0","to":"99.0.0","result":"updated"}"#,
+        "",
+        "99.0.0",
+    );
+    let repo = base.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["config", "user.name", "t"],
+        &["config", "user.email", "t@t"],
+    ] {
+        assert!(
+            Command::new("git")
+                .args(args)
+                .current_dir(&repo)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+    let session_start = |envs: &[(&str, &str)]| {
+        use std::io::Write;
+        let mut c = fael(&base, &["hook", "session-start"], envs)
+            .current_dir(&repo)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let ev = format!(r#"{{"cwd":{:?}}}"#, repo.to_str().unwrap());
+        c.stdin.take().unwrap().write_all(ev.as_bytes()).unwrap();
+        String::from_utf8_lossy(&c.wait_with_output().unwrap().stdout).into_owned()
+    };
+    let out = session_start(&[("FAEL_NO_AUTO_UPDATE", "1")]);
+    assert!(!out.contains("99.0.0"), "opted out but said: {out}");
+    let json = std::fs::read_to_string(base.join("state/update.json")).unwrap_or_default();
+    assert!(
+        !json.contains("\"result\""),
+        "receipt not taken cleanly: {json}"
+    );
+    // opting back in says nothing stale
+    let out = session_start(&[]);
+    assert!(!out.contains("99.0.0"), "stale receipt: {out}");
+}
+
+/// `--auto` runs the whole check by itself: flags that scope a hand-run
+/// upgrade are rejected, never silently ignored (`--dry-run` would be a real
+/// update wearing dry-run).
+#[test]
+fn auto_rejects_flags_it_would_ignore() {
+    let base = world(&["v99.0.0"], "", "", "99.0.0");
+    for args in [
+        &["upgrade", "--auto", "--dry-run"][..],
+        &["upgrade", "--auto", "--client", "codex"][..],
+        &["upgrade", "--auto", "--replace-fapony"][..],
+    ] {
+        let o = fael(&base, args, &[]).output().unwrap();
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(
+            !o.status.success() && err.contains("takes no --dry-run"),
+            "{args:?}: {err}"
+        );
+    }
+    assert!(!base.join("ran").exists(), "the channel command ran");
+}

@@ -120,3 +120,20 @@ fn upgrade_forwards_client_to_the_wiring_pass() {
     assert!(base.join("home/.codex/hooks.json").exists());
     assert!(!base.join("home/.claude/settings.json").exists());
 }
+
+/// A typo'd `--client` errors before the channel command runs: validation
+/// comes before any side effect (review #253 finding 1).
+#[test]
+fn upgrade_rejects_an_unknown_client_before_the_channel_command() {
+    let (o, base) = upgrade_via_fake_brew("", &[".codex"], &["--client", "bogus"]);
+    assert!(!o.status.success(), "bogus client was accepted");
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains("unknown client"),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(
+        !base.join("ran").exists(),
+        "the channel command ran before validation"
+    );
+}
