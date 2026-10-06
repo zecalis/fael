@@ -175,15 +175,23 @@ fn warnings(repo: &crate::Repo, adopted: bool) -> Vec<String> {
             "fael: .fael/log is gitignored — rows stay on this machine, run fael doctor".into(),
         );
     }
-    // doctor's [Wiring] note, where the agent sees it: a hook that shipped
-    // after the last install (the Grep/Bash push) stays off until then.
-    // Reads the client configs only — spawns nothing.
-    let behind = crate::install::pending();
-    if behind > 0 {
-        out.push(format!(
-            "fael: {behind} client wiring change(s) behind this binary — some file pushes stay \
-             off; tell the user to run `fael upgrade`"
-        ));
+    // doctor's [Wiring] note: a hook that shipped after the last install stays
+    // off until then. Writes it now instead of asking the user to; only a pass
+    // that fails (or leaves changes behind) falls back to the old warning.
+    if crate::install::pending() > 0 {
+        let wrote = crate::install::apply_pending();
+        let behind = crate::install::pending();
+        match wrote {
+            Ok(n) if n > 0 && behind == 0 => out.push(format!(
+                "fael: client wiring brought up to date ({n} change(s) written) — \
+                 newer file pushes are on from the next session"
+            )),
+            _ if behind > 0 => out.push(format!(
+                "fael: {behind} client wiring change(s) behind this binary — some file pushes stay \
+                 off; tell the user to run `fael upgrade`"
+            )),
+            _ => {}
+        }
     }
     out
 }

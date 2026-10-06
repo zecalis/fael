@@ -177,21 +177,35 @@ fn detect(home: &Path, cli: bool) -> Vec<&'static str> {
     CLIENTS.into_iter().filter(|n| found(n)).collect()
 }
 
-/// How many changes `fael install` would make right now, printing nothing —
-/// what `doctor` reports when the wiring is behind this binary. Claude's MCP
-/// entry is left out: reading it spawns the `claude` CLI, and `doctor` stays fast.
-pub fn pending() -> u32 {
-    let Some(home) = crate::home() else { return 0 };
-    let c = Ctx {
+/// A pass that prints nothing and skips Claude's MCP entry — reading it
+/// spawns the `claude` CLI. `pending` looks (`dry`), `apply_pending` writes.
+fn quiet(home: PathBuf, dry: bool) -> Ctx {
+    Ctx {
         exe: hook_exe().unwrap_or_else(|| "fael".into()),
-        dry: true,
+        dry,
         replace: false,
         quiet: true,
         changed: Cell::new(0),
         home,
-    };
+    }
+}
+
+/// How many changes `fael install` would make right now, printing nothing —
+/// what `doctor` reports when the wiring is behind this binary.
+pub fn pending() -> u32 {
+    let Some(home) = crate::home() else { return 0 };
+    let c = quiet(home, true);
     let _ = run(&c, &detect(&c.home, false));
     c.changed.get()
+}
+
+/// Writes what `pending` counts, printing nothing (session-start, PLAN-fael-auto-update
+/// chunk 1). Only fael's own entries change, as in `install`; the count written.
+pub fn apply_pending() -> Result<u32, String> {
+    let home = crate::home().ok_or("no home directory")?;
+    let c = quiet(home, false);
+    run(&c, &detect(&c.home, false))?;
+    Ok(c.changed.get())
 }
 
 fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {
