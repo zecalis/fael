@@ -8,7 +8,7 @@
 use super::asks::{UsageMeta, hook_meta};
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
-use super::state::{lock_seen, seen_path, session_key, state_dir};
+use super::state::{lock_seen, new_turn, seen_path, session_key, state_dir};
 use super::usage::record_usage;
 use crate::core;
 use std::path::{Path, PathBuf};
@@ -30,6 +30,8 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     if c.session.is_empty() {
         return Reply::default();
     }
+    // every prompt starts a turn, hint or not: the edit ask speaks once per turn
+    new_turn(&c.session, &c.repo.root);
     let hints = core::key_hints(&c.log, text, &c.repo.cfg.hint_stop);
     if hints.is_empty() {
         return Reply::default();

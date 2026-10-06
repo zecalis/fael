@@ -82,7 +82,9 @@ pub(crate) fn print_recent(limit: usize) {
             "- {} {:?} — {}",
             g("ts").get(..10).unwrap_or(g("ts")),
             g("text"),
-            g("why").trim_start_matches("no rows match — each alone: ")
+            g("why")
+                .trim_start_matches("no rows match — each alone: ")
+                .trim_start_matches("no rows match ")
         );
     }
 }

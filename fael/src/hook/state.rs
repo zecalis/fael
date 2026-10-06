@@ -60,6 +60,33 @@ pub(crate) fn seen_path(session: &str, agent: &str, root: &Path) -> PathBuf {
 /// `<seen file>.touched` — the files this context window has pushed on, one
 /// per line (the session's working set). Keyed like the seen list, so the
 /// lock `lock_seen` holds guards it too.
+/// `<main seen file>.turn` — the id of the user's current turn, rewritten by
+/// every prompt. Keyed without the sub-agent, so a sub-agent's edits share
+/// the turn of the prompt that started them.
+pub(crate) fn turn_path(session: &str, root: &Path) -> PathBuf {
+    seen_path(session, "", root).with_extension("turn")
+}
+
+/// Mark a new user turn: a fresh id, so `per_turn` kinds may speak again.
+/// Fails open: unwritable = no new turn, the old mark stands.
+pub(crate) fn new_turn(session: &str, root: &Path) {
+    let p = turn_path(session, root);
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let _ = std::fs::write(p, crate::core::ulid());
+}
+
+/// The current turn's id; `None` before any prompt marked one (a client
+/// without a prompt hook keeps no per-turn limit).
+pub(crate) fn read_turn(session: &str, root: &Path) -> Option<String> {
+    (!session.is_empty())
+        .then(|| std::fs::read_to_string(turn_path(session, root)).ok())
+        .flatten()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+}
+
 pub(crate) fn touched_path(session: &str, agent: &str, root: &Path) -> PathBuf {
     seen_path(session, agent, root).with_extension("touched")
 }

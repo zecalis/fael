@@ -110,7 +110,20 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
     if parts.is_empty() {
         return "no rows match".into();
     }
-    let mut s = format!("no rows match — each alone: {}", parts.join(" · "));
+    let mut s = match &parts[..] {
+        // one filter: "each alone" adds nothing — say what matched nothing,
+        // and that closed rows are out of sight unless --all
+        [one] => {
+            let what = one.rsplit_once(" ×").map_or(one.as_str(), |(p, _)| p);
+            let hidden = if f.all {
+                ""
+            } else {
+                " (open rows only; --all adds closed)"
+            };
+            format!("no rows match {what}{hidden}")
+        }
+        _ => format!("no rows match — each alone: {}", parts.join(" · ")),
+    };
     // a path typed as a word searches row text, not the files rows sit on
     if f.files.is_empty() && words.iter().any(|w| path_like(w)) {
         s.push_str(&format!(" · a path? use {files_flag}"));

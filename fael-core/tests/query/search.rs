@@ -110,6 +110,17 @@ fn an_empty_find_counts_each_part_alone() {
         why_empty(&l, &f, "files"),
         "no rows match — each alone: \"vector\" ×0 · \"decide.rs\" ×0 · a path? use files"
     );
+    // one filter: no "each alone" breakdown, and the hidden closed rows named
+    let f = Filter {
+        kind: Some("issue".into()),
+        ..Filter::default()
+    };
+    assert_eq!(
+        why_empty(&l, &f, "--files"),
+        "no rows match kind=issue (open rows only; --all adds closed)"
+    );
+    let all = Filter { all: true, ..f };
+    assert_eq!(why_empty(&l, &all, "--files"), "no rows match kind=issue");
     // closed rows count only under --all, like the find itself
     assert_eq!(
         why_empty(&l, &Filter::default(), "--files"),

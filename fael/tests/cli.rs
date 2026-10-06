@@ -335,10 +335,7 @@ fn mcp_add_find_to() {
     let text = r[2]["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("pager fires at night"), "{text}");
     let none = r[3]["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(
-        none.starts_with("no rows match") && none.contains("to=delamind ×0"),
-        "{out}"
-    );
+    assert!(none.starts_with("no rows match to=delamind"), "{out}");
 }
 
 #[test]

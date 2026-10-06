@@ -42,7 +42,7 @@ pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, since, since_arg};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use retire_split::{Arm, RetireSplit};
-pub use said::{KINDS, KindYield};
+pub use said::{ASK_SPLIT, KINDS, KindYield};
 pub use tune::{
     ArmSize, Assoc, Coverage, DECAYS, DecayPoint, Group, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT,
     MIN_DAYS, PolicyResult, Rate, STRATUM_MIN_PUSHES, STRATUM_MIN_SESSIONS, Section, Sizes, Status,
