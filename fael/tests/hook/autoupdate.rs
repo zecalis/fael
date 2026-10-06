@@ -89,3 +89,21 @@ fn the_result_is_said_once_then_taken() {
         "{out}"
     );
 }
+
+/// A day-old stamp restarts the check, and that rewrite must keep the result
+/// the last check left for this very session start to say.
+#[test]
+fn a_result_survives_the_restamp() {
+    let d = repo();
+    seed(
+        &d,
+        r#"{"checked_at":0,"from":"0.29.0","to":"0.30.0","result":"updated"}"#,
+    );
+    let out = start(&d, ON);
+    assert!(out.contains("fael: updated 0.29.0 → 0.30.0"), "{out}");
+    assert!(
+        !update_json(&d).contains("\"updated\""),
+        "{}",
+        update_json(&d)
+    );
+}
