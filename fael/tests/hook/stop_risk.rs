@@ -1,6 +1,7 @@
 //! Stop-event bug and risk signals: never a block — the line surfaces once on
 //! the next push. Quoted code never signals, transcripts scan past the latest
-//! user message only, and an issue filed before the words does not clear them.
+//! user prompt only (tool results are not one), the client's reply backs
+//! a lagging transcript, and an issue filed before the words does not clear them.
 
 use super::{fael, flagged, json, repo};
 
@@ -158,6 +159,72 @@ fn stop_issue_before_match_does_not_clear_signal() {
         "",
     );
     assert!(ok, "{err}");
+    let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
+    assert!(fael(&d, &["hook", "stop"], &input).0);
+    assert!(flagged(&d, &json(&t)));
+}
+
+/// Claude can fire Stop before the final reply reaches the transcript (vela
+/// session 9707ed35, line 1924): the client's `reply` is read when the file
+/// has no match.
+#[test]
+fn stop_reads_reply_when_transcript_lags() {
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let base = fael_core::now_ms() + 120_000;
+    let t = d.join("t.jsonl");
+    std::fs::write(
+        &t,
+        transcript_line("user", "ตรวจหน้าเว็บให้หน่อย", &future_ts(base, 0)),
+    )
+    .unwrap();
+    let reply = "**รอบแรกเจอบั๊กจริง 3 จุด และแก้แล้วใน #283**";
+    let input = format!(
+        r#"{{"cwd":{},"session":{},"reply":{}}}"#,
+        json(&d),
+        json(&t),
+        serde_json::Value::String(reply.into())
+    );
+    assert!(fael(&d, &["hook", "stop"], &input).0);
+    assert!(flagged(&d, &json(&t)));
+}
+
+/// A tool result is a user line, not a new turn: words said before the
+/// turn's last tool call still count.
+#[test]
+fn stop_scans_past_tool_results() {
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let base = fael_core::now_ms() + 120_000;
+    let tool_result = serde_json::to_string(&serde_json::json!({
+        "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "t1", "content": "ok"}
+        ]},
+        "timestamp": future_ts(base, 2),
+    }))
+    .unwrap();
+    let t = d.join("t.jsonl");
+    std::fs::write(
+        &t,
+        [
+            transcript_line("user", "rename the helper", &future_ts(base, 0)),
+            transcript_line("assistant", "I found a bug in login", &future_ts(base, 1)),
+            tool_result,
+            transcript_line("assistant", "renamed, tests pass", &future_ts(base, 3)),
+        ]
+        .join("\n"),
+    )
+    .unwrap();
     let input = format!(r#"{{"cwd":{},"session":{}}}"#, json(&d), json(&t));
     assert!(fael(&d, &["hook", "stop"], &input).0);
     assert!(flagged(&d, &json(&t)));
