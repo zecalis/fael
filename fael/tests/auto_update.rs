@@ -78,6 +78,8 @@ fn fael(base: &Path, args: &[&str], envs: &[(&str, &str)]) -> Command {
         .env("FAEL_STATE_DIR", base.join("state"))
         .env("FAEL_UPDATE_REMOTE", base.join("remote"))
         .env_remove("FAEL_NO_AUTO_UPDATE")
+        // the machine's own config dir never decides a test
+        .env("XDG_CONFIG_HOME", base.join("home/.config"))
         .env(
             "PATH",
             format!("{}:/usr/bin:/bin", base.join("fakebin").display()),
