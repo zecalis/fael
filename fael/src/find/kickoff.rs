@@ -24,6 +24,8 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
         limit,
         offset,
     );
+    // a tag whose branch is already in HEAD says so: its handoff may be stale
+    let branch_of = super::merged::mark(&r.root, branch_of, &rows);
     let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
     let shown = show(
         a,

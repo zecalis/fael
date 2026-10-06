@@ -5,6 +5,7 @@
 pub(crate) mod branches;
 mod kickoff;
 pub(crate) mod many;
+mod merged;
 pub(crate) mod misses;
 
 pub(crate) use kickoff::kickoff;
@@ -47,8 +48,10 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         found(&r.root, &row.id);
         return show_one(a, &log, row, &branch_of);
     }
-    let query = forced.as_ref().or(text);
-    let files = core::normalize_files(&a.files(), &r.cwd, &r.root)?;
+    // `find plan:x` reads the anchor the way `kickoff plan:x` does
+    let (query, anchor) = text_or_anchor(&log, forced.as_ref(), text, &r);
+    let mut files = core::normalize_files(&a.files(), &r.cwd, &r.root)?;
+    files.extend(anchor);
     let (limit, offset) = a.paging()?;
     let f = Filter {
         text: query.cloned(),
@@ -82,7 +85,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // the cut line reprints this call with the next offset — same flags, no
     // guessing; under --full (bodies fill the budget in a few rows) it asks
     // for the rest in one call, since an explicit --limit beats the budget
-    let base = a.page_base("find", query.map(String::as_str), limit);
+    let base = a.page_base("find", query.or(text).map(String::as_str), limit);
     let rest_in_one = a.has("full") && limit.is_none();
     let next = |n: usize| match rest_in_one {
         true => format!("{base} --offset {n} --limit {}", total.saturating_sub(n)),
@@ -140,6 +143,25 @@ fn found(root: &std::path::Path, id: &str) {
         &[id.to_string()],
         (None, &[], Some(id)),
     );
+}
+
+/// A text query that is exactly a file or anchor some row is filed on
+/// (`plan:x`, a path) is that file, not words — the reading `kickoff` gives
+/// it. Anything else, a name no row is filed on, or `forced` (`--text`)
+/// stays a text search. Returns `(text query, files to add)`.
+pub(crate) fn text_or_anchor<'a>(
+    log: &Log,
+    forced: Option<&'a String>,
+    text: Option<&'a String>,
+    r: &super::Repo,
+) -> (Option<&'a String>, Vec<String>) {
+    if forced.is_some() {
+        return (forced, vec![]);
+    }
+    match text.and_then(|t| core::normalize_files(std::slice::from_ref(t), &r.cwd, &r.root).ok()) {
+        Some(f) if log.rows.iter().any(|row| row.files.contains(&f[0])) => (None, f),
+        _ => (text, vec![]),
+    }
 }
 
 /// `find --groups`: every match, grouped by shared files — what to fix in one
