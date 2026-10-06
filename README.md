@@ -122,7 +122,7 @@ starts Node first, so the options above are faster.
 
 ```bash
 fael install              # finds Claude Code, Codex and OpenCode; adds hooks, MCP server and a skill
-fael upgrade              # show what is out of date, ask, then update (alias: update)
+fael upgrade              # update fael by the channel it came from, then its hooks and skills; asks first (alias: update)
 fael install --dry-run    # show what would change, write nothing
 ```
 

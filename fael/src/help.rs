@@ -235,9 +235,9 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     ),
     (
         "upgrade",
-        "bring hooks and skills up to date (alias: update)",
+        "update the binary, hooks and skills (alias: update)",
         "fael upgrade [--client claude|codex|opencode] [--dry-run] [--yes] [--replace-fapony]
-    (show what is out of date, then ask before writing; --yes skips the question, --dry-run only shows; `fael update` is the same)",
+    (updates the binary by the channel it came from — brew, npm or the shell/ps1 installer's fael-update — then the new binary writes hooks and skills; asks first, --yes skips the question, --dry-run shows the channel, the command and the wiring changes; `fael update` is the same)",
     ),
 ];
 

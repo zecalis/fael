@@ -112,14 +112,15 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("sync", []) => sync::sync(&repo()?, &a).map(|()| ExitCode::SUCCESS),
         ("mcp", []) => mcp::serve(a.has("pin")).map(|()| ExitCode::SUCCESS),
         ("install" | "upgrade" | "update", []) => {
-            // `install` keeps writing without a question; upgrade/update ask first
-            let ask = cmd != "install" && !a.has("yes");
-            install::cmd(
-                a.one("client"),
-                a.has("dry-run"),
-                a.has("replace-fapony"),
-                ask,
-            )
+            let (client, dry, replace) =
+                (a.one("client"), a.has("dry-run"), a.has("replace-fapony"));
+            // install writes unasked; upgrade/update update the binary, look first and
+            // ask (`--wiring` = the new binary's half)
+            if cmd == "install" {
+                install::cmd(client, dry, replace, false)
+            } else {
+                install::upgrade(client, dry, replace, a.has("yes"), a.has("wiring"))
+            }
             .map(|()| ExitCode::SUCCESS)
         }
         // bare `fael` is a probe, not an error — the usage, on stdout, exit 0

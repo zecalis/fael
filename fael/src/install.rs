@@ -24,6 +24,7 @@ mod claude;
 mod codex;
 mod hooks;
 mod opencode;
+mod upgrade;
 
 use std::cell::Cell;
 use std::io::{BufRead, IsTerminal, Write};
@@ -102,6 +103,30 @@ impl Ctx {
             c => format!("{exe} hook {sub} --client {c}"),
         }
     }
+}
+
+/// `fael upgrade`: update the binary by its channel (the new binary then writes
+/// the wiring), else just the wiring. `wiring` = that second call: skip the binary.
+pub fn upgrade(
+    client: Option<String>,
+    dry: bool,
+    replace: bool,
+    yes: bool,
+    wiring: bool,
+) -> Result<(), String> {
+    if let (false, Some(home)) = (wiring, crate::home()) {
+        let mut fwd = vec![];
+        if let Some(c) = &client {
+            fwd.extend(["--client".to_string(), c.clone()]);
+        }
+        if replace {
+            fwd.push("--replace-fapony".into());
+        }
+        if upgrade::binary(&home, &fwd, dry, yes)? {
+            return Ok(());
+        }
+    }
+    cmd(client, dry, replace, !yes)
 }
 
 pub fn cmd(client: Option<String>, dry: bool, replace: bool, ask: bool) -> Result<(), String> {
