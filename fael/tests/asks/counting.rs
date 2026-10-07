@@ -158,9 +158,12 @@ fn warning_add_carries_row_and_session() {
         "add", "note", &text, "--files", "src/a.rs", "--json", "--force",
     ])
     .current_dir(&d)
-    .env_remove("FAEL_SESSION")
+    // FAEL_SESSION is set per command by the plugin, so it is always the
+    // calling session — a client id no hook ever recorded stamps nothing
+    // (01M47N67), it never borrows a stranger's session
+    .env("FAEL_SESSION", "sess-add-1")
     .env_remove("CODEX_THREAD_ID")
-    .env("CLAUDE_CODE_SESSION_ID", "sess-add-1");
+    .env_remove("CLAUDE_CODE_SESSION_ID");
     super::state_env(&mut c, &d);
     let o = c.output().unwrap();
     assert!(o.status.success(), "{o:?}");

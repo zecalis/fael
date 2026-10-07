@@ -1,5 +1,5 @@
 //! `fael hook <stop|session-start|read|edit|search|prompt> [--client c]` — stdin in, stdout out.
-//! The decision (`core::decide_stop`, `core::push`) is written once; each
+//! The reply (`stop::decide`, `core::push`) is built once — stop never blocks; each
 //! adapter only parses its client's JSON and renders the answer back.
 //! No `--client` = the neutral protocol from SPEC §9: Event in, Reply out.
 //! Adapters: `claude`, `codex` (same hook shape; codex hands stop its last

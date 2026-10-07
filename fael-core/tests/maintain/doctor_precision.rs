@@ -83,7 +83,8 @@ fn restore_labels_wrong_per_rule() {
     assert_eq!(p.severity, Severity::Info);
     assert!(!p.fixable);
     assert!(
-        p.detail.contains("identity:key 0/1 correct"),
+        p.detail
+            .contains("identity:key 0/1 correct, 1 restored of 1 edges"),
         "{}",
         p.detail
     );
@@ -123,7 +124,8 @@ fn auto_readd_does_not_overturn() {
     ]);
     let p = doctor_precision(&l).expect("label stands");
     assert!(
-        p.detail.contains("identity:key 0/1 correct"),
+        p.detail
+            .contains("identity:key 0/1 correct, 1 restored of 2 edges"),
         "{}",
         p.detail
     );

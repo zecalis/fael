@@ -10,6 +10,10 @@
 //! handles neither labels an edge nor overturns one. Edges whose superseder
 //! carries no known `decision_source` (pre-verdict rows read as `unknown`)
 //! are skipped entirely — `doctor` never counts them into precision.
+//!
+//! Each rule also reports its restore rate: restored (labeled) edges of all
+//! its edges. A rule that reads "0/4 correct" over 69 edges is a 4/69 restore
+//! rate, not a 0% precision — the unlabeled 65 carry no signal either way.
 
 use super::{Kind, Problem};
 use crate::{Log, abbrev};
@@ -64,6 +68,7 @@ pub fn precision(log: &Log) -> Option<Problem> {
     }
     // rule → (right, wrong); full edge ids per rule for the examples
     let mut per: HashMap<&str, (usize, usize)> = HashMap::new();
+    let mut tot: HashMap<&str, usize> = HashMap::new();
     let mut egs: HashMap<&str, Vec<(String, bool)>> = HashMap::new();
     let (mut unlabeled, mut unknown) = (0usize, 0usize);
     for r in &log.rows {
@@ -74,6 +79,7 @@ pub fn precision(log: &Log) -> Option<Problem> {
             unknown += lab.contains_key(r.id.as_str()) as usize;
             continue;
         };
+        *tot.entry(rule).or_default() += 1;
         let Some(after) = lab.get(r.id.as_str()) else {
             unlabeled += 1;
             continue;
@@ -97,6 +103,7 @@ pub fn precision(log: &Log) -> Option<Problem> {
     let mut ids: Vec<String> = vec![];
     for rule in rules {
         let (right, wrong) = per[rule];
+        let labeled = right + wrong;
         let mut eg = egs[rule].clone();
         eg.sort();
         let shown: Vec<String> = eg
@@ -112,8 +119,8 @@ pub fn precision(log: &Log) -> Option<Problem> {
             .collect();
         ids.extend(eg.iter().map(|(id, _)| id.clone()));
         parts.push(format!(
-            "{rule} {right}/{} correct ({})",
-            right + wrong,
+            "{rule} {right}/{labeled} correct, {labeled} restored of {} edges ({})",
+            tot.get(rule).copied().unwrap_or(labeled),
             shown.join("; ")
         ));
     }

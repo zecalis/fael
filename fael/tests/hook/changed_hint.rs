@@ -310,6 +310,11 @@ fn a_no_verdict_row_is_named_once_per_session() {
 fn a_row_this_session_filed_is_not_asked_about() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    // the row's session stamp needs a recorded session: the hook keys the env
+    // id once an edit ran under it (a stranger's id stamps nothing, 01M47N67)
+    add(&d, "decision", "seed", "src/b.rs");
+    edit_or_silent(&d, "s1", "src/a.rs");
     let (ok, _, err) = fael_env(
         &d,
         &[
@@ -336,14 +341,7 @@ fn a_row_this_session_filed_is_not_asked_about() {
 fn a_row_this_session_filed_is_not_asked_about_by_transcript_path() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    let (ok, _, err) = fael_env(
-        &d,
-        &["add", "decision", "mine by path", "--files", "src/a.rs"],
-        "",
-        &[("CLAUDE_CODE_SESSION_ID", "s3")],
-    );
-    assert!(ok, "{err}");
-    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
     let edit = |id: &str| {
         let input = format!(
             r#"{{"cwd":{},"session_id":"{id}","transcript_path":"/h/.claude/projects/p/{id}.jsonl","tool_input":{{"file_path":{}}}}}"#,
@@ -354,6 +352,17 @@ fn a_row_this_session_filed_is_not_asked_about_by_transcript_path() {
         assert!(ok, "{err}");
         out
     };
+    // record s3's transcript before the add (same gate as above)
+    add(&d, "decision", "seed", "src/b.rs");
+    edit("s3");
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "decision", "mine by path", "--files", "src/a.rs"],
+        "",
+        &[("CLAUDE_CODE_SESSION_ID", "s3")],
+    );
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let mine = edit("s3");
     assert!(!mine.contains("changed since"), "{mine}");
     let other = edit("s4");

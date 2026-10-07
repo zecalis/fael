@@ -52,14 +52,10 @@ pub(crate) fn render(
                 notes,
             }
         }
-        Verdict::TextHold { targets } => Heal {
-            supersedes: None,
-            source: None,
-            notes: vec![format!(
-                "open rows {} are named in the text — kept all; pass --supersedes <id> to replace one",
-                id_list(targets, w)
-            )],
-        },
+        Verdict::TextHold { targets } => kept(format!(
+            "open rows {} are named in the text — kept all; pass --supersedes <id> to replace one",
+            id_list(targets, w)
+        )),
         Verdict::KeyAct { target, also } => {
             let mut notes = vec![format!(
                 "superseded {} (open {}, same key {k})",
@@ -73,31 +69,24 @@ pub(crate) fn render(
                 notes,
             }
         }
-        Verdict::KeyIssueKept { targets } => Heal {
-            supersedes: None,
-            source: None,
-            notes: vec![format!(
-                "open issue {} uses key {k} — kept open (a different finding)",
-                id_list(targets, w)
-            )],
-        },
-        Verdict::KeyOtherWriter { target } => Heal {
-            supersedes: None,
-            source: None,
-            notes: vec![format!(
-                "open {} {} uses key {k} (another writer) — kept open",
-                row.kind,
-                short(target)
-            )],
-        },
-        Verdict::KeyMany { targets } => Heal {
-            supersedes: None,
-            source: None,
-            notes: vec![format!(
-                "open rows {} already use key {k} — kept all; pass --supersedes <id> to replace one",
-                id_list(targets, w)
-            )],
-        },
+        Verdict::KeyIssueKept { targets } => kept(format!(
+            "open issue {} uses key {k} — kept open (a different finding)",
+            id_list(targets, w)
+        )),
+        Verdict::KeyOtherWriter { target } => kept(format!(
+            "open {} {} uses key {k} (another writer) — kept open",
+            row.kind,
+            short(target)
+        )),
+        Verdict::KeyMany { targets } => kept(format!(
+            "open rows {} already use key {k} — kept all; pass --supersedes <id> to replace one",
+            id_list(targets, w)
+        )),
+        Verdict::KeyBurst { target } => kept(format!(
+            "open {} {} already uses key {k} — filed a moment ago, kept both; pass --supersedes <id> to replace it",
+            row.kind,
+            short(target)
+        )),
         Verdict::FilesAct { target } => Heal {
             supersedes: Some(target.clone()),
             source: None,
@@ -109,14 +98,10 @@ pub(crate) fn render(
                 None => format!("superseded {} (open note, same files)", short(target)),
             }],
         },
-        Verdict::FilesMany { targets } => Heal {
-            supersedes: None,
-            source: None,
-            notes: vec![format!(
-                "open notes {} overlap these files — kept all; pass --supersedes <id> to replace one",
-                id_list(targets, w)
-            )],
-        },
+        Verdict::FilesMany { targets } => kept(format!(
+            "open notes {} overlap these files — kept all; pass --supersedes <id> to replace one",
+            id_list(targets, w)
+        )),
         Verdict::CrossKey { inner, old, new } => {
             expose(render(inner, row, st, w, flag, cross), old, new, cross)
         }
@@ -142,6 +127,7 @@ impl Verdict {
             Verdict::KeyIssueKept { .. } => "KeyIssueKept",
             Verdict::KeyOtherWriter { .. } => "KeyOtherWriter",
             Verdict::KeyMany { .. } => "KeyMany",
+            Verdict::KeyBurst { .. } => "KeyBurst",
             Verdict::FilesAct { .. } => "FilesAct",
             Verdict::FilesMany { .. } => "FilesMany",
             Verdict::CrossKey { inner, .. } => inner.name(),
@@ -160,6 +146,15 @@ impl Verdict {
             Verdict::CrossKey { inner, .. } => inner.target(),
             _ => None,
         }
+    }
+}
+
+/// A hold or kept-open: files the row, touches nothing, one info line.
+fn kept(note: String) -> Heal {
+    Heal {
+        supersedes: None,
+        source: None,
+        notes: vec![note],
     }
 }
 

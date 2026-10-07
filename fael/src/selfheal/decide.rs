@@ -1,15 +1,10 @@
 //! Decision: the Explicit > Identity > Heuristic policy table over Evidence
 //! (chunk 2 of PLAN-fael-selfheal-verdict).
 //!
-//! Chunk 1 read Evidence through the legacy order; this chunk declares the
-//! order instead. Every open row is classified, per class, as Eligible (the
-//! class may act on it), Ineligible (seen, never acted on — lower classes may
-//! still decide) or Blocks (the class found its identity but cannot act, so
-//! no lower class may pick something else instead). The first class in table
-//! order with an eligible candidate decides — one acts, several hold — and a
-//! class with only Blocks reports "kept open". The Verdict and the renderer
-//! are unchanged: the table decides the same outcomes the order did, byte
-//! for byte.
+//! Every open row is classified, per class, as Eligible (the class may act
+//! on it), Ineligible (seen, never acted on) or Blocks (found its identity
+//! but cannot act, so no lower class may pick instead). The first class in
+//! table order with an eligible candidate decides — one acts, several hold.
 
 use super::evidence::{
     Candidate, Evidence, KeyRel, NameRel, Rel, observe, open_rows, same_finding,
@@ -17,16 +12,14 @@ use super::evidence::{
 use super::render::{Heal, render};
 use crate::core;
 
-/// What self-heal decided — the settled outcome, before any words are
-/// printed. The renderer turns this into the byte-identical info lines.
+/// What self-heal decided — the settled outcome, before any words are printed.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Verdict {
     /// A caller-given flag that resolves: it passes through, no words.
     FlagPassthrough,
     /// A flag that resolves to nothing, rescued by the one row the text names.
     FlagRescued { target: String },
-    /// A flag that resolves to nothing and the text names nothing usable —
-    /// the original reject stands in core.
+    /// A flag that resolves to nothing and the text names nothing usable — the original reject stands in core.
     FlagUnresolved,
     /// (d) the text names exactly one open row.
     TextAct { target: String, also: Vec<String> },
@@ -37,23 +30,22 @@ pub(crate) enum Verdict {
     /// (c) an issue sharing the key is a different finding — kept and named.
     KeyIssueKept { targets: Vec<String> },
     /// (c) the key's row belongs to another writer — kept and named, and
-    /// lower rules must not pick something else instead.
+    /// lower rules must not pick instead.
     KeyOtherWriter { target: String },
     /// (c) several rows share kind + key: file the row, name them all.
     KeyMany { targets: Vec<String> },
-    /// (b) the one open note of mine on this branch overlapping these files,
-    /// and neither it nor the new row has a key — no topic to lose.
+    /// (c) the key's row was filed in the same burst — file both and name it:
+    /// parallel adds share a key without replacing each other.
+    KeyBurst { target: String },
+    /// (b) the one open note of mine on this branch overlapping these files, and neither it nor the new row has a key — no topic to lose.
     FilesAct { target: String },
     /// (b) several overlap, or one with a key on either side: file the row,
     /// name them all — shared files are related, not proof of a replacement.
     FilesMany { targets: Vec<String> },
-    /// (chunk 3) a cross-key act: the acted row's key differs from the new
-    /// row's — only an explicit act (the text names the row) reaches it, the
-    /// files guess never acts across keys. The inner act stands, but the key is
-    /// the weakest evidence, so `[selfheal] cross_key` picks the exposure:
-    /// Warn prints the act as one `warning:` line (an ask), Info as info,
-    /// Off silently. Only `Differ` wraps: `OnlyNew`, `OnlyOld` and `Neither`
-    /// carry no conflict to expose.
+    /// (chunk 3) a cross-key act: the target's key differs from the new row's.
+    /// Only an explicit act reaches across keys; `[selfheal] cross_key` picks
+    /// the exposure (Warn prints one `warning:` line, Info info, Off silent).
+    /// Only `Differ` wraps.
     CrossKey {
         inner: Box<Verdict>,
         old: String,
@@ -64,8 +56,8 @@ pub(crate) enum Verdict {
 }
 
 /// What `evaluate` settled on: the Verdict, the Heal it renders to, and the
-/// acted row's evidence — one shared source for the write path,
-/// `add --dry-run` and MCP `dry_run`, so the three can never disagree.
+/// acted row's evidence — one shared source for the write path, `add
+/// --dry-run` and MCP `dry_run`, so the three can never disagree.
 pub(crate) struct Evaluated {
     pub verdict: Verdict,
     pub heal: Heal,
@@ -73,10 +65,8 @@ pub(crate) struct Evaluated {
 }
 
 /// The single Verdict source (chunk 2 of PLAN-fael-selfheal-restore): settle
-/// the Verdict without writing anything. Order is Explicit > Identity >
-/// Heuristic (see `decide`): (d) the text naming a row, then (c) same kind +
-/// key, then (b) notes on the same writer + branch with overlapping files.
-/// The write path acts on exactly this.
+/// the Verdict without writing anything — Explicit, then Identity, then
+/// Heuristic. The write path acts on exactly this.
 pub(crate) fn evaluate(
     log: &core::Log,
     st: &core::Stamp,
@@ -110,9 +100,8 @@ pub(crate) fn evaluate(
     }
 }
 
-/// A self-heal supersede names what it replaced and how to undo it: a row
-/// on the same key can be another topic, and an id alone does not say so.
-/// Only fael's own "superseded …" line — a caller's `--supersedes` chose.
+/// A self-heal supersede names what it replaced and how to undo it (a row on
+/// the same key can be another topic): only fael's own line — a caller's flag chose.
 fn name_the_replaced(log: &core::Log, w: &core::Abbrev, h: &mut Heal) {
     let (Some(t), Some(first)) = (h.supersedes.as_deref(), h.notes.first_mut()) else {
         return;
@@ -180,9 +169,7 @@ fn decide_flag(log: &core::Log, cands: &[Candidate], flag: Option<&str>) -> Verd
 }
 
 /// A cross-key act exposes the move: wrap any act whose target's key differs
-/// from the new row's, so the renderer — which owns the `[selfheal]
-/// cross_key` exposure — sees it. Explicit included: naming the row justifies
-/// the act, not the silence about the key moving underneath it.
+/// from the new row's (explicit included — naming justifies the act, not silence).
 fn wrap_cross(cands: &[Candidate], v: Verdict) -> Verdict {
     let target = match &v {
         Verdict::TextAct { target, .. }
@@ -210,8 +197,7 @@ fn wrap_cross(cands: &[Candidate], v: Verdict) -> Verdict {
 
 /// Provenance for the row's `supersedes` (chunk 3): which rule filed it, so
 /// restore can trace an edge back to its cause. Cross-key acts append
-/// `:cross-key` — the exposure (`warning:` vs info vs silent) is the knob's
-/// job, the cause is recorded either way. Holds and keeps act on nothing.
+/// `:cross-key`; holds and keeps act on nothing.
 fn source_of(v: &Verdict) -> Option<String> {
     match v {
         Verdict::FlagPassthrough => Some("caller:flag".into()),
@@ -296,9 +282,22 @@ fn explicit(cands: &[Candidate], row: &core::Row) -> Option<Verdict> {
 
 /// Identity resolves second. The class claims every same-kind same-key row;
 /// one of my own acts, several hold, and a claim the class cannot act on
-/// Blocks: another writer's row, or a different finding, is kept and named —
-/// never silently yielded to the files guess below. `None` — no key on the
-/// row, or no open row carrying that kind + key — falls through.
+/// Blocks: another writer's row, or a different finding, is kept and named.
+/// A single own row filed in the same burst holds instead of acting.
+///
+/// Two adds from one writer inside `BURST_MS` are parallel calls, not a
+/// replacement (01M47QEJ): every sub-second edge on record hid a different
+/// topic, while every edge ≥8 s old reads as a real replacement.
+const BURST_MS: i64 = 1_000;
+
+/// The candidate was filed less than a burst before the new row — hold, never
+/// act. Unparseable timestamps read as no burst: old rows keep acting.
+fn burst(old: &core::Row, row: &core::Row) -> bool {
+    match (core::ts_ms(&old.ts), core::ts_ms(&row.ts)) {
+        (Some(o), Some(n)) => 0 <= n - o && n - o < BURST_MS,
+        _ => false,
+    }
+}
 fn identity(cands: &[Candidate], st: &core::Stamp, row: &core::Row) -> Option<Verdict> {
     row.key.as_ref()?;
     let claimed: Vec<&Candidate> = cands
@@ -324,6 +323,9 @@ fn identity(cands: &[Candidate], st: &core::Stamp, row: &core::Row) -> Option<Ve
         });
     }
     match hits.as_slice() {
+        [one] if one.row.by == st.by && burst(one.row, row) => Some(Verdict::KeyBurst {
+            target: one.row.id.clone(),
+        }),
         [one] if one.row.by == st.by => Some(Verdict::KeyAct {
             target: one.row.id.clone(),
             also: also_if_note(cands, row, &one.row.id),
@@ -345,12 +347,10 @@ fn finding_blocked(c: &Candidate, st: &core::Stamp, row: &core::Row) -> bool {
     )
 }
 
-/// Heuristic resolves last, notes only. Shared files prove two notes are
-/// related, not that one replaces the other, so only the one pair with no
-/// topic on either side — both keyless — acts. A key on either side names a
-/// topic, and a lone overlap or several are kept and named, never picked: a
-/// silent hide costs the next reader a todo, a kept note costs one `close`.
-/// It fires only when neither higher class claimed anything.
+/// Heuristic resolves last, notes only: only the one pair with no topic on
+/// either side — both keyless — acts. A key on either side, a lone overlap
+/// or several are kept and named, never picked. It fires only when neither
+/// higher class claimed anything.
 fn heuristic(cands: &[Candidate], row: &core::Row) -> Option<Verdict> {
     if row.kind != "note" {
         return None;

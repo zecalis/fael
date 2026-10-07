@@ -104,6 +104,15 @@ fn gen_case(g: &mut Lcg, n: usize) -> (core::Log, core::Stamp, core::Row) {
                 serde_json::Value::String(g.one_of(&["main", "feature"]).to_string()),
             );
         }
+        // most rows filed a while ago, some in this very burst: the identity
+        // hold only fires inside one second of the new row, so the generator
+        // must span both sides of that line
+        if g.chance(6)
+            && let Some(ms) = core::ts_ms(&r.ts)
+        {
+            let age = 2_000 + g.below(259_200_000) as i64;
+            r.ts = core::rfc3339((ms - age).max(0) as u64);
+        }
         rows.push(r);
     }
     let files: Vec<String> = FILES
@@ -284,6 +293,7 @@ fn hold_and_kept_open_supersede_nothing() {
             eff(&v),
             Verdict::TextHold { .. }
                 | Verdict::KeyMany { .. }
+                | Verdict::KeyBurst { .. }
                 | Verdict::FilesMany { .. }
                 | Verdict::KeyIssueKept { .. }
                 | Verdict::KeyOtherWriter { .. }
@@ -309,4 +319,48 @@ fn carriers_are_never_open_rows() {
     };
     let open: Vec<&str> = open_rows(&log).iter().map(|r| r.id.as_str()).collect();
     assert_eq!(open, [log.rows[0].id.as_str()]);
+}
+
+/// A same-key row filed in the same burst holds instead of acting (01M47QEJ):
+/// parallel adds share a key without replacing each other, while a row filed
+/// a while ago still supersedes itself.
+#[test]
+fn same_burst_key_match_holds_and_an_old_one_acts() {
+    let mut old = mk(
+        1,
+        "me",
+        "decision",
+        "first",
+        vec!["src/a.rs".into()],
+        Some("k:a".into()),
+    );
+    old.ts = "2026-10-07T00:00:00.500Z".into();
+    let log = core::Log {
+        rows: vec![old],
+        ..Default::default()
+    };
+    let st = stamp();
+    let new = |id: usize, ts: &str| {
+        let mut r = mk(
+            id,
+            "me",
+            "decision",
+            "second",
+            vec!["src/a.rs".into()],
+            Some("k:a".into()),
+        );
+        r.ts = ts.into();
+        r
+    };
+    // 700 ms later: one burst, file both and name the first
+    let open = open_rows(&log);
+    match decide(&log, &open, &st, &new(2, "2026-10-07T00:00:01.200Z"), None) {
+        Verdict::KeyBurst { target } => assert_eq!(target, log.rows[0].id),
+        v => panic!("burst acted: {v:?}"),
+    }
+    // 30 s later: a replacement, supersede as before
+    match decide(&log, &open, &st, &new(3, "2026-10-07T00:00:30.000Z"), None) {
+        Verdict::KeyAct { target, .. } => assert_eq!(target, log.rows[0].id),
+        v => panic!("old row held: {v:?}"),
+    }
 }
