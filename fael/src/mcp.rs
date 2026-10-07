@@ -73,8 +73,8 @@ fn error(id: Value, code: i32, msg: &str) -> Value {
 }
 
 fn call(p: &Value) -> Value {
-    let args = &p["arguments"];
     let name = p["name"].as_str().unwrap_or("");
+    let args = &crate::synonyms::mcp(name, &p["arguments"]);
     let res = match name {
         "find" => find::find(args),
         "add" => add::add(args),

@@ -247,7 +247,8 @@ fn reasons_come_from_the_real_reject_paths() {
         &["bump", "01ABC", "--title", "x"],
         &["add", "note", "x", "--files"],
         &["add"],
-        &["decision", "x"],
+        &["find", "a b", "c"],
+        &["frobnicate"],
     ] {
         let (ok, err) = call(&d, Some("s1"), args);
         assert!(!ok && err.contains("rejected:"), "{args:?}: {err}");
@@ -256,13 +257,14 @@ fn reasons_come_from_the_real_reject_paths() {
     assert_eq!(
         f["reasons"],
         serde_json::json!({
-            "unknown_flag": 1, "bad_id": 1, "flag_not_taken": 1, "bad_value": 2, "unknown_command": 1
+            // `-k` is a flag now, not an id
+            "unknown_flag": 2, "bad_id": 1, "flag_not_taken": 1, "bad_value": 2, "unknown_command": 1
         }),
         "{f}"
     );
     // the bare unknown command has no command to blame
     assert_eq!(f["by_command"]["?"]["rejects"], 1, "{f}");
-    assert_eq!(f["by_command"]["find"]["rejects"], 2, "{f}");
+    assert_eq!(f["by_command"]["find"]["rejects"], 3, "{f}");
 }
 
 #[test]
@@ -299,5 +301,32 @@ fn since_cuts_call_lines_like_every_other_line() {
         (since["calls"].as_u64(), since["rejects"].as_u64()),
         (Some(1), Some(0)),
         "{since}"
+    );
+}
+
+/// A synonym is counted as the command it stands for — `decision` is an `add`,
+/// `show` a `find` — not as a `?` that no command's numbers would hold.
+#[test]
+fn a_synonym_counts_under_the_real_command() {
+    let d = repo();
+    let (ok, err) = call(&d, Some("s1"), &["decision", "x", "--file", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let (ok, err) = call(&d, Some("s1"), &["show", "--stale"]);
+    assert!(!ok && err.contains("unknown flag --stale"), "{err}");
+    let got: Vec<_> = calls(&d)
+        .iter()
+        .map(|v| {
+            (
+                v["cmd"].as_str().map(String::from),
+                v["outcome"].as_str().map(String::from),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        [
+            (Some("add".into()), Some("ok".into())),
+            (Some("find".into()), Some("reject".into())),
+        ]
     );
 }
