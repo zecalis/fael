@@ -141,11 +141,16 @@ fn replay_key_candidates_are_adopted_or_left_alone() {
 
 /// R4 — same kind + key, same writer: (c) supersedes the old one, asking
 /// nothing (the pre-3c baseline filed twice; the count is what changes, not
-/// any ask type).
+/// any ask type). Past the same-burst window: two adds inside one second hold
+/// instead of acting (parallel calls share a key — pinned in
+/// `fael/tests/selfheal/key.rs`).
 #[test]
 fn replay_keyed_duplicate_supersedes() {
     let d = replay_repo();
     for i in 1..=2 {
+        if i > 1 {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+        }
         let (ok, _, err) = fael(
             &d,
             &[

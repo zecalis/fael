@@ -72,7 +72,7 @@ A feature must never:
 │   ─────────           ────                         ───             │
 │   CLI         ──┐     normalize·validate·append ▶ .fael/log/**    │
 │   MCP (stdio) ──┼──▶  find · rank · budget ◀────  (jsonl, in git) │
-│   hook        ──┘     decide (block / context)                     │
+│   hook        ──┘     decide (context, never blocks)               │
 │    ├ claude                                                        │
 │    ├ codex                                                         │
 │    ├ opencode                                                      │

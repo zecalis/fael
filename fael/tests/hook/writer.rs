@@ -23,6 +23,10 @@ fn log_text(d: &std::path::Path) -> String {
 fn a_row_carries_the_writer_session_id_never_a_path() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    // the hook records edits only in an adopted repo (one row exists), so seed
+    // one first — then the transcript path below is a recorded session
+    let (ok, _, err) = fael_env(&d, &["add", "note", "seed", "--files", "src/a.rs"], "", &[]);
+    assert!(ok, "{err}");
     // the edit hook keys the session by transcript path; the env holds the stem
     let transcript = d.join("t/abc-123.jsonl");
     let input = format!(
@@ -49,6 +53,8 @@ fn a_row_carries_the_writer_session_id_never_a_path() {
 fn fael_session_tags_a_row_like_claude_code_session_id() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael_env(&d, &["add", "note", "seed", "--files", "src/a.rs"], "", &[]);
+    assert!(ok, "{err}");
     let session = "2026-09-26T00:00:00.000Z";
     let input = format!(
         r#"{{"cwd":{},"session":{},"tool_input":{{"file_path":{}}}}}"#,
@@ -96,16 +102,23 @@ fn fael_session_wins_over_claude_code_session_id() {
 fn codex_thread_id_tags_a_row_like_claude_code_session_id() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael_env(&d, &["add", "note", "seed", "--files", "src/a.rs"], "", &[]);
+    assert!(ok, "{err}");
     // Codex exposes CODEX_THREAD_ID to its shell tool executions (but not to
     // stdio MCP servers: openai/codex#19937); the edit hook keys the session
     // by the hook payload's session id, so a `fael add` from that shell joins
     let thread = "019dba93-8214-7d50-a089-9690b4ce6b9e";
-    let input = format!(
-        r#"{{"cwd":{},"session_id":{},"tool_input":{{"command":"*** Update File: {}"}}}}"#,
-        json(&d),
-        serde_json::json!(thread),
-        json(&d.join("src/a.rs"))
-    );
+    // the path inside `command` is raw patch text, never JSON-quoted: a quoted
+    // path names no file, so the hook would record nothing. Build the whole
+    // payload through serde so a Windows path's backslashes stay a valid JSON
+    // string while the parsed `command` still holds the bare path.
+    let command = format!("*** Update File: {}", d.join("src/a.rs").display());
+    let input = serde_json::json!({
+        "cwd": d.to_string_lossy(),
+        "session_id": thread,
+        "tool_input": {"command": command},
+    })
+    .to_string();
     let (ok, _, err) = fael_env(&d, &["hook", "edit", "--client", "codex"], &input, &[]);
     assert!(ok, "{err}");
     let (ok, _, err) = fael_env(
@@ -135,4 +148,23 @@ fn outside_a_session_a_row_has_no_session() {
         .unwrap();
     assert!(o.status.success());
     assert!(!log_text(&d).contains("session"));
+}
+
+/// Issue 01M47N67: a client session id no hook event ever recorded is a
+/// stranger's — a long-lived MCP server inherits whoever spawned it (an outer
+/// session when nested). The row files without a session rather than under
+/// the wrong one; `FAEL_SESSION` (set per command by the plugin) still reads
+/// back raw — see `fael_session_wins_over_claude_code_session_id`.
+#[test]
+fn unrecorded_client_session_tags_nothing() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "note", "stranger", "--files", "src/a.rs"],
+        "",
+        &[("CLAUDE_CODE_SESSION_ID", "3735bde2")],
+    );
+    assert!(ok, "{err}");
+    assert!(!log_text(&d).contains("\"session\":"), "{}", log_text(&d));
 }

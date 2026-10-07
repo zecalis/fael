@@ -5,8 +5,8 @@ use crate::core;
 
 /// What push could say about the shown rows' files (a count of what it could
 /// not say, never of savings); no push measured it = no line. The second line
-/// is the chunk 4 gate's input (PLAN-fael-file-hash §6.4), printed once an
-/// edit followed a changed or unchanged row twice.
+/// is the chunk 4 gate's input (PLAN-fael-file-hash §6.4), printed once a
+/// pair's ask was said and a later edit set its deadline.
 pub(super) fn verdict_line(v: &core::stats::FileVerdict) -> Option<String> {
     (v.changed + v.unchanged + v.no_verdict > 0).then(|| {
         let mut line = format!(
@@ -21,7 +21,7 @@ pub(super) fn verdict_line(v: &core::stats::FileVerdict) -> Option<String> {
                 Some(false) => "gate fails".into(),
             };
             line += &format!(
-                "\n  retired by the 2nd edit: changed {}/{} · unchanged {}/{} ({gate})",
+                "\n  retired after the ask: changed {}/{} · unchanged {}/{} ({gate})",
                 c.retired, c.pairs, u.retired, u.pairs
             );
         }
@@ -49,8 +49,8 @@ mod tests {
             line.contains("3 changed · 1 unchanged · 6 none (4 with no stamp"),
             "{line}"
         );
-        // no pair edited twice yet: one line only
-        assert!(!line.contains("retired by the 2nd edit"), "{line}");
+        // no pair with a said ask and a later edit yet: one line only
+        assert!(!line.contains("retired after the ask"), "{line}");
         let arm = |pairs, retired| Arm { pairs, retired };
         v.retire = RetireSplit {
             changed: arm(2, 1),
@@ -58,7 +58,7 @@ mod tests {
         };
         let line = verdict_line(&v).unwrap();
         assert!(
-            line.contains("retired by the 2nd edit: changed 1/2 · unchanged 0/5 (gate waits for 30 pairs a side)"),
+            line.contains("retired after the ask: changed 1/2 · unchanged 0/5 (gate waits for 30 pairs a side)"),
             "{line}"
         );
         v.retire = RetireSplit {

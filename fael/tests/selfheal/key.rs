@@ -10,6 +10,13 @@ fn add(d: &Path, kind: &str, text: &str, files: &str, key: &str) -> (bool, Strin
     fael(d, &["add", kind, text, "--files", files, "--key", key], "")
 }
 
+/// Past the same-burst window: self-heal holds a same-key match filed within
+/// a second (parallel adds share a key), so a test that wants the replace
+/// must file its rows further apart than any burst.
+fn past_the_burst() {
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+}
+
 /// Full ids of the currently listed open rows.
 fn open_rows(d: &Path) -> Vec<String> {
     let (ok, out, err) = fael(d, &["find", "--json"], "");
@@ -36,6 +43,7 @@ fn single_key_match_supersedes_any_branch() {
             .unwrap()
             .success()
     );
+    past_the_burst();
     let (ok, _, err) = add(&d, "decision", "second", "src/a.rs", "auth:session");
     assert!(ok, "{err}");
     assert!(names(&err, "superseded ", &first), "{err}");
@@ -128,6 +136,7 @@ fn key_match_wins_and_files_note_is_kept() {
     assert!(ok, "{err}");
     let b = out.split_whitespace().next().unwrap().to_string();
     // the new note carries the key and spans both files: (c) picks A, (b) sees B
+    past_the_burst();
     let (ok, _, err) = fael(
         &d,
         &[
@@ -170,6 +179,7 @@ fn key_and_files_same_row_supersedes_once() {
     );
     assert!(ok, "{err}");
     let a = out.split_whitespace().next().unwrap().to_string();
+    past_the_burst();
     let (ok, _, err) = fael(
         &d,
         &[
@@ -194,6 +204,7 @@ fn mcp_add_single_key_supersedes() {
     let d = repo();
     let (ok, _, err) = add(&d, "decision", "first", "src/a.rs", "auth:session");
     assert!(ok, "{err}");
+    past_the_burst();
     let (is_err, text) = mcp_add(
         &d,
         serde_json::json!({"kind": "decision", "text": "second",
@@ -245,6 +256,7 @@ fn refiled_issue_with_the_same_words_and_a_shared_file_supersedes() {
     let (ok, out, err) = add(&d, "issue", "broken counter", "src/a.rs", "plan:x:chunk-1");
     assert!(ok, "{err}");
     let first = out.split_whitespace().next().unwrap().to_string();
+    past_the_burst();
     let (ok, _, err) = add(
         &d,
         "issue",
@@ -255,4 +267,22 @@ fn refiled_issue_with_the_same_words_and_a_shared_file_supersedes() {
     assert!(ok, "{err}");
     assert!(names(&err, "superseded ", &first), "{err}");
     assert_eq!(open_rows(&d).len(), 1);
+}
+
+/// Parallel adds share a key without replacing each other (issue 01M47QEJ):
+/// two same-key rows filed in one burst both stay open and name the first.
+#[test]
+fn same_burst_key_match_holds_and_names_the_first() {
+    let d = repo();
+    let (ok, out, err) = add(&d, "decision", "first", "src/a.rs", "auth:session");
+    assert!(ok, "{err}");
+    let first = out.split_whitespace().next().unwrap().to_string();
+    // no pause: one burst — the second files beside the first, never over it
+    let (ok, _, err) = add(&d, "decision", "second", "src/a.rs", "auth:session");
+    assert!(ok, "{err}");
+    assert!(!err.contains("superseded"), "{err}");
+    assert!(names(&err, "open decision ", &first), "{err}");
+    assert!(err.contains("kept both"), "{err}");
+    assert_eq!(open_rows(&d).len(), 2);
+    assert!(usage(&d).is_empty(), "the kept-both line is info, no ask");
 }

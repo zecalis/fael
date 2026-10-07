@@ -5,21 +5,41 @@
 use crate::{core, hook};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Set once for the long-lived `fael mcp` server (`mcp::serve`): its env is
+/// inherited at spawn, not per call, so `FAEL_SESSION` there is no fresher
+/// than a client var — it must not be trusted raw (01M47N67).
+static MCP_SERVER: AtomicBool = AtomicBool::new(false);
+
+/// Called by `mcp::serve` at startup, so every `add` the server handles knows
+/// its env is inherited, never per-command.
+pub(crate) fn mark_mcp_server() {
+    MCP_SERVER.store(true, Ordering::Relaxed);
+}
+
+fn mcp_server() -> bool {
+    MCP_SERVER.load(Ordering::Relaxed)
+}
 
 /// Chunk 6e: the hook session string behind this call — the same key the push
 /// reads. Resolved like `derive()`: the recorded session equal to the env
 /// session or its stem; else the raw value (clients that key
 /// by it directly); empty = outside any hook session, seen-ids stay off.
 ///
+/// The raw fallback matters before the session's first recorded edit: an `add`
+/// only knows the env id while the hook keys by transcript path, and the two
+/// meet through the stem. A stranger's id in a per-session file is harmless —
+/// nothing real ever reads it — so this stays lenient; row stamps do not
+/// (see `writer_session`).
+///
 /// The env is `$FAEL_SESSION` first, then `$CLAUDE_CODE_SESSION_ID`, then
 /// `$CODEX_THREAD_ID` — the OpenCode plugin's `shell.env` hook sets the former
 /// inside OpenCode's own shell commands only, so it is the fresher signal; the
-/// Claude one can be inherited when opencode runs inside a Claude Code shell,
-/// tagging the row with the outer session. Codex exposes `CODEX_THREAD_ID` to
-/// its shell tool executions (but not to stdio MCP servers: openai/codex#19937),
-/// so a `fael add` from a Codex shell joins the same way. A local MCP server is
-/// spawned once per OpenCode instance, so MCP `add` calls still land outside
-/// any session.
+/// Claude one can be inherited when opencode runs inside a Claude Code shell.
+/// Codex exposes `CODEX_THREAD_ID` to its shell tool executions (but not to
+/// stdio MCP servers: openai/codex#19937), so a `fael add` from a Codex shell
+/// joins the same way.
 fn env_session() -> String {
     for k in ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] {
         let v = std::env::var(k).unwrap_or_default();
@@ -35,22 +55,40 @@ pub(crate) fn hook_session(root: &Path) -> String {
     if env.is_empty() {
         return String::new();
     }
-    for s in active_sessions(root).into_iter().flatten() {
-        if let Some(rec) = s.3
-            && (rec == env || Path::new(&rec).file_stem().is_some_and(|f| *f == *env))
-        {
-            return rec;
-        }
-    }
-    env
+    recorded(root, &env).unwrap_or(env)
+}
+
+/// The recorded session matching `env` (equal or transcript stem), if any
+/// hook event ever ran under it in this worktree.
+fn recorded(root: &Path, env: &str) -> Option<String> {
+    active_sessions(root).into_iter().flatten().find_map(|s| {
+        s.3.filter(|rec| {
+            rec.as_str() == env || Path::new(rec).file_stem().is_some_and(|f| *f == *env)
+        })
+    })
 }
 
 /// The id a row records as its writer session: `hook_session` cut to the
 /// transcript's file stem — the UUID Claude Code puts in `$CLAUDE_CODE_SESSION_ID`,
 /// so no local path ever lands in a row that syncs to the team. `None` outside
 /// any hook session.
+///
+/// Trust is split (01M47N67): outside the long-lived `fael mcp` server,
+/// `FAEL_SESSION` is set per command by the OpenCode `shell.env` hook, so it
+/// is the calling session and stamps raw; the client vars travel further, so
+/// an id no hook event ever recorded stamps nothing. The MCP server's env is
+/// inherited at spawn, never per call — so there *every* id must be recorded.
 fn writer_session(root: &Path) -> Option<String> {
-    let s = hook_session(root);
+    let env = env_session();
+    if env.is_empty() {
+        return None;
+    }
+    let per_call = !mcp_server() && std::env::var("FAEL_SESSION").is_ok_and(|v| !v.is_empty());
+    let s = match recorded(root, &env) {
+        Some(rec) => rec,
+        None if per_call => env,
+        None => return None,
+    };
     let id = match s.contains(['/', '\\']) {
         true => Path::new(&s).file_stem()?.to_string_lossy().into_owned(),
         false => s,
