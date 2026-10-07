@@ -125,3 +125,83 @@ fn near_names_the_closest_and_never_picks() {
     assert_eq!(near("find", "--why"), "try 'fael find --help'");
     assert!(near("find", "--status").contains("--all"));
 }
+
+/// The table is never advertised: no help section and no schema property names
+/// a guess (advertised, it would be one more thing to learn).
+#[test]
+fn guesses_are_not_advertised() {
+    let flags = |s: &str| -> Vec<String> {
+        s.split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+            .filter(|w| w.starts_with('-') && w.len() > 1)
+            .map(String::from)
+            .collect()
+    };
+    for (cmds, guess, _) in FLAGS {
+        for cmd in cmds.split(' ') {
+            let help = crate::help::for_command(cmd).unwrap();
+            assert!(
+                !flags(help).iter().any(|f| f == guess),
+                "{cmd} help names {guess}"
+            );
+        }
+    }
+    let usage = crate::help::usage();
+    for (from, _) in COMMANDS {
+        assert!(
+            crate::help::for_command(from).is_none(),
+            "{from} is a command"
+        );
+        assert!(
+            !usage.contains(&format!("fael {from} ")),
+            "usage names fael {from}"
+        );
+    }
+    for k in KINDS {
+        assert!(
+            !usage.contains(&format!("fael {k} ")),
+            "usage names fael {k}"
+        );
+    }
+    let schema = crate::schema::tools();
+    for tool in schema.as_array().unwrap() {
+        let props = tool["inputSchema"]["properties"].as_object().unwrap();
+        for (tools, from, _) in PROPS {
+            if listed(tools, tool["name"].as_str().unwrap()) {
+                assert!(
+                    !props.contains_key(*from),
+                    "{} schema has {from}",
+                    tool["name"]
+                );
+            }
+        }
+    }
+}
+
+fn argv(s: &str) -> Vec<String> {
+    s.split(' ').map(String::from).collect()
+}
+
+/// A reject that is not ours, or has no command to read usage from, goes out
+/// as it came — never cut, never crashing.
+#[test]
+fn reject_leaves_what_it_cannot_improve() {
+    let flag_first = "rejected: unknown flag --stale — try 'fael --help'";
+    assert_eq!(
+        reject(&argv("--json find --stale"), flag_first.into()),
+        flag_first
+    );
+    // another module's own "takes no" line, which does not end in our tail
+    let auto = "rejected: `upgrade --auto` takes no --dry-run, --client or --replace-fapony";
+    assert_eq!(reject(&argv("upgrade --auto --dry-run"), auto.into()), auto);
+    // a command with no help section, an empty argv, an error of another kind
+    assert_eq!(reject(&argv("zzz --x"), flag_first.into()), flag_first);
+    assert_eq!(reject(&[], flag_first.into()), flag_first);
+    let other = "rejected: --limit 0 shows nothing";
+    assert_eq!(reject(&argv("find --limit 0"), other.into()), other);
+    // an unknown command far from every name has no "did you mean"
+    let far = "rejected: unknown command \"qqqqqqq\" — try 'fael --help'";
+    assert_eq!(reject(&argv("qqqqqqq"), far.into()), far);
+    // same input, same answer
+    let a = reject(&argv("find --group"), flag_first.into());
+    assert_eq!(a, reject(&argv("find --group"), flag_first.into()));
+}

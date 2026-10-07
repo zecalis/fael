@@ -182,3 +182,51 @@ fn mcp_properties_are_read_like_the_real_ones() {
     let (_, out, _) = fael(&d, &["find", &id, "--all"]);
     assert!(out.contains("fixed in a1b2c3"), "{out}");
 }
+
+fn fael_in(d: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(args)
+        .current_dir(d)
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    c.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    let o = c.wait_with_output().unwrap();
+    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    (o.status.success(), s(&o.stdout), s(&o.stderr))
+}
+
+/// `-x` is a flag nobody defined — but only that: a dash alone, a number and
+/// text with a space stay positionals, and help still reaches the real command.
+#[test]
+fn only_a_dash_word_is_an_unknown_flag() {
+    let d = repo();
+    let (ok, _, err) = fael(&d, &["add", "note", "-foo bar", "--files", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let (_, out, err) = fael(&d, &["find", "-1"]);
+    assert!(
+        !err.contains("unknown flag") && !out.contains("unknown flag"),
+        "{out}{err}"
+    );
+    let (ok, out, err) = fael_in(
+        &d,
+        &["add", "--json", "-"],
+        r#"[{"kind":"note","text":"from stdin","files":["src/a.rs"]}]"#,
+    );
+    assert!(ok, "{out}{err}");
+    let (_, out, _) = fael(&d, &["find", "stdin"]);
+    assert!(out.contains("from stdin"), "{out}");
+    for (args, said) in [
+        (&["show", "--help"][..], "fael find"),
+        (&["decision", "-h"], "fael add <kind>"),
+        (&["done", "-h"], "fael close"),
+    ] {
+        let (ok, out, err) = fael(&d, args);
+        assert!(ok && out.contains(said), "{args:?} {out}{err}");
+    }
+    let (ok, out, _) = fael(&d, &["version"]);
+    assert!(ok && out.starts_with("fael "), "{out}");
+}

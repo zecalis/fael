@@ -303,3 +303,30 @@ fn since_cuts_call_lines_like_every_other_line() {
         "{since}"
     );
 }
+
+/// A synonym is counted as the command it stands for — `decision` is an `add`,
+/// `show` a `find` — not as a `?` that no command's numbers would hold.
+#[test]
+fn a_synonym_counts_under_the_real_command() {
+    let d = repo();
+    let (ok, err) = call(&d, Some("s1"), &["decision", "x", "--file", "src/a.rs"]);
+    assert!(ok, "{err}");
+    let (ok, err) = call(&d, Some("s1"), &["show", "--stale"]);
+    assert!(!ok && err.contains("unknown flag --stale"), "{err}");
+    let got: Vec<_> = calls(&d)
+        .iter()
+        .map(|v| {
+            (
+                v["cmd"].as_str().map(String::from),
+                v["outcome"].as_str().map(String::from),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        [
+            (Some("add".into()), Some("ok".into())),
+            (Some("find".into()), Some("reject".into())),
+        ]
+    );
+}
