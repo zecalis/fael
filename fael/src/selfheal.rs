@@ -51,6 +51,7 @@
 #[cfg(test)]
 mod property;
 
+mod burst;
 mod decide;
 mod evidence;
 mod render;

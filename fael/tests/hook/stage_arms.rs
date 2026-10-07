@@ -125,10 +125,10 @@ fn the_stages_chain_shadow_to_canary_to_ramp_and_fael_counts_none_of_its_own_row
     stop_as(&state(&d), &d, "e1", &envs("e1"));
     assert_eq!(stage_now(&d).as_deref(), Some("canary"));
     arm_usage(&d, (40, 40), (1, 1)); // 2.5% each way: the dup bar holds
-    // past the same-burst window, or the ramp row holds beside the canary one
+    // a zero same-burst window, or the ramp row holds beside the canary one
     // instead of replacing it (parallel adds share a key, 01M47QEJ)
-    std::thread::sleep(std::time::Duration::from_millis(1500));
-    stop_as(&state(&d), &d, "e2", &envs("e2"));
+    let e2 = [("FAEL_SESSION", "e2"), ("FAEL_BURST_MS", "0")];
+    stop_as(&state(&d), &d, "e2", &e2);
     assert_eq!(stage_now(&d).as_deref(), Some("ramp"));
     assert_eq!(
         gate_history(&d),

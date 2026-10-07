@@ -2,7 +2,7 @@
 //! row with the same kind + key (any branch, same writer) supersedes itself;
 //! another writer's row, or several matches, is kept and listed, never asked.
 
-use super::{fael, mcp_add, names, repo, usage};
+use super::{fael, fael_env, mcp_add_env, names, repo, usage};
 use std::path::Path;
 use std::process::Command;
 
@@ -10,11 +10,24 @@ fn add(d: &Path, kind: &str, text: &str, files: &str, key: &str) -> (bool, Strin
     fael(d, &["add", kind, text, "--files", files, "--key", key], "")
 }
 
-/// Past the same-burst window: self-heal holds a same-key match filed within
-/// a second (parallel adds share a key), so a test that wants the replace
-/// must file its rows further apart than any burst.
-fn past_the_burst() {
-    std::thread::sleep(std::time::Duration::from_millis(1500));
+/// Self-heal holds a same-key match filed within `BURST_MS` (parallel adds
+/// share a key, 01M47QEJ), so a test that wants the replace passes a zero
+/// window to the child instead of sleeping out a real second.
+const PAST_BURST: &[(&str, &str)] = &[("FAEL_BURST_MS", "0")];
+
+fn add_past_burst(
+    d: &Path,
+    kind: &str,
+    text: &str,
+    files: &str,
+    key: &str,
+) -> (bool, String, String) {
+    fael_env(
+        d,
+        &["add", kind, text, "--files", files, "--key", key],
+        "",
+        PAST_BURST,
+    )
 }
 
 /// Full ids of the currently listed open rows.
@@ -43,8 +56,7 @@ fn single_key_match_supersedes_any_branch() {
             .unwrap()
             .success()
     );
-    past_the_burst();
-    let (ok, _, err) = add(&d, "decision", "second", "src/a.rs", "auth:session");
+    let (ok, _, err) = add_past_burst(&d, "decision", "second", "src/a.rs", "auth:session");
     assert!(ok, "{err}");
     assert!(names(&err, "superseded ", &first), "{err}");
     // the line names what it replaced and the undo — a same key can be
@@ -136,8 +148,7 @@ fn key_match_wins_and_files_note_is_kept() {
     assert!(ok, "{err}");
     let b = out.split_whitespace().next().unwrap().to_string();
     // the new note carries the key and spans both files: (c) picks A, (b) sees B
-    past_the_burst();
-    let (ok, _, err) = fael(
+    let (ok, _, err) = fael_env(
         &d,
         &[
             "add",
@@ -149,6 +160,7 @@ fn key_match_wins_and_files_note_is_kept() {
             "auth:session",
         ],
         "",
+        PAST_BURST,
     );
     assert!(ok, "{err}");
     assert!(names(&err, "superseded ", &a), "{err}");
@@ -179,8 +191,7 @@ fn key_and_files_same_row_supersedes_once() {
     );
     assert!(ok, "{err}");
     let a = out.split_whitespace().next().unwrap().to_string();
-    past_the_burst();
-    let (ok, _, err) = fael(
+    let (ok, _, err) = fael_env(
         &d,
         &[
             "add",
@@ -192,6 +203,7 @@ fn key_and_files_same_row_supersedes_once() {
             "auth:session",
         ],
         "",
+        PAST_BURST,
     );
     assert!(ok, "{err}");
     assert!(names(&err, "superseded ", &a), "{err}");
@@ -204,11 +216,11 @@ fn mcp_add_single_key_supersedes() {
     let d = repo();
     let (ok, _, err) = add(&d, "decision", "first", "src/a.rs", "auth:session");
     assert!(ok, "{err}");
-    past_the_burst();
-    let (is_err, text) = mcp_add(
+    let (is_err, text) = mcp_add_env(
         &d,
         serde_json::json!({"kind": "decision", "text": "second",
             "files": ["src/a.rs"], "key": "auth:session", "cwd": d}),
+        PAST_BURST,
     );
     assert!(!is_err, "{text}");
     assert!(text.contains("superseded"), "{text}");
@@ -256,8 +268,7 @@ fn refiled_issue_with_the_same_words_and_a_shared_file_supersedes() {
     let (ok, out, err) = add(&d, "issue", "broken counter", "src/a.rs", "plan:x:chunk-1");
     assert!(ok, "{err}");
     let first = out.split_whitespace().next().unwrap().to_string();
-    past_the_burst();
-    let (ok, _, err) = add(
+    let (ok, _, err) = add_past_burst(
         &d,
         "issue",
         "broken counter",
