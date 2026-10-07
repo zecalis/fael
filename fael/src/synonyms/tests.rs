@@ -138,11 +138,16 @@ fn guesses_are_not_advertised() {
     };
     for (cmds, guess, _) in FLAGS {
         for cmd in cmds.split(' ') {
-            let help = crate::help::for_command(cmd).unwrap();
-            assert!(
-                !flags(help).iter().any(|f| f == guess),
-                "{cmd} help names {guess}"
-            );
+            // neither the core help nor the full `--help --all` advertises it
+            for help in [
+                crate::help::for_command(cmd).unwrap(),
+                crate::help::for_command_full(cmd).unwrap(),
+            ] {
+                assert!(
+                    !flags(help).iter().any(|f| f == guess),
+                    "{cmd} help names {guess}"
+                );
+            }
         }
     }
     let usage = crate::help::usage();

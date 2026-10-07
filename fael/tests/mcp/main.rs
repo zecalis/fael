@@ -1,6 +1,8 @@
 //! `fael mcp` picks the repo per call — the server runs in the session's cwd,
 //! an agent may be working in another worktree.
 
+mod surface;
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
