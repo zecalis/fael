@@ -149,3 +149,37 @@ fn kickoff_combines_branch_and_changed_labels() {
         "{out}"
     );
 }
+
+#[test]
+fn kickoff_marks_handoff_over_the_push_cap() {
+    // bigger than `PUSH_MAX_BYTES` (1 MiB) but stamped all the same: kickoff
+    // is a pull, so it compares up to the stamp-side 16 MiB cap
+    let d = repo();
+    std::fs::write(d.join("big.bin"), vec![b'x'; 1_500_000]).unwrap();
+    handoff(&d, "handoff on a big file", "plan:demo,big.bin");
+    std::fs::write(d.join("big.bin"), vec![b'y'; 1_500_000]).unwrap();
+
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    let l = line(&out, "handoff on a big file");
+    assert!(l.ends_with("(files changed since)"), "{out}");
+}
+
+#[test]
+fn kickoff_combines_merged_and_changed_labels() {
+    let d = repo();
+    git(&d, &["switch", "-qc", "feat/x"]);
+    std::fs::write(d.join("a.rs"), "v1\n").unwrap();
+    handoff(&d, "handoff merged and moved", "plan:demo,a.rs");
+    git(&d, &["add", "a.rs"]);
+    git(&d, &["commit", "-qm", "work"]);
+    git(&d, &["switch", "-q", "main"]);
+    git(&d, &["merge", "-q", "--squash", "feat/x"]);
+    git(&d, &["commit", "-qm", "squash feat/x"]);
+    std::fs::write(d.join("a.rs"), "v2\n").unwrap();
+
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    assert!(
+        line(&out, "handoff merged and moved").ends_with("@feat/x (merged) (files changed since)"),
+        "{out}"
+    );
+}
