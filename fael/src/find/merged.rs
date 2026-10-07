@@ -29,6 +29,32 @@ pub fn mark(root: &Path, mut branch_of: BranchMap, rows: &[&Row]) -> BranchMap {
     branch_of
 }
 
+/// Sibling label to `(merged)` for handoff rows whose code files moved since
+/// the row was written (PLAN-fael-file-hash chunk 5a): the same `BranchMap`
+/// channel, so whichever plan lands first owns it and the other reuses it.
+/// Appended after the branch tag when there is one (`@feat/x (merged) (files
+/// changed since)`), else a bare `(files changed since)` the tag renders
+/// without `@` — the note's own plan file never counts (it moves every chunk).
+pub fn mark_changed(
+    root: &Path,
+    mut branch_of: BranchMap,
+    rows: &[&Row],
+    al: &fael_core::Aliases,
+    prefixes: &[String],
+) -> BranchMap {
+    let changed = crate::hook::handoff_changed(rows, root, al, prefixes);
+    if changed.is_empty() {
+        return branch_of;
+    }
+    for row in rows.iter().filter(|r| changed.contains(&r.id)) {
+        branch_of
+            .entry(row.id.clone())
+            .and_modify(|b| b.push_str(" (files changed since)"))
+            .or_insert_with(|| "(files changed since)".to_string());
+    }
+    branch_of
+}
+
 // ponytail: one patch-id pass over base..HEAD per branch on the page; cache
 // by merge base if kickoff ever shows many branches from one old base
 fn is_merged(root: &Path, b: &str) -> bool {

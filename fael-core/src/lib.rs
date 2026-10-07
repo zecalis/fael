@@ -51,11 +51,11 @@ pub use query::{
     TOUCH, Urgent, UrgentChange, abbrev, add_gate, arm_for, arm_in, arm_of, backtick_paths, brief,
     bucket, closed, cmp_rows, due, est_tokens, expands, fat_reasons, find, fresh_ts, freshness,
     glob, gone, gone_files, groups, id_tokens, is_date, json_note, key_hints, keys, kickoff,
-    levenshtein, next_stage, on_work, page, phantom_md_refs, phantom_refs, push, push_tiered,
-    query, ranked, ref_state, render, render_full, render_full_page, render_groups, render_page,
-    resolve, resolve_row, resolve_urgent, restored, reverted, row_due, row_waiting, select,
-    stale_refs, successors, superseded, today, touch_drops, waiting, waiting_line, warnings,
-    why_empty, with_due,
+    levenshtein, next_stage, on_work, page, phantom_md_refs, phantom_refs, plan_anchor, push,
+    push_tiered, query, ranked, ref_state, render, render_full, render_full_page, render_groups,
+    render_page, resolve, resolve_row, resolve_urgent, restored, reverted, row_due, row_waiting,
+    select, stale_refs, successors, superseded, today, touch_drops, waiting, waiting_line,
+    warnings, why_empty, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{

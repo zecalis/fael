@@ -13,7 +13,7 @@ use std::path::Path;
 const MAX_FILES: usize = 8;
 /// Files larger than this are not hashed — the stream keeps memory flat, but
 /// two passes over a huge file would still slow the write.
-const MAX_BYTES: u64 = 16 * 1024 * 1024;
+pub(crate) const MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Why a real file got no key in the map.
 #[derive(Clone, Copy, PartialEq, Debug)]

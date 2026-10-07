@@ -235,12 +235,17 @@ pub fn tag(out: String, branch_of: &BranchMap) -> String {
                 .map(|(_, b)| b)
         });
         match branch {
+            // a bare suffix with no branch behind it (`(files changed since)`)
+            // rides the same channel, minus the `@` — never `@(...)`
             Some(b) => {
                 let (body, nl) = line
                     .strip_suffix('\n')
                     .map(|l| (l, "\n"))
                     .unwrap_or((line, ""));
-                tagged.push_str(&format!("{body} @{b}{nl}"));
+                match b.starts_with('(') {
+                    true => tagged.push_str(&format!("{body} {b}{nl}")),
+                    false => tagged.push_str(&format!("{body} @{b}{nl}")),
+                }
             }
             None => tagged.push_str(line),
         }
