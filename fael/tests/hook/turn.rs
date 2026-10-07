@@ -73,3 +73,25 @@ fn no_prompt_hook_no_turn_limit() {
     assert!(edit(&d, "t2", "src/a.rs").contains("changed since"));
     assert!(edit(&d, "t2", "src/b.rs").contains("changed since"));
 }
+
+/// The vela miss: a package.json ask spent the turn, so the edit of the file
+/// with an open issue said nothing. An open issue is asked at its file's
+/// edit whatever else the turn asked — still once per session.
+#[test]
+fn an_open_issue_is_asked_past_the_turn_limit() {
+    let d = repo();
+    stale_rows(&d, &["src/a.rs"]);
+    std::fs::write(d.join("src/b.rs"), "// v1\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "issue", "b refuses heic", "--files", "src/b.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/b.rs"), "// v2\n").unwrap();
+    prompt(&d, "t3");
+    assert!(edit(&d, "t3", "src/a.rs").contains("changed since"));
+    let b = edit(&d, "t3", "src/b.rs");
+    assert!(b.contains("changed since"), "{b}");
+    assert!(!edit(&d, "t3", "src/b.rs").contains("changed since"));
+}

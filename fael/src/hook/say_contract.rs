@@ -26,6 +26,7 @@ fn all() -> Vec<Line> {
         line(
             Kind::Ask {
                 ids: vec!["01ASK".into()],
+                issue: false,
             },
             "fael: done with one? fael close 01ASK \"<why>\"\n",
         ),
@@ -142,6 +143,7 @@ fn a_per_turn_kind_is_said_once_per_turn() {
         let other = |id: &str| Line {
             kind: Kind::Ask {
                 ids: vec![id.into()],
+                issue: false,
             },
             ..l.clone()
         };
@@ -246,6 +248,7 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             line(
                 Kind::Ask {
                     ids: vec!["01ASKED".into()],
+                    issue: false,
                 },
                 "fael close 01ASKED\n",
             ),
@@ -255,6 +258,7 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             line(
                 Kind::Ask {
                     ids: vec!["*".into()],
+                    issue: false,
                 },
                 "fael close <id>\n",
             ),
@@ -264,6 +268,7 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             line(
                 Kind::Ask {
                     ids: vec!["01OLD".into()],
+                    issue: false,
                 },
                 "fael close 01OLD\n",
             ),

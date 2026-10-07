@@ -77,8 +77,10 @@ pub(crate) enum Kind {
     /// The session-start rows: said once per new or compacted context, never
     /// spent — the next read of a briefed file may push its rows again.
     Brief,
-    /// The edit hint: re-check rows already in context, each named.
-    Ask { ids: Vec<String> },
+    /// The edit hint: re-check rows already in context, each named. `issue`:
+    /// open issues on the edited file, free of the per-turn limit (a vela
+    /// edit's issue went unasked behind a package.json ask in the same turn).
+    Ask { ids: Vec<String>, issue: bool },
     /// The prompt hint: open keys the prompt names.
     Pointer { keys: Vec<String> },
     /// `bodies: fael find <id> …` under a push whose rows have bodies.
@@ -119,7 +121,7 @@ pub(crate) struct Policy {
 pub(crate) fn policy(k: &Kind) -> Policy {
     let (once, command, per_turn) = match k {
         Kind::Row { .. } => (Once::Key, None, false),
-        Kind::Ask { .. } => (Once::Key, Some("fael close"), true),
+        Kind::Ask { issue, .. } => (Once::Key, Some("fael close"), !issue),
         Kind::Pointer { .. } => (Once::Key, Some("fael find --key"), false),
         Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
         Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
@@ -137,7 +139,7 @@ impl Kind {
     pub(crate) fn keys(&self) -> Vec<String> {
         match self {
             Kind::Row { ids } => ids.clone(),
-            Kind::Ask { ids } => ids.iter().map(|i| format!("~{i}")).collect(),
+            Kind::Ask { ids, .. } => ids.iter().map(|i| format!("~{i}")).collect(),
             Kind::Pointer { keys } => keys.clone(),
             Kind::Bodies => vec!["~bodies".into()],
             Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
@@ -161,7 +163,7 @@ impl Kind {
         let (kind, keys) = match self {
             Kind::Row { ids } => ("row", ids.clone()),
             Kind::Brief => ("brief", vec![]),
-            Kind::Ask { ids } => ("ask", ids.clone()),
+            Kind::Ask { ids, .. } => ("ask", ids.clone()),
             Kind::Pointer { keys } => ("pointer", keys.clone()),
             Kind::Bodies => ("bodies", vec![]),
             Kind::Cited { ids } => ("cited", ids.clone()),
@@ -294,11 +296,10 @@ impl Outbox {
         self.said.extend(l.kind.said());
     }
 
-    /// Say `lines` in order within `budget` tokens. What is said is charged,
-    /// and rows and bodies are never cut: over the budget the stashed notice goes first,
-    /// then the edit hint, then the commit-cite hint, each whole. A cut line keeps its keys, so a later
-    /// push may say it. True when a notice was said, so the caller takes it
-    /// off disk.
+    /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
+    /// Over budget the stashed notice goes first, then the edit hints (the open-issue
+    /// one, said first, goes last), then the commit-cite hint, each whole. A cut line
+    /// keeps its keys for a later push. True when a notice was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
         let cost = |ls: &[Line]| ls.iter().map(|l| core::est_tokens(&l.text)).sum::<usize>();
@@ -306,7 +307,10 @@ impl Outbox {
             let cut = keep
                 .iter()
                 .position(|l| matches!(l.kind, Kind::Notice))
-                .or_else(|| keep.iter().position(|l| matches!(l.kind, Kind::Ask { .. })))
+                .or_else(|| {
+                    keep.iter()
+                        .rposition(|l| matches!(l.kind, Kind::Ask { .. }))
+                })
                 .or_else(|| {
                     keep.iter()
                         .position(|l| matches!(l.kind, Kind::Cited { .. }))

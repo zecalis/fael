@@ -216,6 +216,8 @@ pub(crate) struct Ask<'a> {
 pub(crate) struct Hint {
     pub text: String,
     pub spent: Vec<String>,
+    /// Names only open issues: said free of the per-turn limit.
+    pub issue: bool,
 }
 
 /// The seen list split into the ids said and the keys already hinted.
@@ -243,7 +245,7 @@ pub(crate) fn edit_hint(
     t0: &[(&core::Row, usize)],
     said: &[&core::Row],
     blobs: &mut Blobs,
-) -> Option<Hint> {
+) -> Vec<Hint> {
     let rows: Vec<&core::Row> = t0
         .iter()
         .filter(|(r, tier)| {
@@ -253,7 +255,15 @@ pub(crate) fn edit_hint(
         })
         .map(|(r, _)| *r)
         .collect();
-    stale_hint(ask, &rows, blobs)
+    // open issues get a hint of their own, so another file's ask in the same
+    // turn cannot hold them back (PLAN-fael-context-loop chunk 1)
+    let (issues, others): (Vec<&core::Row>, Vec<&core::Row>) =
+        rows.into_iter().partition(|r| r.kind == "issue");
+    let issue = stale_hint(ask, &issues, blobs).map(|h| Hint { issue: true, ..h });
+    issue
+        .into_iter()
+        .chain(stale_hint(ask, &others, blobs))
+        .collect()
 }
 
 /// Did the hook's session file `r`? Claude keys the hook by its transcript
@@ -315,6 +325,7 @@ fn stale_hint(ask: &Ask, rows: &[&core::Row], blobs: &mut Blobs) -> Option<Hint>
     (!lines.is_empty()).then(|| Hint {
         text: lines.join("\n"),
         spent,
+        issue: false,
     })
 }
 

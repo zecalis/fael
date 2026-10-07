@@ -60,9 +60,18 @@ fael: src/a.rs changed since 01K00000000000000000AAA001 was written — still tr
 
 ## 11 edit {"session":"2025-12-01T00:00:00Z","files":["src/a.rs"]}
 ## 12 edit {"session":"2025-12-01T00:00:00Z","files":["src/b.rs"]}
+context:
+fael: done with one? fael close 01K00000000000000000B "<why>"
+
 ## 13 edit {"session":"2025-12-01T00:00:00Z","files":["src/b.rs"]}
 ## 14 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
+context:
+fael: done with one? fael close 01K00000000000000000HUB01 "<why>" · fael close 01K00000000000000000HUB007 "<why>"
+
 ## 15 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
+context:
+fael: done with one? fael close 01K00000000000000000HUB004 "<why>" · fael close 01K00000000000000000HUB001 "<why>"
+
 ## 16 stop {"session":"2025-12-01T00:00:00Z","text":"the schema and the docs are out of sync","reply":"fael issue: broken thing with no files"}
 notice:
 fael: this turn — reminded 12 (01K00000000000000000HUB01, 01K00000000000000000HUB007 …)
@@ -160,5 +169,5 @@ bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true
 
 ## 32 prompt {"text":"fix the auth login flow"}
 ## usage
-25 lines · ~1703 tokens
-session-start prompt read read read search read in-context edit in-context in-context capture read session-start read read read read read search shell-edit outcome search session-start read
+28 lines · ~1811 tokens
+session-start prompt read read read search read in-context edit in-context edit in-context edit edit capture read session-start read read read read read search shell-edit outcome search session-start read

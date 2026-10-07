@@ -214,12 +214,14 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let said = &sel.shown[..n.min(sel.shown.len())];
     // a retire for a row already in context, or a stashed line, still gets
     // said with no rows to join
-    let hint = edit
-        .then(|| edit_hint(&ask, &t0, said, &mut blobs))
-        .flatten();
+    // t0 is empty off an edit, so a read or search gets no hint
+    let hints = edit_hint(&ask, &t0, said, &mut blobs);
     let mut lines = row_lines(&sel, &files, (body, n, bodies), &shown, policy.budget);
-    lines.extend(hint.map(|h| Line {
-        kind: Kind::Ask { ids: h.spent },
+    lines.extend(hints.into_iter().map(|h| Line {
+        kind: Kind::Ask {
+            ids: h.spent,
+            issue: h.issue,
+        },
         text: format!("{}\n", h.text),
     }));
     lines.extend(notes.map(|n| Line::notice(format!("{n}\n"))));
