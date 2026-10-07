@@ -51,7 +51,14 @@ fn said_notes_and_finds_join_into_yield() {
     let (ok, _, err) = fael_env(&d, &["find", "parser", "--files", "src/a.rs"], "", &env);
     assert!(ok, "{err}");
     let usage = std::fs::read_to_string(d.join("state/usage.jsonl")).unwrap();
-    let pull: serde_json::Value = serde_json::from_str(usage.lines().last().unwrap()).unwrap();
+    let pull: serde_json::Value = serde_json::from_str(
+        usage
+            .lines()
+            .rev()
+            .find(|l| !l.contains("\"event\":\"call\""))
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(pull["event"], "find", "{usage}");
     assert_eq!(pull["session"], "s1", "{usage}");
     assert_eq!(pull["found"].as_array().unwrap().len(), 2, "{usage}");
@@ -125,7 +132,14 @@ fn a_pointer_earns_on_an_mcp_find_by_its_key() {
         let (ok, out, err) = fael_env(&d, &["mcp"], &format!("{rpc}\n"), &env);
         assert!(ok && out.contains("append-only"), "{out}{err}");
         let usage = std::fs::read_to_string(d.join("state/usage.jsonl")).unwrap();
-        serde_json::from_str::<serde_json::Value>(usage.lines().last().unwrap()).unwrap()
+        serde_json::from_str::<serde_json::Value>(
+            usage
+                .lines()
+                .rev()
+                .find(|l| !l.contains("\"event\":\"call\""))
+                .unwrap(),
+        )
+        .unwrap()
     };
     let pull = call(serde_json::json!({"key": key}));
     assert_eq!(

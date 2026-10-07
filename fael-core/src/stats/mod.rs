@@ -12,6 +12,7 @@ mod aggregate;
 mod capture;
 mod cross;
 mod day;
+mod friction;
 mod incident;
 mod metrics;
 mod outcomes;
@@ -35,6 +36,7 @@ pub use day::{
     BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
+pub use friction::{FIRST_CALL_WINDOW, Friction, Tally};
 pub use incident::{INCIDENT_KEY, Incidents};
 pub use metrics::ASK_ORDER;
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};

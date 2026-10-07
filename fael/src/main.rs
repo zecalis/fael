@@ -42,7 +42,9 @@ fn main() -> ExitCode {
         .map(String::as_str)
         .unwrap_or("cli")
         .to_string();
-    match run(argv) {
+    let res = run(argv.clone());
+    hook::record_cli(&argv, &res);
+    match res {
         Ok(code) => code,
         Err(e) => {
             eprintln!("{e}");
@@ -62,12 +64,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     // `fael help`, `fael --help`, `fael -h`, `fael <cmd> --help` — usage on
     // stdout, exit 0; with a command it shows only that command's section
     // after `--` it is text, not a flag: `fael add note --files a.rs -- -h`
-    if argv.first().is_some_and(|c| c == "help")
-        || argv
-            .iter()
-            .take_while(|x| *x != "--")
-            .any(|x| x == "--help" || x == "-h")
-    {
+    if help::is_request(&argv) {
         println!("{}", help::for_argv(&argv));
         return Ok(ExitCode::SUCCESS);
     }

@@ -101,6 +101,8 @@ fn usage(d: &Path) -> Vec<serde_json::Value> {
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
         // a find's outcome line (`found`) is no ask
         .filter(|v| v.get("found").is_none())
+        // nor is a call line (friction)
+        .filter(|v| v["event"] != "call")
         .collect()
 }
 

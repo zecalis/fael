@@ -3,6 +3,7 @@
 //! the per-session constants. No spawn, no clock, no filesystem here.
 
 use super::capture::{Capture, capture};
+use super::friction::{Friction, friction};
 use super::incident::{Incidents, incidents};
 use super::metrics::{added_since, ask_totals, non_english_share};
 use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
@@ -116,6 +117,9 @@ pub struct Stats {
     /// Rows a push showed, by file-hash verdict: changed, unchanged, none
     /// (`verdict.rs`) — what push could not say, never a saving.
     pub file_verdict: FileVerdict,
+    /// Rejects, helps and repeat finds per agent call, and first-call
+    /// success (`friction.rs`) — what an agent paid to get its answer.
+    pub friction: Friction,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -186,6 +190,7 @@ pub fn aggregate(
         said: yields(parsed, logs),
         incidents: incidents(parsed, logs),
         file_verdict: file_verdict(parsed, logs),
+        friction: friction(parsed),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }

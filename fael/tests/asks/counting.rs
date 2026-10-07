@@ -96,6 +96,22 @@ fn reject_mcp_counts_with_tool_event() {
     assert_eq!(u[0]["ask"], "reject", "{u:?}");
     assert_eq!(u[0]["event"], "mcp-add", "{u:?}");
     assert_eq!(u[0]["client"], "mcp", "{u:?}");
+    // the same call also leaves its friction line, session-less
+    let c = super::all_usage(&d)
+        .into_iter()
+        .find(|v| v["event"] == "call")
+        .unwrap();
+    assert_eq!(
+        (
+            c["client"].as_str(),
+            c["cmd"].as_str(),
+            c["outcome"].as_str(),
+            c["reason"].as_str()
+        ),
+        (Some("mcp"), Some("add"), Some("reject"), Some("bad_value")),
+        "{c}"
+    );
+    assert!(c.get("session").is_none(), "{c}");
 }
 
 #[test]

@@ -307,6 +307,16 @@ pub(crate) fn for_command(cmd: &str) -> Option<&'static str> {
         .map(|(.., section)| *section)
 }
 
+/// Is this argv a help request — `help` first, or `--help`/`-h` before any `--`
+/// (after it, `-h` is text: `fael add note --files a.rs -- -h`).
+pub(crate) fn is_request(argv: &[String]) -> bool {
+    argv.first().is_some_and(|c| c == "help")
+        || argv
+            .iter()
+            .take_while(|x| *x != "--")
+            .any(|x| x == "--help" || x == "-h")
+}
+
 /// `fael help` / `fael --help` / `fael <cmd> --help` / `fael help <cmd>`:
 /// the full usage, unless a non-flag word names a command — then only that
 /// command's section (`help` itself is skipped, so `help find` finds `find`).
@@ -330,6 +340,22 @@ mod tests {
         s.split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
             .filter(|w| w.starts_with("--") && w.len() > 2)
             .collect()
+    }
+
+    #[test]
+    fn help_is_a_request_before_dashdash_only() {
+        let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+        for yes in ["help", "help add", "--help", "find --help", "add -h"] {
+            assert!(super::is_request(&argv(yes)), "{yes}");
+        }
+        for no in [
+            "find x",
+            "add note x -- -h",
+            "add note x -- --help",
+            "find --files a.rs",
+        ] {
+            assert!(!super::is_request(&argv(no)), "{no}");
+        }
     }
 
     /// A misspelled or renamed CORE entry would silently drop that command
