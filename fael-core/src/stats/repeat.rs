@@ -186,4 +186,64 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn a_folded_close_counts_a_restored_repeat_does_not_and_a_cited_acted_show_is_one() {
+        let row = |id: &str, ts: &str, file: &str, rest: &str| {
+            format!(
+                "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"2026-10-0{ts}T00:00:00Z\",\"by\":\"w\",\"kind\":\"issue\",\"text\":\"t\",\"files\":[\"{file}\"]{rest}}}\n"
+            )
+        };
+        // G's close `fael compact` folded into the row, H re-files it: a repeat.
+        // L re-files the closed K, then a restore reverts that edge: none.
+        let folded =
+            r#","closed":{"id":"t-1","ts":"2026-10-02T00:00:00Z","by":"w","text":"fixed"}"#;
+        let log = Log {
+            rows: super::super::said::tests::rows(
+                &(row("G", "1", "g.rs", folded)
+                    + &row("H", "4", "g.rs", r#","supersedes":"G""#)
+                    + &row("K", "1", "k.rs", "")
+                    + &row("L", "4", "k.rs", r#","supersedes":"K""#)
+                    + "{\"v\":1,\"id\":\"R\",\"ts\":\"2026-10-05T00:00:00Z\",\"by\":\"w\",\"text\":\"t\",\"restores\":\"L\"}\n"
+                    + &row("M", "1", "m.rs", "")
+                    + &row("N", "1", "n.rs", "")),
+            ),
+            closes: super::super::said::tests::rows(concat!(
+                "{\"v\":1,\"id\":\"X\",\"ts\":\"2026-10-02T00:00:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"K\"}\n",
+                "{\"v\":1,\"id\":\"Y\",\"ts\":\"2026-10-01T12:00:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"M\"}\n",
+            )),
+            ..Log::default()
+        };
+        let line = |at: &str, rest: &str| {
+            format!(
+                "{{\"ts\":\"2026-10-0{at}Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",{rest}}}\n"
+            )
+        };
+        // M is said, cited and closed within the day: one useful show, not
+        // two. N is said and only cited: one more. s1 edits g.rs after G's
+        // folded close: one pair.
+        let usage = line("1T00:00:00.000", r#""event":"read","ids":["M","N"]"#)
+            + &line(
+                "1T00:01:00.000",
+                r#""event":"outcome","ids":[],"cited":["M","N"]"#,
+            )
+            + &line(
+                "3T00:00:00.000",
+                r#""event":"edit","ids":[],"files":["g.rs"]"#,
+            );
+        let p = super::super::parse::parse(
+            &usage,
+            Path::new("/w/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        let c = context_loop(&p, &HashMap::from([("/w/r".to_string(), log)]));
+        assert_eq!(
+            c,
+            ContextLoop {
+                confirmed_repeats: 1,
+                edits_after_close: 1,
+                useful_shows: 2,
+            }
+        );
+    }
 }
