@@ -49,6 +49,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "bytes",
             "capture",
             "constants",
+            "context_loop",
             "est_tokens",
             "events",
             "file_verdict",
@@ -79,6 +80,11 @@ fn json_shape_keys_and_types_are_frozen() {
     assert_eq!(
         v["said"]["row"],
         serde_json::json!({"said": 0, "earned": 0}),
+        "{v}"
+    );
+    assert_eq!(
+        v["context_loop"],
+        serde_json::json!({"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0}),
         "{v}"
     );
     assert_eq!(

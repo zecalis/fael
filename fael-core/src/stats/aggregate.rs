@@ -120,6 +120,9 @@ pub struct Stats {
     /// Rejects, helps and repeat finds per agent call, and first-call
     /// success (`friction.rs`) — what an agent paid to get its answer.
     pub friction: Friction,
+    /// Confirmed repeats, the edits they read against, and useful shows
+    /// per token (`repeat.rs`, PLAN-fael-context-loop §3).
+    pub context_loop: super::repeat::ContextLoop,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -191,6 +194,7 @@ pub fn aggregate(
         incidents: incidents(parsed, logs),
         file_verdict: file_verdict(parsed, logs),
         friction: friction(parsed),
+        context_loop: super::repeat::context_loop(parsed, logs),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }

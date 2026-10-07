@@ -28,6 +28,33 @@ fn render_cuts_at_budget_but_shows_one_row() {
     assert!(out.contains("issue (closed) #auth:session"), "{out}");
 }
 
+/// A closed issue a later one re-files (`--supersedes`, a confirmed repeat)
+/// names that row, not just `(closed)`.
+#[test]
+fn render_names_the_row_that_supersedes_a_closed_one() {
+    let mut l = log();
+    l.rows.push(row(
+        "A0000000000000000000000030",
+        "issue",
+        &["src/z.rs"],
+        None,
+    ));
+    l.closes
+        .push(Row::close("t-0001", "A0000000000000000000000030", "fixed"));
+    let mut again = row("A0000000000000000000000031", "issue", &["src/z.rs"], None);
+    again.supersedes = Some("A0000000000000000000000030".into());
+    l.rows.push(again);
+    let all = Filter {
+        all: true,
+        ..Filter::default()
+    };
+    let out = render(&l, &find(&l, &all), 10_000);
+    assert!(
+        out.contains("issue (closed, superseded → A0000000000000000000000031)"),
+        "{out}"
+    );
+}
+
 /// A list says `(closed)`; the full view of a closed row says why — the close
 /// text and the commit the closer stamped, or a compacted row's folded text.
 #[test]
