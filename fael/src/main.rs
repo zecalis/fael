@@ -289,6 +289,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     let opts = write::AddOpts {
         key: a.one("key").or(base.as_ref().and_then(|b| b.key.clone())),
         to: a.one("to"),
+        from: a.one("from").or(base.as_ref().and_then(|b| b.from.clone())),
         title: a
             .one("title")
             .or(base.as_ref().and_then(|b| b.title.clone())),

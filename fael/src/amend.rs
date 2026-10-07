@@ -12,6 +12,7 @@ pub(crate) struct Base {
     pub files: Vec<String>,
     pub key: Option<String>,
     pub title: Option<String>,
+    pub from: Option<String>,
 }
 
 pub(crate) fn base(r: &Repo, a: &Args, kind: &str) -> Result<Base, String> {
@@ -39,6 +40,7 @@ pub(crate) fn base(r: &Repo, a: &Args, kind: &str) -> Result<Base, String> {
             files: row.files.clone(),
             key: row.key.clone(),
             title: row.title.clone(),
+            from: row.from.clone(),
         }),
         0 => Err(format!(
             "rejected: {old:?} is not in the body of {id} — copy it exactly from fael find {id}"

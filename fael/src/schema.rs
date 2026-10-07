@@ -47,6 +47,7 @@ pub(crate) fn tools() -> Value {
                     "description": "batch [{kind, text, files, ...}] — a bad row reports alone, the rest save"},
                 "key": str_("optional colon key, e.g. auth:session"),
                 "to": str_("who answers, e.g. ploy"),
+                "from": str_("user if the user said or decided it"),
                 "revisit": str_("date YYYY-MM[-DD] or free text"),
                 "urgent": {"type": "boolean", "description": "back of the urgent queue (issues)"},
                 "supersedes": str_("id this replaces"),
@@ -146,6 +147,7 @@ mod tests {
                 "supersedes",
                 "rows",
                 "to",
+                "from",
                 "revisit",
                 "urgent"
             ])

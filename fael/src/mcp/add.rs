@@ -44,22 +44,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         let mut failed = 0;
         for (i, v) in rows.iter().enumerate() {
             let b = crate::batch::batch_row(v).map_err(|e| row_err(e, i))?;
-            match add_row(
-                r,
-                &b.kind,
-                &b.text,
-                &b.files,
-                AddOpts {
-                    key: b.opts.key,
-                    to: b.opts.to,
-                    title: b.opts.title,
-                    revisit: b.opts.revisit,
-                    urgent: b.opts.urgent,
-                    supersedes: b.opts.supersedes,
-                    force: b.opts.force,
-                    gate: b.opts.gate,
-                },
-            ) {
+            match add_row(r, &b.kind, &b.text, &b.files, b.opts) {
                 Ok((row, _, w)) => {
                     record_row_asks("mcp", "mcp-add", &r.root, &row, &w);
                     out.push(format!("recorded {}", row.id));
@@ -93,6 +78,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         AddOpts {
             key: s(a, "key"),
             to: s(a, "to"),
+            from: s(a, "from"),
             title: s(a, "title"),
             revisit: s(a, "revisit"),
             urgent: urgent_ask(a)?,

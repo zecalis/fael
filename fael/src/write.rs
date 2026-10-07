@@ -7,16 +7,20 @@
 //! resulting list through the normal `add_row` path.
 
 use crate::{core, hook};
+use from::{from_user, over_user};
 use paths::root_relative;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+mod from;
 mod paths;
 
 /// Optional fields for `add_row` — bundled so the arg count stays under the lint.
 pub(crate) struct AddOpts {
     pub key: Option<String>,
     pub to: Option<String>,
+    /// `user` when the user said or decided it; absent = the agent chose.
+    pub from: Option<String>,
     pub title: Option<String>,
     pub revisit: Option<String>,
     pub urgent: core::Urgent,
@@ -49,6 +53,7 @@ pub(crate) fn prepare(
     let AddOpts {
         key,
         to,
+        from,
         title,
         revisit,
         urgent,
@@ -88,6 +93,7 @@ pub(crate) fn prepare(
     row.to = to
         .map(|t| t.trim().to_lowercase())
         .filter(|t| !t.is_empty());
+    row.from = from_user(from)?;
     // the queue position resolves against the open issues (`--urgent` = back,
     // `--urgent-before` = just above that row); core rejects non-issues
     row.urgent = core::resolve_urgent(&log, &urgent)?;
@@ -97,6 +103,7 @@ pub(crate) fn prepare(
     let evaluated =
         crate::selfheal::evaluate(&log, &st, &row, supersedes.as_deref(), r.cfg.cross_key);
     warns.extend(evaluated.heal.notes.clone());
+    warns.extend(over_user(&log, &row, evaluated.heal.supersedes.as_deref()));
     // verdict chunk 3: provenance for restore — which rule filed `supersedes`
     row.decision_source = evaluated.heal.source.clone();
     // id-refs chunk 2: prose citing an id with no row behind it says so —
