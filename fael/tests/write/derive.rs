@@ -113,3 +113,23 @@ fn concurrent_sessions_never_derive_each_others_files() {
     assert!(ok, "{err}");
     assert_eq!(row_files(&d, "mine is b"), ["src/b.rs"]);
 }
+
+#[test]
+fn more_derived_files_than_the_cap_reject_with_the_list() {
+    let d = repo();
+    let paths: Vec<_> = (0..9).map(|i| d.join(format!("src/f{i}.rs"))).collect();
+    for p in &paths {
+        std::fs::write(p, "// f\n").unwrap();
+    }
+    edit(&d, "s1", &paths);
+    let (ok, _, err) = fael(&d, &["add", "note", "too wide"], "");
+    assert!(
+        !ok && err.contains("--files") && err.contains("src/f8.rs"),
+        "{err}"
+    );
+    let (_, out, _) = fael(&d, &["find", "too wide"], "");
+    assert!(!out.contains("too wide"), "nothing written: {out}");
+    let (ok, _, err) = fael(&d, &["add", "note", "too wide", "--force"], "");
+    assert!(ok, "{err}");
+    assert_eq!(row_files(&d, "too wide").len(), 9);
+}

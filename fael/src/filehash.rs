@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 use std::path::Path;
 
 /// At most this many files per row, in `files` order (format.md §Rows).
-const MAX_FILES: usize = 8;
+pub(crate) const MAX_FILES: usize = 8;
 /// Files larger than this are not hashed — the stream keeps memory flat, but
 /// two passes over a huge file would still slow the write.
 pub(crate) const MAX_BYTES: u64 = 16 * 1024 * 1024;
