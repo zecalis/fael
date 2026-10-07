@@ -306,4 +306,29 @@ mod tests {
         let full = format!("git commit -m 'fix {a}'");
         assert_eq!(commit_cites(&log, &json!({"command": full})), [a]);
     }
+
+    #[test]
+    fn one_commit_naming_two_open_issues_names_both() {
+        let (a, b) = ("01M45R3J0A8Q39CQEH7YBCPA1N", "01M45R3K0A8Q39CQEH7YBCPA2N");
+        let log = issue_log(&[a, b], &[]);
+        let cmd = format!("git commit -m 'fix {a} and {b}'");
+        assert_eq!(commit_cites(&log, &json!({"command": cmd})), [a, b]);
+    }
+
+    #[test]
+    fn a_superseded_issue_is_no_commit_cite() {
+        let (old, new) = ("01M45R3J0A8Q39CQEH7YBCPA1N", "01M45R3K0A8Q39CQEH7YBCPA2N");
+        let mut log = issue_log(&[old, new], &[]);
+        log.rows
+            .iter_mut()
+            .find(|r| r.id == new)
+            .expect("new row")
+            .supersedes = Some(old.to_string());
+        let cmd = |id: &str| format!("git commit -m 'fix {id}'");
+        assert!(
+            commit_cites(&log, &json!({"command": cmd(old)})).is_empty(),
+            "superseded stays silent"
+        );
+        assert_eq!(commit_cites(&log, &json!({"command": cmd(new)})), [new]);
+    }
 }

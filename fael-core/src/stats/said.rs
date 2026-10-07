@@ -250,16 +250,18 @@ pub(super) mod tests {
             )
         };
         // N is a note; F is filed by session s1 after the notice; A is closed
+        // and G is closed too, the latter earning only the cited line
         let log = Log {
             rows: rows(
                 &(row("D", "decision", "")
                     + &row("N", "note", "")
                     + &row("A", "issue", "")
+                    + &row("G", "issue", "")
                     + &row("U", "decision", "")
                     + "{\"v\":1,\"id\":\"F\",\"ts\":\"2026-09-26T00:09:00Z\",\"by\":\"w\",\"kind\":\"issue\",\"text\":\"t\",\"files\":[\"a.rs\"],\"session\":\"s1\"}\n"),
             ),
             closes: rows(
-                "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:08:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"A\"}\n",
+                "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:08:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"A\"}\n{\"v\":1,\"id\":\"C2\",\"ts\":\"2026-09-26T00:09:30Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"G\"}\n",
             ),
             ..Log::default()
         };
@@ -280,7 +282,7 @@ pub(super) mod tests {
             r#""event":"session-start","ids":["D","U"],"said":[{"kind":"brief"}]"#,
         ) + &line(
             1,
-            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"notice"}]"#,
+            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"notice"}]"#,
         ) + &line(
             2,
             r#""event":"prompt","ids":[],"said":[{"kind":"pointer","key":"k:x"},{"kind":"pointer","key":"k:y"}]"#,
@@ -306,6 +308,7 @@ pub(super) mod tests {
             "the --files line pulled, the --key line never"
         );
         assert_eq!(got("bodies"), (1, 0), "no find by id");
+        assert_eq!(got("cited"), (1, 1), "G closed after the commit line");
         assert_eq!(got("notice"), (1, 1), "F filed by s1 after it");
         assert_eq!(got("brief"), (2, 1), "D in context, U never");
         // a pull's outcome line is no injection
