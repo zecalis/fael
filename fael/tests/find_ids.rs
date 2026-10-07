@@ -99,6 +99,47 @@ fn real_id_names_the_rows_that_mention_it() {
 }
 
 #[test]
+fn real_id_names_the_rows_that_cite_its_short() {
+    let d = repo();
+    let id = add(&d, "a.rs", "keeper row with a body");
+    // the short id a list renders — what an agent copies from a list
+    let (ok, list, err) = fael(&d, &["find"]);
+    assert!(ok, "{err}");
+    let short = list
+        .lines()
+        .find(|l| l.contains("keeper row"))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|l| l.split(']').next())
+        .expect(&list)
+        .to_string();
+    assert!(short.len() >= 8 && id.starts_with(&short), "{list}");
+    // one citer quotes the rendered short, another only its 8-char prefix
+    // (the short the next rows may decay it to — still a token of the id)
+    let citing = add(&d, "b.rs", &format!("see {short} for context"));
+    let decaying = add(&d, "c.rs", &format!("see {} for context", &id[..8]));
+    // the current short still resolves, however the log grew around it
+    let (ok, list, err) = fael(&d, &["find"]);
+    assert!(ok, "{err}");
+    let now = list
+        .lines()
+        .find(|l| l.contains("keeper row"))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|l| l.split(']').next())
+        .expect(&list)
+        .to_string();
+    for args in [&id[..], &now[..]] {
+        let (ok, out, err) = fael(&d, &["find", args]);
+        assert!(ok, "{err}{out}");
+        assert!(
+            out.contains("mentioned by:")
+                && out.contains(&citing[..8])
+                && out.contains(&decaying[..8]),
+            "{args} {out}"
+        );
+    }
+}
+
+#[test]
 fn fake_id_mentioned_elsewhere_rejects_and_names_the_mentioner() {
     let d = repo();
     let id = add(&d, "a.rs", "context row");

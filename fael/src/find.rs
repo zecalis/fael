@@ -6,6 +6,7 @@ pub(crate) mod branches;
 pub(crate) mod issue;
 mod kickoff;
 pub(crate) mod many;
+pub(crate) mod mentions;
 mod merged;
 pub(crate) mod misses;
 
@@ -226,10 +227,7 @@ fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &branches::BranchMap) -> 
             "{}",
             branches::tag(core::render_full(log, &[row], 10_000), branch_of)
         );
-        let who: Vec<String> = mentioned(log, &row.id)
-            .into_iter()
-            .filter(|s| !row.id.starts_with(s.as_str()))
-            .collect();
+        let who = mentions::mentioners(log, row);
         if !who.is_empty() {
             println!("mentioned by: {}", who.join(", "));
         }
@@ -256,26 +254,11 @@ pub(crate) fn reject_many(tok: &str, rows: &[Row]) -> String {
 /// is not the row existing.
 pub(crate) fn reject_missing(log: &Log, tok: &str) -> String {
     let mut m = format!("rejected: no row with id {tok:?} — copy the id from fael find");
-    let who = mentioned(log, tok);
+    let who = mentions::mentioned(log, tok);
     if !who.is_empty() {
         m.push_str(&format!("\nmentioned (not owned) by: {}", who.join(", ")));
     }
     m
-}
-
-/// Short ids of rows whose text or title merely mentions `tok` (open rows,
-/// then close reasons), capped at 5. Case-insensitive — ids match that way too.
-pub(crate) fn mentioned(log: &Log, tok: &str) -> Vec<String> {
-    let ab = core::abbrev(log);
-    let needle = tok.to_lowercase();
-    let names = |s: Option<&str>| s.is_some_and(|s| s.to_lowercase().contains(&needle));
-    log.rows
-        .iter()
-        .chain(log.closes.iter())
-        .filter(|r| names(Some(&r.text)) || names(r.title.as_deref()))
-        .map(|r| ab.short(&r.id).to_string())
-        .take(5)
-        .collect()
 }
 
 pub(crate) fn keys(a: &Args, pattern: Option<&String>) -> Result<(), String> {
