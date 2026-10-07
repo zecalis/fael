@@ -7,8 +7,11 @@
 //! resulting list through the normal `add_row` path.
 
 use crate::{core, hook};
+use paths::root_relative;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+
+mod paths;
 
 /// Optional fields for `add_row` — bundled so the arg count stays under the lint.
 pub(crate) struct AddOpts {
@@ -162,30 +165,6 @@ pub(crate) fn add_row(
     // it seen so the next push does not repeat it; the turn's receipt counts it
     hook::note_filed(&r.root, &row);
     Ok((row, path, warns))
-}
-
-/// `fael add` run from `sub/` with `--files sub/a.rs` (repo-root-relative)
-/// resolves to `sub/sub/a.rs`. When that is missing but the arg read from the
-/// root exists, take the root reading — the cwd reading still wins whenever
-/// it exists, so `--files a.rs` from `sub/` keeps meaning `sub/a.rs`.
-fn root_relative(r: &crate::Repo, args: &[String], files: &mut [String]) -> Vec<String> {
-    let mut warns = vec![];
-    for (arg, f) in args.iter().zip(files.iter_mut()) {
-        if hook::is_anchor(f) || core::is_glob(f) || r.root.join(&*f).exists() {
-            continue;
-        }
-        if let Ok(v) = core::normalize_files(std::slice::from_ref(arg), &r.root, &r.root)
-            && let Some(alt) = v.into_iter().next()
-            && r.root.join(&alt).exists()
-        {
-            warns.push(format!(
-                "warning: {arg:?} is not under {:?} — resolved from repo root as {alt:?}",
-                r.cwd.strip_prefix(&r.root).unwrap_or(&r.cwd)
-            ));
-            *f = alt;
-        }
-    }
-    warns
 }
 
 /// Id citations with no row behind them (PLAN-fael-id-refs chunk 2) — one

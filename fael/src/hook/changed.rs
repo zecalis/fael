@@ -56,22 +56,28 @@ fn partition(rows: &[&core::Row], root: &Path, al: &core::Aliases, blobs: &mut B
     (changed_ids, unchanged_ids)
 }
 
-/// Ids of the handoff rows (`key` ending `:handoff`) whose code files moved
-/// since the row was written (PLAN-fael-file-hash chunk 5a): the kickoff
-/// label. The same row verdict as the edit hint, but with the stamp-side cap —
+/// Ids of the handoff rows (`key` ending `:handoff`) and issues whose code
+/// files moved since the row was written (PLAN-fael-file-hash chunk 5a): the
+/// kickoff and issue-list label — an issue fixed on another branch than the
+/// one it was filed on has no other sign (issue find:issue-changed). The same row verdict as the edit hint, but with the stamp-side cap —
 /// kickoff is a pull with no 5 ms ceiling — and skipping the note's own plan
 /// file: `plan_anchor` reads it as the plan, and it moves every chunk, so
 /// counting it would label every handoff. One blob cache for the call; rows
 /// with no verdict stay out — unknown, never changed.
-pub(crate) fn handoff_changed(
+pub(crate) fn files_changed(
     rows: &[&core::Row],
     root: &Path,
     al: &core::Aliases,
     prefixes: &[String],
 ) -> HashSet<String> {
     let mut blobs: Blobs = HashMap::new();
+    let day = core::today();
     rows.iter()
-        .filter(|r| r.key.as_deref().is_some_and(|k| k.ends_with(":handoff")))
+        // a parked issue (revisit waiting) moves with its files by design
+        .filter(|r| {
+            (r.kind == "issue" && !core::row_waiting(r, &day))
+                || r.key.as_deref().is_some_and(|k| k.ends_with(":handoff"))
+        })
         .filter(|r| {
             r.file_hashes()
                 .filter(|fh| !fh.is_empty())

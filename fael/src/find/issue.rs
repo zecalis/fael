@@ -2,8 +2,8 @@
 //! the grouped list, with `[Gone]` on rows whose files are all gone and
 //! `(merged)` on rows whose branch already landed. The grouping is the
 //! `--groups` renderer, the merge mark is kickoff's `merged::mark` channel —
-//! one tag channel, no second writer (PLAN-fael-file-hash chunk 5a shares it
-//! for `(files changed since)` on kickoff handoffs, never on issues).
+//! one tag channel, no second writer: `(files changed since)` shares it — an
+//! issue fixed on another branch has no other sign (issue find:issue-changed).
 
 use super::branches::BranchMap;
 use crate::{Args, aliases, core};
@@ -56,7 +56,7 @@ pub(crate) fn groups(
     Ok(())
 }
 
-/// The grouped issue list with its two tags: `(merged)` through kickoff's
+/// The grouped issue list with its tags: `(merged)` and `(files changed since)` through kickoff's
 /// git-proven channel, `[Gone]` through the same judgement `doctor` uses
 /// (resolver + the row's own branch still holding the file = not gone).
 pub(crate) fn render_issue_groups(
@@ -67,6 +67,8 @@ pub(crate) fn render_issue_groups(
 ) -> String {
     let branch_of = super::merged::mark(&r.root, branch_of, rows);
     let al = aliases::load(r, log, true);
+    let branch_of =
+        super::merged::mark_changed(&r.root, branch_of, rows, &al, &r.cfg.anchor_prefixes);
     let gone = crate::maintain::gone_ids(&r.root, &al, rows);
     let out = super::branches::tag(core::render_groups(log, rows), &branch_of);
     tag_gone(&out, &gone)

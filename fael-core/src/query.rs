@@ -28,7 +28,8 @@ mod stale;
 pub use explain::{EXPAND_MAX, expands, json_note, why_empty};
 pub use focus::{
     Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_GATE, CUT_HUB_PEEK, Focus, Hidden,
-    PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, PushPolicy, Selection, bucket, on_work, select,
+    PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, Prior, PushPolicy, Selection, bucket, on_work,
+    select, select_with,
 };
 pub use groups::{groups, render_groups};
 pub use keyhint::key_hints;

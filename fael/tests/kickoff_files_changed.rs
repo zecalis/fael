@@ -1,7 +1,9 @@
 //! `kickoff` marks a handoff `(files changed since)` once a code file it names
 //! moved after the row was written (PLAN-fael-file-hash chunk 5a) — the same
 //! tag channel as `(merged)`, and never for an unchanged row, the plan file
-//! alone, a row that is no handoff, or a handoff with no stamp.
+//! alone, a row that is no handoff, or a handoff with no stamp. The issue
+//! list marks open issues the same way: one fixed on another branch than the
+//! one it was filed on has no other sign (issue find:issue-changed).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -180,6 +182,38 @@ fn kickoff_combines_merged_and_changed_labels() {
     let out = fael(&d, &["kickoff", "plan:demo"]);
     assert!(
         line(&out, "handoff merged and moved").ends_with("@feat/x (merged) (files changed since)"),
+        "{out}"
+    );
+}
+
+#[test]
+fn issue_list_marks_an_issue_whose_files_moved() {
+    let d = repo();
+    for f in ["a.rs", "b.rs", "c.rs"] {
+        std::fs::write(d.join(f), "v1\n").unwrap();
+    }
+    fael(
+        &d,
+        &["add", "issue", "a throws on empty", "--files", "a.rs"],
+    );
+    fael(&d, &["add", "issue", "b is slow", "--files", "b.rs"]);
+    let parked = ["add", "issue", "c waits on v2", "--files", "c.rs"];
+    fael(&d, &[&parked[..], &["--revisit", "2099-01"]].concat());
+    std::fs::write(d.join("a.rs"), "v2\n").unwrap();
+    std::fs::write(d.join("c.rs"), "v2\n").unwrap();
+
+    let out = fael(&d, &["find", "--kind", "issue"]);
+    assert!(
+        line(&out, "a throws on empty").ends_with("(files changed since)"),
+        "{out}"
+    );
+    // unchanged, or parked (a waiting issue moves with its files by design)
+    assert!(
+        !line(&out, "b is slow").contains("(files changed since)"),
+        "{out}"
+    );
+    assert!(
+        !line(&out, "c waits on v2").contains("(files changed since)"),
         "{out}"
     );
 }
