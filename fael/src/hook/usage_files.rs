@@ -89,6 +89,41 @@ fn all_archives() -> Vec<PathBuf> {
     a
 }
 
+/// The usage past byte `from` of the live file as it was in `month`: archives
+/// named from `month` on are that file moved since — the oldest is read from
+/// `from`, any later one whole, then the new live file from its start. Gives the
+/// text, where the live file ends now, and its month (read before the text: a
+/// move after it names its archive from this month on).
+pub(crate) fn read_since(month: &str, from: u64) -> (String, u64, String) {
+    let live = live();
+    let now = live_month();
+    let mut text = Vec::new();
+    let moved = archives_from(month);
+    for (i, a) in moved.iter().enumerate() {
+        tail(a, if i == 0 { from } else { 0 }, &mut text);
+    }
+    let at = if moved.is_empty() { from } else { 0 };
+    // a live file shorter than `at` was cut by hand: count it from its start
+    let end = tail(&live, at, &mut text)
+        .or_else(|| tail(&live, 0, &mut text))
+        .unwrap_or(0);
+    (String::from_utf8_lossy(&text).into_owned(), end, now)
+}
+
+/// Append `file`'s bytes past `from` to `into`; its length, or `None` when it
+/// is missing or shorter than `from`.
+fn tail(file: &Path, from: u64, into: &mut Vec<u8>) -> Option<u64> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(file).ok()?;
+    let len = f.metadata().ok()?.len();
+    if len < from {
+        return None;
+    }
+    f.seek(SeekFrom::Start(from)).ok()?;
+    f.read_to_end(into).ok()?;
+    Some(len)
+}
+
 /// The usage text a read covers: its archives, then the live file.
 pub(crate) fn read(since: Option<i64>) -> String {
     archives(since)

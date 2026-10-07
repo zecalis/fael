@@ -61,9 +61,10 @@ fn the_stage_file_decides_the_arm_and_a_pin_or_a_bad_file_cannot_be_overruled_by
     let d = seeded();
     // no file: shadow — the default config still changes nothing
     assert_eq!(arm(&d, "s1"), all);
-    // FNV-1a("s1") % 100 = 29 and ("s2") = 96: s1 is in canary's 10%? no — in ramp's 80%
+    // FNV-1a("s1") % 100 = 29 and ("s2") = 96: s1 is in canary's 50% and ramp's 80%
     put_stage(&d, "touch@1", "canary");
-    assert_eq!(arm(&d, "s1"), hold, "29 is outside canary's 10%");
+    assert_eq!(arm(&d, "s1"), cand, "29 is inside canary's 50%");
+    assert_eq!(arm(&d, "s2"), hold, "96 is outside canary's 50%");
     put_stage(&d, "touch@1", "ramp");
     assert_eq!(arm(&d, "s1"), cand);
     assert_eq!(arm(&d, "s2"), hold, "96 is outside ramp's 80%");
@@ -202,7 +203,7 @@ fn a_shadow_replay_that_clears_the_bars_promotes_to_canary_and_files_the_row_onc
         (&body["policy"], &body["from"], &body["to"]),
         (&json!("touch@1"), &json!("shadow"), &json!("canary"))
     );
-    assert_eq!(body["arm_split"], json!({"candidate": 10, "baseline": 90}));
+    assert_eq!(body["arm_split"], json!({"candidate": 50, "baseline": 50}));
     assert!(body["validation"]["replay"].is_object(), "{body}");
     // nothing new since: the next session start does not look again
     stop_look(&d);
@@ -210,7 +211,7 @@ fn a_shadow_replay_that_clears_the_bars_promotes_to_canary_and_files_the_row_onc
     // the repo's stage is on `fael tune`, which writes nothing
     let (_, out, _) = fael(&d, &["tune"], "");
     assert!(
-        out.contains("canary · 10% candidate / 90% baseline arm"),
+        out.contains("canary · 50% candidate / 50% baseline arm"),
         "{out}"
     );
 }

@@ -52,7 +52,14 @@ fn gate_text(gates: &[(String, crate::core::Stage)]) -> String {
         let split = st.candidate_pct().map_or(String::new(), |c| {
             format!(" · {c}% candidate / {}% baseline arm", 100 - c)
         });
-        out.push_str(&format!("  {repo} — {}{split}\n", st.name()));
+        let basis = match st {
+            crate::core::Stage::Shadow => " · screening: the touch@1 replay, not an arm comparison",
+            crate::core::Stage::Canary | crate::core::Stage::Ramp => {
+                " · validation: candidate arm vs baseline arm"
+            }
+            crate::core::Stage::Baseline => "",
+        };
+        out.push_str(&format!("  {repo} — {}{split}{basis}\n", st.name()));
     }
     out
 }

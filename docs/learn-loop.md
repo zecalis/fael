@@ -46,8 +46,8 @@ has its own stage for `touch@1`:
 
 | Stage | Sessions |
 |---|---|
-| `shadow` | everyone sees everything; `would_drop` is recorded (the default, nothing changes) |
-| `canary` | 10% of sessions run the gate (candidate arm), 90% stay on `baseline@1` |
+| `shadow` | everyone sees everything; `would_drop` is recorded (the default, nothing changes). The `touch@1` replay here is **screening**, not validation: failing it rolls back before any agent ran the gate |
+| `canary` | 50% of sessions run the gate (candidate arm), 50% stay on `baseline@1` |
 | `ramp` | 80% candidate, 20% `baseline@1` kept for a continuous comparison |
 | `baseline` | rolled back; final for this policy version (it can only re-enter as a new `@version`) |
 
@@ -60,8 +60,11 @@ phase 2.
 
 The evaluator runs at Stop (never on the push path, nor at session start, which the agent
 waits on), and only once 100 new search pushes of the repo have come in since its last
-look; a look reads this and last month's usage, like `fael stats` with no `--since`. A stage change is filed
-first as a `policy:push-gate` decision row (`policy`, `from`, `to`, `arm_split`, `reason`,
+look. A shadow look reads this and last month's usage, like `fael stats` with no `--since`; a
+canary or ramp look reads the usage since that stage began (the state file keeps the byte and
+month, archives included), so a slow repo's arm data is not dropped before it reaches the
+minimums. A stage change is filed
+first as a `policy:push-gate` decision row (`policy`, `basis` — `screening` from shadow, `validation` from an arm stage — `from`, `to`, `arm_split`, `reason`,
 `validation`); only then does the state file beside the log (`cache/push-gate.json`) move.
 Missing, torn or other-version state reads as `shadow`. `fael tune` lists each repo's stage.
 
