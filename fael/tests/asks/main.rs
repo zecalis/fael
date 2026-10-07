@@ -22,12 +22,26 @@ fn state_env(c: &mut Command, dir: &Path) {
 }
 
 fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
+    fael_env(dir, args, stdin, &[])
+}
+
+/// `fael` with extra env — for tests that need a knob the child reads (e.g.
+/// `FAEL_BURST_MS` to file past the same-burst window without a real sleep).
+fn fael_env(
+    dir: &Path,
+    args: &[&str],
+    stdin: &str,
+    envs: &[(&str, &str)],
+) -> (bool, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
     c.args(args).current_dir(dir);
     state_env(&mut c, dir);
     c.env_remove("FAEL_SESSION");
     c.env_remove("CLAUDE_CODE_SESSION_ID");
     c.env_remove("CODEX_THREAD_ID");
+    for (k, v) in envs {
+        c.env(k, v);
+    }
     if !stdin.is_empty() {
         c.stdin(Stdio::piped());
     }

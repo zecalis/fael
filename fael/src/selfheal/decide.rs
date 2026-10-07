@@ -6,6 +6,7 @@
 //! but cannot act, so no lower class may pick instead). The first class in
 //! table order with an eligible candidate decides — one acts, several hold.
 
+use super::burst::burst;
 use super::evidence::{
     Candidate, Evidence, KeyRel, NameRel, Rel, observe, open_rows, same_finding,
 };
@@ -283,21 +284,8 @@ fn explicit(cands: &[Candidate], row: &core::Row) -> Option<Verdict> {
 /// Identity resolves second. The class claims every same-kind same-key row;
 /// one of my own acts, several hold, and a claim the class cannot act on
 /// Blocks: another writer's row, or a different finding, is kept and named.
-/// A single own row filed in the same burst holds instead of acting.
-///
-/// Two adds from one writer inside `BURST_MS` are parallel calls, not a
-/// replacement (01M47QEJ): every sub-second edge on record hid a different
-/// topic, while every edge ≥8 s old reads as a real replacement.
-const BURST_MS: i64 = 1_000;
-
-/// The candidate was filed less than a burst before the new row — hold, never
-/// act. Unparseable timestamps read as no burst: old rows keep acting.
-fn burst(old: &core::Row, row: &core::Row) -> bool {
-    match (core::ts_ms(&old.ts), core::ts_ms(&row.ts)) {
-        (Some(o), Some(n)) => 0 <= n - o && n - o < BURST_MS,
-        _ => false,
-    }
-}
+/// A single own row filed in the same burst holds instead of acting (see
+/// `super::burst`).
 fn identity(cands: &[Candidate], st: &core::Stamp, row: &core::Row) -> Option<Verdict> {
     row.key.as_ref()?;
     let claimed: Vec<&Candidate> = cands

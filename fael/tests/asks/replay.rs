@@ -8,7 +8,7 @@
 //! ×3) · warning 1 (R8), against the recorded baseline of reject 5 · warning 1.
 //! R9 (one stop-block) went with the Stop-block mode.
 
-use super::{fael, repo, stats_json};
+use super::{fael, fael_env, repo, stats_json};
 
 /// The replay repo: `src/a.rs` + `src/b.rs` (the debt files) and `src/c.rs`
 /// (the keyed file), one writer, one branch throughout.
@@ -141,29 +141,28 @@ fn replay_key_candidates_are_adopted_or_left_alone() {
 
 /// R4 — same kind + key, same writer: (c) supersedes the old one, asking
 /// nothing (the pre-3c baseline filed twice; the count is what changes, not
-/// any ask type). Past the same-burst window: two adds inside one second hold
-/// instead of acting (parallel calls share a key — pinned in
-/// `fael/tests/selfheal/key.rs`).
+/// any ask type). The second add passes a zero same-burst window
+/// (`FAEL_BURST_MS`), since two adds inside one second hold instead of acting
+/// (parallel calls share a key — pinned in `fael/tests/selfheal/key.rs`).
 #[test]
 fn replay_keyed_duplicate_supersedes() {
     let d = replay_repo();
     for i in 1..=2 {
-        if i > 1 {
-            std::thread::sleep(std::time::Duration::from_millis(1500));
-        }
-        let (ok, _, err) = fael(
-            &d,
-            &[
-                "add",
-                "decision",
-                &format!("stance {i}"),
-                "--files",
-                "src/c.rs",
-                "--key",
-                "auth:session",
-            ],
-            "",
-        );
+        let stance = format!("stance {i}");
+        let args = [
+            "add",
+            "decision",
+            &stance,
+            "--files",
+            "src/c.rs",
+            "--key",
+            "auth:session",
+        ];
+        let (ok, _, err) = if i > 1 {
+            fael_env(&d, &args, "", &[("FAEL_BURST_MS", "0")])
+        } else {
+            fael(&d, &args, "")
+        };
         assert!(ok, "add {i}: {err}");
         if i > 1 {
             assert!(err.contains("superseded"), "add {i}: {err}");

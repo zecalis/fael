@@ -19,12 +19,26 @@ use std::process::{Command, Stdio};
 /// Per-child `FAEL_STATE_DIR` at `<repo root>/state`, so a real session on
 /// this machine never leaks in and tests run in parallel.
 fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
+    fael_env(dir, args, stdin, &[])
+}
+
+/// `fael` with extra env — for tests that need a knob the child reads (e.g.
+/// `FAEL_BURST_MS` to file past the same-burst window without a real sleep).
+fn fael_env(
+    dir: &Path,
+    args: &[&str],
+    stdin: &str,
+    envs: &[(&str, &str)],
+) -> (bool, String, String) {
     let root = dir.ancestors().find(|p| p.join(".git").exists()).unwrap();
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
     c.args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", root.join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID");
+    for (k, v) in envs {
+        c.env(k, v);
+    }
     if !stdin.is_empty() {
         c.stdin(Stdio::piped());
     }
@@ -110,19 +124,26 @@ fn usage(d: &Path) -> Vec<serde_json::Value> {
 /// self-heal through here too — CLI and MCP share `write::add_row`, and this
 /// is what proves it.
 fn mcp_add(d: &Path, args: serde_json::Value) -> (bool, String) {
+    mcp_add_env(d, args, &[])
+}
+
+/// `mcp_add` with extra env, like `fael_env`.
+fn mcp_add_env(d: &Path, args: serde_json::Value, envs: &[(&str, &str)]) -> (bool, String) {
     let root = d.ancestors().find(|p| p.join(".git").exists()).unwrap();
     let call = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": "add", "arguments": args}})
     .to_string();
-    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
-        .arg("mcp")
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
+    c.arg("mcp")
         .env("FAEL_STATE_DIR", root.join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .current_dir(d)
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
+        .stdout(Stdio::piped());
+    for (k, v) in envs {
+        c.env(k, v);
+    }
+    let mut c = c.spawn().unwrap();
     c.stdin
         .take()
         .unwrap()
