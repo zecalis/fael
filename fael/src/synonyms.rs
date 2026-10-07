@@ -231,8 +231,11 @@ fn real_flags(cmd: &str) -> Vec<&'static str> {
         .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
         .filter(|w| w.starts_with("--") && w.len() > 2)
         .collect();
-    v.push("--json");
-    v.dedup();
+    // the synopsis may already name it mid-line (tune does): pushing blind
+    // suggests it twice, and dedup only folds neighbours.
+    if !v.contains(&"--json") {
+        v.push("--json");
+    }
     v
 }
 

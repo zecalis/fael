@@ -124,6 +124,8 @@ fn near_names_the_closest_and_never_picks() {
     );
     assert_eq!(near("find", "--why"), "try 'fael find --help'");
     assert!(near("find", "--status").contains("--all"));
+    // tune's synopsis already names --json mid-line: still suggested once
+    assert_eq!(near("tune", "-j"), "did you mean --json?");
 }
 
 /// The table is never advertised: no help section and no schema property names
