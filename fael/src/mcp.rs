@@ -74,13 +74,16 @@ fn error(id: Value, code: i32, msg: &str) -> Value {
 
 fn call(p: &Value) -> Value {
     let args = &p["arguments"];
-    let res = match p["name"].as_str().unwrap_or("") {
+    let name = p["name"].as_str().unwrap_or("");
+    let res = match name {
         "find" => find::find(args),
         "add" => add::add(args),
         "close" => close::close(args),
         "bump" => bump::bump(args),
         n => Err(format!("unknown tool {n} — fael has find, add, close")),
     };
+    let root = args::repo_for(args).ok().map(|r| r.root);
+    crate::hook::record_mcp_call(name, args, root.as_deref(), &res);
     let (text, is_error) = match res {
         Ok(t) => (t, false),
         Err(e) => (e, true),

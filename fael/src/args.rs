@@ -52,7 +52,7 @@ impl Args {
                 | "text" | "edge" | "remote" | "out" | "replace" | "with" => {
                     let v = inline
                         .or_else(|| it.next())
-                        .ok_or(format!("--{name} needs a value"))?;
+                        .ok_or(format!("rejected: --{name} needs a value"))?;
                     a.flags.entry(name).or_default().push(v);
                 }
                 _ => {

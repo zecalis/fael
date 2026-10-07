@@ -21,6 +21,7 @@ pub(crate) fn explain(
     f: &Filter,
     files_flag: &str,
 ) -> String {
+    crate::hook::note_empty();
     let why = core::why_empty(log, f, files_flag);
     if let Some(q) = f.text.as_deref().filter(|t| !t.trim().is_empty()) {
         let row = serde_json::json!({

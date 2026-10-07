@@ -7,6 +7,7 @@
 
 mod concurrent;
 mod counting;
+mod friction;
 mod replay;
 
 use std::io::Write;
@@ -68,8 +69,15 @@ fn repo() -> PathBuf {
     d
 }
 
-/// Usage rows recorded so far in this repo's scratch state dir.
+/// Usage rows recorded so far in this repo's scratch state dir, minus the
+/// `call` lines (friction.rs reads those).
 fn usage(d: &Path) -> Vec<serde_json::Value> {
+    let mut u = all_usage(d);
+    u.retain(|v| v["event"] != "call");
+    u
+}
+
+fn all_usage(d: &Path) -> Vec<serde_json::Value> {
     let root = d.ancestors().find(|p| p.join(".git").exists()).unwrap();
     std::fs::read_to_string(root.join("state/usage.jsonl"))
         .unwrap_or_default()

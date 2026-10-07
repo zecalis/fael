@@ -52,6 +52,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "est_tokens",
             "events",
             "file_verdict",
+            "friction",
             "incidents",
             "non_english_rows",
             "outcomes_v",
