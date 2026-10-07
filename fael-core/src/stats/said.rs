@@ -5,6 +5,9 @@
 //! - `row` / `brief` / `note` — the id was in context at an edit
 //!   (`in_context`, `in_context_notes`) or retired within a day
 //! - `ask` — the id was closed, superseded or bumped within a day
+//! - `cited` (PLAN-fael-agent-ergonomics chunk 5) — the id was closed,
+//!   superseded or bumped within a day, like `ask`: the line already names
+//!   the close, so earning is the close itself
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
 //! - `count` — a later pull by the call the line printed: its files, a
 //!   directory over one, or its key
@@ -85,8 +88,8 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 8] = [
-    "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice",
+pub const KINDS: [&str; 9] = [
+    "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice", "cited",
 ];
 
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
@@ -158,6 +161,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 // the generic clause names no row: nothing to join it to
                 "ask" if key == "*" => continue,
                 "ask" => ("ask", retired(key)),
+                "cited" => ("cited", retired(key)),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
                 "count" => ("count", pulled(&|p| counted(key, p))),
                 "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
@@ -246,16 +250,18 @@ pub(super) mod tests {
             )
         };
         // N is a note; F is filed by session s1 after the notice; A is closed
+        // and G is closed too, the latter earning only the cited line
         let log = Log {
             rows: rows(
                 &(row("D", "decision", "")
                     + &row("N", "note", "")
                     + &row("A", "issue", "")
+                    + &row("G", "issue", "")
                     + &row("U", "decision", "")
                     + "{\"v\":1,\"id\":\"F\",\"ts\":\"2026-09-26T00:09:00Z\",\"by\":\"w\",\"kind\":\"issue\",\"text\":\"t\",\"files\":[\"a.rs\"],\"session\":\"s1\"}\n"),
             ),
             closes: rows(
-                "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:08:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"A\"}\n",
+                "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:08:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"A\"}\n{\"v\":1,\"id\":\"C2\",\"ts\":\"2026-09-26T00:09:30Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"G\"}\n",
             ),
             ..Log::default()
         };
@@ -276,7 +282,7 @@ pub(super) mod tests {
             r#""event":"session-start","ids":["D","U"],"said":[{"kind":"brief"}]"#,
         ) + &line(
             1,
-            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"notice"}]"#,
+            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"notice"}]"#,
         ) + &line(
             2,
             r#""event":"prompt","ids":[],"said":[{"kind":"pointer","key":"k:x"},{"kind":"pointer","key":"k:y"}]"#,
@@ -302,6 +308,7 @@ pub(super) mod tests {
             "the --files line pulled, the --key line never"
         );
         assert_eq!(got("bodies"), (1, 0), "no find by id");
+        assert_eq!(got("cited"), (1, 1), "G closed after the commit line");
         assert_eq!(got("notice"), (1, 1), "F filed by s1 after it");
         assert_eq!(got("brief"), (2, 1), "D in context, U never");
         // a pull's outcome line is no injection

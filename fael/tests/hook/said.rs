@@ -157,3 +157,56 @@ fn a_pointer_earns_on_an_mcp_find_by_its_key() {
     let pull = call(serde_json::json!({"id": &id[..10]}));
     assert_eq!(pull["q"], serde_json::json!({"id": id}), "{pull}");
 }
+
+/// PLAN-fael-agent-ergonomics chunk 5: a `git commit` naming an open issue
+/// says its ready close once per session — and the line is measured, so the
+/// keep/cut bar reads it from `fael stats`.
+#[test]
+fn commit_citing_an_open_issue_says_its_close_once() {
+    let d = repo();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "leaks a handle",
+            "--files",
+            "src/b.rs",
+            "--json",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = out
+        .lines()
+        .find_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .and_then(|v| v["id"].as_str().map(String::from))
+        .expect(&out);
+    // the reply's context, if any — silence prints nothing at all
+    let commit = |msg: &str| {
+        let payload = format!(
+            r#"{{"cwd":{},"session_id":"s1","tool_name":"Bash","tool_input":{{"command":{}}},"tool_response":{{}}}}"#,
+            json(&d),
+            serde_json::to_string(&format!("git commit -m '{msg}'")).unwrap(),
+        );
+        let (ok, out, err) = fael(&d, &["hook", "search", "--client", "claude"], &payload);
+        assert!(ok, "{err}");
+        match out.trim().is_empty() {
+            true => None,
+            false => serde_json::from_str::<serde_json::Value>(&out)
+                .expect(&out)["hookSpecificOutput"]["additionalContext"]
+                .as_str()
+                .map(String::from),
+        }
+    };
+    let ctx = commit(&format!("fix {id}")).expect("the first commit is said");
+    assert!(ctx.contains("cited in a commit"), "{ctx}");
+    assert!(ctx.contains(&format!("fael close {id}")), "{ctx}");
+    assert_eq!(yield_of(&d, "cited"), (1, 0));
+    assert!(
+        commit(&format!("fix {id} again")).is_none(),
+        "once per id per session"
+    );
+    assert_eq!(yield_of(&d, "cited"), (1, 0), "no second said");
+}

@@ -83,6 +83,9 @@ pub(crate) enum Kind {
     Pointer { keys: Vec<String> },
     /// `bodies: fael find <id> …` under a push whose rows have bodies.
     Bodies,
+    /// A `git commit` that named open issues (PLAN-fael-agent-ergonomics
+    /// chunk 5): each named once per session with its ready `fael close`.
+    Cited { ids: Vec<String> },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -119,6 +122,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Ask { .. } => (Once::Key, Some("fael close"), true),
         Kind::Pointer { .. } => (Once::Key, Some("fael find --key"), false),
         Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
+        Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
     Policy {
@@ -136,6 +140,7 @@ impl Kind {
             Kind::Ask { ids } => ids.iter().map(|i| format!("~{i}")).collect(),
             Kind::Pointer { keys } => keys.clone(),
             Kind::Bodies => vec!["~bodies".into()],
+            Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
             Kind::Brief | Kind::Notice => vec![],
         }
     }
@@ -159,6 +164,7 @@ impl Kind {
             Kind::Ask { ids } => ("ask", ids.clone()),
             Kind::Pointer { keys } => ("pointer", keys.clone()),
             Kind::Bodies => ("bodies", vec![]),
+            Kind::Cited { ids } => ("cited", ids.clone()),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {
@@ -290,7 +296,7 @@ impl Outbox {
 
     /// Say `lines` in order within `budget` tokens. What is said is charged,
     /// and rows and bodies are never cut: over the budget the stashed notice goes first,
-    /// then the edit hint, each whole. A cut line keeps its keys, so a later
+    /// then the edit hint, then the commit-cite hint, each whole. A cut line keeps its keys, so a later
     /// push may say it. True when a notice was said, so the caller takes it
     /// off disk.
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
@@ -300,7 +306,11 @@ impl Outbox {
             let cut = keep
                 .iter()
                 .position(|l| matches!(l.kind, Kind::Notice))
-                .or_else(|| keep.iter().position(|l| matches!(l.kind, Kind::Ask { .. })));
+                .or_else(|| keep.iter().position(|l| matches!(l.kind, Kind::Ask { .. })))
+                .or_else(|| {
+                    keep.iter()
+                        .position(|l| matches!(l.kind, Kind::Cited { .. }))
+                });
             match cut {
                 Some(i) => keep.remove(i),
                 None => break,
