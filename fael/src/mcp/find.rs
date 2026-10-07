@@ -54,7 +54,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                     core::render_full(&log, &[row.as_ref()], 10_000),
                     &branch_of,
                 );
-                Ok((text, vec![shown]))
+                Ok((with_mentioned(&log, row.as_ref(), text), vec![shown]))
             }
             crate::refs::Wide::Many(rows) => Err(crate::find::reject_many(&id, &rows)),
             crate::refs::Wide::Missing => Err(crate::find::reject_missing(&log, &id)),
@@ -71,7 +71,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         let row = core::resolve_row(&log, &id)?;
         let shown = row.id.clone();
         let text = crate::find::branches::tag(core::render_full(&log, &[row], 10_000), &branch_of);
-        return Ok((text, vec![shown]));
+        return Ok((with_mentioned(&log, row, text), vec![shown]));
     }
     let text = s(a, "text");
     // `text: "plan:x"` reads the anchor the way `kickoff` does (CLI parity)
@@ -102,8 +102,8 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         },
         offset: a["offset"].as_u64().unwrap_or(0) as usize,
     };
-    if a["groups"].as_bool().unwrap_or(false) {
-        return Ok(groups(&log, f, &branch_of));
+    if a["groups"].as_bool().unwrap_or(false) || auto_issue(&f, a) {
+        return Ok(groups(r, &log, f, &branch_of));
     }
     // same rows as the CLI: query() pages after ranking, the cut line names
     // the next offset to repeat the call with
@@ -132,15 +132,6 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     };
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
-    // grouping and claiming, said where the issue list is (CLI: ISSUE_TIP)
-    let unpaged = f.limit.is_none() && f.offset == 0;
-    let text = if f.kind.as_deref() == Some("issue") && total > 1 && unpaged {
-        format!(
-            "{text}fix together: find kind=issue groups=true · working one? bump id=<id> claim=true first\n"
-        )
-    } else {
-        text
-    };
     // the CLI's stderr line has no stderr here: it rides the result
     let text = match note {
         Some(n) => format!("{}\n{n}", text.trim_end()),
@@ -180,12 +171,37 @@ fn ids_call(
     }
 }
 
+/// The plain issue list wants the grouped answer without asking for it —
+/// same rule as the CLI (`find::issue::auto_grouped` takes `Args`; MCP takes
+/// the flag straight off the tool object).
+fn auto_issue(f: &core::Filter, a: &Value) -> bool {
+    f.kind.as_deref() == Some("issue")
+        && !a["full"].as_bool().unwrap_or(false)
+        && f.limit.is_none()
+        && f.offset == 0
+}
+
+/// Rows that merely mention `row`'s id ride under its body, so the reader
+/// sees who cites it — silent when nobody does (CLI `find <id>` parity).
+fn with_mentioned(log: &core::Log, row: &core::Row, mut text: String) -> String {
+    let who: Vec<String> = crate::find::mentioned(log, &row.id)
+        .into_iter()
+        .filter(|s| !row.id.starts_with(s.as_str()))
+        .collect();
+    if !who.is_empty() {
+        text.push_str(&format!("mentioned by: {}\n", who.join(", ")));
+    }
+    text
+}
+
 /// `groups: true` — every match, unpaged: half a group answers the question wrong.
 fn groups(
+    r: &Repo,
     log: &core::Log,
     f: core::Filter,
     branch_of: &crate::find::branches::BranchMap,
 ) -> (String, Vec<String>) {
+    let is_issue = f.kind.as_deref() == Some("issue");
     let rows = core::find(
         log,
         &core::Filter {
@@ -196,6 +212,9 @@ fn groups(
     );
     let text = match rows.is_empty() {
         true => "no rows match".into(),
+        false if is_issue => {
+            crate::find::issue::render_issue_groups(r, log, &rows, branch_of.clone())
+        }
         false => crate::find::branches::tag(core::render_groups(log, &rows), branch_of),
     };
     (text, rows.iter().map(|r| r.id.clone()).collect())

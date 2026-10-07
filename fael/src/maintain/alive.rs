@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-pub(super) struct BranchFiles<'a> {
+pub(crate) struct BranchFiles<'a> {
     root: &'a Path,
     head: Option<String>,
     /// `(branch, path)` → alive on that branch's tip; each path is asked once.
@@ -19,7 +19,7 @@ pub(super) struct BranchFiles<'a> {
 }
 
 impl<'a> BranchFiles<'a> {
-    pub(super) fn new(root: &'a Path) -> Self {
+    pub(crate) fn new(root: &'a Path) -> Self {
         BranchFiles {
             root,
             head: crate::git(root, &["rev-parse", "--abbrev-ref", "HEAD"]),
@@ -30,7 +30,7 @@ impl<'a> BranchFiles<'a> {
     /// The row's missing files minus those on its branch's tip (local branch
     /// first, then origin's). A row on HEAD's branch, or with no branch, keeps
     /// every missing file — the checkout is its branch.
-    pub(super) fn missing<'r>(&self, row: &'r core::Row, gone: Vec<&'r str>) -> Vec<&'r str> {
+    pub(crate) fn missing<'r>(&self, row: &'r core::Row, gone: Vec<&'r str>) -> Vec<&'r str> {
         let Some(b) = row.branch().filter(|b| Some(*b) != self.head.as_deref()) else {
             return gone;
         };

@@ -65,15 +65,22 @@ fn waiting_issues_list_after_ready_ones() {
     issue(&d, "scope bug", "src/b.rs", &[]);
     let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
     assert!(ok, "{err}");
-    let lines: Vec<&str> = out.lines().filter(|l| l.starts_with("- [")).collect();
-    // newest first among the ready ones; the waiting one last, tagged
+    // grouped by default: the two src/a.rs rows share a group, scope bug stands alone
     assert!(
-        lines[2].contains("ocr gated (waiting: vendor fixes 5xx)"),
+        out.starts_with("## group 1 · 2 rows · shared: src/a.rs\n"),
         "{out}"
     );
-    assert!(lines[0].contains("scope bug"), "{out}");
+    assert!(out.contains("## group 2 · shares no file"), "{out}");
+    let g1 = out.split("## group 2").next().unwrap();
     assert!(
-        out.contains("--groups") && out.contains("fael claim"),
+        g1.contains("ocr gated (waiting: vendor fixes 5xx)"),
+        "{out}"
+    );
+    let g2 = out.split("## group 2").nth(1).unwrap();
+    assert!(g2.contains("scope bug"), "{out}");
+    // the grouping answer rides the list itself now — no tip left to learn a flag from
+    assert!(
+        !out.contains("fix together") && !out.contains("--groups"),
         "{out}"
     );
 }
@@ -209,6 +216,79 @@ fn groups_by_shared_files() {
     );
     let (ok, _, err) = fael(&d, &["find", "--kind", "issue", "--groups", "--limit", "2"]);
     assert!(!ok && err.contains("--groups lists every match"), "{err}");
+}
+
+#[test]
+fn issue_list_marks_rows_on_gone_files() {
+    let d = repo();
+    issue(&d, "ocr timeout", "src/a.rs", &[]);
+    issue(&d, "auth typo", "src/c.rs", &[]);
+    std::fs::remove_file(d.join("src/c.rs")).unwrap();
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(ok, "{err}");
+    let gone = out
+        .lines()
+        .find(|l| l.contains("auth typo"))
+        .unwrap()
+        .to_string();
+    assert!(gone.contains("[Gone]"), "{out}");
+    let live = out
+        .lines()
+        .find(|l| l.contains("ocr timeout"))
+        .unwrap()
+        .to_string();
+    assert!(!live.contains("[Gone]"), "{out}");
+}
+
+#[test]
+fn issue_list_marks_branch_rows_whose_branch_landed() {
+    let d = repo();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
+    git(&d, &["switch", "-q", "-c", "feat/x"]);
+    issue(&d, "side branch leak", "src/a.rs", &[]);
+    std::fs::write(d.join("src/a.rs"), "// touched\n").unwrap();
+    // only the touched file: `add -A` would swallow `state/` (FAEL_STATE_DIR
+    // lives inside the test repo) and the squash merge would conflict on it
+    git(&d, &["add", "src/a.rs"]);
+    git(&d, &["commit", "-q", "-m", "work"]);
+    git(&d, &["switch", "-q", "feat/one"]);
+    // before the landing: tagged with the branch, no merge mark
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(ok, "{err}");
+    let line = out
+        .lines()
+        .find(|l| l.contains("side branch leak"))
+        .unwrap()
+        .to_string();
+    assert!(line.ends_with("@feat/x"), "{out}");
+    git(&d, &["merge", "-q", "--squash", "feat/x"]);
+    git(&d, &["commit", "-q", "-m", "squash"]);
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(ok, "{err}");
+    let line = out
+        .lines()
+        .find(|l| l.contains("side branch leak"))
+        .unwrap()
+        .to_string();
+    assert!(line.ends_with("@feat/x (merged)"), "{out}");
+}
+
+#[test]
+fn issue_json_stays_flat() {
+    let d = repo();
+    issue(&d, "ocr timeout", "src/a.rs,src/b.rs", &[]);
+    issue(&d, "scope leak", "src/b.rs", &[]);
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue", "--json"]);
+    assert!(ok, "{err}");
+    assert!(!out.contains("## group"), "{out}");
+    let rows: Vec<serde_json::Value> = out
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 2, "{out}");
+    assert!(rows.iter().all(|v| v["kind"] == "issue"), "{out}");
 }
 
 #[test]

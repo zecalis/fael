@@ -82,6 +82,23 @@ fn real_id_shows_the_row() {
 }
 
 #[test]
+fn real_id_names_the_rows_that_mention_it() {
+    let d = repo();
+    let id = add(&d, "a.rs", "keeper row with a body");
+    // nobody cites it yet: the body rides alone, no longer output
+    let (ok, out, err) = fael(&d, &["find", &id]);
+    assert!(ok, "{err}{out}");
+    assert!(!out.contains("mentioned by:"), "{out}");
+    let citing = add(&d, "b.rs", &format!("see {id} for context"));
+    let (ok, out, err) = fael(&d, &["find", &id]);
+    assert!(ok, "{err}{out}");
+    assert!(
+        out.contains("mentioned by:") && out.contains(&citing[..8]),
+        "{out}"
+    );
+}
+
+#[test]
 fn fake_id_mentioned_elsewhere_rejects_and_names_the_mentioner() {
     let d = repo();
     let id = add(&d, "a.rs", "context row");
