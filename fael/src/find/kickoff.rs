@@ -26,6 +26,11 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     );
     // a tag whose branch is already in HEAD says so: its handoff may be stale
     let branch_of = super::merged::mark(&r.root, branch_of, &rows);
+    // a handoff whose code files moved since it was written says so too: the
+    // same tag channel, but the note's own plan file never counts (it moves
+    // every chunk, so counting it would label every handoff)
+    let branch_of =
+        super::merged::mark_changed(&r.root, branch_of, &rows, &al, &r.cfg.anchor_prefixes);
     let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
     let shown = show(
         a,

@@ -15,6 +15,11 @@ use std::path::Path;
 /// reads the same number to list the rows this leaves without a verdict.
 pub(crate) const PUSH_MAX_BYTES: u64 = 1024 * 1024;
 
+/// Files this big are still compared on pulls (`kickoff`, `doctor`): the stamp
+/// side covers this much (01M42CGE), and a pull has no 5 ms ceiling to break.
+/// One source with the stamp cap — `filehash::MAX_BYTES` under a pull-side name.
+pub(crate) const STAMP_MAX_BYTES: u64 = crate::filehash::MAX_BYTES;
+
 /// One blob cache per push, so each file is read once however many rows name
 /// it (hub files carry dozens of rows) and the edit hint and the shadow split
 /// share the reads.
@@ -42,7 +47,7 @@ fn partition(rows: &[&core::Row], root: &Path, al: &core::Aliases, blobs: &mut B
     let mut changed_ids = vec![];
     let mut unchanged_ids = vec![];
     for r in rows {
-        match verdict(r, root, al, blobs, &[]) {
+        match verdict(r, root, al, blobs, &[], PUSH_MAX_BYTES) {
             Verdict::Changed(_) => changed_ids.push(r.id.clone()),
             Verdict::Same => unchanged_ids.push(r.id.clone()),
             Verdict::Unknown => {}
@@ -51,15 +56,53 @@ fn partition(rows: &[&core::Row], root: &Path, al: &core::Aliases, blobs: &mut B
     (changed_ids, unchanged_ids)
 }
 
+/// Ids of the handoff rows (`key` ending `:handoff`) whose code files moved
+/// since the row was written (PLAN-fael-file-hash chunk 5a): the kickoff
+/// label. The same row verdict as the edit hint, but with the stamp-side cap —
+/// kickoff is a pull with no 5 ms ceiling — and skipping the note's own plan
+/// file: `plan_anchor` reads it as the plan, and it moves every chunk, so
+/// counting it would label every handoff. One blob cache for the call; rows
+/// with no verdict stay out — unknown, never changed.
+pub(crate) fn handoff_changed(
+    rows: &[&core::Row],
+    root: &Path,
+    al: &core::Aliases,
+    prefixes: &[String],
+) -> HashSet<String> {
+    let mut blobs: Blobs = HashMap::new();
+    rows.iter()
+        .filter(|r| r.key.as_deref().is_some_and(|k| k.ends_with(":handoff")))
+        .filter(|r| {
+            r.file_hashes()
+                .filter(|fh| !fh.is_empty())
+                .is_some_and(|fh| {
+                    fh.iter().any(|(f, v)| {
+                        if core::plan_anchor(f, prefixes).is_some() {
+                            return false;
+                        }
+                        let (Some(want), Some(target)) = (v.as_str(), resolve(al, root, f)) else {
+                            return false;
+                        };
+                        file_verdict(want, &target, root, &mut blobs, STAMP_MAX_BYTES)
+                            .is_some_and(|d| d)
+                    })
+                })
+        })
+        .map(|r| r.id.clone())
+        .collect()
+}
+
 /// `only` narrows the row to the stamped files that live at one of these
 /// paths now (an edit's files); empty reads every stamped file. A row with no
-/// stamp among them is unknown.
+/// stamp among them is unknown. `cap` bounds one hashed file: the push path
+/// passes `PUSH_MAX_BYTES`, pulls the stamp-side cap.
 fn verdict(
     row: &core::Row,
     root: &Path,
     al: &core::Aliases,
     blobs: &mut Blobs,
     only: &[String],
+    cap: u64,
 ) -> Verdict {
     let Some(fh) = row.file_hashes().filter(|fh| !fh.is_empty()) else {
         return Verdict::Unknown;
@@ -74,7 +117,7 @@ fn verdict(
             continue;
         }
         read += 1;
-        match file_verdict(want, &target, root, blobs) {
+        match file_verdict(want, &target, root, blobs, cap) {
             Some(true) => return Verdict::Changed(target),
             Some(false) => {}
             None => unknown = true,
@@ -100,11 +143,17 @@ fn resolve(al: &core::Aliases, root: &Path, f: &str) -> Option<String> {
 }
 
 /// One stamped file against disk: `None` when it is gone, a directory,
-/// unreadable, or over the push cap below — never guessed as changed.
-fn file_verdict(want: &str, target: &str, root: &Path, blobs: &mut Blobs) -> Option<bool> {
+/// unreadable, or over `cap` — never guessed as changed.
+fn file_verdict(
+    want: &str,
+    target: &str,
+    root: &Path,
+    blobs: &mut Blobs,
+    cap: u64,
+) -> Option<bool> {
     let blob = blobs
         .entry(target.to_string())
-        .or_insert_with(|| blob_at(root, target));
+        .or_insert_with(|| blob_at(root, target, cap));
     blob.as_ref().map(|now| now != want)
 }
 
@@ -112,18 +161,16 @@ fn file_verdict(want: &str, target: &str, root: &Path, blobs: &mut Blobs) -> Opt
 /// Files over `PUSH_MAX_BYTES` have no verdict: the stamp side covers up to 16
 /// MiB, but hashing that much on the push path would break its 5 ms ceiling
 /// (01M42CGE) — unknown keeps the legacy hint, never a false "changed".
-fn blob_at(root: &Path, target: &str) -> Option<String> {
+fn blob_at(root: &Path, target: &str, cap: u64) -> Option<String> {
     let md = std::fs::metadata(root.join(target)).ok()?;
     if !md.is_file() {
         return None;
     }
-    if md.len() > PUSH_MAX_BYTES {
+    if md.len() > cap {
         return None;
     }
     let mut file = std::fs::File::open(root.join(target)).ok()?;
-    core::blob_id_stream(&mut file, PUSH_MAX_BYTES)
-        .ok()
-        .flatten()
+    core::blob_id_stream(&mut file, cap).ok().flatten()
 }
 
 /// The said rows' ids plus, on a read, their shadow split (PLAN-fael-file-hash
@@ -228,7 +275,7 @@ fn stale_hint(ask: &Ask, rows: &[&core::Row], blobs: &mut Blobs) -> Option<Hint>
     let mut changed_rows: Vec<(&core::Row, String)> = vec![];
     let mut unknown_rows: Vec<&core::Row> = vec![];
     for r in rows.iter().filter(|r| !ask.hinted.contains(&r.id)) {
-        match verdict(r, ask.root, ask.al, blobs, ask.files) {
+        match verdict(r, ask.root, ask.al, blobs, ask.files, PUSH_MAX_BYTES) {
             Verdict::Changed(f) => changed_rows.push((r, f)),
             Verdict::Same => {}
             Verdict::Unknown => unknown_rows.push(r),

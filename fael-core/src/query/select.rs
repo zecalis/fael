@@ -293,7 +293,7 @@ pub fn brief<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
 /// (`[anchor] prefixes`, default `PLAN-`): fael itself knows no workflow.
 /// A matched prefix that is not markdown decides too — a non-doc never
 /// widens, it does not fall through to the next prefix.
-pub(super) fn plan_anchor(file: &str, prefixes: &[String]) -> Option<String> {
+pub fn plan_anchor(file: &str, prefixes: &[String]) -> Option<String> {
     let base = file.rsplit('/').next().unwrap_or(file);
     for pre in prefixes {
         let Some(stem) = base.strip_prefix(pre.as_str()) else {
