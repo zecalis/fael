@@ -109,13 +109,16 @@ fn codex_thread_id_tags_a_row_like_claude_code_session_id() {
     // by the hook payload's session id, so a `fael add` from that shell joins
     let thread = "019dba93-8214-7d50-a089-9690b4ce6b9e";
     // the path inside `command` is raw patch text, never JSON-quoted: a quoted
-    // path names no file, so the hook would record nothing
-    let input = format!(
-        r#"{{"cwd":{},"session_id":{},"tool_input":{{"command":"*** Update File: {}"}}}}"#,
-        json(&d),
-        serde_json::json!(thread),
-        d.join("src/a.rs").display()
-    );
+    // path names no file, so the hook would record nothing. Build the whole
+    // payload through serde so a Windows path's backslashes stay a valid JSON
+    // string while the parsed `command` still holds the bare path.
+    let command = format!("*** Update File: {}", d.join("src/a.rs").display());
+    let input = serde_json::json!({
+        "cwd": d.to_string_lossy(),
+        "session_id": thread,
+        "tool_input": {"command": command},
+    })
+    .to_string();
     let (ok, _, err) = fael_env(&d, &["hook", "edit", "--client", "codex"], &input, &[]);
     assert!(ok, "{err}");
     let (ok, _, err) = fael_env(
