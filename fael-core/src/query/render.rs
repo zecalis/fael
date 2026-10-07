@@ -195,10 +195,16 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
     let mut hidden = false;
     for (i, r) in rows.iter().enumerate() {
         let id = ab.short(&r.id);
-        let mark = if closed.contains(r.id.as_str()) {
+        // a closed row a later one supersedes (a repeat) still names that row
+        let mark = if let Some(next) = successors.get(r.id.as_str()) {
+            let closed = if closed.contains(r.id.as_str()) {
+                "closed, "
+            } else {
+                ""
+            };
+            &format!(" ({closed}superseded → {})", ab.short(next))
+        } else if closed.contains(r.id.as_str()) {
             " (closed)"
-        } else if let Some(next) = successors.get(r.id.as_str()) {
-            &format!(" (superseded → {})", ab.short(next))
         } else if restored.contains(r.id.as_str()) {
             " (restored)"
         } else {

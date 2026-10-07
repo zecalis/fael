@@ -62,6 +62,21 @@ fn said_line(s: &core::stats::Stats) -> Option<String> {
     (!parts.is_empty()).then(|| format!("  acted on after said: {}", parts.join(" · ")))
 }
 
+/// PLAN-fael-context-loop §3, read together: repeats over the edits after
+/// a close (an upper bound, `ContextLoop`), useful shows per 1k tokens;
+/// nothing counted = no line.
+fn loop_line(s: &core::stats::Stats) -> Option<String> {
+    let c = &s.context_loop;
+    let none = c.confirmed_repeats + c.edits_after_close + c.useful_shows == 0;
+    (!none).then(|| format!(
+        "  context loop: confirmed repeats {} of {} edits after close · useful shows {} (~{:.2} per 1k tokens)",
+        c.confirmed_repeats,
+        c.edits_after_close,
+        c.useful_shows,
+        c.useful_shows as f64 * 1000.0 / s.est_tokens.max(1) as f64
+    ))
+}
+
 /// One line on rows that crossed agents; nothing to say = no line.
 fn cross_line(s: &core::stats::Stats) -> Option<String> {
     let c = &s.value.cross_agent;
@@ -257,6 +272,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
         );
     }
     print_events(s);
+    if let Some(line) = loop_line(s) {
+        println!("{line}");
+    }
     if let Some(line) = cross_line(s) {
         println!("{line}");
     }
