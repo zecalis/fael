@@ -15,6 +15,24 @@ mod status;
 mod unstamped;
 
 use crate::{Args, core, repo};
+pub(crate) use alive::BranchFiles;
+
+/// Full ids of `rows` whose every file is gone from `root` — through the
+/// alias resolver, and never a file alive on the row's own unmerged branch
+/// (same judgement as `doctor [Gone]`). Chunk 4's tag for the grouped issue
+/// list; partial losses stay untagged here (`doctor` reports `[PartGone]`).
+pub(crate) fn gone_ids(
+    root: &std::path::Path,
+    al: &core::Aliases,
+    rows: &[&core::Row],
+) -> std::collections::HashSet<String> {
+    let branches = BranchFiles::new(root);
+    rows.iter()
+        .filter(|r| !r.files.is_empty())
+        .filter(|r| branches.missing(r, core::gone_files(root, r, al)).len() == r.files.len())
+        .map(|r| r.id.clone())
+        .collect()
+}
 use std::path::PathBuf;
 use std::process::ExitCode;
 

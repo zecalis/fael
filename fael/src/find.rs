@@ -3,6 +3,7 @@
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
 pub(crate) mod branches;
+pub(crate) mod issue;
 mod kickoff;
 pub(crate) mod many;
 mod merged;
@@ -69,8 +70,8 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         limit,
         offset,
     };
-    if a.has("groups") {
-        return groups(a, &log, &f, &branch_of);
+    if a.has("groups") || issue::auto_grouped(a, &f) {
+        return issue::groups(a, &log, &f, branch_of, &r);
     }
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
     if rows.is_empty() {
@@ -111,12 +112,6 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         &shown,
         (f.key.as_deref(), &files, None),
     );
-    // the issue list is where grouping and claiming are needed — said here,
-    // not in the skill every session pays for; a paged call keeps its cut line last
-    let unpaged = limit.is_none() && offset == 0;
-    if f.kind.as_deref() == Some("issue") && total > 1 && unpaged && !a.has("json") {
-        println!("{}", ISSUE_TIP);
-    }
     // chunk 6e: ids just shown for these files are already in this session's
     // context — the next push skips them instead of repeating them
     if !files.is_empty() {
@@ -163,33 +158,6 @@ pub(crate) fn text_or_anchor<'a>(
         _ => (text, vec![]),
     }
 }
-
-/// `find --groups`: every match, grouped by shared files — what to fix in one
-/// PR. Unpaged and unbudgeted: half a group answers the question wrong.
-fn groups(a: &Args, log: &Log, f: &Filter, branch_of: &branches::BranchMap) -> Result<(), String> {
-    if a.has("json") || a.has("full") || f.limit.is_some() || f.offset > 0 {
-        return Err("rejected: --groups lists every match as text — drop --json, --full, --limit and --offset".into());
-    }
-    let rows = core::find(
-        log,
-        &Filter {
-            limit: None,
-            ..f.clone()
-        },
-    );
-    if rows.is_empty() {
-        eprintln!("fael: no rows match");
-    } else {
-        print!(
-            "{}",
-            branches::tag(core::render_groups(log, &rows), branch_of)
-        );
-    }
-    Ok(())
-}
-
-const ISSUE_TIP: &str =
-    "fix together: fael find --kind issue --groups · working one? fael claim <id> first";
 
 /// The union log, or the union log plus unmerged branches' rows when
 /// `--branches` is passed (HEAD wins on duplicate ids — a merged-then-listed
@@ -246,7 +214,9 @@ pub(super) fn show(
     Ok(rows.iter().take(n).map(|r| r.id.clone()).collect())
 }
 
-/// One row pulled by id: always the body (`render_full`), or the JSON line.
+/// One row pulled by id: always the body (`render_full`), or the JSON line —
+/// plus the rows that merely mention the id, so the reader sees who cites it
+/// without knowing a flag for it (chunk 4). Silent when nobody cites it.
 fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &branches::BranchMap) -> Result<(), String> {
     if a.has("json") {
         println!("{}", row.to_line());
@@ -256,6 +226,13 @@ fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &branches::BranchMap) -> 
             "{}",
             branches::tag(core::render_full(log, &[row], 10_000), branch_of)
         );
+        let who: Vec<String> = mentioned(log, &row.id)
+            .into_iter()
+            .filter(|s| !row.id.starts_with(s.as_str()))
+            .collect();
+        if !who.is_empty() {
+            println!("mentioned by: {}", who.join(", "));
+        }
     }
     Ok(())
 }
@@ -288,7 +265,7 @@ pub(crate) fn reject_missing(log: &Log, tok: &str) -> String {
 
 /// Short ids of rows whose text or title merely mentions `tok` (open rows,
 /// then close reasons), capped at 5. Case-insensitive — ids match that way too.
-fn mentioned(log: &Log, tok: &str) -> Vec<String> {
+pub(crate) fn mentioned(log: &Log, tok: &str) -> Vec<String> {
     let ab = core::abbrev(log);
     let needle = tok.to_lowercase();
     let names = |s: Option<&str>| s.is_some_and(|s| s.to_lowercase().contains(&needle));

@@ -1,6 +1,7 @@
 //! `fael mcp` picks the repo per call — the server runs in the session's cwd,
 //! an agent may be working in another worktree.
 
+mod issue_groups;
 mod surface;
 
 use std::io::Write;
@@ -336,9 +337,10 @@ fn find_id_shapes_match_cli() {
                 .to_string(),
         )
     };
-    // real id → the body, like `fael find <id>`
+    // real id → the body, like `fael find <id>` (nothing cites it: no mentioned-by line)
     let (is_err, body) = find(serde_json::json!({"id": id}));
     assert!(!is_err && body.contains("keeper row"), "{body}");
+    assert!(!body.contains("mentioned by:"), "{body}");
     // missing id → the CLI's reject, naming the mentioner by its short id
     let (is_err, body) = find(serde_json::json!({"id": fake}));
     assert!(
