@@ -18,7 +18,7 @@ use std::path::Path;
 /// days, in `d`'s repo. The candidate said nothing (the gate cut every row), the
 /// baseline arm said all of them. `dup_c` / `dup_h` sessions of each then filed a
 /// row over one they were never shown.
-fn arm_usage_into(
+pub(super) fn arm_usage_into(
     d: &Path,
     path: &Path,
     (cand, hold): (usize, usize),
@@ -232,7 +232,7 @@ fn a_plain_folder_keeps_its_stage_beside_its_own_log() {
     let s: Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
     assert_eq!(s["stage"], "canary", "{s}");
     let (_, out, _) = fael(&p, &["tune"], "");
-    assert!(out.contains("canary · 10% candidate"), "{out}");
+    assert!(out.contains("canary · 50% candidate"), "{out}");
 }
 
 #[test]

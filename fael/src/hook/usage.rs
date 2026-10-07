@@ -188,8 +188,12 @@ pub(crate) fn load(since: Option<i64>) -> Usage {
 /// `load`, keeping only the lines (and logs) of repos `keep` accepts — a repo's
 /// evaluator never reads another repo's usage (SPEC-fael-learn-loop §E).
 pub(crate) fn load_where(since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
+    load_text(super::usage_files::read(since), since, keep)
+}
+
+/// `load_where` over usage text the caller already read.
+pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
     let path = super::usage_files::live();
-    let mut s = super::usage_files::read(since);
     // `--since all` (0) cuts nothing: skip the second parse of every line
     if let Some(ms) = since.filter(|&ms| ms > 0) {
         s = core::stats::since(&s, ms);

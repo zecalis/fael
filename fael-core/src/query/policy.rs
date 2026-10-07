@@ -107,7 +107,7 @@ pub fn arm_of(push_policy: &str, holdout_pct: usize, session: &str) -> (&'static
 
 /// Where a repo's `touch@1` stands under `push_policy = auto` (PLAN-fael-learn-loop
 /// chunk 6): `shadow` — every session sees everything, `would_drop` records;
-/// `canary` — 10% of sessions run the gate; `ramp` — 80%, the rest stay on
+/// `canary` — 50% of sessions run the gate (the fewest sessions per evidence); `ramp` — 80%, the rest stay on
 /// `baseline@1` for a continuous comparison; `baseline` — rolled back, and
 /// sticky for that policy version (it re-enters only as a new `@version`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,7 +138,7 @@ impl Stage {
     /// `None` = no experiment, everyone sees the baseline push.
     pub fn candidate_pct(self) -> Option<usize> {
         match self {
-            Stage::Canary => Some(10),
+            Stage::Canary => Some(50),
             Stage::Ramp => Some(80),
             Stage::Shadow | Stage::Baseline => None,
         }
@@ -282,7 +282,7 @@ mod tests {
                 .filter(|i| arm_in(st, &format!("sess-{i}")).0 == ARM_CANDIDATE)
                 .count()
         };
-        assert!((140..260).contains(&cand(Canary, 2000)), "~10% of 2000");
+        assert!((900..1100).contains(&cand(Canary, 2000)), "~50% of 2000");
         assert!((1500..1700).contains(&cand(Ramp, 2000)), "~80% of 2000");
         // canary's candidates are still candidates at ramp
         for i in 0..500 {
@@ -291,9 +291,10 @@ mod tests {
                 assert!(arm_in(Ramp, &s).1, "{s}");
             }
         }
-        // FNV-1a("s1") % 100 = 29: out of canary, inside ramp
-        assert_eq!(arm_in(Canary, "s1"), (ARM_HOLDOUT, false));
+        // FNV-1a("s1") % 100 = 29 and ("s2") = 96: s1 is in both, s2 in neither
+        assert_eq!(arm_in(Canary, "s1"), (ARM_CANDIDATE, true));
         assert_eq!(arm_in(Ramp, "s1"), (ARM_CANDIDATE, true));
+        assert_eq!(arm_in(Canary, "s2"), (ARM_HOLDOUT, false));
     }
 
     #[test]

@@ -4,7 +4,8 @@
 //! (`cache/push-gate.json`); it never reads the log or the usage. The evaluator
 //! runs at Stop — never on the push path, nor at session start, which the
 //! agent waits on — and only when the repo's search pushes since its last look
-//! reach `EVAL_EVERY`; a look reads this and last month's usage (`usage_files`). A change of
+//! reach `EVAL_EVERY`; a shadow look reads this and last month's usage (`usage_files`), a
+//! canary or ramp look the usage since that stage began. A change of
 //! stage is filed as a `policy:push-gate` decision row first, and the state
 //! file moves only if that row was written: a policy changes through its row.
 //! State missing, torn, or for another policy version = `shadow`, never a guess.
@@ -20,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 const FILE: &str = "push-gate.json";
@@ -42,6 +42,14 @@ struct State {
     /// Search pushes of this repo counted since the last evaluation.
     #[serde(default)]
     pending: usize,
+    /// Where the current canary or ramp stage began — the live file's byte and
+    /// month at the look that moved it (as `usage_at`/`usage_month`). A look in
+    /// that stage reads usage from here, not from this and last month. Empty
+    /// month = no offset (a state from before chunk 7, or shadow): read as before.
+    #[serde(default)]
+    stage_at: u64,
+    #[serde(default)]
+    stage_month: String,
 }
 
 /// `<repo scope>/cache/push-gate.json`: the journal all worktrees of a clone
@@ -139,7 +147,15 @@ fn evaluate(repo: &crate::Repo) {
             .or_insert_with(|| journal::scope(r))
             .clone()
     };
-    let u = super::usage::load_where(None, &|r| scope(r) == me);
+    let keep = |r: &str| scope(r) == me;
+    let u = match from {
+        // an arm look counts the stage's own sessions, however many months ago it began
+        Stage::Canary | Stage::Ramp if !st.stage_month.is_empty() => {
+            let (text, ..) = super::usage_files::read_since(&st.stage_month, st.stage_at);
+            super::usage::load_text(text, None, &keep)
+        }
+        _ => super::usage::load_where(None, &keep),
+    };
     let t = core::stats::tune(
         &u.parsed,
         &u.logs,
@@ -160,36 +176,28 @@ fn evaluate(repo: &crate::Repo) {
     if to != from && file_change(repo, from, to, &verdict, evidence).is_err() {
         return; // no row, no change: the next look tries again
     }
+    let (stage_at, stage_month) = match to == from {
+        true => (st.stage_at, st.stage_month),
+        false => (end, month.clone()),
+    };
     st = State {
         policy: core::TOUCH.name(),
         stage: to.name().into(),
         usage_at: end,
         usage_month: month,
         pending: 0,
+        stage_at,
+        stage_month,
     };
     save(&file, &st);
 }
 
 /// Search pushes of this repo past byte `from` of the live usage file, where
-/// it ends now, and its month. Archives named from the last look's `month` on
-/// are that live file moved since (`usage_files`): the oldest is read from
-/// `from`, any later one whole, then the new live file from its start.
+/// it ends now, and its month (`usage_files::read_since`).
 fn new_pushes(me: &str, from: u64, month: &str) -> (usize, u64, String) {
-    let live = super::usage_files::live();
-    // before reading: a move after this names its archive from this month on
-    let now = super::usage_files::live_month();
-    let mut text = Vec::new();
-    let moved = super::usage_files::archives_from(month);
-    for (i, a) in moved.iter().enumerate() {
-        tail(a, if i == 0 { from } else { 0 }, &mut text);
-    }
-    let at = if moved.is_empty() { from } else { 0 };
-    // a live file shorter than `at` was cut by hand: count it from its start
-    let end = tail(&live, at, &mut text)
-        .or_else(|| tail(&live, 0, &mut text))
-        .unwrap_or(0);
+    let (text, end, now) = super::usage_files::read_since(month, from);
     let mut mine: HashMap<String, bool> = HashMap::new();
-    let n = String::from_utf8_lossy(&text)
+    let n = text
         .lines()
         .filter(|l| l.contains("\"event\":\"search\""))
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
@@ -202,19 +210,6 @@ fn new_pushes(me: &str, from: u64, month: &str) -> (usize, u64, String) {
         })
         .count();
     (n, end, now)
-}
-
-/// Append `file`'s bytes past `from` to `into`; its length, or `None` when it
-/// is missing or shorter than `from`.
-fn tail(file: &Path, from: u64, into: &mut Vec<u8>) -> Option<u64> {
-    let mut f = std::fs::File::open(file).ok()?;
-    let len = f.metadata().ok()?.len();
-    if len < from {
-        return None;
-    }
-    f.seek(SeekFrom::Start(from)).ok()?;
-    f.read_to_end(into).ok()?;
-    Some(len)
 }
 
 fn shadow_evidence(t: &core::stats::Tune) -> Value {
@@ -242,7 +237,14 @@ fn file_change(
     validation: Value,
 ) -> Result<(), String> {
     let pct = to.candidate_pct();
+    // a shadow row is the replay's screening; only the arms validate (SPEC §E)
+    let basis = if from == Stage::Shadow {
+        "screening"
+    } else {
+        "validation"
+    };
     let body = json!({
+        "basis": basis,
         "policy": core::TOUCH.name(),
         "repo": repo.root.file_name().map(|n| n.to_string_lossy()),
         "from": from.name(),
@@ -255,7 +257,7 @@ fn file_change(
         key: Some(KEY.into()),
         to: None,
         title: Some(format!(
-            "push-gate {}: {} → {}",
+            "push-gate {} {basis}: {} → {}",
             core::TOUCH.name(),
             from.name(),
             to.name()
