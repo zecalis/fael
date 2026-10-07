@@ -184,19 +184,6 @@ impl Hidden {
 }
 
 impl Selection<'_> {
-    /// Move the hub peek back into `omitted`: the push said it once already.
-    pub fn drop_peek(&mut self) {
-        let keep = self.shown.len() - self.peek;
-        let tiers = self.tiers.split_off(keep);
-        let rows = self.shown.split_off(keep);
-        self.cut.extend(
-            rows.into_iter()
-                .zip(tiers)
-                .map(|(r, t)| (r, t, CUT_HUB_PEEK)),
-        );
-        self.omitted += std::mem::take(&mut self.peek);
-    }
-
     /// The rows hidden after render printed `rendered` of `shown`: the cap cut
     /// (`omitted`) plus the token-budget cut (`shown[rendered..]`), each routed
     /// by its L1 tier — tier 0 to `fael find --files <f>`, tier 1 to
@@ -278,6 +265,35 @@ pub fn select<'a>(
     focus: &Focus,
     policy: &PushPolicy,
 ) -> Selection<'a> {
+    let peeked = |_: &Row| false;
+    select_with(
+        rows,
+        focus,
+        policy,
+        &Prior {
+            said: 0,
+            peeked: &peeked,
+        },
+    )
+}
+
+/// What this session already did with a push's File rows, for the hub rule
+/// (issue push:hub-files): `said` of them are in context already — the caller
+/// filtered them out, yet they still make the file a hub, or 11 rows less 3
+/// said would fall under the threshold and push 5 more — and `peeked` holds
+/// for a row whose files in this push all had their one peek.
+pub struct Prior<'p> {
+    pub said: usize,
+    pub peeked: &'p dyn Fn(&Row) -> bool,
+}
+
+/// `select` with what the session already said: a hub peeks once per file.
+pub fn select_with<'a>(
+    rows: Vec<(&'a Row, usize)>,
+    focus: &Focus,
+    policy: &PushPolicy,
+    prior: &Prior,
+) -> Selection<'a> {
     // a shared-key sibling (tier 2) rides only on a key this session works on
     // (decision push:shared-key-siblings): a broad key spanning plans would
     // otherwise drag another plan's rows into the push
@@ -311,12 +327,14 @@ pub fn select<'a>(
     // Now rows always show; the cap only limits how much of File joins them,
     // and a hub's File rows join only PUSH_HUB_PEEK deep
     let cap_room = policy.max_rows.saturating_sub(now.len());
-    let hub = file.len() > PUSH_HUB_ROWS;
+    let hub = file.len() + prior.said > PUSH_HUB_ROWS;
     let room = if hub {
         let day = super::revisit::today();
-        // stable: inside each half the cmp_rows order holds
-        file.sort_by_key(|(r, _)| !super::revisit::row_waiting(r, &day));
-        cap_room.min(PUSH_HUB_PEEK)
+        // stable: inside each half the cmp_rows order holds; a peeked file's
+        // rows go last and never into the peek
+        file.sort_by_key(|(r, _)| ((prior.peeked)(r), !super::revisit::row_waiting(r, &day)));
+        let fresh = file.iter().filter(|(r, _)| !(prior.peeked)(r)).count();
+        cap_room.min(PUSH_HUB_PEEK).min(fresh)
     } else {
         cap_room
     };

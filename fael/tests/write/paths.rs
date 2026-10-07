@@ -152,9 +152,15 @@ fn root_relative_files_from_a_subdir_do_not_double_the_prefix() {
         &["add", "note", "from sub", "--files", "src/a.rs"],
         "",
     );
-    assert!(ok, "{err}");
-    assert!(err.contains("resolved from repo root"), "{err}");
+    // the arg already names the cwd prefix: the root reading is the only one
+    assert!(ok && !err.contains("resolved from repo root"), "{err}");
     assert_eq!(row_files(&d, "from sub"), ["src/a.rs"]);
+    // a root file the cwd reading misses still says where it went
+    std::fs::create_dir_all(d.join("lib")).unwrap();
+    std::fs::write(d.join("lib/b.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael(&sub, &["add", "note", "lib", "--files", "lib/b.rs"], "");
+    assert!(ok && err.contains("resolved from repo root"), "{err}");
+    assert_eq!(row_files(&d, "lib"), ["lib/b.rs"]);
     let (ok, _, err) = fael(&sub, &["add", "note", "cwd rel", "--files", "a.rs"], "");
     assert!(ok, "{err}");
     assert!(!err.contains("resolved from repo root"), "{err}");

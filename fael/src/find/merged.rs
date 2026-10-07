@@ -29,7 +29,7 @@ pub fn mark(root: &Path, mut branch_of: BranchMap, rows: &[&Row]) -> BranchMap {
     branch_of
 }
 
-/// Sibling label to `(merged)` for handoff rows whose code files moved since
+/// Sibling label to `(merged)` for handoff and issue rows whose code files moved since
 /// the row was written (PLAN-fael-file-hash chunk 5a): the same `BranchMap`
 /// channel, so whichever plan lands first owns it and the other reuses it.
 /// Appended after the branch tag when there is one (`@feat/x (merged) (files
@@ -42,7 +42,7 @@ pub fn mark_changed(
     al: &fael_core::Aliases,
     prefixes: &[String],
 ) -> BranchMap {
-    let changed = crate::hook::handoff_changed(rows, root, al, prefixes);
+    let changed = crate::hook::files_changed(rows, root, al, prefixes);
     if changed.is_empty() {
         return branch_of;
     }

@@ -139,6 +139,29 @@ fn read_push_hub_file_peeks_once_beside_now_rows() {
     assert!(ok && shown(&other) == 4, "{other}");
 }
 
+/// Issue push:hub-files (vela 2026-10-07: 9 of a hub's 11 rows in one
+/// session): the peek is once per file, so the rows it said do not shrink
+/// the file back under the threshold (10 decisions, 3 said, 7 left), and a
+/// push naming the hub beside another file peeks only the other file.
+#[test]
+fn hub_peek_holds_after_the_peek_and_across_file_sets() {
+    let d = repo();
+    seed(&d, 10);
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, _, err) = fael(&d, &["add", "decision", "on b", "--files", "src/b.rs"], "");
+    assert!(ok, "{err}");
+    let (ok, first) = read(&d, Some("hub3"));
+    assert!(ok && shown(&first) == 1 + 3, "{first}");
+    let (ok, again) = read(&d, Some("hub3"));
+    assert!(ok && shown(&again) == 0, "{again}");
+    let input = format!(
+        r#"{{"cwd":{},"session":"hub3","files":["src/a.rs","src/b.rs"]}}"#,
+        json(&d)
+    );
+    let (ok, both, _) = fael(&d, &["hook", "read"], &input);
+    assert!(ok && shown(&both) == 1 && both.contains("on b"), "{both}");
+}
+
 #[test]
 fn read_push_zero_rows_means_budget_only() {
     let d = repo();

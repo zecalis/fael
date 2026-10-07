@@ -367,13 +367,22 @@ fn select_names_why_each_row_was_cut() {
 }
 
 #[test]
-fn drop_peek_moves_the_peek_to_cut_as_hub_peek() {
-    let r = rows(12);
-    let tiered = r.iter().map(|r| (r, 0)).collect();
-    let mut sel = select(tiered, &Focus::default(), &policy(5));
-    let before = sel.cut.len();
-    sel.drop_peek();
-    assert_eq!((sel.shown.len(), sel.cut.len() - before), (0, 3));
-    assert!(sel.cut[before..].iter().all(|c| c.2 == CUT_HUB_PEEK));
-    assert_eq!(sel.omitted, sel.cut.len());
+fn select_with_counts_said_rows_and_skips_peeked_ones() {
+    let r = rows(7);
+    let none = |_: &Row| false;
+    let all = |_: &Row| true;
+    let with = |said, peeked: &dyn Fn(&Row) -> bool| {
+        let sel = select_with(
+            r.iter().map(|r| (r, 0)).collect(),
+            &Focus::default(),
+            &policy(5),
+            &Prior { said, peeked },
+        );
+        (sel.shown.len(), sel.hub)
+    };
+    // 7 left after 3 said is still a hub: the peek, not the cap
+    assert_eq!(with(0, &none), (5, false));
+    assert_eq!(with(3, &none), (3, true));
+    // the file already peeked: nothing more, every row cut as hub_peek or cap
+    assert_eq!(with(3, &all), (0, true));
 }

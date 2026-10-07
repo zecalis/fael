@@ -271,7 +271,11 @@ fn issue_list_marks_branch_rows_whose_branch_landed() {
         .find(|l| l.contains("side branch leak"))
         .unwrap()
         .to_string();
-    assert!(line.ends_with("@feat/x (merged)"), "{out}");
+    // the work touched the issue's file after filing: both tags hold
+    assert!(
+        line.ends_with("@feat/x (merged) (files changed since)"),
+        "{out}"
+    );
 }
 
 #[test]

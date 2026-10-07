@@ -177,6 +177,12 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let touched = (!c.session.is_empty())
         .then(|| swap_touched(&touched_path(&c.session, &c.agent, &c.repo.root), &files));
     let (told, hinted) = read_seen(out.seen());
+    let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
+    // a told File row still makes its file a hub (issue push:hub-files)
+    let said = tiered
+        .iter()
+        .filter(|(r, t)| out.has(&r.id) && core::bucket(r, *t, &focus) == core::Bucket::File)
+        .count();
     tiered.retain(|(r, _)| !out.has(&r.id));
     // the validation experiment (SPEC-fael-learn-loop §E): a candidate session's
     // search push loses the rows its gate cuts before `select` fills the cap
@@ -190,16 +196,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         told: &told,
         hinted: &hinted,
     };
-    let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
-    let mut sel = core::select(tiered, &focus, &policy);
-    // a hub peeks once per file per session — each re-read would otherwise
-    // drip PUSH_HUB_PEEK more rows
-    let peek = format!("~peek:{}", files.join(","));
-    if out.has(&peek) {
-        sel.drop_peek();
-    } else if sel.peek > 0 {
-        out.spend(peek);
-    }
+    let sel = hub_select(tiered, said, &focus, &policy, &mut out, &files);
     let notes = stashed(&c, &files);
     let has_notes = notes.is_some();
     let mut blobs = Blobs::new();
@@ -258,6 +255,44 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     }
     r.notice = super::tally::whisper(&c, said, &files);
     r
+}
+
+/// `select` with the session's hub record: a hub peeks once per file per
+/// session — each re-read, or a search naming it beside another file, would
+/// otherwise drip PUSH_HUB_PEEK more (issue push:hub-files). `said` = File
+/// rows already told, still counted toward the hub.
+fn hub_select<'a>(
+    tiered: Vec<(&'a core::Row, usize)>,
+    said: usize,
+    focus: &core::Focus,
+    policy: &core::PushPolicy,
+    out: &mut Outbox,
+    files: &[String],
+) -> core::Selection<'a> {
+    let peeked = |r: &core::Row| {
+        let mut mine = r.files.iter().filter(|f| files.contains(f)).peekable();
+        mine.peek().is_some() && mine.all(|f| out.has(&peek_key(f)))
+    };
+    let sel = core::select_with(
+        tiered,
+        focus,
+        policy,
+        &core::Prior {
+            said,
+            peeked: &peeked,
+        },
+    );
+    for r in &sel.shown[sel.shown.len() - sel.peek..] {
+        for f in r.files.iter().filter(|f| files.contains(f)) {
+            out.spend(peek_key(f));
+        }
+    }
+    sel
+}
+
+/// The seen-list mark of a hub file that had its one peek this session.
+fn peek_key(file: &str) -> String {
+    format!("~peek:{file}")
 }
 
 /// The lines of the rows under their header, then the `bodies:` line. Only
