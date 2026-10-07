@@ -146,6 +146,86 @@ mod tests {
         super::friction(&p)
     }
 
+    /// One call line; `session` empty = the line carries none.
+    #[allow(clippy::too_many_arguments)]
+    fn line(
+        m: u32,
+        session: &str,
+        client: &str,
+        cmd: &str,
+        outcome: &str,
+        empty: bool,
+        sig: &str,
+    ) -> String {
+        let session = if session.is_empty() {
+            String::new()
+        } else {
+            format!("\"session\":\"{session}\",")
+        };
+        format!(
+            "{{\"ts\":\"2026-10-07T00:{m:02}:00.000Z\",\"repo\":\"/work/r\",\"client\":\"{client}\",\"event\":\"call\",{session}\"cmd\":\"{cmd}\",\"outcome\":\"{outcome}\",\"empty\":{empty},\"sig\":\"{sig}\"}}\n"
+        )
+    }
+
+    fn of(lines: &[String]) -> super::Friction {
+        let p = parse(
+            &lines.concat(),
+            Path::new("/work/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        super::friction(&p)
+    }
+
+    #[test]
+    fn sessions_do_not_mix_their_calls() {
+        // s1's empty find, then s2's find, interleaved: not a repeat of s1's
+        let f = of(&[
+            line(0, "s1", "cli", "find", "ok", true, "a"),
+            line(1, "s2", "cli", "find", "ok", false, "b"),
+            line(2, "s1", "cli", "add", "ok", false, "c"),
+        ]);
+        assert_eq!(
+            (f.total.find_repeat, f.total.first_call_ok),
+            (0, 3),
+            "{f:?}"
+        );
+    }
+
+    #[test]
+    fn a_line_without_a_session_streams_by_repo_and_client() {
+        let f = of(&[
+            line(0, "", "mcp", "find", "ok", true, "a"),
+            line(1, "", "mcp", "find", "ok", false, "b"),
+        ]);
+        assert_eq!(f.total.find_repeat, 1, "{f:?}");
+        // another client's find is another agent
+        let f = of(&[
+            line(0, "", "mcp", "find", "ok", true, "a"),
+            line(1, "", "cli", "find", "ok", false, "b"),
+        ]);
+        assert_eq!(f.total.find_repeat, 0, "{f:?}");
+    }
+
+    #[test]
+    fn calls_are_read_in_time_order_not_file_order() {
+        // written out of order: the empty find is the earlier call
+        let f = of(&[
+            line(1, "s", "cli", "find", "ok", false, "b"),
+            line(0, "s", "cli", "find", "ok", true, "a"),
+        ]);
+        assert_eq!(f.total.find_repeat, 1, "{f:?}");
+    }
+
+    #[test]
+    fn calls_at_the_tail_of_a_stream_are_judged_on_the_calls_that_exist() {
+        // one call after, then the stream ends: both clean, both succeed
+        let f = of(&[
+            line(0, "s", "cli", "add", "ok", false, "a"),
+            line(1, "s", "cli", "add", "ok", false, "b"),
+        ]);
+        assert_eq!(f.total.first_call_ok, 2, "{f:?}");
+    }
+
     #[test]
     fn a_lone_clean_call_is_a_first_call_success() {
         let f = run(&[(0, "add", "ok", false, "a")]);

@@ -23,6 +23,12 @@ pub(crate) fn note_empty() {
     EMPTY.store(true, Ordering::Relaxed);
 }
 
+/// Read and clear the flag — first thing in each entry, so a call that writes
+/// no line (an early return) can never leave its `empty` for the next one.
+fn take_empty() -> bool {
+    EMPTY.swap(false, Ordering::Relaxed)
+}
+
 /// The commands an agent calls for an answer — a clean call to anything else
 /// (`stats`, `doctor`, `install`) is a human at the keyboard and is not counted.
 const AGENT_CMDS: [&str; 9] = [
@@ -35,7 +41,8 @@ fn reason(e: &str) -> &'static str {
         "unknown_flag"
     } else if e.contains(" takes no --") {
         "flag_not_taken"
-    } else if e.contains("is not an id") {
+    } else if e.contains("is not an id") || e.contains("ids not shown") {
+        // `find a b` prints each bad id, then rejects with the count — only the count is the Err
         "bad_id"
     } else if e.starts_with("rejected: unknown command") || e.starts_with("unknown tool") {
         "unknown_command"
@@ -66,8 +73,14 @@ enum Outcome {
     Reject(&'static str),
 }
 
-fn record(client: &str, cmd: &str, root: Option<&Path>, session: &str, o: Outcome, sig: String) {
-    let empty = EMPTY.swap(false, Ordering::Relaxed);
+fn record(
+    client: &str,
+    cmd: &str,
+    root: Option<&Path>,
+    session: &str,
+    (o, empty): (Outcome, bool),
+    sig: String,
+) {
     let meta = UsageMeta {
         session: (!session.is_empty()).then_some(session),
         ..UsageMeta::default()
@@ -102,6 +115,7 @@ fn record(client: &str, cmd: &str, root: Option<&Path>, session: &str, o: Outcom
 /// for this argv. `hook` runs on every tool call and `mcp` is the server — neither
 /// is a call an agent made for an answer.
 pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
+    let empty = take_empty();
     if matches!(argv.first().map(String::as_str), Some("hook" | "mcp")) {
         return;
     }
@@ -123,7 +137,14 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
     if session.is_empty() {
         return;
     }
-    record("cli", cmd, Some(&root), &session, outcome, sig(argv));
+    record(
+        "cli",
+        cmd,
+        Some(&root),
+        &session,
+        (outcome, empty),
+        sig(argv),
+    );
 }
 
 /// One MCP tool call: `res` is what the tool returned. No session — an MCP
@@ -135,6 +156,7 @@ pub(crate) fn record_mcp_call(
     root: Option<&Path>,
     res: &Result<String, String>,
 ) {
+    let empty = take_empty();
     let outcome = match res {
         Ok(_) => Outcome::Ok,
         Err(e) if e.starts_with("rejected:") || e.starts_with("unknown tool") => {
@@ -147,7 +169,14 @@ pub(crate) fn record_mcp_call(
     } else {
         "?"
     };
-    record("mcp", cmd, root, "", outcome, sig(args.to_string()));
+    record(
+        "mcp",
+        cmd,
+        root,
+        "",
+        (outcome, empty),
+        sig(args.to_string()),
+    );
 }
 
 /// `per 100 calls`, one decimal.
@@ -215,6 +244,10 @@ mod tests {
             ),
             (
                 "rejected: \"-k\" is not an id — copy it from fael find",
+                "bad_id",
+            ),
+            (
+                "rejected: 2 of 2 ids not shown — the rest printed",
                 "bad_id",
             ),
             (

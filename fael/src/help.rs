@@ -342,6 +342,22 @@ mod tests {
             .collect()
     }
 
+    #[test]
+    fn help_is_a_request_before_dashdash_only() {
+        let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+        for yes in ["help", "help add", "--help", "find --help", "add -h"] {
+            assert!(super::is_request(&argv(yes)), "{yes}");
+        }
+        for no in [
+            "find x",
+            "add note x -- -h",
+            "add note x -- --help",
+            "find --files a.rs",
+        ] {
+            assert!(!super::is_request(&argv(no)), "{no}");
+        }
+    }
+
     /// A misspelled or renamed CORE entry would silently drop that command
     /// from the "commands:" list.
     #[test]
