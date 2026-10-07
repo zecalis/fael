@@ -201,6 +201,23 @@ fn script() -> Vec<Step> {
             json!({"session": S, "tool": "Bash",
                    "tool_input": {"command": "printf x >> src/b.rs"}}),
         ),
+        // PLAN-fael-agent-ergonomics chunk 5: a commit naming the open
+        // issue says its close once; the repeat and the decision cite stay silent
+        step(
+            "search",
+            json!({"session": S, "tool": "Bash",
+                   "tool_input": {"command": "git commit -m 'fix 01K00000000000000000BBB001'"}}),
+        ),
+        step(
+            "search",
+            json!({"session": S, "tool": "Bash",
+                   "tool_input": {"command": "git commit -m 'fix 01K00000000000000000BBB001 again'"}}),
+        ),
+        step(
+            "search",
+            json!({"session": S, "tool": "Bash",
+                   "tool_input": {"command": "git commit -m 'note 01K00000000000000000AAA001'"}}),
+        ),
         step("session-start", json!({"session": "s2"})),
         step("read", json!({"session": "s2", "files": ["src/c.rs"]})),
         step("prompt", json!({"text": "fix the auth login flow"})),

@@ -141,18 +141,24 @@ fael mem for src/b.rs (1 of 10):
 memory: ~18/800 tokens · 1 row
 fael: done with one? fael close 01K00000000000000000B "<why>"
 
-## 27 session-start {"session":"s2"}
+## 27 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001'"}}
+context:
+fael: 01K00000000000000000BBB001 cited in a commit — done? `fael close 01K00000000000000000BBB001 "<why>"`
+
+## 28 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001 again'"}}
+## 29 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'note 01K00000000000000000AAA001'"}}
+## 30 session-start {"session":"s2"}
 context:
 fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
 
-## 28 read {"session":"s2","files":["src/c.rs"]}
+## 31 read {"session":"s2","files":["src/c.rs"]}
 context:
 fael mem for src/c.rs:
 - [01K00000000000000000C] note c is half migrated
 memory: ~18/800 tokens · 1 row
 bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true)
 
-## 29 prompt {"text":"fix the auth login flow"}
+## 32 prompt {"text":"fix the auth login flow"}
 ## usage
-23 lines · ~1662 tokens
-session-start prompt read read read search read in-context edit in-context in-context capture read session-start read read read read read search shell-edit session-start read
+25 lines · ~1703 tokens
+session-start prompt read read read search read in-context edit in-context in-context capture read session-start read read read read read search shell-edit outcome search session-start read

@@ -40,6 +40,56 @@ fn without_fael(cmd: &str) -> String {
         .join(" ")
 }
 
+/// Open issues a `git commit` tool input names (PLAN-fael-agent-ergonomics
+/// chunk 5): the ids a commit-cite push line may say. A full id names
+/// itself; a `SHORT` prefix names one only when no other open issue shares
+/// it (the `candidates` rule) — and a closed or superseded issue never names
+/// itself, so a commit that only re-states done work stays silent. `fael …`
+/// shell segments are already out of the haystack, so `fael close <id>` is
+/// no cite.
+pub(crate) fn commit_cites(log: &crate::core::Log, input: &Value) -> Vec<String> {
+    let cmd = input["command"].as_str().unwrap_or("");
+    if !is_commit(cmd) {
+        return vec![];
+    }
+    let text = haystack(input);
+    let hide: std::collections::HashSet<&str> = crate::core::closed(log)
+        .union(&crate::core::superseded(log))
+        .copied()
+        .collect();
+    let open: Vec<&str> = log
+        .rows
+        .iter()
+        .filter(|r| r.kind == "issue" && r.id.len() == ID_LEN && !hide.contains(r.id.as_str()))
+        .map(|r| r.id.as_str())
+        .collect();
+    let mut out = vec![];
+    for (i, id) in open.iter().enumerate() {
+        let named = text.contains(*id)
+            || (text.contains(&id[..SHORT])
+                && open
+                    .iter()
+                    .enumerate()
+                    .all(|(j, o)| j == i || o[..SHORT] != id[..SHORT]));
+        if named {
+            out.push(id.to_string());
+        }
+    }
+    out
+}
+
+/// A shell command with a `git commit` segment: the first two bare words of
+/// a `;`/`&`/`|`/newline-split segment, skipping env assignments.
+pub(crate) fn is_commit(cmd: &str) -> bool {
+    cmd.split(['\n', ';', '&', '|']).any(|seg| {
+        let mut words = seg.split_whitespace().filter(|w| !w.contains('='));
+        let git = words
+            .next()
+            .is_some_and(|w| w == "git" || w.ends_with("/git"));
+        git && words.next() == Some("commit")
+    })
+}
+
 /// A tool event: the repo is resolved here, since a search with no files never
 /// reaches `push`.
 pub(crate) fn note_tool(e: &Event, input: &Value) {
@@ -192,5 +242,68 @@ mod tests {
             candidates(&seen, &short).is_empty(),
             "a shared prefix is ambiguous"
         );
+    }
+
+    fn issue_log(ids: &[&str], closed: &[&str]) -> crate::core::Log {
+        let row = |id: &str| crate::core::Row {
+            id: id.to_string(),
+            ts: "2026-10-01T00:00:00Z".into(),
+            by: "t-0000".into(),
+            kind: "issue".into(),
+            text: "an open issue".into(),
+            files: vec!["src/a.rs".into()],
+            ..crate::core::Row::default()
+        };
+        crate::core::Log {
+            rows: ids.iter().map(|i| row(i)).collect(),
+            closes: closed
+                .iter()
+                .map(|i| crate::core::Row::close("t-0000", i, "done"))
+                .collect(),
+            ..crate::core::Log::default()
+        }
+    }
+
+    #[test]
+    fn a_commit_names_open_issues_not_closed_ones_or_other_commands() {
+        let open = "01M45R3J0A8Q39CQEH7YBCPA1N";
+        let done = "01M45R3K0A8Q39CQEH7YBCPA1M";
+        let log = issue_log(&[open, done], &[done]);
+        let commit = |c: &str| commit_cites(&log, &json!({"command": c}));
+        assert_eq!(commit(&format!("git commit -m 'fix per {open}'")), [open]);
+        assert!(
+            commit(&format!("git commit -m 're-states {done}'")).is_empty(),
+            "closed is no cite"
+        );
+        assert!(
+            commit(&format!("git show {open}")).is_empty(),
+            "not a commit"
+        );
+        assert!(commit(&format!("echo {open}")).is_empty(), "not a commit");
+        // a `fael close` of the id is a pull, never a commit cite
+        assert!(commit(&format!("fael close {open} done")).is_empty());
+        // env-prefixed and chained commits count
+        assert_eq!(
+            commit(&format!(
+                "FAEL_STATE_DIR=y git commit -m '{open}' && git push"
+            )),
+            [open]
+        );
+        // a bare short prefix cites when no other open issue shares it
+        assert_eq!(commit("git commit -m 'fix per 01M45R3J'"), [open]);
+    }
+
+    #[test]
+    fn a_shared_short_prefix_is_no_commit_cite() {
+        let (a, b) = (
+            crate::core::ulid_at(1_789_000_000_000),
+            crate::core::ulid_at(1_789_000_000_000),
+        );
+        assert_eq!(&a[..SHORT], &b[..SHORT], "one batch shares the prefix");
+        let log = issue_log(&[&a, &b], &[]);
+        let short = format!("git commit -m 'fix {}'", &a[..SHORT]);
+        assert!(commit_cites(&log, &json!({"command": short})).is_empty());
+        let full = format!("git commit -m 'fix {a}'");
+        assert_eq!(commit_cites(&log, &json!({"command": full})), [a]);
     }
 }

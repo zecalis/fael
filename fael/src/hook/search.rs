@@ -10,7 +10,8 @@
 //! that file as an edit — agents that edit through the shell get the stale-row
 //! hint and the edit record like an `Edit` call does.
 
-use super::protocol::{Event, Reply};
+use super::cited::commit_cites;
+use super::protocol::{Event, Reply, ctx};
 use super::push::push;
 use serde_json::Value;
 use std::path::Path;
@@ -199,5 +200,60 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, response: &Value) 
         // one line per beat: the edit side's reminder wins
         out = out.and(push(&e, event, trigger));
     }
-    out
+    out.and(commit_reply(e, tool, input))
+}
+
+/// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):
+/// one line per cited id with its ready `fael close`, each id once per
+/// session. No commit, no open cite, or every id already said = silence.
+/// The line is a `Cited` kind through the `Outbox` like every other push
+/// line, with its own usage row so `fael stats` reads its yield.
+fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
+    let no = Reply::default;
+    if !SHELLS.contains(&tool.to_ascii_lowercase().as_str()) {
+        return no();
+    }
+    let cmd = input["command"].as_str().unwrap_or("");
+    if !super::cited::is_commit(cmd) {
+        return no();
+    }
+    let c = match ctx(e) {
+        Some(c) => c,
+        None => return no(),
+    };
+    let mut out = super::say::Outbox::open(
+        (!c.session.is_empty())
+            .then(|| {
+                super::state::lock_seen(&super::state::seen_path(
+                    &c.session,
+                    &c.agent,
+                    &c.repo.root,
+                ))
+            })
+            .flatten(),
+    );
+    let fresh: Vec<String> = commit_cites(&c.log, input)
+        .into_iter()
+        .filter(|id| !out.has(&format!("~cited:{id}")))
+        .collect();
+    if fresh.is_empty() {
+        return no();
+    }
+    let text: String = fresh
+        .iter()
+        .map(|id| format!("fael: {id} cited in a commit — done? `fael close {id} \"<why>\"`\n"))
+        .collect();
+    out.say(super::say::Line {
+        kind: super::say::Kind::Cited { ids: fresh.clone() },
+        text,
+    });
+    let r = out.reply();
+    if let Some(context) = r.context() {
+        let meta = super::asks::UsageMeta {
+            said: r.said(),
+            ..super::asks::hook_meta(&c, None, true)
+        };
+        super::usage::record_usage(&c.client, "search", &c.repo.root, context, &fresh, &meta);
+    }
+    r
 }

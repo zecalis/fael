@@ -5,6 +5,9 @@
 //! - `row` / `brief` / `note` — the id was in context at an edit
 //!   (`in_context`, `in_context_notes`) or retired within a day
 //! - `ask` — the id was closed, superseded or bumped within a day
+//! - `cited` (PLAN-fael-agent-ergonomics chunk 5) — the id was closed,
+//!   superseded or bumped within a day, like `ask`: the line already names
+//!   the close, so earning is the close itself
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
 //! - `count` — a later pull by the call the line printed: its files, a
 //!   directory over one, or its key
@@ -85,8 +88,8 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 8] = [
-    "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice",
+pub const KINDS: [&str; 9] = [
+    "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice", "cited",
 ];
 
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
@@ -158,6 +161,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 // the generic clause names no row: nothing to join it to
                 "ask" if key == "*" => continue,
                 "ask" => ("ask", retired(key)),
+                "cited" => ("cited", retired(key)),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
                 "count" => ("count", pulled(&|p| counted(key, p))),
                 "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
