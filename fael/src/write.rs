@@ -66,6 +66,16 @@ pub(crate) fn prepare(
     let log = crate::read(r);
     if files.is_empty() {
         files = crate::session::derive(&r.root, &log);
+        // a long session's edits would push the row at every one of them:
+        // the caller names the few it is about (PLAN-fael-context-loop §5b)
+        let cap = crate::filehash::MAX_FILES;
+        if files.len() > cap && !force {
+            return Err(format!(
+                "rejected: nothing written — {} files derived from this session's edits (over {cap}); name the ones the row is about with --files (or add --force to file it on all): {}",
+                files.len(),
+                files.join(",")
+            ));
+        }
     }
     warns.extend(check(
         &r.root,
