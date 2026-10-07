@@ -9,6 +9,7 @@
 
 mod derive;
 mod filehash;
+mod from;
 mod paths;
 mod receipt;
 mod refs;

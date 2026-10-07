@@ -60,8 +60,8 @@ impl Args {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
-                | "before" | "map" | "to" | "title" | "urgent-before" | "limit" | "offset"
-                | "text" | "edge" | "remote" | "out" | "replace" | "with" => {
+                | "before" | "map" | "to" | "from" | "title" | "urgent-before" | "limit"
+                | "offset" | "text" | "edge" | "remote" | "out" | "replace" | "with" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("rejected: --{name} needs a value"))?;

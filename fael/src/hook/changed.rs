@@ -325,14 +325,18 @@ fn changed_hint(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
     let ab = core::abbrev(log);
     let said: Vec<String> = rows
         .iter()
-        .map(|(r, file)| format!("{file} changed since {} was written", ab.short(&r.id)))
+        .map(|(r, file)| {
+            let who = if r.from_user() { " (from user)" } else { "" };
+            format!("{file} changed since {} was written{who}", ab.short(&r.id))
+        })
         .collect();
     let s = match rows {
         [(r, _)] => ab.short(&r.id).to_string(),
         _ => "<id>".to_string(),
     };
+    let user = user_note(rows.iter().map(|(r, _)| *r));
     format!(
-        "fael: {} — still true? `fael bump {s}` · wrong now? re-file with `--supersedes {s}` · done? `fael close {s} \"now in <file>\"`",
+        "fael: {} — still true? `fael bump {s}` · wrong now? re-file with `--supersedes {s}` · done? `fael close {s} \"now in <file>\"`{user}",
         said.join(" · ")
     )
 }
@@ -357,7 +361,17 @@ fn retire_hint(log: &core::Log, rows: &[&core::Row]) -> String {
         _ => "<id>",
     };
     format!(
-        "fael: does the code now say or contradict {}? `fael close {s} \"now in <file>\"` · or re-file with `--supersedes {s}`",
-        ids.join(" · ")
+        "fael: does the code now say or contradict {}? `fael close {s} \"now in <file>\"` · or re-file with `--supersedes {s}`{}",
+        ids.join(" · "),
+        user_note(rows.iter().copied())
     )
+}
+
+/// The user's call is theirs to change: an ask over a `from: user` row tells
+/// the agent to ask before it re-files or closes it.
+fn user_note<'a>(mut rows: impl Iterator<Item = &'a core::Row>) -> &'static str {
+    match rows.any(core::Row::from_user) {
+        true => " · the row is the user's call: ask them before you re-file or close it",
+        false => "",
+    }
 }

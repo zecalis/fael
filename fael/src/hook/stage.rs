@@ -256,6 +256,7 @@ fn file_change(
     let opts = write::AddOpts {
         key: Some(KEY.into()),
         to: None,
+        from: None,
         title: Some(format!(
             "push-gate {} {basis}: {} → {}",
             core::TOUCH.name(),

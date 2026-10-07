@@ -187,6 +187,7 @@ fn file(c: &Ctx, l: &Line) -> Result<String, String> {
     let opts = AddOpts {
         key: None,
         to: None,
+        from: None,
         title: None,
         revisit: None,
         urgent: core::Urgent::Unset,

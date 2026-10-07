@@ -9,12 +9,14 @@
 const CORE: &[(&str, &str)] = &[
     (
         "add",
-        "fael add <kind> \"<text>\" [--files a,b] [--key k] [--title t] [--to who] [--revisit date|text] [--urgent] [--supersedes id [--replace old --with new]] [--json]
+        "fael add <kind> \"<text>\" [--files a,b] [--key k] [--title t] [--to who] [--from user] [--revisit date|text] [--urgent] [--supersedes id [--replace old --with new]] [--json]
     (write rows in English; file each in the same message as your next tool call, never alone;
      no --files = the files this session edited, as the edit hook recorded;
      --title = the ≤15-word headline lists show, the body is pulled by id;
+     --from user = the user said or decided it (omit when you chose): lists say (from user),
+     and a later agent asks the user before re-filing or closing it;
      --replace old --with new re-files the --supersedes row with that one passage changed
-     (no text; files, key and title carry over; old must occur in the body exactly once);
+     (no text; files, key, title and from carry over; old must occur in the body exactly once);
      --to who routes an issue: it lists in full at the session start of whoever's git user.name
      is `who` (lowercased), or of every session of the agent client named `who` (opencode, codex,
      claude); fael find --to who lists theirs. The receipt prints the line to paste to them and,

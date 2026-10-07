@@ -48,6 +48,12 @@ pub struct Row {
     /// like `to`, same compat.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revisit: Option<String>,
+    /// Whose call the row records: `user` when the user said or decided it,
+    /// absent when the agent chose. A later agent asks the user before
+    /// changing a `user` row and may revise its own. Top-level like `to`,
+    /// same compat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<String>,
     /// Which self-heal rule filed this row's `supersedes`
@@ -86,6 +92,11 @@ impl Row {
     /// fallback to look for.
     pub fn to_who(&self) -> Option<&str> {
         self.to.as_deref()
+    }
+
+    /// The user said or decided this row (`from: user`), not the agent.
+    pub fn from_user(&self) -> bool {
+        self.from.as_deref() == Some("user")
     }
 
     /// The branch this row was filed on: `extra.branch`, stamped by the

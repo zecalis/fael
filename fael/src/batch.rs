@@ -208,6 +208,7 @@ pub(crate) fn batch_row(v: &serde_json::Value) -> Result<BatchRow, String> {
         opts: write::AddOpts {
             key: one("key"),
             to: one("to"),
+            from: one("from"),
             title: one("title"),
             revisit: one("revisit"),
             urgent,
