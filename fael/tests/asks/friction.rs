@@ -247,7 +247,8 @@ fn reasons_come_from_the_real_reject_paths() {
         &["bump", "01ABC", "--title", "x"],
         &["add", "note", "x", "--files"],
         &["add"],
-        &["decision", "x"],
+        &["find", "a b", "c"],
+        &["frobnicate"],
     ] {
         let (ok, err) = call(&d, Some("s1"), args);
         assert!(!ok && err.contains("rejected:"), "{args:?}: {err}");
@@ -256,13 +257,14 @@ fn reasons_come_from_the_real_reject_paths() {
     assert_eq!(
         f["reasons"],
         serde_json::json!({
-            "unknown_flag": 1, "bad_id": 1, "flag_not_taken": 1, "bad_value": 2, "unknown_command": 1
+            // `-k` is a flag now, not an id
+            "unknown_flag": 2, "bad_id": 1, "flag_not_taken": 1, "bad_value": 2, "unknown_command": 1
         }),
         "{f}"
     );
     // the bare unknown command has no command to blame
     assert_eq!(f["by_command"]["?"]["rejects"], 1, "{f}");
-    assert_eq!(f["by_command"]["find"]["rejects"], 2, "{f}");
+    assert_eq!(f["by_command"]["find"]["rejects"], 3, "{f}");
 }
 
 #[test]

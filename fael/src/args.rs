@@ -9,6 +9,14 @@ pub(crate) struct Args {
     flags: HashMap<String, Vec<String>>,
 }
 
+/// `-k`, `-n3`: a dash and a word — not `-` (stdin), `-1`, or text with spaces.
+fn is_short_flag(s: &str) -> bool {
+    let mut c = s.chars();
+    c.next() == Some('-')
+        && c.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && !s.contains(char::is_whitespace)
+}
+
 impl Args {
     pub(crate) fn parse(argv: Vec<String>) -> Result<Args, String> {
         let mut a = Args {
@@ -22,6 +30,10 @@ impl Args {
                 break;
             }
             let Some(name) = s.strip_prefix("--") else {
+                // `-k` is a flag nobody defined, never an id or a text
+                if is_short_flag(&s) {
+                    return Err(format!("rejected: unknown flag {s} — try 'fael --help'"));
+                }
                 a.pos.push(s);
                 continue;
             };

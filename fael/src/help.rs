@@ -298,6 +298,11 @@ fn list_args(name: &str, section: &str) -> String {
     s
 }
 
+/// Every command name — what an unknown one is measured against.
+pub(crate) fn names() -> impl Iterator<Item = &'static str> {
+    COMMANDS.iter().map(|(n, ..)| *n)
+}
+
 /// `fael <cmd> --help` — only that command's section, or None when `cmd`
 /// names no command (the caller falls back to the full usage).
 pub(crate) fn for_command(cmd: &str) -> Option<&'static str> {
