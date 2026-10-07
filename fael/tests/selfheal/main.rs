@@ -35,7 +35,8 @@ fn fael_env(
     c.args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", root.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID");
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_BURST_MS");
     for (k, v) in envs {
         c.env(k, v);
     }
@@ -137,6 +138,7 @@ fn mcp_add_env(d: &Path, args: serde_json::Value, envs: &[(&str, &str)]) -> (boo
     c.arg("mcp")
         .env("FAEL_STATE_DIR", root.join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_BURST_MS")
         .current_dir(d)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
