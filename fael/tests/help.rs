@@ -81,3 +81,78 @@ fn per_command_help_and_short_errors() {
     let (_, out, _) = fael(&d, &["find", "--full"]);
     assert!(out.contains("-h"), "{out}");
 }
+
+#[test]
+fn core_help_hides_advanced_flags_and_all_shows_them() {
+    let d = repo();
+    // `fael find --help` is the core: the everyday flags, none hidden ones
+    let (ok, out, err) = fael(&d, &["find", "--help"]);
+    assert!(ok, "{err}");
+    for present in [
+        "--files", "--key", "--kind", "--full", "--all", "--limit", "--offset",
+    ] {
+        assert!(out.contains(present), "{present} missing: {out}");
+    }
+    for hidden in [
+        "--since",
+        "--by",
+        "--to",
+        "--revisit",
+        "--branches",
+        "--groups",
+    ] {
+        assert!(!out.contains(hidden), "{hidden} leaks: {out}");
+    }
+    // `--help --all` is the full surface again
+    let (ok, full, err) = fael(&d, &["find", "--help", "--all"]);
+    assert!(ok, "{err}");
+    for hidden in ["--since", "--branches", "--groups"] {
+        assert!(full.contains(hidden), "{hidden} missing: {full}");
+    }
+    // same for add: --force/--dry-run/--urgent-before hide, --urgent stays
+    let (ok, out, err) = fael(&d, &["add", "--help"]);
+    assert!(ok, "{err}");
+    assert!(out.contains("--urgent"), "{out}");
+    for hidden in ["--force", "--dry-run", "--urgent-before"] {
+        assert!(!out.contains(hidden), "{hidden} leaks: {out}");
+    }
+    let (ok, full, err) = fael(&d, &["add", "--help", "--all"]);
+    assert!(ok, "{err}");
+    for hidden in ["--force", "--dry-run", "--urgent-before"] {
+        assert!(full.contains(hidden), "{hidden} missing: {full}");
+    }
+    // no core override: close shows the same text either way
+    let (_, core, _) = fael(&d, &["close", "--help"]);
+    let (_, full, _) = fael(&d, &["close", "--help", "--all"]);
+    assert_eq!(core, full);
+}
+
+#[test]
+fn hidden_flags_still_run() {
+    let d = repo();
+    // every hidden CLI flag still parses and runs — hiding is discovery only
+    for args in [
+        &["find", "--groups"][..],
+        &["find", "--since", "2026-01"],
+        &["find", "--by", "nobody"],
+        &["find", "--to", "nobody"],
+        &["find", "--revisit"],
+        &["find", "--branches"],
+    ] {
+        let (ok, _, err) = fael(&d, args);
+        assert!(ok, "{args:?} {err}");
+    }
+    // --dry-run writes nothing but still previews
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "note", "probe", "--files", "src/a.rs", "--dry-run"],
+    );
+    assert!(ok, "{err}");
+    assert!(!out.is_empty(), "dry-run prints the verdict");
+    // did-you-mean still knows the hidden flags (reads the full surface)
+    let (ok, _, err) = fael(&d, &["find", "--group"]);
+    assert!(!ok && err.contains("did you mean --groups?"), "{err}");
+    let (ok, _, err) = fael(&d, &["find", "--stale"]);
+    assert!(!ok && err.contains("fael find --kind issue"), "{err}");
+}

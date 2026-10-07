@@ -29,15 +29,9 @@ pub(crate) fn tools() -> Value {
                 "text": str_("all words, any order, in text or title"),
                 "key": str_("key glob, e.g. auth:*"),
                 "kind": str_("decision | issue | note, or a repo kind"),
-                "since": str_("yyyy-mm or yyyy-mm-dd"),
-                "to": str_("rows routed to someone, e.g. ploy"),
-                "by": str_("writer who filed the row, e.g. ploy"),
                 "all": {"type": "boolean", "description": "closed and superseded rows too"},
-                "revisit": {"type": ["boolean", "string"], "description": "true = any revisit, a string narrows it"},
-                "branches": {"type": "boolean", "description": "unmerged branches too, tagged @branch; none under store=local"},
                 "limit": {"type": "integer", "minimum": 1, "description": "max rows"},
                 "offset": {"type": "integer", "minimum": 0, "description": "skip this many first"},
-                "groups": {"type": "boolean"},
             }},
         },
         {
@@ -55,10 +49,7 @@ pub(crate) fn tools() -> Value {
                 "to": str_("who answers, e.g. ploy"),
                 "revisit": str_("date YYYY-MM[-DD] or free text"),
                 "urgent": {"type": "boolean", "description": "back of the urgent queue (issues)"},
-                "urgent_before": str_("above that row — one of urgent / urgent_before"),
                 "supersedes": str_("id this replaces"),
-                "force": {"type": "boolean", "description": "allow a typo-lookalike path"},
-                "dry_run": {"type": "boolean"},
             }},
         },
         {
@@ -84,6 +75,7 @@ pub(crate) fn tools() -> Value {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6300 bytes
     /// combined (measured 5813 on 2026-10-03 — SKILL 2204 + schema 3609, after the duplicate-text trim).
     /// Raised from 6100 by owner decision when `find ids[]` joined `close
@@ -112,5 +104,52 @@ mod tests {
             total * 100 <= BASELINE * 85,
             "constants {total} B kept less than 15% off the {BASELINE} B baseline"
         );
+    }
+
+    /// PLAN-fael-agent-ergonomics chunk 3 (experiment): the MCP surface shows
+    /// the core only — hidden properties keep working, they are just not
+    /// offered first. `cwd` is routing, not a filter, so it is ignored here.
+    #[test]
+    fn core_surface_is_what_agents_see() {
+        let tools = super::tools();
+        let props = |name: &str| -> BTreeSet<String> {
+            tools
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["name"] == name)
+                .unwrap()["inputSchema"]["properties"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .filter(|k| *k != "cwd")
+                .cloned()
+                .collect()
+        };
+        let set = |names: &[&str]| -> BTreeSet<String> {
+            names.iter().map(ToString::to_string).collect()
+        };
+        assert_eq!(
+            props("find"),
+            set(&[
+                "id", "ids", "text", "files", "key", "kind", "full", "all", "limit", "offset"
+            ])
+        );
+        assert_eq!(
+            props("add"),
+            set(&[
+                "kind",
+                "text",
+                "title",
+                "files",
+                "key",
+                "supersedes",
+                "rows",
+                "to",
+                "revisit",
+                "urgent"
+            ])
+        );
+        assert_eq!(props("close"), set(&["id", "ids", "key", "text"]));
     }
 }

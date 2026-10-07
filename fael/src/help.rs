@@ -1,6 +1,14 @@
 //! Help text — the full usage plus one section per command.
 //! `main.rs` owns the parser; this module only owns the strings, so the
 //! 400-line file cap never forces help content to shrink.
+//!
+//! Split at the chunk-3 ratchet: `core.rs` holds the trimmed sections
+//! `fael <cmd> --help` shows, `tests.rs` the unit tests.
+
+mod core;
+
+#[cfg(test)]
+mod tests;
 
 /// One row per command: name, the one-line summary the full usage lists,
 /// and the section `fael <cmd> --help` prints (synopsis, then notes). The
@@ -303,9 +311,20 @@ pub(crate) fn names() -> impl Iterator<Item = &'static str> {
     COMMANDS.iter().map(|(n, ..)| *n)
 }
 
-/// `fael <cmd> --help` — only that command's section, or None when `cmd`
-/// names no command (the caller falls back to the full usage).
+/// `fael <cmd> --help` — only that command's core section (chunk 3: the
+/// flags an agent meets first), or None when `cmd` names no command (the
+/// caller falls back to the full usage). `--help --all` gets the full
+/// section from `for_command_full`.
 pub(crate) fn for_command(cmd: &str) -> Option<&'static str> {
+    if let Some(s) = core::section(cmd) {
+        return Some(s);
+    }
+    for_command_full(cmd)
+}
+
+/// The full section, hidden flags included — what `--help --all`, the docs
+/// table and did-you-mean read, so trimming the core never loses a flag.
+pub(crate) fn for_command_full(cmd: &str) -> Option<&'static str> {
     COMMANDS
         .iter()
         .find(|(n, ..)| *n == cmd)
@@ -324,70 +343,21 @@ pub(crate) fn is_request(argv: &[String]) -> bool {
 
 /// `fael help` / `fael --help` / `fael <cmd> --help` / `fael help <cmd>`:
 /// the full usage, unless a non-flag word names a command — then only that
-/// command's section (`help` itself is skipped, so `help find` finds `find`).
+/// command's core section (`help` itself is skipped, so `help find` finds
+/// `find`). With `--all` anywhere before `--`, the full section instead.
 pub(crate) fn for_argv(argv: &[String]) -> String {
+    let all = argv.iter().take_while(|x| *x != "--").any(|x| x == "--all");
     let section = argv
         .iter()
         .find(|a| !a.starts_with('-') && a.as_str() != "help")
-        .and_then(|c| for_command(c));
+        .and_then(|c| match all {
+            true => for_command_full(c),
+            false => for_command(c),
+        });
     match section {
         Some(text) => {
             format!("{text}\n\nrun 'fael --help' for all commands and global options.")
         }
         None => usage(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    /// `--files`, `--revisit` … named anywhere in `s`.
-    fn flags(s: &str) -> std::collections::BTreeSet<&str> {
-        s.split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
-            .filter(|w| w.starts_with("--") && w.len() > 2)
-            .collect()
-    }
-
-    #[test]
-    fn help_is_a_request_before_dashdash_only() {
-        let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
-        for yes in ["help", "help add", "--help", "find --help", "add -h"] {
-            assert!(super::is_request(&argv(yes)), "{yes}");
-        }
-        for no in [
-            "find x",
-            "add note x -- -h",
-            "add note x -- --help",
-            "find --files a.rs",
-        ] {
-            assert!(!super::is_request(&argv(no)), "{no}");
-        }
-    }
-
-    /// A misspelled or renamed CORE entry would silently drop that command
-    /// from the "commands:" list.
-    #[test]
-    fn core_names_are_commands() {
-        for c in super::CORE {
-            assert!(
-                super::COMMANDS.iter().any(|(n, ..)| n == c),
-                "CORE names {c}, which is not in COMMANDS"
-            );
-        }
-    }
-
-    /// docs/architecture.md's CLI table is prose around the same synopses —
-    /// each command's row must name exactly the flags its `--help` names.
-    #[test]
-    fn docs_match_flags() {
-        let docs = include_str!("../../docs/architecture.md");
-        for (name, _, section) in super::COMMANDS {
-            let row = docs
-                .lines()
-                .find(|l| l.starts_with(&format!("| `fael {name}")))
-                .unwrap_or_else(|| panic!("docs/architecture.md has no row for fael {name}"));
-            let synopsis = row.split("` |").next().unwrap_or_default();
-            let help = section.lines().next().unwrap_or_default();
-            assert_eq!(flags(synopsis), flags(help), "fael {name}: docs vs --help");
-        }
     }
 }

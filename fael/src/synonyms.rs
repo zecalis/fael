@@ -221,9 +221,11 @@ fn with_usage(cmd: &str, msg: String, old: &str) -> String {
     }
 }
 
-/// The real flags of `cmd`: the ones its synopsis line names, plus `--json`.
+/// The real flags of `cmd`, hidden ones included: the full synopsis line
+/// names them, plus `--json`. Chunk 3 trims the shown help to the core, so
+/// reading the shown line here would lose `--groups` and friends.
 fn real_flags(cmd: &str) -> Vec<&'static str> {
-    let line = crate::help::for_command(cmd).and_then(|s| s.lines().next());
+    let line = crate::help::for_command_full(cmd).and_then(|s| s.lines().next());
     let mut v: Vec<&str> = line
         .unwrap_or_default()
         .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
