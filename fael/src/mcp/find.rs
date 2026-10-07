@@ -184,10 +184,7 @@ fn auto_issue(f: &core::Filter, a: &Value) -> bool {
 /// Rows that merely mention `row`'s id ride under its body, so the reader
 /// sees who cites it — silent when nobody does (CLI `find <id>` parity).
 fn with_mentioned(log: &core::Log, row: &core::Row, mut text: String) -> String {
-    let who: Vec<String> = crate::find::mentioned(log, &row.id)
-        .into_iter()
-        .filter(|s| !row.id.starts_with(s.as_str()))
-        .collect();
+    let who = crate::find::mentions::mentioners(log, row);
     if !who.is_empty() {
         text.push_str(&format!("mentioned by: {}\n", who.join(", ")));
     }

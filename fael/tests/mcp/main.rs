@@ -337,7 +337,8 @@ fn find_id_shapes_match_cli() {
                 .to_string(),
         )
     };
-    // real id → the body, like `fael find <id>` (nothing cites it: no mentioned-by line)
+    // real id → the body, like `fael find <id>` (nothing cites it: the phantom
+    // token is longer than the keeper's id prefix, so no mentioned-by line)
     let (is_err, body) = find(serde_json::json!({"id": id}));
     assert!(!is_err && body.contains("keeper row"), "{body}");
     assert!(!body.contains("mentioned by:"), "{body}");
