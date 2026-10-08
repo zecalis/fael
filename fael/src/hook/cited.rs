@@ -78,6 +78,34 @@ pub(crate) fn commit_cites(log: &crate::core::Log, input: &Value) -> Vec<String>
     out
 }
 
+/// A `git commit` whose subject declares a fix (`fix:` / `fix(`, the type the
+/// agent typed — PLAN-fael-experience-loop chunk 5b) and whose text names no
+/// row of `log`, open or closed, by its `SHORT` prefix. Which issue the
+/// commit fixes is never judged; a repo without conventional commits never
+/// matches.
+pub(crate) fn fix_uncited(log: &crate::core::Log, input: &Value) -> bool {
+    let cmd = input["command"].as_str().unwrap_or("");
+    if !is_commit(cmd) || !fix_subject(cmd) {
+        return false;
+    }
+    let text = haystack(input);
+    !log.rows
+        .iter()
+        .any(|r| r.id.len() >= SHORT && text.contains(&r.id[..SHORT]))
+}
+
+/// A message line opening `fix:` / `fix(`: right after a `-m "` / `-m '`
+/// quote, or at a line start (a heredoc body).
+// ponytail: a later heredoc line opening `fix:` counts too — a subject parser
+// if a body ever trips it
+fn fix_subject(cmd: &str) -> bool {
+    cmd.match_indices("fix").any(|(i, _)| {
+        let before = cmd[..i].chars().next_back();
+        matches!(before, None | Some('\n' | '"' | '\''))
+            && matches!(cmd[i + 3..].chars().next(), Some(':' | '('))
+    })
+}
+
 /// A shell command with a `git commit` segment: the first two bare words of
 /// a `;`/`&`/`|`/newline-split segment, skipping env assignments.
 pub(crate) fn is_commit(cmd: &str) -> bool {

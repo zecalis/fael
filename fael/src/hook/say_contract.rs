@@ -62,6 +62,14 @@ pub(super) fn all() -> Vec<Line> {
             "fael: 01CHK was closed pointing at `t/a.sh`, now gone — fael add issue \"<what is unguarded>\" --files a.rs --supersedes 01CHK\n",
         ),
         Line::notice("fael: a stashed line\n".into()),
+        line(
+            Kind::Fixed,
+            "fael: this session said it fixed a bug — fael add issue \"x\" --key a:b then fael close --key a:b \"y\"\n",
+        ),
+        line(
+            Kind::FixCommit,
+            "fael: a fix: commit names no fael row — fael add issue \"x\" --key a:b then fael close --key a:b \"y\"\n",
+        ),
     ]
 }
 
@@ -77,6 +85,8 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Finding { .. } => 7,
         Kind::Check { .. } => 8,
         Kind::Notice => 9,
+        Kind::Fixed => 10,
+        Kind::FixCommit => 11,
     }
 }
 
@@ -337,8 +347,18 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
     assert_eq!(
         want,
         [
-            "row", "brief", "ask", "pointer", "bodies", "cited", "merge", "finding", "check",
-            "notice"
+            "row",
+            "brief",
+            "ask",
+            "pointer",
+            "bodies",
+            "cited",
+            "merge",
+            "finding",
+            "check",
+            "notice",
+            "fixed",
+            "fixcommit"
         ]
     );
 }

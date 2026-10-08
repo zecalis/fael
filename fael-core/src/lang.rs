@@ -17,6 +17,9 @@ pub struct Lang {
     pub bug: &'static [&'static str],
     /// Weak phrases: a risk/inconsistency mention (one-line note, never a block).
     pub risk: &'static [&'static str],
+    /// Fix phrases (PLAN-fael-experience-loop chunk 5a): the agent says it
+    /// fixed a bug — the moment its cause → fix is worth filing.
+    pub fixed: &'static [&'static str],
     /// Strong-cancel window words.
     pub negations: &'static [&'static str],
     /// Weak-cancel window words.
@@ -56,6 +59,14 @@ static EN: Lang = Lang {
         "will break",
         "likely to break",
     ],
+    fixed: &[
+        "fixed the bug",
+        "fixed a bug",
+        "fixed this bug",
+        "fixed the regression",
+        "root cause was",
+        "root cause is",
+    ],
     negations: &["not", "no", "if"],
     risk_negations: &["not", "no"],
     conditionals: &["if", "unless"],
@@ -74,6 +85,13 @@ static TH: Lang = Lang {
         "อาจมีปัญหา",
         "น่าจะมีปัญหา",
         "มีความเสี่ยง",
+    ],
+    fixed: &[
+        "แก้บั๊กแล้ว",
+        "แก้ bug แล้ว",
+        "แก้บั๊กเรียบร้อย",
+        "สาเหตุของบั๊ก",
+        "ต้นเหตุของบั๊ก",
     ],
     negations: &["ไม่", "จะ", "ถ้า", "อาจ"],
     risk_negations: &["ไม่"],
@@ -169,6 +187,21 @@ pub fn marker_hit(text: &str, packs: &[&Lang], negations_extra: &[&str]) -> Opti
         from = i + 3;
     }
     None
+}
+
+/// The fix phrase the agent said (chunk 5a), or `None` — quoted text dropped
+/// and the pooled negation window applied, like `marker_hit`'s bug phrases.
+/// An empty `packs` matches nothing.
+pub fn fixed_hit(text: &str, packs: &[&Lang]) -> Option<String> {
+    let lower = strip_quoted(text).to_lowercase();
+    let negs: Vec<&str> = packs
+        .iter()
+        .flat_map(|p| p.negations.iter().copied())
+        .collect();
+    packs.iter().flat_map(|p| p.fixed).find_map(|p| {
+        let i = lower.find(*p)?;
+        (!negated(&lower, i, &negs)).then(|| (*p).to_string())
+    })
 }
 
 /// The add-time language warning, or `None` when at most `FOREIGN_SHARE` of

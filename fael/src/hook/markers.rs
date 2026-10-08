@@ -23,6 +23,12 @@ pub(crate) fn has_bug_marker(text: &str, cfg: &core::Config) -> Option<String> {
     core::lang::marker_hit(text, &packs(cfg), &[]).map(|h| h.marker)
 }
 
+/// The fix phrase (PLAN-fael-experience-loop chunk 5a) from the same packs
+/// as the bug markers, or `None`.
+pub(crate) fn has_fix_phrase(text: &str, cfg: &core::Config) -> Option<String> {
+    core::lang::fixed_hit(text, &packs(cfg))
+}
+
 /// Last ≤200 KB of a transcript, whatever its size — one seek, so the hook
 /// never stalls turn-end and a long session still has its last message.
 /// Skips a partial first line.
@@ -42,15 +48,16 @@ pub(super) fn read_tail(path: &Path) -> Option<String> {
     }
 }
 
-/// Scan assistant text in a Claude transcript tail for a bug marker — only
+/// Scan assistant text in a Claude transcript tail for a `hit` (a bug marker,
+/// a fix phrase) — only
 /// lines after the latest user prompt (a plan written an hour ago must not
 /// flag this turn). Returns the marker with its line timestamp (fallback:
 /// the session start, when the line carries none) — an issue row clears it
 /// only when stamped at or after that.
-pub(crate) fn bug_signal_from_transcript(
+pub(crate) fn signal_from_transcript(
     path: &Path,
     since_ms: i64,
-    cfg: &core::Config,
+    hit: impl Fn(&str) -> Option<String>,
 ) -> Option<(String, i64)> {
     let text = read_tail(path)?;
     // (is_user, line ms, text blocks) in file order
@@ -102,7 +109,7 @@ pub(crate) fn bug_signal_from_transcript(
         .unwrap_or(0);
     for (_, at_ms, texts) in msgs.iter().skip(after).filter(|m| !m.0) {
         for t in texts {
-            if let Some(marker) = has_bug_marker(t, cfg) {
+            if let Some(marker) = hit(t) {
                 return Some((marker, *at_ms));
             }
         }

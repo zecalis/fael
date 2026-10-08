@@ -100,11 +100,8 @@ fn json_shape_keys_and_types_are_frozen() {
     assert_eq!(v["schema"], 2, "{v}");
     // every kind listed, zeros included
     assert_eq!(
-        keys(&v["said"]),
-        [
-            "ask", "bodies", "brief", "check", "cited", "count", "finding", "merge", "note",
-            "notice", "pointer", "row"
-        ],
+        keys(&v["said"]).join(" "),
+        "ask bodies brief check cited count finding fixcommit fixed merge note notice pointer row",
         "{v}"
     );
     assert_eq!(
