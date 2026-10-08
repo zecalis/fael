@@ -70,3 +70,88 @@ fn a_plan_kickoff_drops_ticked_chunks_and_caps_at_five_rows() {
     );
     assert!(rows(&fael(&d, &["kickoff"])) > 5);
 }
+
+fn rows(out: &str) -> Vec<&str> {
+    out.lines().filter(|l| l.starts_with("- [")).collect()
+}
+
+#[test]
+fn an_unreadable_plan_doc_still_caps_and_keeps_every_row() {
+    let d = repo();
+    note(&d, "chunk one note", "plan:foo:chunk-1");
+    for i in 0..6 {
+        note(&d, &format!("other note {i}"), &format!("foo:topic-{i}"));
+    }
+    std::fs::remove_file(d.join("PLAN-foo.md")).unwrap();
+    // the doc is gone: the anchor still widens, nothing is filtered, the cap holds
+    let out = fael(&d, &["kickoff", "PLAN-foo.md"]);
+    assert_eq!(rows(&out).len(), 5, "{out}");
+}
+
+#[test]
+fn a_nested_plan_doc_works_from_a_subdirectory() {
+    let d = repo();
+    std::fs::create_dir_all(d.join(".fapony/plan/sub")).unwrap();
+    std::fs::rename(d.join("PLAN-foo.md"), d.join(".fapony/plan/PLAN-foo.md")).unwrap();
+    note(&d, "chunk one note", "plan:foo:chunk-1");
+    note(&d, "chunk two note", "plan:foo:chunk-2");
+    let out = fael(&d, &["kickoff", ".fapony/plan/PLAN-foo.md"]);
+    assert!(
+        !out.contains("chunk one note") && out.contains("chunk two note"),
+        "{out}"
+    );
+    let out = fael(&d.join(".fapony/plan/sub"), &["kickoff", "../PLAN-foo.md"]);
+    assert!(
+        !out.contains("chunk one note") && out.contains("chunk two note"),
+        "{out}"
+    );
+}
+
+#[test]
+fn offset_pages_on_without_repeat_or_gap() {
+    let d = repo();
+    for i in 0..8 {
+        note(&d, &format!("other note {i}"), &format!("foo:topic-{i}"));
+    }
+    let first = fael(&d, &["kickoff", "PLAN-foo.md"]);
+    let second = fael(&d, &["kickoff", "PLAN-foo.md", "--offset", "5"]);
+    let all = fael(&d, &["kickoff", "PLAN-foo.md", "--limit", "8"]);
+    let mut paged: Vec<&str> = rows(&first);
+    paged.extend(rows(&second));
+    assert_eq!(paged, rows(&all), "{first}{second}");
+}
+
+#[test]
+fn json_follows_the_same_cap() {
+    let d = repo();
+    for i in 0..8 {
+        note(&d, &format!("other note {i}"), &format!("foo:topic-{i}"));
+    }
+    let out = fael(&d, &["kickoff", "PLAN-foo.md", "--json"]);
+    // --json prints one row object per line
+    let n = out.lines().filter(|l| l.starts_with('{')).count();
+    assert_eq!(n, 5, "{out}");
+}
+
+#[test]
+fn the_handoff_survives_the_cap_behind_many_open_issues() {
+    let d = repo();
+    note(&d, "the handoff note", "plan:foo:handoff");
+    for i in 0..6 {
+        fael(
+            &d,
+            &[
+                "add",
+                "issue",
+                &format!("open issue {i}"),
+                "--files",
+                "plan:foo",
+                "--key",
+                &format!("foo:bug-{i}"),
+                "--force",
+            ],
+        );
+    }
+    let out = fael(&d, &["kickoff", "PLAN-foo.md"]);
+    assert!(out.contains("the handoff note"), "{out}");
+}

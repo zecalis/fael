@@ -31,6 +31,9 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     {
         ranked = core::drop_closed(ranked, anchor, &core::closed_chunks(&doc));
     }
+    if let Some((_, anchor)) = &plan {
+        ranked = core::handoff_first(ranked, anchor);
+    }
     let (rows, total) = core::page(ranked, page_limit, offset);
     // a tag whose branch is already in HEAD says so: its handoff may be stale
     let branch_of = super::merged::mark(&r.root, branch_of, &rows);

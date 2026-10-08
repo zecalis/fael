@@ -29,3 +29,16 @@ fn drop_closed_keeps_handoff_other_keys_and_open_chunks() {
         ["02", "03", "04", "05"]
     );
 }
+
+#[test]
+fn closed_chunks_edges() {
+    // multi-digit, upper-case X, a tick with nothing after the number
+    assert_eq!(
+        closed_chunks("  - [x] chunk 10 — a\n- [X] chunk 11\n- [x] chunk 12"),
+        [10, 11, 12]
+    );
+    // not a number, not a chunk line: nothing closes
+    assert!(closed_chunks("- [x] chunk\n- [x] chunk two\n- [x] fix 3\n- [ ] chunk 4").is_empty());
+    // a number glued to letters is no chunk number — never guess
+    assert!(closed_chunks("- [x] chunk 2a — x").is_empty());
+}

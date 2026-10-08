@@ -19,6 +19,10 @@ pub fn closed_chunks(doc: &str) -> Vec<u32> {
             }
             let n = l.strip_prefix("] chunk ")?;
             let end = n.find(|c: char| !c.is_ascii_digit()).unwrap_or(n.len());
+            // `2a` is no chunk number — never guess
+            if n[end..].starts_with(|c: char| c.is_alphanumeric()) {
+                return None;
+            }
             n[..end].parse().ok()
         })
         .collect()
@@ -35,4 +39,12 @@ pub fn drop_closed<'a>(rows: Vec<&'a Row>, anchor: &str, closed: &[u32]) -> Vec<
             .is_some_and(|n| closed.contains(&n))
     };
     rows.into_iter().filter(|r| !done(r)).collect()
+}
+
+/// The plan's `:handoff` row first, so the cap never cuts the row a plan
+/// kickoff exists to show; the rest keep their rank.
+pub fn handoff_first<'a>(mut rows: Vec<&'a Row>, anchor: &str) -> Vec<&'a Row> {
+    let handoff = format!("{anchor}:handoff");
+    rows.sort_by_key(|r| r.key.as_deref() != Some(handoff.as_str())); // stable
+    rows
 }
