@@ -36,6 +36,7 @@ mod friction;
 mod in_context;
 mod markers;
 mod merge;
+mod promote;
 mod prompt;
 mod protocol;
 mod push;

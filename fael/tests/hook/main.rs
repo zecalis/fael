@@ -40,6 +40,7 @@ mod notify;
 mod outcomes;
 mod overlap;
 mod precision;
+mod promote;
 mod prompt;
 mod push_cap;
 mod replay;

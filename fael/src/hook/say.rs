@@ -101,6 +101,9 @@ pub(crate) enum Kind {
     /// A `fix:` commit naming no fael row in a session that closed none
     /// (chunk 5b): said once per session.
     FixCommit,
+    /// The promote ask (PLAN-fael-context-loop chunk 4): a decision in front of
+    /// agents at edits in many sessions — a test or check? Once ever per row.
+    Promote { id: String },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -143,6 +146,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
         Kind::Carry { .. } => (Once::Key, Some("fael find"), true),
         Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close"), false),
+        Kind::Promote { .. } => (Once::Key, Some("fael close"), true),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
     Policy {
@@ -171,6 +175,7 @@ impl Kind {
             Kind::Carry { id } => vec![format!("~carry:{id}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
+            Kind::Promote { id } => vec![format!("~promote:{id}")],
             Kind::Brief | Kind::Notice => vec![],
         }
     }
@@ -201,6 +206,7 @@ impl Kind {
             Kind::Carry { id } => ("carry", vec![id.clone()]),
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
+            Kind::Promote { id } => ("promote", vec![id.clone()]),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {
@@ -331,7 +337,7 @@ impl Outbox {
     }
 
     /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
-    /// Over budget the stashed notice goes first, then the stashed fix line, then the consolidate ask, then the
+    /// Over budget the stashed notice goes first, then the stashed fix line, then the consolidate or promote ask, then the
     /// carry-back line, then the gone-check ask, then the
     /// edit hints (the open-issue one, said first, goes last), then the commit-cite
     /// hint, each whole. A cut line
@@ -343,7 +349,7 @@ impl Outbox {
             let first = |f: fn(&Kind) -> bool| keep.iter().position(|l| f(&l.kind));
             let cut = first(|k| matches!(k, Kind::Notice))
                 .or_else(|| first(|k| matches!(k, Kind::Fixed)))
-                .or_else(|| first(|k| matches!(k, Kind::Merge { .. })))
+                .or_else(|| first(|k| matches!(k, Kind::Merge { .. } | Kind::Promote { .. })))
                 .or_else(|| first(|k| matches!(k, Kind::Carry { .. })))
                 .or_else(|| first(|k| matches!(k, Kind::Check { .. })))
                 .or_else(|| {
