@@ -92,3 +92,72 @@ fn only_issues_count_and_only_two_are_named() {
         "{err}"
     );
 }
+
+#[test]
+fn a_closed_issue_a_repeat_already_superseded_is_not_named_again() {
+    let d = repo();
+    let (old, _) = issue(&d, "heic upload breaks in chrome", &[]);
+    close(&d, &old);
+    // the agent confirmed the repeat: the closed issue now has a successor
+    issue(&d, "chrome rejects heic again", &["--supersedes", &old]);
+    let (_, err) = issue(&d, "unrelated crash in the resizer", &[]);
+    assert!(!err.contains(LINE), "{err}");
+}
+
+#[test]
+fn an_issue_self_heal_supersedes_is_silent() {
+    let d = repo();
+    let (gone, _) = issue(&d, "heic upload breaks in chrome", &[]);
+    close(&d, &gone);
+    let (open, _) = issue(&d, "resizer leaks memory", &["--key", "resizer"]);
+    // the text names the open row after "supersedes": self-heal links them
+    let (_, err) = issue(
+        &d,
+        &format!("supersedes {open}: resizer leaks and crashes"),
+        &[],
+    );
+    assert!(err.contains("superseded"), "{err}");
+    assert!(!err.contains(LINE), "{err}");
+}
+
+#[test]
+fn the_line_is_info_never_a_counted_warning() {
+    let d = repo();
+    let (old, _) = issue(&d, "heic upload breaks in chrome", &[]);
+    close(&d, &old);
+    let (_, err) = issue(&d, "chrome rejects heic again", &[]);
+    let line = err.lines().find(|l| l.contains(LINE)).expect(&err);
+    // `record_row_asks` counts only `warning:` lines as asks
+    assert!(!line.starts_with("warning:"), "{line}");
+}
+
+#[test]
+fn an_issue_closed_by_compact_is_still_named() {
+    let d = repo();
+    let by = std::fs::read_dir(d.join(".fael/log"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    let dir = by.path();
+    let old = "A0000000000000000000000001";
+    std::fs::write(
+        dir.join("2000-01.jsonl"),
+        format!(
+            r#"{{"v":1,"id":"{old}","ts":"2000-01-01T00:00:00.000Z","by":"test-user-","kind":"issue","text":"old heic bug","files":["src/a.rs"]}}"#
+        ) + "\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("2000-01.close.jsonl"),
+        format!(
+            r#"{{"v":1,"id":"C0000000000000000000000001","ts":"2000-01-02T00:00:00.000Z","by":"test-user-","ref":"{old}","text":"done"}}"#
+        ) + "\n",
+    )
+    .unwrap();
+    let (ok, out, err) = fael(&d, &["compact"], "");
+    assert!(ok, "{err}");
+    assert!(out.contains("1 close(s) folded"), "{out}");
+    let (_, err) = issue(&d, "chrome rejects heic again", &[]);
+    assert!(err.contains(LINE) && err.contains("A0000000"), "{err}");
+}
