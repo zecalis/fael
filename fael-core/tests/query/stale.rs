@@ -56,6 +56,18 @@ fn stale_refs_flags_only_what_is_gone() {
         ),
         ["pnpm-workspace.yaml"]
     );
+    // a command naming a dir is not a path that must exist
+    assert!(
+        stale_refs(
+            &r,
+            &text_row(
+                "A0000000000000000000000022",
+                "point at `fael find --files <dir>/`"
+            ),
+            &al
+        )
+        .is_empty()
+    );
     // renamed through the resolver: not stale (chunk 2 rule)
     let moved = Aliases::from_pairs(vec![("src/old.rs".to_string(), "src/keep.rs".to_string())]);
     assert!(
