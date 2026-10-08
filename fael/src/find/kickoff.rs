@@ -12,6 +12,12 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let (log, branch_of) = working_or_branches(a, base, jtags, &r);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
+    // a plan doc shows its open work: rows of chunks the doc ticked leave, and
+    // without --limit the page is PLAN_KICKOFF_ROWS (the cut line names the rest)
+    let plan = files
+        .first()
+        .and_then(|f| core::plan_anchor(f, &r.cfg.anchor_prefixes).map(|p| (f, p)));
+    let page_limit = limit.or(plan.as_ref().map(|_| core::PLAN_KICKOFF_ROWS));
     let f = Filter {
         files: al.expand_all(&files),
         limit,
@@ -19,11 +25,13 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
         ..Filter::default()
     };
     // kickoff ranks the full set itself, so it pages after — same helper as query()
-    let (rows, total) = core::page(
-        core::kickoff(&log, &f, &r.root, &al, &r.cfg.anchor_prefixes),
-        limit,
-        offset,
-    );
+    let mut ranked = core::kickoff(&log, &f, &r.root, &al, &r.cfg.anchor_prefixes);
+    if let Some((file, anchor)) = &plan
+        && let Ok(doc) = std::fs::read_to_string(r.root.join(file))
+    {
+        ranked = core::drop_closed(ranked, anchor, &core::closed_chunks(&doc));
+    }
+    let (rows, total) = core::page(ranked, page_limit, offset);
     // a tag whose branch is already in HEAD says so: its handoff may be stale
     let branch_of = super::merged::mark(&r.root, branch_of, &rows);
     // a handoff whose code files moved since it was written says so too: the
