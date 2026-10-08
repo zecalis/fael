@@ -107,8 +107,11 @@ fn a_fix_commit_naming_no_row_is_said_once_per_session() {
     assert!(!commit(&d, "feat: retry cap").contains(FIX), "not a fix");
     assert!(!commit(&d, "prefix: retry cap").contains(FIX));
     let out = commit(&d, "fix(hook): cap retries at 3");
+    // no edit recorded: a placeholder, never an add that rejects for no --files
     assert!(
-        out.contains(FIX) && out.contains("fael close --key"),
+        out.contains(FIX)
+            && out.contains("--files <files the fix touched>")
+            && out.contains("fael close --key"),
         "{out}"
     );
     assert!(
@@ -274,4 +277,37 @@ fn the_fix_line_wins_a_turn_and_the_bug_line_comes_back_after() {
         !out.contains(SAID) && out.contains("possible problem"),
         "{out}"
     );
+}
+
+/// Both fix lines name what the session edited for `--files`, not the file
+/// the next push happens to be on.
+#[test]
+fn the_fix_lines_name_the_files_the_session_edited() {
+    let d = super::repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let edit = |session: &str| {
+        let input = format!(
+            r#"{{"cwd":{},"session":{},"files":["src/fixed.rs"]}}"#,
+            json(&d),
+            serde_json::to_string(session).unwrap()
+        );
+        let (ok, _, err) = fael(&d, &["hook", "edit"], &input);
+        assert!(ok, "{err}");
+    };
+    let s = "2020-01-01T00:00:00Z";
+    edit(s);
+    stop(&d, s, "Fixed the bug: the retry cap was off by one.");
+    let out = read(&d, s);
+    assert!(
+        out.contains(SAID) && out.contains("--files src/fixed.rs --key"),
+        "{out}"
+    );
+    edit("s1");
+    let out = commit(&d, "fix(hook): cap retries at 3");
+    assert!(out.contains("--files src/fixed.rs --key"), "{out}");
 }

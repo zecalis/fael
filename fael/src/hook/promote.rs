@@ -101,7 +101,7 @@ pub(crate) fn promote_line(ask: &Ask, t0: &[(&core::Row, usize)]) -> Option<Line
     Some(Line {
         kind: Kind::Promote { id: r.id.clone() },
         text: format!(
-            "fael: {id} on {file} was in front of agents at edits in {MIN_SESSIONS}+ sessions — should it be a test or a lint/check you write, failing when broken? then `fael close {id} \"moved to <test or check>\"` · if neither fits, it stays as the why\n"
+            "fael: {id} on {file} was in front of agents at edits in {MIN_SESSIONS}+ sessions — should a test or lint/check guard it, failing when broken — one that already exists, or one you write? then `fael close {id} \"moved to <test or check path>\"` · if neither fits, it stays as the why\n"
         ),
     })
 }

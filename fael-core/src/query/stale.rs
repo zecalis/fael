@@ -80,7 +80,9 @@ fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<Str
         let p = p.strip_prefix("./").unwrap_or(p);
         // `file.rs:88` cites a line inside a file — the file is what must exist
         let p = strip_location(p);
-        if p.is_empty() || filed.iter().any(|f| f == p) {
+        // a span with whitespace is a command (`fael find --files <dir>/`),
+        // never a path that must exist
+        if p.is_empty() || p.contains(char::is_whitespace) || filed.iter().any(|f| f == p) {
             continue;
         }
         if al.forward(p).iter().all(|q| !root.join(q).exists()) && !out.contains(&p.to_string()) {
