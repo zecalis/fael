@@ -12,7 +12,7 @@ use super::state::{
     clear_stash, edits_path, lock_seen, peek_stash, read_turn, record_edits, seen_path,
     swap_touched, touched_path,
 };
-use super::usage::{memory_line, record_usage_shadow};
+use super::usage::record_usage_shadow;
 use crate::{aliases, core};
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
@@ -217,7 +217,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     // said with no rows to join
     // t0 is empty off an edit, so a read or search gets no hint
     let hints = edit_hint(&ask, &t0, said, &mut blobs);
-    let mut lines = row_lines(&sel, &files, (body, n, bodies), &shown, policy.budget);
+    let mut lines = row_lines(&sel, &files, (body, n, bodies), &shown);
     lines.extend(hints.into_iter().map(|h| Line {
         kind: Kind::Ask {
             ids: h.spent,
@@ -309,7 +309,6 @@ fn row_lines(
     files: &[String],
     (body, n, bodies): (String, usize, Option<String>),
     shown: &[String],
-    budget: usize,
 ) -> Vec<Line> {
     if n == 0 {
         return vec![];
@@ -319,12 +318,11 @@ fn row_lines(
         h => format!(" ({n} of {})", n + h),
     };
     let header = format!("fael mem for {}{more}:\n", files.join(", "));
-    let usage = memory_line(&body, budget).unwrap_or_default();
     let mut out = vec![Line {
         kind: Kind::Row {
             ids: shown.to_vec(),
         },
-        text: format!("{header}{body}{usage}"),
+        text: format!("{header}{body}"),
     }];
     out.extend(bodies.map(|text| Line {
         kind: Kind::Bodies,
