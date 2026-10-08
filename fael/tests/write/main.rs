@@ -11,6 +11,7 @@ mod derive;
 mod filehash;
 mod from;
 mod paths;
+mod recall;
 mod receipt;
 mod refs;
 mod replace;

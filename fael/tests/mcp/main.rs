@@ -3,6 +3,7 @@
 
 mod find;
 mod issue_groups;
+mod recall;
 mod session;
 mod surface;
 
