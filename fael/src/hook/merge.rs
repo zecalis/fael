@@ -64,3 +64,70 @@ fn line(log: &core::Log, file: &str, rows: &[&core::Row]) -> Line {
         text,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::say::{Kind, Line, Outbox};
+    use super::super::state::lock_seen;
+    use crate::core::est_tokens;
+
+    fn ask() -> Line {
+        Line {
+            kind: Kind::Ask {
+                ids: vec!["01ASK".into()],
+                issue: false,
+            },
+            text: "fael: done with one? fael close 01ASK \"<why>\"\n".into(),
+        }
+    }
+
+    fn merge() -> Line {
+        Line {
+            kind: Kind::Merge {
+                file: "a.rs".into(),
+                ids: vec!["01MERGE".into()],
+            },
+            text: "fael: a.rs has 6 open rows — fael add decision \"x\" --supersedes 01MERGE\n"
+                .into(),
+        }
+    }
+
+    fn seen() -> std::path::PathBuf {
+        std::env::temp_dir()
+            .join(format!("fael-merge-{}", crate::core::ulid()))
+            .join("s.seen")
+    }
+
+    /// Over budget the consolidate ask goes before the edit ask, and a cut
+    /// line spends no key.
+    #[test]
+    fn over_the_budget_merge_goes_before_ask() {
+        let p = seen();
+        let mut out = Outbox::open(lock_seen(&p));
+        out.say_within(est_tokens(&ask().text), vec![ask(), merge()]);
+        let said = out.reply().context().unwrap_or("").to_string();
+        assert!(
+            said.contains("fael close 01ASK") && !said.contains("01MERGE"),
+            "{said}"
+        );
+        assert!(!std::fs::read_to_string(&p).unwrap().contains("~merge:"));
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+
+    /// One edit ask per user turn, shared with the merge ask: the ask wins
+    /// the turn, the merge keeps its key and is said in the next.
+    #[test]
+    fn the_ask_wins_the_turn_and_the_merge_waits() {
+        let p = seen();
+        let in_turn = |t: &str, ls: Vec<Line>| {
+            let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
+            ls.into_iter().for_each(|l| out.say(l));
+            out.reply().context().map(String::from)
+        };
+        let t1 = in_turn("t1", vec![ask(), merge()]).unwrap();
+        assert!(t1.contains("01ASK") && !t1.contains("01MERGE"), "{t1}");
+        let t2 = in_turn("t2", vec![merge()]).unwrap();
+        assert!(t2.contains("01MERGE"), "{t2}");
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+}
