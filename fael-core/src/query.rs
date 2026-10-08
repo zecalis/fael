@@ -9,6 +9,7 @@
 //! `groups` (open rows linked by a shared file), `explain` (why a find came
 //! back empty, when a short list shows bodies).
 
+mod chunks;
 mod explain;
 mod focus;
 mod groups;
@@ -25,6 +26,7 @@ mod select;
 mod shape;
 mod stale;
 
+pub use chunks::{PLAN_KICKOFF_ROWS, closed_chunks, drop_closed, handoff_first};
 pub use explain::{EXPAND_MAX, expands, json_note, why_empty};
 pub use focus::{
     Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_GATE, CUT_HUB_PEEK, Focus, Hidden,
