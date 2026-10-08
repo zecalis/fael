@@ -12,7 +12,6 @@
 //! `push_cap` (read-push row cap + omitted line),
 //! `precision` (PLAN-fael-moat-token chunk 2: push footer + branch tag fixture),
 //! `focus` (session Focus: focus.json written at start, read by the push),
-//! `memory_line` (the `memory: ~used/budget tokens · n rows` line),
 //! `tied` (session start lists issues tied to the branch), `notify` (the
 //! user channel: brief, reminder, receipt).
 
@@ -32,7 +31,6 @@ mod from_user;
 mod gate;
 mod handoff;
 mod incident;
-mod memory_line;
 mod merge;
 mod notify;
 mod outcomes;
