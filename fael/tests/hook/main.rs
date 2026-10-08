@@ -13,7 +13,8 @@
 //! `precision` (PLAN-fael-moat-token chunk 2: push footer + branch tag fixture),
 //! `focus` (session Focus: focus.json written at start, read by the push),
 //! `tied` (session start lists issues tied to the branch), `notify` (the
-//! user channel: brief, reminder, receipt).
+//! user channel: brief, reminder, receipt), `fix_net` (the fix-time net:
+//! a fix phrase or a `fix:` commit with nothing filed).
 
 mod adopted;
 mod autosync;
@@ -27,6 +28,7 @@ mod compact;
 mod day;
 mod decision;
 mod experience;
+mod fix_net;
 mod focus;
 mod from_user;
 mod gate;

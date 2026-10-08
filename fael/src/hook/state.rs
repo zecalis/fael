@@ -157,6 +157,13 @@ pub(crate) fn hint_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.hint"))
 }
 
+/// A fix phrase stashed by stop for the next push (PLAN-fael-experience-loop
+/// chunk 5a) — shown once, deleted.
+pub(crate) fn fixed_path(session: &str, root: &Path) -> PathBuf {
+    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+    state_dir().join("sessions").join(format!("{key}.fixed"))
+}
+
 /// The checked-out branch, read straight from `<gitdir>/HEAD` — no git spawn
 /// on this path (session-start already spawns elsewhere). Lives in `journal`
 /// beside the git-dir traversal the journal root uses too, so the two cannot
@@ -187,24 +194,23 @@ pub(crate) fn prune_sessions(dir: &Path) {
     }
 }
 
-/// The stashed risk note and capture-reject hint, if any — left on disk until
-/// `clear_stash`, so a push that had no budget for them leaves them for the next.
-pub(crate) fn peek_stash(session: &str, root: &Path) -> (Option<String>, Option<String>) {
+/// The stashed risk note, capture-reject hint and fix phrase, if any — left
+/// on disk until `clear_stash`, so a push that had no budget for them leaves
+/// them for the next.
+pub(crate) fn peek_stash(session: &str, root: &Path) -> [Option<String>; 3] {
     let peek = |path: &Path| {
         let s = std::fs::read_to_string(path).ok()?;
         let s = s.trim().to_string();
         (!s.is_empty()).then_some(s)
     };
-    (
-        peek(&risk_path(session, root)),
-        peek(&hint_path(session, root)),
-    )
+    [risk_path, hint_path, fixed_path].map(|p| peek(&p(session, root)))
 }
 
-/// Delete both stashes — once their line was said, never before.
+/// Delete the stashes — once their line was said, never before.
 pub(crate) fn clear_stash(session: &str, root: &Path) {
-    let _ = std::fs::remove_file(risk_path(session, root));
-    let _ = std::fs::remove_file(hint_path(session, root));
+    for p in [risk_path, hint_path, fixed_path] {
+        let _ = std::fs::remove_file(p(session, root));
+    }
 }
 
 /// One `{"path","at"[, "worktree","session"]}` line per edit event, in order —

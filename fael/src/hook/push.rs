@@ -23,20 +23,34 @@ fn risk_line(marker: &str, files: &[String]) -> String {
     )
 }
 
+/// The stashed fix line (PLAN-fael-experience-loop chunk 5a): the agent said
+/// it fixed a bug and filed nothing — the add + close that keeps it.
+fn fixed_line(phrase: &str, files: &[String]) -> String {
+    format!(
+        "fael: this session said it fixed a bug (\"{phrase}\") with no issue filed or closed since — keep it for the next agent: fael add issue \"<what broke>\" --files {} --key <area:topic> then fael close --key <area:topic> \"<cause> → <fix>; tried <what failed>; guard `<test path>`\"\n",
+        files.join(",")
+    )
+}
+
 /// The lines stop stashed for this push — the Weak risk mention and the
-/// capture-reject hint, whether or not rows join them. Joined, or `None` when
-/// there are none. Only looked at: `push` clears them once they were said, so
-/// a push with no budget left leaves them for the next. Stop stashed them for
+/// capture-reject hint (one notice), and the fix line, whether or not rows
+/// join them. Only looked at: `push` clears them once they were said, so a
+/// push with no budget left leaves them for the next. Stop stashed them for
 /// the session's own thread — a sub-agent's push leaves them there.
-fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Option<String> {
+fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
     if c.session.is_empty() || !c.agent.is_empty() {
-        return None;
+        return vec![];
     }
-    let (risk, hint) = peek_stash(&c.session, &c.repo.root);
+    let [risk, hint, fixed] = peek_stash(&c.session, &c.repo.root);
     let risk = risk.map(|m| risk_line(&m, files));
     let hint = hint.map(|h| format!("fael: {h}"));
-    let lines: Vec<String> = risk.into_iter().chain(hint).collect();
-    (!lines.is_empty()).then(|| lines.join("\n"))
+    let notice: Vec<String> = risk.into_iter().chain(hint).collect();
+    let notice = (!notice.is_empty()).then(|| Line::notice(format!("{}\n", notice.join("\n"))));
+    let fixed = fixed.map(|p| Line {
+        kind: Kind::Fixed,
+        text: fixed_line(&p, files),
+    });
+    notice.into_iter().chain(fixed).collect()
 }
 
 /// Render the selected rows with the token budget — the hard cap after the
@@ -199,7 +213,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     };
     let sel = hub_select(tiered, said, &focus, &policy, &mut out, &files);
     let notes = stashed(&c, &files);
-    let has_notes = notes.is_some();
+    let has_notes = !notes.is_empty();
     let mut blobs = Blobs::new();
     let (body, n, bodies) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
@@ -226,7 +240,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         text: format!("{}\n", h.text),
     }));
     lines.extend(check::asks(&ask, &t0, said, edit));
-    lines.extend(notes.map(|n| Line::notice(format!("{n}\n"))));
+    lines.extend(notes);
     // the hint and the stashed notice share the budget the rows left
     if out.say_within(policy.budget, lines) && has_notes {
         clear_stash(&c.session, &c.repo.root);

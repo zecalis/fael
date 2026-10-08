@@ -1,7 +1,7 @@
 //! `[lang]` config + core language packs (PLAN-fael-languages chunk 1):
 //! the registry, the Stop-hook matcher and the row-language warning.
 
-use fael_core::{Config, by_name, marker_hit, row_language_check};
+use fael_core::{Config, by_name, fixed_hit, marker_hit, row_language_check};
 
 fn en_th() -> Vec<&'static fael_core::Lang> {
     vec![by_name("english").unwrap(), by_name("thai").unwrap()]
@@ -216,4 +216,23 @@ fn thai_rows_pass_when_allowed_cjk_still_warns() {
     assert!(w.contains("english/thai"), "{w}");
     // title counts, same as before
     assert!(row_language_check(&c, Some("バグ"), "plain text").is_some());
+}
+
+#[test]
+fn fix_phrases_fire_in_both_languages_not_in_code_or_denial() {
+    let hit = |t: &str| fixed_hit(t, &en_th());
+    assert_eq!(
+        hit("Fixed the bug: the cap was off by one").as_deref(),
+        Some("fixed the bug")
+    );
+    assert_eq!(
+        hit("The root cause was a stale cache").as_deref(),
+        Some("root cause was")
+    );
+    assert_eq!(hit("แก้บั๊กแล้ว ตัวนับเกินหนึ่ง").as_deref(), Some("แก้บั๊กแล้ว"));
+    assert_eq!(hit("I have not fixed the bug yet"), None);
+    assert_eq!(hit("run `fixed the bug` in the log"), None);
+    assert_eq!(hit("> fixed the bug"), None);
+    assert_eq!(fixed_hit("fixed the bug", &[]), None, "no pack, no rule");
+    assert_eq!(fixed_hit("แก้บั๊กแล้ว", &en_only()), None);
 }

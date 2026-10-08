@@ -203,11 +203,15 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, response: &Value) 
     out.and(commit_reply(e, tool, input))
 }
 
+const FIX_COMMIT: &str = "fael: this `fix:` commit names no fael row and this session closed none — keep what broke for the next agent: fael add issue \"<what broke>\" --key <area:topic> then fael close --key <area:topic> \"<cause> → <fix>; tried <what failed>; guard `<test path>`; <sha>\"\n";
+
 /// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):
 /// one line per cited id with its ready `fael close`, each id once per
-/// session. No commit, no open cite, or every id already said = silence.
-/// The line is a `Cited` kind through the `Outbox` like every other push
-/// line, with its own usage row so `fael stats` reads its yield.
+/// session. A `fix:` commit naming no row in a session that closed none
+/// (PLAN-fael-experience-loop chunk 5b): the add + close that keeps it, once
+/// per session. Nothing to say = silence. Each line is its kind through the
+/// `Outbox` like every other push line, with a usage row so `fael stats`
+/// reads its yield.
 fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
     let no = Reply::default;
     if !SHELLS.contains(&tool.to_ascii_lowercase().as_str()) {
@@ -236,9 +240,6 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
         .into_iter()
         .filter(|id| !out.has(&format!("~cited:{id}")))
         .collect();
-    if fresh.is_empty() {
-        return no();
-    }
     let text: String = fresh
         .iter()
         .map(|id| format!("fael: {id} cited in a commit — done? `fael close {id} \"<why>\"`\n"))
@@ -247,6 +248,14 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
         kind: super::say::Kind::Cited { ids: fresh.clone() },
         text,
     });
+    if super::cited::fix_uncited(&c.log, input)
+        && !super::tally::closed_any(&c.session, &c.repo.root)
+    {
+        out.say(super::say::Line {
+            kind: super::say::Kind::FixCommit,
+            text: FIX_COMMIT.into(),
+        });
+    }
     let r = out.reply();
     if let Some(context) = r.context() {
         let meta = super::asks::UsageMeta {

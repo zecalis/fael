@@ -83,6 +83,13 @@ pub(crate) fn first(session: &str, root: &Path, what: &str, item: &str) -> bool 
     true
 }
 
+/// True when this session closed a row (a `closed <id>` line).
+pub(crate) fn closed_any(session: &str, root: &Path) -> bool {
+    lines(session, root)
+        .lines()
+        .any(|l| l.starts_with("closed "))
+}
+
 fn lines(session: &str, root: &Path) -> String {
     std::fs::read_to_string(path(session, root)).unwrap_or_default()
 }

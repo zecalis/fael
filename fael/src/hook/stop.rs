@@ -1,11 +1,13 @@
 //! The stop event. It files the reply's `fael <kind>:` lines (`capture`),
-//! and stashes a bug announcement with no issue row for the next push to
-//! show once. It never blocks: fael never starts an agent turn.
+//! and stashes a fix or bug announcement with no issue or close after it for
+//! the next push to show once. It never blocks: fael never starts an agent turn.
 
 use super::capture;
-use super::markers::{bug_signal_from_transcript, has_bug_marker};
+use super::markers::{has_bug_marker, has_fix_phrase, signal_from_transcript};
 use super::protocol::{Event, Reply, ctx};
-use super::state::{file_birth_ms, now_rfc3339, risk_path, session_key, state_dir};
+use super::state::{
+    file_birth_ms, fixed_path, now_rfc3339, risk_path, seen_path, session_key, state_dir,
+};
 use crate::core;
 use std::path::Path;
 
@@ -72,8 +74,9 @@ fn adopted(c: &super::protocol::Ctx) -> bool {
     crate::journal::home(&c.repo).is_some()
 }
 
-/// File the reply's capture lines; a bug announcement with no issue row since
-/// is stashed for the next push. Never blocks — fael never starts a turn.
+/// File the reply's capture lines; a fix or bug announcement with no issue
+/// or close since is stashed for the next push — the fix phrase first, its
+/// line asks for the whole cause → fix. Never blocks — fael never starts a turn.
 fn decide(e: &Event) -> Reply {
     let no = Reply::default();
     // before the reply's lines are filed: an issue they write clears the
@@ -95,8 +98,13 @@ fn decide(e: &Event) -> Reply {
     let Some(since_ms) = session_start(e) else {
         return no;
     };
-    if let Some(marker) = bug_marker(e, &c.log, since_ms, stop_ms, &c.repo.cfg) {
-        stash_risk(&c.session, &c.repo.root, &marker);
+    let cfg = &c.repo.cfg;
+    let fixed = signal(e, &c.log, (since_ms, stop_ms), &|t| has_fix_phrase(t, cfg));
+    if fixed.is_some_and(|p| stash_fixed(&c.session, &c.repo.root, &p)) {
+        return no;
+    }
+    if let Some(marker) = signal(e, &c.log, (since_ms, stop_ms), &|t| has_bug_marker(t, cfg)) {
+        stash(&c.session, &risk_path(&c.session, &c.repo.root), &marker);
     }
     no
 }
@@ -117,33 +125,32 @@ fn collect_reply(e: &Event, c: &super::protocol::Ctx) -> capture::Filed {
     }
 }
 
-/// The turn's bug announcement, if any — free text, or the transcript tail
-/// after the latest user message — unless an issue row at or after the match
-/// already clears it. An issue filed before the words never does.
-/// Phrases come from the repo's `[lang] marker` packs (PLAN-fael-languages).
-/// Claude may fire Stop before the final reply reaches the transcript, so
-/// the client's copy of it (`reply`) is read when the file has no match.
-fn bug_marker(
+/// The turn's announcement `hit` finds (a bug marker, a fix phrase), if any —
+/// free text, or the transcript tail after the latest user message — unless
+/// an issue or a close at or after the match already clears it. One filed
+/// before the words never does. Phrases come from the repo's `[lang] marker`
+/// packs (PLAN-fael-languages). Claude may fire Stop before the final reply
+/// reaches the transcript, so the client's copy of it (`reply`) is read when
+/// the file has no match. `(since_ms, stop_ms)`: session start, this stop.
+fn signal(
     e: &Event,
     log: &core::Log,
-    since_ms: i64,
-    stop_ms: i64,
-    cfg: &core::Config,
+    (since_ms, stop_ms): (i64, i64),
+    hit: &dyn Fn(&str) -> Option<String>,
 ) -> Option<String> {
     let (marker, at_ms) = match &e.text {
-        Some(text) => (has_bug_marker(text, cfg)?, since_ms),
+        Some(text) => (hit(text)?, since_ms),
         None => e
             .session
             .as_deref()
             .map(Path::new)
             .filter(|t| t.is_file())
-            .and_then(|t| bug_signal_from_transcript(t, since_ms, cfg))
-            .or_else(|| Some((has_bug_marker(e.reply.as_deref()?, cfg)?, stop_ms)))?,
+            .and_then(|t| signal_from_transcript(t, since_ms, hit))
+            .or_else(|| Some((hit(e.reply.as_deref()?)?, stop_ms)))?,
     };
-    let cleared = log
-        .rows
-        .iter()
-        .any(|r| r.kind == "issue" && core::ts_ms(&r.ts).is_some_and(|ms| ms >= at_ms));
+    let after = |r: &core::Row| core::ts_ms(&r.ts).is_some_and(|ms| ms >= at_ms);
+    let cleared =
+        log.rows.iter().any(|r| r.kind == "issue" && after(r)) || log.closes.iter().any(after);
     (!cleared).then_some(marker)
 }
 
@@ -155,19 +162,29 @@ fn session_start(e: &Event) -> Option<i64> {
     core::ts_ms(s).or_else(|| file_birth_ms(Path::new(s)).map(|m| m as i64))
 }
 
-/// Stash a risk line for the next push in this session — shown once,
-/// then deleted. Empty session = no stash (no push would ever show it).
-fn stash_risk(session: &str, worktree: &Path, marker: &str) {
-    if session.is_empty() {
-        return;
+/// Stash a fix phrase for the next push, unless this session's fix line was
+/// already said (`~fixed`, once per session) — false then, so the bug marker
+/// may still be stashed. Empty session = no stash.
+fn stash_fixed(session: &str, worktree: &Path, phrase: &str) -> bool {
+    let seen = std::fs::read_to_string(seen_path(session, "", worktree)).unwrap_or_default();
+    if seen.lines().any(|l| l == super::say::FIXED_KEY) {
+        return false;
     }
-    let path = risk_path(session, worktree);
-    if path
-        .parent()
-        .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
+    stash(session, &fixed_path(session, worktree), phrase)
+}
+
+/// Stash a phrase at `path`, a session file the next push in this session
+/// shows once, then deletes. Empty session = no stash (no push would ever
+/// show it) — false.
+fn stash(session: &str, path: &Path, marker: &str) -> bool {
+    if !session.is_empty()
+        && path
+            .parent()
+            .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
     {
-        let _ = std::fs::write(&path, format!("{marker}\n"));
+        return std::fs::write(path, format!("{marker}\n")).is_ok();
     }
+    false
 }
 
 /// True when this session already marked this worktree + kind — else record

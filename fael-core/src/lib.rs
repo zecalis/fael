@@ -38,7 +38,7 @@ pub use hook::last_row_ms;
 pub use id::{
     looks_like_id, now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id,
 };
-pub use lang::{Hit, Lang, by_name, marker_hit, row_language_check};
+pub use lang::{Hit, Lang, by_name, fixed_hit, marker_hit, row_language_check};
 pub use log::{
     Adopted, BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, adopt_tree, append,
     bump_row, close, close_row, decode_text, fold_bumps, is_month, mv_row, needs_seal, parse,

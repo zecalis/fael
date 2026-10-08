@@ -17,6 +17,7 @@
 //!   bumping the (already closed) issue landed within a day after the line
 //! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
 //!   issue naming the finding's file after it
+//! - `fixed` / `fixcommit` (experience-loop chunk 5) — the session filed an issue after it
 //! - `notice` — the session filed a row after it
 //!
 //! An upper bound: the agent may have done it anyway — use it only to cut.
@@ -94,9 +95,21 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 12] = [
-    "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice", "cited", "merge",
-    "finding", "check",
+pub const KINDS: [&str; 14] = [
+    "row",
+    "note",
+    "brief",
+    "ask",
+    "pointer",
+    "count",
+    "bodies",
+    "notice",
+    "cited",
+    "merge",
+    "finding",
+    "check",
+    "fixed",
+    "fixcommit",
 ];
 
 /// Whether a row superseding or bumping `id` landed within a day after `ms`.
@@ -207,6 +220,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                         r.kind == "issue" && r.files.iter().any(|f| f == key)
                     }),
                 ),
+                "fixed" | "fixcommit" => (kind, filed_after(log, s, ms, |r| r.kind == "issue")),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
                 "count" => ("count", pulled(&|p| counted(key, p))),
                 "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
@@ -318,7 +332,7 @@ pub(super) mod tests {
             r#""event":"session-start","ids":["D","U"],"said":[{"kind":"brief"}]"#,
         ) + &line(
             1,
-            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"finding","key":"a.rs"},{"kind":"finding","key":"z.rs"},{"kind":"notice"}]"#,
+            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"finding","key":"a.rs"},{"kind":"finding","key":"z.rs"},{"kind":"notice"},{"kind":"fixed"},{"kind":"fixcommit"}]"#,
         ) + &line(
             2,
             r#""event":"prompt","ids":[],"said":[{"kind":"pointer","key":"k:x"},{"kind":"pointer","key":"k:y"}]"#,
@@ -351,6 +365,7 @@ pub(super) mod tests {
             "F filed on a.rs by s1, none on z.rs"
         );
         assert_eq!(got("notice"), (1, 1), "F filed by s1 after it");
+        assert_eq!([got("fixed"), got("fixcommit")], [(1, 1); 2], "F after");
         assert_eq!(got("brief"), (2, 1), "D in context, U never");
         // a pull's outcome line is no injection
         assert_eq!(p.n, 3, "session-start + edit + prompt");
