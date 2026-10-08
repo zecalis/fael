@@ -1,8 +1,13 @@
 //! Language packs for the Stop-hook markers and the row-language warning
 //! (PLAN-fael-languages chunk 1): every phrase lives behind `.fael/config.toml`
-//! `[lang]`, so this file names no language of its own — adding one is a new
-//! `Lang` below plus one arm in `by_name`. Core never spawns here: matching
-//! and detection are pure text.
+//! `[lang]`, so this file names no language of its own — each pack is a file
+//! under `lang/`; adding one is a new `lang/<name>.rs` with its `Lang`, its
+//! `mod` line and one arm in `by_name`, plus its cases in
+//! `fael-core/tests/lang.rs`. Core never spawns here: matching and detection
+//! are pure text.
+
+mod english;
+mod thai;
 
 use crate::Config;
 use std::ops::RangeInclusive;
@@ -31,89 +36,13 @@ pub struct Lang {
     pub script: &'static [RangeInclusive<char>],
 }
 
-static EN: Lang = Lang {
-    name: "english",
-    bug: &[
-        "found a bug",
-        "found the bug",
-        "found bug",
-        "found a real bug",
-        "found the real bug",
-        "this is a bug",
-        "that is a bug",
-        "it is a bug",
-        "it's a bug",
-        "bug confirmed",
-        "confirmed bug",
-        "confirmed a bug",
-    ],
-    risk: &[
-        "inconsistent",
-        "inconsistency",
-        "mismatch",
-        "doesn't match",
-        "does not match",
-        "out of sync",
-        "might break",
-        "could break",
-        "will break",
-        "likely to break",
-    ],
-    fixed: &[
-        "fixed the bug",
-        "fixed a bug",
-        "fixed this bug",
-        "fixed the regression",
-        "root cause was",
-        "root cause is",
-    ],
-    negations: &["not", "no", "if"],
-    risk_negations: &["not", "no"],
-    conditionals: &["if", "unless"],
-    script: &['A'..='Z', 'a'..='z', 'À'..='ſ', 'ƀ'..='ɏ', 'Ḁ'..='ỿ'],
-};
-
-static TH: Lang = Lang {
-    name: "thai",
-    bug: &["เจอบั๊ก", "พบว่าเป็นบั๊ก", "เจอว่าเป็นบั๊ก", "บั๊กที่เจอ", "บั๊กที่พบ"],
-    risk: &[
-        "ไม่ตรงกัน",
-        "ไม่สอดคล้อง",
-        "ขัดแย้งกัน",
-        "อาจพัง",
-        "น่าจะพัง",
-        "อาจมีปัญหา",
-        "น่าจะมีปัญหา",
-        "มีความเสี่ยง",
-    ],
-    fixed: &[
-        "แก้บั๊กแล้ว",
-        "แก้ bug แล้ว",
-        "แก้บั๊กเรียบร้อย",
-        "สาเหตุของบั๊ก",
-        "ต้นเหตุของบั๊ก",
-        // the "root cause was" of a Thai reply: 51 of 17.8k assistant
-        // messages in 14 days, about half naming a bug's cause
-        "ต้นเหตุคือ",
-        "สาเหตุคือ",
-        "เจอต้นเหตุ",
-        "พบต้นเหตุ",
-    ],
-    negations: &["ไม่", "จะ", "ถ้า", "อาจ"],
-    risk_negations: &["ไม่"],
-    conditionals: &["ถ้า", "หาก", "สมมติ"],
-    // one range is the whole Thai block — the slice shape stays so EN/TH match
-    #[allow(clippy::single_range_in_vec_init)]
-    script: &['\u{0E00}'..='\u{0E7F}'],
-};
-
 /// The pack behind a `[lang]` name (`"english"`, `"thai"`); `None` is an
 /// unknown name, which `Config::from_toml` rejects — silently matching
 /// nothing would leave the hook blind, worse than an error.
 pub fn by_name(name: &str) -> Option<&'static Lang> {
     match name {
-        "english" => Some(&EN),
-        "thai" => Some(&TH),
+        "english" => Some(&english::EN),
+        "thai" => Some(&thai::TH),
         _ => None,
     }
 }
