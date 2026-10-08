@@ -63,3 +63,41 @@ fn five_findings_per_session_and_nothing_for_an_empty_report() {
     );
     assert_eq!(report(&d, "s3", &[]), "");
 }
+
+/// No session id: nothing remembered, so every call says again, still five at most.
+#[test]
+fn no_session_says_every_call_but_five_at_most() {
+    let d = repo();
+    let files: Vec<String> = (0..8).map(|i| format!("src/f{i}.rs")).collect();
+    let call: Vec<(&str, i64)> = files.iter().map(|f| (f.as_str(), 1)).collect();
+    for _ in 0..2 {
+        assert_eq!(report(&d, "", &call).matches("fael add issue").count(), 5);
+    }
+}
+
+/// A finding already offered takes no slot of the cap: the fresh ones behind it still come.
+#[test]
+fn an_offered_finding_does_not_use_up_the_cap() {
+    let d = repo();
+    report(
+        &d,
+        "s1",
+        &[("src/a.rs", 1), ("src/b.rs", 1), ("src/c.rs", 1)],
+    );
+    let again = report(
+        &d,
+        "s1",
+        &[
+            ("src/a.rs", 1),
+            ("src/b.rs", 1),
+            ("src/c.rs", 1),
+            ("src/d.rs", 1),
+            ("src/e.rs", 1),
+        ],
+    );
+    assert_eq!(again.matches("fael add issue").count(), 2, "{again}");
+    assert!(
+        again.contains("src/d.rs") && again.contains("src/e.rs"),
+        "{again}"
+    );
+}

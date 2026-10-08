@@ -80,7 +80,7 @@ fn install_all_three_idempotent_and_replaces_fapony_on_request() {
     assert!(out.contains("! fapony's Stop"), "{out}");
     let s = read(&claude);
     assert!(s.starts_with("{\n  \"theme\""), "key order kept: {s}");
-    for sub in ["stop", "session-start", "read", "edit", "search"] {
+    for sub in ["stop", "session-start", "read", "edit", "search", "review"] {
         assert!(
             s.contains(&format!("\"fael hook {sub} --client claude\"")),
             "{sub}: {s}"
@@ -89,6 +89,7 @@ fn install_all_three_idempotent_and_replaces_fapony_on_request() {
     assert!(
         s.contains("Edit|Write|MultiEdit|NotebookEdit")
             && s.contains("Glob|Grep|Bash")
+            && s.contains("\"matcher\": \"ReportFindings\"")
             && s.contains("hook-stop"),
         "{s}"
     );
@@ -96,7 +97,8 @@ fn install_all_three_idempotent_and_replaces_fapony_on_request() {
     assert!(
         h.contains("hook edit --client codex")
             && h.contains("hook search --client codex")
-            && !h.contains("hook read --client codex"),
+            && !h.contains("hook read --client codex")
+            && !h.contains("hook review"),
         "{h}"
     );
     let t = read(&codex_cfg);

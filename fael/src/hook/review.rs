@@ -98,6 +98,24 @@ mod tests {
     }
 
     #[test]
+    fn a_thai_summary_is_cut_on_a_char_boundary() {
+        let long = "ผิด".repeat(SUMMARY_MAX);
+        assert_eq!(summary(&long).chars().count(), SUMMARY_MAX + 1);
+    }
+
+    #[test]
+    fn a_malformed_report_says_nothing() {
+        let out = Outbox::open(None);
+        for input in [
+            json!({}),
+            json!({"findings": "x"}),
+            json!({"findings": [{"file": "a.rs"}, {"summary": "x"}, {"file": 3, "summary": 4}]}),
+        ] {
+            assert!(lines(&input, &out).is_empty(), "{input}");
+        }
+    }
+
+    #[test]
     fn a_finding_is_offered_once_and_five_per_session() {
         let f = |file: &str, line: i64| json!({"file": file, "summary": "broken", "line": line});
         let findings: Vec<Value> = (0..7).map(|i| f(&format!("a{i}.rs"), 1)).collect();
