@@ -269,7 +269,7 @@ pub(crate) fn edit_hint(
 /// Did the hook's session file `r`? Claude keys the hook by its transcript
 /// path while the row carries the bare session id — the path's stem — so
 /// either counts (as stats attribute it, 01M3V9QAN).
-fn own_row(r: &core::Row, session: &str) -> bool {
+pub(super) fn own_row(r: &core::Row, session: &str) -> bool {
     r.session()
         .is_some_and(|s| s == session || Path::new(session).file_stem().is_some_and(|f| *f == *s))
 }

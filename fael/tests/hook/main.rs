@@ -32,6 +32,7 @@ mod gate;
 mod handoff;
 mod incident;
 mod memory_line;
+mod merge;
 mod notify;
 mod outcomes;
 mod overlap;
