@@ -44,6 +44,22 @@ how many open rows the code has outgrown, and how much of what one agent wrote r
 another (`fael stats` → `across agents`). Rounds and tokens are a cost to keep low, never
 a promise.
 
+What the ledger accumulates is **the repo's experience**: what a long-serving member of the
+team carries and a new hire does not — what broke here and how it was fixed, what was decided
+and why, which constraints this repo works under (its platforms, its CI, its conventions). An
+agent arrives capable but new to the repo; fael puts that experience in front of it at the file
+it touches, so it works the way this repo needs. Every vendor's model improves for everyone;
+this repo's history is its own, and only a per-file, team-shared record carries it.
+
+The unit of experience is a fixed bug on a file: the issue says what broke, its close says how
+it was fixed — cause, fix, what was tried and failed, and the guard (a test or check path) —
+the part no diff, test or commit message keeps. It is captured when the fix is done, however
+the bug was found (a failing test, a test written afterwards, a review). Fael never infers a
+bug from test output or from what prose means; it asks only on evidence the agent itself gave
+(a declared bug or fix, a review finding) with nothing filed. The design question for every
+feature: does it help an agent new to this repo act like one who has worked here — not make
+the agent smarter in general?
+
 A feature ships only if it does at least one of these **and** gives nothing back:
 
 - preserves work context

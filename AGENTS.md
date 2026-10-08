@@ -7,6 +7,10 @@ assigned issues, claims, where a plan stopped) that pass between sessions and ag
 personal notebook, not a generic AI memory store, and not a process or git guard. Value is work context
 (`task (key) → decision → evidence → outcome → closure`) in front of the right agent, once,
 at the file it touches — never more rows. Rounds and tokens are a cost to keep low, never a promise.
+What the ledger accumulates is the repo's experience: what broke here and how it was fixed
+(a closed issue — the close holds cause → fix → guard), what was decided and why, which
+constraints this repo works under. Design every feature for one question: does it help an
+agent new to this repo act like one who has worked here — not make the agent smarter in general?
 
 Ship a feature only if it preserves/repairs context, retrieves the right context, cuts
 repeated agent work, or improves team reuse — and never starts an agent turn or
