@@ -66,6 +66,12 @@ fn pr_like(w: &str) -> bool {
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// A close text that names its fix: a sha or a `(#N)` — the evidence `fixed`
+/// counts, and the one an edit's carry-back line reads (`fix_close`).
+pub(crate) fn names_fix(text: &str) -> bool {
+    words(text).any(|w| sha_like(w) || pr_like(w))
+}
+
 /// Every close text of `log`, by the issue it closes: close rows and the
 /// close `fael compact` folded into the row.
 fn close_texts(log: &Log) -> HashMap<&str, Vec<&str>> {
@@ -161,10 +167,7 @@ pub(super) fn experience(
             if with_check[repo.as_str()].contains(id) {
                 checked.insert(id);
             }
-            let evidence = said
-                .iter()
-                .flat_map(|t| words(t))
-                .any(|w| sha_like(w) || pr_like(w));
+            let evidence = said.iter().any(|t| names_fix(t));
             if !evidence && !in_commit.contains(id) {
                 continue;
             }

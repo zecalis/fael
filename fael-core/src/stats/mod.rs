@@ -26,7 +26,7 @@ mod retire;
 mod retire_split;
 mod said;
 #[cfg(test)]
-mod said_finding;
+mod said_tests;
 mod tune;
 mod unused;
 mod value;
@@ -42,6 +42,7 @@ pub use day::{
     BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
+pub(crate) use experience::names_fix;
 pub use experience::{Commit, Commits, Experience};
 pub use friction::{FIRST_CALL_WINDOW, Friction, Tally};
 pub use incident::{INCIDENT_KEY, Incidents};

@@ -70,6 +70,12 @@ pub(super) fn all() -> Vec<Line> {
             Kind::FixCommit,
             "fael: a fix: commit names no fael row — fael add issue \"x\" --key a:b then fael close --key a:b \"y\"\n",
         ),
+        line(
+            Kind::Carry {
+                id: "01CARRY".into(),
+            },
+            "fael: a.rs broke before — 01CARRY \"x\" was fixed: y in e6deb61 · whole story: `fael find 01CARRY`\n",
+        ),
     ]
 }
 
@@ -87,6 +93,7 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Notice => 9,
         Kind::Fixed => 10,
         Kind::FixCommit => 11,
+        Kind::Carry { .. } => 12,
     }
 }
 
@@ -358,7 +365,8 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "check",
             "notice",
             "fixed",
-            "fixcommit"
+            "fixcommit",
+            "carry"
         ]
     );
 }

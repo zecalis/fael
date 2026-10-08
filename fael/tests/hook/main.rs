@@ -20,6 +20,7 @@ mod adopted;
 mod autosync;
 mod autoupdate;
 mod capture;
+mod carry;
 mod changed_hint;
 mod check;
 mod clients;

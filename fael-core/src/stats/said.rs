@@ -15,6 +15,9 @@
 //!   directory over one, or its key
 //! - `check` (PLAN-fael-experience-loop chunk 3) — a row superseding or
 //!   bumping the (already closed) issue landed within a day after the line
+//! - `carry` (PLAN-fael-experience-loop chunk 6) — the session pulled the
+//!   closed issue's body (`fael find <id>`, the line's command) after it, or
+//!   a row superseding or bumping it landed within a day
 //! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
 //!   issue naming the finding's file after it
 //! - `fixed` / `fixcommit` (experience-loop chunk 5) — the session filed an issue after it
@@ -95,7 +98,7 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 14] = [
+pub const KINDS: [&str; 15] = [
     "row",
     "note",
     "brief",
@@ -108,6 +111,7 @@ pub const KINDS: [&str; 14] = [
     "merge",
     "finding",
     "check",
+    "carry",
     "fixed",
     "fixcommit",
 ];
@@ -207,12 +211,15 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "brief" => ("brief", used(key)),
                 // the generic clause names no row: nothing to join it to
                 "ask" if key == "*" => continue,
-                "ask" => ("ask", retired(key)),
-                "cited" => ("cited", retired(key)),
-                "merge" => ("merge", retired(key)),
+                "ask" | "cited" | "merge" => (kind, retired(key)),
                 // the issue was closed before the line, so `retired` (the
                 // earliest event) never lands after it: look for a later one
                 "check" => ("check", reopened(log, key, ms)),
+                // the agent types a short id: a prefix of the row's
+                "carry" => (
+                    "carry",
+                    pulled(&|p| p.id.is_some_and(|i| key.starts_with(i))) || reopened(log, key, ms),
+                ),
                 // an issue the session filed on the finding's file after it
                 "finding" => (
                     "finding",
@@ -369,32 +376,5 @@ pub(super) mod tests {
         assert_eq!(got("brief"), (2, 1), "D in context, U never");
         // a pull's outcome line is no injection
         assert_eq!(p.n, 3, "session-start + edit + prompt");
-    }
-
-    #[test]
-    fn a_count_line_earns_on_the_call_it_printed() {
-        let pull = |files: &[&'static str], key: Option<&'static str>| Pull {
-            ms: 0,
-            key,
-            files: files.to_vec(),
-            id: None,
-        };
-        let files = |p: &Pull| counted("src/a.rs,src/b.rs|file", p);
-        assert!(files(&pull(&["src/b.rs"], None)), "a file it named");
-        assert!(!files(&pull(&["lib/"], None)), "another directory");
-        assert!(
-            !files(&pull(&["src/a"], None)),
-            "a prefix that is no directory"
-        );
-        assert!(!files(&pull(&[], Some("k:a"))), "a key pull");
-        let dir = |p: &Pull| counted("src/a.rs|dir:src/", p);
-        assert!(dir(&pull(&["src/"], None)), "`+N more in src/`");
-        assert!(dir(&pull(&["src"], None)), "the same call, normalised");
-        let key = |p: &Pull| counted("src/a.rs|key:auth:session", p);
-        assert!(key(&pull(&[], Some("auth:session"))), "`+N more with #key`");
-        assert!(!key(&pull(&[], Some("auth:other"))), "a key it never named");
-        assert!(!key(&pull(&["src/a.rs"], None)), "a file pull");
-        let keys = |p: &Pull| counted("src/a.rs|keys", p);
-        assert!(keys(&pull(&[], Some("any:key"))), "`+N more under 3 keys`");
     }
 }

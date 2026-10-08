@@ -58,6 +58,21 @@ pub fn stale_close_refs(root: &Path, log: &Log, row: &Row, al: &Aliases) -> Vec<
     gone
 }
 
+/// The text `row` was closed with when it names its fix — a sha or `(#N)`,
+/// what `fael stats` counts as fixed (PLAN-fael-experience-loop chunk 6):
+/// the newest close record, else the close `fael compact` folded in. A fix
+/// linked only by a commit naming the id is not here: the push reads no git.
+pub fn fix_close<'a>(log: &'a Log, row: &'a Row) -> Option<&'a str> {
+    let close = log
+        .closes
+        .iter()
+        .filter(|c| c.reference.as_deref() == Some(row.id.as_str()))
+        .max_by(|a, b| a.ts.cmp(&b.ts))
+        .map(|c| c.text.as_str());
+    let folded = || row.extra.get("closed").and_then(|c| c["text"].as_str());
+    close.or_else(folded).filter(|t| crate::stats::names_fix(t))
+}
+
 fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<String> {
     let mut out = vec![];
     for c in backtick_paths(text) {
