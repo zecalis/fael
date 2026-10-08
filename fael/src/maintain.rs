@@ -16,6 +16,7 @@ mod unstamped;
 
 use crate::{Args, core, repo};
 pub(crate) use alive::BranchFiles;
+pub(crate) use merged::default_branch;
 
 /// Full ids of `rows` whose every file is gone from `root` — through the
 /// alias resolver, and never a file alive on the row's own unmerged branch

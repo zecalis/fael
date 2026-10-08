@@ -279,6 +279,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     if let Some(line) = loop_line(s) {
         println!("{line}");
     }
+    for line in super::experience_text::experience_lines(s) {
+        println!("{line}");
+    }
     if let Some(line) = cross_line(s) {
         println!("{line}");
     }

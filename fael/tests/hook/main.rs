@@ -26,6 +26,7 @@ mod close_hint;
 mod compact;
 mod day;
 mod decision;
+mod experience;
 mod focus;
 mod from_user;
 mod gate;

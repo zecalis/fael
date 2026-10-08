@@ -29,6 +29,7 @@ mod check;
 mod cited;
 mod claude;
 mod decision;
+mod experience_text;
 mod focus;
 mod friction;
 mod in_context;

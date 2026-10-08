@@ -73,7 +73,7 @@ fn rows(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Vec<String> {
 /// The remote's default branch from `origin/HEAD` (set by clone, or
 /// `git remote set-head origin -a`); no remote or no pointer → `main`.
 /// Shared with `shipped` (its `git branch --merged` source).
-pub(super) fn default_branch(root: &Path) -> String {
+pub(crate) fn default_branch(root: &Path) -> String {
     crate::git(
         root,
         &["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"],

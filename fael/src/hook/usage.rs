@@ -212,7 +212,39 @@ pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -
 
 /// The `Stats` `fael stats --json` prints — `fael report` renders the same one.
 pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stats::Stats {
-    core::stats::aggregate(&u.parsed, &u.logs, cfg, asks::constants().into(), rows)
+    let commits = u
+        .logs
+        .keys()
+        .filter_map(|repo| Some((repo.clone(), commits(repo, *u.parsed.first_seen.get(repo)?))))
+        .collect();
+    let constants = asks::constants().into();
+    core::stats::aggregate(&u.parsed, &u.logs, &commits, cfg, constants, rows)
+}
+
+/// The default branch's commits since the repo's first usage (H5 capture
+/// recall) — one `git log` per repo, read by `fael stats`, never on a push.
+/// No git, no branch: none.
+fn commits(repo: &str, since_ms: i64) -> Vec<core::stats::Commit> {
+    let root = Path::new(repo);
+    let branch = crate::maintain::default_branch(root);
+    let since = format!("--since={}", core::rfc3339(since_ms.max(0) as u64));
+    let log = |r: &str| {
+        crate::git(
+            root,
+            &["log", r, "--no-merges", &since, "--format=%H%x1f%B%x1e"],
+        )
+    };
+    let out = log(&format!("origin/{branch}")).or_else(|| log(&branch));
+    out.unwrap_or_default()
+        .split('\x1e')
+        .filter_map(|c| {
+            let (sha, message) = c.trim().split_once('\x1f')?;
+            Some(core::stats::Commit {
+                sha: sha.to_string(),
+                message: message.trim().to_string(),
+            })
+        })
+        .collect()
 }
 
 pub fn stats(a: &crate::args::Args) -> Result<(), String> {
