@@ -61,7 +61,7 @@ pub(crate) fn tools() -> Value {
                 "ids": {"type": "array", "items": {"type": "string"},
                     "description": "many ids, one reason"},
                 "key": str_("the one open row on this key"),
-                "text": str_("why, e.g. fixed in <sha>"),
+                "text": str_("why; a fixed bug: <cause> → <fix>; tried <what failed>; guard `<test path>`"),
             }},
         },
     ]);

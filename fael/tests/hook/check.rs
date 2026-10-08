@@ -139,3 +139,25 @@ fn a_read_is_silent_and_a_shell_edit_is_said() {
     assert!(ok, "{err}");
     assert!(out.contains("now gone"), "{out}");
 }
+
+/// The close shape the skill teaches (`<cause> → <fix>; tried …; guard
+/// `<test path>``): a bare file name in the prose is talk, not a check, so
+/// it stays silent while the file lives under a dir; the guard path is said
+/// once it is gone.
+#[test]
+fn the_taught_close_shape_says_only_its_guard() {
+    let d = repo();
+    std::fs::create_dir_all(d.join("tests")).unwrap();
+    std::fs::write(d.join("tests/retry.rs"), "\n").unwrap();
+    closed_with(
+        &d,
+        "`a.rs` retried forever → cap at 3; tried a sleep; guard `tests/retry.rs`",
+    );
+    assert!(!edit(&d, "s1").contains("now gone"));
+    std::fs::remove_file(d.join("tests/retry.rs")).unwrap();
+    let out = edit(&d, "s2");
+    assert!(
+        out.contains("pointing at `tests/retry.rs`, now gone") && !out.contains("`a.rs`"),
+        "{out}"
+    );
+}

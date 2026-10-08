@@ -14,7 +14,10 @@ close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage o
 `--replace "<old>" --with "<new>"`), in that same message.
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there, one per finding — do not wait for the end of the task.**
-That includes a bug in your own earlier work, a regression your change caused, and a problem a reviewer raised that outlives this turn — file it before the fix, then `fael close <id> "fixed in <sha>"`.
+That includes your own earlier bug, a regression you caused, and a reviewer's finding that outlives this turn.
+Fixed one with no row yet, however found (failing test, review, reading code)? File and close it in one command, commit or not:
+`fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; tried <what failed>; guard `<test path>`"`` (+ sha, `(#N)` once known).
+Name `(fael:<id>)` in the commit body — a squash keeps it.
 In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).
 
 - `fael find [<text>] [--files <path>]` — the session brief, rows about a file, or a text search
@@ -22,11 +25,11 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
   - the user said or decided it? `--from user`; ask them before you change a `(from user)` row
 - `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
-- Work for someone else, or your next session (the user moves to a new one): `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
+- Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
 Each row is read months later with no chat: one or two standalone sentences.
 `--files` names the paths or an anchor (`doc:pricing`) `fael find` showed — never
 invent one; left out, it is this session's edited files.
-An id is verified only once this session's `fael find` printed it as `- [<id>]` — never type
-one from memory. A listed id is a prefix of the full id `add` prints — either works.
+Type an id only once this session's `fael find` or `add` printed it — never from memory;
+the listed prefix works.
