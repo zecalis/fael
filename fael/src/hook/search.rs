@@ -203,7 +203,18 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, response: &Value) 
     out.and(commit_reply(e, tool, input))
 }
 
-const FIX_COMMIT: &str = "fael: this `fix:` commit names no fael row and this session closed none — keep what broke for the next agent: fael add issue \"<what broke>\" --key <area:topic> then fael close --key <area:topic> \"<cause> → <fix>; tried <what failed>; guard `<test path>`; <sha>\"\n";
+/// The fix commit line; `files` = what the session edited, else a
+/// placeholder — `fael add` rejects a row with no `--files`.
+fn fix_commit(files: &[String]) -> String {
+    let files = if files.is_empty() {
+        "<files the fix touched>".to_string()
+    } else {
+        files.join(",")
+    };
+    format!(
+        "fael: this `fix:` commit names no fael row and this session closed none — keep what broke for the next agent: fael add issue \"<what broke>\" --files {files} --key <area:topic> then fael close --key <area:topic> \"<cause> → <fix>; tried <what failed>; guard `<test path>`; <sha>\"\n"
+    )
+}
 
 /// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):
 /// one line per cited id with its ready `fael close`, each id once per
@@ -253,7 +264,7 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
     {
         out.say(super::say::Line {
             kind: super::say::Kind::FixCommit,
-            text: FIX_COMMIT.into(),
+            text: fix_commit(&super::state::edited_files(&c.session, &c.repo.root, 3)),
         });
     }
     let r = out.reply();

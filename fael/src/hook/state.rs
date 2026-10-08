@@ -234,6 +234,22 @@ pub(crate) fn session_edits(path: &Path) -> Vec<Edit> {
         .collect()
 }
 
+/// The files this session edited in this worktree, newest first, deduped, at
+/// most `n` — what a fix line names for `--files`, not the file the next push
+/// happens to touch. Empty = no edit recorded.
+pub(crate) fn edited_files(session: &str, root: &Path, n: usize) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for (path, ..) in session_edits(&edits_path(session, root)).into_iter().rev() {
+        if out.len() == n {
+            break;
+        }
+        if !out.contains(&path) {
+            out.push(path);
+        }
+    }
+    out
+}
+
 /// Append one line per file. Fails open like record_usage. Worktree and
 /// session ride along so `fael add` without `--files` can tell which session
 /// files are its own, in its repo (the filename hash is one-way).

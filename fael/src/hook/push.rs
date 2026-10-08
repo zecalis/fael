@@ -9,8 +9,8 @@ use super::decision::{self, Gate};
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{
-    clear_stash, edits_path, lock_seen, peek_stash, read_turn, record_edits, seen_path,
-    swap_touched, touched_path,
+    clear_stash, edited_files, edits_path, lock_seen, peek_stash, read_turn, record_edits,
+    seen_path, swap_touched, touched_path,
 };
 use super::usage::record_usage_shadow;
 use crate::{aliases, core};
@@ -46,9 +46,13 @@ fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
     let hint = hint.map(|h| format!("fael: {h}"));
     let notice: Vec<String> = risk.into_iter().chain(hint).collect();
     let notice = (!notice.is_empty()).then(|| Line::notice(format!("{}\n", notice.join("\n"))));
-    let fixed = fixed.map(|p| Line {
-        kind: Kind::Fixed,
-        text: fixed_line(&p, files),
+    // the fix is in what the session edited, not in the file this push is on
+    let fixed = fixed.map(|p| {
+        let edited = edited_files(&c.session, &c.repo.root, 3);
+        Line {
+            kind: Kind::Fixed,
+            text: fixed_line(&p, if edited.is_empty() { files } else { &edited }),
+        }
     });
     notice.into_iter().chain(fixed).collect()
 }
