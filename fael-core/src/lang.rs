@@ -92,6 +92,12 @@ static TH: Lang = Lang {
         "แก้บั๊กเรียบร้อย",
         "สาเหตุของบั๊ก",
         "ต้นเหตุของบั๊ก",
+        // the "root cause was" of a Thai reply: 51 of 17.8k assistant
+        // messages in 14 days, about half naming a bug's cause
+        "ต้นเหตุคือ",
+        "สาเหตุคือ",
+        "เจอต้นเหตุ",
+        "พบต้นเหตุ",
     ],
     negations: &["ไม่", "จะ", "ถ้า", "อาจ"],
     risk_negations: &["ไม่"],

@@ -230,6 +230,10 @@ fn fix_phrases_fire_in_both_languages_not_in_code_or_denial() {
         Some("root cause was")
     );
     assert_eq!(hit("แก้บั๊กแล้ว ตัวนับเกินหนึ่ง").as_deref(), Some("แก้บั๊กแล้ว"));
+    assert_eq!(hit("ต้นเหตุคือ cache ไม่หมดอายุ").as_deref(), Some("ต้นเหตุคือ"));
+    assert_eq!(hit("แก้แล้ว สาเหตุคือ pool ค้าง").as_deref(), Some("สาเหตุคือ"));
+    assert_eq!(hit("อาจสาเหตุคือ TS 7"), None, "a hedge right before");
+    assert_eq!(hit("คำว่า `ต้นเหตุคือ` ใน pack"), None);
     assert_eq!(hit("I have not fixed the bug yet"), None);
     assert_eq!(hit("run `fixed the bug` in the log"), None);
     assert_eq!(hit("> fixed the bug"), None);
