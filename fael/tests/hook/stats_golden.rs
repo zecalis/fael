@@ -39,7 +39,7 @@ fn normalize(out: &str, state: &Path) -> String {
 // (PLAN-fael-agent-ergonomics chunk 3: schema 3609 → 2966, hidden find/add
 // properties leave the served surface; they still work when called.)
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 2585 bytes (~650 est) + MCP schema 3043 bytes (~763 est)";
+    "  constants per session: SKILL.md 2789 bytes (~701 est) + MCP schema 3043 bytes (~763 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -88,7 +88,7 @@ fn stats_json_matches_golden_values() {
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"reject": {"events": 0, "bytes": 0}, "warning": {"events": 0, "bytes": 0}},
-            "constants": {"skill_bytes": 2585, "skill_est": 650, "mcp_schema_bytes": 3043, "mcp_schema_est": 763},
+            "constants": {"skill_bytes": 2789, "skill_est": 701, "mcp_schema_bytes": 3043, "mcp_schema_est": 763},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "capture": {"reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "no_row_sessions": []},
