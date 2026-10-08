@@ -14,7 +14,10 @@ close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage o
 `--replace "<old>" --with "<new>"`), in that same message.
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there, one per finding — do not wait for the end of the task.**
-That includes a bug in your own earlier work, a regression your change caused, and a problem a reviewer raised that outlives this turn — file it before the fix, then `fael close <id> "fixed in <sha>"`.
+That includes a bug in your own earlier work, a regression your change caused, and a problem a reviewer raised that outlives this turn.
+Fixed one with no row yet, however you found it (failing test, review, reading code)? Add the issue and close it in the same message, no commit needed:
+``fael close <id> "<cause> → <fix>; tried <what failed>; guard `<test path>`"`` — add the sha and `(#N)` once they exist.
+Then put `(fael:<id>)` in the commit body; a squash merge keeps it.
 In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).
 
 - `fael find [<text>] [--files <path>]` — the session brief, rows about a file, or a text search
