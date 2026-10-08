@@ -78,3 +78,41 @@ fn a_check_that_is_there_or_no_check_is_silent() {
     closed_with(&d, "fixed in abc1234");
     assert!(!edit(&d, "s1").contains("now gone"));
 }
+
+/// The yield: `earned` only once the agent files the successor the line
+/// offered (`--supersedes <id>`), never on the line alone.
+#[test]
+fn the_check_is_earned_when_the_issue_is_superseded() {
+    let d = repo();
+    closed_with(&d, "guarded by `scripts/check-retry.sh`");
+    let said = edit(&d, "s1");
+    let id = said.split("--supersedes ").nth(1).expect(&said);
+    let id = id
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .next()
+        .unwrap();
+    let earned = || {
+        let (_, out, _) = fael(&d, &["stats", "--json"], "");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        (
+            v["said"]["check"]["said"].as_u64(),
+            v["said"]["check"]["earned"].as_u64(),
+        )
+    };
+    assert_eq!(earned(), (Some(1), Some(0)));
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "retry loops are back",
+            "--files",
+            "src/a.rs",
+            "--supersedes",
+            id,
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert_eq!(earned(), (Some(1), Some(1)));
+}

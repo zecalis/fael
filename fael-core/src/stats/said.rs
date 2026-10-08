@@ -13,8 +13,8 @@
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
 //! - `count` — a later pull by the call the line printed: its files, a
 //!   directory over one, or its key
-//! - `check` (PLAN-fael-experience-loop chunk 3) — the closed issue was
-//!   superseded or bumped within a day
+//! - `check` (PLAN-fael-experience-loop chunk 3) — a row superseding or
+//!   bumping the (already closed) issue landed within a day after the line
 //! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
 //!   issue naming the finding's file after it
 //! - `notice` — the session filed a row after it
@@ -98,6 +98,16 @@ pub const KINDS: [&str; 12] = [
     "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice", "cited", "merge",
     "finding", "check",
 ];
+
+/// Whether a row superseding or bumping `id` landed within a day after `ms`.
+fn reopened(log: Option<&Log>, id: &str, ms: i64) -> bool {
+    log.is_some_and(|l| {
+        l.rows.iter().any(|r| {
+            let names = [r.supersedes.as_deref(), r.bumps.as_deref()].contains(&Some(id));
+            names && ts_ms(&r.ts).is_some_and(|t| t >= ms && t - ms <= RETIRE_WINDOW_MS)
+        })
+    })
+}
 
 /// Whether the session filed a row `pick` takes after `ms`.
 fn filed_after(
@@ -187,8 +197,9 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "ask" => ("ask", retired(key)),
                 "cited" => ("cited", retired(key)),
                 "merge" => ("merge", retired(key)),
-                // the issue superseded (or bumped) after the line named it gone
-                "check" => ("check", retired(key)),
+                // the issue was closed before the line, so `retired` (the
+                // earliest event) never lands after it: look for a later one
+                "check" => ("check", reopened(log, key, ms)),
                 // an issue the session filed on the finding's file after it
                 "finding" => (
                     "finding",
