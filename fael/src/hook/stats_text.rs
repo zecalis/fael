@@ -214,8 +214,12 @@ fn print_capture(c: &core::stats::Capture) {
     if c.reply_lines + c.manual_adds + c.sessions_with_edits == 0 {
         return;
     }
+    let gone = match c.sessions_with_edits_gone {
+        0 => String::new(),
+        n => format!(" ({n} in removed worktrees, not judged)"),
+    };
     println!(
-        "  capture: reply ×{} ({} stored, {} rejected) · manual adds ×{} · {} of {} edited session(s) left no row",
+        "  capture: reply ×{} ({} stored, {} rejected) · manual adds ×{} · {} of {} edited session(s) left no row{gone}",
         c.reply_lines,
         c.reply_stored,
         c.reply_rejected,

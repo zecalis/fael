@@ -260,12 +260,16 @@ fn table(
 fn friction(h: &mut String, s: &Stats) {
     let c = &s.capture;
     let ask = |k: &str| s.asks.get(k).map(|a| a.events).unwrap_or(0);
+    let gone = match c.sessions_with_edits_gone {
+        0 => String::new(),
+        n => format!(" ({n} in removed worktrees, not judged)"),
+    };
     let _ = write!(
         h,
         "<section><h2>3. Did fael add friction?</h2>\n<ul>\n\
          <li>Memory written from replies (<code>fael decision: …</code> lines): {} stored · {} rejected</li>\n\
          <li>Rows written outside replies (<code>add</code> over CLI or MCP, synced teammate rows included): {}</li>\n\
-         <li>Sessions that edited files: {}, of which {} left no row</li>\n\
+         <li>Sessions that edited files: {}, of which {} left no row{gone}</li>\n\
          <li>Asks: reject ×{} · warning ×{}</li>\n</ul>\n\
          <p>fael never blocks a turn, so it adds no round after the agent is done.</p>\n\
          </section>\n",

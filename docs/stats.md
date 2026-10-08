@@ -101,6 +101,9 @@ did not come from a reply line, by any writer · `sessions_with_edits` = session
 look at, not a verdict. Worktrees share one journal, so a row counts for a session only when it is that session's: its writer
 `session` (transcript stem) when the row has one, else its `branch` against the session's edit events
 (`branch` on `edit` usage rows; either side absent = it counts) ·
+`sessions_with_edits_gone` = of `sessions_with_edits`, sessions whose repo path no longer exists (a
+removed worktree): its journal cannot be found from the path, so they are unknown, never counted in
+`sessions_with_edits_no_row` ·
 `no_row_sessions` = the newest ≤10 of those as `[{repo, session, from, to}]`, for a human to judge. Replies are recorded as `event: "capture"` usage rows (`capture: stored|rejected`,
 `row` = the filed id; never `ids`, a capture is no push).
 
@@ -205,6 +208,7 @@ is untouched, so no `STATS_SCHEMA` bump; `Tune` carries its own `outcomes_v`.
 
 Newest first.
 
+- `2` (2026-10-08): added `capture.sessions_with_edits_gone`. A session whose repo path no longer exists (a removed worktree) used to read as an empty log and count in `sessions_with_edits_no_row`; it now counts as unknown. This is a correction, not a redefinition, so no bump. On the author's usage: 73 of 144 became 24, with 49 gone. Removed paths no longer get a log entry at all, which every other join already read as no rows.
 - `2` (2026-10-08): added `context_loop` (confirmed repeats, edits after close, useful shows, PLAN-fael-context-loop chunk 6); read from existing usage lines and logs; no bump.
 - `2` (2026-10-07): added `friction` (rejects by reason, helps, repeat finds and first-call success per agent call, total and per command, PLAN-fael-agent-ergonomics chunk 1); usage gains the `call` line, which no count includes; no bump.
 - `2` (2026-10-05): `file_verdict` gained `no_fh` (of `no_verdict`, rows with no stamp in the log) and `retire` (`{changed, unchanged}` of `{pairs, retired}`, PLAN-fael-file-hash chunk 4b); nested keys only, the top-level keys are unchanged; no bump.

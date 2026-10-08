@@ -210,9 +210,13 @@ pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -
     let mut parsed = core::stats::parse(&s, &path, &tmp);
     parsed.kept.retain(|v| v["repo"].as_str().is_some_and(keep));
     let mut logs: HashMap<String, core::Log> = HashMap::new();
+    // a removed worktree's path no longer leads to its journal: leave it out,
+    // so stats read it as unknown, not as a log with no rows (01M4D7N4)
     for repo in parsed.repos().into_iter().filter(|r| keep(r)) {
-        logs.entry(repo.to_string())
-            .or_insert_with(|| repo_log(repo));
+        if Path::new(repo).exists() {
+            logs.entry(repo.to_string())
+                .or_insert_with(|| repo_log(repo));
+        }
     }
     Usage {
         path,

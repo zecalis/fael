@@ -96,6 +96,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "reply_rejected",
             "reply_stored",
             "sessions_with_edits",
+            "sessions_with_edits_gone",
             "sessions_with_edits_no_row",
         ],
         "{v}"
