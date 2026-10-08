@@ -76,6 +76,12 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael: a.rs broke before — 01CARRY \"x\" was fixed: y in e6deb61 · whole story: `fael find 01CARRY`\n",
         ),
+        line(
+            Kind::Promote {
+                id: "01PROMO".into(),
+            },
+            "fael: 01PROMO on a.rs was in front of agents at edits in 10+ sessions — a test or check? then `fael close 01PROMO \"moved to <where>\"`\n",
+        ),
     ]
 }
 
@@ -94,6 +100,7 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Fixed => 10,
         Kind::FixCommit => 11,
         Kind::Carry { .. } => 12,
+        Kind::Promote { .. } => 13,
     }
 }
 
@@ -366,7 +373,8 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "notice",
             "fixed",
             "fixcommit",
-            "carry"
+            "carry",
+            "promote"
         ]
     );
 }

@@ -12,7 +12,7 @@ use crate::core;
 const NAMED: usize = 2;
 
 /// The edit-time asks beyond the edit hint: the consolidate ask, the
-/// gone-check ask, then the carry-back line (`carry`) — never on the issue
+/// promote ask, the gone-check ask, then the carry-back line (`carry`) — never on the issue
 /// the gone-check line names. A read (`edit` false) gets none.
 pub(crate) fn asks(
     ask: &Ask,
@@ -27,7 +27,13 @@ pub(crate) fn asks(
         _ => None,
     });
     let carry = super::carry::carry_line(ask, edit, checked);
-    merge.into_iter().chain(check).chain(carry).collect()
+    let promote = super::promote::promote_line(ask, t0);
+    merge
+        .into_iter()
+        .chain(promote)
+        .chain(check)
+        .chain(carry)
+        .collect()
 }
 
 /// Closed issues examined per edit, newest first: a hub file with hundreds

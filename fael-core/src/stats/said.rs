@@ -10,6 +10,8 @@
 //!   the close, so earning is the close itself
 //! - `merge` (PLAN-fael-context-loop chunk 3) — a named id was closed,
 //!   superseded or bumped within a day, like `ask`
+//! - `promote` (PLAN-fael-context-loop chunk 4) — the id was closed within a
+//!   day: a bump or supersede keeps the rule a row, not a test or check
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
 //! - `count` — a later pull by the call the line printed: its files, a
 //!   directory over one, or its key
@@ -98,7 +100,7 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 15] = [
+pub const KINDS: [&str; 16] = [
     "row",
     "note",
     "brief",
@@ -114,6 +116,7 @@ pub const KINDS: [&str; 15] = [
     "carry",
     "fixed",
     "fixcommit",
+    "promote",
 ];
 
 /// Whether a row superseding or bumping `id` landed within a day after `ms`.
@@ -122,6 +125,16 @@ fn reopened(log: Option<&Log>, id: &str, ms: i64) -> bool {
         l.rows.iter().any(|r| {
             let names = [r.supersedes.as_deref(), r.bumps.as_deref()].contains(&Some(id));
             names && ts_ms(&r.ts).is_some_and(|t| t >= ms && t - ms <= RETIRE_WINDOW_MS)
+        })
+    })
+}
+
+/// Whether `id` was closed within a day after `ms`.
+fn closed_after(log: Option<&Log>, id: &str, ms: i64) -> bool {
+    log.is_some_and(|l| {
+        l.closes.iter().any(|c| {
+            c.reference.as_deref() == Some(id)
+                && ts_ms(&c.ts).is_some_and(|t| t >= ms && t - ms <= RETIRE_WINDOW_MS)
         })
     })
 }
@@ -141,6 +154,13 @@ fn filed_after(
                 && pick(r)
         })
     })
+}
+
+/// One more `said` entry of `bucket`, earned or not.
+fn tally(out: &mut BTreeMap<String, KindYield>, bucket: &str, earned: bool) {
+    let y = out.entry(bucket.to_string()).or_default();
+    y.said += 1;
+    y.earned += earned as usize;
 }
 
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
@@ -212,6 +232,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 // the generic clause names no row: nothing to join it to
                 "ask" if key == "*" => continue,
                 "ask" | "cited" | "merge" => (kind, retired(key)),
+                "promote" => ("promote", closed_after(log, key, ms)),
                 // the issue was closed before the line, so `retired` (the
                 // earliest event) never lands after it: look for a later one
                 "check" => ("check", reopened(log, key, ms)),
@@ -234,20 +255,14 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "notice" => ("notice", filed_after(log, s, ms, |_| true)),
                 _ => continue,
             };
-            let y = out.entry(bucket.to_string()).or_default();
-            y.said += 1;
-            y.earned += earned as usize;
+            tally(&mut out, bucket, earned);
             // the same ask split by the file it sat on: `hub` as the push
             // recorded it (`feat`), so the split never re-derives a hub
             if let Some(hub) = (kind == "ask")
                 .then(|| v["feat"][key]["hub"].as_bool())
                 .flatten()
             {
-                let y = out
-                    .entry(ASK_SPLIT[usize::from(!hub)].to_string())
-                    .or_default();
-                y.said += 1;
-                y.earned += earned as usize;
+                tally(&mut out, ASK_SPLIT[usize::from(!hub)], earned);
             }
         }
     }

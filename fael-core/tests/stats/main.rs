@@ -101,7 +101,7 @@ fn json_shape_keys_and_types_are_frozen() {
     // every kind listed, zeros included
     assert_eq!(
         keys(&v["said"]).join(" "),
-        "ask bodies brief carry check cited count finding fixcommit fixed merge note notice pointer row",
+        "ask bodies brief carry check cited count finding fixcommit fixed merge note notice pointer promote row",
         "{v}"
     );
     assert_eq!(
