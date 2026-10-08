@@ -91,6 +91,10 @@ pub(crate) enum Kind {
     /// A closed issue whose close named a path that is gone (PLAN-fael-
     /// experience-loop chunk 3): asked once per issue and session.
     Check { id: String },
+    /// A closed issue on the edited file whose close named its fix (PLAN-
+    /// fael-experience-loop chunk 6): the pair "broke → fixed", once per
+    /// issue and session.
+    Carry { id: String },
     /// The agent said it fixed a bug and filed nothing after (PLAN-fael-
     /// experience-loop chunk 5a): stashed by stop, said once per session.
     Fixed,
@@ -137,6 +141,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Merge { .. } => (Once::Key, Some("fael add"), true),
         Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
+        Kind::Carry { .. } => (Once::Key, Some("fael find"), true),
         Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close"), false),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
@@ -163,6 +168,7 @@ impl Kind {
             Kind::Merge { file, .. } => vec![format!("~merge:{file}")],
             Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
             Kind::Check { id } => vec![format!("~check:{id}")],
+            Kind::Carry { id } => vec![format!("~carry:{id}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Brief | Kind::Notice => vec![],
@@ -192,6 +198,7 @@ impl Kind {
             Kind::Merge { ids, .. } => ("merge", ids.clone()),
             Kind::Finding { file, .. } => ("finding", vec![file.clone()]),
             Kind::Check { id } => ("check", vec![id.clone()]),
+            Kind::Carry { id } => ("carry", vec![id.clone()]),
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
             Kind::Notice => ("notice", vec![]),
@@ -325,7 +332,7 @@ impl Outbox {
 
     /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
     /// Over budget the stashed notice goes first, then the stashed fix line, then the consolidate ask, then the
-    /// gone-check ask, then the
+    /// carry-back line, then the gone-check ask, then the
     /// edit hints (the open-issue one, said first, goes last), then the commit-cite
     /// hint, each whole. A cut line
     /// keeps its keys for a later push. True when a stashed line was said (caller unstashes).
@@ -333,26 +340,17 @@ impl Outbox {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
         let cost = |ls: &[Line]| ls.iter().map(|l| core::est_tokens(&l.text)).sum::<usize>();
         while cost(&keep) > budget {
-            let cut = keep
-                .iter()
-                .position(|l| matches!(l.kind, Kind::Notice))
-                .or_else(|| keep.iter().position(|l| matches!(l.kind, Kind::Fixed)))
-                .or_else(|| {
-                    keep.iter()
-                        .position(|l| matches!(l.kind, Kind::Merge { .. }))
-                })
-                .or_else(|| {
-                    keep.iter()
-                        .position(|l| matches!(l.kind, Kind::Check { .. }))
-                })
+            let first = |f: fn(&Kind) -> bool| keep.iter().position(|l| f(&l.kind));
+            let cut = first(|k| matches!(k, Kind::Notice))
+                .or_else(|| first(|k| matches!(k, Kind::Fixed)))
+                .or_else(|| first(|k| matches!(k, Kind::Merge { .. })))
+                .or_else(|| first(|k| matches!(k, Kind::Carry { .. })))
+                .or_else(|| first(|k| matches!(k, Kind::Check { .. })))
                 .or_else(|| {
                     keep.iter()
                         .rposition(|l| matches!(l.kind, Kind::Ask { .. }))
                 })
-                .or_else(|| {
-                    keep.iter()
-                        .position(|l| matches!(l.kind, Kind::Cited { .. }))
-                });
+                .or_else(|| first(|k| matches!(k, Kind::Cited { .. })));
             match cut {
                 Some(i) => keep.remove(i),
                 None => break,

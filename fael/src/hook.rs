@@ -24,6 +24,7 @@ mod asks;
 mod askstats;
 mod autosync;
 mod capture;
+mod carry;
 mod changed;
 mod check;
 mod cited;

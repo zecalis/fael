@@ -11,8 +11,9 @@ use crate::core;
 /// Paths named in the line; the rest are one `fael find <id>` away.
 const NAMED: usize = 2;
 
-/// The edit-time asks beyond the edit hint: the consolidate ask, then the
-/// gone-check ask. A read (`edit` false) gets neither.
+/// The edit-time asks beyond the edit hint: the consolidate ask, the
+/// gone-check ask, then the carry-back line (`carry`) — never on the issue
+/// the gone-check line names. A read (`edit` false) gets none.
 pub(crate) fn asks(
     ask: &Ask,
     t0: &[(&core::Row, usize)],
@@ -20,13 +21,19 @@ pub(crate) fn asks(
     edit: bool,
 ) -> Vec<Line> {
     let merge = super::merge::merge_line(ask, t0, said);
-    merge.into_iter().chain(check_line(ask, edit)).collect()
+    let check = check_line(ask, edit);
+    let checked = check.as_ref().and_then(|l| match &l.kind {
+        Kind::Check { id } => Some(id.as_str()),
+        _ => None,
+    });
+    let carry = super::carry::carry_line(ask, edit, checked);
+    merge.into_iter().chain(check).chain(carry).collect()
 }
 
 /// Closed issues examined per edit, newest first: a hub file with hundreds
 /// of them would otherwise cost every edit a close scan and a stat each.
 // ponytail: newest 50 only, a gone check on an older issue goes unsaid
-const SCAN: usize = 50;
+pub(super) const SCAN: usize = 50;
 
 /// The newest closed issue on an edited file whose close names a gone path,
 /// as one `Check` line. `edit` is false off an edit: a read gets no line.
