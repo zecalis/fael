@@ -5,6 +5,7 @@
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
 use super::decision::{self, Gate};
+use super::merge;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{
@@ -224,6 +225,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         },
         text: format!("{}\n", h.text),
     }));
+    lines.extend(merge::merge_line(&ask, &t0, said));
     lines.extend(notes.map(|n| Line::notice(format!("{n}\n"))));
     // the hint and the stashed notice share the budget the rows left
     if out.say_within(policy.budget, lines) && has_notes {
