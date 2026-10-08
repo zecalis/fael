@@ -88,6 +88,9 @@ pub(crate) enum Kind {
     /// A review finding (PLAN-fael-experience-loop chunk 2): the ready
     /// `fael add issue` for a ReportFindings entry, once per file and line.
     Finding { file: String, line: i64 },
+    /// A closed issue whose close named a path that is gone (PLAN-fael-
+    /// experience-loop chunk 3): asked once per issue and session.
+    Check { id: String },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -127,6 +130,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
         Kind::Merge { .. } => (Once::Key, Some("fael add"), true),
         Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
+        Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
     Policy {
@@ -147,6 +151,7 @@ impl Kind {
             Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
             Kind::Merge { file, .. } => vec![format!("~merge:{file}")],
             Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
+            Kind::Check { id } => vec![format!("~check:{id}")],
             Kind::Brief | Kind::Notice => vec![],
         }
     }
@@ -173,6 +178,7 @@ impl Kind {
             Kind::Cited { ids } => ("cited", ids.clone()),
             Kind::Merge { ids, .. } => ("merge", ids.clone()),
             Kind::Finding { file, .. } => ("finding", vec![file.clone()]),
+            Kind::Check { id } => ("check", vec![id.clone()]),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {
@@ -304,6 +310,7 @@ impl Outbox {
 
     /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
     /// Over budget the stashed notice goes first, then the consolidate ask, then the
+    /// gone-check ask, then the
     /// edit hints (the open-issue one, said first, goes last), then the commit-cite
     /// hint, each whole. A cut line
     /// keeps its keys for a later push. True when a notice was said (caller unstashes).
@@ -317,6 +324,10 @@ impl Outbox {
                 .or_else(|| {
                     keep.iter()
                         .position(|l| matches!(l.kind, Kind::Merge { .. }))
+                })
+                .or_else(|| {
+                    keep.iter()
+                        .position(|l| matches!(l.kind, Kind::Check { .. }))
                 })
                 .or_else(|| {
                     keep.iter()

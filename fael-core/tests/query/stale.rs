@@ -124,3 +124,45 @@ fn stale_refs_reads_file_line_only_and_skips_urls() {
         .is_empty()
     );
 }
+
+#[test]
+fn stale_close_refs_reads_the_close_text_not_the_row() {
+    let r = std::env::temp_dir().join(format!("fael-stale-{}", ulid()));
+    std::fs::create_dir_all(r.join("t")).unwrap();
+    std::fs::write(r.join("t/kept.sh"), "x").unwrap();
+    let al = Aliases::default();
+    let issue = text_row("A0000000000000000000000030", "see `t/gone.sh` in the row");
+    let close = |id: &str, ts: &str, text: &str| {
+        let mut c = text_row(id, text);
+        c.ts = ts.into();
+        c.reference = Some("A0000000000000000000000030".into());
+        c
+    };
+    let log = |closes: Vec<Row>| Log {
+        rows: vec![issue.clone()],
+        closes,
+        ..Log::default()
+    };
+    // no close record: nothing to judge (the row's own text is `stale_refs`' job)
+    assert!(stale_close_refs(&r, &log(vec![]), &issue, &al).is_empty());
+    // the close points at a check that is there, then at one that is gone
+    let kept = close(
+        "C1",
+        "2026-10-01T00:00:00Z",
+        "fixed, guarded by `t/kept.sh`",
+    );
+    assert!(stale_close_refs(&r, &log(vec![kept.clone()]), &issue, &al).is_empty());
+    let gone = close("C2", "2026-10-02T00:00:00Z", "moved to `t/gone.sh:9`");
+    assert_eq!(
+        stale_close_refs(&r, &log(vec![kept.clone(), gone.clone()]), &issue, &al),
+        ["t/gone.sh"]
+    );
+    // the newest close wins, whatever the file order
+    let newer = close("C3", "2026-10-03T00:00:00Z", "now `t/kept.sh`");
+    assert!(stale_close_refs(&r, &log(vec![newer, gone]), &issue, &al).is_empty());
+    // a check that moved through the resolver is not gone
+    let moved = Aliases::from_pairs(vec![("t/gone.sh".to_string(), "t/kept.sh".to_string())]);
+    let gone = close("C4", "2026-10-04T00:00:00Z", "moved to `t/gone.sh`");
+    assert!(stale_close_refs(&r, &log(vec![gone]), &issue, &moved).is_empty());
+    let _ = std::fs::remove_dir_all(&r);
+}

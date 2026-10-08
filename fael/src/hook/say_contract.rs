@@ -10,7 +10,7 @@ use std::path::PathBuf;
 /// One fixture per kind. `slot` has no `_` arm, so a new `Kind` does not
 /// compile until it gets a slot — and `every_kind_has_a_fixture` fails until
 /// that slot has a fixture here.
-fn all() -> Vec<Line> {
+pub(super) fn all() -> Vec<Line> {
     let line = |kind: Kind, text: &str| Line {
         kind,
         text: text.into(),
@@ -57,11 +57,15 @@ fn all() -> Vec<Line> {
             },
             "fael: review finding on a.rs — file it: `fael add issue \"x\" --files a.rs`\n",
         ),
+        line(
+            Kind::Check { id: "01CHK".into() },
+            "fael: 01CHK was closed pointing at `t/a.sh`, now gone — fael add issue \"<what is unguarded>\" --files a.rs --supersedes 01CHK\n",
+        ),
         Line::notice("fael: a stashed line\n".into()),
     ]
 }
 
-fn slot(k: &Kind) -> usize {
+pub(super) fn slot(k: &Kind) -> usize {
     match k {
         Kind::Row { .. } => 0,
         Kind::Brief => 1,
@@ -71,12 +75,13 @@ fn slot(k: &Kind) -> usize {
         Kind::Cited { .. } => 5,
         Kind::Merge { .. } => 6,
         Kind::Finding { .. } => 7,
-        Kind::Notice => 8,
+        Kind::Check { .. } => 8,
+        Kind::Notice => 9,
     }
 }
 
 /// A fresh seen list of its own.
-fn seen(name: &str) -> PathBuf {
+pub(super) fn seen(name: &str) -> PathBuf {
     std::env::temp_dir()
         .join(format!("fael-say-{}", crate::core::ulid()))
         .join(name)
@@ -161,7 +166,7 @@ fn a_per_turn_kind_is_said_once_per_turn() {
                 ids: vec![id.into()],
                 issue: false,
             },
-            ..l.clone()
+            text: format!("fael close {id}\n"),
         };
         let in_turn = |t: &str, l: Line| {
             let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
@@ -303,51 +308,6 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
 }
 
-/// PLAN-fael-say-gate chunk 6: rows and bodies keep their say; over
-/// the budget the stashed notice goes first, then the edit hint, and a cut
-/// line spends no key (a later push may say it).
-#[test]
-fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
-    let pick = |slots: &[usize]| -> Vec<Line> {
-        all()
-            .into_iter()
-            .filter(|l| slots.contains(&slot(&l.kind)))
-            .collect()
-    };
-    let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 4, 2, 8]); // row, bodies, hint, notice
-    let keep = cost(&pick(&[0, 4]));
-    let run = |budget: usize| {
-        let p = seen("s.seen");
-        let mut out = Outbox::open(lock_seen(&p));
-        out.say_within(budget, lines.clone());
-        let said = out.reply().context().unwrap_or("").to_string();
-        let keys = std::fs::read_to_string(&p).unwrap();
-        let _ = std::fs::remove_dir_all(p.parent().unwrap());
-        (said, keys)
-    };
-    let all_said = run(usize::MAX).0;
-    assert!(all_said.contains("a stashed line") && all_said.contains("fael close 01ASK"));
-    let (said, keys) = run(keep + cost(&pick(&[2])));
-    assert!(
-        !said.contains("a stashed line") && said.contains("fael close 01ASK"),
-        "{said}"
-    );
-    let (said, keys_cut) = run(keep);
-    assert!(
-        !said.contains("fael close 01ASK") && !said.contains("a stashed line"),
-        "{said}"
-    );
-    assert!(said.contains("bodies:") && said.contains("01ROW"), "{said}");
-    // the cut hint kept its key
-    assert!(
-        keys.contains("~01ASK") && !keys_cut.contains("~01ASK"),
-        "{keys} / {keys_cut}"
-    );
-    // no budget at all still says the rows and the bodies line
-    assert!(run(0).0.contains("bodies:"));
-}
-
 /// Usage records what was said (chunk 3): a said line names its kind, a
 /// dropped one names nothing, and `Reply::and` (a shell call's edit side, then
 /// its read side) keeps both sides' entries in order.
@@ -377,7 +337,8 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
     assert_eq!(
         want,
         [
-            "row", "brief", "ask", "pointer", "bodies", "cited", "merge", "finding", "notice"
+            "row", "brief", "ask", "pointer", "bodies", "cited", "merge", "finding", "check",
+            "notice"
         ]
     );
 }

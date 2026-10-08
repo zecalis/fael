@@ -73,8 +73,8 @@ fn json_shape_keys_and_types_are_frozen() {
     assert_eq!(
         keys(&v["said"]),
         [
-            "ask", "bodies", "brief", "cited", "count", "finding", "merge", "note", "notice",
-            "pointer", "row"
+            "ask", "bodies", "brief", "check", "cited", "count", "finding", "merge", "note",
+            "notice", "pointer", "row"
         ],
         "{v}"
     );

@@ -25,6 +25,7 @@ mod askstats;
 mod autosync;
 mod capture;
 mod changed;
+mod check;
 mod cited;
 mod claude;
 mod decision;
@@ -38,6 +39,8 @@ mod protocol;
 mod push;
 mod review;
 mod say;
+#[cfg(test)]
+mod say_budget;
 #[cfg(test)]
 mod say_contract;
 mod search;
