@@ -5,7 +5,7 @@
 use super::{fael, fael_at, git, json, repo, state};
 use std::path::Path;
 
-const ASK: &str = "should it be a test or a lint/check";
+const ASK: &str = "should a test or lint/check guard it";
 const RULE: &str = "a keeps one door";
 
 /// A hook event on `<dir>/src/a.rs`, with usage in `st` (one state dir per
