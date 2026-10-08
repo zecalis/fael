@@ -10,7 +10,7 @@
 > This page is the contract the code is built against —
 > when code and this page disagree, fix one of them in the same commit.
 
-fael is a shared work ledger for agents that lives **inside the repo**: every agent (Claude Code, Codex, OpenCode, a chat
+fael carries a repo's experience to every new agent (§0). It is a shared work ledger that lives **inside the repo**: every agent (Claude Code, Codex, OpenCode, a chat
 host speaking MCP, …) and every person on the team reads and writes the same log, git carries it between machines, and there is no server.
 
 Three ideas carry the whole design:
@@ -21,12 +21,46 @@ Three ideas carry the whole design:
 
 ---
 
-## 0. Product invariant
+## 0. North star and product invariant
 
-Fael is the **team's shared work ledger**: the context of the work, and the work handed
+**North star: the repo's experience, handed to a new agent.** Every agent arrives capable and
+new to the repo. What someone who has worked here for years knows — what broke here and how it
+was fixed, what was chosen over what and why, how this repo works — is in no model and only
+partly in the code, diffs, tests and git. Fael keeps that part, per file and shared by the team,
+and puts it in front of the agent at the file it touches. It does not make the agent smarter;
+it lets a new agent start with this repo's experience. That is a thesis to prove — new agent +
+fael works closer to one with experience in this repo (`fael stats`, the replay A/B) — never a
+promise. Every vendor's model improves for everyone; this repo's history is its own.
+
+Experience is not a row kind (no `experience` or `lesson` bucket — it would become the new junk
+drawer). It is what three kinds of evidence on existing rows add up to:
+
+- **failure** — a closed issue: the issue says what broke; the close says the cause, the fix,
+  what was tried and failed, and the guard (a test or check path)
+- **decision** — what this repo chose over what, why, and why not to switch back
+- **constraint** — how things work here: a platform limit, a migration rule, a layer that must
+  not import another, a CI without X, a function's invariant — a decision or note with its
+  evidence, until data shows it needs more
+
+One cycle, two halves:
+
+```
+agent works → capture (the agent declares: a bug and its fix, a review finding, a choice, a constraint)
+            → ledger (rows + evidence)
+            → curation (consolidate, promote to a check, retire; measure repeat and use)
+            → the next agent touches the same file and gets it
+```
+
+The agent discovers, judges and records; fael captures, carries and surfaces. Fael never infers
+a bug or a lesson from test output, diffs, commits, CI or what prose means, never judges, and
+never fixes for the agent. It asks only where the agent itself declared something (its own
+words, a `fix:` commit, a review finding) and nothing was filed. Capture happens when the agent
+knows — at the fix, not at a commit: a commit is a link, not the boundary.
+
+**The mechanism is the team's shared work ledger**: the context of the work, and the work handed
 between sessions and agents — hand-offs, requirements, assigned issues (`--to`), claims,
-come-backs (`--revisit`). It is not a personal notebook, not a generic AI memory store, and not a
-process or git guard.
+come-backs (`--revisit`). It is not the agent's memory, not a personal notebook, not a generic
+AI memory store, and not a process or git guard.
 
 The unit of value is work context:
 
@@ -38,35 +72,24 @@ Fael resolves, reconciles, or self-heals **deterministic** context before asking
 to reason again; when it cannot decide, it exposes the evidence and never guesses (§6).
 The goal is not to store more memory — it is memory that **points the right way**. Git owns
 what changed; fael keeps only what git and the code cannot say (why, what was rejected, what is
-unfinished), and retires a row once the code says it or contradicts it. It is measured by
-repeat mistakes (redoing what was decided or rejected), the share of pushed rows actually used,
-how many open rows the code has outgrown, and how much of what one agent wrote reached
-another (`fael stats` → `across agents`). Rounds and tokens are a cost to keep low, never
-a promise.
+unfinished), and retires a row once the code says it or contradicts it — a wrong row is bad
+experience. It is measured in three layers, never mixed and never by row count: **capture**
+(what the agent knew hurt was recorded), **acted** (what fael surfaced was used — cited, closed,
+superseded, promoted), **outcome** (the same mistake did not come back: repeat mistakes,
+decisions reverted, guards gone). Alongside: how many open rows the code has outgrown, and how
+much of what one agent wrote reached another (`fael stats` → `across agents`). Rounds and
+tokens are a cost to keep low, never a promise.
 
-What the ledger accumulates is **the repo's experience**: what a long-serving member of the
-team carries and a new hire does not — what broke here and how it was fixed, what was decided
-and why, which constraints this repo works under (its platforms, its CI, its conventions). An
-agent arrives capable but new to the repo; fael puts that experience in front of it at the file
-it touches, so it works the way this repo needs. Every vendor's model improves for everyone;
-this repo's history is its own, and only a per-file, team-shared record carries it.
+A feature ships only if every answer is yes **and** it gives nothing back (below):
 
-The unit of experience is a fixed bug on a file: the issue says what broke, its close says how
-it was fixed — cause, fix, what was tried and failed, and the guard (a test or check path) —
-the part no diff, test or commit message keeps. It is captured when the fix is done, however
-the bug was found (a failing test, a test written afterwards, a review). Fael never infers a
-bug from test output or from what prose means; it asks only on evidence the agent itself gave
-(a declared bug or fix, a review finding) with nothing filed. The design question for every
-feature: does it help an agent new to this repo act like one who has worked here — not make
-the agent smarter in general?
+1. Does an agent new to this repo lack it?
+2. Does someone who has worked in this repo have it?
+3. Is it absent from, or not plain in, the code, diff, tests and git?
+4. Can fael keep its evidence without interpreting it?
+5. Does the next agent at that file or task get it back?
+6. Can `fael stats` show whether it helped (capture → acted → outcome)?
 
-A feature ships only if it does at least one of these **and** gives nothing back:
-
-- preserves work context
-- recovers or repairs context
-- retrieves the right task context
-- reduces repeated agent work
-- improves team reuse or coordination
+Repairing, reconciling and retiring rows pass the same test — they keep what comes back true.
 
 A feature must never:
 
