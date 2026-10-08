@@ -54,9 +54,9 @@ pub use query::{
     id_tokens, is_date, json_note, key_hints, keys, kickoff, levenshtein, next_stage, on_work,
     page, phantom_md_refs, phantom_refs, plan_anchor, push, push_tiered, query, ranked, ref_state,
     render, render_full, render_full_page, render_groups, render_page, resolve, resolve_row,
-    resolve_urgent, restored, reverted, row_due, row_waiting, select, select_with, stale_refs,
-    successors, superseded, today, touch_drops, waiting, waiting_line, warnings, why_empty,
-    with_due,
+    resolve_urgent, restored, reverted, row_due, row_waiting, select, select_with,
+    stale_close_refs, stale_refs, successors, superseded, today, touch_drops, waiting,
+    waiting_line, warnings, why_empty, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{

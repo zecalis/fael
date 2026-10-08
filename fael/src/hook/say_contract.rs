@@ -57,6 +57,10 @@ fn all() -> Vec<Line> {
             },
             "fael: review finding on a.rs — file it: `fael add issue \"x\" --files a.rs`\n",
         ),
+        line(
+            Kind::Check { id: "01CHK".into() },
+            "fael: 01CHK was closed pointing at `t/a.sh`, now gone — fael add issue \"<what is unguarded>\" --files a.rs --supersedes 01CHK\n",
+        ),
         Line::notice("fael: a stashed line\n".into()),
     ]
 }
@@ -71,7 +75,8 @@ fn slot(k: &Kind) -> usize {
         Kind::Cited { .. } => 5,
         Kind::Merge { .. } => 6,
         Kind::Finding { .. } => 7,
-        Kind::Notice => 8,
+        Kind::Check { .. } => 8,
+        Kind::Notice => 9,
     }
 }
 
@@ -161,7 +166,7 @@ fn a_per_turn_kind_is_said_once_per_turn() {
                 ids: vec![id.into()],
                 issue: false,
             },
-            ..l.clone()
+            text: format!("fael close {id}\n"),
         };
         let in_turn = |t: &str, l: Line| {
             let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
@@ -315,7 +320,7 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 4, 2, 8]); // row, bodies, hint, notice
+    let lines = pick(&[0, 4, 2, 9]); // row, bodies, hint, notice
     let keep = cost(&pick(&[0, 4]));
     let run = |budget: usize| {
         let p = seen("s.seen");
@@ -377,7 +382,8 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
     assert_eq!(
         want,
         [
-            "row", "brief", "ask", "pointer", "bodies", "cited", "merge", "finding", "notice"
+            "row", "brief", "ask", "pointer", "bodies", "cited", "merge", "finding", "check",
+            "notice"
         ]
     );
 }

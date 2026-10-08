@@ -53,7 +53,7 @@ pub use select::{
     kickoff, page, plan_anchor, ranked, resolve_urgent, reverted, superseded,
 };
 pub use shape::add_gate;
-pub use stale::{backtick_paths, stale_refs};
+pub use stale::{backtick_paths, stale_close_refs, stale_refs};
 
 /// What `find` narrows by. Every field is optional; `files` holds normalised refs.
 #[derive(Debug, Default, Clone)]

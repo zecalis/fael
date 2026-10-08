@@ -21,6 +21,7 @@ mod autosync;
 mod autoupdate;
 mod capture;
 mod changed_hint;
+mod check;
 mod clients;
 mod close_hint;
 mod compact;

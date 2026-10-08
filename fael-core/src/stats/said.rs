@@ -13,6 +13,8 @@
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
 //! - `count` — a later pull by the call the line printed: its files, a
 //!   directory over one, or its key
+//! - `check` (PLAN-fael-experience-loop chunk 3) — the closed issue was
+//!   superseded or bumped within a day
 //! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
 //!   issue naming the finding's file after it
 //! - `notice` — the session filed a row after it
@@ -92,9 +94,9 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 11] = [
+pub const KINDS: [&str; 12] = [
     "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice", "cited", "merge",
-    "finding",
+    "finding", "check",
 ];
 
 /// Whether the session filed a row `pick` takes after `ms`.
@@ -185,6 +187,8 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "ask" => ("ask", retired(key)),
                 "cited" => ("cited", retired(key)),
                 "merge" => ("merge", retired(key)),
+                // the issue superseded (or bumped) after the line named it gone
+                "check" => ("check", retired(key)),
                 // an issue the session filed on the finding's file after it
                 "finding" => (
                     "finding",

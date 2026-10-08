@@ -12,6 +12,7 @@
 //! never flags.
 
 use crate::Aliases;
+use crate::Log;
 use crate::Row;
 use std::path::Path;
 
@@ -38,13 +39,29 @@ pub fn backtick_paths(text: &str) -> Vec<&str> {
 /// The row's backticked paths that resolve nowhere under `root`, even through
 /// `al`. Paths the row already files (exact match) stay `[PartGone]`'s job.
 pub fn stale_refs(root: &Path, row: &Row, al: &Aliases) -> Vec<String> {
+    gone_refs(root, &row.text, &row.files, al)
+}
+
+/// The backticked paths in the text `row` was closed with (its close record,
+/// not the row — PLAN-fael-experience-loop chunk 3) that resolve nowhere: a
+/// check the agent pointed the close at, gone since. The newest close wins.
+pub fn stale_close_refs(root: &Path, log: &Log, row: &Row, al: &Aliases) -> Vec<String> {
+    let close = log
+        .closes
+        .iter()
+        .filter(|c| c.reference.as_deref() == Some(row.id.as_str()))
+        .max_by(|a, b| a.ts.cmp(&b.ts));
+    close.map_or(vec![], |c| gone_refs(root, &c.text, &row.files, al))
+}
+
+fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<String> {
     let mut out = vec![];
-    for c in backtick_paths(&row.text) {
+    for c in backtick_paths(text) {
         let p = c.strip_prefix('/').unwrap_or(c);
         let p = p.strip_prefix("./").unwrap_or(p);
         // `file.rs:88` cites a line inside a file — the file is what must exist
         let p = strip_location(p);
-        if p.is_empty() || row.files.iter().any(|f| f == p) {
+        if p.is_empty() || filed.iter().any(|f| f == p) {
             continue;
         }
         if al.forward(p).iter().all(|q| !root.join(q).exists()) && !out.contains(&p.to_string()) {
