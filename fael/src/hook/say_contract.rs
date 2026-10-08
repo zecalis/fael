@@ -50,6 +50,13 @@ fn all() -> Vec<Line> {
             },
             "fael: a.rs has 6 open rows, among them 01MERGE — fael add decision \"<the one rule>\" --supersedes 01MERGE · fael close <id>\n",
         ),
+        line(
+            Kind::Finding {
+                file: "a.rs".into(),
+                line: 7,
+            },
+            "fael: review finding on a.rs — file it: `fael add issue \"x\" --files a.rs`\n",
+        ),
         Line::notice("fael: a stashed line\n".into()),
     ]
 }
@@ -63,7 +70,8 @@ fn slot(k: &Kind) -> usize {
         Kind::Bodies => 4,
         Kind::Cited { .. } => 5,
         Kind::Merge { .. } => 6,
-        Kind::Notice => 7,
+        Kind::Finding { .. } => 7,
+        Kind::Notice => 8,
     }
 }
 
@@ -307,7 +315,7 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 4, 2, 7]); // row, bodies, hint, notice
+    let lines = pick(&[0, 4, 2, 8]); // row, bodies, hint, notice
     let keep = cost(&pick(&[0, 4]));
     let run = |budget: usize| {
         let p = seen("s.seen");
@@ -369,7 +377,7 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
     assert_eq!(
         want,
         [
-            "row", "brief", "ask", "pointer", "bodies", "cited", "merge", "notice"
+            "row", "brief", "ask", "pointer", "bodies", "cited", "merge", "finding", "notice"
         ]
     );
 }

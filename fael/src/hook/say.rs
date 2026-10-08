@@ -85,6 +85,9 @@ pub(crate) enum Kind {
     /// The consolidate ask (PLAN-fael-context-loop chunk 3): a file whose
     /// open decision/note rows crowd the agent's context, asked once per file.
     Merge { file: String, ids: Vec<String> },
+    /// A review finding (PLAN-fael-experience-loop chunk 2): the ready
+    /// `fael add issue` for a ReportFindings entry, once per file and line.
+    Finding { file: String, line: i64 },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -123,6 +126,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
         Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
         Kind::Merge { .. } => (Once::Key, Some("fael add"), true),
+        Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
     Policy {
@@ -142,6 +146,7 @@ impl Kind {
             Kind::Bodies => vec!["~bodies".into()],
             Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
             Kind::Merge { file, .. } => vec![format!("~merge:{file}")],
+            Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
             Kind::Brief | Kind::Notice => vec![],
         }
     }
@@ -167,6 +172,7 @@ impl Kind {
             Kind::Bodies => ("bodies", vec![]),
             Kind::Cited { ids } => ("cited", ids.clone()),
             Kind::Merge { ids, .. } => ("merge", ids.clone()),
+            Kind::Finding { file, .. } => ("finding", vec![file.clone()]),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {

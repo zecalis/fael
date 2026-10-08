@@ -36,6 +36,7 @@ mod merge;
 mod prompt;
 mod protocol;
 mod push;
+mod review;
 mod say;
 #[cfg(test)]
 mod say_contract;
