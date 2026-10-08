@@ -13,6 +13,8 @@
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
 //! - `count` — a later pull by the call the line printed: its files, a
 //!   directory over one, or its key
+//! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
+//!   issue naming the finding's file after it
 //! - `notice` — the session filed a row after it
 //!
 //! An upper bound: the agent may have done it anyway — use it only to cut.
@@ -21,7 +23,7 @@
 use super::capture::mine;
 use super::parse::Parsed;
 use super::retire::{RETIRE_WINDOW_MS, retire_times};
-use crate::{Log, ts_ms};
+use crate::{Log, Row, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -90,9 +92,27 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 10] = [
+pub const KINDS: [&str; 11] = [
     "row", "note", "brief", "ask", "pointer", "count", "bodies", "notice", "cited", "merge",
+    "finding",
 ];
+
+/// Whether the session filed a row `pick` takes after `ms`.
+fn filed_after(
+    log: Option<&Log>,
+    s: Option<Session>,
+    ms: i64,
+    pick: impl Fn(&Row) -> bool,
+) -> bool {
+    log.is_some_and(|l| {
+        l.rows.iter().any(|r| {
+            r.session().is_some()
+                && ts_ms(&r.ts).is_some_and(|t| t >= ms)
+                && s.is_some_and(|(_, s)| mine(r, s, None))
+                && pick(r)
+        })
+    })
+}
 
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
     let mut in_ctx: HashSet<(Session, &str)> = HashSet::new();
@@ -165,19 +185,17 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "ask" => ("ask", retired(key)),
                 "cited" => ("cited", retired(key)),
                 "merge" => ("merge", retired(key)),
+                // an issue the session filed on the finding's file after it
+                "finding" => (
+                    "finding",
+                    filed_after(log, s, ms, |r| {
+                        r.kind == "issue" && r.files.iter().any(|f| f == key)
+                    }),
+                ),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
                 "count" => ("count", pulled(&|p| counted(key, p))),
                 "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
-                "notice" => {
-                    let filed = |l: &Log| {
-                        l.rows.iter().any(|r| {
-                            r.session().is_some()
-                                && ts_ms(&r.ts).is_some_and(|t| t >= ms)
-                                && s.is_some_and(|(_, s)| mine(r, s, None))
-                        })
-                    };
-                    ("notice", log.is_some_and(filed))
-                }
+                "notice" => ("notice", filed_after(log, s, ms, |_| true)),
                 _ => continue,
             };
             let y = out.entry(bucket.to_string()).or_default();
@@ -285,7 +303,7 @@ pub(super) mod tests {
             r#""event":"session-start","ids":["D","U"],"said":[{"kind":"brief"}]"#,
         ) + &line(
             1,
-            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"notice"}]"#,
+            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"finding","key":"a.rs"},{"kind":"finding","key":"z.rs"},{"kind":"notice"}]"#,
         ) + &line(
             2,
             r#""event":"prompt","ids":[],"said":[{"kind":"pointer","key":"k:x"},{"kind":"pointer","key":"k:y"}]"#,
@@ -312,6 +330,11 @@ pub(super) mod tests {
         );
         assert_eq!(got("bodies"), (1, 0), "no find by id");
         assert_eq!(got("cited"), (1, 1), "G closed after the commit line");
+        assert_eq!(
+            got("finding"),
+            (2, 1),
+            "F filed on a.rs by s1, none on z.rs"
+        );
         assert_eq!(got("notice"), (1, 1), "F filed by s1 after it");
         assert_eq!(got("brief"), (2, 1), "D in context, U never");
         // a pull's outcome line is no injection

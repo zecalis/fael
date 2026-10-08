@@ -53,6 +53,8 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
         Some("Edit|Write|MultiEdit|NotebookEdit"),
         "edit",
     ),
+    // a review's findings, each as a ready `fael add issue` (Claude Code only)
+    ("PostToolUse", Some("ReportFindings"), "review"),
 ];
 /// Codex reads through the shell — no read hook; file edits are apply_patch.
 /// Shell calls match as `Bash`, so the search hook fires there like on Claude.

@@ -22,6 +22,8 @@ mod repeat;
 mod retire;
 mod retire_split;
 mod said;
+#[cfg(test)]
+mod said_finding;
 mod tune;
 mod unused;
 mod value;

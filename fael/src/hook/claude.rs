@@ -205,9 +205,26 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             print_reply("PostToolUse", reply, codex);
             ExitCode::SUCCESS
         }
+        // ReportFindings (Claude Code only): each finding as a ready `add issue`
+        "review" => {
+            let p: ClaudeTool = serde_json::from_str(stdin).unwrap_or_default();
+            let e = Event {
+                cwd: p.base.cwd,
+                session: p.base.transcript_path.or(p.base.session_id),
+                agent: p.base.agent_id,
+                client,
+                ..Event::default()
+            };
+            print_reply(
+                "PostToolUse",
+                super::review::report_reply(&e, &p.tool_input),
+                codex,
+            );
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!(
-                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search|prompt"
+                "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search|prompt|review"
             );
             ExitCode::SUCCESS
         }

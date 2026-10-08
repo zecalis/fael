@@ -40,6 +40,7 @@ mod precision;
 mod prompt;
 mod push_cap;
 mod replay;
+mod review;
 mod said;
 mod search;
 mod seen;
