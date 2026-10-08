@@ -47,6 +47,9 @@ pub struct Capture {
     /// …of which the repo's log was not loaded (a worktree since removed):
     /// unknown, never counted as no row (01M4D7N4).
     pub sessions_with_edits_gone: usize,
+    /// Issues those sessions filed (deduped by id) — read against
+    /// `sessions_with_edits` (PLAN-fael-experience-loop chunk 4).
+    pub edit_session_issues: usize,
     /// The newest ≤10 of the no-row ones, for a human to judge.
     pub no_row_sessions: Vec<Silent>,
 }
@@ -103,17 +106,15 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         .iter()
         .filter(|((repo, _), _)| !logs.contains_key(*repo))
         .count();
+    let issues: HashSet<&str> = edited
+        .iter()
+        .flat_map(|(k, s)| filed(logs, k, s))
+        .filter(|r| r.kind == "issue")
+        .map(|r| r.id.as_str())
+        .collect();
     let mut no_row: Vec<_> = edited
         .iter()
-        .filter(|((repo, session), (first, last, _, branch))| {
-            logs.get(*repo).is_some_and(|l| {
-                !l.rows.iter().any(|r| {
-                    !r.kind.is_empty()
-                        && ts_ms(&r.ts).is_some_and(|t| t >= *first && t <= last + SLACK_MS)
-                        && mine(r, session, *branch)
-                })
-            })
-        })
+        .filter(|(k, s)| logs.contains_key(k.0) && filed(logs, k, s).is_empty())
         .collect();
     no_row.sort_by_key(|(k, s)| (std::cmp::Reverse(s.1), *k));
     let at = |ms: i64| rfc3339(ms.max(0) as u64);
@@ -125,6 +126,7 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         sessions_with_edits: edited.len(),
         sessions_with_edits_no_row: no_row.len(),
         sessions_with_edits_gone: gone,
+        edit_session_issues: issues.len(),
         no_row_sessions: no_row
             .iter()
             .take(SAMPLE)
@@ -136,6 +138,25 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
             })
             .collect(),
     }
+}
+
+/// The rows a session filed: in its window (+10 min) and its own.
+fn filed<'a>(
+    logs: &'a HashMap<String, Log>,
+    (repo, session): &(&str, &str),
+    (first, last, _, branch): &(i64, i64, bool, Option<&str>),
+) -> Vec<&'a Row> {
+    let Some(l) = logs.get(*repo) else {
+        return vec![];
+    };
+    l.rows
+        .iter()
+        .filter(|r| {
+            !r.kind.is_empty()
+                && ts_ms(&r.ts).is_some_and(|t| t >= *first && t <= last + SLACK_MS)
+                && mine(r, session, *branch)
+        })
+        .collect()
 }
 
 /// Whether row `r` came from this session: rows carry the writer's session
@@ -209,6 +230,7 @@ mod tests {
                 sessions_with_edits: 5,
                 sessions_with_edits_no_row: 2, // s2: no row near it · s4: only feat/b's
                 sessions_with_edits_gone: 1,   // s6
+                edit_session_issues: 0,
                 no_row_sessions: ["s4", "s2"]
                     .iter()
                     .zip(["2026-09-30T03:00:00.000Z", "2026-09-30T01:00:00.000Z"])

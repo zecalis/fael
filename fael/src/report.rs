@@ -301,6 +301,7 @@ mod tests {
         let mut s = core::stats::aggregate(
             &p,
             &HashMap::new(),
+            &HashMap::new(),
             &core::Config::default(),
             (0, 0, 0, 0).into(),
             true,

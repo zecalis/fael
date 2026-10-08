@@ -35,7 +35,7 @@ type OnFile<'a> = HashMap<&'a str, Vec<(&'a str, i64)>>;
 
 /// Each closed issue's close time: a close row, or the close `fael compact`
 /// folded into the row. The earliest wins.
-fn closed_issues(log: &Log) -> HashMap<&str, i64> {
+pub(super) fn closed_issues(log: &Log) -> HashMap<&str, i64> {
     let issues: HashSet<&str> = log
         .rows
         .iter()
@@ -63,13 +63,33 @@ fn closed_issues(log: &Log) -> HashMap<&str, i64> {
     out
 }
 
+/// What the loop counts, kept apart so `experience` can split it by the
+/// close: each repeat (new id → repo, closed id) and each edit after close
+/// ((session, closed id) → repo).
+pub(super) struct Pairs<'a> {
+    pub repeats: HashMap<&'a str, (&'a str, &'a str)>,
+    pub edits: HashMap<(&'a str, &'a str), &'a str>,
+}
+
 pub(super) fn context_loop(parsed: &Parsed, logs: &HashMap<String, Log>) -> ContextLoop {
+    let p = pairs(parsed, logs);
+    ContextLoop {
+        confirmed_repeats: p.repeats.len(),
+        edits_after_close: p.edits.len(),
+        useful_shows: super::outcomes::observations(parsed, logs)
+            .iter()
+            .filter(|o| o.cited || o.acted)
+            .count(),
+    }
+}
+
+pub(super) fn pairs<'a>(parsed: &'a Parsed, logs: &'a HashMap<String, Log>) -> Pairs<'a> {
     let closed: HashMap<&str, HashMap<&str, i64>> = logs
         .iter()
         .map(|(repo, log)| (repo.as_str(), closed_issues(log)))
         .collect();
     // repos in one clone share the journal: dedup the repeat by its id
-    let mut repeats: HashSet<&str> = HashSet::new();
+    let mut repeats: HashMap<&str, (&str, &str)> = HashMap::new();
     for (repo, first) in &parsed.first_seen {
         let (Some(log), Some(gone)) = (logs.get(repo), closed.get(repo.as_str())) else {
             continue;
@@ -81,8 +101,8 @@ pub(super) fn context_loop(parsed: &Parsed, logs: &HashMap<String, Log>) -> Cont
                 .filter(|r| r.kind == "issue" && !rev.contains(r.id.as_str()))
                 .filter_map(|r| {
                     let ms = ts_ms(&r.ts).filter(|ms| ms >= first)?;
-                    let was = gone.get(r.supersedes.as_deref()?)?;
-                    (*was <= ms).then_some(r.id.as_str())
+                    let old = r.supersedes.as_deref()?;
+                    (*gone.get(old)? <= ms).then_some((r.id.as_str(), (repo.as_str(), old)))
                 }),
         );
     }
@@ -99,7 +119,7 @@ pub(super) fn context_loop(parsed: &Parsed, logs: &HashMap<String, Log>) -> Cont
             }
         }
     }
-    let mut edits: HashSet<(&str, &str)> = HashSet::new();
+    let mut edits: HashMap<(&str, &str), &str> = HashMap::new();
     for v in &parsed.kept {
         if !v["event"]
             .as_str()
@@ -107,8 +127,8 @@ pub(super) fn context_loop(parsed: &Parsed, logs: &HashMap<String, Log>) -> Cont
         {
             continue;
         }
-        let (Some(files), Some(session), Some(ms)) = (
-            v["repo"].as_str().and_then(|r| on_file.get(r)),
+        let (Some((repo, files)), Some(session), Some(ms)) = (
+            v["repo"].as_str().and_then(|r| on_file.get_key_value(r)),
             v["session"].as_str(),
             v["ts"].as_str().and_then(ts_ms),
         ) else {
@@ -116,17 +136,10 @@ pub(super) fn context_loop(parsed: &Parsed, logs: &HashMap<String, Log>) -> Cont
         };
         let named = super::said::strs(v, "files").filter_map(|f| files.get(f));
         for (id, _) in named.flatten().filter(|(_, at)| *at < ms) {
-            edits.insert((stem(session), id));
+            edits.insert((stem(session), id), *repo);
         }
     }
-    ContextLoop {
-        confirmed_repeats: repeats.len(),
-        edits_after_close: edits.len(),
-        useful_shows: super::outcomes::observations(parsed, logs)
-            .iter()
-            .filter(|o| o.cited || o.acted)
-            .count(),
-    }
+    Pairs { repeats, edits }
 }
 
 #[cfg(test)]

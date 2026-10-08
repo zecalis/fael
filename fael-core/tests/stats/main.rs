@@ -19,11 +19,39 @@ fn value_of(text: &str, with_rows: bool) -> serde_json::Value {
     let stats = aggregate(
         &parsed,
         &HashMap::new(),
+        &HashMap::new(),
         &Config::default(),
         (1, 2, 3, 4).into(),
         with_rows,
     );
     serde_json::to_value(&stats).unwrap()
+}
+
+/// `capture` keys, and `experience` (PLAN-fael-experience-loop chunk 4):
+/// every field listed, zeros included.
+#[test]
+fn capture_and_experience_shapes_are_frozen() {
+    let v = value_of(BASE_ROWS, false);
+    assert_eq!(
+        keys(&v["capture"]),
+        [
+            "edit_session_issues",
+            "manual_adds",
+            "no_row_sessions",
+            "reply_lines",
+            "reply_rejected",
+            "reply_stored",
+            "sessions_with_edits",
+            "sessions_with_edits_gone",
+            "sessions_with_edits_no_row",
+        ],
+        "{v}"
+    );
+    assert_eq!(
+        v["experience"],
+        serde_json::json!({"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0}),
+        "{v}"
+    );
 }
 
 const BASE_ROWS: &str = concat!(
@@ -52,6 +80,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "context_loop",
             "est_tokens",
             "events",
+            "experience",
             "file_verdict",
             "friction",
             "incidents",
@@ -86,20 +115,6 @@ fn json_shape_keys_and_types_are_frozen() {
     assert_eq!(
         v["context_loop"],
         serde_json::json!({"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0}),
-        "{v}"
-    );
-    assert_eq!(
-        keys(&v["capture"]),
-        [
-            "manual_adds",
-            "no_row_sessions",
-            "reply_lines",
-            "reply_rejected",
-            "reply_stored",
-            "sessions_with_edits",
-            "sessions_with_edits_gone",
-            "sessions_with_edits_no_row",
-        ],
         "{v}"
     );
     for k in ["events", "bytes", "est_tokens", "skipped_temp"] {
@@ -235,6 +250,7 @@ fn carriers_never_count_as_rows_added() {
     let s = aggregate(
         &parsed,
         &logs,
+        &HashMap::new(),
         &Config::default(),
         (1, 2, 3, 4).into(),
         false,

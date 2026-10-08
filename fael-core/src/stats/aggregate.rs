@@ -3,6 +3,7 @@
 //! the per-session constants. No spawn, no clock, no filesystem here.
 
 use super::capture::{Capture, capture};
+use super::experience::{Commits, Experience, experience};
 use super::friction::{Friction, friction};
 use super::incident::{Incidents, incidents};
 use super::metrics::{added_since, ask_totals, non_english_share};
@@ -123,15 +124,20 @@ pub struct Stats {
     /// Confirmed repeats, the edits they read against, and useful shows
     /// per token (`repeat.rs`, PLAN-fael-context-loop §3).
     pub context_loop: super::repeat::ContextLoop,
+    /// Fixes, checks and capture recall (`experience.rs`,
+    /// PLAN-fael-experience-loop chunk 4).
+    pub experience: Experience,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
 
 /// Join parsed usage with pre-loaded logs. `logs` must cover `parsed.repos()`;
-/// a repo with no entry reads as empty (its rows resolve `unknown`).
+/// a repo with no entry reads as empty (its rows resolve `unknown`). A repo
+/// with no `commits` entry has no fix commits.
 pub fn aggregate(
     parsed: &Parsed,
     logs: &HashMap<String, Log>,
+    commits: &Commits,
     cfg: &Config,
     constants: Constants,
     with_rows: bool,
@@ -195,6 +201,7 @@ pub fn aggregate(
         file_verdict: file_verdict(parsed, logs),
         friction: friction(parsed),
         context_loop: super::repeat::context_loop(parsed, logs),
+        experience: experience(parsed, logs, commits),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }
@@ -300,6 +307,7 @@ mod tests {
         let p = parsed_of(text);
         let s = aggregate(
             &p,
+            &HashMap::new(),
             &HashMap::new(),
             &Config::default(),
             (1, 2, 3, 4).into(),

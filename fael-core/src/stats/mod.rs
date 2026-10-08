@@ -12,6 +12,9 @@ mod aggregate;
 mod capture;
 mod cross;
 mod day;
+mod experience;
+#[cfg(test)]
+mod experience_tests;
 mod friction;
 mod incident;
 mod metrics;
@@ -39,6 +42,7 @@ pub use day::{
     BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
+pub use experience::{Commit, Commits, Experience};
 pub use friction::{FIRST_CALL_WINDOW, Friction, Tally};
 pub use incident::{INCIDENT_KEY, Incidents};
 pub use metrics::ASK_ORDER;
