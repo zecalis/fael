@@ -116,3 +116,26 @@ fn the_check_is_earned_when_the_issue_is_superseded() {
     assert!(ok, "{err}");
     assert_eq!(earned(), (Some(1), Some(1)));
 }
+
+/// A read of the file is not an edit: no line, and the key stays unspent for
+/// the edit that follows. A shell edit counts as an edit.
+#[test]
+fn a_read_is_silent_and_a_shell_edit_is_said() {
+    let d = repo();
+    closed_with(&d, "guarded by `scripts/check-retry.sh`");
+    let read = format!(
+        r#"{{"cwd":{},"session_id":"s1","tool_input":{{"file_path":{}}}}}"#,
+        json(&d),
+        json(&d.join("src/a.rs"))
+    );
+    let (ok, out, err) = fael(&d, &["hook", "read", "--client", "claude"], &read);
+    assert!(ok, "{err}");
+    assert!(!out.contains("now gone"), "{out}");
+    let shell = format!(
+        r#"{{"cwd":{},"session_id":"s1","tool_name":"Bash","tool_input":{{"command":"sed -i s/a/b/ src/a.rs"}},"tool_response":{{"stdout":""}}}}"#,
+        json(&d)
+    );
+    let (ok, out, err) = fael(&d, &["hook", "search", "--client", "claude"], &shell);
+    assert!(ok, "{err}");
+    assert!(out.contains("now gone"), "{out}");
+}
