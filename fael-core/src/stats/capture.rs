@@ -44,7 +44,10 @@ pub struct Capture {
     /// writer session when the row has one, else its branch against the
     /// session's edits (either side unknown = it counts, as before).
     pub sessions_with_edits_no_row: usize,
-    /// The newest ≤10 of those, for a human to judge.
+    /// …of which the repo's log was not loaded (a worktree since removed):
+    /// unknown, never counted as no row (01M4D7N4).
+    pub sessions_with_edits_gone: usize,
+    /// The newest ≤10 of the no-row ones, for a human to judge.
     pub no_row_sessions: Vec<Silent>,
 }
 
@@ -96,11 +99,15 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         }
     }
     let edited: Vec<_> = sessions.iter().filter(|(_, s)| s.2).collect();
+    let gone = edited
+        .iter()
+        .filter(|((repo, _), _)| !logs.contains_key(*repo))
+        .count();
     let mut no_row: Vec<_> = edited
         .iter()
         .filter(|((repo, session), (first, last, _, branch))| {
-            !logs.get(*repo).is_some_and(|l| {
-                l.rows.iter().any(|r| {
+            logs.get(*repo).is_some_and(|l| {
+                !l.rows.iter().any(|r| {
                     !r.kind.is_empty()
                         && ts_ms(&r.ts).is_some_and(|t| t >= *first && t <= last + SLACK_MS)
                         && mine(r, session, *branch)
@@ -117,6 +124,7 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         manual_adds: manual,
         sessions_with_edits: edited.len(),
         sessions_with_edits_no_row: no_row.len(),
+        sessions_with_edits_gone: gone,
         no_row_sessions: no_row
             .iter()
             .take(SAMPLE)
@@ -170,6 +178,8 @@ mod tests {
             // two worktrees, one journal: s4's window holds only s5's row
             r#"{"ts":"2026-09-30T03:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","branch":"feat/a","session":"s4","ids":[]}"#,
             r#"{"ts":"2026-09-30T03:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","branch":"feat/b","session":"s5","ids":[]}"#,
+            // a removed worktree: no log loaded, so unknown, not silent
+            r#"{"ts":"2026-09-30T04:00:00.000Z","repo":"/w/gone","client":"opencode","event":"edit","session":"s6","ids":[]}"#,
         ]);
         let mut on_b = row("B1", "2026-09-30T03:01:00.000Z", "note");
         on_b.extra.insert("branch".into(), "feat/b".into());
@@ -196,8 +206,9 @@ mod tests {
                 reply_stored: 1,
                 reply_rejected: 1,
                 manual_adds: 3,
-                sessions_with_edits: 4,
+                sessions_with_edits: 5,
                 sessions_with_edits_no_row: 2, // s2: no row near it · s4: only feat/b's
+                sessions_with_edits_gone: 1,   // s6
                 no_row_sessions: ["s4", "s2"]
                     .iter()
                     .zip(["2026-09-30T03:00:00.000Z", "2026-09-30T01:00:00.000Z"])
