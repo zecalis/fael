@@ -40,6 +40,8 @@ mod push;
 mod review;
 mod say;
 #[cfg(test)]
+mod say_budget;
+#[cfg(test)]
 mod say_contract;
 mod search;
 mod session;
