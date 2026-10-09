@@ -22,8 +22,8 @@ pub(super) fn experience_lines(s: &core::stats::Stats) -> Vec<String> {
         return vec![];
     }
     vec![
-        // only a review whose model calls ReportFindings is seen: /code-review
-        // prints its findings as text (01M4F5QDH), so the count is a floor
+        // only a review whose model calls ReportFindings is seen: a review
+        // that prints its findings as text is not (01M4F5QDH), so the count is a floor
         format!(
             "  experience — capture: review findings {} (ReportFindings calls only) → issues {} · issues {} in {} edit sessions",
             finding.said, finding.earned, c.edit_session_issues, c.sessions_with_edits

@@ -234,13 +234,10 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     // a retire for a row already in context, or a stashed line, still gets
     // said with no rows to join
     // t0 is empty off an edit, so a read or search gets no hint
-    let hints = edit_hint(&ask, &t0, said, &mut blobs);
+    let hint = edit_hint(&ask, &t0, said, &mut blobs);
     let mut lines = row_lines(&sel, &files, (body, n, bodies), &shown);
-    lines.extend(hints.into_iter().map(|h| Line {
-        kind: Kind::Ask {
-            ids: h.spent,
-            issue: true,
-        },
+    lines.extend(hint.map(|h| Line {
+        kind: Kind::Ask { ids: h.spent },
         text: format!("{}\n", h.text),
     }));
     lines.extend(check::asks(&ask, &t0, said, edit));

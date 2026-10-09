@@ -71,10 +71,10 @@ pub(crate) enum Kind {
     /// The session-start rows: said once per new or compacted context, never
     /// spent — the next read of a briefed file may push its rows again.
     Brief,
-    /// The edit hint: re-check rows already in context, each named. `issue`:
-    /// open issues on the edited file, free of the per-turn limit (a vela
-    /// edit's issue went unasked behind a package.json ask in the same turn).
-    Ask { ids: Vec<String>, issue: bool },
+    /// The edit hint: re-check open issues already in context, each named.
+    /// Free of the per-turn limit: it names only open issues on the edited
+    /// file (a vela edit's issue went unasked behind another ask in the turn).
+    Ask { ids: Vec<String> },
     /// The prompt hint: open keys the prompt names.
     Pointer { keys: Vec<String> },
     /// `bodies: fael find <id> …` under a push whose rows have bodies.
@@ -137,7 +137,7 @@ pub(crate) struct Policy {
 pub(crate) fn policy(k: &Kind) -> Policy {
     let (once, command, per_turn) = match k {
         Kind::Row { .. } => (Once::Key, None, false),
-        Kind::Ask { issue, .. } => (Once::Key, Some("fael close"), !issue),
+        Kind::Ask { .. } => (Once::Key, Some("fael close"), false),
         Kind::Pointer { .. } => (Once::Key, Some("fael find --key"), false),
         Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
         Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
@@ -339,7 +339,7 @@ impl Outbox {
     /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
     /// Over budget the stashed notice goes first, then the stashed fix line, then the consolidate or promote ask, then the
     /// carry-back line, then the gone-check ask, then the
-    /// edit hints (the open-issue one, said first, goes last), then the commit-cite
+    /// edit hint, then the commit-cite
     /// hint, each whole. A cut line
     /// keeps its keys for a later push. True when a stashed line was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
