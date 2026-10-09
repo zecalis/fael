@@ -77,8 +77,8 @@ fn recorded(root: &Path, env: &str) -> Option<String> {
 /// `FAEL_SESSION` is set per command by the OpenCode `shell.env` hook, so it
 /// is the calling session and stamps raw; the client vars travel further, so
 /// an id no hook event ever recorded (an edit, or session-start in this
-/// worktree) stamps nothing. The MCP server's env is
-/// inherited at spawn, never per call — so there *every* id must be recorded.
+/// worktree) stamps nothing. The MCP server's env is inherited at spawn,
+/// never per call — so there *every* id must be recorded by an edit.
 fn writer_session(root: &Path) -> Option<String> {
     let env = env_session();
     if env.is_empty() {
@@ -87,8 +87,11 @@ fn writer_session(root: &Path) -> Option<String> {
     let per_call = !mcp_server() && std::env::var("FAEL_SESSION").is_ok_and(|v| !v.is_empty());
     let s = match recorded(root, &env) {
         Some(rec) => rec,
-        // session-start saw this id here: a row filed before the first edit
-        None if per_call || hook::started_path(&env, root).exists() => env,
+        None if per_call => env,
+        // session-start saw this id here: a row filed before the first edit.
+        // Never for the MCP server — its env may name a session it outlived,
+        // and a session-start makes that id look live (01M47N67).
+        None if !mcp_server() && hook::started_path(&env, root).exists() => env,
         None => return None,
     };
     let id = match s.contains(['/', '\\']) {
