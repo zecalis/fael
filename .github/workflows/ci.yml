@@ -24,28 +24,35 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       rust: ${{ steps.diff.outputs.rust }}
+      docs: ${{ steps.diff.outputs.docs }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2
-      # ponytail: a short allowlist of files nothing compiles. docs/ and skill/ stay out:
-      # include_str! builds docs/architecture.md and skill/SKILL.md into the binary
+      # ponytail: a short allowlist of files nothing compiles. skill/ stays out:
+      # include_str! builds skill/SKILL.md into the binary. docs/*.md only feeds tests
+      # (help/tests.rs reads architecture.md, tests/doc_refs.rs every .md), so a
+      # docs-only PR runs the tests on one OS and skips lint and msrv
       - id: diff
         run: |
           rust=true
+          docs=false
+          prose='^[^/]+\.md$|^LICENSE|^\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)'
           if [ "${{ github.event_name }}" = pull_request ]; then
             # fail closed: a failed diff aborts the step (bash -e), an empty one runs all
             files=$(git diff --name-only HEAD^1 HEAD)
-            if [ -n "$files" ] &&
-               ! grep -qvE '^[^/]+\.md$|^LICENSE|^\.github/(ISSUE_TEMPLATE/|pull_request_template\.md$)' <<<"$files"; then
+            if [ -n "$files" ] && ! grep -qvE "$prose" <<<"$files"; then
               rust=false
+            elif [ -n "$files" ] && ! grep -qvE "$prose|^docs/.+\.md$" <<<"$files"; then
+              docs=true
             fi
           fi
           echo "rust=$rust" >> "$GITHUB_OUTPUT"
+          echo "docs=$docs" >> "$GITHUB_OUTPUT"
 
   lint:
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.docs != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -67,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.changes.outputs.docs == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -84,7 +91,7 @@ jobs:
 
   msrv:
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.docs != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -103,7 +110,10 @@ jobs:
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
-      # a skip passes only when changes said rust=false outright, never on a missing output
-      - if: needs.changes.outputs.rust != 'false' && contains(needs.*.result, 'skipped')
+      # a skip passes only when changes said rust=false outright, never on a missing output;
+      # docs=true lets lint and msrv skip, never test
+      - if: needs.changes.outputs.rust != 'false' && needs.changes.outputs.docs != 'true' && contains(needs.*.result, 'skipped')
+        run: exit 1
+      - if: needs.changes.outputs.docs == 'true' && needs.test.result != 'success'
         run: exit 1
       - run: echo ok
