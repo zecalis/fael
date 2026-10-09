@@ -9,7 +9,7 @@
 use super::capture::mine;
 use super::label::{Label, label};
 use super::parse::Parsed;
-use super::repeat::{closed_issues, pairs};
+use super::repeat::{closed_issues, closes, pairs};
 use crate::{Log, backtick_paths, code_spans, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -79,15 +79,8 @@ pub(crate) fn names_fix(text: &str) -> bool {
 /// close `fael compact` folded into the row.
 fn close_texts(log: &Log) -> HashMap<&str, Vec<&str>> {
     let mut out: HashMap<&str, Vec<&str>> = HashMap::new();
-    for c in &log.closes {
-        if let Some(id) = c.reference.as_deref() {
-            out.entry(id).or_default().push(&c.text);
-        }
-    }
-    for r in &log.rows {
-        if let Some(t) = r.extra.get("closed").and_then(|c| c["text"].as_str()) {
-            out.entry(&r.id).or_default().push(t);
-        }
+    for (id, _, text) in closes(log) {
+        out.entry(id).or_default().push(text);
     }
     out
 }

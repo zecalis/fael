@@ -33,29 +33,35 @@ const EDIT_EVENTS: [&str; 3] = ["edit", "shell-edit", "in-context"];
 /// File → the closed issues on it, with their close time.
 type OnFile<'a> = HashMap<&'a str, Vec<(&'a str, i64)>>;
 
-/// Each closed issue's close time: a close row, or the close `fael compact`
-/// folded into the row. The earliest wins.
-pub(super) fn closed_issues(log: &Log) -> HashMap<&str, i64> {
-    let issues: HashSet<&str> = log
-        .rows
-        .iter()
+/// Every close of `log` as (closed id, ts, text): a close row, or the close
+/// `fael compact` folded into the row — the one walk `closed_issues`,
+/// `close_texts` and `label` read. A folded close missing a field reads "".
+pub(super) fn closes(log: &Log) -> impl Iterator<Item = (&str, &str, &str)> {
+    let rows = (log.closes.iter())
+        .filter_map(|c| Some((c.reference.as_deref()?, c.ts.as_str(), c.text.as_str())));
+    let folded = log.rows.iter().filter_map(|r| {
+        let c = r.extra.get("closed")?;
+        let ts = c["ts"].as_str().unwrap_or_default();
+        Some((r.id.as_str(), ts, c["text"].as_str().unwrap_or_default()))
+    });
+    rows.chain(folded)
+}
+
+/// Each issue's close as (id, ms, text), closes with no readable ts left out.
+pub(super) fn issue_closes(log: &Log) -> impl Iterator<Item = (&str, i64, &str)> {
+    let issues: HashSet<&str> = (log.rows.iter())
         .filter(|r| r.kind == "issue")
         .map(|r| r.id.as_str())
         .collect();
-    let folded = log
-        .rows
-        .iter()
-        .filter(|r| r.kind == "issue")
-        .filter_map(|r| {
-            let ts = r.extra.get("closed")?["ts"].as_str()?;
-            Some((r.id.as_str(), ts_ms(ts)?))
-        });
+    closes(log)
+        .filter_map(move |(id, ts, text)| issues.contains(id).then_some((id, ts_ms(ts)?, text)))
+}
+
+/// Each closed issue's close time: a close row, or the close `fael compact`
+/// folded into the row. The earliest wins.
+pub(super) fn closed_issues(log: &Log) -> HashMap<&str, i64> {
     let mut out: HashMap<&str, i64> = HashMap::new();
-    let closes = log.closes.iter().filter_map(|c| {
-        let id = c.reference.as_deref()?;
-        issues.contains(id).then_some((id, ts_ms(&c.ts)?))
-    });
-    for (id, ms) in closes.chain(folded) {
+    for (id, ms, _) in issue_closes(log) {
         out.entry(id)
             .and_modify(|m| *m = (*m).min(ms))
             .or_insert(ms);
