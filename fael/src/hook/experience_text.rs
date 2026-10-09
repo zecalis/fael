@@ -58,21 +58,15 @@ pub(super) fn label_line(s: &core::stats::Stats) -> Option<String> {
     }
     let show = |m: &Measure, none: &str| match m.state {
         State::Unmeasurable => format!("n/a ({none})"),
-        st => format!(
-            "{}/{} ({}%{})",
-            m.num,
-            m.den,
-            m.num * 100 / m.den,
-            if st == State::Partial {
-                ", partial: a repo's log is gone"
-            } else {
-                ""
-            }
-        ),
+        State::Measured => format!("{}/{} ({}%)", m.num, m.den, m.num * 100 / m.den),
     };
     let closed = "no issue closed since";
+    let gone = match l.gone_repos {
+        0 => String::new(),
+        n => format!(" · {n} repo path(s) gone, read through a live checkout if any"),
+    };
     Some(format!(
-        "  label — close core {} · guard {} · key reuse {} · find hit {} — since {}",
+        "  label — close core {} · guard {} · key reuse {} · find hit {} — since {}{gone}",
         show(&l.close_core, closed),
         show(&l.guard, closed),
         show(&l.key_reuse, "no keyed add since"),

@@ -80,7 +80,7 @@ fn m(state: State, num: usize, den: usize) -> Measure {
 }
 
 #[test]
-fn measured_partial_and_unmeasurable() {
+fn measured_unmeasurable_and_gone_repos() {
     let one = HashMap::from([("/w/r".to_string(), log())]);
     let find_hit = Measure::default(); // never kept: no since either
     assert_eq!(
@@ -90,9 +90,9 @@ fn measured_partial_and_unmeasurable() {
             guard: m(State::Measured, 1, 3),      // A
             key_reuse: m(State::Measured, 2, 3),  // K2, K5 of K2, K3, K5
             find_hit: find_hit.clone(),
+            gone_repos: 0,
         }
     );
-    // a repo used since the contract whose log is gone: counted, not all of it
     // two worktrees reading the same log: each row counts once
     let two = HashMap::from([("/w/r".to_string(), log()), ("/w/q".to_string(), log())]);
     let both = run(&[("/w/r", "10-10"), ("/w/q", "10-10")], two);
@@ -100,12 +100,16 @@ fn measured_partial_and_unmeasurable() {
         (both.close_core, both.key_reuse),
         (m(State::Measured, 2, 3), m(State::Measured, 2, 3))
     );
-    let partial = run(&[("/w/r", "10-10"), ("/w/gone", "10-10")], one.clone());
-    assert_eq!(partial.close_core, m(State::Partial, 2, 3));
-    assert_eq!(partial.key_reuse, m(State::Partial, 2, 3));
+    // a removed worktree used since the contract: its rows count through the
+    // live checkout sharing its journal, so the state holds; the path is counted
+    let gone = run(&[("/w/r", "10-10"), ("/w/gone", "10-10")], one.clone());
+    assert_eq!(gone.close_core, m(State::Measured, 2, 3));
+    assert_eq!(gone.key_reuse, m(State::Measured, 2, 3));
+    assert_eq!(gone.gone_repos, 1);
     // gone, but last used before the contract: it had nothing to count
     let before = run(&[("/w/r", "10-10"), ("/w/gone", "10-01")], one);
     assert_eq!(before.close_core, m(State::Measured, 2, 3));
+    assert_eq!(before.gone_repos, 0);
     // nothing closed or keyed since the contract: no base, never 0%
     let empty = run(
         &[("/w/r", "10-10")],
@@ -118,6 +122,7 @@ fn measured_partial_and_unmeasurable() {
             guard: m(State::Unmeasurable, 0, 0),
             key_reuse: m(State::Unmeasurable, 0, 0),
             find_hit,
+            gone_repos: 0,
         }
     );
 }

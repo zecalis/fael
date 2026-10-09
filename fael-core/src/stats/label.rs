@@ -18,8 +18,6 @@ pub const LABEL_SINCE: &str = "2026-10-09T03:58:54.270Z";
 #[serde(rename_all = "lowercase")]
 pub enum State {
     Measured,
-    /// Counted, but a repo with usage since the contract has no log left.
-    Partial,
     /// No base: `den = 0`, or the data was never kept.
     #[default]
     Unmeasurable,
@@ -46,6 +44,11 @@ pub struct Label {
     pub key_reuse: Measure,
     /// Always unmeasurable: usage keeps no missed find and no query (01M4FCPA).
     pub find_hit: Measure,
+    /// Repo paths with usage since `since` and no log left (a removed
+    /// worktree). Never a lower state: a worktree shares its checkout's
+    /// journal, so its rows count through any live path of the repo; only a
+    /// repo with no live path left is missing, and this is how many could be.
+    pub gone_repos: usize,
 }
 
 /// Each issue's latest close text: a close row, or the close `fael compact`
@@ -100,14 +103,13 @@ fn key_reuse(log: &Log, from: i64) -> Vec<(&str, bool)> {
     out
 }
 
-fn measure(num: usize, den: usize, gone: bool) -> Measure {
-    let state = match (den, gone) {
-        (0, _) => State::Unmeasurable,
-        (_, true) => State::Partial,
-        _ => State::Measured,
-    };
+fn measure(num: usize, den: usize) -> Measure {
     Measure {
-        state,
+        state: if den == 0 {
+            State::Unmeasurable
+        } else {
+            State::Measured
+        },
         num,
         den,
         since: Some(LABEL_SINCE.to_string()),
@@ -119,7 +121,10 @@ pub(super) fn label(parsed: &Parsed, logs: &HashMap<String, Log>) -> Label {
     // by id: worktrees of one repo read the same log, each row counts once
     let (mut shut, mut keyed) = (HashMap::new(), HashMap::new());
     // a removed worktree last used before the contract had nothing to count
-    let gone = (parsed.rows.iter()).any(|u| u.ms >= from && !logs.contains_key(&u.repo));
+    let gone: HashSet<&str> = (parsed.rows.iter())
+        .filter(|u| u.ms >= from && !logs.contains_key(&u.repo))
+        .map(|u| u.repo.as_str())
+        .collect();
     for repo in parsed.first_seen.keys() {
         let Some(log) = logs.get(repo) else { continue };
         for (id, (ms, text)) in latest_closes(log) {
@@ -132,9 +137,10 @@ pub(super) fn label(parsed: &Parsed, logs: &HashMap<String, Log>) -> Label {
     let count = |f: fn(&Shape) -> bool| shut.values().filter(|s| f(s)).count();
     let reused = keyed.values().filter(|r| **r).count();
     Label {
-        close_core: measure(count(|s| s.core), shut.len(), gone),
-        guard: measure(count(|s| s.guard), shut.len(), gone),
-        key_reuse: measure(reused, keyed.len(), gone),
+        close_core: measure(count(|s| s.core), shut.len()),
+        guard: measure(count(|s| s.guard), shut.len()),
+        key_reuse: measure(reused, keyed.len()),
         find_hit: Measure::default(),
+        gone_repos: gone.len(),
     }
 }

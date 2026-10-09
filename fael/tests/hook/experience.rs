@@ -78,9 +78,9 @@ fn stats_links_a_fix_commit_by_the_id_it_names() {
 
 /// PLAN-fael-label chunk 3: each label measure is `{state, num, den, since}`
 /// — unmeasurable before anything is closed (never 0%), measured once it is,
-/// partial when a repo with usage has lost its log.
+/// still measured when a repo path with usage has lost its log (counted apart).
 #[test]
-fn stats_label_measures_take_three_states() {
+fn stats_label_measures_unmeasurable_measured_and_gone() {
     let d = repo();
     let add = ["add", "issue", "retry loops", "--files", "src/a.rs"];
     assert!(fael(&d, &[&add[..], &["--key", "a:retry"]].concat(), "").0);
@@ -111,7 +111,7 @@ fn stats_label_measures_take_three_states() {
     assert!(ok);
     let line = "  label — close core 1/1 (100%) · guard 1/1 (100%) · key reuse 0/1 (0%) · find hit n/a (usage keeps no missed find)";
     assert!(out.contains(line), "{out}");
-    // a second repo's usage, its log gone: the counts no longer cover it
+    // a removed worktree's usage: the state holds, the path is counted apart
     let usage = std::fs::read_dir(d.join("state"))
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -124,5 +124,8 @@ fn stats_label_measures_take_three_states() {
     let body = std::fs::read_to_string(&usage).unwrap() + &gone + "\n";
     std::fs::write(&usage, body).unwrap();
     let l = label();
-    assert_eq!(l["close_core"], m("partial", 1, 1), "{l}");
+    assert_eq!(l["close_core"], m("measured", 1, 1), "{l}");
+    assert_eq!(l["gone_repos"], 1, "{l}");
+    let (_, out, _) = fael(&d, &["stats"], "");
+    assert!(out.contains("1 repo path(s) gone"), "{out}");
 }
