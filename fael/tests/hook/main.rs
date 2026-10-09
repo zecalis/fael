@@ -64,6 +64,7 @@ mod tune;
 mod turn;
 mod usage_month;
 mod working_set;
+mod worktree_push;
 mod writer;
 
 use std::io::Write;

@@ -14,7 +14,7 @@ use super::cited::commit_cites;
 use super::protocol::{Event, Reply, ctx};
 use super::push::push;
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 /// The most files one call pushes.
@@ -50,6 +50,39 @@ fn is_data(p: &str) -> bool {
         .is_some_and(|e| EXT.contains(&e.to_ascii_lowercase().as_str()))
 }
 
+/// A shell command's segments, each with the directory it runs in: a `cd`
+/// to an existing directory moves every later segment, so `cd ../wt && cat
+/// a.rs` reads `../wt/a.rs`, not `a.rs` at the session's cwd.
+// ponytail: no subshell scope — `(cd x && …); cat y` reads y in x too; the
+// file still has to exist there
+fn segments<'a>(cmd: &'a str, cwd: &Path) -> Vec<(PathBuf, &'a str)> {
+    let mut dir = cwd.to_path_buf();
+    cmd.split(['|', ';', '&', '\n'])
+        .map(|seg| {
+            let mut w = seg.split_whitespace();
+            if w.next().map(|c| c.trim_start_matches('(')) == Some("cd")
+                && let Some(d) = w
+                    .next()
+                    .map(|d| dir.join(d.trim_matches(['\'', '"', ')'])))
+                    .filter(|d| d.is_dir())
+            {
+                dir = d;
+            }
+            (dir.clone(), seg)
+        })
+        .collect()
+}
+
+/// `p` as a hook names it: as written at the session's cwd, else under the
+/// directory a `cd` moved to (absolute, so push maps it to its repo).
+fn named(dir: &Path, cwd: &Path, p: &str) -> String {
+    if dir == cwd {
+        p.to_string()
+    } else {
+        dir.join(p).to_string_lossy().into_owned()
+    }
+}
+
 /// Files touched by one search/shell call, and what made them a touch:
 /// `reader-arg` (a path the call names), `hitlist` (the one file a grep's
 /// output names) or `glob` (the same from a glob). `input` is `tool_input`,
@@ -61,16 +94,19 @@ pub(crate) fn touched(
     response: &Value,
     cwd: &Path,
 ) -> (Vec<String>, &'static str) {
-    let is_file = |p: &str| !p.is_empty() && cwd.join(p).is_file();
+    let is_file = |dir: &Path, p: &str| !p.is_empty() && dir.join(p).is_file();
     let mut out: Vec<String> = vec![];
-    // true when `p` was new
-    let mut add = |p: &str| {
-        let new = out.len() < MAX_FILES && is_file(p) && !out.iter().any(|o| o == p);
+    // true when `p` (at `dir`) was new
+    let mut add = |dir: &Path, p: &str| {
+        let p = named(dir, cwd, p);
+        let new = out.len() < MAX_FILES && is_file(cwd, &p) && !out.contains(&p);
         if new {
-            out.push(p.to_string());
+            out.push(p);
         }
         new
     };
+    // where a hit list's relative paths start: the last `cd`, else cwd
+    let mut at = cwd.to_path_buf();
     let tool = tool.to_ascii_lowercase();
     let mut listing = tool == "grep" || tool == "glob";
     if tool == "grep" || tool == "glob" {
@@ -80,14 +116,11 @@ pub(crate) fn touched(
             .as_str()
             .or_else(|| input["filePath"].as_str())
         {
-            add(p);
+            add(cwd, p);
         }
     } else if SHELLS.contains(&tool.as_str()) {
-        for seg in input["command"]
-            .as_str()
-            .unwrap_or("")
-            .split(['|', ';', '&', '\n'])
-        {
+        for (dir, seg) in segments(input["command"].as_str().unwrap_or(""), cwd) {
+            at = dir.clone();
             let words: Vec<&str> = seg.split_whitespace().collect();
             let (git, rest) = match words.split_first() {
                 Some((&"git", r)) => (true, r),
@@ -108,7 +141,10 @@ pub(crate) fn touched(
             for w in rest.iter().skip(1).filter(|w| !w.starts_with('-')) {
                 let w = w.trim_matches(['\'', '"']);
                 // `git show HEAD:src/a.rs`
-                add(w.rsplit_once(':').filter(|_| git).map_or(w, |(_, p)| p));
+                add(
+                    &dir,
+                    w.rsplit_once(':').filter(|_| git).map_or(w, |(_, p)| p),
+                );
             }
         }
     }
@@ -136,7 +172,7 @@ pub(crate) fn touched(
         for l in lines.into_iter().take(MAX_LINES) {
             // `path:line:text`, or a bare path (`grep -l`, `rg -l`, files_with_matches)
             let p = l.split_once(':').map_or(l, |(p, _)| p).trim();
-            if !is_data(p) && !hits.contains(&p) && is_file(p) {
+            if !is_data(p) && !hits.contains(&p) && is_file(&at, p) {
                 hits.push(p);
             }
             if hits.len() > 1 {
@@ -144,7 +180,7 @@ pub(crate) fn touched(
             }
         }
         if let [p] = hits[..] {
-            from_hits = add(p);
+            from_hits = add(&at, p);
         }
     }
     let trigger = match (from_hits, tool == "glob") {
@@ -171,13 +207,12 @@ pub(crate) fn edited(tool: &str, input: &Value, cwd: &Path) -> Vec<String> {
         })
     };
     let mut out: Vec<String> = vec![];
-    let words = input["command"]
-        .as_str()
-        .unwrap_or("")
-        .split(|c: char| c.is_whitespace() || "'\"`()[]{},;|&<>=".contains(c));
-    for w in words {
-        if out.len() < MAX_FILES && !w.is_empty() && !out.iter().any(|o| o == w) && fresh(w) {
-            out.push(w.to_string());
+    for (dir, seg) in segments(input["command"].as_str().unwrap_or(""), cwd) {
+        let words = seg.split(|c: char| c.is_whitespace() || "'\"`()[]{},;|&<>=".contains(c));
+        for w in words.filter(|w| !w.is_empty()).map(|w| named(&dir, cwd, w)) {
+            if out.len() < MAX_FILES && !out.contains(&w) && fresh(&w) {
+                out.push(w);
+            }
         }
     }
     out
