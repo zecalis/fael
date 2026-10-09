@@ -78,14 +78,15 @@ pub(crate) fn commit_cites(log: &crate::core::Log, input: &Value) -> Vec<String>
     out
 }
 
-/// A `git commit` whose subject declares a fix (`fix:` / `fix(`, the type the
-/// agent typed — PLAN-fael-experience-loop chunk 5b) and whose text names no
-/// row of `log`, open or closed, by its `SHORT` prefix. Which issue the
-/// commit fixes is never judged; a repo without conventional commits never
-/// matches.
+/// A `git commit` whose own subject declares a fix (`fix:` / `fix(`, the type
+/// the agent typed — PLAN-fael-experience-loop chunk 5b; never a `fix(`
+/// elsewhere in a script that also commits) and whose text names no row of
+/// `log`, open or closed, by its `SHORT` prefix. Which issue the commit fixes
+/// is never judged; a repo without conventional commits never matches.
 pub(crate) fn fix_uncited(log: &crate::core::Log, input: &Value) -> bool {
     let cmd = input["command"].as_str().unwrap_or("");
-    if !is_commit(cmd) || !fix_subject(cmd) {
+    let fix = |s: &str| s.starts_with("fix:") || s.starts_with("fix(");
+    if !commits(cmd).filter_map(subject).any(fix) {
         return false;
     }
     let text = haystack(input);
@@ -94,28 +95,41 @@ pub(crate) fn fix_uncited(log: &crate::core::Log, input: &Value) -> bool {
         .any(|r| r.id.len() >= SHORT && text.contains(&r.id[..SHORT]))
 }
 
-/// A message line opening `fix:` / `fix(`: right after a `-m "` / `-m '`
-/// quote, or at a line start (a heredoc body).
-// ponytail: a later heredoc line opening `fix:` counts too — a subject parser
-// if a body ever trips it
-fn fix_subject(cmd: &str) -> bool {
-    cmd.match_indices("fix").any(|(i, _)| {
-        let before = cmd[..i].chars().next_back();
-        matches!(before, None | Some('\n' | '"' | '\''))
-            && matches!(cmd[i + 3..].chars().next(), Some(':' | '('))
+/// The subject after a commit's first `-m`-ending flag (`-m`, `-am`, `-qm`):
+/// its quote dropped, a `$(cat <<'EOF'` line skipped to the heredoc body.
+// ponytail: `-F` / `--message` / a glued `-m"…"` read as no subject
+fn subject(commit: &str) -> Option<&str> {
+    let flag = commit
+        .split_whitespace()
+        .find(|w| w.starts_with('-') && !w.starts_with("--") && w.ends_with('m'))?;
+    let rest = commit[offset(commit, flag) + flag.len()..].trim_start();
+    let rest = rest.trim_start_matches(['"', '\'']);
+    Some(match rest.strip_prefix("$(cat <<") {
+        Some(h) => h[h.find('\n')? + 1..].trim_start(),
+        None => rest,
     })
 }
 
-/// A shell command with a `git commit` segment: the first two bare words of
-/// a `;`/`&`/`|`/newline-split segment, skipping env assignments.
-pub(crate) fn is_commit(cmd: &str) -> bool {
-    cmd.split(['\n', ';', '&', '|']).any(|seg| {
+/// Byte offset of `part`, a slice of `whole`.
+fn offset(whole: &str, part: &str) -> usize {
+    part.as_ptr() as usize - whole.as_ptr() as usize
+}
+
+/// Each `git commit` in a shell command, from its `git` on: the first two bare
+/// words of a `;`/`&`/`|`/newline-split segment, env assignments skipped.
+fn commits(cmd: &str) -> impl Iterator<Item = &str> {
+    cmd.split(['\n', ';', '&', '|']).filter_map(move |seg| {
         let mut words = seg.split_whitespace().filter(|w| !w.contains('='));
         let git = words
             .next()
-            .is_some_and(|w| w == "git" || w.ends_with("/git"));
-        git && words.next() == Some("commit")
+            .filter(|w| *w == "git" || w.ends_with("/git"))?;
+        (words.next() == Some("commit")).then(|| &cmd[offset(cmd, git)..])
     })
+}
+
+/// A shell command with a `git commit` segment.
+pub(crate) fn is_commit(cmd: &str) -> bool {
+    commits(cmd).next().is_some()
 }
 
 /// A tool event: the repo is resolved here, since a search with no files never
@@ -239,6 +253,28 @@ mod tests {
         assert!(t("git commit -m 'fix per 01M45R3J'").contains("01M45R3J"));
         // a bare `fael` word later in a quoted message is no command
         assert!(t("echo 'x' && git commit -m \"a fael 01M45R3J\"").contains("01M45R3J"));
+    }
+
+    #[test]
+    fn only_the_commits_own_subject_declares_a_fix() {
+        let fix_subject = |c: &str| fix_uncited(&issue_log(&[], &[]), &json!({"command": c}));
+        for c in [
+            "git commit -m \"fix(hook): cap\"",
+            "git add -A && git commit -qm 'fix: cap'",
+            "git commit -am fix:cap",
+            "git commit -m \"$(cat <<'EOF'\nfix(hook): cap\n\nbody\nEOF\n)\"",
+        ] {
+            assert!(fix_subject(c), "{c}");
+        }
+        // a later line, a script holding a fix commit as text, an echo, -F
+        for c in [
+            "git commit -m \"feat: x\n\nfix: later line\"",
+            "cat > t.sh <<'EOF'\ngit commit -qm init\nrun \"git commit -m \\\"fix(a): x\\\"\"\nEOF",
+            "echo \"fix(a): x\"; git commit -m init",
+            "git commit -F msg.txt",
+        ] {
+            assert!(!fix_subject(c), "{c}");
+        }
     }
 
     #[test]
