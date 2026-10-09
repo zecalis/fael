@@ -161,11 +161,12 @@ fn filed<'a>(
 
 /// Whether row `r` came from this session: rows carry the writer's session
 /// as the transcript's file stem (`Row::session`), usage carries the hook's
-/// key (a path for Claude), so compare stems. No writer session → branch.
+/// key (a path for Claude), so compare stems. No writer session → branch,
+/// only when both are known: a row with neither is nobody's.
 pub(super) fn mine(r: &Row, session: &str, branch: Option<&str>) -> bool {
     match r.session() {
         Some(w) => Path::new(session).file_stem().is_some_and(|s| *s == *w),
-        None => branch.is_none() || r.branch().is_none() || r.branch() == branch,
+        None => branch.is_some() && r.branch() == branch,
     }
 }
 
@@ -208,11 +209,18 @@ mod tests {
         let mut other = row("B2", "2026-09-30T03:02:00.000Z", "note");
         other.extra.insert("branch".into(), "feat/a".into());
         other.extra.insert("session".into(), "s9".into());
+        let s1 = |id, ts, kind| {
+            let mut r = row(id, ts, kind);
+            r.extra.insert("session".into(), "s1".into());
+            r
+        };
         let log = Log {
             rows: vec![
-                row("R1", "2026-09-30T00:01:00.000Z", "note"), // via reply
-                row("M1", "2026-09-30T00:00:20.000Z", "decision"), // manual
-                row("C1", "2026-09-30T00:00:25.000Z", ""),     // a close: not an add
+                s1("R1", "2026-09-30T00:01:00.000Z", "note"), // via reply
+                s1("M1", "2026-09-30T00:00:20.000Z", "decision"), // manual
+                // neither session nor branch: nobody's, so s2 stays silent
+                row("N1", "2026-09-30T01:00:30.000Z", "note"),
+                row("C1", "2026-09-30T00:00:25.000Z", ""), // a close: not an add
                 row("OLD", "2026-09-29T00:00:00.000Z", "note"), // before first usage
                 on_b,
                 other,
@@ -226,7 +234,7 @@ mod tests {
                 reply_lines: 2,
                 reply_stored: 1,
                 reply_rejected: 1,
-                manual_adds: 3,
+                manual_adds: 4,
                 sessions_with_edits: 5,
                 sessions_with_edits_no_row: 2, // s2: no row near it · s4: only feat/b's
                 sessions_with_edits_gone: 1,   // s6
@@ -256,5 +264,16 @@ mod tests {
             "/h/.claude/projects/x/def.jsonl",
             Some("feat/other")
         ));
+    }
+
+    #[test]
+    fn a_row_with_no_session_is_mine_only_on_a_known_equal_branch() {
+        let mut r = row("R", "2026-09-30T00:00:00.000Z", "note");
+        let s = "/h/.claude/projects/x/abc.jsonl";
+        assert!(!mine(&r, s, Some("feat/z")));
+        assert!(!mine(&r, s, None));
+        r.extra.insert("branch".into(), "feat/z".into());
+        assert!(mine(&r, s, Some("feat/z")));
+        assert!(!mine(&r, s, None));
     }
 }
