@@ -3,8 +3,8 @@
 
 Rows in a window: issues closed and decisions written while the W PR commits
 ending at <end-sha> landed on origin/main (PR commit = mine.main_commits()
-subject ending in (#N)). A row superseded, or closed as "superseded", counts
-through its successor only. Each row is judged at its `at` commit: the squash
+subject ending in (#N)). A row superseded (edge not restored), or closed as
+"superseded", by the window's end counts through its successor only. Each row is judged at its `at` commit: the squash
 of the PR whose branch closed (issue) or wrote (decision) it, else main as it
 stood at that moment.
 
@@ -32,19 +32,27 @@ SEED = 20261010
 
 def ledger(repo):
     common = mine.git(repo, "rev-parse", "--git-common-dir").strip()
-    rows, closes, gone = {}, {}, set()
+    every = []
     for f in glob.glob(os.path.join(repo, common, "fael", "log", "*", "*.jsonl")):
-        for line in open(f):
-            r = json.loads(line)
-            if r.get("ref"):
-                closes.setdefault(r["ref"], r)
-                if r["text"] == "superseded":
-                    gone.add(r["ref"])
-            elif r.get("kind") in ("issue", "decision"):
-                rows[r["id"]] = r
-            if r.get("supersedes") and not r.get("restores"):
-                gone.add(r["supersedes"])
-    return rows, closes, gone
+        every += [json.loads(line) for line in open(f)]
+    every.sort(key=lambda r: mine.ts(r["ts"]))
+    rows, closes = {}, {}
+    for r in every:
+        if r.get("ref"):
+            closes.setdefault(r["ref"], r)  # first close by ts
+        elif r.get("kind") in ("issue", "decision"):
+            rows[r["id"]] = r
+    return rows, closes, every
+
+
+def gone_by(every, hi):
+    """Rows superseded (edge not restored) or closed as "superseded" by hi."""
+    early = [r for r in every if mine.ts(r["ts"]) <= hi]
+    reverted = {r["restores"] for r in early if r.get("restores")}
+    return ({r["supersedes"] for r in early
+             if r.get("supersedes") and r["id"] not in reverted}
+            | {r["ref"] for r in early
+               if r.get("ref") and r["text"] == "superseded"})
 
 
 def at_commit(event, pr_main, main):
@@ -57,7 +65,7 @@ def at_commit(event, pr_main, main):
 
 
 def main(repo, out_dir, *sel):
-    rows, closes, gone = ledger(repo)
+    rows, closes, every = ledger(repo)
     commits, times = mine.main_commits(repo)
     main_t = {sha: times[sha] for sha, *_ in commits}
     prs = json.loads(subprocess.run(
@@ -82,6 +90,7 @@ def main(repo, out_dir, *sel):
         def event(r):
             e = closes.get(r["id"]) if r["kind"] == "issue" else r
             return e and lo < mine.ts(e["ts"]) <= hi
+        gone = gone_by(every, hi)
         ids = sorted(k for k, r in rows.items() if k not in gone and event(r))
         print(json.dumps({"pr_commits": len(win), "from": lo.isoformat(),
                           "to": hi.isoformat(), "issues": sum(
