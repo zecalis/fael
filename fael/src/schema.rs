@@ -39,8 +39,8 @@ pub(crate) fn tools() -> Value {
             "description": "File what the next session needs — a decision and why, a bug (kind issue), or state it needs (note). Add it in the same message as your next tool call or final edit — never as a turn of its own.",
             "inputSchema": {"type": "object", "required": ["kind", "text"], "properties": {
                 "kind": str_("decision | issue | note, or a repo kind"),
-                "text": str_("what happened and why, standalone"),
-                "title": str_("≤15-word headline — set it if the first sentence passes ~12 words"),
+                "text": str_("what happened and why, standalone, one topic (no ; or · list)"),
+                "title": str_("≤15-word headline — required past 60 words or 400 chars of text"),
                 "files": {"type": "array", "items": {"type": "string"},
                     "description": "paths or scheme:ref anchors — omit for this session's edited files"},
                 "rows": {"type": "array", "items": {"type": "object"},
