@@ -164,6 +164,23 @@ pub(crate) fn fixed_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.fixed"))
 }
 
+/// `<seen file>.started` — left by session-start, keyed by the session id,
+/// so a row filed before the first edit can still show a hook event saw its
+/// env id in this worktree (01M4GEDR).
+pub(crate) fn started_path(session: &str, root: &Path) -> PathBuf {
+    seen_path(session, "", root).with_extension("started")
+}
+
+pub(crate) fn mark_started(session: &str, root: &Path) {
+    let p = started_path(session, root);
+    if !session.is_empty()
+        && p.parent()
+            .is_some_and(|d| std::fs::create_dir_all(d).is_ok())
+    {
+        let _ = std::fs::write(p, "");
+    }
+}
+
 /// The checked-out branch, read straight from `<gitdir>/HEAD` — no git spawn
 /// on this path (session-start already spawns elsewhere). Lives in `journal`
 /// beside the git-dir traversal the journal root uses too, so the two cannot

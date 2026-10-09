@@ -5,7 +5,7 @@ use super::asks::{UsageMeta, hook_meta};
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
-use super::state::{head_branch, prune_sessions, seen_path, session_key, state_dir};
+use super::state::{head_branch, mark_started, prune_sessions, seen_path, session_key, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
@@ -17,6 +17,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         None => return no(),
     };
     prune_sessions(&state_dir().join("sessions"));
+    mark_started(&c.session, &c.repo.root);
     // detached: teammates' rows land before the first read, never awaited
     super::autosync::start(e);
     // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
