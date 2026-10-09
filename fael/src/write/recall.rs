@@ -35,8 +35,8 @@ pub(crate) fn lines(log: &core::Log, row: &core::Row) -> Vec<String> {
         .map(|c| {
             let old = w.short(&c.id);
             format!(
-                "closed issue on these files: {old} \"{}\" — the same bug back? \
-fael add issue \"<text>\" --supersedes {old}, then fael close {new} \"refiled\"",
+                "closed earlier on these files (left closed): {old} \"{}\" — only if it is \
+the same bug: fael add issue \"<text>\" --supersedes {old}, then fael close {new} \"refiled\"",
                 c.display_title()
             )
         })

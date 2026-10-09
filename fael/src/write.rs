@@ -173,7 +173,7 @@ pub(crate) fn add_row(
         pending.evaluated.heal.supersedes.as_deref(),
     )?;
     warns.append(&mut core_warns);
-    warns.extend(recall::lines(&log, &row)); // closed issue on these files (context-loop 5)
+    warns.extend(recall::lines(&log, &row)); // closed earlier on these files (context-loop 5)
     // PLAN-fael-languages chunk 2: the row-language warning lives in core
     // (`lang::row_language_check` behind `[lang] rows`) — never a reject, one
     // warning line; under the default the string is byte-identical to the old one.
