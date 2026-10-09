@@ -51,14 +51,14 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         return show_one(a, &log, row, &branch_of);
     }
     // `find plan:x` reads the anchor the way `kickoff plan:x` does
-    let (query, anchor) = text_or_anchor(&log, forced.as_ref(), text, &r);
+    let (query, anchor, text_key) = text_or_anchor(&log, forced.as_ref(), text, &r);
     let mut files = core::normalize_files(&a.files(), &r.cwd, &r.root)?;
     files.extend(anchor);
     let (limit, offset) = a.paging()?;
     let f = Filter {
         text: query.cloned(),
         files: aliases::load(&r, &log, true).expand_all(&files),
-        key: a.one("key"),
+        key: a.one("key").or(text_key),
         kind: a.one("kind"),
         since: a.one("since"),
         by: a.one("by"),
@@ -143,20 +143,33 @@ fn found(root: &std::path::Path, id: &str) {
 
 /// A text query that is exactly a file or anchor some row is filed on
 /// (`plan:x`, a path) is that file, not words — the reading `kickoff` gives
-/// it. Anything else, a name no row is filed on, or `forced` (`--text`)
-/// stays a text search. Returns `(text query, files to add)`.
+/// it. One that is exactly a key some row carries — bare, as the `#k` a row
+/// prints, or `key:k` — is that key: text never searches keys. Anything
+/// else, or `forced` (`--text`), stays a text search. Returns `(text query,
+/// files to add, key)`.
 pub(crate) fn text_or_anchor<'a>(
     log: &Log,
     forced: Option<&'a String>,
     text: Option<&'a String>,
     r: &super::Repo,
-) -> (Option<&'a String>, Vec<String>) {
+) -> (Option<&'a String>, Vec<String>, Option<String>) {
     if forced.is_some() {
-        return (forced, vec![]);
+        return (forced, vec![], None);
     }
-    match text.and_then(|t| core::normalize_files(std::slice::from_ref(t), &r.cwd, &r.root).ok()) {
-        Some(f) if log.rows.iter().any(|row| row.files.contains(&f[0])) => (None, f),
-        _ => (text, vec![]),
+    let Some(t) = text else {
+        return (None, vec![], None);
+    };
+    let k = t
+        .strip_prefix('#')
+        .or_else(|| t.strip_prefix("key:"))
+        .unwrap_or(t);
+    // a bare word that is also a key (`usage`) stays words; `scope:name` is a key
+    if (k != t || k.contains(':')) && log.rows.iter().any(|row| row.key.as_deref() == Some(k)) {
+        return (None, vec![], Some(k.to_string()));
+    }
+    match core::normalize_files(std::slice::from_ref(t), &r.cwd, &r.root).ok() {
+        Some(f) if log.rows.iter().any(|row| row.files.contains(&f[0])) => (None, f, None),
+        _ => (text, vec![], None),
     }
 }
 

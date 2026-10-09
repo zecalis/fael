@@ -127,3 +127,51 @@ fn find_reads_an_anchor_like_kickoff() {
         .unwrap();
     assert!(String::from_utf8_lossy(&o.stderr).contains("no rows match \"plan:other\""));
 }
+
+#[test]
+fn find_reads_a_key_like_find_key() {
+    // agents copy the `#key` a row prints, or the `key:` field name; the body
+    // never holds the key, so only a key lookup can find it
+    let d = repo();
+    fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "m2 done, m2b is left",
+            "--files",
+            "a.rs",
+            "--key",
+            "vela:money-m2",
+        ],
+    );
+    for q in ["vela:money-m2", "#vela:money-m2", "key:vela:money-m2"] {
+        let out = fael(&d, &["find", q]);
+        assert!(out.contains("m2b is left"), "{q}: {out}");
+    }
+    // a bare word that is also a key stays a text search
+    fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "usage log is append-only",
+            "--files",
+            "a.rs",
+            "--key",
+            "usage",
+        ],
+    );
+    fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "usage rows carry a session",
+            "--files",
+            "b.rs",
+        ],
+    );
+    let out = fael(&d, &["find", "usage"]);
+    assert!(out.contains("carry a session"), "{out}");
+}
