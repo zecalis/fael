@@ -15,7 +15,10 @@ mod find;
 
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
+use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::SystemTime;
 
 const VERSION: &str = "2025-06-18";
 
@@ -28,8 +31,42 @@ pub(crate) fn pinned() -> bool {
     PIN.load(Ordering::Relaxed)
 }
 
+/// The binary this server started from, as it stood then (01M4F5N7M).
+static EXE: OnceLock<Option<Stamp>> = OnceLock::new();
+/// The replaced-binary line went out — it is said once per server.
+static TOLD: AtomicBool = AtomicBool::new(false);
+
+type Stamp = (PathBuf, SystemTime);
+
+fn stamp() -> Option<Stamp> {
+    let p = std::env::current_exe().ok()?;
+    let at = std::fs::metadata(&p).and_then(|m| m.modified()).ok()?;
+    Some((p, at))
+}
+
+/// The file is gone (brew dropped the old Cellar dir; Linux reads it as
+/// `… (deleted)`) or rewritten in place since the stamp was taken.
+fn replaced((p, at): &Stamp) -> bool {
+    std::fs::metadata(p).and_then(|m| m.modified()).ok() != Some(*at)
+}
+
+/// Once per server, when its binary was replaced after it started: the
+/// session's MCP is now an older fael than its CLI and hooks, and nothing
+/// else would say so.
+fn replaced_line() -> Option<String> {
+    let s = EXE.get()?.as_ref()?;
+    if !replaced(s) || TOLD.swap(true, Ordering::Relaxed) {
+        return None;
+    }
+    Some(format!(
+        "fael: this MCP server still runs fael {} — the installed fael was replaced since it started; restart the fael MCP server (or start a new session) so MCP matches the CLI and hooks",
+        env!("CARGO_PKG_VERSION")
+    ))
+}
+
 pub fn serve(pin: bool) -> Result<(), String> {
     PIN.store(pin, Ordering::Relaxed);
+    EXE.get_or_init(stamp);
     // this process's env is inherited at spawn, never per call: a row stamp
     // must come from a recorded session, not whatever id it was born with
     crate::session::mark_mcp_server();
@@ -87,9 +124,35 @@ fn call(p: &Value) -> Value {
     };
     let root = args::repo_for(args).ok().map(|r| r.root);
     crate::hook::record_mcp_call(name, args, root.as_deref(), &res);
-    let (text, is_error) = match res {
+    let (mut text, is_error) = match res {
         Ok(t) => (t, false),
         Err(e) => (e, true),
     };
+    if let Some(l) = replaced_line() {
+        text = format!("{text}\n{l}");
+    }
     json!({"content": [{"type": "text", "text": text}], "isError": is_error})
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replaced;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn a_binary_gone_or_rewritten_is_replaced() {
+        let p = std::env::temp_dir().join(format!("fael-exe-{}", std::process::id()));
+        std::fs::write(&p, "v1").unwrap();
+        let at = std::fs::metadata(&p).unwrap().modified().unwrap();
+        let s = (p.clone(), at);
+        assert!(!replaced(&s));
+        // rewritten in place (an installer copying over it)
+        let f = std::fs::File::options().write(true).open(&p).unwrap();
+        f.set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(1))
+            .unwrap();
+        assert!(replaced(&s));
+        // removed (brew upgrade deleting the old Cellar dir)
+        std::fs::remove_file(&p).unwrap();
+        assert!(replaced(&s));
+    }
 }
