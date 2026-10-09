@@ -3,7 +3,9 @@
 //! puts that pair — what broke, how it was fixed — in front of the agent,
 //! once per issue and session. A closed row never pushes (`push_tiered`), so
 //! without it the fix is written down and never read again. fael does not
-//! judge whether the old bug applies; the agent reads it and decides.
+//! judge whether the old bug applies; the agent reads it and decides. A close
+//! whose only evidence is a branch sha that never reached this checkout or
+//! the default branch is skipped (`reached`).
 
 use super::changed::Ask;
 use super::say::{Kind, Line};
@@ -11,6 +13,10 @@ use crate::core;
 
 /// The close text shown, in chars; the rest is one `fael find <id>` away.
 const CLOSE_CHARS: usize = 160;
+
+/// Fixed issues whose fix is looked up in git per edit (two spawns each at
+/// most): past the newest few, an unmerged fix stays silent, not slow.
+const REACHED: usize = 3;
 
 /// The newest closed, not superseded, issue on an edited file whose close
 /// names its fix, as one `Carry` line — unless it is `skip` (the gone-check
@@ -31,7 +37,13 @@ pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Li
         .filter(on_file)
         .filter(|r| closed.contains(r.id.as_str()) && !gone.contains(r.id.as_str()))
         .take(super::check::SCAN)
-        .find_map(|r| core::fix_close(ask.log, r).map(|t| (r, t)))?;
+        .filter_map(|r| core::fix_close(ask.log, r).map(|t| (r, t)))
+        .take(REACHED)
+        // one said this session is spent anyway (the Outbox drops it): no spawn
+        .find(|(r, t)| {
+            ask.hinted.contains(&format!("carry:{}", r.id))
+                || super::reached::fix_reached(ask.root, t, &r.id)
+        })?;
     if skip == Some(r.id.as_str()) {
         return None;
     }
@@ -60,6 +72,29 @@ fn clip(text: &str) -> String {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    /// The taught close puts its lesson (`guard` or `don't`) before `tried`,
+    /// so a long close loses what failed to the clip, never the lesson.
+    #[test]
+    fn clip_keeps_the_taught_lesson() {
+        let text = core::stats::CLOSE_TEMPLATE
+            .replace("<cause>", "copy-as-new drops line quantity on every draft")
+            .replace("<fix>", "copy every line field")
+            .replace("guard `<test path>` or ", "")
+            .replace("<X>", "copy fields by hand")
+            .replace("<Y>", "copyLine() is the one list of fields")
+            .replace(
+                "<what failed>",
+                "a per-field patch, then a deep clone that also copied ids",
+            )
+            .replace("<sha or (#N)>", "(#326)");
+        assert!(text.chars().count() > CLOSE_CHARS, "{text}");
+        assert!(
+            clip(&text).contains("copyLine() is the one list"),
+            "{}",
+            clip(&text)
+        );
+    }
 
     fn row(id: &str, kind: &str, text: &str) -> core::Row {
         core::Row {
@@ -182,7 +217,9 @@ mod tests {
         };
         let (got, silent) = timed(&log);
         assert!(got.is_none());
-        log.closes.last_mut().unwrap().text = "cap → 3; fixed in e6deb61".into();
+        // `(#N)`, not a sha: the hub scan is what grows with the log; a sha's
+        // git lookup (`reached`) is a constant, bounded by `REACHED`
+        log.closes.last_mut().unwrap().text = "cap → 3; fixed in (#61)".into();
         let (got, ms) = timed(&log);
         assert!(got.is_some());
         assert!(silent < 50.0 && ms < 50.0, "{silent:.1} ms / {ms:.1} ms");
