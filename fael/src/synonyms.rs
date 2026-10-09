@@ -213,6 +213,48 @@ pub(crate) fn reject(argv: &[String], e: String) -> String {
     e
 }
 
+/// What a failed run says: a text flag clash (`text_twice`), else `reject`.
+/// `raw` is the agent's argv, `argv` the rewritten one.
+pub(crate) fn explain(raw: &[String], argv: &[String], e: String) -> String {
+    reject(argv, text_twice(raw, argv, e))
+}
+
+/// `add note "x" --body "y"`: `rewrite` moved the flag into the text slot, so
+/// the parser saw two texts and said only "wrong arguments". Name the flag
+/// when the rewritten argv (`argv`) has one positional more than the command
+/// takes and the agent's own argv (`raw`) holds a text flag.
+fn text_twice(raw: &[String], argv: &[String], e: String) -> String {
+    let cmd = argv.first().map_or("", String::as_str);
+    let slot = match cmd {
+        "add" => "<kind>",
+        "close" => "<id>",
+        _ => return e,
+    };
+    if !e.starts_with("rejected: wrong arguments") {
+        return e;
+    }
+    let flag = raw
+        .iter()
+        .map(|s| s.split('=').next().unwrap_or(s))
+        .find(|s| {
+            FLAGS
+                .iter()
+                .any(|(c, f, to)| matches!(to, Text) && f == s && listed(c, cmd))
+        });
+    // the command, its kind or id, and two texts
+    let two = crate::Args::parse(argv.to_vec()).is_ok_and(|a| a.pos.len() > 3);
+    match flag {
+        Some(f) if two => with_usage(
+            cmd,
+            format!(
+                "rejected: {f} is the text, and a text was given too — pass it once: fael {cmd} {slot} \"<text>\""
+            ),
+            &e,
+        ),
+        _ => e,
+    }
+}
+
 /// `msg` plus the command's synopsis line; `old` when the command has none.
 fn with_usage(cmd: &str, msg: String, old: &str) -> String {
     match crate::help::for_command(cmd).and_then(|s| s.lines().next()) {
