@@ -103,7 +103,9 @@ fn a_fix_on_an_unmerged_branch_is_not_carried_until_its_subject_lands() {
             "fix: cap retries at 3",
         ],
     );
-    let sha = git(&d, &["rev-parse", "--short", "HEAD"]);
+    // the full sha: a short one is all digits ~4% of the time, and a close
+    // naming only digits names no fix (`sha_like` needs a letter too)
+    let sha = git(&d, &["rev-parse", "HEAD"]);
     git(&d, &["switch", "-q", home.trim()]);
     closed_with(&d, &format!("no cap → cap at 3; {}", sha.trim()));
     assert!(
@@ -133,7 +135,9 @@ fn an_unmerged_sha_is_carried_once_a_commit_cites_the_issue() {
     let home = git(&d, &["rev-parse", "--abbrev-ref", "HEAD"]);
     git(&d, &["switch", "-q", "-c", "side"]);
     git(&d, &["commit", "-q", "--allow-empty", "-m", "wip"]);
-    let sha = git(&d, &["rev-parse", "--short", "HEAD"]);
+    // the full sha: a short one is all digits ~4% of the time, and a close
+    // naming only digits names no fix (`sha_like` needs a letter too)
+    let sha = git(&d, &["rev-parse", "HEAD"]);
     git(&d, &["switch", "-q", home.trim()]);
     closed_with(&d, &format!("no cap → cap at 3; {}", sha.trim()));
     assert!(!hook(&d, "edit", "s1").contains(SAID));
