@@ -199,3 +199,121 @@ fn unrecorded_client_session_tags_nothing() {
     assert!(ok, "{err}");
     assert!(!log_text(&d).contains("\"session\":"), "{}", log_text(&d));
 }
+
+/// A Claude session-start in `d` under `id`, keyed by its transcript path.
+fn start(d: &std::path::Path, id: &str, source: &str) {
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"{id}","transcript_path":{},"source":"{source}"}}"#,
+        json(d),
+        json(&d.join(format!("t/{id}.jsonl")))
+    );
+    let (ok, _, err) = fael_env(
+        d,
+        &["hook", "session-start", "--client", "claude"],
+        &input,
+        &[],
+    );
+    assert!(ok, "{err}");
+}
+
+/// Issue 01M4GEDR: a session's first CLI row, before any edit, carries the
+/// session its session-start registered here. The start is no edit (`add`
+/// without --files still asks for them), a second start is harmless, and
+/// another session's start vouches for nobody else.
+#[test]
+fn a_session_start_lets_the_first_cli_row_carry_the_session() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael_env(&d, &["add", "note", "seed", "--files", "src/a.rs"], "", &[]);
+    assert!(ok, "{err}");
+    start(&d, "abc-123", "startup");
+    start(&d, "abc-123", "compact");
+    start(&d, "other-9", "startup");
+    let me = [("CLAUDE_CODE_SESSION_ID", "abc-123")];
+    let (ok, _, err) = fael_env(&d, &["add", "note", "no files named"], "", &me);
+    assert!(!ok, "a session-start is not an edit: {err}");
+    for (text, id) in [("first", "abc-123"), ("stranger", "zzz-000")] {
+        let env = [("CLAUDE_CODE_SESSION_ID", id)];
+        let (ok, _, err) = fael_env(&d, &["add", "note", text, "--files", "src/a.rs"], "", &env);
+        assert!(ok, "{err}");
+    }
+    let log = log_text(&d);
+    assert!(log.contains(r#""session":"abc-123""#), "{log}");
+    assert_eq!(log.matches(r#""session":"#).count(), 1, "{log}");
+}
+
+/// 01M47N67 still holds over MCP: the server's env may name a session it
+/// outlived, so a registered session-start does not vouch for it there.
+#[test]
+fn a_session_start_does_not_vouch_for_the_mcp_server() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael_env(&d, &["add", "note", "seed", "--files", "src/a.rs"], "", &[]);
+    assert!(ok, "{err}");
+    start(&d, "abc-123", "startup");
+    let rpc = serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "tools/call",
+        "params": {"name": "add", "arguments": {"kind": "note", "text": "over mcp",
+        "files": ["src/a.rs"], "cwd": d}}});
+    let env = [("CLAUDE_CODE_SESSION_ID", "abc-123")];
+    let (ok, out, err) = fael_env(&d, &["mcp"], &format!("{rpc}\n"), &env);
+    assert!(ok && out.contains("recorded"), "{out}{err}");
+    assert!(!log_text(&d).contains(r#""session":"#), "{}", log_text(&d));
+}
+
+/// The edit ask never asks a session about the row it just filed: with the
+/// session stamped at its start, `own_row` knows the row is its own.
+#[test]
+fn the_edit_ask_skips_the_row_the_session_filed_before_its_first_edit() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    let (ok, _, err) = fael_env(&d, &["add", "note", "seed", "--files", "src/a.rs"], "", &[]);
+    assert!(ok, "{err}");
+    start(&d, "abc-123", "startup");
+    let me = [("CLAUDE_CODE_SESSION_ID", "abc-123")];
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "issue", "login loops here", "--files", "src/a.rs"],
+        "",
+        &me,
+    );
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// v2 the fix\n").unwrap();
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"abc-123","transcript_path":{},"tool_input":{{"file_path":{}}}}}"#,
+        json(&d),
+        json(&d.join("t/abc-123.jsonl")),
+        json(&d.join("src/a.rs"))
+    );
+    let (ok, out, err) = fael_env(&d, &["hook", "edit", "--client", "claude"], &input, &[]);
+    assert!(ok, "{err}");
+    assert!(!out.contains("changed since"), "{out}");
+}
+
+/// A detached HEAD names no branch, so the row carries the commit and no
+/// branch — never a guessed one (a commit can sit on many branches).
+#[test]
+fn a_detached_head_stamps_the_sha_and_no_branch() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let git = |args: &[&str]| {
+        let o = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&d)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{o:?}");
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    };
+    git(&["switch", "-q", "--detach", "HEAD"]);
+    let sha = git(&["rev-parse", "--short", "HEAD"]);
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "note", "on detached", "--files", "src/a.rs"],
+        "",
+        &[],
+    );
+    assert!(ok, "{err}");
+    let log = log_text(&d);
+    assert!(log.contains(&format!(r#""sha":"{sha}"#)), "{log}");
+    assert!(!log.contains(r#""branch":"#), "{log}");
+}
