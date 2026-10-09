@@ -37,7 +37,7 @@ const AGENT_CMDS: [&str; 9] = [
 
 /// Why a reject cost a round, from its message — the vocabulary the plan fixed.
 fn reason(e: &str) -> &'static str {
-    if e.starts_with("rejected: nothing written") {
+    if e.starts_with(crate::batch::GATE_REJECT) {
         core::stats::SHAPE_GATE
     } else if e.starts_with("rejected: unknown flag") {
         "unknown_flag"

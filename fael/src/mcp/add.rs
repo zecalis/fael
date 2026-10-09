@@ -41,7 +41,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         }
         let mut out = vec![];
         let mut warns = vec![];
-        let mut failed = 0;
+        let (mut failed, mut gated) = (0, 0);
         for (i, v) in rows.iter().enumerate() {
             let b = crate::batch::batch_row(v).map_err(|e| row_err(e, i))?;
             match add_row(r, &b.kind, &b.text, &b.files, b.opts) {
@@ -56,6 +56,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                 }
                 Err(e) => {
                     failed += 1;
+                    gated += usize::from(e.starts_with(crate::batch::GATE_REJECT));
                     let e = format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "));
                     record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
                     out.push(e);
@@ -64,7 +65,9 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         }
         // like the CLI batch: any rejection turns the call into an error —
         // the saved rows stay saved, their warnings already sit under their ids
+        // its first line says why, like the CLI batch's one reject
         if failed > 0 {
+            out.insert(0, crate::batch::batch_reject(failed, gated, rows.len()));
             return Err(out.join("\n"));
         }
         // chunk 6e rides inside write::add_row — the saved ids are already seen
