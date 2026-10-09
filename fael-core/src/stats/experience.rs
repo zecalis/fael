@@ -83,6 +83,16 @@ pub(crate) fn names_fix(text: &str) -> bool {
     words(text).any(|w| sha_like(w) || pr_like(w))
 }
 
+/// The shas a close names when it names no `(#N)` — the fix evidence a reader
+/// must find in git (fael:01M4GQVP). A `(#N)` survives a squash, so a close
+/// naming one yields none.
+pub fn bare_shas(text: &str) -> Vec<&str> {
+    if words(text).any(pr_like) {
+        return vec![];
+    }
+    words(text).filter(|w| sha_like(w)).collect()
+}
+
 /// Every close text of `log`, by the issue it closes: close rows and the
 /// close `fael compact` folded into the row.
 fn close_texts(log: &Log) -> HashMap<&str, Vec<&str>> {

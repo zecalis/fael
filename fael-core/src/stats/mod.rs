@@ -46,7 +46,7 @@ pub use day::{
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
 pub(crate) use experience::names_fix;
-pub use experience::{CLOSE_TEMPLATE, Commit, Commits, Experience, Shape, close_shape};
+pub use experience::{CLOSE_TEMPLATE, Commit, Commits, Experience, Shape, bare_shas, close_shape};
 pub use friction::{FIRST_CALL_WINDOW, Friction, SHAPE_GATE, Tally};
 pub use incident::{INCIDENT_KEY, Incidents};
 pub use label::{LABEL_SINCE, Label, Measure, State};

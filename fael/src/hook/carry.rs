@@ -3,7 +3,9 @@
 //! puts that pair — what broke, how it was fixed — in front of the agent,
 //! once per issue and session. A closed row never pushes (`push_tiered`), so
 //! without it the fix is written down and never read again. fael does not
-//! judge whether the old bug applies; the agent reads it and decides.
+//! judge whether the old bug applies; the agent reads it and decides. A close
+//! whose only evidence is a branch sha that never reached this checkout or
+//! the default branch is skipped (`reached`).
 
 use super::changed::Ask;
 use super::say::{Kind, Line};
@@ -11,6 +13,10 @@ use crate::core;
 
 /// The close text shown, in chars; the rest is one `fael find <id>` away.
 const CLOSE_CHARS: usize = 160;
+
+/// Fixed issues whose fix is looked up in git per edit (two spawns each at
+/// most): past the newest few, an unmerged fix stays silent, not slow.
+const REACHED: usize = 3;
 
 /// The newest closed, not superseded, issue on an edited file whose close
 /// names its fix, as one `Carry` line — unless it is `skip` (the gone-check
@@ -31,7 +37,9 @@ pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Li
         .filter(on_file)
         .filter(|r| closed.contains(r.id.as_str()) && !gone.contains(r.id.as_str()))
         .take(super::check::SCAN)
-        .find_map(|r| core::fix_close(ask.log, r).map(|t| (r, t)))?;
+        .filter_map(|r| core::fix_close(ask.log, r).map(|t| (r, t)))
+        .take(REACHED)
+        .find(|(r, t)| super::reached::fix_reached(ask.root, t, &r.id))?;
     if skip == Some(r.id.as_str()) {
         return None;
     }

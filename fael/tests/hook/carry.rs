@@ -3,7 +3,7 @@
 //! → how it was fixed" in front of the agent once per session; a close with
 //! no fix named, or a read, is silent.
 
-use super::{fael, fael_env, json, repo};
+use super::{fael, fael_env, git, json, repo};
 use std::path::Path;
 
 const SAID: &str = "broke before";
@@ -83,4 +83,71 @@ fn no_fix_named_or_a_read_is_silent() {
     assert!(!hook(&d, "read", "s1").contains(SAID));
     // the read spent nothing: the edit that follows is told
     assert!(hook(&d, "edit", "s1").contains(SAID));
+}
+
+/// fael:01M4GQVP: a close whose only evidence is a branch sha that never
+/// reached HEAD or the default branch is not carried; once a commit there
+/// keeps that sha's subject (a squash does), it is.
+#[test]
+fn a_fix_on_an_unmerged_branch_is_not_carried_until_its_subject_lands() {
+    let d = repo();
+    let home = git(&d, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    git(&d, &["switch", "-q", "-c", "side"]);
+    git(
+        &d,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "fix: cap retries at 3",
+        ],
+    );
+    let sha = git(&d, &["rev-parse", "--short", "HEAD"]);
+    git(&d, &["switch", "-q", home.trim()]);
+    closed_with(&d, &format!("no cap → cap at 3; {}", sha.trim()));
+    assert!(
+        !hook(&d, "edit", "s1").contains(SAID),
+        "unmerged fix carried"
+    );
+    git(
+        &d,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "squash (#9)\n\n* fix: cap retries at 3",
+        ],
+    );
+    assert!(
+        hook(&d, "edit", "s2").contains(SAID),
+        "merged fix not carried"
+    );
+}
+
+/// The other evidence a squash keeps: a commit naming the issue id.
+#[test]
+fn an_unmerged_sha_is_carried_once_a_commit_cites_the_issue() {
+    let d = repo();
+    let home = git(&d, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    git(&d, &["switch", "-q", "-c", "side"]);
+    git(&d, &["commit", "-q", "--allow-empty", "-m", "wip"]);
+    let sha = git(&d, &["rev-parse", "--short", "HEAD"]);
+    git(&d, &["switch", "-q", home.trim()]);
+    closed_with(&d, &format!("no cap → cap at 3; {}", sha.trim()));
+    assert!(!hook(&d, "edit", "s1").contains(SAID));
+    let (_, out, _) = fael(&d, &["find", "--key", "a:retry", "--all"], "");
+    let id = out.split(['[', ']']).nth(1).unwrap().to_string();
+    git(
+        &d,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            &format!("cap retries (fael:{id})"),
+        ],
+    );
+    assert!(hook(&d, "edit", "s2").contains(SAID));
 }
