@@ -128,7 +128,7 @@ fael upgrade              # update fael by the channel it came from, then its ho
 fael install --dry-run    # show what would change, write nothing
 ```
 
-fael also checks for a new release at session start, at most once a day, and installs it by the same channel after the tag has been out a day. Turn that off with `FAEL_NO_AUTO_UPDATE=1` or `auto_update = false` in `~/.config/fael/config.toml`; `fael upgrade` by hand always works.
+fael also checks for a new release at session start, at most once a day, and installs it by the same channel after the tag has been out a day. On Windows it only says a new release is out — run `fael upgrade` yourself. Turn that off with `FAEL_NO_AUTO_UPDATE=1` or `auto_update = false` in `~/.config/fael/config.toml`; `fael upgrade` by hand always works.
 
 `fael` must be on your `PATH` — the hooks call it by name, so upgrades never leave them pointing at
 an old path. That's also why `npx @zecalis/fael install` is refused: npx keeps the binary in a

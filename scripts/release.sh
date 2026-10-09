@@ -2,6 +2,7 @@
 # Cut a release: bump fael/Cargo.toml, commit + tag on main, push.
 # The tag runs .github/workflows/release.yml → GitHub Release + npm @zecalis/fael + Homebrew tap.
 # usage: scripts/release.sh [patch|minor|major]   (default patch)
+# FAEL_RELEASE_NO_LOCAL=1 leaves this machine's npm/brew fael alone, so auto-update has a release to catch
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 
@@ -68,6 +69,10 @@ done
 [ -n "$run" ] || { echo "release: no release.yml run for v$new after 60s — check Actions" >&2; exit 1; }
 gh run watch "$run" --exit-status >/dev/null || { echo "release: release.yml run $run failed — gh run rerun $run --failed" >&2; exit 1; }
 echo "release.yml $run green"
+if [ -n "${FAEL_RELEASE_NO_LOCAL:-}" ]; then
+  echo "local fael left as is (FAEL_RELEASE_NO_LOCAL)"
+  exit 0
+fi
 if npm ls -g @zecalis/fael >/dev/null 2>&1; then
   # registry lag has no fixed length (usually seconds) — poll up to 5 min instead of guessing a sleep
   for _ in $(seq 30); do
