@@ -199,25 +199,29 @@ fn tally_text(t: &core::stats::Tally) -> String {
 }
 
 /// The `fael stats` friction lines: the total per 100 calls, the reject
-/// reasons, then each command's own — nothing called = no lines.
+/// reasons, then each command's own — nothing called and nothing gated = no
+/// lines; gate rejects alone get the line with no rate (none of 0 calls).
 pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
+    let gate = if f.shape_gate == 0 {
+        String::new()
+    } else {
+        format!(" · shape gate ×{} (not friction)", f.shape_gate)
+    };
     if f.total.calls == 0 {
-        return vec![];
+        return match f.shape_gate {
+            0 => vec![],
+            _ => vec![format!("  friction per 100 calls (0 calls): n/a{gate}")],
+        };
     }
     let reasons: Vec<String> = f.reasons.iter().map(|(r, n)| format!("{r} ×{n}")).collect();
     let mut out = vec![format!(
-        "  friction per 100 calls ({} calls): {}{}{}",
+        "  friction per 100 calls ({} calls): {}{}{gate}",
         f.total.calls,
         tally_text(&f.total),
         if reasons.is_empty() {
             String::new()
         } else {
             format!(" · rejects: {}", reasons.join(", "))
-        },
-        if f.shape_gate == 0 {
-            String::new()
-        } else {
-            format!(" · shape gate ×{} (not friction)", f.shape_gate)
         }
     )];
     let mut by: Vec<_> = f.by_command.iter().collect();
@@ -282,6 +286,15 @@ mod tests {
     #[test]
     fn text_is_silent_with_no_calls_and_per_100_otherwise() {
         assert!(lines(&Friction::default()).is_empty());
+        // gate rejects alone still print, with no rate to divide by zero
+        let gated = Friction {
+            shape_gate: 3,
+            ..Friction::default()
+        };
+        assert_eq!(
+            lines(&gated),
+            ["  friction per 100 calls (0 calls): n/a · shape gate ×3 (not friction)"]
+        );
         let t = Tally {
             calls: 8,
             rejects: 1,

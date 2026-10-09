@@ -44,7 +44,8 @@ pub(crate) fn groups(
         },
     );
     if rows.is_empty() {
-        eprintln!("fael: no rows match");
+        // the flat list's reason, so an empty open list says --all adds closed
+        eprintln!("fael: {}", core::why_empty(log, f, "--files"));
     } else if f.kind.as_deref() == Some("issue") {
         print!("{}", render_issue_groups(r, log, &rows, branch_of));
     } else {

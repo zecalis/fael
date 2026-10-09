@@ -31,3 +31,15 @@ fn find_kind_issue_groups_by_default() {
     );
     assert!(!body.contains("fix together"), "{body}");
 }
+
+/// An empty grouped answer says why like the flat one: closed rows need all=true.
+#[test]
+fn an_empty_issue_list_says_all_adds_closed() {
+    let (_, wt) = main_and_worktree();
+    let r = mcp_tool(&wt, "find", &[serde_json::json!({"kind": "issue"})]);
+    let body = r[0]["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        body.starts_with("no rows match kind=issue (open rows only; --all adds closed)"),
+        "{body}"
+    );
+}

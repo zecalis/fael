@@ -204,11 +204,12 @@ fn groups(
         &core::Filter {
             limit: None,
             offset: 0,
-            ..f
+            ..f.clone()
         },
     );
     let text = match rows.is_empty() {
-        true => "no rows match".into(),
+        // the flat list's reason, so an empty open list says all=true adds closed
+        true => core::why_empty(log, &f, "files"),
         false if is_issue => {
             crate::find::issue::render_issue_groups(r, log, &rows, branch_of.clone())
         }
