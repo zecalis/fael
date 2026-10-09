@@ -78,7 +78,9 @@ fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<Str
     for c in backtick_paths(text) {
         let p = c.strip_prefix('/').unwrap_or(c);
         let p = p.strip_prefix("./").unwrap_or(p);
-        // `file.rs:88` cites a line inside a file — the file is what must exist
+        // `a.md#usage` and `file.rs:88` cite a place inside a file — the file
+        // is what must exist
+        let p = p.split_once('#').map_or(p, |(file, _)| file);
         let p = strip_location(p);
         // a span with whitespace is a command (`fael find --files <dir>/`),
         // never a path that must exist
@@ -91,8 +93,9 @@ fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<Str
             continue;
         }
         // a bare `name.ext` is a file only by a file's extension: `money.read`
-        // and `document.type` are code identifiers (#293)
-        if !p.contains('/') && !p.starts_with('.') && !file_ext(p) {
+        // and `document.type` are code identifiers (#293), and so is a bare
+        // call (`.clone()`); a dir may hold parens (`app/(auth)/page.tsx`)
+        if !p.contains('/') && (p.contains('(') || !p.starts_with('.') && !file_ext(p)) {
             continue;
         }
         // no file name, and a first dir this repo does not have: a name from
@@ -130,14 +133,16 @@ fn strip_location(p: &str) -> &str {
 }
 
 /// Extensions a bare `name.ext` must end in to be judged as a file — the
-/// rest (`.read`, `.type`, `.copy`) are field and method names.
+/// rest (`.read`, `.type`, `.copy`) are field and method names. `env`, `mod`
+/// and `sum` are left out: `process.env` and `np.sum` are code far more often
+/// than a bare `go.sum` is gone (`.env` is judged as a dotfile anyway).
 /// ponytail: a fixed list; a gone file with an unlisted extension goes unsaid
 const FILE_EXTS: &[&str] = &[
     "rs", "toml", "lock", "md", "mdx", "txt", "json", "jsonc", "yaml", "yml", "ts", "tsx", "js",
     "jsx", "mjs", "cjs", "py", "go", "java", "kt", "kts", "swift", "c", "h", "cc", "cpp", "hpp",
     "cs", "rb", "php", "sh", "bash", "zsh", "fish", "ps1", "sql", "html", "css", "scss", "vue",
-    "svelte", "xml", "csv", "env", "ini", "cfg", "conf", "mod", "sum", "gradle", "proto",
-    "graphql", "gql", "prisma", "dart", "lua", "zig", "ex", "exs", "pdf", "png", "svg",
+    "svelte", "xml", "csv", "ini", "cfg", "conf", "gradle", "proto", "graphql", "gql", "prisma",
+    "dart", "lua", "zig", "ex", "exs", "pdf", "png", "svg",
 ];
 
 /// A bare name ending in one of `FILE_EXTS`, any case (`Cargo.toml`, `A.TS`).

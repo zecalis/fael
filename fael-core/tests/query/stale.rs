@@ -108,18 +108,20 @@ fn stale_refs_flags_only_what_is_gone() {
         ["src/gone/"]
     );
     // #293: a route with a query, a placeholder, a glob and dotted code
-    // identifiers name no file; a bare file name with a file's extension does
+    // identifiers (`process.env`, `np.sum`, `.clone()`) name no file; a bare
+    // file name with a file's extension does, and an anchor cites its file
     assert_eq!(
         stale_refs(
             &r,
             &text_row(
                 "A0000000000000000000000026",
                 "`dev/ui?s=marks` `e2e/<flow>.ts` `src/*.rs` `createDocumentService.copy` \
-                 `document.type` `money.read` `README.MD`"
+                 `document.type` `money.read` `process.env` `np.sum` `.clone()` `README.MD` \
+                 `src/keep.rs#usage` `src/gone.rs#L3`"
             ),
             &al
         ),
-        ["README.MD"]
+        ["README.MD", "src/gone.rs"]
     );
 }
 
