@@ -7,8 +7,8 @@ base(): a bare repo holding only history reachable from C^ (fetched by sha
 into an empty repo, so C and later never arrive), with .fael/ dropped from
 every commit — the tracked frozen log is ledger content, and it must reach an
 agent only through the snapshot. strip=True also cuts fael's commands from
-every markdown file in every commit (the off arm's AGENTS.md/CLAUDE.md), so
-neither `git status` nor `git log -p` shows what was cut.
+every instruction file (CLAUDE.md, AGENTS.md, README.md, SKILL.md) in every
+commit, so neither `git status` nor `git log -p` shows what was cut.
 
 snapshot(): every ledger line (the clone's journal, plus the tree log at C^)
 written before C^ landed and not on C's own branch, folded into
@@ -30,9 +30,12 @@ from datetime import datetime
 # the agent sees its cwd: nothing in the path may name fael or the arm
 ROOT = "/tmp/trials"
 # a fael command or path in prose; `fael #key` pointers inside a rule are kept
-CMD = re.compile(rb"`fael\b|\bfael (add|find|close|kickoff|sync|stats|hook|mcp"
-                 rb"|install|next|claim)\b|Fael MCP|\.fael/|\.git/fael"
-                 rb"|chore\(fael\)|\(see Memory\)")
+CMD = re.compile(rb"\bfael (add|find|close|kickoff|sync|stats|hook|mcp|install|next|claim)\b"
+                 rb"|`fael`|Fael MCP|\.fael/|\.git/fael|chore\(fael\)|\(see Memory\)")
+# what an agent loads or is told to follow. Plans, specs and docs keep every
+# line: a user decision there may end in "record it with `fael add decision`",
+# and losing the decision would cost the off arm a repo rule, not fael
+INSTRUCTIONS = (b"CLAUDE.md", b"AGENTS.md", b"README.md", b"SKILL.md")
 HEAD = re.compile(rb"(#+)\s+(.*?)\s*$")
 
 
@@ -104,7 +107,7 @@ def rewrite(raw, dest, strip_md):
             p = _path(parts[-1])
             if p == b".fael" or p.startswith(b".fael/"):
                 continue
-            if line.startswith(b"M ") and strip_md and p.endswith(b".md") \
+            if line.startswith(b"M ") and strip_md and p.rsplit(b"/", 1)[-1] in INSTRUCTIONS \
                     and parts[2] in fael_blobs:
                 new = strip(fael_blobs[parts[2]])
                 if new != fael_blobs[parts[2]]:

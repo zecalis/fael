@@ -30,17 +30,22 @@ def main():
     replica.ROOT = t
     src = os.path.join(t, "src")
     os.makedirs(os.path.join(src, ".fael", "log", "w x"))
-    os.makedirs(os.path.join(src, "docs"))
+    os.makedirs(os.path.join(src, "docs", "ข้อ ตกลง"))
     git(t, "init", "-q", "-b", "main", src)
     git(src, "config", "user.name", "x")
     git(src, "config", "user.email", "x@x")
     open(os.path.join(src, "CLAUDE.md"), "w").write(
         "# Rules\n* keep `a.ts` small\n* run `fael kickoff` first\n"
+        "* test `fael-core/x` first\n* ask (fael `#ui:smoke`)\n"
+        "`.fael/` is managed through `fael`.\n"
         "## Memory\nfael is append-only\n* rows hold why\n## Tests\n* bun test\n")
     open(os.path.join(src, "a.ts"), "w").write("// a\n")
     # git quotes a Thai or spaced path: it must still be cut, stripped, read
-    open(os.path.join(src, "docs", "ข้อ ตกลง.md"), "w").write(
+    open(os.path.join(src, "docs", "ข้อ ตกลง", "AGENTS.md"), "w").write(
         "* keep it short\n* then `fael close <id>`\n")
+    # a plan is not an instruction file: a user decision there stays whole
+    open(os.path.join(src, "docs", "plan.md"), "w").write(
+        "* User: no hardcoded adapters — record `fael add decision`\n")
     open(os.path.join(src, ".fael", "log", "w x", "2026-09.jsonl"), "w").write(
         row("TREE1", "2026-09-01T00:00:00Z") + "\n")
     git(src, "add", "-A")
@@ -62,9 +67,12 @@ def main():
     off = os.path.join(t, "off")
     replica.clone(replica.base(src, parent, True), off)
     md = open(os.path.join(off, "CLAUDE.md")).read()
-    assert md == "# Rules\n* keep `a.ts` small\n## Tests\n* bun test\n", md
+    assert md == ("# Rules\n* keep `a.ts` small\n* test `fael-core/x` first\n"
+                  "* ask (fael `#ui:smoke`)\n"
+                  "## Tests\n* bun test\n"), md
     assert not os.path.exists(os.path.join(off, ".fael"))
-    assert open(os.path.join(off, "docs", "ข้อ ตกลง.md")).read() == "* keep it short\n"
+    assert open(os.path.join(off, "docs", "ข้อ ตกลง", "AGENTS.md")).read() == "* keep it short\n"
+    assert "fael add decision" in open(os.path.join(off, "docs", "plan.md")).read()
     tip = git(off, "rev-parse", "HEAD")
     shutil.rmtree(replica.base(src, parent, True))  # rebuilt from scratch: same sha
     assert replica.clone(replica.base(src, parent, True), os.path.join(t, "off2")) == tip

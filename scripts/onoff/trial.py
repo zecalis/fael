@@ -3,7 +3,7 @@
 
   on  — C^'s copy + the ledger snapshot (replica.py) + `fael install` into the
         trial's own HOME (hooks, MCP, skill: what a user gets)
-  off — C^'s copy with fael's commands cut from every markdown file, no
+  off — C^'s copy with fael's commands cut from its instruction files, no
         ledger, a HOME with nothing in it
 Both arms: the same tree otherwise, prompt, runner, model, flags, timeout and
 env; a fresh HOME and FAEL_STATE_DIR per trial; the agent works in
@@ -42,8 +42,8 @@ import replica
 TEST = re.compile(r"(^|/)(e2e|__tests__)/|\.(test|spec)\.[cm]?[jt]sx?$")
 RUNNABLE = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?$")
 # `git log -G` (ERE) twin of replica.CMD, for the off arm's history check
-CMD_ERE = (r"`fael|fael (add|find|close|kickoff|sync|stats|hook|mcp|install|next|claim)"
-           r"|Fael MCP|\.fael/|\.git/fael|chore\(fael\)|\(see Memory\)")
+CMD_ERE = (r"fael (add|find|close|kickoff|sync|stats|hook|mcp|install|next|claim)"
+           r"|`fael`|Fael MCP|\.fael/|\.git/fael|chore\(fael\)|\(see Memory\)")
 # no \b: in an escaped reply an id may follow the "n" of a "\\n"
 ULID = re.compile(r"(?<![0-9A-Z])[0-9A-HJKMNP-TV-Z]{8,26}(?![0-9A-Z])")
 # inherited from whoever launched the harness (this very session, often)
@@ -270,7 +270,8 @@ def leaks(a, task, cand, ws, env):
         f["fael_rows_readable"] = len(rows)
         f["fael_dirs"] = [d for d in (".fael", ".git/fael") if os.path.exists(os.path.join(ws, d))]
         f["fael_commands_in_md_history"] = sh(
-            ["git", "-C", ws, "log", "--all", "--format=%h", "-E", "-G", CMD_ERE, "--", "*.md"]
+            ["git", "-C", ws, "log", "--all", "--format=%h", "-E", "-G", CMD_ERE, "--",
+             *(f"*{n.decode()}" for n in replica.INSTRUCTIONS)]
         ).split()
         f["stripped_md"] = _tree_diff(replica.base(a.src, cand["parent"], False), ws)
         f["arms_differ_beyond_md"] = [p for p in f["stripped_md"] if not p.endswith(".md")]
