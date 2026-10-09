@@ -11,9 +11,11 @@ use crate::core;
 /// Paths named in the line; the rest are one `fael find <id>` away.
 const NAMED: usize = 2;
 
-/// The edit-time asks beyond the edit hint: the consolidate ask, the
-/// promote ask, the gone-check ask, then the carry-back line (`carry`) — never on the issue
-/// the gone-check line names. A read (`edit` false) gets none.
+/// The edit-time asks beyond the edit hint: the gone-check ask, the
+/// carry-back line (`carry`) — never on the issue the gone-check line names —
+/// then the consolidate ask, then the promote ask. One per turn, in that
+/// order: the repo's experience goes before upkeep of the rows, which keeps
+/// its key for a later turn. A read (`edit` false) gets none.
 pub(crate) fn asks(
     ask: &Ask,
     t0: &[(&core::Row, usize)],
@@ -28,11 +30,11 @@ pub(crate) fn asks(
     });
     let carry = super::carry::carry_line(ask, edit, checked);
     let promote = super::promote::promote_line(ask, t0);
-    merge
+    check
         .into_iter()
-        .chain(promote)
-        .chain(check)
         .chain(carry)
+        .chain(merge)
+        .chain(promote)
         .collect()
 }
 
