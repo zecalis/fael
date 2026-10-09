@@ -126,3 +126,26 @@ fn measured_unmeasurable_and_gone_repos() {
         }
     );
 }
+
+/// A supersede the caller chose reuses a key by design and is left out; one
+/// self-heal filed (`identity:key`) is the agent's own keyed add and counts.
+#[test]
+fn key_reuse_counts_self_healed_supersedes() {
+    let src = |s: &str| format!(r#","key":"a:x","supersedes":"K1","decision_source":"{s}""#);
+    let log = Log {
+        rows: rows(
+            &(row("K1", "10-10T00:00:00", "note", r#","key":"a:x""#)
+                + &row("K2", "10-11T00:00:00", "note", &src("identity:key"))
+                + &row("K3", "10-12T00:00:00", "note", &src("caller:flag"))
+                + &row(
+                    "K4",
+                    "10-13T00:00:00",
+                    "note",
+                    &src("explicit:text:cross-key"),
+                )),
+        ),
+        ..Log::default()
+    };
+    let l = run(&[("/w/r", "10-10")], HashMap::from([("/w/r".into(), log)]));
+    assert_eq!(l.key_reuse, m(State::Measured, 1, 2)); // K2 of K1, K2
+}

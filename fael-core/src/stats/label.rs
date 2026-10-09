@@ -6,7 +6,8 @@
 
 use super::experience::{Shape, close_shape};
 use super::parse::Parsed;
-use crate::{Log, ts_ms};
+use super::repeat::issue_closes;
+use crate::{Log, Row, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
@@ -39,10 +40,11 @@ pub struct Label {
     /// …whose latest close names a check: a number to read, no bar — a fix
     /// with no single guarding file is no defect.
     pub guard: Measure,
-    /// Keyed adds (supersedes left out: they reuse a key by design) whose key
-    /// an earlier row already held, rows ordered by (ts, id) across writers.
+    /// Keyed adds whose key an earlier row already held, rows ordered by
+    /// (ts, id) across writers. A supersede the caller chose is left out (it
+    /// reuses a key by design); one self-heal filed still counts.
     pub key_reuse: Measure,
-    /// Always unmeasurable: usage keeps no missed find and no query (01M4FCPA).
+    /// Always unmeasurable: usage keeps no missed find and no query (01M4FCPAR).
     pub find_hit: Measure,
     /// Repo paths with usage since `since` and no log left (a removed
     /// worktree). Never a lower state: a worktree shares its checkout's
@@ -51,29 +53,10 @@ pub struct Label {
     pub gone_repos: usize,
 }
 
-/// Each issue's latest close text: a close row, or the close `fael compact`
-/// folded into the row. Ties go to the one read last.
+/// Each issue's latest close text. Ties go to the one read last.
 fn latest_closes(log: &Log) -> HashMap<&str, (i64, &str)> {
-    let issues: HashSet<&str> = log
-        .rows
-        .iter()
-        .filter(|r| r.kind == "issue")
-        .map(|r| r.id.as_str())
-        .collect();
-    let rows = log.closes.iter().filter_map(|c| {
-        let id = c.reference.as_deref()?;
-        Some((id, ts_ms(&c.ts)?, c.text.as_str()))
-    });
-    let folded = log.rows.iter().filter_map(|r| {
-        let c = r.extra.get("closed")?;
-        Some((
-            r.id.as_str(),
-            ts_ms(c["ts"].as_str()?)?,
-            c["text"].as_str()?,
-        ))
-    });
     let mut out: HashMap<&str, (i64, &str)> = HashMap::new();
-    for (id, ms, text) in rows.chain(folded).filter(|(id, ..)| issues.contains(id)) {
+    for (id, ms, text) in issue_closes(log) {
         if out.get(id).is_none_or(|(m, _)| ms >= *m) {
             out.insert(id, (ms, text));
         }
@@ -95,12 +78,20 @@ fn key_reuse(log: &Log, from: i64) -> Vec<(&str, bool)> {
         let Some(key) = r.key.as_deref() else {
             continue;
         };
-        if ms >= from && r.supersedes.is_none() {
+        if ms >= from && !chosen_supersede(r) {
             out.push((id, held.contains(key)));
         }
         held.insert(key);
     }
     out
+}
+
+/// A supersede the caller chose (`--supersedes`, or the text naming the row)
+/// reuses its key by design. One self-heal filed (`identity:key`,
+/// `heuristic:files`) is still the agent's own keyed add, so it counts.
+fn chosen_supersede(r: &Row) -> bool {
+    let healed = |s: &str| s.starts_with("identity:") || s.starts_with("heuristic:");
+    r.supersedes.is_some() && !r.decision_source.as_deref().is_some_and(healed)
 }
 
 fn measure(num: usize, den: usize) -> Measure {
