@@ -99,11 +99,17 @@ fn decide(e: &Event) -> Reply {
         return no;
     };
     let cfg = &c.repo.cfg;
-    let fixed = signal(e, &c.log, (since_ms, stop_ms), &|t| has_fix_phrase(t, cfg));
+    // the honest order is fix → close → reply: a close anywhere in this turn
+    // already filed what the reply says was fixed (fael:01M4F4CD)
+    let fixed = signal(e, &c.log, (since_ms, stop_ms), true, &|t| {
+        has_fix_phrase(t, cfg)
+    });
     if fixed.is_some_and(|p| stash_fixed(&c.session, &c.repo.root, &p)) {
         return no;
     }
-    if let Some(marker) = signal(e, &c.log, (since_ms, stop_ms), &|t| has_bug_marker(t, cfg)) {
+    if let Some(marker) = signal(e, &c.log, (since_ms, stop_ms), false, &|t| {
+        has_bug_marker(t, cfg)
+    }) {
         stash(&c.session, &risk_path(&c.session, &c.repo.root), &marker);
     }
     no
@@ -132,25 +138,36 @@ fn collect_reply(e: &Event, c: &super::protocol::Ctx) -> capture::Filed {
 /// packs (PLAN-fael-languages). Claude may fire Stop before the final reply
 /// reaches the transcript, so the client's copy of it (`reply`) is read when
 /// the file has no match. `(since_ms, stop_ms)`: session start, this stop.
+/// `close_in_turn`: a close since the turn's prompt clears it too, even one
+/// made before the words.
 fn signal(
     e: &Event,
     log: &core::Log,
     (since_ms, stop_ms): (i64, i64),
+    close_in_turn: bool,
     hit: &dyn Fn(&str) -> Option<String>,
 ) -> Option<String> {
-    let (marker, at_ms) = match &e.text {
-        Some(text) => (hit(text)?, since_ms),
-        None => e
-            .session
-            .as_deref()
-            .map(Path::new)
-            .filter(|t| t.is_file())
-            .and_then(|t| signal_from_transcript(t, since_ms, hit))
-            .or_else(|| Some((hit(e.reply.as_deref()?)?, stop_ms)))?,
+    let (marker, at_ms, turn_ms) = match &e.text {
+        Some(text) => (hit(text)?, since_ms, since_ms),
+        None => {
+            let (found, turn_ms) = e
+                .session
+                .as_deref()
+                .map(Path::new)
+                .filter(|t| t.is_file())
+                .map_or((None, since_ms), |t| {
+                    signal_from_transcript(t, since_ms, hit)
+                });
+            match found {
+                Some((marker, at_ms)) => (marker, at_ms, turn_ms),
+                None => (hit(e.reply.as_deref()?)?, stop_ms, turn_ms),
+            }
+        }
     };
-    let after = |r: &core::Row| core::ts_ms(&r.ts).is_some_and(|ms| ms >= at_ms);
-    let cleared =
-        log.rows.iter().any(|r| r.kind == "issue" && after(r)) || log.closes.iter().any(after);
+    let at = |from: i64| move |r: &core::Row| core::ts_ms(&r.ts).is_some_and(|ms| ms >= from);
+    let close_from = if close_in_turn { turn_ms } else { at_ms };
+    let cleared = log.rows.iter().any(|r| r.kind == "issue" && at(at_ms)(r))
+        || log.closes.iter().any(at(close_from));
     (!cleared).then_some(marker)
 }
 
