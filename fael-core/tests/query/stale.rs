@@ -207,3 +207,12 @@ fn stale_close_refs_reads_the_close_text_not_the_row() {
     assert!(stale_close_refs(&r, &log(vec![gone]), &issue, &moved).is_empty());
     let _ = std::fs::remove_dir_all(&r);
 }
+
+#[test]
+fn backtick_paths_skips_an_unpaired_last_backtick() {
+    assert!(backtick_paths("cause → fix `src/a.rs").is_empty());
+    assert_eq!(
+        backtick_paths("`src/a.rs` then `oops b/c"),
+        vec!["src/a.rs"]
+    );
+}

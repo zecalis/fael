@@ -170,3 +170,40 @@ fn folded_closes_sha_edges_and_worktrees() {
         }
     );
 }
+
+/// PLAN-fael-label §7, locked before the code: (text, core, guard).
+#[test]
+fn close_shape_locks_the_label_table() {
+    use super::experience::{Shape, close_shape};
+    let table = [
+        (
+            "stale cache → invalidate on mtime; tried ttl; guard `fael/tests/a.rs`",
+            true,
+            true,
+        ),
+        (
+            "config เก่าถูก cache -> invalidate ตอน mtime เปลี่ยน",
+            true,
+            false,
+        ),
+        ("a → b → c", true, false),
+        ("→ fixed it", false, false),
+        ("cause →   ", false, false),
+        ("renamed `a -> b` in the doc", false, false),
+        ("x → y; guard `Cargo.toml`", true, false),
+        ("x → y; guard `run cargo test`", true, false),
+        ("x -> y → z", true, false),
+        ("`a → b` -> c", false, false),
+        ("cause → fix `oops", true, false),
+        ("stale `x → y` in the old note", false, false),
+        ("example `src/a.rs` only", false, true),
+        ("fixed in a1b2c3d", false, false),
+        // an unpaired backtick is plain text for the guard too
+        ("cause → fix `src/a.rs", true, false),
+        // a cut span leaves a space: `-` and `>` around it never glue into an arrow
+        ("a -`x`> b", false, false),
+    ];
+    for (text, core, guard) in table {
+        assert_eq!(close_shape(text), Shape { core, guard }, "{text}");
+    }
+}

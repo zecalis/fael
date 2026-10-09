@@ -18,12 +18,15 @@ use std::path::Path;
 
 /// Backticked spans of `text` that look like paths (`/` inside, or a trailing
 /// `name.ext`). Multiline spans (fenced code blocks) and URLs never count —
-/// those are commands, output and links, not repo pointers.
+/// those are commands, output and links, not repo pointers. Backticks pair
+/// left to right; an unpaired last one is plain text, never a span
+/// (`format:label`, the same rule `close_shape` cuts code spans by).
 pub fn backtick_paths(text: &str) -> Vec<&str> {
     let mut out = vec![];
-    for (i, span) in text.split('`').enumerate() {
-        if i % 2 == 0 {
-            continue; // outside backticks
+    let parts: Vec<&str> = text.split('`').collect();
+    for (i, span) in parts.iter().enumerate() {
+        if i % 2 == 0 || i + 1 == parts.len() {
+            continue; // outside backticks, or after an unpaired one
         }
         let s = span.trim();
         if s.is_empty() || s.contains('\n') || s.contains("://") {

@@ -94,6 +94,41 @@ other anchor or key, and never infers from them which plan a session is inside �
 intent is not a fact the shared log can answer. The workflow tool that knows the plan asks for
 its rows itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`).
 
+### Label
+
+A row is labelled in three layers, each with one job (decision key `format:label`):
+
+| Layer | Job | Shape |
+|---|---|---|
+| `files` | where: binds and pushes the row | exact paths or anchors, the same for every agent |
+| `key` | which: supersede, close and find by name | a proper name, not a category; reuse rate is no quality score |
+| close text | what was learned | core `cause → fix`; tried and guard are optional |
+
+The close text is the agent's own words, stored as written: fael never rejects, edits or
+completes it. `close_shape()` (`fael-core/src/stats/experience.rs`) reads its form, never its
+meaning:
+
+- **Code spans** — backticks pair left to right; a paired span is cut before the arrow is
+  looked for. An unpaired last backtick is plain text.
+- **core** — the first `→` or `->` by position (never `=>`) outside a code span, with
+  non-blank text on both sides once spans are cut. `because … so …` without an arrow is not
+  core, on purpose.
+- **guard** — a backticked path holding a `/`, read off the whole text (code spans
+  included); the check `closed_with_check` counts. A root file (`` `Cargo.toml` ``) and a
+  command are no guard. No guard is no fault: some fixes have no one file to guard them.
+- **tried** — not checked.
+
+| Close text | core | guard |
+|---|---|---|
+| `` stale cache → invalidate on mtime; tried ttl; guard `fael-core/tests/query/stale.rs` `` | ✓ | ✓ |
+| `config cached stale -> invalidate on mtime` | ✓ | ✗ |
+| `a → b → c` (right side is `b → c`) | ✓ | ✗ |
+| `→ fixed it` · `cause →` | ✗ | ✗ |
+| `` renamed `a -> b` in the doc `` · `` `a → b` -> c `` | ✗ | ✗ |
+| `` cause → fix `src/a.rs `` (unpaired backtick) | ✓ | ✗ |
+| `` example `src/a.rs` only `` | ✗ | ✓ |
+| `fixed in a1b2c3d` | ✗ | ✗ |
+
 ## Writers
 
 **Write contract ≠ read contract.** Writers v1 must follow every rule below; readers must accept anything
