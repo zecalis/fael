@@ -212,12 +212,11 @@ pub(crate) struct Ask<'a> {
 }
 
 /// The hint text and the keys it spent: the caller appends `~<key>` for each,
-/// so the same row is never named twice in a session.
+/// so the same row is never named twice in a session. It names only open
+/// issues, so it is said free of the per-turn limit.
 pub(crate) struct Hint {
     pub text: String,
     pub spent: Vec<String>,
-    /// Names only open issues: said free of the per-turn limit.
-    pub issue: bool,
 }
 
 /// The seen list split into the ids said and the keys already hinted.
@@ -234,9 +233,12 @@ pub(crate) fn read_seen(old: &str) -> (HashSet<String>, HashSet<String>) {
     (told, hinted)
 }
 
-/// The tier-0 rows of an edit push the agent has in front of it — said now
-/// (`said`) or by an earlier push this session (`ask.told`) — through
-/// `stale_hint`. A row cut by the cap or the budget was never said, so it is
+/// The tier-0 open issues of an edit push the agent has in front of it — said
+/// now (`said`) or by an earlier push this session (`ask.told`) — through
+/// `stale_hint`. Decisions and notes get no edit ask: a row names only its
+/// file, so fael cannot tell whether the edit touched what the row says, and
+/// asking on every edit of a hub file taught agents to skip the line (issue
+/// hook:changed-line-noise). A row cut by the cap or the budget was never said, so it is
 /// never named, and neither is a row this very session filed: the agent just
 /// wrote it, so asking whether it is still true after its own edit says
 /// nothing new.
@@ -245,25 +247,18 @@ pub(crate) fn edit_hint(
     t0: &[(&core::Row, usize)],
     said: &[&core::Row],
     blobs: &mut Blobs,
-) -> Vec<Hint> {
-    let rows: Vec<&core::Row> = t0
+) -> Option<Hint> {
+    let issues: Vec<&core::Row> = t0
         .iter()
         .filter(|(r, tier)| {
             *tier == 0
+                && r.kind == "issue"
                 && (ask.told.contains(&r.id) || said.iter().any(|s| s.id == r.id))
                 && (ask.session.is_empty() || !own_row(r, ask.session))
         })
         .map(|(r, _)| *r)
         .collect();
-    // open issues get a hint of their own, so another file's ask in the same
-    // turn cannot hold them back (PLAN-fael-context-loop chunk 1)
-    let (issues, others): (Vec<&core::Row>, Vec<&core::Row>) =
-        rows.into_iter().partition(|r| r.kind == "issue");
-    let issue = stale_hint(ask, &issues, blobs).map(|h| Hint { issue: true, ..h });
-    issue
-        .into_iter()
-        .chain(stale_hint(ask, &others, blobs))
-        .collect()
+    stale_hint(ask, &issues, blobs)
 }
 
 /// Did the hook's session file `r`? Claude keys the hook by its transcript
@@ -274,13 +269,12 @@ pub(super) fn own_row(r: &core::Row, session: &str) -> bool {
         .is_some_and(|s| s == session || Path::new(session).file_stem().is_some_and(|f| *f == *s))
 }
 
-/// The edit hint over the tier-0 rows already in the agent's context: rows
+/// The edit hint over the open issues already in the agent's context: issues
 /// whose edited file changed since the row was written are named (at most
-/// two, each with the changed file and the retire ready to run); rows whose
-/// edited file matches earn no hint; rows with no verdict are named too (two
-/// at most, issues first: an open issue with a ready close, any other row
-/// with the retire) — beside the changed rows only open issues. Every ask names its
-/// row: an ask with no id is one the agent cannot act on. A row said by an
+/// two, each with the changed file and the retire ready to run); issues whose
+/// edited file matches earn no hint; issues with no verdict get a ready close
+/// (two at most). Every ask names its row: an ask with no id is one the agent
+/// cannot act on. A row said by an
 /// earlier edit hint this session is not said again. `None` when no hint is
 /// earned.
 ///
@@ -298,34 +292,23 @@ fn stale_hint(ask: &Ask, rows: &[&core::Row], blobs: &mut Blobs) -> Option<Hint>
         }
     }
     changed_rows.truncate(2);
-    let named = !changed_rows.is_empty();
-    // issues first, the only ones said beside changed rows; two at most
-    unknown_rows.sort_by_key(|r| r.kind != "issue");
-    unknown_rows.retain(|r| !named || r.kind == "issue");
     unknown_rows.truncate(2);
-    let (issues, others): (Vec<&core::Row>, Vec<&core::Row>) =
-        unknown_rows.into_iter().partition(|r| r.kind == "issue");
     let mut lines = vec![];
-    if named {
+    if !changed_rows.is_empty() {
         lines.push(changed_hint(ask.log, &changed_rows));
     }
-    if !issues.is_empty() {
-        lines.push(close_hint(ask.log, &issues));
-    }
-    if !others.is_empty() {
-        lines.push(retire_hint(ask.log, &others));
+    if !unknown_rows.is_empty() {
+        lines.push(close_hint(ask.log, &unknown_rows));
     }
     let spent: Vec<String> = changed_rows
         .iter()
         .map(|(r, _)| *r)
-        .chain(issues.iter().copied())
-        .chain(others.iter().copied())
+        .chain(unknown_rows.iter().copied())
         .map(|r| r.id.clone())
         .collect();
     (!lines.is_empty()).then(|| Hint {
         text: lines.join("\n"),
         spent,
-        issue: false,
     })
 }
 
@@ -360,22 +343,6 @@ fn close_hint(log: &core::Log, issues: &[&core::Row]) -> String {
         .map(|r| format!("fael close {} \"<why>\"", ab.short(&r.id)))
         .collect();
     format!("fael: done with one? {}", calls.join(" · "))
-}
-
-/// The retire for other rows with no verdict (at most two), named like
-/// `changed_hint` names its rows: `<id>` in the commands stands for either.
-fn retire_hint(log: &core::Log, rows: &[&core::Row]) -> String {
-    let ab = core::abbrev(log);
-    let ids: Vec<&str> = rows.iter().map(|r| ab.short(&r.id)).collect();
-    let s = match ids[..] {
-        [one] => one,
-        _ => "<id>",
-    };
-    format!(
-        "fael: does the code now say or contradict {}? `fael close {s} \"now in <file>\"` · or re-file with `--supersedes {s}`{}",
-        ids.join(" · "),
-        user_note(rows.iter().copied())
-    )
 }
 
 /// The user's call is theirs to change: an ask over a `from: user` row tells

@@ -86,7 +86,7 @@ fn read_push_marks_a_changed_file_changed_with_no_display() {
 fn edit_push_records_no_shadow() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    let id = add(&d, "decision", "retry uses backoff here", "src/a.rs");
+    let id = add(&d, "issue", "retry uses backoff here", "src/a.rs");
     std::fs::write(d.join("src/a.rs"), "// v2 edited\n").unwrap();
     let (context, usage) = push(&d, "edit", "s1", "src/a.rs");
     assert_eq!(ids(&usage, "ids"), vec![id], "{usage}");

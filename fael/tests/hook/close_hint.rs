@@ -55,10 +55,10 @@ fn edit_hint_names_open_issues_with_a_ready_close() {
 }
 
 #[test]
-fn edit_hint_names_a_decision_with_its_retire() {
+fn edit_hint_never_asks_about_a_decision() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    // a decision is shown, but never gets a ready close
+    // a decision is shown, but earns no ask (issue hook:changed-line-noise)
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "pick x", "--files", "src/a.rs"],
@@ -70,7 +70,7 @@ fn edit_hint_names_a_decision_with_its_retire() {
     assert!(out.contains("pick x"), "{out}");
     assert!(!out.contains("done with one?"), "{out}");
     assert!(!out.contains("fael close <id>"), "{out}");
-    assert!(out.contains("\"now in <file>\""), "{out}");
+    assert!(!out.contains("\"now in <file>\""), "{out}");
 }
 
 /// Claude Code reads a file before it may edit it: the read push already

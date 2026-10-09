@@ -50,9 +50,6 @@ notice:
 fael: reminded agent — #auth:login "auth login retries twice" (src/auth.rs)
 ## 9 prompt {"session":"2025-12-01T00:00:00Z","text":"and the login again"}
 ## 10 edit {"session":"2025-12-01T00:00:00Z","files":["src/a.rs"]}
-context:
-fael: src/a.rs changed since 01K00000000000000000AAA001 was written — still true? `fael bump 01K00000000000000000AAA001` · wrong now? re-file with `--supersedes 01K00000000000000000AAA001` · done? `fael close 01K00000000000000000AAA001 "now in <file>"`
-
 ## 11 edit {"session":"2025-12-01T00:00:00Z","files":["src/a.rs"]}
 ## 12 edit {"session":"2025-12-01T00:00:00Z","files":["src/b.rs"]}
 context:
@@ -62,6 +59,7 @@ fael: done with one? fael close 01K00000000000000000B "<why>"
 ## 14 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 context:
 fael: done with one? fael close 01K00000000000000000HUB01 "<why>" · fael close 01K00000000000000000HUB007 "<why>"
+fael: src/hub.rs has 7 open decision/note rows in front of you, among them 01K00000000000000000HUB009 · 01K00000000000000000HUB006 · 01K00000000000000000HUB003 — one matter? file it once: `fael add decision "<the one rule>" --files src/hub.rs --supersedes 01K00000000000000000HUB009` · then `fael close <id> "merged into <new id>"` for the others
 
 ## 15 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 context:
@@ -156,5 +154,5 @@ bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true
 
 ## 32 prompt {"text":"fix the auth login flow"}
 ## usage
-28 lines · ~1696 tokens
-session-start prompt read read read search read in-context edit in-context edit in-context edit edit capture read session-start read read read read read search shell-edit outcome search session-start read
+27 lines · ~1720 tokens
+session-start prompt read read read search read in-context in-context edit in-context edit edit capture read session-start read read read read read search shell-edit outcome search session-start read
