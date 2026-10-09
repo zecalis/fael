@@ -28,7 +28,8 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
-Each row is read months later with no chat: one or two standalone sentences.
+Each row is read months later with no chat: one or two standalone sentences, one topic (a `;`/`·` list is rejected).
+Over 60 words or 400 chars? Add `--title "<≤15 words>"` or it is rejected.
 `--files` names the paths or an anchor (`doc:pricing`) `fael find` showed — never
 invent one; left out, it is this session's edited files.
 Type an id only once this session's `fael find` or `add` printed it — never from memory;
