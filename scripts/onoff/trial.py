@@ -154,18 +154,43 @@ def run_stub(a, cand, ws, env, out):
     return {"runner": "stub", "exit": 0, "events": len(events)}
 
 
-def collect(ws, tip, row, out):
-    """diff.patch (commits and loose edits alike) · tokens · delivered."""
-    idx = os.path.join(os.path.dirname(ws), "collect.index")
+def diff_of(wt, tip, idx):
+    """wt against tip, commits and loose edits alike."""
     e = os.environ | {"GIT_INDEX_FILE": idx}
-    subprocess.run(["git", "-C", ws, "read-tree", tip], env=e, check=True)
-    subprocess.run(["git", "-C", ws, "add", "-A"], env=e, check=True)
-    diff = subprocess.run(["git", "-C", ws, "diff", "--cached", "--binary", tip],
+    subprocess.run(["git", "-C", wt, "read-tree", tip], env=e, check=True)
+    subprocess.run(["git", "-C", wt, "add", "-A"], env=e, check=True)
+    diff = subprocess.run(["git", "-C", wt, "diff", "--cached", "--binary", tip],
                           env=e, check=True, capture_output=True).stdout
-    open(os.path.join(out, "diff.patch"), "wb").write(diff)
     os.remove(idx)
-    return {"diff_sha256": sha256(diff), "diff_bytes": len(diff)} | reached(
-        os.path.join(out, "transcript.jsonl"), row)
+    return diff
+
+
+def collect(ws, tip, row, out):
+    """diff.patch · tokens · delivered. A repo that says "work in a worktree"
+    gets one: the diff is the worktree's the agent changed, not only ws's."""
+    tdir = os.path.realpath(os.path.dirname(ws))  # git names /private/tmp, not /tmp
+    wts = [l[9:] for l in sh(["git", "-C", ws, "worktree", "list", "--porcelain"]).splitlines()
+           if l.startswith("worktree ")]
+    diffs = {wt: diff_of(wt, tip, os.path.join(tdir, "collect.index")) for wt in wts}
+    # ponytail: two changed worktrees keep the bigger one; diff_worktrees shows it happened
+    wt = max(wts, key=lambda w: len(diffs[w]))
+    # ponytail: a worktree outside tdir outlives rmtree(tdir); its "../" key says so
+    open(os.path.join(out, "diff.patch"), "wb").write(diffs[wt])
+    return {"diff_sha256": sha256(diffs[wt]), "diff_bytes": len(diffs[wt]),
+            "diff_from": os.path.relpath(wt, tdir),
+            "diff_worktrees": {os.path.relpath(w, tdir): len(d) for w, d in diffs.items()}
+            } | reached(os.path.join(out, "transcript.jsonl"), row)
+
+
+def strays(url, dbs, tmp, transcript):
+    """What the agent left outside its trial — a later agent must not find it:
+    databases and /tmp entries new since its start and named in its transcript."""
+    text = open(transcript, errors="replace").read()
+    files = sorted(f for f in set(os.listdir("/tmp")) - tmp if "/tmp/" + f in text)
+    for f in files:
+        p = os.path.join("/tmp", f)
+        shutil.rmtree(p) if os.path.isdir(p) and not os.path.islink(p) else os.remove(p)
+    return {"tmp": files, "db": db.drop_strays(url, dbs, transcript) if url else []}
 
 
 def reached(transcript, row):
@@ -353,10 +378,13 @@ def main():
     if not m["leaks"]["ok"]:
         json.dump(m, open(os.path.join(out, "manifest.json"), "w"), indent=1)
         sys.exit(f"leak check failed, no agent run: {out}/leaks.json")
+    url = (m["db"]["urls"] or [None])[0]
+    dbs, tmp = db.names(url) if url else set(), set(os.listdir("/tmp"))
     m |= (run_claude(a, task, ws, env, out) if a.runner == "claude"
           else run_stub(a, cand, ws, env, out))
     m["ended"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     m |= collect(ws, m["tip"], task["row"], out)
+    m["strays"] = strays(url, dbs, tmp, os.path.join(out, "transcript.jsonl"))
     m["tests"] = evaluate(a, cand, tdir, m["tip"], out, env)
     json.dump(m, open(os.path.join(out, "manifest.json"), "w"), indent=1)
     if not a.keep:

@@ -54,12 +54,34 @@ def reset(root, env):
     return done
 
 
+def _sql(url, query):
+    """query on url's server (its postgres database); rows as dicts."""
+    admin = urlsplit(url)._replace(path="/postgres").geturl()
+    r = subprocess.run(["bun", "-e", "import {SQL} from 'bun'; const s = new SQL(Bun.env.ADMIN);"
+                        "console.log(JSON.stringify(await s.unsafe(Bun.env.Q))); await s.close()"],
+                       env=os.environ | {"ADMIN": admin, "Q": query}, capture_output=True, text=True)
+    return json.loads(r.stdout or "[]")
+
+
+def _drop(url, name):
+    _sql(url, 'drop database if exists "%s" with (force)' % name.replace('"', '""'))
+
+
 def drop(url):
-    u = urlsplit(url)
-    name = u.path[1:]
+    name = urlsplit(url).path[1:]
     assert NAME.match(name), name
-    admin = u._replace(path="/postgres").geturl()
-    subprocess.run(["bun", "-e", "import {SQL} from 'bun'; const s = new SQL(Bun.env.ADMIN);"
-                    f"await s.unsafe('drop database if exists {name} with (force)');"
-                    "await s.close()"],
-                   env=os.environ | {"ADMIN": admin}, capture_output=True)
+    _drop(url, name)
+
+
+def names(url):
+    return {r["datname"] for r in _sql(url, "select datname from pg_database")}
+
+
+def drop_strays(url, before, transcript):
+    """Databases the agent made itself (a repo rule like "one per worktree"):
+    new since `before` and named in its transcript — never another session's."""
+    text = open(transcript, errors="replace").read()
+    gone = sorted(n for n in names(url) - before if n in text and not NAME.match(n))
+    for n in gone:
+        _drop(url, n)
+    return gone
