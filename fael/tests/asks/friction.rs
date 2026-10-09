@@ -265,6 +265,19 @@ fn reasons_come_from_the_real_reject_paths() {
     // the bare unknown command has no command to blame
     assert_eq!(f["by_command"]["?"]["rejects"], 1, "{f}");
     assert_eq!(f["by_command"]["find"]["rejects"], 3, "{f}");
+    assert_eq!(f["shape_gate"], 0, "{f}");
+}
+
+#[test]
+fn a_shape_gate_reject_is_counted_apart_not_as_friction() {
+    let d = repo();
+    let long = "word ".repeat(70);
+    let (ok, err) = call(&d, Some("s1"), &["add", "note", &long, "--files", "a.rs"]);
+    assert!(!ok && err.starts_with("rejected: nothing written"), "{err}");
+    let f = &stats_json(&d)["friction"];
+    assert_eq!(f["shape_gate"], 1, "{f}");
+    assert_eq!((&f["calls"], &f["rejects"]), (&0.into(), &0.into()), "{f}");
+    assert_eq!(f["reasons"], serde_json::json!({}), "{f}");
 }
 
 #[test]

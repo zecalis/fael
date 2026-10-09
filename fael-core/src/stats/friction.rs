@@ -9,6 +9,11 @@
 //! repeat itself, and none of the next `FIRST_CALL_WINDOW` calls of its stream
 //! is friction. A stream is one session, or one (repo, client) when the line
 //! carries none (MCP). Per call, not per task — fael cannot see the task.
+//!
+//! A `SHAPE_GATE` reject (fael refused to write a row it could not read back,
+//! 01M4FNQ1) is a round asked for on purpose, not friction: it is counted
+//! apart and left out of the stream, so it neither counts as a call nor
+//! spoils the calls around it.
 
 use super::parse::Parsed;
 use crate::ts_ms;
@@ -17,6 +22,10 @@ use std::collections::{BTreeMap, HashMap};
 
 /// How many calls after one a reject, help or repeat still counts against it.
 pub const FIRST_CALL_WINDOW: usize = 2;
+
+/// The reject reason of a pre-write gate ("rejected: nothing written —"),
+/// shared with the side that records it.
+pub const SHAPE_GATE: &str = "shape_gate";
 
 /// The counts for all calls, or for one command's.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -36,6 +45,8 @@ pub struct Friction {
     /// unknown_command).
     pub reasons: BTreeMap<String, usize>,
     pub by_command: BTreeMap<String, Tally>,
+    /// `SHAPE_GATE` rejects — in no count above.
+    pub shape_gate: usize,
 }
 
 #[derive(PartialEq)]
@@ -68,6 +79,7 @@ fn repeat(calls: &[Call], i: usize) -> bool {
 pub(super) fn friction(parsed: &Parsed) -> Friction {
     let mut streams: HashMap<String, Vec<Call>> = HashMap::new();
     let mut reasons: BTreeMap<String, usize> = BTreeMap::new();
+    let mut shape_gate = 0;
     for v in parsed.kept.iter().filter(|v| v["event"] == "call") {
         let outcome = match v["outcome"].as_str() {
             Some("ok") => Outcome::Ok,
@@ -80,6 +92,10 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
         };
         if outcome == Outcome::Reject {
             let r = v["reason"].as_str().unwrap_or("unknown");
+            if r == SHAPE_GATE {
+                shape_gate += 1;
+                continue;
+            }
             *reasons.entry(r.to_string()).or_default() += 1;
         }
         let key = match v["session"].as_str().filter(|s| !s.is_empty()) {
@@ -100,6 +116,7 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
     }
     let mut out = Friction {
         reasons,
+        shape_gate,
         ..Friction::default()
     };
     for calls in streams.values_mut() {
@@ -243,6 +260,21 @@ mod tests {
         assert_eq!(f.reasons["unknown_flag"], 1);
         assert_eq!(f.by_command["find"].rejects, 1);
         assert_eq!(f.by_command["add"].first_call_ok, 0);
+    }
+
+    #[test]
+    fn a_shape_gate_reject_is_counted_apart_and_spoils_nothing() {
+        let gate = line(1, "s", "cli", "add", "reject", false, "b")
+            .replace("\"reject\"", "\"reject\",\"reason\":\"shape_gate\"");
+        let f = of(&[
+            line(0, "s", "cli", "find", "ok", false, "a"),
+            gate,
+            line(2, "s", "cli", "add", "ok", false, "c"),
+        ]);
+        assert_eq!(f.shape_gate, 1);
+        assert_eq!((f.total.calls, f.total.rejects), (2, 0));
+        assert_eq!(f.total.first_call_ok, 2, "{f:?}");
+        assert!(f.reasons.is_empty(), "{f:?}");
     }
 
     #[test]
