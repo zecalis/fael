@@ -4,6 +4,10 @@ use super::{est_tokens, glob};
 use crate::{Config, Log, Row, anchor, is_carrier_row};
 use std::collections::HashMap;
 
+/// How a reject of an id that names no row begins: usage tags those rejects
+/// `reason: unknown-id` by this prefix (PLAN-fael-say-gate chunk 4c).
+pub const NO_ROW_WITH_ID: &str = "rejected: no row with id";
+
 /// A row by exact id or a unique prefix (like a git sha, case-insensitive).
 pub fn resolve<'a>(log: &'a Log, prefix: &str) -> Result<&'a Row, String> {
     resolve_among(log.rows.iter(), prefix)
@@ -34,7 +38,7 @@ fn resolve_among<'a>(
     match hits.as_slice() {
         [r] => Ok(r),
         [] => Err(format!(
-            "rejected: no row with id {prefix:?} — copy the id from fael find (this session's output, never from memory)"
+            "{NO_ROW_WITH_ID} {prefix:?} — copy the id from fael find (this session's output, never from memory)"
         )),
         _ => Err(format!(
             "rejected: id {prefix:?} matches {} rows ({}) — use more characters",

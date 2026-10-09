@@ -47,16 +47,16 @@ pub use log::{
 pub use query::{
     ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, AUTO, Abbrev, BASELINE, Background, Bucket, CUT_BUDGET,
     CUT_CAP, CUT_GATE, CUT_HUB_PEEK, Cut, EXPAND_MAX, Filter, Focus, Hidden, KeyUse, MdRef,
-    PLAN_KICKOFF_ROWS, PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, PolicyDef, Prior, PushPolicy,
-    Ref, Selection, Stage, TOUCH, Urgent, UrgentChange, abbrev, add_gate, arm_for, arm_in, arm_of,
-    backtick_paths, brief, bucket, closed, closed_chunks, cmp_rows, code_spans, drop_closed, due,
-    est_tokens, expands, fat_reasons, find, fix_close, fresh_ts, freshness, glob, gone, gone_files,
-    groups, handoff_first, id_tokens, is_date, json_note, key_hints, keys, kickoff, levenshtein,
-    next_stage, on_work, page, phantom_md_refs, phantom_refs, plan_anchor, push, push_tiered,
-    query, ranked, ref_state, render, render_full, render_full_page, render_groups, render_page,
-    resolve, resolve_row, resolve_urgent, restored, reverted, row_due, row_waiting, select,
-    select_with, stale_close_refs, stale_refs, successors, superseded, today, touch_drops, waiting,
-    waiting_line, warnings, why_empty, with_due,
+    NO_ROW_WITH_ID, PLAN_KICKOFF_ROWS, PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, PolicyDef,
+    Prior, PushPolicy, Ref, Selection, Stage, TOUCH, Urgent, UrgentChange, abbrev, add_gate,
+    arm_for, arm_in, arm_of, backtick_paths, brief, bucket, closed, closed_chunks, cmp_rows,
+    code_spans, drop_closed, due, est_tokens, expands, fat_reasons, find, fix_close, fresh_ts,
+    freshness, glob, gone, gone_files, groups, handoff_first, id_tokens, is_date, json_note,
+    key_hints, keys, kickoff, levenshtein, next_stage, on_work, page, phantom_md_refs,
+    phantom_refs, plan_anchor, push, push_tiered, query, ranked, ref_state, render, render_full,
+    render_full_page, render_groups, render_page, resolve, resolve_row, resolve_urgent, restored,
+    reverted, row_due, row_waiting, select, select_with, stale_close_refs, stale_refs, successors,
+    superseded, today, touch_drops, waiting, waiting_line, warnings, why_empty, with_due,
 };
 pub use row::{Row, Stamp};
 pub use validate::{

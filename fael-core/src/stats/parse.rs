@@ -89,8 +89,10 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
         // nothing reached any context: `value` reads it, no count does — nor
         // a pull's outcome line (`found`, say-gate chunk 3): the yield reads it
         // — nor an observed outcome (`outcome`, learn-loop chunk 2) — nor a call
-        // (`friction.rs`: one line per agent call, whatever it injected)
+        // (`friction.rs`: one line per agent call, whatever it injected) — nor
+        // a session-start that said nothing (`SILENT_START`)
         if matches!(v["event"].as_str(), Some("in-context" | "outcome" | "call"))
+            || v["event"] == super::SILENT_START
             || v.get("found").is_some()
         {
             p.kept.push(v);
@@ -204,6 +206,13 @@ mod tests {
         assert_eq!(p.by_event.get("read"), Some(&(1, 3)));
         assert_eq!(p.first_seen.get("/work/real"), Some(&1790380800000));
         assert_eq!(p.repos(), vec!["/work/real"]);
+    }
+
+    #[test]
+    fn silent_start_is_kept_but_never_counted() {
+        let text = "{\"ts\":\"2026-09-26T00:00:00.000Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"event\":\"silent-start\",\"bytes\":0,\"est_tokens\":0,\"ids\":[],\"session\":\"s1\"}\n";
+        let p = parse(text, Path::new("/work/state/usage.jsonl"), &tmp());
+        assert_eq!((p.n, p.by_event.len(), p.kept.len()), (0, 0, 1));
     }
 
     #[test]

@@ -44,7 +44,11 @@ Every number comes from two inputs, joined as pure functions in
   chunk 2): `cited` lists the ids from the session's seen list that a tool input or
   the closing reply typed, once per id per session. So is a `call` row
   (PLAN-fael-agent-ergonomics chunk 1, the `friction` field below): one per agent
-  call, `cmd` and `outcome` only. Torn lines are
+  call, `cmd` and `outcome` only. So is a `silent-start` row (PLAN-fael-say-gate
+  chunk 4c): a session-start that said nothing, 0 bytes, so a count per
+  session-start sees every start. A reject whose message names an id with no
+  row carries `reason: "unknown-id"`; a CLI command writes one reject row, a
+  batch with several bad items included. Torn lines are
   skipped; temp-dir repos (the OS temp dir and `/tmp`, where agent
   scratchpads live) are skipped unless the state dir itself is scratch.
   The live file is `usage.jsonl`; at the first write of a new month it moves

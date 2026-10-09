@@ -118,22 +118,22 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         out.say(Line::notice(format!("{warn}\n")));
     }
     let mut r = out.reply();
-    let Some(context) = r.context() else {
-        return no();
+    // the session just began — no round completed yet, so no real tokens. A
+    // start that said nothing lands too, as `SILENT_START`: the say-gate
+    // revert check divides by every session-start (chunk 4c), and stats keep
+    // that event out of every injection total
+    let (event, context) = match r.context() {
+        Some(t) => ("session-start", t),
+        None => (core::stats::SILENT_START, ""),
     };
-    // the session just began — no round completed yet, so no real tokens
     let meta = UsageMeta {
         said: r.said(),
         ..hook_meta(&c, None, false)
     };
-    record_usage(
-        &c.client,
-        "session-start",
-        &c.repo.root,
-        context,
-        &ids,
-        &meta,
-    );
+    record_usage(&c.client, event, &c.repo.root, context, &ids, &meta);
+    if context.is_empty() {
+        return no();
+    }
     r.notice = brief_line(&c, said);
     r
 }
