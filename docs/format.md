@@ -108,14 +108,17 @@ The close text is the agent's own words, stored as written: fael never rejects, 
 completes it. `close_shape()` (`fael-core/src/stats/experience.rs`) reads its form, never its
 meaning:
 
-- **Code spans** — backticks pair left to right; a paired span is cut before the arrow is
-  looked for. An unpaired last backtick is plain text.
-- **core** — the first `→` or `->` by position (never `=>`) outside a code span, with
-  non-blank text on both sides once spans are cut. `because … so …` without an arrow is not
-  core, on purpose.
+- **Code spans** — markdown's: a run of n backticks opens a span that the next run of
+  exactly n closes, so a double-backtick span may hold a backtick. A run nothing closes is
+  plain text. Spans are cut before the arrow is looked for. `fael doctor` and the edit's
+  check line read backticked paths by the same rule (`code_spans`).
+- **core** — the first `→` or `->` by position (never `=>`) outside a code span, with text
+  on both sides once spans are cut; blanks and stray backticks are no text. `because … so …`
+  without an arrow is not core, on purpose.
 - **guard** — a backticked path holding a `/`, read off the whole text (code spans
-  included); the check `closed_with_check` counts. A root file (`` `Cargo.toml` ``) and a
-  command are no guard. No guard is no fault: some fixes have no one file to guard them.
+  included); the check `closed_with_check` counts. A root file (`` `Cargo.toml` ``) or a
+  command with no `/` (`` `cargo test` ``) is no guard; a span holding a `/` is one, a
+  command too. No guard is no fault: some fixes have no one file to guard them.
 - **tried** — not checked.
 
 | Close text | core | guard |
@@ -123,7 +126,7 @@ meaning:
 | `` stale cache → invalidate on mtime; tried ttl; guard `fael-core/tests/query/stale.rs` `` | ✓ | ✓ |
 | `config cached stale -> invalidate on mtime` | ✓ | ✗ |
 | `a → b → c` (right side is `b → c`) | ✓ | ✗ |
-| `→ fixed it` · `cause →` | ✗ | ✗ |
+| `→ fixed it` · `cause →` · ``cause → ` `` (stray backtick) | ✗ | ✗ |
 | `` renamed `a -> b` in the doc `` · `` `a → b` -> c `` | ✗ | ✗ |
 | `` cause → fix `src/a.rs `` (unpaired backtick) | ✓ | ✗ |
 | `` example `src/a.rs` only `` | ✗ | ✓ |

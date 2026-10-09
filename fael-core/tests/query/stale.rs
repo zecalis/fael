@@ -205,6 +205,9 @@ fn stale_close_refs_reads_the_close_text_not_the_row() {
     let moved = Aliases::from_pairs(vec![("t/gone.sh".to_string(), "t/kept.sh".to_string())]);
     let gone = close("C4", "2026-10-04T00:00:00Z", "moved to `t/gone.sh`");
     assert!(stale_close_refs(&r, &log(vec![gone]), &issue, &moved).is_empty());
+    // an unpaired backtick points at nothing: no check line (format:label)
+    let open = close("C5", "2026-10-05T00:00:00Z", "moved to `t/gone.sh");
+    assert!(stale_close_refs(&r, &log(vec![open]), &issue, &al).is_empty());
     let _ = std::fs::remove_dir_all(&r);
 }
 
@@ -214,5 +217,25 @@ fn backtick_paths_skips_an_unpaired_last_backtick() {
     assert_eq!(
         backtick_paths("`src/a.rs` then `oops b/c"),
         vec!["src/a.rs"]
+    );
+    assert_eq!(backtick_paths("use `` a`b/c.rs `` here"), vec!["a`b/c.rs"]);
+}
+
+#[test]
+fn code_spans_pair_runs_of_equal_length() {
+    assert_eq!(
+        code_spans("a `x` b ``y`z`` c"),
+        [
+            (false, "a "),
+            (true, "x"),
+            (false, " b "),
+            (true, "y`z"),
+            (false, " c")
+        ]
+    );
+    // an unclosed run is plain text, and a later span still pairs
+    assert_eq!(
+        code_spans("`a ``b`` c"),
+        [(false, "`a "), (true, "b"), (false, " c")]
     );
 }
