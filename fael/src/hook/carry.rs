@@ -39,7 +39,11 @@ pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Li
         .take(super::check::SCAN)
         .filter_map(|r| core::fix_close(ask.log, r).map(|t| (r, t)))
         .take(REACHED)
-        .find(|(r, t)| super::reached::fix_reached(ask.root, t, &r.id))?;
+        // one said this session is spent anyway (the Outbox drops it): no spawn
+        .find(|(r, t)| {
+            ask.hinted.contains(&format!("carry:{}", r.id))
+                || super::reached::fix_reached(ask.root, t, &r.id)
+        })?;
     if skip == Some(r.id.as_str()) {
         return None;
     }
@@ -213,7 +217,9 @@ mod tests {
         };
         let (got, silent) = timed(&log);
         assert!(got.is_none());
-        log.closes.last_mut().unwrap().text = "cap → 3; fixed in e6deb61".into();
+        // `(#N)`, not a sha: the hub scan is what grows with the log; a sha's
+        // git lookup (`reached`) is a constant, bounded by `REACHED`
+        log.closes.last_mut().unwrap().text = "cap → 3; fixed in (#61)".into();
         let (got, ms) = timed(&log);
         assert!(got.is_some());
         assert!(silent < 50.0 && ms < 50.0, "{silent:.1} ms / {ms:.1} ms");
