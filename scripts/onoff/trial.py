@@ -11,7 +11,8 @@ env; a fresh HOME and FAEL_STATE_DIR per trial; the agent works in
 
 After the agent, the evaluator applies its diff to a fresh copy outside the
 workspace, puts back the test suite as it stood at C for every package C's
-tests or the diff touch, and runs it. Results go to
+tests or the diff touch, and runs it. The agent and the evaluator each get
+their own database (db.py), dropped at exit. Results go to
 <results>/trials/<pr>-<arm>-<run>/: manifest.json, diff.patch,
 transcript.jsonl, runner.log, tests.json, tests.log, leaks.json. Scores are
 chunk 5's. A trial that exists is never overwritten. /tmp/trials/<hex> is
@@ -37,6 +38,7 @@ import subprocess
 import sys
 import time
 
+import db
 import replica
 
 TEST = re.compile(r"(^|/)(e2e|__tests__)/|\.(test|spec)\.[cm]?[jt]sx?$")
@@ -47,7 +49,7 @@ CMD_ERE = (r"fael (add|find|close|kickoff|sync|stats|hook|mcp|install|next|claim
 # no \b: in an escaped reply an id may follow the "n" of a "\\n"
 ULID = re.compile(r"(?<![0-9A-Z])[0-9A-HJKMNP-TV-Z]{8,26}(?![0-9A-Z])")
 # inherited from whoever launched the harness (this very session, often)
-DROP = re.compile(r"^(CLAUDE|ANTHROPIC_|FAEL_|GIT_|XDG_|MCP_)")
+DROP = re.compile(r"^(CLAUDE|ANTHROPIC_|FAEL_|GIT_|XDG_|MCP_|DATABASE_URL$)")
 KEEP = {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}
 
 
@@ -99,6 +101,10 @@ def setup(a, task, cand, tdir, ws, env):
         t = time.time()
         sh(["bun", "install", "--frozen-lockfile"], cwd=ws, env=env)
         m["bun_install_s"] = round(time.time() - t)
+    # the agent's own database, ready as a worktree's would be
+    m["db"] = {"urls": db.write_env(ws, f"onoff_{os.path.basename(tdir)}_ws")}
+    if not a.no_install:
+        m["db"]["reset"] = db.reset(ws, env)
     return m
 
 
@@ -223,6 +229,10 @@ def evaluate(a, cand, tdir, tip, out, env):
                if x.count("\t") >= 2] if applied and os.path.getsize(patch) else []
     pkgs = sorted({package_of(ev, f) for f in [x for x in changed if TEST.search(x)] + touched})
     res = {"applied": applied, "hidden": [f for f in changed if TEST.search(f)], "packages": {}}
+    if applied and pkgs:  # C's tests on a fresh database migrated by the agent's diff
+        res["db"] = db.write_env(ev, f"onoff_{os.path.basename(tdir)}_ev")
+        sh(["bun", "install", "--frozen-lockfile"], cwd=ev, env=env)
+        res["db_reset"] = db.reset(ev, env)
     with open(os.path.join(out, "tests.log"), "w") as log:
         for p in pkgs if applied else []:
             mine = {f for f in c_tests if package_of(ev, f) == p}
@@ -232,13 +242,15 @@ def evaluate(a, cand, tdir, tip, out, env):
             run = sorted("./" + os.path.relpath(f, p) for f in mine if RUNNABLE.search(f))
             entry = {"run": run, "not_run": sorted(f for f in mine if not RUNNABLE.search(f))}
             if run:
-                if not os.path.exists(os.path.join(ev, "node_modules")):
-                    sh(["bun", "install", "--frozen-lockfile"], cwd=ev, env=env)
-                r = subprocess.run(["bun", "test", *run], cwd=os.path.join(ev, p), env=env,
+                # `test:db` loads the package's .env; plain `bun test` skips DB tests
+                scripts = json.load(open(os.path.join(ev, p, "package.json"))).get("scripts", {})
+                cmd = ["bun", "run", "test:db"] if "test:db" in scripts else ["bun", "test"]
+                r = subprocess.run([*cmd, *run], cwd=os.path.join(ev, p), env=env,
                                    capture_output=True, text=True, timeout=1800)
                 log.write(f"=== {p}\n{r.stdout}{r.stderr}\n")
-                n = {k: int(m.group(1)) if (m := re.search(rf"(\d+) {k}\b", r.stdout + r.stderr))
-                     else 0 for k in ("pass", "fail", "skip")}
+                # bun's summary lines (" 343 pass"), not a test name that says "30 pass"
+                n = {k: int((re.findall(rf"^\s*(\d+) {k}$", r.stdout + r.stderr, re.M)
+                             or [0])[-1]) for k in ("pass", "fail", "skip")}
                 entry |= {"exit": r.returncode, **n}
             res["packages"][p or "."] = entry
     json.dump(res, open(os.path.join(out, "tests.json"), "w"), indent=1)
