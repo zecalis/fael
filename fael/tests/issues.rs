@@ -218,6 +218,18 @@ fn groups_by_shared_files() {
     assert!(!ok && err.contains("--groups lists every match"), "{err}");
 }
 
+/// An empty grouped list says why like the flat one: closed rows need --all.
+#[test]
+fn an_empty_issue_list_says_all_adds_closed() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(ok && out.is_empty(), "{out}");
+    assert!(
+        err.contains("no rows match kind=issue (open rows only; --all adds closed)"),
+        "{err}"
+    );
+}
+
 #[test]
 fn issue_list_marks_rows_on_gone_files() {
     let d = repo();
