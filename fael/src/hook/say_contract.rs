@@ -55,7 +55,7 @@ pub(super) fn all() -> Vec<Line> {
                 file: "a.rs".into(),
                 line: 7,
             },
-            "fael: review finding on a.rs — file it: `fael add issue \"x\" --files a.rs`\n",
+            "fael: review finding on a.rs — file it: `fael add issue 'x' --files a.rs`\n",
         ),
         line(
             Kind::Check { id: "01CHK".into() },

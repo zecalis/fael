@@ -28,7 +28,7 @@ fn the_edit_ask_names_the_users_call() {
     let d = repo();
     for (f, from) in [("src/a.rs", Some("user")), ("src/b.rs", None)] {
         std::fs::write(d.join(f), "// v1\n").unwrap();
-        let mut args = vec!["add", "decision", "rule", "--files", f];
+        let mut args = vec!["add", "issue", "rule", "--files", f];
         args.extend(from.map(|u| ["--from", u]).into_iter().flatten());
         let (ok, _, err) = fael(&d, &args, "");
         assert!(ok, "{err}");

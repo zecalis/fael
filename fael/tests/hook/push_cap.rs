@@ -179,12 +179,15 @@ fn edit_hides_same_dir_neighbour_but_counts_it() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
-    for (text, f) in [("on a", "src/a.rs"), ("neighbour", "src/b.rs")] {
-        let (ok, _, err) = fael(&d, &["add", "decision", text, "--files", f], "");
+    for (kind, text, f) in [
+        ("issue", "on a", "src/a.rs"),
+        ("decision", "neighbour", "src/b.rs"),
+    ] {
+        let (ok, _, err) = fael(&d, &["add", kind, text, "--files", f], "");
         assert!(ok, "{err}");
     }
     // stamped rows whose files still match earn no hint (PLAN-fael-file-hash
-    // chunk 2) — strip `fh` so this still exercises the legacy retire ask
+    // chunk 2) — strip `fh` so this still exercises the legacy close ask
     strip_fh(&d, "on a");
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
@@ -194,10 +197,10 @@ fn edit_hides_same_dir_neighbour_but_counts_it() {
     assert!(out.contains("fael mem for src/a.rs (1 of 2):"), "{out}");
     let (ok, found, _) = fael(&d, &["find", "--files", "src/"], "");
     assert!(ok && found.contains("neighbour"), "{found}");
-    // an edit push asks to retire a row the code outgrew; a read push never does
-    assert!(out.contains("--supersedes "), "{out}");
+    // an edit push offers the open issue's close; a read push never does
+    assert!(out.contains("done with one?"), "{out}");
     let (ok, read, _) = fael(&d, &["hook", "read"], &input);
-    assert!(ok && !read.contains("--supersedes "), "{read}");
+    assert!(ok && !read.contains("done with one?"), "{read}");
 }
 
 #[test]

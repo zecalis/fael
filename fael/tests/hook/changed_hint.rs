@@ -1,6 +1,7 @@
-//! PLAN-fael-file-hash chunk 2: the edit hint names the tier-0 rows whose
-//! edited file changed since the row was written, earns no hint when it still
-//! matches, and names rows with no verdict with their ready retire.
+//! PLAN-fael-file-hash chunk 2: the edit hint names the tier-0 open issues
+//! whose edited file changed since the row was written, earns no hint when it
+//! still matches, and names issues with no verdict with their ready close.
+//! Decisions and notes get no edit ask (issue hook:changed-line-noise).
 
 use super::{fael, fael_env, json, repo, strip_fh};
 use std::path::Path;
@@ -80,7 +81,7 @@ fn unchanged_files_earn_no_hint() {
 fn changed_file_names_the_row_with_retire_commands() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    let id = add(&d, "decision", "retry uses backoff here", "src/a.rs");
+    let id = add(&d, "issue", "retry uses backoff here", "src/a.rs");
     std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
     let hint = out
@@ -104,9 +105,9 @@ fn changed_hint_names_at_most_two() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     let ids = [
-        add(&d, "decision", "first module choice", "src/a.rs"),
-        add(&d, "decision", "second module choice", "src/a.rs"),
-        add(&d, "decision", "third module choice", "src/a.rs"),
+        add(&d, "issue", "first module choice", "src/a.rs"),
+        add(&d, "issue", "second module choice", "src/a.rs"),
+        add(&d, "issue", "third module choice", "src/a.rs"),
     ];
     std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
@@ -135,30 +136,32 @@ fn issue_without_fh_keeps_the_named_close() {
     assert!(out.contains("done with one?"), "{out}");
 }
 
-/// The ask names the row it means: an ask with no id is one the agent
-/// cannot act on.
+/// A decision or note names only its file, so fael cannot tell whether an
+/// edit touched what it says: changed or with no verdict, it earns no ask.
 #[test]
-fn decision_without_fh_is_named_with_its_retire() {
+fn a_decision_earns_no_edit_ask() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    let id = add(&d, "decision", "old choice predates hashes", "src/a.rs");
+    add(&d, "decision", "retry uses backoff here", "src/a.rs");
+    add(&d, "note", "old note predates hashes", "src/a.rs");
     strip_fh(&d, "predates hashes");
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
-    assert!(!out.contains("changed since"), "{out}");
-    assert_retire_names(&out, &id);
+    assert!(out.contains("retry uses backoff here"), "{out}");
+    for banned in ["changed since", "does the code now say", "fael close"] {
+        assert!(!out.contains(banned), "{banned} in:\n{out}");
+    }
 }
 
-/// The no-verdict retire line names `id` by its short form, commands included.
-fn assert_retire_names(out: &str, id: &str) {
+/// The no-verdict close line names `id` by its short form.
+fn assert_close_names(out: &str, id: &str) {
     let hint = out
         .lines()
-        .find(|l| l.contains("does the code now say or contradict"))
+        .find(|l| l.contains("done with one?"))
         .expect(out);
-    let short = hint.split("contradict ").nth(1).unwrap();
-    let short = short.split('?').next().unwrap();
+    let short = hint.split("fael close ").nth(1).unwrap();
+    let short = short.split(' ').next().unwrap();
     assert!(id.starts_with(short), "{hint}\n{id}");
-    assert!(hint.contains(&format!("fael close {short} ")), "{hint}");
-    assert!(hint.contains(&format!("--supersedes {short}")), "{hint}");
 }
 
 /// A row filed under the old path reads the bytes at the new one: renamed
@@ -167,7 +170,7 @@ fn assert_retire_names(out: &str, id: &str) {
 fn rename_resolves_to_the_new_bytes() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    let id = add(&d, "decision", "moved module choice", "src/a.rs");
+    let id = add(&d, "issue", "moved module choice", "src/a.rs");
     std::fs::rename(d.join("src/a.rs"), d.join("src/b.rs")).unwrap();
     let (ok, _, err) = fael(&d, &["mv", "src/a.rs", "src/b.rs"], "");
     assert!(ok, "{err}");
@@ -188,7 +191,7 @@ fn hint_asks_only_about_the_edited_file() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     std::fs::write(d.join("src/c.rs"), "// c v1\n").unwrap();
-    add(&d, "decision", "pair choice", "src/a.rs,src/c.rs");
+    add(&d, "issue", "pair choice", "src/a.rs,src/c.rs");
     std::fs::write(d.join("src/c.rs"), "// c v2\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
     assert!(out.contains("pair choice"), "{out}");
@@ -209,17 +212,18 @@ fn changed_row_keeps_the_legacy_issue_close() {
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     add(&d, "issue", "old problem predates hashes", "src/a.rs");
     strip_fh(&d, "predates hashes");
-    add(&d, "decision", "stamped module choice", "src/a.rs");
+    add(&d, "issue", "stamped module choice", "src/a.rs");
     std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
     assert_eq!(named(&out).len(), 1, "{out}");
     assert!(out.contains("done with one?"), "{out}");
 }
 
-/// A hub file past the row cap says its peek and the count line: the hint
-/// names only rows the push said (a row never shown cannot be judged).
+/// A hub file past the row cap says its peek and the count line, and its
+/// decisions earn no ask however much the file changed — the noise that
+/// taught agents to skip the line (issue hook:changed-line-noise).
 #[test]
-fn hint_skips_rows_the_cap_cut() {
+fn a_hub_of_decisions_earns_no_ask() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     for i in 0..14 {
@@ -233,14 +237,7 @@ fn hint_skips_rows_the_cap_cut() {
     std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
     assert!(out.contains("3 of 14"), "{out}");
-    let ids = named(&out);
-    assert!(!ids.is_empty(), "{out}");
-    for id in ids {
-        assert!(
-            out.contains(&format!("- [{id}]")),
-            "{id} never shown: {out}"
-        );
-    }
+    assert!(named(&out).is_empty(), "{out}");
 }
 
 /// A path renamed away and then recreated is read as itself, not through the
@@ -249,7 +246,7 @@ fn hint_skips_rows_the_cap_cut() {
 fn recreated_path_is_read_as_itself() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    let id = add(&d, "decision", "split module choice", "src/a.rs");
+    let id = add(&d, "issue", "split module choice", "src/a.rs");
     std::fs::rename(d.join("src/a.rs"), d.join("src/b.rs")).unwrap();
     let (ok, _, err) = fael(&d, &["mv", "src/a.rs", "src/b.rs"], "");
     assert!(ok, "{err}");
@@ -267,7 +264,7 @@ fn recreated_path_is_read_as_itself() {
 fn a_named_row_is_not_named_twice_in_a_session() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    add(&d, "decision", "retry uses backoff here", "src/a.rs");
+    add(&d, "issue", "retry uses backoff here", "src/a.rs");
     std::fs::write(d.join("src/a.rs"), "// v2\n").unwrap();
     assert!(edit_or_silent(&d, "s1", "src/a.rs").contains("changed since"));
     std::fs::write(d.join("src/a.rs"), "// v3\n").unwrap();
@@ -276,32 +273,17 @@ fn a_named_row_is_not_named_twice_in_a_session() {
     assert!(edit_or_silent(&d, "s2", "src/a.rs").contains("changed since"));
 }
 
-/// A row with no verdict gets its retire, and an open issue its ready close,
-/// once per session too.
+/// An open issue with no verdict gets its ready close once per session too.
 #[test]
 fn legacy_hints_are_said_once_per_session() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    add(&d, "decision", "old choice predates hashes", "src/a.rs");
     add(&d, "issue", "old problem predates hashes", "src/a.rs");
     strip_fh(&d, "predates hashes");
     let first = edit_or_silent(&d, "s1", "src/a.rs");
     assert!(first.contains("done with one?"), "{first}");
-    assert!(first.contains("does the code now say"), "{first}");
     let again = edit_or_silent(&d, "s1", "src/a.rs");
     assert!(!again.contains("done with one?"), "{again}");
-    assert!(!again.contains("does the code now say"), "{again}");
-}
-
-#[test]
-fn a_no_verdict_row_is_named_once_per_session() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
-    add(&d, "decision", "old choice predates hashes", "src/a.rs");
-    strip_fh(&d, "predates hashes");
-    let ask = "does the code now say";
-    assert!(edit_or_silent(&d, "s1", "src/a.rs").contains(ask));
-    assert!(!edit_or_silent(&d, "s1", "src/a.rs").contains(ask));
 }
 
 /// The agent that just filed a row is not asked whether it is still true after
@@ -313,17 +295,11 @@ fn a_row_this_session_filed_is_not_asked_about() {
     std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
     // the row's session stamp needs a recorded session: the hook keys the env
     // id once an edit ran under it (a stranger's id stamps nothing, 01M47N67)
-    add(&d, "decision", "seed", "src/b.rs");
+    add(&d, "issue", "seed", "src/b.rs");
     edit_or_silent(&d, "s1", "src/a.rs");
     let (ok, _, err) = fael_env(
         &d,
-        &[
-            "add",
-            "decision",
-            "mine this session",
-            "--files",
-            "src/a.rs",
-        ],
+        &["add", "issue", "mine this session", "--files", "src/a.rs"],
         "",
         &[("CLAUDE_CODE_SESSION_ID", "s1")],
     );
@@ -353,11 +329,11 @@ fn a_row_this_session_filed_is_not_asked_about_by_transcript_path() {
         out
     };
     // record s3's transcript before the add (same gate as above)
-    add(&d, "decision", "seed", "src/b.rs");
+    add(&d, "issue", "seed", "src/b.rs");
     edit("s3");
     let (ok, _, err) = fael_env(
         &d,
-        &["add", "decision", "mine by path", "--files", "src/a.rs"],
+        &["add", "issue", "mine by path", "--files", "src/a.rs"],
         "",
         &[("CLAUDE_CODE_SESSION_ID", "s3")],
     );
@@ -371,7 +347,7 @@ fn a_row_this_session_filed_is_not_asked_about_by_transcript_path() {
 
 /// Stamped at ~2 MiB (over the push path's 1 MiB read cap, under the 16 MiB
 /// stamp cap): the edit push does not hash it, so the row has no verdict and
-/// the row is named with its retire — never "changed", never silence.
+/// the issue is named with its ready close — never "changed", never silence.
 #[test]
 fn file_over_the_push_cap_is_unknown_not_changed() {
     let d = repo();
@@ -380,8 +356,8 @@ fn file_over_the_push_cap_is_unknown_not_changed() {
         "fn f() { let x = 1; }\n".repeat(100_000),
     )
     .unwrap();
-    let id = add(&d, "decision", "big generated table choice", "src/big.rs");
+    let id = add(&d, "issue", "big generated table choice", "src/big.rs");
     let out = edit(&d, "s1", "src/big.rs");
     assert!(!out.contains("changed since"), "{out}");
-    assert_retire_names(&out, &id);
+    assert_close_names(&out, &id);
 }

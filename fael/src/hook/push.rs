@@ -239,7 +239,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     lines.extend(hints.into_iter().map(|h| Line {
         kind: Kind::Ask {
             ids: h.spent,
-            issue: h.issue,
+            issue: true,
         },
         text: format!("{}\n", h.text),
     }));

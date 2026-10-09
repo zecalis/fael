@@ -32,7 +32,7 @@ fn each_finding_is_a_ready_add_issue_said_once() {
     let d = repo();
     let first = report(&d, "s1", &[("src/a.rs", 3), ("src/b.rs", 9)]);
     assert!(
-        first.contains("`fael add issue \"src/a.rs breaks on retry\" --files src/a.rs`")
+        first.contains(r#"`fael add issue 'src/a.rs "breaks" on retry' --files src/a.rs`"#)
             && first.contains("--files src/b.rs`"),
         "{first}"
     );
