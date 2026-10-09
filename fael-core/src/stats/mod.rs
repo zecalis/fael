@@ -72,6 +72,10 @@ pub use verdict::{FileVerdict, GATE_MIN_PAIRS};
 pub const ASK_REJECT: &str = "reject";
 pub const ASK_WARN: &str = "warning";
 
+/// The usage event of a session-start that said nothing (PLAN-fael-say-gate
+/// chunk 4c): the revert check counts it as a start, no injection total does.
+pub const SILENT_START: &str = "silent-start";
+
 /// Per-machine runtime state, never in `.fael/`. `FAEL_STATE_DIR` wins (tests
 /// and scratch runs); otherwise the home state dir. The one function that
 /// reads the environment, called by the CLI and the desktop app alike.

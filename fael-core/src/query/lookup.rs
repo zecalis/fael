@@ -4,6 +4,10 @@ use super::{est_tokens, glob};
 use crate::{Config, Log, Row, anchor, is_carrier_row};
 use std::collections::HashMap;
 
+/// How a reject of an id that names no row begins: usage tags those rejects
+/// `reason: unknown-id` by this prefix (PLAN-fael-say-gate chunk 4c).
+pub const NO_ROW_WITH_ID: &str = "rejected: no row with id";
+
 /// A row by exact id or a unique prefix (like a git sha, case-insensitive).
 pub fn resolve<'a>(log: &'a Log, prefix: &str) -> Result<&'a Row, String> {
     resolve_among(log.rows.iter(), prefix)
@@ -34,7 +38,7 @@ fn resolve_among<'a>(
     match hits.as_slice() {
         [r] => Ok(r),
         [] => Err(format!(
-            "rejected: no row with id {prefix:?} — copy the id from fael find (this session's output, never from memory)"
+            "{NO_ROW_WITH_ID} {prefix:?} — copy the id from fael find (this session's output, never from memory)"
         )),
         _ => Err(format!(
             "rejected: id {prefix:?} matches {} rows ({}) — use more characters",
@@ -197,8 +201,6 @@ fn chunk_stem(k: &str) -> Option<&str> {
     (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(stem)
 }
 
-/// Warnings for a row about to be added — never a reject: a key domain the repo did not declare,
-/// a new key close to an existing one, text over `warn.row_tokens`.
 /// The anchor a doc stands for: `PLAN-vela.md` → `plan:vela` (the plan
 /// convention, AGENTS.md), any other `PRODUCT.md` → `doc:product`.
 fn md_anchor(f: &str) -> String {
@@ -210,6 +212,8 @@ fn md_anchor(f: &str) -> String {
     }
 }
 
+/// Warnings for a row about to be added — never a reject: a key domain the repo did not declare,
+/// a new key close to an existing one, text over `warn.row_tokens`.
 pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
     let mut w = vec![];
     if let Some(k) = &row.key {

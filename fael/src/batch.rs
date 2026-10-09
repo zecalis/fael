@@ -3,7 +3,7 @@
 //! ratchet): parsing here, one shared `add_row` per row over there.
 
 use crate::core::Row;
-use crate::hook::{ASK_WARN, record_asks, record_cli_reject, record_row_asks};
+use crate::hook::{ASK_WARN, record_asks, record_row_asks};
 use crate::{core, write};
 use std::process::ExitCode;
 
@@ -114,9 +114,8 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
             }
             Err(e) => {
                 failed += 1;
-                let e = format!("rejected: row {i}: {e}");
-                println!("{e}");
-                record_cli_reject("add", &e);
+                // main records the command's one reject — a round, not a row
+                println!("rejected: row {i}: {e}");
             }
         }
     }
@@ -150,9 +149,7 @@ pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<
                 if first.is_empty() {
                     first = e.clone();
                 }
-                let e = format!("rejected: {id}: {}", e.trim_start_matches("rejected: "));
-                println!("{e}");
-                record_cli_reject("close", &e);
+                println!("rejected: {id}: {}", e.trim_start_matches("rejected: "));
             }
         }
     }

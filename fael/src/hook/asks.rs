@@ -163,7 +163,7 @@ fn ask_row(
     repo: Option<&Path>,
     text: &str,
 ) -> serde_json::Value {
-    serde_json::json!({
+    let mut v = serde_json::json!({
         "ts": now_rfc3339().unwrap_or_default(),
         "repo": repo.map(|r| r.to_string_lossy().into_owned()).unwrap_or_default(),
         "client": client,
@@ -171,7 +171,13 @@ fn ask_row(
         "ask": ask,
         "bytes": text.len(),
         "est_tokens": core::est_tokens(text),
-    })
+    });
+    // an id that names no row: what the say-gate revert check counts per
+    // session-start, apart from every other reject
+    if text.starts_with(core::NO_ROW_WITH_ID) {
+        v["reason"] = "unknown-id".into();
+    }
+    v
 }
 
 /// Bytes the agent pays every session before saying anything: the bundled

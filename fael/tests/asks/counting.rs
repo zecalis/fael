@@ -175,3 +175,30 @@ fn warning_add_carries_row_and_session() {
     // `ids` means "pushed to the agent" — an add's own row never counts there
     assert!(u[0].get("ids").is_none(), "{u:?}");
 }
+
+#[test]
+fn reject_unknown_id_carries_its_reason() {
+    let d = repo();
+    let (ok, _, err) = fael(&d, &["close", "ZZZZZZZZ", "done"], "");
+    assert!(!ok && err.contains("rejected: no row with id"), "{err}");
+    let u = usage(&d);
+    let r: Vec<_> = u.iter().filter(|v| v["ask"] == "reject").collect();
+    assert_eq!(r.len(), 1, "{u:?}");
+    assert_eq!(r[0]["reason"], "unknown-id", "{u:?}");
+}
+
+#[test]
+fn silent_session_start_is_counted_apart_from_injections() {
+    let d = repo();
+    let input = serde_json::json!({ "cwd": d, "session_id": "s1" }).to_string();
+    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+    assert!(ok && out.is_empty(), "{out}");
+    let u = usage(&d);
+    assert_eq!(u.len(), 1, "{u:?}");
+    assert_eq!(
+        (&u[0]["event"], &u[0]["bytes"]),
+        (&"silent-start".into(), &0.into()),
+        "{u:?}"
+    );
+    assert!(stats_json(&d)["by_event"].get("silent-start").is_none());
+}
