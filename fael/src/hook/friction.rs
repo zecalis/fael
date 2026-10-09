@@ -37,7 +37,9 @@ const AGENT_CMDS: [&str; 9] = [
 
 /// Why a reject cost a round, from its message — the vocabulary the plan fixed.
 fn reason(e: &str) -> &'static str {
-    if e.starts_with("rejected: unknown flag") {
+    if e.starts_with("rejected: nothing written") {
+        core::stats::SHAPE_GATE
+    } else if e.starts_with("rejected: unknown flag") {
         "unknown_flag"
     } else if e.contains(" takes no --") {
         "flag_not_taken"
@@ -204,13 +206,18 @@ pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
     }
     let reasons: Vec<String> = f.reasons.iter().map(|(r, n)| format!("{r} ×{n}")).collect();
     let mut out = vec![format!(
-        "  friction per 100 calls ({} calls): {}{}",
+        "  friction per 100 calls ({} calls): {}{}{}",
         f.total.calls,
         tally_text(&f.total),
         if reasons.is_empty() {
             String::new()
         } else {
             format!(" · rejects: {}", reasons.join(", "))
+        },
+        if f.shape_gate == 0 {
+            String::new()
+        } else {
+            format!(" · shape gate ×{} (not friction)", f.shape_gate)
         }
     )];
     let mut by: Vec<_> = f.by_command.iter().collect();
@@ -255,6 +262,10 @@ mod tests {
                 "unknown_command",
             ),
             ("rejected: --limit 0 shows nothing", "bad_value"),
+            (
+                "rejected: nothing written — text is 131 words with no title (or add --force to file it as is)",
+                "shape_gate",
+            ),
         ] {
             assert_eq!(reason(msg), want, "{msg}");
         }
@@ -282,11 +293,12 @@ mod tests {
             total: t.clone(),
             reasons: [("unknown_flag".to_string(), 1)].into(),
             by_command: [("find".to_string(), t)].into(),
+            shape_gate: 2,
         };
         let l = lines(&f);
         assert_eq!(
             l[0],
-            "  friction per 100 calls (8 calls): 25.0 — reject 12.5 · help 12.5 · find repeat 0.0 · first-call success 75% · rejects: unknown_flag ×1"
+            "  friction per 100 calls (8 calls): 25.0 — reject 12.5 · help 12.5 · find repeat 0.0 · first-call success 75% · rejects: unknown_flag ×1 · shape gate ×2 (not friction)"
         );
         assert!(l[1].starts_with("    find (8 calls): 25.0"), "{l:?}");
     }
