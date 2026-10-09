@@ -72,6 +72,9 @@ fn crockford_val(c: char) -> Option<u8> {
 /// `2` — the guard silently disabled itself.) At least one letter: an
 /// all-digit token is a number in prose (a tax id `0107544000108`), never a
 /// fael id — a ULID's time part holds a letter from ~1980 on (`01M…` today).
+/// Lowercase hex (digits and `a-f` only) is a git sha (`0e0fd51a`), never a
+/// fael id: fael prints ids uppercase. Not all-hex in any case — from ~2037
+/// the third char is a digit and ~1 in 32 short ids would be all-hex.
 ///
 /// Legacy fapony `mug…` ids are outside this shape: `resolve` still finds them
 /// by exact id/prefix, but prose scanning ignores their shape (short lowercase
@@ -80,7 +83,7 @@ pub fn looks_like_id(tok: &str) -> bool {
     (8..=26).contains(&tok.len())
         && tok.as_bytes().first() == Some(&b'0')
         && tok.chars().all(|c| crockford_val(c).is_some())
-        && !tok.bytes().all(|b| b.is_ascii_digit())
+        && !tok.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 /// present: the stop hook anchors recency at a transcript birthtime with ms
 /// precision, and a whole-second row filed just before the session start
