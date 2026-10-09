@@ -74,8 +74,8 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         return Ok((with_mentioned(&log, row, text), vec![shown]));
     }
     let text = s(a, "text");
-    // `text: "plan:x"` reads the anchor the way `kickoff` does (CLI parity)
-    let (text, anchor) = crate::find::text_or_anchor(&log, None, text.as_ref(), r);
+    // `text: "plan:x"` reads the anchor the way `kickoff` does, `text: "#k"` the key (CLI parity)
+    let (text, anchor, text_key) = crate::find::text_or_anchor(&log, None, text.as_ref(), r);
     let mut files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
     files.extend(anchor);
     // `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`)
@@ -87,7 +87,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let f = core::Filter {
         text: text.cloned(),
         files: aliases::load(r, &log, true).expand_all(&files),
-        key: s(a, "key"),
+        key: s(a, "key").or(text_key),
         kind: s(a, "kind"),
         since: s(a, "since"),
         by: s(a, "by"),
