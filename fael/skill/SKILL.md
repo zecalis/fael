@@ -16,7 +16,9 @@ close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage o
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there, one per finding — do not wait for the end of the task.**
 That includes your own earlier bug, a regression you caused, and a reviewer's finding that outlives this turn.
 Fixed one with no row yet, however found (failing test, review, reading code)? File and close it in one command, commit or not:
-`fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; tried <what failed>; guard `<test path>`"`` (+ sha, `(#N)` once known).
+`fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; tried <what failed>; guard `<test path>` or don't <X> because <Y>; <sha or (#N)>"``.
+Close after the commit: a row closes once, with the sha.
+Would a new agent reading only code and tests know this? Yes → a test, named in `guard`. No → what not to do, and why.
 Name `(fael:<id>)` in the commit body — a squash keeps it.
 In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).
 

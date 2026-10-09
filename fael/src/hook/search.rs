@@ -212,7 +212,8 @@ fn fix_commit(files: &[String]) -> String {
         files.join(",")
     };
     format!(
-        "fael: this `fix:` commit names no fael row and this session closed none (a row id anywhere in the commit message names it) — keep what broke for the next agent: fael add issue \"<what broke>\" --files {files} --key <area:topic> then fael close --key <area:topic> \"<cause> → <fix>; tried <what failed>; guard `<test path>`; <sha>\"\n"
+        "fael: this `fix:` commit names no fael row and this session closed none (a row id anywhere in the commit message names it) — keep what broke for the next agent: fael add issue \"<what broke>\" --files {files} --key <area:topic> then fael close --key <area:topic> \"{}\"\n",
+        fael_core::stats::CLOSE_TEMPLATE
     )
 }
 

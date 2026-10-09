@@ -61,7 +61,7 @@ pub(crate) fn tools() -> Value {
                 "ids": {"type": "array", "items": {"type": "string"},
                     "description": "many ids, one reason"},
                 "key": str_("the one open row on this key"),
-                "text": str_("why; a fixed bug: <cause> → <fix>; tried <what failed>; guard `<test path>`"),
+                "text": str_(&format!("why; a fixed bug: {}", fael_core::stats::CLOSE_TEMPLATE)),
             }},
         },
     ]);
@@ -77,7 +77,7 @@ pub(crate) fn tools() -> Value {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6300 bytes
+    /// Chunk 6d ceiling: SKILL.md + the served schema stay under 6430 bytes
     /// combined (measured 5813 on 2026-10-03 — SKILL 2204 + schema 3609, after the duplicate-text trim).
     /// Raised from 6100 by owner decision when `find ids[]` joined `close
     /// ids[]`: batching the read and the write each saves an agent round per
@@ -85,6 +85,12 @@ mod tests {
     /// to ≥15% + a ceiling (PLAN-fael-durable-log §3). The ceiling sits just
     /// above the measure so any growth fails here, not only in the stats
     /// golden — raise it again only with a feature that earns it.
+    ///
+    /// Raised from 6300 to 6430 (measured 6424, 2026-10-10) when the close
+    /// template gained its `don't <X> because <Y>` branch, the one-line
+    /// question and "close after the commit" (PLAN-fael-capture-yield
+    /// chunk 2): +124 B, once per session, until chunk 3 measures whether it
+    /// earns it — if not, those lines come out and the ceiling goes back.
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
@@ -94,12 +100,21 @@ mod tests {
     const SKILL: &str = include_str!("../skill/SKILL.md");
     const BASELINE: usize = 7756;
 
+    /// PLAN-fael-capture-yield chunk 2: one close template for every channel —
+    /// the skill and the served `close` schema carry the core const verbatim.
+    #[test]
+    fn close_template_is_one_const() {
+        let t = fael_core::stats::CLOSE_TEMPLATE;
+        assert!(SKILL.contains(t), "SKILL.md lacks the close template");
+        assert!(super::schema_json().contains(t), "schema lacks it");
+    }
+
     #[test]
     fn constants_stay_small() {
         let total = SKILL.replace("\r\n", "\n").len() + super::schema_json().len();
         assert!(
-            total <= 6300,
-            "constants {total} B exceed the 6300 B ceiling — trim, don't grow"
+            total <= 6430,
+            "constants {total} B exceed the 6430 B ceiling — trim, don't grow"
         );
         assert!(
             total * 100 <= BASELINE * 85,

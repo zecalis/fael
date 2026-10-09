@@ -69,6 +69,13 @@ fn pr_like(w: &str) -> bool {
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// The close text a fixed bug is taught to take — one const for every channel
+/// (skill, MCP `close`, fix-net, fix-commit line) so what is taught and what
+/// `close_shape`/`names_fix` read cannot drift. The core `<cause> → <fix>` is
+/// `close_shape`'s; the tail picks a branch (a test to `guard`, or what not to
+/// do when no test can say it) and ends on the fix `names_fix` reads.
+pub const CLOSE_TEMPLATE: &str = "<cause> → <fix>; tried <what failed>; guard `<test path>` or don't <X> because <Y>; <sha or (#N)>";
+
 /// A close text that names its fix: a sha or a `(#N)` — the evidence `fixed`
 /// counts, and the one an edit's carry-back line reads (`fix_close`).
 pub(crate) fn names_fix(text: &str) -> bool {
