@@ -64,7 +64,8 @@ fn a_shell_read_pushes_the_rows_of_its_file() {
     for (i, cmd) in [
         "sed -n 1,20p src/a.rs",
         "cat src/a.rs | head -5",
-        "cd /tmp && cat 'src/a.rs'",
+        // a path after `cd` is under that directory, as the shell reads it
+        "cd src && cat 'a.rs'",
         "git show HEAD:src/a.rs",
     ]
     .iter()

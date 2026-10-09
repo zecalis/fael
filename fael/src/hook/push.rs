@@ -122,13 +122,27 @@ fn repo_files(c: &super::protocol::Ctx, raw: &[String]) -> Vec<String> {
                 .map(|p| p.to_string_lossy().replace('\\', "/"))
                 .unwrap_or_else(|_| f.clone())
         };
-        if let Ok(mut n) =
-            core::normalize_files(std::slice::from_ref(&f), &c.repo.cwd, &c.repo.root)
+        let one = std::slice::from_ref(&f);
+        if let Ok(mut n) = core::normalize_files(one, &c.repo.cwd, &c.repo.root)
+            .or_else(|e| sibling(c, &f).map_or(Err(e), |r| core::normalize_files(one, &r, &r)))
         {
             files.append(&mut n);
         }
     }
     files
+}
+
+/// The root of the sibling worktree holding `f` when it shares this clone's
+/// journal: a session that `cd`s into `git worktree add ../wt` reads and edits
+/// the same repo files there.
+fn sibling(c: &super::protocol::Ctx, f: &str) -> Option<std::path::PathBuf> {
+    let common = |root: &std::path::Path| crate::journal::root(root)?.parent()?.canonicalize().ok();
+    let mine = common(&c.repo.root)?;
+    let root = std::path::Path::new(f)
+        .ancestors()
+        .skip(1)
+        .find(|d| d.join(".git").exists())?;
+    (common(root)? == mine).then(|| root.to_path_buf())
 }
 
 /// Only adopted repos record an edit — `add` derives files from this list only there.
