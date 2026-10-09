@@ -49,6 +49,37 @@ fn a_row_carries_the_writer_session_id_never_a_path() {
     assert!(!log.contains("/t/"), "no local path in a shared row: {log}");
 }
 
+/// Issue 01M4GEDR: a row filed before the session's first edit still carries
+/// the session, since session-start saw the id in this worktree.
+#[test]
+fn a_row_before_the_first_edit_carries_the_session() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
+    let (ok, _, err) = fael_env(&d, &["add", "note", "seed", "--files", "src/a.rs"], "", &[]);
+    assert!(ok, "{err}");
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"x","transcript_path":{}}}"#,
+        json(&d),
+        json(&d.join("t/abc-123.jsonl"))
+    );
+    let (ok, _, err) = fael_env(
+        &d,
+        &["hook", "session-start", "--client", "claude"],
+        &input,
+        &[],
+    );
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael_env(
+        &d,
+        &["add", "note", "first", "--files", "src/a.rs"],
+        "",
+        &[("CLAUDE_CODE_SESSION_ID", "abc-123")],
+    );
+    assert!(ok, "{err}");
+    let log = log_text(&d);
+    assert!(log.contains(r#""session":"abc-123""#), "{log}");
+}
+
 #[test]
 fn fael_session_tags_a_row_like_claude_code_session_id() {
     let d = repo();
