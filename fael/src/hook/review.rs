@@ -23,7 +23,22 @@ fn summary(s: &str) -> String {
         Some((i, _)) => format!("{}…", flat[..i].trim_end()),
         None => flat,
     };
-    format!("'{}'", cut.replace('\'', r"'\''"))
+    quote(&cut)
+}
+
+fn quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', r"'\''"))
+}
+
+/// The finding's file as one shell word: bare when every char is plain
+/// (`src/a.rs`), else single-quoted (`'src/my file.rs'`).
+fn word(s: &str) -> String {
+    let plain = |c: char| c.is_ascii_alphanumeric() || "/._-+@:,".contains(c);
+    if s.chars().all(plain) {
+        s.into()
+    } else {
+        quote(s)
+    }
 }
 
 /// One `Finding` line per fresh finding of `input` (`findings[]`), at most
@@ -41,13 +56,17 @@ fn lines(input: &Value, out: &Outbox) -> Vec<Line> {
                 return None;
             }
             keys.push(key);
+            // a backtick kept in the summary would close a one-tick span early
+            // ponytail: a summary holding a double backtick still closes it
+            let tick = if text.contains('`') { "``" } else { "`" };
             Some(Line {
                 kind: Kind::Finding {
                     file: file.into(),
                     line,
                 },
                 text: format!(
-                    "fael: review finding on {file} — file it: `fael add issue {text} --files {file}`\n"
+                    "fael: review finding on {file} — file it: {tick}fael add issue {text} --files {}{tick}\n",
+                    word(file)
                 ),
             })
         })
@@ -110,6 +129,19 @@ mod tests {
         ] {
             assert!(lines(&input, &out).is_empty(), "{input}");
         }
+    }
+
+    #[test]
+    fn a_backtick_widens_the_span_and_an_odd_file_is_quoted() {
+        let input = json!({"findings": [{"file": "src/my file.rs", "summary": "`f()` panics"}]});
+        let got = lines(&input, &Outbox::open(None));
+        assert!(
+            got[0]
+                .text
+                .contains("``fael add issue '`f()` panics' --files 'src/my file.rs'``"),
+            "{}",
+            got[0].text
+        );
     }
 
     #[test]

@@ -75,7 +75,6 @@ mod tests {
         Line {
             kind: Kind::Ask {
                 ids: vec!["01ASK".into()],
-                issue: false,
             },
             text: "fael: done with one? fael close 01ASK \"<why>\"\n".into(),
         }
@@ -114,20 +113,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(p.parent().unwrap());
     }
 
-    /// One edit ask per user turn, shared with the merge ask: the ask wins
-    /// the turn, the merge keeps its key and is said in the next.
+    /// The edit ask names only open issues and spends no turn mark: the
+    /// merge ask is said beside it in the same turn.
     #[test]
-    fn the_ask_wins_the_turn_and_the_merge_waits() {
+    fn the_ask_leaves_the_turn_to_the_merge() {
         let p = seen();
-        let in_turn = |t: &str, ls: Vec<Line>| {
-            let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
-            ls.into_iter().for_each(|l| out.say(l));
-            out.reply().context().map(String::from)
-        };
-        let t1 = in_turn("t1", vec![ask(), merge()]).unwrap();
-        assert!(t1.contains("01ASK") && !t1.contains("01MERGE"), "{t1}");
-        let t2 = in_turn("t2", vec![merge()]).unwrap();
-        assert!(t2.contains("01MERGE"), "{t2}");
+        let mut out = Outbox::open(lock_seen(&p)).in_turn(Some("t1".into()));
+        [ask(), merge()].into_iter().for_each(|l| out.say(l));
+        let t1 = out.reply().context().unwrap_or("").to_string();
+        assert!(t1.contains("01ASK") && t1.contains("01MERGE"), "{t1}");
         let _ = std::fs::remove_dir_all(p.parent().unwrap());
     }
 }

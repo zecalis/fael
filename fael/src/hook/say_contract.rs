@@ -26,7 +26,6 @@ pub(super) fn all() -> Vec<Line> {
         line(
             Kind::Ask {
                 ids: vec!["01ASK".into()],
-                issue: false,
             },
             "fael: done with one? fael close 01ASK \"<why>\"\n",
         ),
@@ -185,12 +184,13 @@ fn a_spent_mark_says_nothing_and_is_seen_next_time() {
 fn a_per_turn_kind_is_said_once_per_turn() {
     for l in all().into_iter().filter(|l| policy(&l.kind).per_turn) {
         let p = seen("s.seen");
+        // turns share one mark across per-turn kinds: a merge on a fresh file
         let other = |id: &str| Line {
-            kind: Kind::Ask {
-                ids: vec![id.into()],
-                issue: false,
+            kind: Kind::Merge {
+                file: id.into(),
+                ids: vec![],
             },
-            text: format!("fael close {id}\n"),
+            text: format!("fael add decision --files {id}\n"),
         };
         let in_turn = |t: &str, l: Line| {
             let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
@@ -207,7 +207,7 @@ fn a_per_turn_kind_is_said_once_per_turn() {
         assert!(in_turn("t2", other("01B")).is_some());
         // the held-back line spent nothing: 01B is asked once, in t2
         let (_, hinted) = read_seen(&std::fs::read_to_string(&p).unwrap());
-        assert!(hinted.contains("01A") && hinted.contains("01B"));
+        assert!(hinted.contains("merge:01A") && hinted.contains("merge:01B"));
         assert!(said(lock_seen(&p), other("01C")).is_some());
         let _ = std::fs::remove_dir_all(p.parent().unwrap());
     }
@@ -293,7 +293,6 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             line(
                 Kind::Ask {
                     ids: vec!["01ASKED".into()],
-                    issue: false,
                 },
                 "fael close 01ASKED\n",
             ),
@@ -303,7 +302,6 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             line(
                 Kind::Ask {
                     ids: vec!["*".into()],
-                    issue: false,
                 },
                 "fael close <id>\n",
             ),
@@ -313,7 +311,6 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             line(
                 Kind::Ask {
                     ids: vec!["01OLD".into()],
-                    issue: false,
                 },
                 "fael close 01OLD\n",
             ),
