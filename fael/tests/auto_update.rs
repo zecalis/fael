@@ -239,12 +239,14 @@ fn session_start_does_not_wait_for_the_update_and_the_next_one_says_it() {
 }
 
 /// Opted out, a stored receipt is taken silently: no line now, nothing stale
-/// when opting back in (notice() had no off() gate).
+/// when opting back in (notice() had no off() gate). `checked_at` is in the
+/// future so opting back in spawns no `--auto` child: a real update racing
+/// notice() would write a fresh receipt (flaked on macOS CI).
 #[test]
 fn off_takes_a_stored_receipt_silently() {
     let base = world(
         &["v99.0.0"],
-        r#"{"checked_at":1,"seen_at":0,"from":"0.30.0","to":"99.0.0","result":"updated"}"#,
+        r#"{"checked_at":9999999999,"seen_at":0,"from":"0.30.0","to":"99.0.0","result":"updated"}"#,
         "",
         "99.0.0",
     );
