@@ -27,8 +27,9 @@ fn risk_line(marker: &str, files: &[String]) -> String {
 /// it fixed a bug and filed nothing — the add + close that keeps it.
 fn fixed_line(phrase: &str, files: &[String]) -> String {
     format!(
-        "fael: this session said it fixed a bug (\"{phrase}\") with no issue filed or closed since — keep it for the next agent: fael add issue \"<what broke>\" --files {} --key <area:topic> then fael close --key <area:topic> \"<cause> → <fix>; tried <what failed>; guard `<test path>`\"\n",
-        files.join(",")
+        "fael: this session said it fixed a bug (\"{phrase}\") with no issue filed or closed since — keep it for the next agent: fael add issue \"<what broke>\" --files {} --key <area:topic> then fael close --key <area:topic> \"{}\"\n",
+        files.join(","),
+        fael_core::stats::CLOSE_TEMPLATE
     )
 }
 
