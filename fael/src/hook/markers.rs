@@ -53,13 +53,16 @@ pub(super) fn read_tail(path: &Path) -> Option<String> {
 /// lines after the latest user prompt (a plan written an hour ago must not
 /// flag this turn). Returns the marker with its line timestamp (fallback:
 /// the session start, when the line carries none) — an issue row clears it
-/// only when stamped at or after that.
+/// only when stamped at or after that — beside the turn start (that prompt's
+/// timestamp, else the session start), returned even with no match.
 pub(crate) fn signal_from_transcript(
     path: &Path,
     since_ms: i64,
     hit: impl Fn(&str) -> Option<String>,
-) -> Option<(String, i64)> {
-    let text = read_tail(path)?;
+) -> (Option<(String, i64)>, i64) {
+    let Some(text) = read_tail(path) else {
+        return (None, since_ms);
+    };
     // (is_user, line ms, text blocks) in file order
     let mut msgs: Vec<(bool, i64, Vec<String>)> = vec![];
     for line in text.split('\n') {
@@ -107,12 +110,13 @@ pub(crate) fn signal_from_transcript(
         .rposition(|(user, _, _)| *user)
         .map(|i| i + 1)
         .unwrap_or(0);
+    let turn_ms = after.checked_sub(1).map_or(since_ms, |i| msgs[i].1);
     for (_, at_ms, texts) in msgs.iter().skip(after).filter(|m| !m.0) {
         for t in texts {
             if let Some(marker) = hit(t) {
-                return Some((marker, *at_ms));
+                return (Some((marker, *at_ms)), turn_ms);
             }
         }
     }
-    None
+    (None, turn_ms)
 }

@@ -311,3 +311,60 @@ fn the_fix_lines_name_the_files_the_session_edited() {
     let out = commit(&d, "fix(hook): cap retries at 3");
     assert!(out.contains("--files src/fixed.rs --key"), "{out}");
 }
+
+/// One Claude transcript line stamped now.
+fn line_now(role: &str, text: &str) -> String {
+    let ts = fael_core::rfc3339(fael_core::now_ms());
+    let v = serde_json::json!({
+        "message": {"role": role, "content": [{"type": "text", "text": text}]},
+        "timestamp": ts,
+    });
+    format!("{v}\n")
+}
+
+/// The honest order is fix → close → summary: a close made in this turn
+/// clears the summary's fix phrase, from the transcript or the client's
+/// reply alike. A close from an earlier turn does not (fael:01M4F4CD).
+#[test]
+fn a_close_earlier_in_the_turn_clears_the_summarys_fix_phrase() {
+    let d = super::repo();
+    let pause = || std::thread::sleep(std::time::Duration::from_millis(5));
+    // one session (transcript) per case; `in_turn`: the close comes after
+    // the prompt, else before it; `reply`: the summary only in the client's
+    // reply, the transcript lagging
+    let said = |key: &str, in_turn: bool, reply: bool| {
+        let args = ["add", "issue", key, "--files", "src/a.rs", "--key", key];
+        assert!(fael(&d, &args, "").0);
+        let close = || assert!(fael(&d, &["close", "--key", key, "capped"], "").0);
+        let t = d.join(format!("{}.jsonl", key.replace(':', "-")));
+        std::fs::write(&t, "").unwrap();
+        pause();
+        if !in_turn {
+            close();
+            pause();
+        }
+        let mut body = line_now("user", "fix the retry loop");
+        pause();
+        if in_turn {
+            close();
+            pause();
+        }
+        let summary = "สาเหตุคือ retry ไม่มี cap — Fixed the bug by capping at 3.";
+        if !reply {
+            body.push_str(&line_now("assistant", summary));
+        }
+        std::fs::write(&t, body).unwrap();
+        let input = format!(
+            r#"{{"cwd":{},"session":{},"reply":{}}}"#,
+            json(&d),
+            json(&t),
+            serde_json::to_string(summary).unwrap()
+        );
+        let (ok, out, err) = fael(&d, &["hook", "stop"], &input);
+        assert!(ok && out.contains(r#""block":false"#), "{out}{err}");
+        read(&d, &t.to_string_lossy()).contains(SAID)
+    };
+    assert!(!said("a:one", true, false), "close in turn, transcript");
+    assert!(!said("a:two", true, true), "close in turn, reply");
+    assert!(said("a:three", false, false), "close before the turn");
+}
