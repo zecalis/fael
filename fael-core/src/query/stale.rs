@@ -85,6 +85,16 @@ fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<Str
         if p.is_empty() || p.contains(char::is_whitespace) || filed.iter().any(|f| f == p) {
             continue;
         }
+        // no file name, and a first dir this repo does not have: a name from
+        // elsewhere (`verapdf/cli`, a docker image), never one of its paths.
+        // A file (`t/gone.sh`) is still judged — its dir may be what went.
+        // ponytail: a deleted top-level dir cited without a file goes unflagged
+        if let Some((top, _)) = p.split_once('/')
+            && !has_extension(p)
+            && !root.join(top).exists()
+        {
+            continue;
+        }
         if al.forward(p).iter().all(|q| !root.join(q).exists()) && !out.contains(&p.to_string()) {
             out.push(p.to_string());
         }

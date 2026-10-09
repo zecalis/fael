@@ -94,6 +94,19 @@ fn stale_refs_flags_only_what_is_gone() {
         ),
         ["a/b.rs", "c.toml"]
     );
+    // no file name and a first dir this repo never had: a name from
+    // elsewhere (a docker image), not a path — a dir under `src/` still is
+    assert_eq!(
+        stale_refs(
+            &r,
+            &text_row(
+                "A0000000000000000000000025",
+                "run `verapdf/cli` on `src/gone/`"
+            ),
+            &al
+        ),
+        ["src/gone/"]
+    );
 }
 
 #[test]

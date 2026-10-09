@@ -35,7 +35,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
-    let argv = synonyms::rewrite(std::env::args().skip(1).collect());
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    let argv = synonyms::rewrite(raw.clone());
     // usage event for rejects, so they join their command's warnings
     let event = argv
         .first()
@@ -43,7 +44,7 @@ fn main() -> ExitCode {
         .map(String::as_str)
         .unwrap_or("cli")
         .to_string();
-    let res = run(argv.clone()).map_err(|e| synonyms::reject(&argv, e));
+    let res = run(argv.clone()).map_err(|e| synonyms::explain(&raw, &argv, e));
     hook::record_cli(&argv, &res);
     match res {
         Ok(code) => code,

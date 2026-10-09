@@ -212,3 +212,26 @@ fn reject_leaves_what_it_cannot_improve() {
     let a = reject(&argv("find --group"), flag_first.into());
     assert_eq!(a, reject(&argv("find --group"), flag_first.into()));
 }
+
+/// `add note x --body y` is two texts: name the flag, not "wrong arguments".
+/// A flag with no second text, or an arity error of another kind, is left as
+/// it came.
+#[test]
+fn a_text_flag_next_to_a_text_is_named() {
+    let wrong = "rejected: wrong arguments for \"add\" — try 'fael add --help'";
+    let raw = argv("add note x --body y --files a.rs");
+    let got = text_twice(&raw, &rewrite(raw.clone()), wrong.into());
+    assert!(
+        got.starts_with("rejected: --body is the text, and a text was given too"),
+        "{got}"
+    );
+    assert!(got.contains("fael add <kind> \"<text>\""), "{got}");
+    let raw = argv("close 01ABC done --why=y");
+    assert!(text_twice(&raw, &rewrite(raw.clone()), wrong.into()).contains("--why is the text"));
+    // unquoted words, no text flag: not ours to word
+    let raw = argv("add note x y --files a.rs");
+    assert_eq!(text_twice(&raw, &rewrite(raw.clone()), wrong.into()), wrong);
+    // the flag alone is one text — whatever failed, it was not this
+    let raw = argv("add --body y");
+    assert_eq!(text_twice(&raw, &rewrite(raw.clone()), wrong.into()), wrong);
+}

@@ -32,7 +32,7 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     }
     // every prompt starts a turn, hint or not: the edit ask speaks once per turn
     new_turn(&c.session, &c.repo.root);
-    let hints = core::key_hints(&c.log, text, &c.repo.cfg.hint_stop);
+    let hints = core::key_hints(&c.log, &typed(text), &c.repo.cfg.hint_stop);
     if hints.is_empty() {
         return Reply::default();
     }
@@ -84,6 +84,46 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     r
 }
 
+/// Blocks the harness puts in a prompt that the user never typed (01M4F5K3):
+/// a background agent's finish notice, a reminder. Their words ("usage",
+/// "background") named keys nobody asked about.
+const HARNESS: [&str; 2] = ["task-notification", "system-reminder"];
+
+/// The prompt as the user wrote it: harness blocks cut whole, and the markup
+/// left (`<pasted_content id=…>`, whose "content" named a key) cut to a space —
+/// the pasted text inside stays, the user put it there.
+/// ponytail: any `<word…>` is cut as markup, so `a<b c>d` loses "b c" too
+fn typed(text: &str) -> String {
+    let mut s = text.to_string();
+    for tag in HARNESS {
+        let close = format!("</{tag}>");
+        while let Some(i) = s.find(&format!("<{tag}")) {
+            let end = s[i..].find(&close).map_or(s.len(), |j| i + j + close.len());
+            s.replace_range(i..end, " ");
+        }
+    }
+    let (mut out, mut rest) = (String::with_capacity(s.len()), s.as_str());
+    while let Some(i) = rest.find('<') {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 1..];
+        let tag = after
+            .trim_start_matches('/')
+            .starts_with(|c: char| c.is_ascii_alphabetic());
+        match after.find('>') {
+            Some(j) if tag => {
+                out.push(' ');
+                rest = &after[j + 1..];
+            }
+            _ => {
+                out.push('<');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// The session's seen list, empty when there is none.
 fn read_seen(session: &str, root: &Path) -> String {
     std::fs::read_to_string(seen_path(session, "", root)).unwrap_or_default()
@@ -109,4 +149,28 @@ fn rows_all_seen(log: &core::Log, key: &str, seen: &[&str]) -> bool {
         .map(|r| r.id.as_str())
         .collect();
     !ids.is_empty() && ids.iter().all(|id| seen.contains(id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::typed;
+
+    #[test]
+    fn harness_text_is_not_the_prompt() {
+        let note = "<task-notification>Agent finished, <usage>9</usage> background</task-notification> fix credit";
+        assert_eq!(
+            typed(note).split_whitespace().collect::<Vec<_>>(),
+            ["fix", "credit"]
+        );
+        // a block never closed runs to the end
+        assert_eq!(typed("a <system-reminder>usage").trim(), "a");
+        // the paste stays, its markup goes
+        let paste = "<pasted_content id=\"9\">credit rows</pasted_content id=\"9\"> why?";
+        assert_eq!(
+            typed(paste).split_whitespace().collect::<Vec<_>>(),
+            ["credit", "rows", "why?"]
+        );
+        // a bare `<` is text
+        assert_eq!(typed("a < b"), "a < b");
+    }
 }
