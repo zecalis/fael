@@ -282,6 +282,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     for line in super::experience_text::experience_lines(s) {
         println!("{line}");
     }
+    if let Some(line) = super::experience_text::label_line(s) {
+        println!("{line}");
+    }
     if let Some(line) = cross_line(s) {
         println!("{line}");
     }

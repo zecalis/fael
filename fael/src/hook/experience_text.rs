@@ -46,3 +46,31 @@ pub(super) fn experience_lines(s: &core::stats::Stats) -> Vec<String> {
         ),
     ]
 }
+
+/// The label contract's measures (PLAN-fael-label chunk 3): `num/den (pct)`,
+/// `n/a (why)` with no base — never 0% for a missing one. Nothing keyed or
+/// closed since the contract = no line.
+pub(super) fn label_line(s: &core::stats::Stats) -> Option<String> {
+    use core::stats::{Measure, State};
+    let l = &s.experience.label;
+    if l.close_core.den + l.key_reuse.den == 0 {
+        return None;
+    }
+    let show = |m: &Measure, none: &str| match m.state {
+        State::Unmeasurable => format!("n/a ({none})"),
+        State::Measured => format!("{}/{} ({}%)", m.num, m.den, m.num * 100 / m.den),
+    };
+    let closed = "no issue closed since";
+    let gone = match l.gone_repos {
+        0 => String::new(),
+        n => format!(" · {n} repo path(s) gone, read through a live checkout if any"),
+    };
+    Some(format!(
+        "  label — close core {} · guard {} · key reuse {} · find hit {} — since {}{gone}",
+        show(&l.close_core, closed),
+        show(&l.guard, closed),
+        show(&l.key_reuse, "no keyed add since"),
+        show(&l.find_hit, "usage keeps no missed find"),
+        core::stats::LABEL_SINCE.get(..10).unwrap_or_default()
+    ))
+}

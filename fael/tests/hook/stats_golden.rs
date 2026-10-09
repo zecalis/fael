@@ -94,7 +94,7 @@ fn stats_json_matches_golden_values() {
             "capture": {"reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "edit_session_issues": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
             "context_loop": {"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0},
-            "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0},
+            "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0, "label": {"close_core": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "guard": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "key_reuse": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "find_hit": {"state": "unmeasurable", "num": 0, "den": 0, "since": null}, "gone_repos": 0}},
             "unused_rows": [],
             "incidents": {},
             "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}},

@@ -121,6 +121,8 @@ meaning:
   command too. No guard is no fault: some fixes have no one file to guard them.
 - **tried** — not checked.
 
+`fael stats` counts the form, never the worth: `experience.label` (`docs/stats.md`).
+
 | Close text | core | guard |
 |---|---|---|
 | `` stale cache → invalidate on mtime; tried ttl; guard `fael-core/tests/query/stale.rs` `` | ✓ | ✓ |
