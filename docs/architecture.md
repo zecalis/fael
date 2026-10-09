@@ -28,9 +28,12 @@ new to the repo. What someone who has worked here for years knows — what broke
 was fixed, what was chosen over what and why, how this repo works — is in no model and only
 partly in the code, diffs, tests and git. Fael keeps that part, per file and shared by the team,
 and puts it in front of the agent at the file it touches. It does not make the agent smarter;
-it lets a new agent start with this repo's experience. That is a thesis to prove — new agent +
-fael works closer to one with experience in this repo (`fael stats`, the replay A/B) — never a
-promise. Every vendor's model improves for everyone; this repo's history is its own.
+it lets a new agent start with this repo's experience. That is a thesis — new agent + fael works
+closer to one with experience in this repo — never a promise. `fael stats` shows what fael
+handed over and what followed (capture → acted → outcome), never the counterfactual, so it
+cannot prove the thesis; no fael on/off replay is run (decision 01M4FCRG — a new, narrow plan
+only when one design question needs it). Every vendor's model improves for everyone; this
+repo's history is its own.
 
 Experience is not a row kind (no `experience` or `lesson` bucket — it would become the new junk
 drawer). It is what three kinds of evidence on existing rows add up to:
