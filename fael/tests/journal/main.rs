@@ -30,6 +30,13 @@ fn git_out(d: &Path, args: &[&str]) -> String {
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_fael"))
+        // never the developer's real usage log or session (fael:01M4F3G0)
+        .env(
+            "FAEL_STATE_DIR",
+            std::env::temp_dir().join(format!("fael-test-state-{}", std::process::id())),
+        )
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
         .args(args)
         .current_dir(dir)
         .output()
