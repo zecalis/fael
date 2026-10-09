@@ -12,7 +12,8 @@ env; a fresh HOME and FAEL_STATE_DIR per trial; the agent works in
 After the agent, the evaluator applies its diff to a fresh copy outside the
 workspace, puts back the test suite as it stood at C for every package C's
 tests or the diff touch, and runs it. The agent and the evaluator each get
-their own database (db.py), dropped at exit. Results go to
+their own database on the trial's own Postgres container (db.py), removed
+at exit. Results go to
 <results>/trials/<pr>-<arm>-<run>/: manifest.json, diff.patch,
 transcript.jsonl, runner.log, tests.json, tests.log, leaks.json. Scores are
 chunk 5's. A trial that exists is never overwritten. /tmp/trials/<hex> is
@@ -84,7 +85,7 @@ def trial_env(tdir, arm):
     return env
 
 
-def setup(a, task, cand, tdir, ws, env):
+def setup(a, task, cand, tdir, ws, env, port):
     """The workspace and the arm; returns the manifest's setup part."""
     tip = replica.clone(replica.base(a.src, cand["parent"], a.arm == "off"), ws)
     sh(["git", "-C", ws, "config", "user.name", "agent"])
@@ -102,7 +103,8 @@ def setup(a, task, cand, tdir, ws, env):
         sh(["bun", "install", "--frozen-lockfile"], cwd=ws, env=env)
         m["bun_install_s"] = round(time.time() - t)
     # the agent's own database, ready as a worktree's would be
-    m["db"] = {"urls": db.write_env(ws, f"onoff_{os.path.basename(tdir)}_ws")}
+    # neutral name: the agent reads it; the server is the trial's own (db.py)
+    m["db"] = {"urls": db.write_env(ws, port, "dev")}
     if not a.no_install:
         m["db"]["reset"] = db.reset(ws, env)
     return m
@@ -182,15 +184,16 @@ def collect(ws, tip, row, out):
             } | reached(os.path.join(out, "transcript.jsonl"), row)
 
 
-def strays(url, dbs, tmp, transcript):
-    """What the agent left outside its trial — a later agent must not find it:
-    databases and /tmp entries new since its start and named in its transcript."""
+def strays(tmp, transcript):
+    """What the agent left in /tmp — a later agent must not find it: entries
+    new since its start and named in its transcript. (Its databases go with
+    the trial's server.)"""
     text = open(transcript, errors="replace").read()
     files = sorted(f for f in set(os.listdir("/tmp")) - tmp if "/tmp/" + f in text)
     for f in files:
         p = os.path.join("/tmp", f)
         shutil.rmtree(p) if os.path.isdir(p) and not os.path.islink(p) else os.remove(p)
-    return {"tmp": files, "db": db.drop_strays(url, dbs, transcript) if url else []}
+    return {"tmp": files}
 
 
 def reached(transcript, row):
@@ -238,7 +241,7 @@ def put_suite(ev, p, mine, at_c):
         open(os.path.join(ev, f), "wb").write(at_c(f))
 
 
-def evaluate(a, cand, tdir, tip, out, env):
+def evaluate(a, cand, tdir, tip, out, env, port):
     """C's test suite against the agent's diff, outside the workspace."""
     ev = os.path.join(tdir, "eval")
     sh(["git", "clone", "-q", "--no-local", replica.base(a.src, cand["parent"], a.arm == "off"), ev])
@@ -255,7 +258,7 @@ def evaluate(a, cand, tdir, tip, out, env):
     pkgs = sorted({package_of(ev, f) for f in [x for x in changed if TEST.search(x)] + touched})
     res = {"applied": applied, "hidden": [f for f in changed if TEST.search(f)], "packages": {}}
     if applied and pkgs:  # C's tests on a fresh database migrated by the agent's diff
-        res["db"] = db.write_env(ev, f"onoff_{os.path.basename(tdir)}_ev")
+        res["db"] = db.write_env(ev, port, "eval")
         sh(["bun", "install", "--frozen-lockfile"], cwd=ev, env=env)
         res["db_reset"] = db.reset(ev, env)
     with open(os.path.join(out, "tests.log"), "w") as log:
@@ -370,7 +373,8 @@ def main():
          "rubric_version": sha256(task["rubric"])[:12], "prompt_sha256": sha256(task["prompt"]),
          "model": a.model, "timeout_s": a.timeout, "env_keys": sorted(env),
          "started": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
-    m |= setup(a, task, cand, tdir, ws, env)
+    port = db.server(run_id)
+    m |= setup(a, task, cand, tdir, ws, env, port)
     m["config"] = config(env["HOME"])
     m["config_sha256"] = sha256(json.dumps(m["config"], sort_keys=True))
     m["leaks"] = leaks(a, task, cand, ws, env)
@@ -378,14 +382,13 @@ def main():
     if not m["leaks"]["ok"]:
         json.dump(m, open(os.path.join(out, "manifest.json"), "w"), indent=1)
         sys.exit(f"leak check failed, no agent run: {out}/leaks.json")
-    url = (m["db"]["urls"] or [None])[0]
-    dbs, tmp = db.names(url) if url else set(), set(os.listdir("/tmp"))
+    tmp = set(os.listdir("/tmp"))
     m |= (run_claude(a, task, ws, env, out) if a.runner == "claude"
           else run_stub(a, cand, ws, env, out))
     m["ended"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     m |= collect(ws, m["tip"], task["row"], out)
-    m["strays"] = strays(url, dbs, tmp, os.path.join(out, "transcript.jsonl"))
-    m["tests"] = evaluate(a, cand, tdir, m["tip"], out, env)
+    m["strays"] = strays(tmp, os.path.join(out, "transcript.jsonl"))
+    m["tests"] = evaluate(a, cand, tdir, m["tip"], out, env, port)
     json.dump(m, open(os.path.join(out, "manifest.json"), "w"), indent=1)
     if not a.keep:
         shutil.rmtree(tdir)
