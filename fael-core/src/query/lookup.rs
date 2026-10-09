@@ -201,8 +201,6 @@ fn chunk_stem(k: &str) -> Option<&str> {
     (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(stem)
 }
 
-/// Warnings for a row about to be added — never a reject: a key domain the repo did not declare,
-/// a new key close to an existing one, text over `warn.row_tokens`.
 /// The anchor a doc stands for: `PLAN-vela.md` → `plan:vela` (the plan
 /// convention, AGENTS.md), any other `PRODUCT.md` → `doc:product`.
 fn md_anchor(f: &str) -> String {
@@ -214,6 +212,8 @@ fn md_anchor(f: &str) -> String {
     }
 }
 
+/// Warnings for a row about to be added — never a reject: a key domain the repo did not declare,
+/// a new key close to an existing one, text over `warn.row_tokens`.
 pub fn warnings(row: &Row, log: &Log, cfg: &Config) -> Vec<String> {
     let mut w = vec![];
     if let Some(k) = &row.key {
