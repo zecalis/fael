@@ -7,6 +7,7 @@ Usage: scripts/onoff/check.py
 """
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -28,7 +29,8 @@ def main():
     t = tempfile.mkdtemp(prefix="replica-check-")
     replica.ROOT = t
     src = os.path.join(t, "src")
-    os.makedirs(os.path.join(src, ".fael", "log", "w"))
+    os.makedirs(os.path.join(src, ".fael", "log", "w x"))
+    os.makedirs(os.path.join(src, "docs"))
     git(t, "init", "-q", "-b", "main", src)
     git(src, "config", "user.name", "x")
     git(src, "config", "user.email", "x@x")
@@ -36,7 +38,10 @@ def main():
         "# Rules\n* keep `a.ts` small\n* run `fael kickoff` first\n"
         "## Memory\nfael is append-only\n* rows hold why\n## Tests\n* bun test\n")
     open(os.path.join(src, "a.ts"), "w").write("// a\n")
-    open(os.path.join(src, ".fael", "log", "w", "2026-09.jsonl"), "w").write(
+    # git quotes a Thai or spaced path: it must still be cut, stripped, read
+    open(os.path.join(src, "docs", "ข้อ ตกลง.md"), "w").write(
+        "* keep it short\n* then `fael close <id>`\n")
+    open(os.path.join(src, ".fael", "log", "w x", "2026-09.jsonl"), "w").write(
         row("TREE1", "2026-09-01T00:00:00Z") + "\n")
     git(src, "add", "-A")
     git(src, "commit", "-qm", "parent", date="2026-10-01T00:00:00+00:00")
@@ -59,6 +64,7 @@ def main():
     md = open(os.path.join(off, "CLAUDE.md")).read()
     assert md == "# Rules\n* keep `a.ts` small\n## Tests\n* bun test\n", md
     assert not os.path.exists(os.path.join(off, ".fael"))
+    assert open(os.path.join(off, "docs", "ข้อ ตกลง.md")).read() == "* keep it short\n"
     assert replica.git_leaks(off, c, cutoff) == {}, replica.git_leaks(off, c, cutoff)
 
     on = os.path.join(t, "on")
@@ -76,7 +82,24 @@ def main():
     got = replica.git_leaks(off, c, cutoff)
     assert {"c_object", "second_history", "late_commits"} <= got.keys(), got
     reached(t)
+    put_suite(t)
+    shutil.rmtree(t)
     print("check ok")
+
+
+def put_suite(t):
+    """The root package's suite becomes C's without touching a nested
+    package's tests; the agent's own test in the root package goes."""
+    ev = os.path.join(t, "ev")
+    for f, body in [("package.json", "{}"), ("pkg/package.json", "{}"),
+                    ("pkg/a.test.ts", "nested"), ("b.test.ts", "agent's b"),
+                    ("mine.test.ts", "agent's own")]:
+        os.makedirs(os.path.dirname(os.path.join(ev, f)), exist_ok=True)
+        open(os.path.join(ev, f), "w").write(body)
+    trial.put_suite(ev, "", {"b.test.ts"}, lambda f: b"C's b")
+    assert open(os.path.join(ev, "b.test.ts")).read() == "C's b"
+    assert open(os.path.join(ev, "pkg", "a.test.ts")).read() == "nested"
+    assert not os.path.exists(os.path.join(ev, "mine.test.ts"))
 
 
 def reached(t):

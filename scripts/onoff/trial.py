@@ -127,7 +127,7 @@ def run_stub(a, cand, ws, env, out):
             for g in groups:
                 for h in g["hooks"]:
                     hooks.setdefault(event, []).append((g.get("matcher"), h["command"]))
-    files = sh(["git", "-C", a.src, "diff", "--name-only", cand["parent"], cand["sha"]]).split()
+    files = replica.paths(a.src, "diff", "--name-only", cand["parent"], cand["sha"])
     session = secrets.token_hex(8)
     events = [("SessionStart", None, {"source": "startup"})] + [
         ("PostToolUse", "Edit", {"tool_name": "Edit", "tool_input":
@@ -191,6 +191,22 @@ def package_of(root, path):
     return d
 
 
+def put_suite(ev, p, mine, at_c):
+    """Package p's tests become exactly C's (mine, read by at_c): any other
+    test file in p goes, the agent's own included. A nested package's tests
+    are its own package's business, not p's."""
+    for root, _, names in os.walk(os.path.join(ev, p)):
+        if "node_modules" in root:
+            continue
+        for n in names:
+            f = os.path.relpath(os.path.join(root, n), ev)
+            if TEST.search(f) and f not in mine and package_of(ev, f) == p:
+                os.remove(os.path.join(ev, f))
+    for f in mine:
+        os.makedirs(os.path.dirname(os.path.join(ev, f)), exist_ok=True)
+        open(os.path.join(ev, f), "wb").write(at_c(f))
+
+
 def evaluate(a, cand, tdir, tip, out, env):
     """C's test suite against the agent's diff, outside the workspace."""
     ev = os.path.join(tdir, "eval")
@@ -199,27 +215,20 @@ def evaluate(a, cand, tdir, tip, out, env):
     patch = os.path.join(out, "diff.patch")
     applied = os.path.getsize(patch) == 0 or subprocess.run(
         ["git", "-C", ev, "apply", "--binary", patch], capture_output=True).returncode == 0
-    c_tests = [f for f in sh(["git", "-C", a.src, "ls-tree", "-r", "--name-only", cand["sha"]]).split()
+    c_tests = [f for f in replica.paths(a.src, "ls-tree", "-r", "--name-only", cand["sha"])
                if TEST.search(f)]
-    changed = sh(["git", "-C", a.src, "diff", "--name-only", cand["parent"], cand["sha"]]).split()
-    touched = re.findall(r"^diff --git a/(\S+)", open(patch, errors="replace").read(), re.M)
+    changed = replica.paths(a.src, "diff", "--name-only", cand["parent"], cand["sha"])
+    # numstat -z: "<added>\t<deleted>\t<path>" per NUL, the path unquoted
+    touched = [x.split("\t", 2)[2] for x in replica.paths(ev, "apply", "--numstat", patch)
+               if x.count("\t") >= 2] if applied and os.path.getsize(patch) else []
     pkgs = sorted({package_of(ev, f) for f in [x for x in changed if TEST.search(x)] + touched})
     res = {"applied": applied, "hidden": [f for f in changed if TEST.search(f)], "packages": {}}
     with open(os.path.join(out, "tests.log"), "w") as log:
         for p in pkgs if applied else []:
             mine = {f for f in c_tests if package_of(ev, f) == p}
-            for root, _, names in os.walk(os.path.join(ev, p)):
-                if "node_modules" in root:
-                    continue
-                for n in names:
-                    f = os.path.relpath(os.path.join(root, n), ev)
-                    if TEST.search(f) and f not in mine and package_of(ev, f) == p:
-                        os.remove(os.path.join(ev, f))  # the agent's own test
-            for f in mine:
-                os.makedirs(os.path.dirname(os.path.join(ev, f)), exist_ok=True)
-                open(os.path.join(ev, f), "wb").write(
-                    subprocess.run(["git", "-C", a.src, "show", f"{cand['sha']}:{f}"],
-                                   check=True, capture_output=True).stdout)
+            put_suite(ev, p, mine, lambda f: subprocess.run(
+                ["git", "-C", a.src, "show", f"{cand['sha']}:{f}"],
+                check=True, capture_output=True).stdout)
             run = sorted("./" + os.path.relpath(f, p) for f in mine if RUNNABLE.search(f))
             entry = {"run": run, "not_run": sorted(f for f in mine if not RUNNABLE.search(f))}
             if run:
@@ -242,9 +251,9 @@ def leaks(a, task, cand, ws, env):
     f = {"git": replica.git_leaks(ws, cand["sha"], cutoff)}
     if a.arm == "off":  # before fael runs below and leaves state anywhere
         f["fael_in_home"] = subprocess.run(["grep", "-rli", "fael", env["HOME"]],
-                                           capture_output=True, text=True).stdout.split()
+                                           capture_output=True, text=True).stdout.splitlines()
     hidden = []
-    for p in sh(["git", "-C", a.src, "diff", "--name-only", cand["parent"], cand["sha"]]).split():
+    for p in replica.paths(a.src, "diff", "--name-only", cand["parent"], cand["sha"]):
         if TEST.search(p) and os.path.exists(os.path.join(ws, p)):
             at_c = subprocess.run(["git", "-C", a.src, "show", f"{cand['sha']}:{p}"],
                                   capture_output=True).stdout
@@ -281,8 +290,8 @@ def config(home):
 
 def _tree_diff(plain, ws):
     """Paths whose blob differs between the plain base's main and ws's HEAD."""
-    a = dict(l.split("\t", 1)[::-1] for l in sh(["git", "-C", plain, "ls-tree", "-r", "main"]).splitlines())
-    b = dict(l.split("\t", 1)[::-1] for l in sh(["git", "-C", ws, "ls-tree", "-r", "HEAD"]).splitlines())
+    a = dict(l.split("\t", 1)[::-1] for l in replica.paths(plain, "ls-tree", "-r", "main"))
+    b = dict(l.split("\t", 1)[::-1] for l in replica.paths(ws, "ls-tree", "-r", "HEAD"))
     return sorted(p for p in a.keys() | b.keys() if a.get(p) != b.get(p))
 
 

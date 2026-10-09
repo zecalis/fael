@@ -45,6 +45,11 @@ def git(repo, *args, **kw):
                           capture_output=True, **kw).stdout
 
 
+def paths(repo, cmd, *args):
+    """git's path list NUL-split: a space or a quoted Thai name stays whole."""
+    return [p for p in git(repo, cmd, "-z", *args, text=True).split("\0") if p]
+
+
 def strip(text):
     """Markdown without fael's commands: a `# Memory` section that names fael
     goes whole, any other line naming a fael command or path goes alone."""
@@ -148,8 +153,7 @@ def ledger(src, parent, cutoff, branch):
                               recursive=True)):
         rel = os.path.relpath(f, os.path.join(common, "fael", "log"))
         files[rel] = open(f, "rb").read().splitlines()
-    tree = git(src, "ls-tree", "-r", "--name-only", parent, "--", ".fael/log", text=True)
-    for p in tree.split():
+    for p in paths(src, "ls-tree", "-r", "--name-only", parent, "--", ".fael/log"):
         if p.endswith(".jsonl"):
             rel = os.path.relpath(p, ".fael/log")
             files.setdefault(rel, []).extend(git(src, "show", f"{parent}:{p}").splitlines())
