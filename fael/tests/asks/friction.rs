@@ -280,6 +280,34 @@ fn a_shape_gate_reject_is_counted_apart_not_as_friction() {
     assert_eq!(f["reasons"], serde_json::json!({}), "{f}");
 }
 
+/// A batch whose every rejected row met the gate is the gate too, CLI and MCP;
+/// one row rejected for another reason makes the call a `bad_value` (01M4GD6C).
+#[test]
+fn a_batch_rejected_only_by_the_gate_is_counted_as_the_gate() {
+    let d = repo();
+    let long = "word ".repeat(70);
+    let gated = serde_json::json!({"kind": "note", "text": long, "files": ["a.rs"]});
+    let ok = serde_json::json!({"kind": "note", "text": "short", "files": ["a.rs"]});
+    let bad = serde_json::json!({"kind": "nope", "text": "short", "files": ["a.rs"]});
+    let batch = serde_json::json!([gated, ok]).to_string();
+    let (saved, err) = call_in(&d, Some("s1"), &["add", "--json", "-"], &batch);
+    let last = err.lines().last().unwrap_or_default();
+    assert!(
+        !saved && last.starts_with("rejected: nothing written"),
+        "{err}"
+    );
+    mcp(
+        &d,
+        &[
+            ("add", serde_json::json!({"rows": [gated, ok], "cwd": d})),
+            ("add", serde_json::json!({"rows": [gated, bad], "cwd": d})),
+        ],
+    );
+    let f = &stats_json(&d)["friction"];
+    assert_eq!(f["shape_gate"], 2, "{f}");
+    assert_eq!(f["reasons"], serde_json::json!({"bad_value": 1}), "{f}");
+}
+
 #[test]
 fn since_cuts_call_lines_like_every_other_line() {
     let d = repo();

@@ -7,6 +7,20 @@ use crate::hook::{ASK_WARN, record_asks, record_row_asks};
 use crate::{core, write};
 use std::process::ExitCode;
 
+/// How a pre-write gate (the add shape gate, the derived-files cap) opens its
+/// reject — friction counts it apart, not as a round lost (01M4FNQ1).
+pub(crate) const GATE_REJECT: &str = "rejected: nothing written";
+
+/// A batch's one reject, its first line: when every rejected row was a gate
+/// reject it keeps the gate's opening, so friction counts the call as the gate.
+pub(crate) fn batch_reject(failed: usize, gated: usize, n: usize) -> String {
+    if failed == gated {
+        format!("{GATE_REJECT} for {failed} of {n} rows — the rest saved")
+    } else {
+        format!("rejected: {failed} of {n} rows rejected — the rest saved")
+    }
+}
+
 /// A routed row says what to paste to its receiver: whoever gets the line (a
 /// person, or an agent that knows fael) runs it and reads the row.
 pub(crate) fn paste_line(row: &Row) -> Option<String> {
@@ -98,13 +112,10 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
         return Err("rejected: stdin must be a JSON array of row objects".into());
     }
     let r = crate::repo()?;
-    let mut failed = 0;
+    let (mut failed, mut gated) = (0, 0);
     for (i, v) in items.iter().enumerate() {
         let parsed = batch_row(v);
-        let res = parsed.and_then(|b| {
-            write::add_row(&r, &b.kind, &b.text, &b.files, b.opts)
-                .map_err(|e| e.trim_start_matches("rejected: ").to_string())
-        });
+        let res = parsed.and_then(|b| write::add_row(&r, &b.kind, &b.text, &b.files, b.opts));
         match res {
             Ok((row, _path, warns)) => {
                 warns.iter().for_each(|w| eprintln!("{w}"));
@@ -114,16 +125,14 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
             }
             Err(e) => {
                 failed += 1;
+                gated += usize::from(e.starts_with(GATE_REJECT));
                 // main records the command's one reject — a round, not a row
-                println!("rejected: row {i}: {e}");
+                println!("rejected: row {i}: {}", e.trim_start_matches("rejected: "));
             }
         }
     }
     if failed > 0 {
-        Err(format!(
-            "rejected: {failed} of {} rows rejected — the rest saved",
-            items.len()
-        ))
+        Err(batch_reject(failed, gated, items.len()))
     } else {
         Ok(ExitCode::SUCCESS)
     }
