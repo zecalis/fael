@@ -258,7 +258,7 @@ fn close_template_fills_into_a_label_core_and_a_fix() {
     // unfilled, the placeholders name no fix
     assert!(!names_fix(CLOSE_TEMPLATE));
     // the don't branch citing a path with a `/` reads as a guard
-    let dont = "x → y; tried z; don't edit `src/a.rs` because b; a1b2c3d4";
+    let dont = "x → y; don't edit `src/a.rs` because b; tried z; a1b2c3d4";
     assert_eq!(
         close_shape(dont),
         Shape {

@@ -61,6 +61,29 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
+    /// The taught close puts its lesson (`guard` or `don't`) before `tried`,
+    /// so a long close loses what failed to the clip, never the lesson.
+    #[test]
+    fn clip_keeps_the_taught_lesson() {
+        let text = core::stats::CLOSE_TEMPLATE
+            .replace("<cause>", "copy-as-new drops line quantity on every draft")
+            .replace("<fix>", "copy every line field")
+            .replace("guard `<test path>` or ", "")
+            .replace("<X>", "copy fields by hand")
+            .replace("<Y>", "copyLine() is the one list of fields")
+            .replace(
+                "<what failed>",
+                "a per-field patch, then a deep clone that also copied ids",
+            )
+            .replace("<sha or (#N)>", "(#326)");
+        assert!(text.chars().count() > CLOSE_CHARS, "{text}");
+        assert!(
+            clip(&text).contains("copyLine() is the one list"),
+            "{}",
+            clip(&text)
+        );
+    }
+
     fn row(id: &str, kind: &str, text: &str) -> core::Row {
         core::Row {
             id: id.into(),
