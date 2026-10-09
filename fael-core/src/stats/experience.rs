@@ -7,6 +7,7 @@
 //! branch's commits (read by the caller) in.
 
 use super::capture::mine;
+use super::label::{Label, label};
 use super::parse::Parsed;
 use super::repeat::{closed_issues, pairs};
 use crate::{Log, backtick_paths, code_spans, ts_ms};
@@ -43,6 +44,8 @@ pub struct Experience {
     /// or its `(#N)`. Deduped by sha across worktrees.
     pub fix_commits: usize,
     pub fix_commits_linked: usize,
+    /// The label contract's measures (PLAN-fael-label chunk 3).
+    pub label: Label,
 }
 
 const SHORT: usize = 8;
@@ -242,5 +245,6 @@ pub(super) fn experience(
     (e.fixed, e.fixed_from_review, e.closed_with_check) =
         (fixed.len(), from_review.len(), checked.len());
     (e.fix_commits, e.fix_commits_linked) = (fix_shas.len(), linked.len());
+    e.label = label(parsed, logs);
     e
 }

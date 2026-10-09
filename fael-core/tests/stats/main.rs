@@ -49,7 +49,7 @@ fn capture_and_experience_shapes_are_frozen() {
     );
     assert_eq!(
         v["experience"],
-        serde_json::json!({"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0}),
+        serde_json::json!({"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0, "label": {"close_core": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "guard": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "key_reuse": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "find_hit": {"state": "unmeasurable", "num": 0, "den": 0, "since": null}}}),
         "{v}"
     );
 }

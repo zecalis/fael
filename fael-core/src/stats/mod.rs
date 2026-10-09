@@ -17,6 +17,9 @@ mod experience;
 mod experience_tests;
 mod friction;
 mod incident;
+mod label;
+#[cfg(test)]
+mod label_tests;
 mod metrics;
 mod outcomes;
 mod overlap;
@@ -46,6 +49,7 @@ pub(crate) use experience::names_fix;
 pub use experience::{Commit, Commits, Experience, Shape, close_shape};
 pub use friction::{FIRST_CALL_WINDOW, Friction, Tally};
 pub use incident::{INCIDENT_KEY, Incidents};
+pub use label::{LABEL_SINCE, Label, Measure, State};
 pub use metrics::ASK_ORDER;
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};

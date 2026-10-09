@@ -75,3 +75,54 @@ fn stats_links_a_fix_commit_by_the_id_it_names() {
         "{e}"
     );
 }
+
+/// PLAN-fael-label chunk 3: each label measure is `{state, num, den, since}`
+/// — unmeasurable before anything is closed (never 0%), measured once it is,
+/// partial when a repo with usage has lost its log.
+#[test]
+fn stats_label_measures_take_three_states() {
+    let d = repo();
+    let add = ["add", "issue", "retry loops", "--files", "src/a.rs"];
+    assert!(fael(&d, &[&add[..], &["--key", "a:retry"]].concat(), "").0);
+    let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
+    assert!(fael(&d, &["hook", "read"], &input).0);
+    let label = || {
+        let (ok, out, err) = fael(&d, &["stats", "--json"], "");
+        assert!(ok, "{err}");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        v["experience"]["label"].clone()
+    };
+    let since = fael_core::stats::LABEL_SINCE;
+    let m = |state: &str, num: u32, den: u32| serde_json::json!({"state": state, "num": num, "den": den, "since": since});
+    let l = label();
+    assert_eq!(l["close_core"], m("unmeasurable", 0, 0), "{l}");
+    assert_eq!(l["key_reuse"], m("measured", 0, 1), "{l}");
+    let find_hit = serde_json::json!({"state": "unmeasurable", "num": 0, "den": 0, "since": null});
+    assert_eq!(l["find_hit"], find_hit, "{l}");
+    let why = "retried forever → cap at 3; guard `tests/retry.rs`";
+    assert!(fael(&d, &["close", "--key", "a:retry", why], "").0);
+    let l = label();
+    assert_eq!(
+        (&l["close_core"], &l["guard"]),
+        (&m("measured", 1, 1), &m("measured", 1, 1)),
+        "{l}"
+    );
+    let (ok, out, _) = fael(&d, &["stats"], "");
+    assert!(ok);
+    let line = "  label — close core 1/1 (100%) · guard 1/1 (100%) · key reuse 0/1 (0%) · find hit n/a (usage keeps no missed find)";
+    assert!(out.contains(line), "{out}");
+    // a second repo's usage, its log gone: the counts no longer cover it
+    let usage = std::fs::read_dir(d.join("state"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|x| x == "jsonl"))
+        .unwrap();
+    let gone = format!(
+        r#"{{"ts":"2099-01-01T00:00:00.000Z","repo":{},"client":"claude","event":"read","ids":[]}}"#,
+        json(&d.with_extension("gone"))
+    );
+    let body = std::fs::read_to_string(&usage).unwrap() + &gone + "\n";
+    std::fs::write(&usage, body).unwrap();
+    let l = label();
+    assert_eq!(l["close_core"], m("partial", 1, 1), "{l}");
+}
