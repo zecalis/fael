@@ -1,13 +1,20 @@
 #!/bin/sh
 # Cut a release: bump fael/Cargo.toml, commit + tag on main, push.
 # The tag runs .github/workflows/release.yml → GitHub Release + npm @zecalis/fael + Homebrew tap.
-# usage: scripts/release.sh [patch|minor|major]   (default patch)
-# FAEL_RELEASE_NO_LOCAL=1 leaves this machine's npm/brew fael alone, so auto-update has a release to catch
+# usage: scripts/release.sh [patch|minor|major] [--no-local]   (default patch)
+# --no-local leaves this machine's npm/brew fael alone, so auto-update has a release to catch
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 
-part=${1:-patch}
-case $part in patch | minor | major) ;; *) echo "usage: $0 [patch|minor|major]" >&2; exit 2 ;; esac
+part=patch
+no_local=
+for a in "$@"; do
+  case $a in
+  patch | minor | major) part=$a ;;
+  --no-local) no_local=1 ;;
+  *) echo "usage: $0 [patch|minor|major] [--no-local]" >&2; exit 2 ;;
+  esac
+done
 
 [ -z "$(git status --porcelain)" ] || { echo "release: working tree is dirty — commit or stash first" >&2; exit 1; }
 # dependabot PRs don't block — they carry no work of ours
@@ -69,8 +76,8 @@ done
 [ -n "$run" ] || { echo "release: no release.yml run for v$new after 60s — check Actions" >&2; exit 1; }
 gh run watch "$run" --exit-status >/dev/null || { echo "release: release.yml run $run failed — gh run rerun $run --failed" >&2; exit 1; }
 echo "release.yml $run green"
-if [ -n "${FAEL_RELEASE_NO_LOCAL:-}" ]; then
-  echo "local fael left as is (FAEL_RELEASE_NO_LOCAL)"
+if [ -n "$no_local" ]; then
+  echo "local fael left as is (--no-local)"
   exit 0
 fi
 if npm ls -g @zecalis/fael >/dev/null 2>&1; then
