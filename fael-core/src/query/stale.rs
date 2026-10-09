@@ -85,6 +85,16 @@ fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<Str
         if p.is_empty() || p.contains(char::is_whitespace) || filed.iter().any(|f| f == p) {
             continue;
         }
+        // a query, placeholder or glob (`dev/ui?s=x`, `e2e/<flow>.ts`,
+        // `src/*.rs`) names no one file (#293)
+        if p.contains(['?', '<', '>', '*']) {
+            continue;
+        }
+        // a bare `name.ext` is a file only by a file's extension: `money.read`
+        // and `document.type` are code identifiers (#293)
+        if !p.contains('/') && !p.starts_with('.') && !file_ext(p) {
+            continue;
+        }
         // no file name, and a first dir this repo does not have: a name from
         // elsewhere (`verapdf/cli`, a docker image), never one of its paths.
         // A file (`t/gone.sh`) is still judged — its dir may be what went.
@@ -117,6 +127,24 @@ fn strip_location(p: &str) -> &str {
         rest = head;
     }
     rest
+}
+
+/// Extensions a bare `name.ext` must end in to be judged as a file — the
+/// rest (`.read`, `.type`, `.copy`) are field and method names.
+/// ponytail: a fixed list; a gone file with an unlisted extension goes unsaid
+const FILE_EXTS: &[&str] = &[
+    "rs", "toml", "lock", "md", "mdx", "txt", "json", "jsonc", "yaml", "yml", "ts", "tsx", "js",
+    "jsx", "mjs", "cjs", "py", "go", "java", "kt", "kts", "swift", "c", "h", "cc", "cpp", "hpp",
+    "cs", "rb", "php", "sh", "bash", "zsh", "fish", "ps1", "sql", "html", "css", "scss", "vue",
+    "svelte", "xml", "csv", "env", "ini", "cfg", "conf", "mod", "sum", "gradle", "proto",
+    "graphql", "gql", "prisma", "dart", "lua", "zig", "ex", "exs", "pdf", "png", "svg",
+];
+
+/// A bare name ending in one of `FILE_EXTS`, any case (`Cargo.toml`, `A.TS`).
+fn file_ext(s: &str) -> bool {
+    has_extension(s)
+        && s.rsplit_once('.')
+            .is_some_and(|(_, e)| FILE_EXTS.iter().any(|x| x.eq_ignore_ascii_case(e)))
 }
 
 /// `name.ext` where both sides look like a file, not a version: the name
