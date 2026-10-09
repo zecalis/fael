@@ -94,6 +94,44 @@ other anchor or key, and never infers from them which plan a session is inside �
 intent is not a fact the shared log can answer. The workflow tool that knows the plan asks for
 its rows itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`).
 
+### Label
+
+A row is labelled in three layers, each with one job (decision key `format:label`):
+
+| Layer | Job | Shape |
+|---|---|---|
+| `files` | where: binds and pushes the row | exact paths or anchors, the same for every agent |
+| `key` | which: supersede, close and find by name | a proper name, not a category; reuse rate is no quality score |
+| close text | what was learned | core `cause → fix`; tried and guard are optional |
+
+The close text is the agent's own words, stored as written: fael never rejects, edits or
+completes it. `close_shape()` (`fael-core/src/stats/experience.rs`) reads its form, never its
+meaning:
+
+- **Code spans** — markdown's: a run of n backticks opens a span that the next run of
+  exactly n closes, so a double-backtick span may hold a backtick. A run nothing closes is
+  plain text. Spans are cut before the arrow is looked for. `fael doctor` and the edit's
+  check line read backticked paths by the same rule (`code_spans`).
+- **core** — the first `→` or `->` by position (never `=>`) outside a code span, with text
+  on both sides once spans are cut; blanks and stray backticks are no text. `because … so …`
+  without an arrow is not core, on purpose.
+- **guard** — a backticked path holding a `/`, read off the whole text (code spans
+  included); the check `closed_with_check` counts. A root file (`` `Cargo.toml` ``) or a
+  command with no `/` (`` `cargo test` ``) is no guard; a span holding a `/` is one, a
+  command too. No guard is no fault: some fixes have no one file to guard them.
+- **tried** — not checked.
+
+| Close text | core | guard |
+|---|---|---|
+| `` stale cache → invalidate on mtime; tried ttl; guard `fael-core/tests/query/stale.rs` `` | ✓ | ✓ |
+| `config cached stale -> invalidate on mtime` | ✓ | ✗ |
+| `a → b → c` (right side is `b → c`) | ✓ | ✗ |
+| `→ fixed it` · `cause →` · ``cause → ` `` (stray backtick) | ✗ | ✗ |
+| `` renamed `a -> b` in the doc `` · `` `a → b` -> c `` | ✗ | ✗ |
+| `` cause → fix `src/a.rs `` (unpaired backtick) | ✓ | ✗ |
+| `` example `src/a.rs` only `` | ✗ | ✓ |
+| `fixed in a1b2c3d` | ✗ | ✗ |
+
 ## Writers
 
 **Write contract ≠ read contract.** Writers v1 must follow every rule below; readers must accept anything

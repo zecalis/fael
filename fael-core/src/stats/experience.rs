@@ -9,7 +9,7 @@
 use super::capture::mine;
 use super::parse::Parsed;
 use super::repeat::{closed_issues, pairs};
-use crate::{Log, backtick_paths, ts_ms};
+use crate::{Log, backtick_paths, code_spans, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
@@ -89,10 +89,46 @@ fn close_texts(log: &Log) -> HashMap<&str, Vec<&str>> {
     out
 }
 
-fn names_check(texts: &[&str]) -> bool {
-    texts
-        .iter()
-        .any(|t| backtick_paths(t).iter().any(|p| p.contains('/')))
+/// A close text's label shape (`format:label`, `docs/format.md` § Label).
+/// Pure form, never meaning: the text itself is kept as written either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shape {
+    /// `cause → fix`: the first `→` or `->` outside a code span, with text on
+    /// both sides once code spans are cut — blanks and stray backticks are none.
+    pub core: bool,
+    /// `guard`: a backticked path holding a `/`.
+    pub guard: bool,
+}
+
+pub fn close_shape(text: &str) -> Shape {
+    let prose: String = code_spans(text)
+        .into_iter()
+        .map(|(code, t)| if code { " " } else { t }) // a space, so no arrow is glued
+        .collect();
+    let arrow = [
+        prose.find('→').map(|i| (i, '→'.len_utf8())),
+        prose.find("->").map(|i| (i, 2)),
+    ];
+    let said = |s: &str| s.chars().any(|c| !c.is_whitespace() && c != '`');
+    let core = arrow
+        .into_iter()
+        .flatten()
+        .min()
+        .is_some_and(|(i, n)| said(&prose[..i]) && said(&prose[i + n..]));
+    Shape {
+        core,
+        guard: guard(text),
+    }
+}
+
+/// A backticked path holding a `/`, read off the whole text, code spans
+/// included — the check `closed_with_check` counts and `Shape::guard` reads.
+fn guard(text: &str) -> bool {
+    backtick_paths(text).iter().any(|p| p.contains('/'))
+}
+
+pub(super) fn names_check(texts: &[&str]) -> bool {
+    texts.iter().any(|t| guard(t))
 }
 
 /// Row ids a commit message names (a full id or a ≥ 8-char prefix).

@@ -16,15 +16,46 @@ use crate::Log;
 use crate::Row;
 use std::path::Path;
 
+/// `text` cut at its markdown code spans, in order: `(true, inside)` for a
+/// span, `(false, rest)` for the text around it. A run of n backticks opens a
+/// span that the next run of exactly n closes (CommonMark, so `` ``a`b`` ``
+/// holds one span); a run nothing closes is plain text (`format:label`).
+/// ponytail: rescans after an unclosed run, O(n²) on backtick-heavy text;
+/// fine for row and close text, index the runs if it ever reads files.
+pub fn code_spans(text: &str) -> Vec<(bool, &str)> {
+    let b = text.as_bytes();
+    let run = |i: usize| b[i..].iter().take_while(|&&c| c == b'`').count();
+    let (mut out, mut plain, mut i) = (vec![], 0, 0);
+    while i < b.len() {
+        if b[i] != b'`' {
+            i += 1;
+            continue;
+        }
+        let n = run(i);
+        let mut j = i + n;
+        while j < b.len() && !(b[j] == b'`' && run(j) == n) {
+            j += if b[j] == b'`' { run(j) } else { 1 };
+        }
+        if j < b.len() {
+            out.push((false, &text[plain..i]));
+            out.push((true, &text[i + n..j]));
+            plain = j + n;
+            i = plain;
+        } else {
+            i += n; // nothing closes this run: plain text
+        }
+    }
+    out.push((false, &text[plain..]));
+    out
+}
+
 /// Backticked spans of `text` that look like paths (`/` inside, or a trailing
 /// `name.ext`). Multiline spans (fenced code blocks) and URLs never count —
-/// those are commands, output and links, not repo pointers.
+/// those are commands, output and links, not repo pointers. Spans are
+/// `code_spans`', so an unpaired backtick is plain text, never a pointer.
 pub fn backtick_paths(text: &str) -> Vec<&str> {
     let mut out = vec![];
-    for (i, span) in text.split('`').enumerate() {
-        if i % 2 == 0 {
-            continue; // outside backticks
-        }
+    for (_, span) in code_spans(text).into_iter().filter(|(code, _)| *code) {
         let s = span.trim();
         if s.is_empty() || s.contains('\n') || s.contains("://") {
             continue;

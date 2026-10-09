@@ -43,7 +43,7 @@ pub use day::{
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
 pub(crate) use experience::names_fix;
-pub use experience::{Commit, Commits, Experience};
+pub use experience::{Commit, Commits, Experience, Shape, close_shape};
 pub use friction::{FIRST_CALL_WINDOW, Friction, Tally};
 pub use incident::{INCIDENT_KEY, Incidents};
 pub use metrics::ASK_ORDER;
