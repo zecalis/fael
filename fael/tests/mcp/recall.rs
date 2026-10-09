@@ -19,7 +19,7 @@ fn add_issue_names_the_closed_issue_on_its_file() {
         ],
     );
     let first = text(&first[0]);
-    assert!(!first.contains("closed issue on these files"), "{first}");
+    assert!(!first.contains("closed earlier on these files"), "{first}");
     let old = first.split_whitespace().nth(1).unwrap().to_string();
     let closed = mcp_tool(
         &wt,
@@ -35,7 +35,7 @@ fn add_issue_names_the_closed_issue_on_its_file() {
         ],
     );
     let again = text(&again[0]);
-    assert!(again.contains("closed issue on these files"), "{again}");
+    assert!(again.contains("closed earlier on these files"), "{again}");
     // ids print at their shortest unique prefix
     let short = again.split("--supersedes ").nth(1).unwrap();
     let short = short.split(|c: char| !c.is_alphanumeric()).next().unwrap();

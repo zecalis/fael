@@ -128,8 +128,9 @@ fn call(p: &Value) -> Value {
         Ok(t) => (t, false),
         Err(e) => (e, true),
     };
+    // first, not after a long find: a stale server is read before its output
     if let Some(l) = replaced_line() {
-        text = format!("{text}\n{l}");
+        text = format!("{l}\n{text}");
     }
     json!({"content": [{"type": "text", "text": text}], "isError": is_error})
 }

@@ -5,7 +5,7 @@
 use super::{fael, repo};
 use std::path::Path;
 
-const LINE: &str = "closed issue on these files";
+const LINE: &str = "closed earlier on these files (left closed)";
 
 fn issue(d: &Path, text: &str, extra: &[&str]) -> (String, String) {
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
