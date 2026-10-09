@@ -65,13 +65,18 @@ def main():
     assert md == "# Rules\n* keep `a.ts` small\n## Tests\n* bun test\n", md
     assert not os.path.exists(os.path.join(off, ".fael"))
     assert open(os.path.join(off, "docs", "ข้อ ตกลง.md")).read() == "* keep it short\n"
+    tip = git(off, "rev-parse", "HEAD")
+    shutil.rmtree(replica.base(src, parent, True))  # rebuilt from scratch: same sha
+    assert replica.clone(replica.base(src, parent, True), os.path.join(t, "off2")) == tip
     assert replica.git_leaks(off, c, cutoff) == {}, replica.git_leaks(off, c, cutoff)
 
     on = os.path.join(t, "on")
     replica.clone(replica.base(src, parent, False), on)
     assert "fael kickoff" in open(os.path.join(on, "CLAUDE.md")).read()
-    _, rows, ids = replica.snapshot(src, parent, cutoff, "feat/c", on)
+    snap, rows, ids = replica.snapshot(src, parent, cutoff, "feat/c", on)
     assert ids == {"OLD", "TREE1"} and rows == 2, ids
+    replica.clone(replica.base(src, parent, False), os.path.join(t, "on2"))
+    assert replica.snapshot(src, parent, cutoff, "feat/c", os.path.join(t, "on2"))[0] == snap
     assert replica.snapshot_leaks(on, cutoff, "feat/c") == []
 
     # planted leaks: each check must fire
