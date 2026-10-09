@@ -23,6 +23,13 @@ fn upgrade_dry_run_names_the_channel_and_runs_nothing() {
     let home = base.join("home");
     std::fs::create_dir_all(home.join(".codex")).unwrap();
     let o = Command::new(brew_copy(&base))
+        // never the developer's real usage log or session (fael:01M4F3G0)
+        .env(
+            "FAEL_STATE_DIR",
+            std::env::temp_dir().join(format!("fael-test-state-{}", std::process::id())),
+        )
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
         .args(["upgrade", "--dry-run"])
         .env("HOME", &home)
         .env(
@@ -71,6 +78,13 @@ fn upgrade_via_fake_brew(
     .unwrap();
     std::fs::set_permissions(&brew, std::fs::Permissions::from_mode(0o755)).unwrap();
     let o = Command::new(brew_copy(&base))
+        // never the developer's real usage log or session (fael:01M4F3G0)
+        .env(
+            "FAEL_STATE_DIR",
+            std::env::temp_dir().join(format!("fael-test-state-{}", std::process::id())),
+        )
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
         .args(["upgrade", "--yes"])
         .args(args)
         .env("HOME", &home)

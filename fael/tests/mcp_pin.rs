@@ -46,6 +46,8 @@ fn pinned_server_never_leaves_its_workspace() {
     let base = std::env::temp_dir().join(format!("fael-mcp-pin-{}", fael_core::ulid()));
     let (mine, other) = (workspace(&base, "mine"), workspace(&base, "other"));
     let ok = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .env("FAEL_STATE_DIR", base.join("state"))
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .args(["add", "note", "secret of other", "--files", "doc:x"])
         .current_dir(&other)
         .status()
