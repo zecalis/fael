@@ -160,6 +160,7 @@ mod tests {
     /// 5000 closed issues in a 10000-row log, in a debug build, is held to ten
     /// times that, like `check.rs` — the worst silent case (the newest `SCAN`
     /// all closed naming no fix, each close looked up) and the said case.
+    /// Best of 5, so a cold run on a shared CI runner is no fail (01M4FDXY).
     #[test]
     fn a_hub_of_closed_issues_stays_inside_the_push_budget() {
         let mut log = core::Log::default();
@@ -172,8 +173,12 @@ mod tests {
             log.rows.push(other);
         }
         let timed = |log: &core::Log| {
-            let t = std::time::Instant::now();
-            (said(log, None), t.elapsed().as_secs_f64() * 1000.0)
+            let run = || {
+                let t = std::time::Instant::now();
+                (said(log, None), t.elapsed())
+            };
+            let (got, d) = (0..5).map(|_| run()).min_by_key(|(_, d)| *d).unwrap();
+            (got, d.as_secs_f64() * 1000.0)
         };
         let (got, silent) = timed(&log);
         assert!(got.is_none());
