@@ -259,3 +259,16 @@ fn ambiguous_prefix_stays_silent() {
     assert!(ok, "{err}");
     assert!(!err.contains("no row with id"), "{err}");
 }
+
+#[test]
+fn citing_a_git_sha_starting_with_0_stays_silent() {
+    let d = repo();
+    std::fs::write(d.join("src/s.rs"), "// s\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", "squashed as 0e0fd51a", "--files", "src/s.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(!err.contains("no row with id"), "{err}");
+}

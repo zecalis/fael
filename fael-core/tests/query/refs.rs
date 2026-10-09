@@ -47,6 +47,8 @@ fn looks_like_id_rejects_non_shapes() {
     assert!(!looks_like_id("01M3M8Y")); // 7 chars — never a printed prefix
     assert!(!looks_like_id("0123")); // prose number, not something fael printed
     assert!(!looks_like_id("0107544000108")); // all digits: a tax id, not a ULID
+    assert!(!looks_like_id("0e0fd51a")); // lowercase hex: a git short sha
+    assert!(looks_like_id("0E0FD51A")); // uppercase: what fael prints
     assert!(!looks_like_id("12M3M8Y800")); // first char is 0 until ~year 3084
     assert!(!looks_like_id("M3M8Y80000")); // not a leading 0
     assert!(!looks_like_id("01M3M8Y8IXXXXXXXXXXXXXXXXX")); // I excluded
