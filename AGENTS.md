@@ -2,9 +2,10 @@
 
 ## North star and product invariant
 
-North star: the ledger behind plan work — the hand-off where a chunk stopped, the decision and
-why, the open issue, the note the next session needs, what the user asked for — pulled at
-`fael kickoff`, in plan briefs, and at session start for work routed to an agent. Git owns what
+North star: the engine behind plan work — every chunk's brief, area (dev|marketing), size,
+model hint and state in `.fael/plans.db`, started, waited on and finished through
+`fael chunk start|wait|done` — plus the ledger: the hand-off where a chunk stopped, the decision
+and why, the open issue, the note the next session needs, what the user asked for. Git owns what
 changed; fael keeps what git and the code cannot say. The agent discovers, judges and records;
 fael captures, carries and surfaces — never infers, never judges, never fixes for it.
 
@@ -14,8 +15,11 @@ agent's memory, not a personal notebook, not a generic AI memory store, and not 
 guard. Value is work context (`task (key) → decision → evidence → outcome → closure`) in front
 of the right agent, once — never more rows. Rounds and tokens are a cost to keep low, never a promise.
 
-Maintenance mode (decision `product:mission`): no new dev features. A change ships when it fixes
-a bug, cuts noise, or removes code — and it never starts an agent turn or re-prompts on idle,
+Decision `product:mission` (plan `PLAN-fael-board`): a change ships when it fixes a bug, cuts
+noise, removes code, or serves the plan → chunk → agent → ship loop. The owner's SwiftUI app
+reads `fael board --json` and starts an agent only on the owner's click or from a queue
+the owner approved; the owner merges every PR; fael itself
+never starts an agent turn or re-prompts on idle,
 adds no daemon, never guesses, never polices the developer's process (worktree, branch, git flow).
 Assigning and claiming inform. A claim is race-safe (of two agents, one wins) but only gates the claim — `--force` takes it over, no edit is ever blocked.
 Claims about value (README, docs, PRs) say only what `fael stats` shows — what fael handed over
@@ -79,7 +83,7 @@ Follow the repo-wide Git workflow. Validate before `push pr`:
 ```text
 cargo fmt --all --check
 RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked
-RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc
+RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc --no-default-features
 scripts/file-size.sh
 tests
 ```

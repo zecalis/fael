@@ -23,21 +23,26 @@ Three ideas carry the whole design:
 
 ## 0. North star and product invariant
 
-**North star: the ledger behind plan work.** Work runs as plans cut into chunks, one session
-or agent at a time, and no session shares another's chat. Fael keeps what passes between them —
-the hand-off where a chunk stopped, the decision and why, the issue still open, the note the
-next session needs, what the user asked for — and hands it back when the next session starts:
-at kickoff of the plan or file it names (`fael kickoff`), in plan briefs, and at session start
-for work routed to it. Git owns what changed; fael keeps only what git and the code cannot say
-(why, what was rejected, what is unfinished), and retires a row once the code says it or
-contradicts it.
+**North star: the engine behind plan work.** Work runs as plans cut into chunks, one session
+or agent at a time, and no session shares another's chat. Fael keeps the plan and every chunk —
+its brief, area (dev or marketing), size, model hint and state — and the ledger of what passes
+between sessions: the hand-off where a chunk stopped, the decision and why, the issue still
+open, the note the next session needs, what the user asked for. An agent starts, waits on the
+owner and finishes a chunk through one contract (`fael chunk start|wait|done`), and the brief
+it starts from carries the plan goal, the last hand-off and the open rows on its files. Git
+owns what changed; fael keeps only what git and the code cannot say (why, what was rejected,
+what is unfinished), and retires a row once the code says it or contradicts it.
 
-Fael is in **maintenance mode** (decision `product:mission`, 2026-10-10): no new dev features.
-A change ships when it fixes a bug, cuts noise, or removes code. The reason is the evidence:
-what agents act on is the hand-off, the brief and the note; the experience pushed at the file
-an agent touched was mostly noise, and the push kinds no agent acted on were cut. Measurement
-plans are parked; `fael stats` still shows what fael handed over and what followed (capture →
-acted → outcome), never the counterfactual, so claims about value say only that.
+Decision `product:mission` (2026-10-10, plan `PLAN-fael-board`): plans and chunks move from
+fapony's markdown into fael's SQLite store (`.fael/plans.db`, English); the ledger stays
+jsonl. Planner skills (plan-with-pony for dev, plan-with-marketing) cut the chunks; the agent
+judges size and model hint, fael stores them, the owner picks. A change ships when it fixes a
+bug, cuts noise, removes code, or serves that plan → chunk → agent → ship loop. The owner's
+window is a separate SwiftUI app reading `fael board --json`: it watches, notifies, and starts
+an agent only on the owner's click or from a queue of chunks the owner approved; the planner
+agent applies merge / split / pair itself, and every git merge is the owner's. `fael stats` still shows what fael handed over and what
+followed (capture → acted → outcome), never the counterfactual, so claims about value say
+only that.
 
 **The mechanism is the team's shared work ledger**: the context of the work, and the work handed
 between sessions and agents — hand-offs, requirements, assigned issues (`--to`), claims,
@@ -176,6 +181,7 @@ A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integ
 | `fael find [text\|id] [--files …] [--key glob] [--kind …] [--since …] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--groups] [--text query]` | query; closed and superseded rows are hidden unless `--all`; lists show titles, `<id>`/`--full` show bodies and, for a closed row, why it closed (`closed: <text> (<sha>)`); a query that is exactly a file or anchor some row is filed on (`plan:<name>`, a path) is that `--files`, as `kickoff` reads it — a name no row is filed on stays text; an id-shaped query is never a text search — it rejects when no row owns it, naming the rows that only mention it; `--text` forces a text search even for an id-shaped query; text is every whitespace-split word, any order (§4 Ranking), and a blank one narrows nothing; `--branches` also reads branches not yet merged into HEAD, tagging their rows `@<branch>` without a checkout — only rows committed to their `.fael/log` that the union read lacks, none under `store = "local"` or a gitignored log, so when it adds none it says why (stderr on the CLI, a trailing line over MCP); a cut list prints the exact next call (`--offset M`; under `--full` it adds `--limit <rest>` for the rest in one call); an explicit `--limit N` is not cut by `budget.find_tokens`; `--kind issue` lists the issues ready to work first, those waiting on a revisit (free text or a date ahead, shown `(waiting: …)`) last; `--groups` prints every match, unpaged, grouped by shared files (union-find; `*.md` and anchors never link) — what to fix in one PR |
 | `fael keys [glob]` | list keys, with a count and last use for each — to reuse a key that already exists |
 | `fael mv <old> <new>` | record a move git can't see — an anchor, an uncommitted rewrite, or one file split into several (one old path may point at many new ones). Adds matches only, never hides a row |
+| `fael plan import \| fael plan next` | import every `PLAN-*.md` under the repo's `.fapony/` dirs (root and `apps/*`; `plan/`, `parked/`, `done/`) into `<git-common-dir>/fael/plans.db` (SQLite, WAL, shared by every worktree), replacing what it held for those apps; `next` prints each plan's next chunk from the db — the pick `fapony plan` makes (own `(wip)` claim, else the first open chunk no live worktree claimed, `(after …)` met, no `(wait …)`) |
 | `fael restore [<id>] [--edge id]` | revert a supersede edge with an event row — the row keeps its id and opens again; `--edge` names the superseding row when several edges still hide it; an already-open row or an already-reverted edge is info, never an error |
 | `fael purge <id>` | permanently remove a leaked test row or a mistake: the row and its close and bump events go from every month file, tree and journal; refused when another row supersedes or restores it, when the id names a close event, or when it lives in an immutable compact file; the id is kept as a tombstone (`purged.txt` in the writer's ref) so sync never carries the row back; copies already in a teammate's journal stay until purged there |
 | `fael migrate local` | move a tracked repo to `store = "local"`: fold `.fael/log` into this clone's journal — the tree copy wins on every id it holds (a row edited in the tree replaces the journal's stale original in place), rows only the tree holds are copied — then set `store = "local"` in `.fael/config.toml`; idempotent; each clone runs it before the tree log is removed, since the fold reads the working tree |

@@ -18,6 +18,8 @@ mod journal;
 mod maintain;
 mod mcp;
 mod migrate;
+mod mv;
+mod plan;
 mod purge;
 mod refs;
 mod report;
@@ -92,7 +94,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("find", ids) => find::many::find_many(&a, ids).map(|()| ExitCode::SUCCESS),
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
-        ("mv", [old, new]) => mv(&a, old, new).map(|()| ExitCode::SUCCESS),
+        ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),
+        ("plan", rest) => plan::cmd(&a, rest),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
@@ -255,7 +258,7 @@ pub(crate) fn writer(r: &Repo) -> String {
 }
 
 /// Writer, branch and sha from git — never asked of the agent.
-fn stamp(r: &Repo) -> core::Stamp {
+pub(crate) fn stamp(r: &Repo) -> core::Stamp {
     core::Stamp {
         by: writer(r),
         branch: git(&r.root, &["symbolic-ref", "--short", "-q", "HEAD"]),
@@ -364,37 +367,6 @@ fn next(a: &Args) -> Result<(), String> {
             "{}",
             row.text.split_whitespace().collect::<Vec<_>>().join(" ")
         );
-    }
-    Ok(())
-}
-
-/// Record that `old` moved to `new` — for what git can't see (anchors,
-/// uncommitted rewrites, repos without git). Appends an alias row; the log
-/// stays append-only, nothing is rewritten.
-fn mv(a: &Args, old: &str, new: &str) -> Result<(), String> {
-    a.only("mv", &["json"])?;
-    let r = repo()?;
-    let norm = core::normalize_files(&[old.to_string(), new.to_string()], &r.cwd, &r.root)?;
-    let (from, to) = (&norm[0], &norm[1]);
-    if from == to {
-        return Err(format!(
-            "rejected: {from:?} is already itself — `fael mv` needs two different paths"
-        ));
-    }
-    let log = read(&r);
-    if core::Aliases::from_log(&log).forward(from).contains(to) {
-        return Err(format!(
-            "rejected: {from} → {to} is already recorded — `fael find --files {to}` shows the rows"
-        ));
-    }
-    let (row, _, warns) =
-        core::mv_row(&r.fael, r.journal.as_deref(), &r.cfg, &stamp(&r), from, to)?;
-    warns.iter().for_each(|w| eprintln!("{w}"));
-    hook::record_asks("cli", hook::ASK_WARN, "mv", Some(&r.root), &warns);
-    if a.has("json") {
-        println!("{}", row.to_line());
-    } else {
-        println!("{} → {from} → {to}", row.id);
     }
     Ok(())
 }

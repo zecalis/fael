@@ -59,11 +59,13 @@ cargo test --workspace --locked
 ```
 
 Also type-check for Windows, so a stray `std::os::unix` fails here instead of in CI.
-It needs no MSVC linker and takes a few seconds:
+It needs no MSVC linker and takes a few seconds. `--no-default-features` drops the
+bundled SQLite: its C cannot be compiled for Windows from macOS or Linux, and the Rust
+lints the same without it (CI's Windows job and the release build bundle it natively):
 
 ```bash
 rustup target add x86_64-pc-windows-msvc   # once
-cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings
+cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc --no-default-features -- -D warnings
 ```
 
 - **Conventional commits** — `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ci:`, `chore:`
