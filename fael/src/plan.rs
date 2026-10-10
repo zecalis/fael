@@ -41,6 +41,7 @@ fn import(r: &Repo) -> Result<(), String> {
     }
     let path = db(r);
     let rep = Store::open(&path)?.import_all(&plans, &fael_core::rfc3339(fael_core::now_ms()))?;
+    crate::board::register(r);
     println!(
         "imported {} plans, {} chunks → {}",
         rep.plans,

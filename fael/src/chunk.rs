@@ -85,6 +85,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     if let Err(e) = s().and_then(|s| crate::plan::mirror(&r, &s)) {
         eprintln!("fael: md mirror not written: {e}");
     }
+    crate::board::register(&r);
     Ok(ExitCode::SUCCESS)
 }
 
