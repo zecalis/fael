@@ -79,6 +79,8 @@ fn stats_json_matches_golden_values() {
     let (ok, out, err) = fael_at(&state, dir, &["stats", "--json"], "");
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    // its own json! call: one literal with every kind passes the macro's recursion limit
+    let said = serde_json::json!({"row": {"said": 2, "earned": 0}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "count": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "merge": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "check": {"said": 0, "earned": 0}, "carry": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "promote": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}});
     assert_eq!(
         v,
         serde_json::json!({
@@ -99,7 +101,7 @@ fn stats_json_matches_golden_values() {
             "incidents": {},
             "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "shape_gate": 0},
             "file_verdict": {"changed": 0, "unchanged": 0, "no_verdict": 0, "no_fh": 0, "retire": {"changed": {"pairs": 0, "retired": 0}, "unchanged": {"pairs": 0, "retired": 0}}},
-            "said": {"row": {"said": 2, "earned": 0}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "count": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "merge": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "check": {"said": 0, "earned": 0}, "carry": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "promote": {"said": 0, "earned": 0}},
+            "said": said,
             "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}},
         }),
         "{out}"

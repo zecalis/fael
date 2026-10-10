@@ -100,7 +100,7 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 16] = [
+pub const KINDS: [&str; 17] = [
     "row",
     "note",
     "brief",
@@ -117,6 +117,7 @@ pub const KINDS: [&str; 16] = [
     "fixed",
     "fixcommit",
     "promote",
+    "held",
 ];
 
 /// Whether a row superseding or bumping `id` landed within a day after `ms`.
@@ -231,7 +232,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "brief" => ("brief", used(key)),
                 // the generic clause names no row: nothing to join it to
                 "ask" if key == "*" => continue,
-                "ask" | "cited" | "merge" => (kind, retired(key)),
+                "ask" | "cited" | "merge" | "held" => (kind, retired(key)),
                 "promote" => ("promote", closed_after(log, key, ms)),
                 // the issue was closed before the line, so `retired` (the
                 // earliest event) never lands after it: look for a later one
