@@ -23,21 +23,25 @@ Three ideas carry the whole design:
 
 ## 0. North star and product invariant
 
-**North star: the ledger behind plan work.** Work runs as plans cut into chunks, one session
-or agent at a time, and no session shares another's chat. Fael keeps what passes between them —
-the hand-off where a chunk stopped, the decision and why, the issue still open, the note the
-next session needs, what the user asked for — and hands it back when the next session starts:
-at kickoff of the plan or file it names (`fael kickoff`), in plan briefs, and at session start
-for work routed to it. Git owns what changed; fael keeps only what git and the code cannot say
-(why, what was rejected, what is unfinished), and retires a row once the code says it or
-contradicts it.
+**North star: the engine behind plan work.** Work runs as plans cut into chunks, one session
+or agent at a time, and no session shares another's chat. Fael keeps the plan and every chunk —
+its brief, area (dev or marketing), size, model hint and state — and the ledger of what passes
+between sessions: the hand-off where a chunk stopped, the decision and why, the issue still
+open, the note the next session needs, what the user asked for. An agent starts, waits on the
+owner and finishes a chunk through one contract (`fael chunk start|wait|done`), and the brief
+it starts from carries the plan goal, the last hand-off and the open rows on its files. Git
+owns what changed; fael keeps only what git and the code cannot say (why, what was rejected,
+what is unfinished), and retires a row once the code says it or contradicts it.
 
-Fael is in **maintenance mode** (decision `product:mission`, 2026-10-10): no new dev features.
-A change ships when it fixes a bug, cuts noise, or removes code. The reason is the evidence:
-what agents act on is the hand-off, the brief and the note; the experience pushed at the file
-an agent touched was mostly noise, and the push kinds no agent acted on were cut. Measurement
-plans are parked; `fael stats` still shows what fael handed over and what followed (capture →
-acted → outcome), never the counterfactual, so claims about value say only that.
+Decision `product:mission` (2026-10-10, plan `PLAN-fael-board`): plans and chunks move from
+fapony's markdown into fael's SQLite store (`.fael/plans.db`, English); the ledger stays
+jsonl. Planner skills (plan-with-pony for dev, plan-with-marketing) cut the chunks; the agent
+judges size and model hint, fael stores them, the owner picks. A change ships when it fixes a
+bug, cuts noise, removes code, or serves that plan → chunk → agent → ship loop. The owner's
+window is a separate SwiftUI app reading `fael board --json`: it watches, notifies, and starts
+an agent only on the owner's click. `fael stats` still shows what fael handed over and what
+followed (capture → acted → outcome), never the counterfactual, so claims about value say
+only that.
 
 **The mechanism is the team's shared work ledger**: the context of the work, and the work handed
 between sessions and agents — hand-offs, requirements, assigned issues (`--to`), claims,
