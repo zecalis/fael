@@ -49,6 +49,13 @@ the next PR fixes it). Two rules:
 - **Unix-only APIs gate the whole test.** Anything from `std::os::unix` goes in a test marked
   `#[cfg(unix)]` (see `fael/tests/install.rs`). Do not gate single lines inside a shared test.
 
+### A race test repeats itself
+
+A test of two threads or processes racing (a claim, a first open, a migration) loses only on
+some runs, so one pass before `push pr` proves little. Loop the rounds inside the test until one
+run catches the race (`two_first_opens_migrate_once`: 30 rounds), and check it fails on the
+code before the fix.
+
 ## Before submitting
 
 The same checks CI runs:
