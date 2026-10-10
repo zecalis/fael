@@ -173,6 +173,13 @@ fn a_failed_step_leaves_v1_and_the_next_open_retries() {
 
 #[test]
 fn two_first_opens_migrate_once() {
+    // a race shows on some runs only: 30 rounds make one test run catch it
+    for _ in 0..30 {
+        two_first_opens_round();
+    }
+}
+
+fn two_first_opens_round() {
     let path = v1_db("");
     let opens: Vec<_> = (0..2)
         .map(|_| {

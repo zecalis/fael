@@ -65,9 +65,20 @@ impl Store {
 
     fn init(conn: Connection) -> Result<Store, String> {
         // 8 agents write at once: wait for the writer instead of failing
-        conn.busy_timeout(Duration::from_secs(10)).map_err(err)?;
-        conn.query_row("PRAGMA journal_mode=WAL", [], |r| r.get::<_, String>(0))
-            .map_err(err)?;
+        let wait = Duration::from_secs(10);
+        conn.busy_timeout(wait).map_err(err)?;
+        // the switch to WAL skips the busy handler: a second first-open gets BUSY at once
+        // while the first one switches, so it retries within the same budget
+        let t = std::time::Instant::now();
+        while let Err(e) = conn.query_row("PRAGMA journal_mode=WAL", [], |r| r.get::<_, String>(0))
+        {
+            if e.sqlite_error_code() != Some(rusqlite::ErrorCode::DatabaseBusy)
+                || t.elapsed() > wait
+            {
+                return Err(err(e));
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
         // off while a step renames and drops tables (a transaction cannot change it)
         conn.pragma_update(None, "foreign_keys", false)
             .map_err(err)?;
