@@ -4,12 +4,12 @@
 //! Thin entry only — the suites sit next to this file:
 //! `autoupdate` (session-start's daily self-update check and its one Notice),
 //! `stop` (turn end: bug lines stashed, never a block), `autosync` (once-per-session `fael sync`), `stop_lang` ([lang] marker/rows packs),
-//! `session` (session-start + read push), `clients` (codex/claude shapes), `stats` (usage accounting),
+//! `session` (session-start + edit push), `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `changed_hint` (PLAN-fael-file-hash chunk 2: the edit hint names changed rows),
-//! `shadow` (PLAN-fael-file-hash chunk 3: changed/unchanged shadow on usage),
+//! `shadow` (PLAN-fael-file-hash chunk 3: an edit records no shadow),
 //! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
 //! `day` (PLAN-fael-sync chunk 3: `fael stats --day`),
-//! `push_cap` (read-push row cap + omitted line),
+//! `push_cap` (edit-push row cap + omitted line),
 //! `precision` (PLAN-fael-moat-token chunk 2: push footer + branch tag fixture),
 //! `focus` (session Focus: focus.json written at start, read by the push),
 //! `tied` (session start lists issues tied to the branch), `notify` (the
@@ -48,9 +48,6 @@ mod search;
 mod seen;
 mod session;
 mod shadow;
-mod stage;
-mod stage_arms;
-mod stage_reach;
 mod stats;
 mod stats_golden;
 mod stop;
@@ -61,7 +58,6 @@ mod tied;
 mod tune;
 mod turn;
 mod usage_month;
-mod working_set;
 mod worktree_push;
 mod writer;
 
@@ -165,11 +161,11 @@ fn repo() -> PathBuf {
 /// True when the next push in `session` (JSON-encoded) carries the bug line
 /// a stop stashed — the push takes it, so a second call is false.
 fn flagged(d: &Path, session: &str) -> bool {
-    let read = format!(
+    let edit = format!(
         r#"{{"cwd":{},"session":{session},"files":["src/nothing.rs"]}}"#,
         json(d)
     );
-    let (ok, out, _) = fael(d, &["hook", "read"], &read);
+    let (ok, out, _) = fael(d, &["hook", "edit"], &edit);
     assert!(ok, "{out}");
     out.contains("possible problem")
 }

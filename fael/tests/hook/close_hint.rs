@@ -73,10 +73,10 @@ fn edit_hint_never_asks_about_a_decision() {
     assert!(!out.contains("\"now in <file>\""), "{out}");
 }
 
-/// Claude Code reads a file before it may edit it: the read push already
-/// said the issue, yet the edit still offers its ready close.
+/// The row is already in the agent's context (a `find` said it; a read says
+/// nothing) — the edit still offers its ready close.
 #[test]
-fn edit_after_read_still_offers_the_ready_close() {
+fn edit_after_the_row_was_said_still_offers_the_ready_close() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let (ok, out, err) = fael(
@@ -93,7 +93,10 @@ fn edit_after_read_still_offers_the_ready_close() {
         json(&d.join("src/a.rs"))
     );
     let (ok, read, err) = fael(&d, &["hook", "read", "--client", "claude"], &input);
-    assert!(ok && read.contains("seen on read"), "{err}{read}");
+    assert!(ok && !read.contains("seen on read"), "{err}{read}");
+    let env = [("CLAUDE_CODE_SESSION_ID", "s1")];
+    let (ok, found, err) = fael_env(&d, &["find", "--files", "src/a.rs"], "", &env);
+    assert!(ok && found.contains("seen on read"), "{err}{found}");
     let out = edit_a(&d);
     // the row itself is not repeated, only the close for it
     assert!(!out.contains("seen on read"), "{out}");

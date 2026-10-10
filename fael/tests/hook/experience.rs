@@ -39,7 +39,7 @@ fn stats_links_a_fix_commit_by_the_id_it_names() {
     let id = &out[..8];
     // a push on the file: the repo's first usage line
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
-    assert!(fael(&d, &["hook", "read"], &input).0);
+    assert!(fael(&d, &["hook", "edit"], &input).0);
     let why = "`a.rs` retried forever → cap at 3; guard `tests/retry.rs`";
     assert!(fael(&d, &["close", "--key", "a:retry", why], "").0);
     git(&d, &["add", "src/a.rs"]);
@@ -85,7 +85,7 @@ fn stats_label_measures_unmeasurable_measured_and_gone() {
     let add = ["add", "issue", "retry loops", "--files", "src/a.rs"];
     assert!(fael(&d, &[&add[..], &["--key", "a:retry"]].concat(), "").0);
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
-    assert!(fael(&d, &["hook", "read"], &input).0);
+    assert!(fael(&d, &["hook", "edit"], &input).0);
     let label = || {
         let (ok, out, err) = fael(&d, &["stats", "--json"], "");
         assert!(ok, "{err}");

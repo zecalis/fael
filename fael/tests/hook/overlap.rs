@@ -1,10 +1,10 @@
 //! 01M411WF step 2: edit usage lines (and the `in-context` line the same edit
 //! writes) name the edited file, and `fael stats` counts two sessions that
 //! edited one file within the window under `value.cross_agent.same_file`.
-//! Reads name their file too (the decision record), but only an edit says a
-//! session is at the file: overlap counts edit lines only.
+//! A `find` that said the row first leaves the edit only its in-context line:
+//! overlap counts edit lines only.
 
-use super::{fael, json, repo};
+use super::{fael, fael_env, json, repo};
 use std::path::Path;
 
 fn hook(d: &Path, event: &str, session: &str, file: &str) {
@@ -41,10 +41,12 @@ fn edit_lines_name_the_file_and_two_sessions_on_it_count() {
         "",
     );
     assert!(ok, "{err}");
-    // s1 reads, then edits: the row is already in its context, so the edit
-    // says nothing and only the in-context line (which names the file too)
-    // shows it was there; s2 edits cold and the push says the row
-    hook(&d, "read", "s1", "src/a.rs");
+    // s1 finds the row, then edits: the row is already in its context, so
+    // the edit says nothing and only the in-context line (which names the
+    // file too) shows it was there; s2 edits cold and the push says the row
+    let env = [("CLAUDE_CODE_SESSION_ID", "s1")];
+    let (ok, found, err) = fael_env(&d, &["find", "--files", "src/a.rs"], "", &env);
+    assert!(ok && found.contains("keep the parser pure"), "{err}{found}");
     hook(&d, "edit", "s1", "src/a.rs");
     hook(&d, "edit", "s2", "src/a.rs");
     let lines = usage(&d);

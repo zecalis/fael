@@ -58,15 +58,10 @@ the `touch@1` replay over the repo's shadow pushes — exposure down ≥ 40%, ea
 arm keeps the wire name `holdout` on usage lines; it is not the permanent holdout, which is
 phase 2.
 
-The evaluator runs at Stop (never on the push path, nor at session start, which the agent
-waits on), and only once 100 new search pushes of the repo have come in since its last
-look. A shadow look reads this and last month's usage, like `fael stats` with no `--since`; a
-canary or ramp look reads the usage since that stage began (the state file keeps the byte and
-month, archives included), so a slow repo's arm data is not dropped before it reaches the
-minimums. A stage change is filed
-first as a `policy:push-gate` decision row (`policy`, `basis` — `screening` from shadow, `validation` from an arm stage — `from`, `to`, `arm_split`, `reason`,
-`validation`); only then does the state file beside the log (`cache/push-gate.json`) move.
-Missing, torn or other-version state reads as `shadow`. `fael tune` lists each repo's stage.
+**Stopped 2026-10-10** (decision `say:push-at-edit`): a read or a search no longer pushes, so the
+gate has nothing to cut and no new search push comes in. The Stop evaluator that moved the stage
+and filed `policy:push-gate` rows was removed; the last stage in `cache/push-gate.json` stays as it
+was. Missing, torn or other-version state reads as `shadow`. `fael tune` lists each repo's stage.
 
 `dup` (SPEC §B) is written when a row is filed over one the session was never shown
 (the supersede proved the link). Lines from before the writer existed carry none.

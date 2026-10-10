@@ -1,7 +1,8 @@
 //! PLAN-fael-decision-held chunk 2 (M1): a decision this session wrote on a
-//! file it edited is named once, at the push after stop, with a ready
-//! `fael close <id> "now in <path>"`. Never at the edit, never another
-//! session's decision, never one already closed or superseded.
+//! file it edited is named once, at the push after stop (here an edit of a
+//! file no row is on), with a ready `fael close <id> "now in <path>"`. Never
+//! at the edit before stop, never another session's decision, never one
+//! already closed or superseded.
 
 use super::{fael, fael_env, json};
 use std::path::Path;
@@ -53,18 +54,18 @@ fn the_sessions_decision_on_an_edited_file_is_named_once_after_stop() {
     let edit = hook(&d, "edit", "src/a.rs");
     assert!(!edit.contains(HELD), "never at the edit: {edit}");
     stop(&d);
-    let out = hook(&d, "read", "src/b.rs");
+    let out = hook(&d, "edit", "src/c.rs");
     let close = format!(r#"fael close {id} \"now in `src/a.rs`\""#);
     assert!(
         out.matches(HELD).count() == 1 && out.contains(&close),
         "{out}"
     );
-    assert!(!hook(&d, "read", "src/b.rs").contains(HELD), "shown once");
+    assert!(!hook(&d, "edit", "src/c.rs").contains(HELD), "shown once");
     // a later turn's decision: the session was already told
     decide(&d, "rows sort by date", "src/a.rs", Some(S));
     stop(&d);
     assert!(
-        !hook(&d, "read", "src/b.rs").contains(HELD),
+        !hook(&d, "edit", "src/c.rs").contains(HELD),
         "once per session"
     );
 }
@@ -77,7 +78,7 @@ fn another_sessions_decision_or_an_unedited_file_is_silent() {
     decide(&d, "on a file not edited", "src/b.rs", Some(S));
     hook(&d, "edit", "src/a.rs");
     stop(&d);
-    assert!(!hook(&d, "read", "src/b.rs").contains(HELD));
+    assert!(!hook(&d, "edit", "src/c.rs").contains(HELD));
 }
 
 #[test]
@@ -103,6 +104,6 @@ fn a_decision_closed_or_superseded_in_the_session_is_not_named() {
         "",
     );
     assert!(ok, "{err}");
-    let out = hook(&d, "read", "src/b.rs");
+    let out = hook(&d, "edit", "src/c.rs");
     assert!(!out.contains(HELD), "{out}");
 }

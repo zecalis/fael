@@ -1,7 +1,6 @@
-//! Grep/Bash push: an agent that reads through the shell still gets the rows
-//! about the files it touched — from the command's arguments and from a
-//! grep's hit list when it names one file, never from a path that is not a
-//! file on disk.
+//! Grep/Bash/Read hooks: a shell call that wrote a file pushes that file's
+//! rows as an edit; a read or a search — `Read`, `Grep`, `Glob`, `cat`, a hit
+//! list — says nothing, on every client. Rows reach the agent at the edit.
 
 use super::{fael, json, repo, state};
 use std::path::Path;
@@ -58,220 +57,6 @@ fn bash(d: &Path, session: &str, cmd: &str, stdout: &str) -> String {
 }
 
 #[test]
-fn a_shell_read_pushes_the_rows_of_its_file() {
-    let d = repo();
-    seed(&d);
-    for (i, cmd) in [
-        "sed -n 1,20p src/a.rs",
-        "cat src/a.rs | head -5",
-        // a path after `cd` is under that directory, as the shell reads it
-        "cd src && cat 'a.rs'",
-        "git show HEAD:src/a.rs",
-    ]
-    .iter()
-    .enumerate()
-    {
-        let out = bash(&d, &format!("s{i}"), cmd, "");
-        assert!(out.contains("login loops"), "{cmd}: {out}");
-        assert!(!out.contains("retry storms"), "{cmd}: {out}");
-    }
-}
-
-#[test]
-fn a_grep_hit_list_pushes_only_a_lone_file() {
-    let d = repo();
-    seed(&d);
-    // two matched files: a match is not intent, nothing pushes
-    let out = bash(
-        &d,
-        "s1",
-        "grep -rn x src",
-        "src/a.rs:1:// x\nsrc/b.rs:1:// x\n",
-    );
-    assert!(out.is_empty(), "{out}");
-    // every hit in one file: that file pushes
-    let out = bash(
-        &d,
-        "s2",
-        "grep -rn x src",
-        "src/a.rs:1:// x\nsrc/a.rs:2:// x\n",
-    );
-    assert!(
-        out.contains("login loops") && !out.contains("retry storms"),
-        "{out}"
-    );
-    // the Grep tool: files_with_matches lists bare paths
-    let out = search(
-        &d,
-        "s3",
-        "Grep",
-        r#"{"pattern":"x","path":"src"}"#,
-        r#"{"mode":"files_with_matches","filenames":["src/b.rs"],"numFiles":1}"#,
-    );
-    assert!(
-        out.contains("retry storms") && !out.contains("login loops"),
-        "{out}"
-    );
-    // a file the grep names keeps pushing, whatever the hit list says
-    let out = bash(
-        &d,
-        "s4",
-        "grep -n x src/a.rs src/b.rs",
-        "src/a.rs:1:// x\nsrc/b.rs:1:// x\n",
-    );
-    assert!(
-        out.contains("login loops") && out.contains("retry storms"),
-        "{out}"
-    );
-}
-
-#[test]
-fn a_hit_list_skips_data_files_but_a_named_one_counts() {
-    let d = repo();
-    seed(&d);
-    std::fs::write(d.join("src/index.json"), "{}\n").unwrap();
-    backdate(&d.join("src/index.json"));
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "issue",
-            "font index stale",
-            "--files",
-            "src/index.json",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    let out = bash(
-        &d,
-        "s1",
-        "grep -rn x src",
-        "src/a.rs:1:// x\nsrc/index.json:1:x\n",
-    );
-    assert!(
-        out.contains("login loops") && !out.contains("font index stale"),
-        "{out}"
-    );
-    // a file the call names is intent, whatever its extension
-    let out = bash(&d, "s2", "cat src/index.json", "{}");
-    assert!(out.contains("font index stale"), "{out}");
-}
-
-#[test]
-fn only_readers_and_real_files_push() {
-    let d = repo();
-    seed(&d);
-    // not a reader: the argument is not a touch
-    assert!(bash(&d, "s1", "cargo test src/a.rs", "src/a.rs:1: x").is_empty());
-    assert!(bash(&d, "s1", "git commit -m src/a.rs", "").is_empty());
-    // a reader on a path with no file behind it, and on a directory
-    assert!(bash(&d, "s1", "cat src/nope.rs", "").is_empty());
-    assert!(bash(&d, "s1", "grep -rn x src", "").is_empty());
-    // cat's output is file content, never a hit list
-    assert!(bash(&d, "s1", "cat notes.txt", "src/a.rs:1: x").is_empty());
-}
-
-#[test]
-fn a_wide_hit_list_pushes_nothing() {
-    let d = repo();
-    let mut hits = String::new();
-    for i in 0..20 {
-        let f = format!("src/f{i}.rs");
-        std::fs::write(d.join(&f), "// x\n").unwrap();
-        let (ok, _, err) = fael(
-            &d,
-            &["add", "note", &format!("about f{i}"), "--files", &f],
-            "",
-        );
-        assert!(ok, "{err}");
-        hits.push_str(&format!("{f}:1:// x\n"));
-    }
-    let out = bash(&d, "s1", "grep -rn x src", &hits);
-    assert!(out.is_empty(), "{out}");
-}
-
-#[test]
-fn codex_bash_payload_pushes_like_claude() {
-    let d = repo();
-    seed(&d);
-    // Codex shell calls match as `Bash`: a `cat` read pushes the file's rows,
-    // whether the response arrives as `stdout` or `output`.
-    for (i, response) in [
-        r#"{"stdout":""}"#.to_string(),
-        r#"{"output":""}"#.to_string(),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let payload = format!(
-            r#"{{"cwd":{},"session_id":"s{i}","tool_name":"Bash","tool_input":{{"command":"cat src/a.rs"}},"tool_response":{response}}}"#,
-            json(&d)
-        );
-        let (ok, out, err) = fael(&d, &["hook", "search", "--client", "codex"], &payload);
-        assert!(ok, "{err}");
-        assert!(out.contains("login loops"), "{response}: {out}");
-    }
-}
-
-#[test]
-fn glob_pushes_the_files_it_names() {
-    let d = repo();
-    seed(&d);
-    // Claude's `Glob`: the path counts when it is a file, the hit list the rest
-    let out = search(
-        &d,
-        "s1",
-        "Glob",
-        r#"{"pattern":"src/*.rs","path":"src"}"#,
-        r#"["src/a.rs"]"#,
-    );
-    assert!(out.contains("login loops"), "{out}");
-    // OpenCode's lowercase `glob`, forwarded as a neutral raw call
-    let out = search_neutral(
-        &d,
-        "s2",
-        "glob",
-        r#"{"pattern":"src/*.rs"}"#,
-        r#"["src/b.rs"]"#,
-    );
-    assert!(out.contains("retry storms"), "{out}");
-}
-
-#[test]
-fn neutral_search_resolves_opencode_tool_calls() {
-    let d = repo();
-    seed(&d);
-    // `grep` with a hit list, lowercase like OpenCode sends it
-    let out = search_neutral(
-        &d,
-        "s1",
-        "grep",
-        r#"{"pattern":"x","path":"src"}"#,
-        r#"{"output":"src/a.rs:1:// x\n"}"#,
-    );
-    assert!(out.contains("login loops"), "{out}");
-    // `bash` reading through the shell
-    let out = search_neutral(
-        &d,
-        "s2",
-        "bash",
-        r#"{"command":"cat src/b.rs"}"#,
-        r#""src/b.rs:1:// x\n""#,
-    );
-    assert!(out.contains("retry storms"), "{out}");
-    // not a reader: nothing pushes (neutral still answers `{"block":false}`)
-    let out = search_neutral(
-        &d,
-        "s3",
-        "bash",
-        r#"{"command":"cargo test src/a.rs"}"#,
-        r#""src/a.rs:1: x""#,
-    );
-    assert!(!out.contains("context"), "{out}");
-}
-
-#[test]
 fn a_shell_write_pushes_as_an_edit() {
     let d = repo();
     seed(&d);
@@ -291,14 +76,13 @@ fn a_shell_write_pushes_as_an_edit() {
     let usage = std::fs::read_to_string(state(&d).join("usage.jsonl")).unwrap();
     assert!(usage.contains(r#""event":"shell-edit""#), "{usage}");
 
-    // a read of an old file is still a read: no stale hint
+    // a read of an old file says nothing: rows come at the edit
     let out = bash(&d, "w2", "cat src/b.rs", "");
-    assert!(out.contains("retry storms"), "{out}");
-    assert!(!out.contains("fael close"), "{out}");
+    assert!(out.is_empty(), "{out}");
 }
 
 #[test]
-fn a_shell_write_and_read_push_both() {
+fn a_shell_write_and_read_push_only_the_write() {
     let d = repo();
     seed(&d);
     std::fs::write(d.join("src/a.rs"), "// y\n").unwrap();
@@ -310,15 +94,126 @@ fn a_shell_write_and_read_push_both() {
     let out = bash(&d, "wr", "sed -i '' s/x/y/ src/a.rs && cat c.rs", "");
     let edit = out.find(r"fael mem for src/a.rs (1 of 2):\n").expect(&out);
     let hint = out.find("fael close").expect(&out);
-    let read = out.find(r"fael mem for c.rs:\n").expect(&out);
+    assert!(edit < hint, "the edit block, then its hint: {out}");
     assert!(
-        edit < hint && hint < read,
-        "the edit block, its hint, then the read: {out}"
+        !out.contains("cache misses"),
+        "the read says nothing: {out}"
     );
-    // one hint line (generic or ready close), the edit's: a read has none
-    assert_eq!(
-        out.matches("now in <file>").count(),
-        1,
-        "a read has no hint: {out}"
+}
+
+#[test]
+fn codex_bash_payload_pushes_a_shell_write_like_claude() {
+    let d = repo();
+    seed(&d);
+    // Codex shell calls match as `Bash`, whether the response arrives as
+    // `stdout` or `output`; a `cat` beside the write says nothing.
+    for (i, response) in [r#"{"stdout":""}"#, r#"{"output":""}"#]
+        .into_iter()
+        .enumerate()
+    {
+        std::fs::write(d.join("src/a.rs"), format!("// y{i}\n")).unwrap();
+        let payload = format!(
+            r#"{{"cwd":{},"session_id":"s{i}","tool_name":"Bash","tool_input":{{"command":"sed -i '' s/x/y/ src/a.rs; cat src/b.rs"}},"tool_response":{response}}}"#,
+            json(&d)
+        );
+        let (ok, out, err) = fael(&d, &["hook", "search", "--client", "codex"], &payload);
+        assert!(ok, "{err}");
+        assert!(out.contains("login loops"), "{response}: {out}");
+        assert!(!out.contains("retry storms"), "{response}: {out}");
+    }
+}
+
+#[test]
+fn neutral_search_resolves_opencode_shell_writes() {
+    let d = repo();
+    seed(&d);
+    // `bash` writing through the shell, lowercase like OpenCode sends it
+    std::fs::write(d.join("src/b.rs"), "// y\n").unwrap();
+    let out = search_neutral(
+        &d,
+        "s1",
+        "bash",
+        r#"{"command":"sed -i '' s/x/y/ src/b.rs"}"#,
+        r#""""#,
+    );
+    assert!(out.contains("retry storms"), "{out}");
+    // a `grep`, `glob` or `bash` read pushes nothing (neutral still answers `{"block":false}`)
+    for (i, (tool, input, response)) in [
+        (
+            "grep",
+            r#"{"pattern":"x","path":"src"}"#,
+            r#"{"output":"src/a.rs:1:// x\n"}"#,
+        ),
+        ("glob", r#"{"pattern":"src/*.rs"}"#, r#"["src/a.rs"]"#),
+        ("bash", r#"{"command":"cat src/a.rs"}"#, r#""// x\n""#),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let out = search_neutral(&d, &format!("r{i}"), tool, input, response);
+        assert!(
+            !out.contains("context") && !out.contains("login loops"),
+            "{tool}: {out}"
+        );
+    }
+}
+
+/// Rows reach the agent at the edit, at kickoff and in plan briefs — a read
+/// or a search of a file with an open row says nothing, on every client.
+#[test]
+fn a_read_or_a_search_says_nothing() {
+    let d = repo();
+    seed(&d);
+    // Claude `Read`
+    let read = serde_json::json!({"cwd": d, "session_id": "c1", "tool_name": "Read",
+        "tool_input": {"file_path": d.join("src/a.rs")}, "tool_response": {}})
+    .to_string();
+    let (ok, out, err) = fael(&d, &["hook", "read", "--client", "claude"], &read);
+    assert!(ok, "{err}");
+    assert!(out.is_empty(), "claude read: {out}");
+    // Claude `Grep` naming the one file, and `Glob`
+    let out = search(
+        &d,
+        "c2",
+        "Grep",
+        r#"{"pattern":"x","path":"src/a.rs"}"#,
+        r#"{"mode":"files_with_matches","filenames":["src/a.rs"],"numFiles":1}"#,
+    );
+    assert!(out.is_empty(), "claude grep: {out}");
+    let out = search(
+        &d,
+        "c3",
+        "Glob",
+        r#"{"pattern":"src/*.rs"}"#,
+        r#"["src/a.rs"]"#,
+    );
+    assert!(out.is_empty(), "claude glob: {out}");
+    // shell reads: `cat`, a lone-file grep, `git show`
+    for (i, (cmd, stdout)) in [
+        ("cat src/a.rs", "// x\n"),
+        ("grep -rn x src", "src/a.rs:1:// x\n"),
+        ("git show HEAD:src/a.rs", ""),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let out = bash(&d, &format!("b{i}"), cmd, stdout);
+        assert!(out.is_empty(), "{cmd}: {out}");
+    }
+    // the neutral client's `read` and a `search` naming its files
+    for (i, event) in ["read", "search"].into_iter().enumerate() {
+        let input = format!(
+            r#"{{"cwd":{},"session":"n{i}","files":["src/a.rs"]}}"#,
+            json(&d)
+        );
+        let (ok, out, err) = fael(&d, &["hook", event], &input);
+        assert!(ok, "{err}");
+        assert!(!out.contains("login loops"), "neutral {event}: {out}");
+    }
+    // nothing said, nothing recorded as said
+    let usage = std::fs::read_to_string(state(&d).join("usage.jsonl")).unwrap_or_default();
+    assert!(
+        !usage.contains(r#""event":"read""#) && !usage.contains(r#""event":"search""#),
+        "{usage}"
     );
 }

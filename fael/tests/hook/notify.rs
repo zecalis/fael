@@ -14,12 +14,12 @@ fn hook(d: &Path, event: &str, client: &str, input: &str) -> Option<Value> {
     (!out.trim().is_empty()).then(|| serde_json::from_str(out.trim()).unwrap())
 }
 
-fn read(d: &Path, client: &str) -> Option<Value> {
+fn edit(d: &Path, client: &str) -> Option<Value> {
     let input = format!(
-        r#"{{"cwd":{},"session_id":"s1","tool_name":"Read","tool_input":{{"file_path":"src/a.rs"}}}}"#,
+        r#"{{"cwd":{},"session_id":"s1","tool_name":"Edit","tool_input":{{"file_path":"src/a.rs"}}}}"#,
         json(d)
     );
-    hook(d, "read", client, &input)
+    hook(d, "edit", client, &input)
 }
 
 fn stop(d: &Path) -> Option<Value> {
@@ -43,7 +43,7 @@ fn reminder_once_per_file_then_the_turn_receipt() {
         "",
     );
     assert!(ok, "{err}");
-    let out = read(&d, "claude").unwrap();
+    let out = edit(&d, "claude").unwrap();
     assert!(out["systemMessage"].is_null(), "{out}");
     // a decision is: one line naming its key and title
     let (ok, _, err) = fael(
@@ -60,7 +60,7 @@ fn reminder_once_per_file_then_the_turn_receipt() {
         "",
     );
     assert!(ok, "{err}");
-    let out = read(&d, "claude").unwrap();
+    let out = edit(&d, "claude").unwrap();
     assert_eq!(
         out["systemMessage"], r#"fael: reminded agent — #cache:keep "keep the cache" (src/a.rs)"#,
         "{out}"
@@ -74,7 +74,7 @@ fn reminder_once_per_file_then_the_turn_receipt() {
         "",
     );
     assert!(ok, "{err}");
-    let out = read(&d, "claude").unwrap();
+    let out = edit(&d, "claude").unwrap();
     assert!(out["systemMessage"].is_null(), "{out}");
     // filed in the session (the shell `add` knows it by CLAUDE_CODE_SESSION_ID)
     add(
@@ -118,7 +118,7 @@ fn codex_and_notify_off_print_no_user_line() {
         "",
     );
     assert!(ok, "{err}");
-    let on = read(&d, "codex").unwrap();
+    let on = edit(&d, "codex").unwrap();
     assert!(on["systemMessage"].is_null(), "{on}");
     std::fs::write(
         d.join(".fael/config.toml"),
@@ -127,10 +127,10 @@ fn codex_and_notify_off_print_no_user_line() {
     .unwrap();
     // a fresh session: the seen list would hide the row otherwise
     let input = format!(
-        r#"{{"cwd":{},"session_id":"s2","tool_name":"Read","tool_input":{{"file_path":"src/a.rs"}}}}"#,
+        r#"{{"cwd":{},"session_id":"s2","tool_name":"Edit","tool_input":{{"file_path":"src/a.rs"}}}}"#,
         json(&d)
     );
-    let off = hook(&d, "read", "claude", &input).unwrap();
+    let off = hook(&d, "edit", "claude", &input).unwrap();
     assert!(off["systemMessage"].is_null(), "{off}");
     assert_eq!(
         on["hookSpecificOutput"]["additionalContext"],

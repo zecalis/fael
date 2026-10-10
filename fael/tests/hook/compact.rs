@@ -1,10 +1,10 @@
 //! A file push names only the files its row is about besides the one the agent
-//! opened — it knows that one.
+//! edited — it knows that one.
 
 use super::{fael, json, repo};
 
 #[test]
-fn a_read_push_drops_the_opened_file_and_folds_the_rest() {
+fn an_edit_push_drops_the_edited_file_and_folds_the_rest() {
     let d = repo();
     for f in ["a", "b", "c", "d"] {
         std::fs::write(d.join(format!("src/{f}.rs")), "//\n").unwrap();
@@ -24,7 +24,7 @@ fn a_read_push_drops_the_opened_file_and_folds_the_rest() {
         json(&d),
         json(&d.join("src/a.rs"))
     );
-    let (ok, out, err) = fael(&d, &["hook", "read", "--client", "claude"], &input);
+    let (ok, out, err) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
     assert!(ok, "{err}");
     let line = |t: &str| {
         out.split("\\n")

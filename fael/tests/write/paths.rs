@@ -51,7 +51,7 @@ fn planned_path_pushes_once_the_file_exists() {
         r#"{{"cwd":{:?},"files":["src/money/tx.rs"]}}"#,
         d.to_string_lossy()
     );
-    let (ok, out, err) = fael(&d, &["hook", "read"], &input);
+    let (ok, out, err) = fael(&d, &["hook", "edit"], &input);
     assert!(ok && out.contains("tx rules"), "{out}{err}");
 }
 

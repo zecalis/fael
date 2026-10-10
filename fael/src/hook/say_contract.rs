@@ -203,8 +203,8 @@ fn no_session_says_every_time() {
     }
 }
 
-/// A shell call's edit side, then its read side: the contexts in that order,
-/// the edit side's notice kept.
+/// A shell call's edit side, then its commit side: the contexts in that
+/// order, the edit side's notice kept.
 #[test]
 fn two_replies_join_in_order_and_the_first_notice_wins() {
     let reply = |text: &str, notice: Option<&str>| {
@@ -214,12 +214,12 @@ fn two_replies_join_in_order_and_the_first_notice_wins() {
         r.notice = notice.map(String::from);
         r
     };
-    let r = reply("edit\n", Some("edit side")).and(reply("read\n", Some("read side")));
-    assert_eq!(r.context(), Some("edit\nread\n"));
+    let r = reply("edit\n", Some("edit side")).and(reply("commit\n", Some("commit side")));
+    assert_eq!(r.context(), Some("edit\ncommit\n"));
     assert_eq!(r.notice.as_deref(), Some("edit side"));
-    let r = reply("", None).and(reply("read\n", Some("read side")));
-    assert_eq!(r.context(), Some("read\n"));
-    assert_eq!(r.notice.as_deref(), Some("read side"));
+    let r = reply("", None).and(reply("commit\n", Some("commit side")));
+    assert_eq!(r.context(), Some("commit\n"));
+    assert_eq!(r.notice.as_deref(), Some("commit side"));
     let r = Reply::default().and(Reply::default());
     assert!(r.context().is_none() && r.notice.is_none());
 }
@@ -313,7 +313,7 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
 
 /// Usage records what was said (chunk 3): a said line names its kind, a
 /// dropped one names nothing, and `Reply::and` (a shell call's edit side, then
-/// its read side) keeps both sides' entries in order.
+/// its commit side) keeps both sides' entries in order.
 #[test]
 fn said_names_each_line_said_and_and_keeps_both_sides() {
     let kinds = |r: &Reply| -> Vec<String> {

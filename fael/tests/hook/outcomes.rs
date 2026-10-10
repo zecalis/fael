@@ -29,7 +29,7 @@ fn cited(d: &Path) -> Vec<Value> {
         .collect()
 }
 
-/// One decision on `src/a.rs`, pushed to session `s1` by a read: its id.
+/// One decision on `src/a.rs`, pushed to session `s1` by an edit: its id.
 fn said(d: &Path) -> String {
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let (ok, _, err) = fael(
@@ -44,9 +44,9 @@ fn said(d: &Path) -> String {
         "",
     );
     assert!(ok, "{err}");
-    call(d, "read", "s1", r#""files":["src/a.rs"]"#);
-    let read = usage(d).into_iter().find(|l| l["event"] == "read").unwrap();
-    read["ids"][0].as_str().unwrap().to_string()
+    call(d, "edit", "s1", r#""files":["src/a.rs"]"#);
+    let edit = usage(d).into_iter().find(|l| l["event"] == "edit").unwrap();
+    edit["ids"][0].as_str().unwrap().to_string()
 }
 
 fn row(d: &Path, id: &str) -> Value {
@@ -131,7 +131,7 @@ fn the_claude_adapter_cites_from_its_tool_input() {
     let id = said(&d);
     let short = &id[..8];
     // Claude Code's shape: `session_id`, an Edit's `tool_input` — the same
-    // seen list the neutral read above filled
+    // seen list the neutral edit above filled
     let input = format!(
         r#"{{"cwd":{},"session_id":"s1","tool_name":"Edit","tool_input":{{"file_path":{},"new_string":"// per {short}"}}}}"#,
         json(&d),
@@ -159,26 +159,26 @@ fn a_pull_after_a_cap_cut_is_the_agents_own() {
         let (ok, _, err) = fael(&d, &["add", "decision", &t, "--files", "src/a.rs"], "");
         assert!(ok, "{err}");
     }
-    call(&d, "read", "s1", r#""files":["src/a.rs"]"#);
-    let read = usage(&d)
+    call(&d, "edit", "s1", r#""files":["src/a.rs"]"#);
+    let pushed = usage(&d)
         .into_iter()
-        .find(|l| l["event"] == "read")
+        .find(|l| l["event"] == "edit")
         .unwrap();
-    let kinds: Vec<&str> = read["said"]
+    let kinds: Vec<&str> = pushed["said"]
         .as_array()
         .unwrap()
         .iter()
         .map(|s| s["kind"].as_str().unwrap())
         .collect();
     // no count line names the call to the cut rows: nothing fael said induces a pull
-    assert!(!kinds.contains(&"count"), "{read}");
-    let cut: Vec<&str> = read["cut"]
+    assert!(!kinds.contains(&"count"), "{pushed}");
+    let cut: Vec<&str> = pushed["cut"]
         .as_array()
         .unwrap()
         .iter()
         .map(|c| c["id"].as_str().unwrap())
         .collect();
-    assert!(cut.len() >= 2, "{read}");
+    assert!(cut.len() >= 2, "{pushed}");
     let env = [("FAEL_SESSION", "s1")];
     // the agent asks for one cut row by id
     let (ok, _, err) = fael_env(&d, &["find", cut[0]], "", &env);
@@ -192,7 +192,7 @@ fn a_pull_after_a_cap_cut_is_the_agents_own() {
     let o = &row(&d, cut[1])["outcomes"];
     assert_eq!(o["retrieved_after_cut"], 1, "{o}");
     // a row said, then shown again by the agent's own file pull
-    let said_id = read["ids"][0].as_str().unwrap();
+    let said_id = pushed["ids"][0].as_str().unwrap();
     let o = &row(&d, said_id)["outcomes"];
     assert_eq!(
         o["pulled"],
@@ -217,9 +217,9 @@ fn a_sub_agent_cites_from_its_own_reply_and_seen_list() {
     );
     assert!(ok, "{err}");
     // the sub-agent's own context was told the row
-    call(&d, "read", "s1", r#""agent":"a1","files":["src/a.rs"]"#);
-    let read = usage(&d).into_iter().find(|l| l["event"] == "read");
-    let id = read.expect("the sub-agent was told a row")["ids"][0]
+    call(&d, "edit", "s1", r#""agent":"a1","files":["src/a.rs"]"#);
+    let pushed = usage(&d).into_iter().find(|l| l["event"] == "edit");
+    let id = pushed.expect("the sub-agent was told a row")["ids"][0]
         .as_str()
         .unwrap()
         .to_string();

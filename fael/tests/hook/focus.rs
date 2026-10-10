@@ -52,14 +52,14 @@ fn session_start(d: &Path, state: Option<&Path>, session: &str) {
     assert!(ok, "{err}");
 }
 
-fn read(d: &Path, state: Option<&Path>, session: &str) -> String {
+fn edit(d: &Path, state: Option<&Path>, session: &str) -> String {
     let input = format!(
         r#"{{"cwd":{},"session":"{session}","files":["src/a.rs"]}}"#,
         json(d)
     );
     let (ok, out, err) = match state {
-        Some(s) => fael_at(s, d, &["hook", "read"], &input),
-        None => fael(d, &["hook", "read"], &input),
+        Some(s) => fael_at(s, d, &["hook", "edit"], &input),
+        None => fael(d, &["hook", "edit"], &input),
     };
     assert!(ok, "{err}");
     out
@@ -104,7 +104,7 @@ fn focus_rows_lead_a_fresher_tier0_decision() {
     assert!(body.contains("auth:session"), "{body}");
 
     // with the Focus: the older keyed row is Now, the fresher tier-0 row is not
-    let out = read(&d, None, "focus-1");
+    let out = edit(&d, None, "focus-1");
     let (keyed, plain) = order(&out);
     assert!(keyed < plain, "keyed row must lead: {keyed} {plain}\n{out}");
     // the lib/z.rs issue came by its key, not the file: its line says so,
@@ -117,7 +117,7 @@ fn focus_rows_lead_a_fresher_tier0_decision() {
     assert_eq!(out.matches("(same ").count(), 1, "{out}");
 
     // no session-start for this session = no Focus = today's order, freshest first
-    let (keyed, plain) = order(&read(&d, None, "no-focus"));
+    let (keyed, plain) = order(&edit(&d, None, "no-focus"));
     assert!(
         plain < keyed,
         "freshness must decide with no Focus: {keyed} {plain}"
@@ -136,7 +136,7 @@ fn bad_focus_file_falls_back_to_default_order() {
     assert_eq!(files.len(), 1, "{files:?}");
     std::fs::write(&files[0], "{not json").unwrap();
     // unreadable Focus = `Focus::default()` — freshness decides, no error
-    let (keyed, plain) = order(&read(&d, Some(&state), "bad-1"));
+    let (keyed, plain) = order(&edit(&d, Some(&state), "bad-1"));
     assert!(
         plain < keyed,
         "a bad Focus must not reorder: {keyed} {plain}"
@@ -144,7 +144,7 @@ fn bad_focus_file_falls_back_to_default_order() {
 }
 
 #[test]
-fn read_push_spawns_no_git() {
+fn edit_push_spawns_no_git() {
     let d = repo();
     let base = git(&d, &["rev-parse", "--abbrev-ref", "HEAD"]);
     seed(&d, &base);
@@ -165,11 +165,11 @@ fn read_push_spawns_no_git() {
         r#"{{"cwd":{},"session":"nogit","files":["src/a.rs"]}}"#,
         json(&d)
     );
-    let (ok, out, _) = fael_env(&d, &["hook", "read"], &input, &tripwire);
+    let (ok, out, _) = fael_env(&d, &["hook", "edit"], &input, &tripwire);
     assert!(ok, "{out}");
     assert!(
         !trace.exists(),
-        "the read push spawned git:\n{}",
+        "the edit push spawned git:\n{}",
         std::fs::read_to_string(&trace).unwrap_or_default()
     );
 }
@@ -185,7 +185,7 @@ fn head_switch_mid_session_rebuilds_focus() {
     session_start(&d, Some(&state), "head-1");
     // another session switches the worktree; the push follows HEAD
     git(&d, &["checkout", "-q", "feat/focus"]);
-    let (keyed, plain) = order(&read(&d, Some(&state), "head-1"));
+    let (keyed, plain) = order(&edit(&d, Some(&state), "head-1"));
     assert!(keyed < plain, "Focus stuck on {base}: {keyed} {plain}");
     let files = focus_files(&state);
     let body = std::fs::read_to_string(&files[0]).unwrap();

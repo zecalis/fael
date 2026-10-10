@@ -17,13 +17,14 @@ fn stop(d: &Path, session: &str, text: &str) {
     assert!(ok && out.contains(r#""block":false"#), "{out}{err}");
 }
 
-fn read(d: &Path, session: &str) -> String {
+/// The next push of `session`: an edit of a file no row is on.
+fn push(d: &Path, session: &str) -> String {
     let input = format!(
         r#"{{"cwd":{},"session":{},"files":["src/nothing.rs"]}}"#,
         json(d),
         serde_json::to_string(session).unwrap()
     );
-    let (ok, out, err) = fael(d, &["hook", "read"], &input);
+    let (ok, out, err) = fael(d, &["hook", "edit"], &input);
     assert!(ok, "{err}");
     out
 }
@@ -42,7 +43,7 @@ fn a_fix_phrase_with_nothing_filed_is_said_once_per_session() {
     assert!(ok, "{err}");
     let s = "2020-01-01T00:00:00Z";
     stop(&d, s, "Fixed the bug: the retry cap was off by one.");
-    let out = read(&d, s);
+    let out = push(&d, s);
     assert!(
         out.matches(SAID).count() == 1
             && out.contains("fixed the bug")
@@ -51,11 +52,11 @@ fn a_fix_phrase_with_nothing_filed_is_said_once_per_session() {
             && out.contains("fael close --key"),
         "{out}"
     );
-    assert!(!read(&d, s).contains(SAID), "shown once");
+    assert!(!push(&d, s).contains(SAID), "shown once");
     // a later turn of the same session says it again: no second line
     stop(&d, s, "The root cause was a stale cache.");
-    assert!(!read(&d, s).contains(SAID), "once per session");
-    assert!(!read(&d, s).contains("possible problem"));
+    assert!(!push(&d, s).contains(SAID), "once per session");
+    assert!(!push(&d, s).contains("possible problem"));
 }
 
 #[test]
@@ -79,14 +80,14 @@ fn an_issue_or_a_close_after_the_words_clears_them_one_before_does_not() {
     std::thread::sleep(std::time::Duration::from_millis(5));
     let s = fael_core::rfc3339(fael_core::now_ms());
     stop(&d, &s, "fixed the bug in the retry loop");
-    assert!(read(&d, &s).contains(SAID), "an older issue never clears");
+    assert!(push(&d, &s).contains(SAID), "an older issue never clears");
     // a close after the words clears them
     let s = fael_core::rfc3339(fael_core::now_ms());
     std::thread::sleep(std::time::Duration::from_millis(5));
     let (ok, _, err) = fael(&d, &["close", "--key", "a:retry", "cap at 3"], "");
     assert!(ok, "{err}");
     stop(&d, &s, "fixed the bug in the retry loop");
-    assert!(!read(&d, &s).contains(SAID));
+    assert!(!push(&d, &s).contains(SAID));
 }
 
 fn commit(d: &Path, msg: &str) -> String {
@@ -239,7 +240,7 @@ fn a_fix_line_is_counted_and_earned_by_an_issue_after() {
     assert!(ok, "{err}");
     let s = "2020-01-01T00:00:00Z";
     stop(&d, s, "fixed the bug in the retry loop");
-    assert!(read(&d, s).contains(SAID));
+    assert!(push(&d, s).contains(SAID));
     assert_eq!(yield_of(&d, "fixed"), (1, 0));
     let (ok, _, err) = fael_env(
         &d,
@@ -268,21 +269,21 @@ fn the_fix_line_wins_a_turn_and_the_bug_line_comes_back_after() {
         s,
         "Found a bug in the retry loop. Fixed the bug by capping at 3.",
     );
-    let out = read(&d, s);
+    let out = push(&d, s);
     assert!(
         out.contains(SAID) && !out.contains("possible problem"),
         "{out}"
     );
     stop(&d, s, "Found a bug in the parser. Fixed the bug too.");
-    let out = read(&d, s);
+    let out = push(&d, s);
     assert!(
         !out.contains(SAID) && out.contains("possible problem"),
         "{out}"
     );
 }
 
-/// Both fix lines name what the session edited for `--files`, not the file
-/// the next push happens to be on.
+/// Both fix lines name what the session edited for `--files`, not only the
+/// file the next push happens to be on.
 #[test]
 fn the_fix_lines_name_the_files_the_session_edited() {
     let d = super::repo();
@@ -304,9 +305,10 @@ fn the_fix_lines_name_the_files_the_session_edited() {
     let s = "2020-01-01T00:00:00Z";
     edit(s);
     stop(&d, s, "Fixed the bug: the retry cap was off by one.");
-    let out = read(&d, s);
+    // the push is an edit too: its file joins, newest first
+    let out = push(&d, s);
     assert!(
-        out.contains(SAID) && out.contains("--files src/fixed.rs --key"),
+        out.contains(SAID) && out.contains("--files src/nothing.rs,src/fixed.rs --key"),
         "{out}"
     );
     edit("s1");
@@ -364,7 +366,7 @@ fn a_close_earlier_in_the_turn_clears_the_summarys_fix_phrase() {
         );
         let (ok, out, err) = fael(&d, &["hook", "stop"], &input);
         assert!(ok && out.contains(r#""block":false"#), "{out}{err}");
-        read(&d, &t.to_string_lossy()).contains(SAID)
+        push(&d, &t.to_string_lossy()).contains(SAID)
     };
     assert!(!said("a:one", true, false), "close in turn, transcript");
     assert!(!said("a:two", true, true), "close in turn, reply");

@@ -22,7 +22,8 @@ fn said_notes_and_finds_join_into_yield() {
         json(&d),
         json(&d.join("src/a.rs"))
     );
-    let (ok, out, _) = fael(&d, &["hook", "read", "--client", "claude"], &input);
+    // the first edit says the rows, the second finds them in context
+    let (ok, out, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
     assert!(ok && out.contains("parser half done"), "{out}");
     let (ok, _, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
     assert!(ok);
@@ -31,8 +32,8 @@ fn said_notes_and_finds_join_into_yield() {
         .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
-    let read = lines.iter().find(|v| v["event"] == "read").unwrap();
-    let kinds: Vec<&str> = read["said"]
+    let edit = lines.iter().find(|v| v["event"] == "edit").unwrap();
+    let kinds: Vec<&str> = edit["said"]
         .as_array()
         .unwrap()
         .iter()

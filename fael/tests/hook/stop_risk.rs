@@ -24,17 +24,17 @@ fn stop_weak_risk_never_blocks_shows_once_on_next_push() {
     assert!(ok && out.contains(r#""block":false"#), "{out}");
 
     // the next push carries exactly one warning line, even with no rows
-    let read = format!(
+    let edit = format!(
         r#"{{"cwd":{},"session":"2020-01-01T00:00:00Z","files":["src/nothing.rs"]}}"#,
         json(&d)
     );
-    let (ok, out, _) = fael(&d, &["hook", "read"], &read);
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &edit);
     assert!(
         ok && out.matches("possible problem").count() == 1 && out.contains("out of sync"),
         "{out}"
     );
     // shown once: the push after has nothing left
-    let (ok, out, _) = fael(&d, &["hook", "read"], &read);
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &edit);
     assert!(ok && !out.contains("possible problem"), "{out}");
 }
 

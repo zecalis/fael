@@ -48,9 +48,10 @@ How it behaves:
   call. When a turn ends with no tool call left, it can close its reply with `fael
   decision|issue|note: … [files: …]` lines and fael files them — no turn is stopped or
   re-prompted.
-- **Memory finds them.** When an agent reads a file, the decisions and open bugs about *that file*
-  come attached — nobody has to remember to search. Sub-agents too: one starts with an empty
-  context and only a short brief, and the file it opens brings the memory the brief left out.
+- **Memory finds them.** When an agent edits a file, the decisions and open bugs about *that file*
+  come attached — nobody has to remember to search. Reading or searching brings nothing: the
+  rows wait for the edit. Sub-agents too: one starts with an empty context and only a short
+  brief, and the file it edits brings the memory the brief left out.
 - **No spam in context.** Rows are pushed per file, once per context window (a sub-agent, or a
   session after compaction, is told again — it no longer has them), and cut to a token budget
   (800 by default) — not a notes dump. Anything else the agent asks for itself, through MCP.
