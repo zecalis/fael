@@ -192,7 +192,7 @@ pub fn fat_reasons(row: &Row, cfg: &Config) -> Vec<String> {
 /// by convention and the handoff sits beside them — chunk-1 vs chunk-3 is
 /// the next chunk, not a typo — so `warnings` never reports two keys with
 /// the same stem as similar.
-fn chunk_stem(k: &str) -> Option<&str> {
+pub fn chunk_stem(k: &str) -> Option<&str> {
     let (stem, tail) = k.rsplit_once(':')?;
     if tail == "handoff" {
         return Some(stem);

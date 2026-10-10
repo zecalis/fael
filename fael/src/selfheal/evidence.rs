@@ -151,12 +151,15 @@ pub(crate) fn same_finding(ev: &Evidence) -> bool {
 /// exactly one key exists: zero candidates files the row keyless, several file
 /// it keyless too (§6e), because a guessed key must never pick between topics
 /// and never ask which. Deterministic: the keys are a sorted set. Runs after
-/// `heal`, so this key never feeds (c).
+/// `heal`, so this key never feeds (c). A plan's `:handoff` / `:chunk-<n>`
+/// key is a slot, not a topic: adopting it made a cross-plan note the newest
+/// handoff and hid the real one (01M4HW7E), so it is never a candidate.
 pub(crate) fn auto_key(log: &core::Log, files: &[String]) -> Option<String> {
     let keys: BTreeSet<&str> = open_rows(log)
         .iter()
         .filter(|r| r.files.iter().any(|f| files.contains(f)))
         .filter_map(|r| r.key.as_deref())
+        .filter(|k| core::chunk_stem(k).is_none())
         .collect();
     match keys.len() {
         1 => keys.into_iter().next().map(String::from),
