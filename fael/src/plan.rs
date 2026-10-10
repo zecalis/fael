@@ -1,9 +1,10 @@
-//! `fael plan import` · `fael plan next` (PLAN-fael-board b1): read every `.fapony/` of the
-//! repo into `plans.db`, and print each plan's next chunk from the db — the same pick
-//! `fapony plan` makes, so `scripts/plan-parity.sh` can hold the two to each other.
+//! `fael plan import` · `fael plan next` · `fael plan export` (PLAN-fael-board b1, b1b): read
+//! every `.fapony/` of the repo into `plans.db`, print each plan's next chunk from the db —
+//! the same pick `fapony plan` makes, so `scripts/plan-parity.py` can hold the two to each
+//! other — and write a plan back out as markdown.
 
 use crate::{Args, Repo, repo};
-use fael_core::plan::{Import, Next, Store, md};
+use fael_core::plan::{Import, Next, PlanRow, Store, md};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -14,7 +15,11 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     match rest.first().map(String::as_str) {
         Some("import") if rest.len() == 1 => import(&r),
         Some("next") if rest.len() == 1 => next(&r),
-        _ => Err("rejected: fael plan import | fael plan next — try 'fael plan --help'".into()),
+        Some("export") if rest.len() <= 2 => export(&r, rest.get(1).map(String::as_str)),
+        _ => Err(
+            "rejected: fael plan import | fael plan next | fael plan export [<plan>] — try 'fael plan --help'"
+                .into(),
+        ),
     }
     .map(|()| ExitCode::SUCCESS)
 }
@@ -49,6 +54,15 @@ fn import(r: &Repo) -> Result<(), String> {
     }
     for u in &rep.unresolved {
         println!("⚠ (after …) names no chunk, never met: {u}");
+    }
+    for a in &rep.ambiguous {
+        println!("⚠ label/title matches more than one chunk, new uid: {a}");
+    }
+    if rep.db_plans > 0 {
+        println!(
+            "{} plan(s) live in the db: plan fields refreshed, chunks untouched",
+            rep.db_plans
+        );
     }
     Ok(())
 }
@@ -111,12 +125,52 @@ fn subdirs(d: &Path) -> impl Iterator<Item = PathBuf> {
         .filter(|p| p.is_dir())
 }
 
-fn next(r: &Repo) -> Result<(), String> {
+fn open(r: &Repo) -> Result<Store, String> {
     let path = db(r);
     if !path.exists() {
         return Err("rejected: no plans.db yet — run `fael plan import` first".into());
     }
-    let s = Store::open(&path)?;
+    Store::open(&path)
+}
+
+/// `app/name`, or `name` at the root — how `next` and `export` name a plan.
+fn key(p: &PlanRow) -> String {
+    if p.app.is_empty() {
+        p.name.clone()
+    } else {
+        format!("{}/{}", p.app, p.name)
+    }
+}
+
+/// Every plan, or the one `want` names (`name` or `app/name`), to stdout.
+fn export(r: &Repo, want: Option<&str>) -> Result<(), String> {
+    let s = open(r)?;
+    let plans: Vec<PlanRow> = s
+        .plans()?
+        .into_iter()
+        .filter(|p| want.is_none_or(|w| key(p) == w || p.name == w))
+        .collect();
+    match (want, plans.len()) {
+        (Some(w), 0) => {
+            return Err(format!(
+                "rejected: no plan '{w}' in plans.db — see `fael plan next`"
+            ));
+        }
+        (Some(w), n) if n > 1 => {
+            return Err(format!("rejected: '{w}' names {n} plans — use app/name"));
+        }
+        _ => {}
+    }
+    let docs: Vec<String> = plans
+        .iter()
+        .map(|p| fael_core::plan::export(&s, p.id))
+        .collect::<Result<_, _>>()?;
+    print!("{}", docs.join("\n"));
+    Ok(())
+}
+
+fn next(r: &Repo) -> Result<(), String> {
+    let s = open(r)?;
     let branch = crate::journal::head_branch(&r.root);
     // fapony `liveBranches`: a claim naming no checked-out branch holds nothing
     let live: Option<HashSet<String>> = crate::git(&r.root, &["worktree", "list", "--porcelain"])
@@ -135,12 +189,7 @@ fn next(r: &Repo) -> Result<(), String> {
             Next::Closed => "(all closed)".into(),
             Next::Shipped => continue,
         };
-        let key = if p.app.is_empty() {
-            p.name
-        } else {
-            format!("{}/{}", p.app, p.name)
-        };
-        println!("{key}\t{what}");
+        println!("{}\t{what}", key(&p));
     }
     Ok(())
 }

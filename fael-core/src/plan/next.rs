@@ -46,11 +46,12 @@ pub fn next(
         .prepare(
             "SELECT c.id, c.label, c.title, c.state,
                (SELECT branch FROM run WHERE chunk = c.id ORDER BY id DESC LIMIT 1),
-               (SELECT COUNT(*) FROM dep d LEFT JOIN chunk a ON a.id = d.after
-                 WHERE d.chunk = c.id AND (a.id IS NULL OR a.state NOT IN ('done','dropped')))
+               (SELECT COUNT(*) FROM edge d LEFT JOIN chunk a ON a.id = d.dst
+                 WHERE d.src = c.id AND d.kind = 'after'
+                   AND (a.id IS NULL OR a.state NOT IN ('done','dropped')))
              FROM chunk c
              WHERE c.plan = ?1 AND c.state IN ('open','running','waiting')
-             ORDER BY c.pos",
+             ORDER BY c.seq",
         )
         .map_err(e)?;
     type Open = (Option<String>, String, String, Option<String>, i64);
