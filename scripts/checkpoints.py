@@ -150,9 +150,16 @@ def gates():
     tasks = len(json.load(open(os.path.join(RESULTS, "vela", "passed.json"))))
     shas = {v["sha"] for v in screened}
     fresh = next((i for i, (sha, *_) in enumerate(commits) if sha in shas), len(commits))  # newest first
-    yield (tasks >= 30, "onoff 2", f"gold {gold} of {len(screened)} screened · tasks {bar(tasks, 30)} · "
+    per = {}  # cohort -> [gold, screened]; tally.py stamps each verdict's cohort
+    for v in screened:
+        g = per.setdefault(v["cohort"], [0, 0])
+        g[0] += v["verdict"] == "pass"
+        g[1] += 1
+    rates = " · ".join(f"{c} {g}/{n} ({g / n:.1%})" for c, (g, n) in sorted(per.items(), key=lambda kv: int(kv[0].rsplit("-", 1)[1])))
+    yield (tasks >= 30, "onoff 2", f"gold {gold} of {len(screened)} screened [{rates}] · tasks {bar(tasks, 30)} · "
            f"vela main commits since the newest screened {fresh}", "01M4GSD3",
-           {"gold": gold, "screened": len(screened), "tasks": tasks, "unscreened_commits": fresh})
+           {"gold": gold, "screened": len(screened), "tasks": tasks, "unscreened_commits": fresh,
+            **{f"{c}_gold": g for c, (g, _) in per.items()}, **{f"{c}_screened": n for c, (_, n) in per.items()}})
 
     yield None, "auto-update 4", "by hand at the next release (release.sh --no-local)", "01M4GDC6", {}
 
