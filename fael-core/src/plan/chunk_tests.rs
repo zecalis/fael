@@ -136,7 +136,8 @@ fn run_end_forced_takeover_and_fencing() {
     assert!(e.contains(&format!("holds run {r3}")), "{e}");
     assert_eq!(state(&s, &other), "open", "a refused start claims nothing");
     s.done(&c, "shipped", Some(7), None, &here("/c")).unwrap();
-    assert_eq!((state(&s, &c), live(&s, &c)), ("review".into(), 0));
+    // push pr is the owner's ok: a PR lands in done, no review
+    assert_eq!((state(&s, &c), live(&s, &c)), ("done".into(), 0));
     let pr = get(&s, "SELECT CAST(pr AS TEXT) FROM run WHERE start = ?1", &r3);
     assert_eq!(pr.as_deref(), Some("7"));
 }

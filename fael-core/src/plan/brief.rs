@@ -10,7 +10,7 @@ pub fn rules(uid: &str) -> String {
     format!(
         "## chunk rules\n\
          - state moves only through fael, never by editing a plan file:\n  \
-         finished → `fael chunk done {uid} \"<handoff>\" --pr N` (or `--out <path>` for a file, image or video): review, the owner merges or accepts\n  \
+         finished → `fael chunk done {uid} \"<handoff>\" --pr N` (or `--out <path>` for a file, image or video): done with a PR, review for a file the owner accepts\n  \
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\

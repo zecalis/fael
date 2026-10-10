@@ -94,12 +94,14 @@ fn cutover_hands_the_chunks_to_the_db_and_the_brief_still_reads_the_md() {
         ok && out.contains("c cut over: its 2 chunks live in plans.db"),
         "{err}{out}"
     );
-    let text = std::fs::read_to_string(&md).unwrap();
-    assert!(
-        text.contains("- chunks live in fael — `fael board`, `fael plan export c`\n")
-            && !text.contains("[ ]"),
-        "{text}"
-    );
+    let mirror = |tail: &str| {
+        let text = std::fs::read_to_string(&md).unwrap();
+        let want = format!(
+            "- chunks live in fael — `fael board`, `fael plan export c` (mirror: edits here change nothing)\n- [x] c1 — done\n{tail}\n\n## 1. Goal"
+        );
+        assert!(text.contains(&want), "{text}");
+    };
+    mirror("- [ ] c2 — next one");
     let (ok, _, err) = fael(&d, &["plan", "cutover", "c"]);
     assert!(!ok && err.contains("already cut over"), "{err}");
     // the db owns c2 now: a chunk command takes it, the brief reads the md's Goal live
@@ -108,6 +110,14 @@ fn cutover_hands_the_chunks_to_the_db_and_the_brief_still_reads_the_md() {
     let uid = uid.split_whitespace().next().unwrap();
     let (ok, out, err) = fael(&d, &["chunk", "start", uid]);
     assert!(ok && out.contains("## 1. Goal\nship it"), "{err}{out}");
+    // every chunk command rewrites the mirror; push pr is the ok, so done --pr is done
+    mirror("- [ ] c2 — next one · **running**");
+    let (ok, out, err) = fael(&d, &["chunk", "done", uid, "shipped", "--pr", "7"]);
+    assert!(ok && out.contains("→ done"), "{err}{out}");
+    mirror("- [x] c2 — next one");
+    assert!(fael(&d, &["plan", "import"]).0, "a mirrored md re-imports");
+    let (_, out, _) = fael(&d, &["plan", "export", "c"]);
+    assert!(out.contains("- [x] c2 — next one\n  uid"), "{out}");
     let _ = std::fs::remove_dir_all(d);
 }
 

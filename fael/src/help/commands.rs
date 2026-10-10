@@ -126,8 +126,9 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
      the new uid, no brief = draft; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
      --force takes it over; wait, after and done answer only to the worktree of the
-     latest run and end it; done always lands in review — accept, or the PR merging,
-     makes it done; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
+     latest run and end it; done --pr N lands in done (push pr is the ok), done
+     without a PR in review until accept; each command rewrites a cut-over plan's
+     md TL;DR as a read-only mirror; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval)",
     ),
     (
