@@ -50,7 +50,9 @@ CMD_ERE = (r"fael (add|find|close|kickoff|sync|stats|hook|mcp|install|next|claim
 # no \b: in an escaped reply an id may follow the "n" of a "\\n"
 ULID = re.compile(r"(?<![0-9A-Z])[0-9A-HJKMNP-TV-Z]{8,26}(?![0-9A-Z])")
 # inherited from whoever launched the harness (this very session, often)
-DROP = re.compile(r"^(CLAUDE|ANTHROPIC_|FAEL_|GIT_|XDG_|MCP_|DATABASE_URL$)")
+# REPOS_* point at the real repos (C and its fix in history); PWD/OLDPWD at
+# the fael worktree that launched the trial
+DROP = re.compile(r"^(CLAUDE|ANTHROPIC_|FAEL_|GIT_|XDG_|MCP_|REPOS_|DATABASE_URL$|PWD$|OLDPWD$)")
 KEEP = {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}
 
 
