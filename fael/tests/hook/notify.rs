@@ -143,6 +143,13 @@ fn codex_and_notify_off_print_no_user_line() {
 fn session_start_briefs_the_user_on_issues_said() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    // a work branch: the default branch ties no issue to the session
+    let sw = std::process::Command::new("git")
+        .args(["switch", "-q", "-c", "feat/login"])
+        .current_dir(&d)
+        .status()
+        .unwrap();
+    assert!(sw.success());
     let start = |session: &str| {
         let input = format!(r#"{{"cwd":{},"session_id":"{session}"}}"#, json(&d));
         hook(&d, "session-start", "claude", &input).unwrap()

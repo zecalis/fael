@@ -40,6 +40,28 @@ pub(crate) fn head_branch(repo_root: &Path) -> Option<String> {
         .map(String::from)
 }
 
+/// The checked-out branch when it names work: `head_branch` minus the repo's
+/// default branch, which every session shares and every merge lands on — its
+/// rows are the whole repo's, not this session's (onoff pilot 2026-10-10: on
+/// `main` they rode the push as Now, past the row cap). The default is
+/// `<common>/refs/remotes/origin/HEAD` (a clone sets it; a symbolic ref is
+/// never packed), else `main` or `master` (whichever `git init` made) — no spawn.
+pub(crate) fn work_branch(repo_root: &Path) -> Option<String> {
+    let head = head_branch(repo_root)?;
+    let trunk = root(repo_root)
+        .and_then(|j| std::fs::read_to_string(j.parent()?.join("refs/remotes/origin/HEAD")).ok())
+        .and_then(|s| {
+            s.trim()
+                .strip_prefix("ref: refs/remotes/origin/")
+                .map(String::from)
+        });
+    let default = match trunk {
+        Some(t) => head == t,
+        None => head == "main" || head == "master",
+    };
+    (!default).then_some(head)
+}
+
 /// HEAD's full sha, read off `<gitdir>/HEAD` and the ref it names (a loose
 /// ref in the worktree's dir, then the common dir, then `packed-refs`) — no
 /// git spawn. `None` for anything else (reftable, unborn branch, a symbolic
@@ -229,5 +251,34 @@ fn warn(log: &crate::core::Log) {
             "fael: {} log line(s) skipped — first: {first}",
             log.warnings.len()
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::work_branch;
+
+    /// The default branch names no work: `main` or `master` when
+    /// `origin/HEAD` is unset, the branch it points at when set.
+    #[test]
+    fn work_branch_is_none_on_the_default_branch() {
+        let d = std::env::temp_dir().join(format!("fael-trunk-{}", fael_core::ulid()));
+        let git = d.join(".git");
+        std::fs::create_dir_all(git.join("refs/remotes/origin")).unwrap();
+        let on = |b: &str| {
+            std::fs::write(git.join("HEAD"), format!("ref: refs/heads/{b}\n")).unwrap();
+            work_branch(&d)
+        };
+        assert_eq!(on("main"), None);
+        assert_eq!(on("master"), None);
+        assert_eq!(on("feat/x").as_deref(), Some("feat/x"));
+        std::fs::write(
+            git.join("refs/remotes/origin/HEAD"),
+            "ref: refs/remotes/origin/dev\n",
+        )
+        .unwrap();
+        assert_eq!(on("dev"), None);
+        assert_eq!(on("main").as_deref(), Some("main"));
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

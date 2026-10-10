@@ -5,7 +5,7 @@
 //! row cap). Core owns the shape and the pure build (`Focus::from_rows`);
 //! this module is the file.
 
-use super::state::{head_branch, session_key, state_dir};
+use super::state::{session_key, state_dir};
 use crate::core;
 use std::path::{Path, PathBuf};
 
@@ -50,7 +50,7 @@ pub(crate) fn current(session: &str, root: &Path, log: &core::Log) -> core::Focu
     let Some(stored) = read(session, root) else {
         return core::Focus::default();
     };
-    let head = head_branch(root);
+    let head = crate::journal::work_branch(root);
     if stored.branch == head {
         return stored;
     }
