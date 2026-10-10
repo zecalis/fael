@@ -71,10 +71,12 @@ jobs:
   test:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
+    # ponytail: Windows runs on main only (best effort): its tests spawn git and fael ~8x
+    # slower and set every PR's wall time. Add it back to the PR list if Windows breaks often
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(needs.changes.outputs.docs == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
+        os: ${{ fromJSON(needs.changes.outputs.docs == 'true' && '["ubuntu-latest"]' || github.event_name == 'pull_request' && '["ubuntu-latest","macos-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
