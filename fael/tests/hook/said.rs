@@ -183,23 +183,7 @@ fn commit_citing_an_open_issue_says_its_close_once() {
         .find_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
         .and_then(|v| v["id"].as_str().map(String::from))
         .expect(&out);
-    // the reply's context, if any — silence prints nothing at all
-    let commit = |msg: &str| {
-        let payload = format!(
-            r#"{{"cwd":{},"session_id":"s1","tool_name":"Bash","tool_input":{{"command":{}}},"tool_response":{{}}}}"#,
-            json(&d),
-            serde_json::to_string(&format!("git commit -m '{msg}'")).unwrap(),
-        );
-        let (ok, out, err) = fael(&d, &["hook", "search", "--client", "claude"], &payload);
-        assert!(ok, "{err}");
-        match out.trim().is_empty() {
-            true => None,
-            false => serde_json::from_str::<serde_json::Value>(&out)
-                .expect(&out)["hookSpecificOutput"]["additionalContext"]
-                .as_str()
-                .map(String::from),
-        }
-    };
+    let commit = |msg: &str| commit_ctx(&d, msg);
     let ctx = commit(&format!("fix {id}")).expect("the first commit is said");
     assert!(ctx.contains("cited in a commit"), "{ctx}");
     // one row in the log: abbrev prints the 8-char prefix
@@ -212,4 +196,52 @@ fn commit_citing_an_open_issue_says_its_close_once() {
         "once per id per session"
     );
     assert_eq!(yield_of(&d, "cited"), (1, 0), "no second said");
+}
+
+/// A `git commit -m '<msg>'` through the search hook: the reply's context, if
+/// any — silence prints nothing at all.
+fn commit_ctx(d: &Path, msg: &str) -> Option<String> {
+    let payload = format!(
+        r#"{{"cwd":{},"session_id":"s1","tool_name":"Bash","tool_input":{{"command":{}}},"tool_response":{{}}}}"#,
+        json(d),
+        serde_json::to_string(&format!("git commit -m '{msg}'")).unwrap(),
+    );
+    let (ok, out, err) = fael(d, &["hook", "search", "--client", "claude"], &payload);
+    assert!(ok, "{err}");
+    match out.trim().is_empty() {
+        true => None,
+        false => serde_json::from_str::<serde_json::Value>(&out).expect(&out)["hookSpecificOutput"]
+            ["additionalContext"]
+            .as_str()
+            .map(String::from),
+    }
+}
+
+/// Two open issues filed in one millisecond share their first 8 chars (vela
+/// `01M4G1N1`): the Cited line's `(fael:<prefix>)` must still name one row,
+/// or the resolver rejects the citation it taught as ambiguous.
+#[test]
+fn cited_prefix_stays_unique_when_rows_share_eight_chars() {
+    let d = repo();
+    let (a, b) = ("01M4G1N16R2X0000000000000A", "01M4G1N199XP0000000000000B");
+    let row = |id: &str| {
+        format!(
+            r#"{{"v":1,"id":"{id}","ts":"2026-10-01T00:00:00.000Z","by":"fixture","kind":"issue","text":"leaks a handle","files":["src/b.rs"]}}"#
+        )
+    };
+    std::fs::create_dir_all(d.join(".fael/log/fixture")).unwrap();
+    std::fs::write(
+        d.join(".fael/log/fixture/2026-10.jsonl"),
+        format!("{}\n{}\n", row(a), row(b)),
+    )
+    .unwrap();
+    let ctx = commit_ctx(&d, &format!("fix {a}")).expect("the commit is said");
+    let short = ctx
+        .split("`(fael:")
+        .nth(1)
+        .and_then(|t| t.split(')').next())
+        .expect(&ctx);
+    assert!(short.len() > 8, "{ctx}");
+    assert!(a.starts_with(short) && !b.starts_with(short), "{ctx}");
+    assert!(ctx.contains(&format!("fael close {short} ")), "{ctx}");
 }

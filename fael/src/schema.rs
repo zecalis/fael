@@ -107,6 +107,9 @@ mod tests {
         let t = fael_core::stats::CLOSE_TEMPLATE;
         assert!(SKILL.contains(t), "SKILL.md lacks the close template");
         assert!(super::schema_json().contains(t), "schema lacks it");
+        // label contract (01M4FD0Q): a template change lands with its doc
+        let doc = include_str!("../../docs/format.md");
+        assert!(doc.contains(t), "docs/format.md lacks it");
     }
 
     #[test]

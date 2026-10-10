@@ -47,6 +47,7 @@ fn a_fix_phrase_with_nothing_filed_is_said_once_per_session() {
         out.matches(SAID).count() == 1
             && out.contains("fixed the bug")
             && out.contains("fael add issue")
+            && out.contains("cite `(fael:<id>)`")
             && out.contains("fael close --key"),
         "{out}"
     );
@@ -111,6 +112,7 @@ fn a_fix_commit_naming_no_row_is_said_once_per_session() {
     assert!(
         out.contains(FIX)
             && out.contains("--files <files the fix touched>")
+            && out.contains("cite `(fael:<id>)`")
             && out.contains("fael close --key"),
         "{out}"
     );
