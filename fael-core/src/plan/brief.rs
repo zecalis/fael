@@ -54,9 +54,11 @@ impl Started {
         };
         let _ = writeln!(o, "fael run {} · {what}", self.run);
         for c in &self.chunks {
+            // an imported title already starts with its label (`c1 — …`)
             let label = c
                 .label
                 .as_deref()
+                .filter(|l| !c.title.strip_prefix(l).is_some_and(|r| r.starts_with(" ")))
                 .map(|l| format!("{l} — "))
                 .unwrap_or_default();
             let _ = writeln!(
@@ -166,6 +168,17 @@ mod tests {
         let md = |src: &str| (src == ".fapony/plan/PLAN-x.md").then(|| DOC.to_string());
         let t = st.text(&md, &|p| p == "SPEC-x.md");
         assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
+        assert!(t.contains("\n# 1 — title A (A)\n"), "{t}");
+        let mut imported = chunk("C");
+        imported.title = "1 — from the md".into();
+        let one = Started {
+            run: "R".into(),
+            chunks: vec![imported],
+        };
+        assert!(
+            one.text(&|_| None, &|_| true)
+                .contains("\n# 1 — from the md (C)\n")
+        );
         assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
         assert_eq!(
             t.matches("## 1. Goal").count(),

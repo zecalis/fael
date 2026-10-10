@@ -138,14 +138,14 @@ fn first_section(body: &str) -> String {
     out.join("\n")
 }
 
-fn is_h2(line: &str) -> bool {
+pub(super) fn is_h2(line: &str) -> bool {
     line.strip_prefix("##")
         .and_then(|r| r.chars().next())
         .is_some_and(char::is_whitespace)
 }
 
 /// `- [?] ` / `* [?] ` at the line start (after spaces): the box char and the rest.
-fn checkbox(line: &str) -> Option<(char, &str)> {
+pub(super) fn checkbox(line: &str) -> Option<(char, &str)> {
     let l = line.trim_start();
     let l = l.strip_prefix(['-', '*'])?;
     let l2 = l.trim_start();
