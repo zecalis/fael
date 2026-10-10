@@ -5,7 +5,7 @@ use super::asks::{UsageMeta, hook_meta};
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
-use super::state::{head_branch, mark_started, prune_sessions, seen_path, session_key, state_dir};
+use super::state::{mark_started, prune_sessions, seen_path, session_key, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core, home};
 use std::path::{Path, PathBuf};
@@ -206,12 +206,13 @@ fn warnings(repo: &crate::Repo, adopted: bool) -> Vec<String> {
 }
 
 /// The branch this session started on, for the session Focus. Empty session
-/// (no key for the Focus file) and detached HEAD (no branch) build no Focus.
+/// (no key for the Focus file), detached HEAD and the default branch
+/// (`work_branch`) build no Focus.
 fn start_branch(session: &str, root: &Path) -> Option<String> {
     if session.is_empty() {
         return None;
     }
-    head_branch(root)
+    crate::journal::work_branch(root)
 }
 
 /// Open issues grouped for session start: mine (`to` = reader, the reader's
