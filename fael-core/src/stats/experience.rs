@@ -74,8 +74,11 @@ fn pr_like(w: &str) -> bool {
 /// `close_shape`/`names_fix` read cannot drift. The core `<cause> → <fix>` is
 /// `close_shape`'s; the branch right after it (a test to `guard`, or what not
 /// to do when no test can say it) comes before `tried`, so carry's 160-char
-/// clip cuts what failed, never the lesson; it ends on the fix `names_fix` reads.
-pub const CLOSE_TEMPLATE: &str = "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>; <sha or (#N)>";
+/// clip cuts what failed, never the lesson. It asks for no sha — a squash or a
+/// rebase rewrites it (fael:01M4HTZ4): the fix commit cites `(fael:<id>)`,
+/// and the close ends on an optional `(#N)`.
+pub const CLOSE_TEMPLATE: &str =
+    "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]";
 
 /// A close text that names its fix: a sha or a `(#N)` — the evidence `fixed`
 /// counts, and the one an edit's carry-back line reads (`fix_close`).

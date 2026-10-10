@@ -87,7 +87,7 @@ mod tests {
                 "<what failed>",
                 "a per-field patch, then a deep clone that also copied ids",
             )
-            .replace("<sha or (#N)>", "(#326)");
+            .replace("[; (#N)]", "; (#326)");
         assert!(text.chars().count() > CLOSE_CHARS, "{text}");
         assert!(
             clip(&text).contains("copyLine() is the one list"),

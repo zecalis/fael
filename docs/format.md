@@ -120,6 +120,11 @@ meaning:
   command with no `/` (`` `cargo test` ``) is no guard; a span holding a `/` is one, a
   command too. No guard is no fault: some fixes have no one file to guard them.
 - **tried** — not checked.
+- **fix link** — not the close's job: the fix commit's message cites `(fael:<id>)`, the id
+  `add` printed or the ≥ 8-char prefix fael lists. A squash or rebase keeps that token and
+  rewrites every sha, so the taught close asks for no sha and ends on an optional `(#N)`
+  (decision key `plan:fael-fix-evidence:citation`). The template every channel teaches is
+  `CLOSE_TEMPLATE`: ``<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]``.
 
 `fael stats` counts the form, never the worth: `experience.label` (`docs/stats.md`).
 

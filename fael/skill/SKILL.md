@@ -15,10 +15,10 @@ close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage o
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there, one per finding — do not wait for the end of the task.**
 That includes your own earlier bug, a regression you caused, and a reviewer's finding that outlives this turn.
-Fixed one with no row yet, however found (failing test, review, reading code)? File it now; close it after the commit — a row closes once, with the sha:
-`fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>; <sha or (#N)>"``.
+Fixed one with no row yet, however found (failing test, review, reading code)? File it now; close it after the commit — a row closes once:
+`fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]"``.
 Would a new agent reading only code and tests know this? Yes → a test, named in `guard`. No → what not to do, and why.
-Name `(fael:<id>)` in the commit body — a squash keeps it.
+Name `(fael:<id>)` in the fix commit — a squash keeps it, a sha does not.
 In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).
 
 - `fael find [<text>] [--files <path>]` — the session brief, rows about a file, or a text search
