@@ -123,14 +123,17 @@ const COMMANDS: &[(&str, &str, &str)] = &[
     ),
     (
         "plan",
-        "read plans into plans.db, print each one's next chunk",
-        "fael plan import | fael plan next
+        "read plans into plans.db, print each one's next chunk, export one as markdown",
+        "fael plan import | fael plan next | fael plan export [<plan>]
     (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
-     parked/, done/ — into <git-common-dir>/fael/plans.db, replacing what it held for
-     those apps; an unknown checkbox imports as draft, an (after …) naming no chunk is
-     listed; next: one line per plan, the chunk a session takes next — the pick
+     parked/, done/ — into <git-common-dir>/fael/plans.db; a chunk keeps its uid by a
+     unique label, else a unique title (an ambiguous one is listed), a plan whose chunks
+     live in the db keeps them; an unknown checkbox imports as draft, an (after …)
+     naming no chunk is listed; next: one line per plan, the chunk a session takes next — the pick
      `fapony plan` makes: your own (wip) claim, else the first open chunk no live
-     worktree claimed whose (after …) is met and that has no (wait …))",
+     worktree claimed whose (after …) is met and that has no (wait …); export: every
+     plan, or the one named (name or app/name), as markdown to stdout — uid, state and
+     fields under each line)",
     ),
     (
         "restore",

@@ -1,4 +1,4 @@
-//! `fael plan import` / `fael plan next` through the real binary: plans.db lands in the
+//! `fael plan import` / `next` / `export` through the real binary: plans.db lands in the
 //! git common dir, an app under apps/ is found, and `next` without a db is a reject.
 
 use std::path::{Path, PathBuf};
@@ -61,9 +61,21 @@ fn import_then_next_per_app() {
         out,
         "root\t- [ ] r2 — next one\napps/vela/vela-x\t(none ready)\n"
     );
+    // a re-import of unchanged files keeps every uid
+    let (_, before, _) = fael(&d, &["plan", "export", "root"]);
+    assert!(fael(&d, &["plan", "import"]).0);
+    let (ok, out, err) = fael(&d, &["plan", "export", "root"]);
+    assert!(
+        ok && out == before && out.contains("- [ ] r2 — next one\n  uid "),
+        "{err}{out}"
+    );
+    let (ok, out, _) = fael(&d, &["plan", "export", "apps/vela/vela-x"]);
+    assert!(ok && out.contains("· waiting · wait owner"), "{out}");
+    let (ok, _, err) = fael(&d, &["plan", "export", "nope"]);
+    assert!(!ok && err.contains("no plan 'nope'"), "{err}");
     let (ok, _, err) = fael(&d, &["plan", "sweep"]);
     assert!(
-        !ok && err.contains("fael plan import | fael plan next"),
+        !ok && err.contains("fael plan import | fael plan next | fael plan export"),
         "{err}"
     );
     let _ = std::fs::remove_dir_all(d);

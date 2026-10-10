@@ -1,10 +1,14 @@
 //! Plans and chunks (SPEC-fael-board): the markdown reader, the SQLite store, and the
 //! chunk state table. A state changes only by a command or by live git — never guessed.
 
+mod export;
+mod import;
 pub mod md;
 mod next;
+mod schema;
 mod store;
 
+pub use export::export;
 pub use next::{Next, next};
 pub use store::{Import, PlanRow, Report, Store};
 
@@ -17,7 +21,7 @@ pub enum State {
     Waiting,
     Review,
     Done,
-    Merged,
+    Replaced,
     Dropped,
     Parked,
 }
@@ -29,7 +33,7 @@ const ALL: [State; 9] = [
     State::Waiting,
     State::Review,
     State::Done,
-    State::Merged,
+    State::Replaced,
     State::Dropped,
     State::Parked,
 ];
@@ -43,7 +47,7 @@ impl State {
             State::Waiting => "waiting",
             State::Review => "review",
             State::Done => "done",
-            State::Merged => "merged",
+            State::Replaced => "replaced",
             State::Dropped => "dropped",
             State::Parked => "parked",
         }
@@ -60,7 +64,7 @@ impl State {
 
     /// No transition leaves it.
     pub fn terminal(self) -> bool {
-        matches!(self, State::Done | State::Dropped | State::Merged)
+        matches!(self, State::Done | State::Dropped | State::Replaced)
     }
 
     /// The command that sets this state — what a rejected transition points at.
@@ -72,7 +76,7 @@ impl State {
             State::Waiting => "fael chunk wait --on owner|data|<chunk>",
             State::Review => "fael chunk done --pr N",
             State::Done => "fael chunk done (no PR) · the PR merging",
-            State::Merged => "fael chunk merge · fael chunk split",
+            State::Replaced => "fael chunk apply (merge · split)",
             State::Dropped => "fael chunk drop",
             State::Parked => "fael chunk park",
         }
@@ -112,7 +116,7 @@ fn allowed(from: State, to: State) -> bool {
             Waiting => from == Running,
             Review => from == Running,
             Done => matches!(from, Running | Review),
-            Merged | Dropped => true,
+            Replaced | Dropped => true,
             Parked => matches!(from, Draft | Open | Waiting),
             Draft => false,
         }
@@ -141,7 +145,7 @@ mod tests {
             (Running, Review),
             (Running, Done),
             (Review, Done),
-            (Open, Merged),
+            (Open, Replaced),
             (Review, Dropped),
             (Open, Parked),
             (Parked, Open),
@@ -153,7 +157,7 @@ mod tests {
             (Open, Done),
             (Waiting, Running),
             (Done, Open),
-            (Merged, Dropped),
+            (Replaced, Dropped),
             (Running, Parked),
         ] {
             assert!(check(from, to).is_err(), "{from:?} → {to:?}");
