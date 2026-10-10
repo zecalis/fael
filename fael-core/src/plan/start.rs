@@ -35,6 +35,10 @@ pub struct Brief {
     pub refs: Vec<String>,
     /// the owner's answers since this chunk last started (SPEC §1 "owner said")
     pub said: Vec<String>,
+    /// `fael chunk note` texts since this chunk last started
+    pub notes: Vec<String>,
+    /// `(title, handoff)`: the done / review word of each chunk this one is after
+    pub after: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,27 +199,55 @@ fn brief(tx: &Transaction, id: i64) -> Result<Brief, String> {
                         .map(str::to_string)
                         .collect(),
                     said: vec![],
+                    notes: vec![],
+                    after: vec![],
                 })
             },
         )
         .map_err(err)?;
-    // answers after the start before this one (this start's own event is the newest)
+    // answers and notes after the start before this one (this start's own event is the
+    // newest; a note on a running chunk is not a start)
+    let since = |who: &str| {
+        format!(
+            "SELECT text FROM event
+             WHERE chunk_uid = ?1 AND {who} AND text IS NOT NULL
+               AND id > COALESCE((SELECT id FROM event WHERE chunk_uid = ?1
+                                    AND to_state = 'running' AND by != 'note'
+                                  ORDER BY id DESC LIMIT 1 OFFSET 1), 0)
+             ORDER BY id"
+        )
+    };
+    b.said = texts(
+        tx,
+        &since("by = 'owner' AND to_state = 'open' AND from_state IN ('waiting', 'review')"),
+        &b.uid,
+    )?;
+    b.notes = texts(tx, &since("by = 'note'"), &b.uid)?;
     let mut q = tx
         .prepare(
-            "SELECT text FROM event
-             WHERE chunk_uid = ?1 AND by = 'owner' AND to_state = 'open' AND text IS NOT NULL
-               AND from_state IN ('waiting', 'review')
-               AND id > COALESCE((SELECT id FROM event WHERE chunk_uid = ?1 AND to_state = 'running'
-                                   ORDER BY id DESC LIMIT 1 OFFSET 1), 0)
-             ORDER BY id",
+            "SELECT c.title, e.text FROM edge g
+             JOIN chunk c ON c.id = g.dst
+             JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid
+                                       AND by = 'agent' AND to_state IN ('done', 'review'))
+             WHERE g.src = ?1 AND g.kind = 'after' AND e.text != ''
+             ORDER BY c.seq",
         )
         .map_err(err)?;
-    b.said = q
-        .query_map([&b.uid], |r| r.get(0))
+    b.after = q
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)?;
     Ok(b)
+}
+
+fn texts(tx: &Transaction, sql: &str, uid: &str) -> Result<Vec<String>, String> {
+    tx.prepare(sql)
+        .map_err(err)?
+        .query_map([uid], |r| r.get(0))
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)
 }
 
 #[cfg(test)]

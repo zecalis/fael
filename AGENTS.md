@@ -70,6 +70,12 @@ worktree): its note goes under `--key plan:<name>:chunk-<n>` so it can't wipe th
 chunk's handoff. Start the next session with `fael kickoff <path/to/PLAN-x.md>`;
 don't carry the old transcript forward.
 
+A plan whose chunks live in plans.db (inbox, or cut over) skips that note: the
+`fael chunk done <uid> "<handoff>"` text is the handoff — the board shows it and the brief
+of every chunk `after` it prints it. A word for a chunk another agent will start goes in
+`fael chunk note <uid> "<text>"`, printed in that chunk's next brief; never `chunk edit`
+(it clears the owner's approval).
+
 A chunk marked `(wait …)` waits on events: `scripts/checkpoints.py` prints every such
 gate's count against its locked bar. Run the chunk only when its line reads `ready`; its
 result goes in the decision that chunk names. Each run that moves a number appends to

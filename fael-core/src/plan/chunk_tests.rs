@@ -275,3 +275,55 @@ fn the_stop_hook_stamps_only_its_own_live_run() {
     assert_eq!(s.seen("/w", "s1", NOW).unwrap(), 0, "never an ended run");
     assert!(s.held("/w").unwrap().is_empty());
 }
+
+#[test]
+fn notes_and_the_handoff_before_reach_the_next_brief() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("b"));
+    let f = Fields {
+        title: Some("next".into()),
+        brief: Some("b".into()),
+        ..Fields::default()
+    };
+    let b = s.add("inbox", &f, std::slice::from_ref(&a), NOW).unwrap();
+    start(&mut s, &a, "/a").unwrap();
+    // from another worktree, on a running chunk: no fence, no state change, not a start
+    s.note(&b, "use the v2 fixture", NOW).unwrap();
+    s.note(&a, "too late for a's brief", NOW).unwrap();
+    assert_eq!(state(&s, &a), "running");
+    s.done(
+        &a,
+        "board ships; app reads FAEL_BIN",
+        Some(1),
+        None,
+        &here("/a"),
+    )
+    .unwrap();
+    assert!(s.note(&a, "x", NOW).unwrap_err().contains("is done"));
+    let st = s.start(&b, &Start::default(), &here("/b")).unwrap();
+    let br = &st.chunks[0];
+    assert_eq!(br.notes, ["use the v2 fixture"]);
+    assert_eq!(
+        br.after,
+        [(
+            "a".to_string(),
+            "board ships; app reads FAEL_BIN".to_string()
+        )]
+    );
+    s.note(&b, "mid-run word", NOW).unwrap();
+    s.done(&b, "h", None, None, &here("/b")).unwrap();
+    s.owner(&b, Owner::Answer, Some("redo"), NOW).unwrap();
+    // the second start: only what came since the first, the mid-run note is not a start
+    let br = &s.start(&b, &Start::default(), &here("/b")).unwrap().chunks[0];
+    assert_eq!(
+        (br.notes.as_slice(), br.said.as_slice()),
+        (&["mid-run word".to_string()][..], &["redo".to_string()][..])
+    );
+    let t = s.board("2026-10-11", NOW).unwrap();
+    let hb = t.chunks.iter().find(|c| c.uid == b).unwrap();
+    assert_eq!(
+        hb.handoff.as_ref().unwrap().text,
+        "h",
+        "a note is never the hand-off"
+    );
+}
