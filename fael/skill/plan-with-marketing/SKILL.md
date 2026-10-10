@@ -1,6 +1,6 @@
 ---
 name: plan-with-marketing
-description: Plan a month of on-brand posts — one post = one topic — from what the product ships and what users asked for. Soft grill (rounds of questions, each with a recommended answer), then a plan where each chunk is one post with a brief a small image/video/copy agent can execute. Trigger on /plan-with-marketing and when the user asks to plan content, posts, marketing or a content calendar.
+description: Plan a month of on-brand posts — one post = one topic — from what the product ships and what users asked for. Soft grill (rounds of questions that decide the plan), then a plan where each chunk is one post with a brief a small image/video/copy agent can execute. Trigger on /plan-with-marketing and when the user asks to plan content, posts, marketing or a content calendar.
 ---
 
 # plan-with-marketing
@@ -11,8 +11,9 @@ make the copy, images and video from your briefs. The owner decides; you find fa
 ## Rules
 
 - **Read before you ask.** A fact you can look up is never a question.
-- **Ask in rounds.** Only frontier questions (answerable now, nothing open upstream), ≤ 4 a round,
-  each with a recommended answer worded so "yes" accepts it. "yes" to the round accepts all.
+- **Ask only what decides the plan.** A question earns its place if a different answer changes the
+  posts. As many as the frontier needs (answerable now, nothing open upstream), no fixed count.
+  State the fact behind it, then ask; don't lead the answer. Owner's words go in the plan as said.
 - **One post = one topic.** Two topics = two posts, the second later in the month.
 - **Claim only what shipped.** Not live = not a post.
 - **Files, not chat.** System text (this skill, plan structure, briefs' keys, fael rows) is English
@@ -60,8 +61,8 @@ goal of the month (sign-ups | trust | retention)
 Round format:
 
 ```
-❓ **Q1 — <title>**: <question, options if any>
-➡️ <recommended answer>
+❓ **Q1 — <title>**
+<fact found, with source> → <question>
 ```
 
 Recompute the frontier after each answer. Done when it is empty and the owner confirms.
@@ -102,6 +103,8 @@ video: [scene · what's on screen (site section / component) · voiceover · sec
 Hand back the 3–5 briefs you are least sure of and ask what's wrong with them.
 
 ## Chunk = one post
+
+`fapony plan` prints dev closing rules (branch, PR, commit); for a content plan this section wins.
 
 The executing agent writes the copy and makes the assets from the post's block + `VOICE.md`.
 Done when: one topic · every claim traces to `source` · within the channel limits · VOICE.md
