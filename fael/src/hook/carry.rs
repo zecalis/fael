@@ -19,9 +19,12 @@ const CLOSE_CHARS: usize = 160;
 const REACHED: usize = 3;
 
 /// The newest closed, not superseded, issue on an edited file whose fix
-/// reached main (`fix_close`, then `fix_reached`), as one `Carry` line — unless it is `skip` (the gone-check
-/// line already names it). Only the newest per file: a file with thirty
-/// fixed bugs says one, not one per turn. `edit` is false off an edit.
+/// reached main (`fix_close`, then `fix_reached`) and that this session has
+/// not been told, as one `Carry` line — unless it is `skip` (the gone-check
+/// line already names it). One per edit: a file with thirty fixed bugs says
+/// the next one on its next edit turn, never two at once, never one twice.
+/// A said one no longer hides an older one (PLAN-fael-carry-reach chunk 2:
+/// it kept 3 of 10 vela gold pairs from carry). `edit` is false off an edit.
 pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Line> {
     if !edit {
         return None;
@@ -37,12 +40,11 @@ pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Li
         .filter(on_file)
         .filter(|r| closed.contains(r.id.as_str()) && !gone.contains(r.id.as_str()))
         .take(super::check::SCAN)
+        .filter(|r| !ask.hinted.contains(&format!("carry:{}", r.id)))
         .filter_map(|r| core::fix_close(ask.log, r).map(|t| (r, t)))
         .take(REACHED)
-        // one said this session is spent anyway (the Outbox drops it): no spawn
         .find(|(r, (t, new))| {
-            ask.hinted.contains(&format!("carry:{}", r.id))
-                || super::reached::fix_reached(ask.root, ask.log, &r.id, t, *new) == Some(true)
+            super::reached::fix_reached(ask.root, ask.log, &r.id, t, *new) == Some(true)
         })?;
     if skip == Some(r.id.as_str()) {
         return None;
@@ -118,7 +120,13 @@ mod tests {
     }
 
     fn said(log: &core::Log, skip: Option<&str>) -> Option<String> {
+        told(log, skip, &[])
+    }
+
+    /// `said` in a session already told `spent` (`carry:<id>` hinted keys).
+    fn told(log: &core::Log, skip: Option<&str>, spent: &[&str]) -> Option<String> {
         let (al, set) = (core::Aliases::default(), HashSet::new());
+        let hinted = spent.iter().map(|i| format!("carry:{i}")).collect();
         let files = vec!["src/a.rs".to_string()];
         let ask = Ask {
             log,
@@ -127,9 +135,26 @@ mod tests {
             al: &al,
             session: "",
             told: &set,
-            hinted: &set,
+            hinted: &hinted,
         };
         carry_line(&ask, true, skip).map(|l| l.text)
+    }
+
+    /// Rule (b): the newest fix already told this session no longer hides an
+    /// older one on the file; each is said once, then the file goes quiet.
+    #[test]
+    fn a_told_fix_lets_the_next_older_one_through_once() {
+        let mut log = core::Log::default();
+        for (id, title) in [("01AAAAAAAA", "old bug"), ("01BBBBBBBB", "new bug")] {
+            log.rows.push(row(id, "issue", title));
+            log.closes.push(close(id, "x → y; fixed in (#9)"));
+        }
+        assert!(said(&log, None).unwrap().contains("\"new bug\""));
+        let next = told(&log, None, &["01BBBBBBBB"]).unwrap();
+        assert!(next.contains("\"old bug\""), "{next}");
+        assert!(told(&log, None, &["01BBBBBBBB", "01AAAAAAAA"]).is_none());
+        // the gone-check line names the next one: still nothing twice
+        assert!(told(&log, Some("01AAAAAAAA"), &["01BBBBBBBB"]).is_none());
     }
 
     #[test]
