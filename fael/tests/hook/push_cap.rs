@@ -1,4 +1,4 @@
-//! Read-push row cap (PLAN-fael-push-focus chunk 1): at most
+//! Edit-push row cap (PLAN-fael-push-focus chunk 1): at most
 //! `budget.push_rows` rows push, an open issue always shows, and the header
 //! names the cut (`(shown of total)`).
 
@@ -31,11 +31,11 @@ fn seed(d: &Path, n: usize) {
     }
 }
 
-fn read(d: &Path, session: Option<&str>) -> (bool, String) {
-    read_file(d, session, "src/a.rs")
+fn edit(d: &Path, session: Option<&str>) -> (bool, String) {
+    edit_file(d, session, "src/a.rs")
 }
 
-fn read_file(d: &Path, session: Option<&str>, file: &str) -> (bool, String) {
+fn edit_file(d: &Path, session: Option<&str>, file: &str) -> (bool, String) {
     let input = match session {
         Some(s) => format!(
             r#"{{"cwd":{},"session":"{s}","files":["{file}"]}}"#,
@@ -43,7 +43,7 @@ fn read_file(d: &Path, session: Option<&str>, file: &str) -> (bool, String) {
         ),
         None => format!(r#"{{"cwd":{},"files":["{file}"]}}"#, json(d)),
     };
-    let (ok, out, _) = fael(d, &["hook", "read"], &input);
+    let (ok, out, _) = fael(d, &["hook", "edit"], &input);
     (ok, out)
 }
 
@@ -53,10 +53,10 @@ fn shown(out: &str) -> usize {
 }
 
 #[test]
-fn read_push_caps_at_five_and_names_the_cut() {
+fn edit_push_caps_at_five_and_names_the_cut() {
     let d = repo();
     seed(&d, 7);
-    let (ok, out) = read(&d, None);
+    let (ok, out) = edit(&d, None);
     assert!(ok, "{out}");
     // 8 matching rows → 5 shown, the issue among them, the cut in the
     // header (not the budget line)
@@ -85,30 +85,30 @@ fn a_full_budget_cuts_the_stashed_notice_not_the_rows_and_a_later_push_says_it()
     assert!(fael(&d, &["hook", "stop"], &stop).0);
     let cfg = d.join(".fael/config.toml");
     std::fs::write(&cfg, "[budget]\npush_tokens = 60\n").unwrap();
-    let (ok, out) = read(&d, Some(s));
+    let (ok, out) = edit(&d, Some(s));
     assert!(ok, "{out}");
     assert!(shown(&out) > 0 && shown(&out) < 8, "{out}");
     assert!(out.contains(" of 8):"), "{out}");
     assert!(!out.contains("possible problem"), "{out}");
     // room again: the cut rows and the kept notice come, once
     std::fs::write(&cfg, "[budget]\npush_tokens = 800\n").unwrap();
-    let (ok, out) = read(&d, Some(s));
+    let (ok, out) = edit(&d, Some(s));
     assert!(ok && out.matches("possible problem").count() == 1, "{out}");
     assert!(out.contains("out of sync"), "{out}");
-    let (ok, out) = read(&d, Some(s));
+    let (ok, out) = edit(&d, Some(s));
     assert!(ok && !out.contains("possible problem"), "{out}");
 }
 
 #[test]
-fn read_push_omitted_rows_push_later_in_session() {
+fn edit_push_omitted_rows_push_later_in_session() {
     let d = repo();
     seed(&d, 7);
-    // omitted rows never reach seen, so later reads push them: 5 + 3
-    let (ok, first) = read(&d, Some("cap1"));
+    // omitted rows never reach seen, so later edits push them: 5 + 3
+    let (ok, first) = edit(&d, Some("cap1"));
     assert!(ok, "{first}");
     assert_eq!(shown(&first), 5, "{first}");
     assert!(first.contains("login loops"), "{first}");
-    let (ok, second) = read(&d, Some("cap1"));
+    let (ok, second) = edit(&d, Some("cap1"));
     assert!(ok, "{second}");
     assert_eq!(shown(&second), 3, "{second}");
     assert!(!second.contains("login loops"), "{second}");
@@ -116,12 +116,12 @@ fn read_push_omitted_rows_push_later_in_session() {
 }
 
 #[test]
-fn read_push_hub_file_peeks_once_beside_now_rows() {
+fn edit_push_hub_file_peeks_once_beside_now_rows() {
     let d = repo();
     seed(&d, 15);
     // 15 off-Focus decisions: any 5 by freshness is a guess, none at all says
     // nothing — the issue renders, a peek of 3, the header counts the rest
-    let (ok, out) = read(&d, None);
+    let (ok, out) = edit(&d, None);
     assert!(ok, "{out}");
     assert_eq!(shown(&out), 1 + 3, "{out}");
     assert!(out.contains("login loops"), "{out}");
@@ -129,13 +129,13 @@ fn read_push_hub_file_peeks_once_beside_now_rows() {
         out.contains("(4 of 16)") && !out.contains("more about"),
         "{out}"
     );
-    // the peek is once per file per session: a re-read drips no more rows,
+    // the peek is once per file per session: a re-edit drips no more rows,
     // so with every Now row told the push is silent; a new session peeks again
-    let (ok, first) = read(&d, Some("hub1"));
+    let (ok, first) = edit(&d, Some("hub1"));
     assert!(ok && shown(&first) == 4, "{first}");
-    let (ok, again) = read(&d, Some("hub1"));
+    let (ok, again) = edit(&d, Some("hub1"));
     assert!(ok && !again.contains("context"), "{again}");
-    let (ok, other) = read(&d, Some("hub2"));
+    let (ok, other) = edit(&d, Some("hub2"));
     assert!(ok && shown(&other) == 4, "{other}");
 }
 
@@ -150,25 +150,25 @@ fn hub_peek_holds_after_the_peek_and_across_file_sets() {
     std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
     let (ok, _, err) = fael(&d, &["add", "decision", "on b", "--files", "src/b.rs"], "");
     assert!(ok, "{err}");
-    let (ok, first) = read(&d, Some("hub3"));
+    let (ok, first) = edit(&d, Some("hub3"));
     assert!(ok && shown(&first) == 1 + 3, "{first}");
-    let (ok, again) = read(&d, Some("hub3"));
+    let (ok, again) = edit(&d, Some("hub3"));
     assert!(ok && shown(&again) == 0, "{again}");
     let input = format!(
         r#"{{"cwd":{},"session":"hub3","files":["src/a.rs","src/b.rs"]}}"#,
         json(&d)
     );
-    let (ok, both, _) = fael(&d, &["hook", "read"], &input);
+    let (ok, both, _) = fael(&d, &["hook", "edit"], &input);
     assert!(ok && shown(&both) == 1 && both.contains("on b"), "{both}");
 }
 
 #[test]
-fn read_push_zero_rows_means_budget_only() {
+fn edit_push_zero_rows_means_budget_only() {
     let d = repo();
     seed(&d, 15);
     std::fs::write(d.join(".fael/config.toml"), "[budget]\npush_rows = 0\n").unwrap();
     // no row cap, no hub cut: all 16 fit the default token budget, no omitted line
-    let (ok, out) = read(&d, None);
+    let (ok, out) = edit(&d, None);
     assert!(ok, "{out}");
     assert_eq!(shown(&out), 16, "{out}");
     assert!(!out.contains("more about this file"), "{out}");
@@ -197,14 +197,17 @@ fn edit_hides_same_dir_neighbour_but_counts_it() {
     assert!(out.contains("fael mem for src/a.rs (1 of 2):"), "{out}");
     let (ok, found, _) = fael(&d, &["find", "--files", "src/"], "");
     assert!(ok && found.contains("neighbour"), "{found}");
-    // an edit push offers the open issue's close; a read push never does
+    // an edit push offers the open issue's close; a read says nothing at all
     assert!(out.contains("done with one?"), "{out}");
     let (ok, read, _) = fael(&d, &["hook", "read"], &input);
-    assert!(ok && !read.contains("done with one?"), "{read}");
+    assert!(
+        ok && !read.contains("done with one?") && !read.contains("on a"),
+        "{read}"
+    );
 }
 
 #[test]
-fn read_push_drops_shared_key_rows_outside_focus() {
+fn edit_push_drops_shared_key_rows_outside_focus() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     // an exact hit on src/a.rs, and another file sharing its key (tier 2).
@@ -238,7 +241,7 @@ fn read_push_drops_shared_key_rows_outside_focus() {
     );
     assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
-    let (ok, out, _) = fael(&d, &["hook", "read"], &input);
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
     assert!(ok, "{out}");
     // no session Focus holds the key: the sibling is neither pushed nor
     // counted (decision push:shared-key-siblings), `find --key` still has it
@@ -253,7 +256,7 @@ fn read_push_drops_shared_key_rows_outside_focus() {
 fn header_names_no_cut_without_one() {
     let d = repo();
     seed(&d, 2);
-    let (ok, out) = read(&d, Some("c0"));
+    let (ok, out) = edit(&d, Some("c0"));
     assert!(ok && shown(&out) == 3, "{out}");
     assert!(out.contains("fael mem for src/a.rs:"), "{out}");
 }
@@ -282,7 +285,7 @@ fn titled(d: &Path, file: &str) {
 fn bodies_line_says_nothing_without_a_body() {
     let d = repo();
     seed(&d, 1);
-    let (ok, out) = read(&d, Some("b0"));
+    let (ok, out) = edit(&d, Some("b0"));
     assert!(ok && shown(&out) == 2, "{out}");
     assert!(!out.contains("bodies:"), "{out}");
 }
@@ -294,10 +297,10 @@ fn bodies_line_is_said_once_per_session() {
     let d = repo();
     titled(&d, "src/a.rs");
     titled(&d, "src/b.rs");
-    let (_, a) = read_file(&d, Some("b1"), "src/a.rs");
+    let (_, a) = edit_file(&d, Some("b1"), "src/a.rs");
     assert!(a.contains("bodies: fael find <id>"), "{a}");
-    let (_, b) = read_file(&d, Some("b1"), "src/b.rs");
+    let (_, b) = edit_file(&d, Some("b1"), "src/b.rs");
     assert!(shown(&b) == 1 && !b.contains("bodies:"), "{b}");
-    let (_, b) = read_file(&d, Some("b2"), "src/b.rs");
+    let (_, b) = edit_file(&d, Some("b2"), "src/b.rs");
     assert!(b.contains("bodies: fael find <id>"), "{b}");
 }

@@ -36,12 +36,12 @@ fn find(d: &Path, text: &str) -> String {
     fael(d, &["find", text], "").1
 }
 
-fn read_push(d: &Path) -> String {
+fn next_push(d: &Path) -> String {
     let input = format!(
         r#"{{"cwd":{},"session":"{SESSION}","files":["src/nothing.rs"]}}"#,
         json(d)
     );
-    fael(d, &["hook", "read"], &input).1
+    fael(d, &["hook", "edit"], &input).1
 }
 
 #[test]
@@ -152,13 +152,13 @@ fael note: UNIQTYPO wrong path [files: src/aa.rs]"
         assert!(!find(&d, u).contains(u), "{u} was filed");
     }
 
-    let out = read_push(&d);
+    let out = next_push(&d);
     assert!(out.contains("4 `fael <kind>:` line(s)"), "{out}");
     assert!(
         !out.contains(&secret),
         "the hint must not echo the line: {out}"
     );
-    assert!(!read_push(&d).contains("not filed"), "hint shows once");
+    assert!(!next_push(&d).contains("not filed"), "hint shows once");
 
     let (_, out, _) = fael(&d, &["stats", "--json"], "");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
@@ -181,7 +181,7 @@ fn default_mode_never_returns_a_block() {
     // bug: a strong announcement with no issue row is a hint, not a block
     let out = stop(&d, r#""text":"bug confirmed in logout""#);
     assert!(out.contains(r#""block":false"#), "bug: {out}");
-    assert!(read_push(&d).contains("possible problem"), "bug hint");
+    assert!(next_push(&d).contains("possible problem"), "bug hint");
 
     // reject: a malformed capture line
     let out = stop_reply(&d, "fael note: no scope here");
@@ -198,7 +198,7 @@ fn default_mode_never_returns_a_block() {
 /// A sub-agent's stop (`agent` set) only files its own reply's lines: it never
 /// blocks, even with uncovered work, and with no reply it does
 /// nothing — `session` is the parent's, never this agent's message. The row is
-/// news to the parent, so the parent's next read of the file still pushes it.
+/// news to the parent, so the parent's next edit of the file still pushes it.
 #[test]
 fn a_subagent_stop_files_its_reply_and_never_blocks() {
     let d = adopted(repo());
@@ -216,11 +216,11 @@ fn a_subagent_stop_files_its_reply_and_never_blocks() {
     );
     assert!(out.contains(r#""block":false"#), "{out}");
     assert!(find(&d, "race in the writer").contains("race in the writer"));
-    let read = format!(
+    let next = format!(
         r#"{{"cwd":{},"session":"{SESSION}","files":["src/a.rs"]}}"#,
         json(&d)
     );
-    let (_, out, _) = fael(&d, &["hook", "read"], &read);
+    let (_, out, _) = fael(&d, &["hook", "edit"], &next);
     assert!(out.contains("race in the writer"), "{out}");
 }
 

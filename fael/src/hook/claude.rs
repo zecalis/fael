@@ -197,10 +197,11 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 ..Event::default()
             };
             super::cited::note_tool(&e, input);
-            let reply = if event == "search" {
-                super::search::push_call(&e, &p.tool_name, input, &p.tool_response)
-            } else {
-                push(&e, event, event)
+            // a read says nothing: rows reach the agent at the edit, at kickoff and in briefs
+            let reply = match event {
+                "search" => super::search::push_call(&e, &p.tool_name, input, &p.tool_response),
+                "edit" => push(&e, event, event),
+                _ => super::protocol::Reply::default(),
             };
             print_reply("PostToolUse", reply, codex);
             ExitCode::SUCCESS

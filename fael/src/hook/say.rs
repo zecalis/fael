@@ -45,8 +45,8 @@ impl Reply {
         &self.said
     }
 
-    /// Two replies as one, in order (a shell call's edit side, then its read
-    /// side): the contexts joined, the first notice kept.
+    /// Two replies as one, in order (a shell call's edit side, then its
+    /// commit side): the contexts joined, the first notice kept.
     pub(crate) fn and(self, next: Reply) -> Reply {
         let context = match (self.context, next.context) {
             (Some(a), Some(b)) => Some(a + &b),

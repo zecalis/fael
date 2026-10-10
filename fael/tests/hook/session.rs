@@ -1,10 +1,10 @@
-//! Session-start kickoff + gitignore warning, and the read push (each row
+//! Session-start kickoff + gitignore warning, and the edit push (each row
 //! once per session).
 
 use super::{fael, json, repo};
 
 #[test]
-fn session_start_and_read_push() {
+fn session_start_and_edit_push() {
     let d = repo();
     // empty log = silent, not an error
     let (ok, out, _) = fael(
@@ -46,7 +46,7 @@ fn session_start_and_read_push() {
     let (_, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
     assert!(!out.contains("gitignored"), "{out}");
 
-    // read: claude shape in, PostToolUse context out
+    // edit: claude shape in, PostToolUse context out
     let f = d.join("src/a.rs");
     std::fs::write(&f, "// a\n").unwrap();
     let input = format!(
@@ -54,28 +54,28 @@ fn session_start_and_read_push() {
         json(&d),
         json(&f)
     );
-    let (ok, out, _) = fael(&d, &["hook", "read", "--client", "claude"], &input);
+    let (ok, out, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
     assert!(
         ok && out.contains("PostToolUse") && out.contains("login loops"),
         "{out}"
     );
 
-    // with a session, a row pushes once — the second read of the same file is silent
+    // with a session, a row pushes once — the second edit of the same file does not repeat it
     let input = format!(
         r#"{{"cwd":{},"session_id":"s1","tool_input":{{"file_path":{}}}}}"#,
         json(&d),
         json(&f)
     );
-    let (_, out, _) = fael(&d, &["hook", "read", "--client", "claude"], &input);
+    let (_, out, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
     assert!(out.contains("login loops"), "{out}");
-    let (ok, out, _) = fael(&d, &["hook", "read", "--client", "claude"], &input);
+    let (ok, out, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
     assert!(ok && !out.contains("login loops"), "{out}");
 
     // neutral shape: Event in, Reply out · a file outside the repo pushes nothing
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
-    let (ok, out, _) = fael(&d, &["hook", "read"], &input);
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
     assert!(ok && out.contains("login loops"), "{out}");
-    let (ok, out, _) = fael(&d, &["hook", "read"], r#"{"cwd":"/","files":["x.rs"]}"#);
+    let (ok, out, _) = fael(&d, &["hook", "edit"], r#"{"cwd":"/","files":["x.rs"]}"#);
     assert!(
         ok && out.contains(r#""block":false"#) && !out.contains("context"),
         "{out}"
@@ -87,7 +87,7 @@ fn session_start_and_read_push() {
     let (ok, out, _) = fael(&d, &["stats", "--json"], "");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(
-        ok && v["events"] == 7 && v["by_event"]["read"]["events"] == 3,
+        ok && v["events"] == 7 && v["by_event"]["edit"]["events"] == 3,
         "{out}"
     );
 }

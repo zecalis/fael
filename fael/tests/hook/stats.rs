@@ -65,7 +65,7 @@ fn push_usage_counts_only_rendered_rows() {
         );
         assert!(ok, "{err}");
     }
-    // a same-dir neighbour: a read must not push it, an edit must
+    // a same-dir neighbour: an edit counts it but never renders it
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "neighbour choice", "--files", "src/b.rs"],
@@ -73,9 +73,9 @@ fn push_usage_counts_only_rendered_rows() {
     );
     assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
-    let (ok, out, _) = fael(&d, &["hook", "read"], &input);
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
     // the budget cut surfaces in the header, not as render's budget line
-    assert!(ok && out.contains(" of 4):"), "{out}");
+    assert!(ok && out.contains(" of 5):"), "{out}");
     let reply: serde_json::Value = serde_json::from_str(&out).unwrap();
     let context = reply["context"].as_str().unwrap();
     let rendered = context.lines().filter(|l| l.starts_with("- [")).count();
@@ -302,12 +302,13 @@ fn stats_rows_sees_local_store_journal_rows() {
     );
 }
 
-/// PLAN-fael-visible-secretary chunk 5: a decision read into context, then
-/// its file edited twice in the same session, is one "in context at edit" —
-/// the edit says nothing new (the row is seen) yet still records it, once,
-/// as no injection; `fael stats` leads with the value line `--json` carries.
+/// PLAN-fael-visible-secretary chunk 5: a decision an edit said into
+/// context, then its file edited twice more in the same session, is one "in
+/// context at edit" — the later edits say nothing new (the row is seen) yet
+/// still record it, once, as no injection; `fael stats` leads with the value
+/// line `--json` carries.
 #[test]
-fn edit_after_read_counts_in_context_at_edit() {
+fn edit_after_the_row_was_said_counts_in_context_at_edit() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let (ok, _, err) = fael(
@@ -327,7 +328,7 @@ fn edit_after_read_counts_in_context_at_edit() {
         json(&d),
         json(&d.join("src/a.rs"))
     );
-    let (ok, out, _) = fael(&d, &["hook", "read", "--client", "claude"], &input);
+    let (ok, out, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
     assert!(ok && out.contains("keep the parser pure"), "{out}");
     for _ in 0..2 {
         let (ok, out, _) = fael(&d, &["hook", "edit", "--client", "claude"], &input);

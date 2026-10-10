@@ -17,7 +17,7 @@ Three ideas carry the whole design:
 
 1. **The log is the truth; everything else is derived** — like Redis's append-only file or a Kafka topic.
 2. **Agents write in the same message, never a turn of their own** — `fael add` beside the next tool call, or `fael <kind>:` lines closing the reply; fael never refuses to end a turn.
-3. **Memory comes to the agent** — when an agent reads a file, the rows about that file are attached to the read.
+3. **Memory comes to the agent where it acts** — at `fael kickoff`, in a plan brief, at session start, and when an agent edits a file (the rows about that file are attached to the edit). A read or a search says nothing: read and search pushes were ~74% of the tokens fael put into context (`fael stats`, 2026-09-25 → 2026-10-10).
 
 ---
 
@@ -211,7 +211,7 @@ push_holdout = 20             # percent of sessions (by hash of the session id) 
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800
-push_tokens = 800             # read/edit hook push: rows first, then the edit hint and a stashed notice in what is left
+push_tokens = 800             # edit hook push: rows first, then the edit hint and a stashed notice in what is left
 push_rows = 5               # at most this many rows per push (0 = token budget only)
 session_decisions = 0         # session-start lists this many freshest open decisions above the count line
 [warn]
@@ -272,10 +272,11 @@ agent ─(MCP add | CLI add | hook)─▶ core.normalize ─▶ core.validate �
 
 The write path self-heals before it validates (`fael/src/selfheal.rs`): `core.validate` sees one row and no log, so filling an absent `--supersedes` — from `Supersedes <id>` in the text, from the same kind + key of the caller's own row, or from a repeat on the same files when neither note has a key — and adopting the one key the row's files already carry happen here, where the log is readable. An `issue` is a finding, not a topic: a key may hold several, so a key match supersedes an issue only when it is the same finding re-filed (same words, a shared file), and a distinct issue sharing the key is kept and named. Shared files prove two notes related, not that one replaces the other: a key on either side, or several overlapping notes, files the row and names what stays open (`kept all`) — a silent hide costs the next reader a todo, a kept note costs one `close`. Each choice is reported in one info line, which is not an ask — except a cross-key act (the superseded row's key differs from the new row's, reachable only by naming the row in the text): under `[selfheal] cross_key = "warn"` (the default) it prints one `warning:` line instead, which counts as an ask; `"info"` keeps the info line, `"off"` acts silently. Every act stamps `decision_source` (`explicit:text`, `identity:key`, `heuristic:files`, each with `:cross-key` when the key moved, `caller:flag` for a resolving flag) so restore can trace an edge back to its cause; older rows read as `unknown`. Several candidates file the row and name what was kept: fael never picks and never rejects for it. Fael doesn't try to understand everything. It makes only the decisions it can justify, exposes the evidence when it can't, and makes every automatic decision reversible.
 
-**Push** — the agent reads a file, and the memory for that file comes with it:
+**Push** — the agent edits a file (the Edit tool, or a shell call that wrote a file it names), and the memory for that file comes with it:
 ```
-client ─(read event)─▶ adapter.parse ─▶ core.find(files) ─▶ rank ─▶ cut to token budget ─▶ adapter.render ─▶ context attached to the read
+client ─(edit event)─▶ adapter.parse ─▶ core.find(files) ─▶ rank ─▶ cut to token budget ─▶ adapter.render ─▶ context attached to the edit
 ```
+The `read` and `search` hooks still fire (they count tool use for `fael stats`) but reply empty: a read or a search names no change, and the row reaches the agent at the edit if one follows.
 Ranking: an exact file match beats the same directory, which beats the same key. Open `issue` and `decision` rows go first, then newer before older by `id`. Text matching splits the query on whitespace: every word must be a case-insensitive substring of the row's text or title, in any order — no stemming, fuzzy match or hit-count ranking.
 Ranking is **deterministic**: the same log, query and budget give the same output on any machine and any day — recency comes from `id` order, never from the clock, and ties break by `id`. No fuzzy, BM25 or semantic ranking.
 
@@ -284,7 +285,7 @@ Rows are then bucketed by the session **Focus** — the start branch and the key
 
 A push carries no cost line: the old `memory: ~<used>/<budget> tokens · <n> rows` footer repeated the header's row count and gave the agent nothing to act on, so it was dropped; the bill stays in `fael stats` (`est_tokens` per event).
 
-A row is said once per **context window**, not once per session: the pushed ids are kept per session, worktree and `agent` (`<state>/sessions/<key>.seen`), keyed by the session id (a transcript path counts as its file stem, so `add` and `find` — which only know `$CLAUDE_CODE_SESSION_ID` — mark the same list), and read-filter-append runs under a file lock so parallel reads push a row once. A sub-agent starts with an empty context, so it has its own list — what its parent was told says nothing about what it knows (Claude Code sends `agent_id` on tool events inside a sub-agent; an OpenCode sub-agent is a child session with its own id). A session-start with `source: "compact"` drops the thread's list, because compaction removed the pushed rows from context.
+A row is said once per **context window**, not once per session: the pushed ids are kept per session, worktree and `agent` (`<state>/sessions/<key>.seen`), keyed by the session id (a transcript path counts as its file stem, so `add` and `find` — which only know `$CLAUDE_CODE_SESSION_ID` — mark the same list), and read-filter-append runs under a file lock so parallel edits push a row once. A sub-agent starts with an empty context, so it has its own list — what its parent was told says nothing about what it knows (Claude Code sends `agent_id` on tool events inside a sub-agent; an OpenCode sub-agent is a child session with its own id). A session-start with `source: "compact"` drops the thread's list, because compaction removed the pushed rows from context.
 
 **Capture** — the agent ends its turn. The Stop hook reads the last assistant message (`reply`, else the tail of a Claude transcript) and files every line of the form `fael decision|issue|note: <text> [files: a,b]` at column 0, outside a code fence, through the same validation as `fael add` (secrets, ids, size, paths). `[files: …]` is required and never inferred from the session's edits. A line that cannot be filed is dropped and becomes one hint on the next push — never a turn. The same lines seen twice in one session file once. `block` is always `false`: fael never stops a turn. A sub-agent's stop (`agent` set — Claude Code `SubagentStop`) files its own `reply` the same way and does nothing else: no bug rule, no sync, no transcript fallback (the transcript is the parent's).
 
@@ -292,7 +293,7 @@ The edit hook appends `{"path","at"}` to `~/.local/state/fael/sessions/<session+
 
 **Bug line** — a bug or risk announcement in the turn's text (the transcript tail after the latest user message) with no issue or close since the words stashes one line for the next push, shown once; never a turn. **Fix lines** (PLAN-fael-experience-loop chunk 5) catch the fix itself, the moment its cause → fix is worth keeping: a fix phrase (`fixed the bug`, `root cause was`, from the same packs) with no issue or close after it takes the bug line's place and offers `fael add issue` + `fael close`, and so does a `git commit` whose subject opens `fix:`/`fix(` and whose text names no row, in a session that closed none. Each is said once per session (`fixed`, `fixcommit` in `fael stats` `said`); fael never decides which issue a commit fixes. **Held line** (PLAN-fael-decision-held chunk 2): a decision the session wrote naming a file it edited, still open at Stop, is named on the next push with a ready `fael close <id> "now in `<path>`"`, once per session (`held`); the agent judges whether the code holds it, and an unclosed decision stays active. Never at the edit (decision 01M4F8B0). The phrases come from the `[lang] marker` packs (`english` + `thai` by default, `marker = []` switches the rule off), never from hardcoded lists. The Stop-block mode (`[capture] block = true`) was removed 2026-10-03: 55 blocks, 12 followed by a row; an old config key is ignored.
 
-Session start, and every stop, start one detached `fael sync` per session and newest row when `fael.remote` is set (`[sync] auto`): fail-quiet, never awaited, the hook still exits 0. Session start goes first, so teammates' rows reach the session's reads (not its kickoff context, already built) and a Stop with no new row starts nothing.
+Session start, and every stop, start one detached `fael sync` per session and newest row when `fael.remote` is set (`[sync] auto`): fail-quiet, never awaited, the hook still exits 0. Session start goes first, so teammates' rows reach the session's edits (not its kickoff context, already built) and a Stop with no new row starts nothing.
 
 **Session start:**
 ```
@@ -315,7 +316,7 @@ Rows that only exist on another branch render with `@<branch>`; once merged they
 Tokens are the unit of value, and they are spent when reading, not when storing. So:
 
 - Storage is JSON, so any tool can parse it and it merges cleanly in git.
-- What an agent is shown (kickoff, push, `find`) is one markdown line per row: `- [id] kind #key text → files`. On real rows this adds 18.5% on top of the text, against 42.6% for raw JSON and 17.7% for TOON. The text is most of the size, so the savings come from choosing fewer rows, not from the format. One cut on top: a file push drops the file the agent just opened from each row's list (`→ also: <others> +N` past two), 14% fewer bytes over 25 file reads in one repo (2026-10-03, bytes not tokens). A pushed row that is not about the opened file says how it came, `- [id] (same dir) …` or `(same key) …`, and a push that cut rows names the cut in its header, `fael mem for <files> (shown of total):`.
+- What an agent is shown (kickoff, push, `find`) is one markdown line per row: `- [id] kind #key text → files`. On real rows this adds 18.5% on top of the text, against 42.6% for raw JSON and 17.7% for TOON. The text is most of the size, so the savings come from choosing fewer rows, not from the format. One cut on top: a file push drops the file the agent is editing from each row's list (`→ also: <others> +N` past two), 14% fewer bytes over 25 file reads in one repo (2026-10-03, bytes not tokens). A pushed row that is not about the opened file says how it came, `- [id] (same dir) …` or `(same key) …`, and a push that cut rows names the cut in its header, `fael mem for <files> (shown of total):`.
 - Every output is cut to a token budget (configurable per repo). The estimate is computed at read time and never stored, because every model's tokenizer counts differently. `est_tokens` stays the anchor unit (ASCII ≈ 4 bytes/token, non-ASCII ≈ 1 char/token) — a ruler, not a scale; convert with the frozen exchange table below — no per-model config, no formula tuning.
 
   | model | EN (× est) | TH (× est) |

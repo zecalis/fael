@@ -1,5 +1,5 @@
 //! Push precision fixture, binary layer (PLAN-fael-moat-token chunk 2): what
-//! the read push renders around the rows — the count footer and the
+//! the edit push renders around the rows — the count footer and the
 //! `@branch` tag — for the real-session cases of notes 01M3S446P / 01M3S6NAH.
 
 #[cfg(unix)]
@@ -7,9 +7,9 @@ use super::git;
 use super::{fael, json, repo};
 use std::path::Path;
 
-fn read(d: &Path, file: &str) -> String {
+fn edit(d: &Path, file: &str) -> String {
     let input = format!(r#"{{"cwd":{},"files":["{file}"]}}"#, json(d));
-    let (ok, out, err) = fael(d, &["hook", "read"], &input);
+    let (ok, out, err) = fael(d, &["hook", "edit"], &input);
     assert!(ok, "{err}");
     out
 }
@@ -49,7 +49,7 @@ fn shared_keys_outside_focus_are_not_counted() {
             assert!(ok, "{err}");
         }
     }
-    let out = read(&d, "src/a.rs");
+    let out = edit(&d, "src/a.rs");
     assert!(footer(&out).is_empty(), "{out}");
     assert!(out.contains("(5 of 8):"), "{out}");
 }
@@ -87,7 +87,7 @@ fn off_branch_row_in_a_shared_tree_is_tagged() {
     );
     assert!(ok, "{err}");
     git(&d, &["switch", "-q", &main]);
-    let out = read(&d, "src/a.rs");
+    let out = edit(&d, "src/a.rs");
     assert!(out.contains("only on feat/x"), "{out}");
     assert!(out.contains("@feat/x"), "{out}");
 }
@@ -112,7 +112,7 @@ fn off_branch_row_of_a_deleted_branch_in_the_tree_stays_untagged() {
     assert!(ok, "{err}");
     git(&d, &["switch", "-q", &main]);
     git(&d, &["branch", "-D", "feat/x"]);
-    let out = read(&d, "src/a.rs");
+    let out = edit(&d, "src/a.rs");
     assert!(out.contains("filed on feat/x"), "{out}");
     assert!(!out.contains("@feat/x"), "{out}");
 }

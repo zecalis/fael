@@ -1,4 +1,4 @@
-//! Journal-only rows carry their `@branch` tag into the hooks too — the read
+//! Journal-only rows carry their `@branch` tag into the hooks too — the edit
 //! push and the session brief (PLAN-fael-durable-log chunk 1; 01M3HTE10).
 
 use super::{fael, git, json, repo};
@@ -11,7 +11,7 @@ fn hook_rows_carry_their_branch_tag() {
     git(&d, &["commit", "-qm", "a"]);
     let main = git(&d, &["symbolic-ref", "--short", "HEAD"]);
     // a note filed on another branch, then that branch deleted — the journal
-    // keeps it, and the read push must tag it like `find` does (§5)
+    // keeps it, and the edit push must tag it like `find` does (§5)
     git(&d, &["switch", "-qc", "feat/x"]);
     let (ok, _, err) = fael(
         &d,
@@ -31,12 +31,12 @@ fn hook_rows_carry_their_branch_tag() {
     git(&d, &["branch", "-D", "feat/x"]);
 
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
-    let (ok, out, _) = fael(&d, &["hook", "read"], &input);
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
     assert!(ok && out.contains("row from another branch"), "{out}");
     assert!(out.contains("@feat/x"), "{out}");
 }
 
-/// The session brief tags a journal-only row too, not only the read push
+/// The session brief tags a journal-only row too, not only the edit push
 /// (01M3HTE10): an urgent issue from a deleted branch still lists with
 /// `@branch`.
 #[test]

@@ -1,4 +1,4 @@
-//! PLAN-fael-learn-loop chunk 1: every push's usage line is its decision
+//! PLAN-fael-learn-loop chunk 1: every edit push's usage line is its decision
 //! record — the trigger, the files, the policy `baseline@1`, the features of
 //! each row said or cut, and why a row was cut (`cap` / `hub_peek` /
 //! `budget`). The record is usage-line only: what the agent sees is untouched
@@ -48,12 +48,12 @@ fn reasons(l: &Value) -> Vec<&str> {
 }
 
 #[test]
-fn a_read_push_records_trigger_files_policy_and_row_features() {
+fn an_edit_push_records_trigger_files_policy_and_row_features() {
     let d = repo();
     seed(&d, 1);
-    push(&d, "read", "src/a.rs");
-    let l = line(&d, "read");
-    assert_eq!(l["trigger"], "read", "{l}");
+    push(&d, "edit", "src/a.rs");
+    let l = line(&d, "edit");
+    assert_eq!(l["trigger"], "edit", "{l}");
     assert_eq!(l["files"], json!(["src/a.rs"]), "{l}");
     assert_eq!(l["policy"], "baseline@1", "{l}");
     assert!(l.get("cut").is_none() && l.get("cut_n").is_none(), "{l}");
@@ -77,8 +77,8 @@ fn a_read_push_records_trigger_files_policy_and_row_features() {
 fn the_row_cap_cuts_with_reason_cap() {
     let d = repo();
     seed(&d, 7); // 8 rows, push_rows 5
-    push(&d, "read", "src/a.rs");
-    let l = line(&d, "read");
+    push(&d, "edit", "src/a.rs");
+    let l = line(&d, "edit");
     assert_eq!(l["ids"].as_array().unwrap().len(), 5, "{l}");
     assert_eq!(reasons(&l), ["cap"; 3], "{l}");
     assert_eq!(l["cut_n"], 3, "{l}");
@@ -95,8 +95,8 @@ fn the_row_cap_cuts_with_reason_cap() {
 fn a_hub_push_cuts_with_reason_hub_peek() {
     let d = repo();
     seed(&d, 15); // issue + 3 peek said, 12 cut
-    push(&d, "read", "src/a.rs");
-    let l = line(&d, "read");
+    push(&d, "edit", "src/a.rs");
+    let l = line(&d, "edit");
     assert_eq!(l["ids"].as_array().unwrap().len(), 4, "{l}");
     // the cap leaves room for 4 File rows (5 less the issue): the hub peek
     // alone cut the 4th, the row cap would have cut the other 11 anyway
@@ -120,8 +120,8 @@ fn a_hub_push_cuts_with_reason_hub_peek() {
 fn the_record_caps_cut_at_twenty_and_counts_them_all() {
     let d = repo();
     seed(&d, 29); // issue + 3 peek said, 26 cut
-    push(&d, "read", "src/a.rs");
-    let l = line(&d, "read");
+    push(&d, "edit", "src/a.rs");
+    let l = line(&d, "edit");
     assert_eq!(l["cut"].as_array().unwrap().len(), 20, "{l}");
     assert_eq!(l["cut_n"], 26, "{l}");
 }
@@ -131,8 +131,8 @@ fn the_token_budget_cuts_with_reason_budget() {
     let d = repo();
     seed(&d, 3);
     std::fs::write(d.join(".fael/config.toml"), "[budget]\npush_tokens = 40\n").unwrap();
-    push(&d, "read", "src/a.rs");
-    let l = line(&d, "read");
+    push(&d, "edit", "src/a.rs");
+    let l = line(&d, "edit");
     let said = l["ids"].as_array().unwrap().len();
     assert!(said > 0 && said < 4, "{l}");
     assert_eq!(reasons(&l), vec!["budget"; 4 - said], "{l}");
@@ -150,13 +150,6 @@ fn call(d: &Path, session: &str, event: &str, tool: &str, input: &str, resp: &st
     line(d, event)
 }
 
-/// A minute old: past the window that makes a named file a shell edit.
-fn backdate(f: &Path) {
-    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
-    let file = std::fs::File::options().write(true).open(f).unwrap();
-    file.set_modified(old).unwrap();
-}
-
 #[test]
 fn an_edit_names_its_trigger() {
     let d = repo();
@@ -166,49 +159,13 @@ fn an_edit_names_its_trigger() {
 }
 
 #[test]
-fn a_search_names_what_made_the_file_a_touch() {
+fn a_shell_write_names_its_trigger() {
     let d = repo();
     seed(&d, 1);
     // a file just written, named by a shell call: that call edited it
     let sed = r#"{"command":"sed -i s/x/y/ src/a.rs"}"#;
     let l = call(&d, "t1", "shell-edit", "Bash", sed, r#"{"stdout":""}"#);
     assert_eq!(l["trigger"], "shell-edit", "{l}");
-    backdate(&d.join("src/a.rs"));
-    // a reader command that names it
-    let cat = r#"{"command":"cat src/a.rs"}"#;
-    let l = call(&d, "t2", "search", "Bash", cat, r#"{"stdout":""}"#);
-    assert_eq!(l["trigger"], "reader-arg", "{l}");
-    // a grep whose hit list names one file
-    let l = call(
-        &d,
-        "t3",
-        "search",
-        "Grep",
-        r#"{"pattern":"x"}"#,
-        r#"{"filenames":["src/a.rs"]}"#,
-    );
-    assert_eq!(l["trigger"], "hitlist", "{l}");
-    // the same from a glob
-    let l = call(
-        &d,
-        "t4",
-        "search",
-        "Glob",
-        r#"{"pattern":"src/*.rs"}"#,
-        r#"{"filenames":["src/a.rs"]}"#,
-    );
-    assert_eq!(l["trigger"], "glob", "{l}");
-    // a named file wins over the hit list that repeats it
-    let grep = r#"{"command":"grep x src/a.rs"}"#;
-    let l = call(
-        &d,
-        "t5",
-        "search",
-        "Bash",
-        grep,
-        r#"{"stdout":"src/a.rs:1:x"}"#,
-    );
-    assert_eq!(l["trigger"], "reader-arg", "{l}");
 }
 
 #[test]
@@ -216,8 +173,8 @@ fn no_row_cap_records_no_cut() {
     let d = repo();
     seed(&d, 15);
     std::fs::write(d.join(".fael/config.toml"), "[budget]\npush_rows = 0\n").unwrap();
-    push(&d, "read", "src/a.rs");
-    let l = line(&d, "read");
+    push(&d, "edit", "src/a.rs");
+    let l = line(&d, "edit");
     assert_eq!(l["ids"].as_array().unwrap().len(), 16, "{l}");
     assert!(l.get("cut").is_none(), "{l}");
     assert_eq!(l["feat"].as_object().unwrap().len(), 16, "{l}");

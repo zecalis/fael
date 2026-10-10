@@ -91,13 +91,13 @@ fn add(d: &Path, files: &str) -> String {
     out.split_whitespace().next().unwrap().to_string()
 }
 
-fn hook_read(d: &Path, files: &str) -> String {
+fn hook_edit(d: &Path, files: &str) -> String {
     let input = format!(
         r#"{{"cwd":{},"files":[{}]}}"#,
         json(&d.to_string_lossy()),
         json(files)
     );
-    let (ok, out, _) = fael(d, &["hook", "read"], &input);
+    let (ok, out, _) = fael(d, &["hook", "edit"], &input);
     assert!(ok, "hook must always exit 0");
     out
 }
@@ -116,8 +116,8 @@ fn rename_pushes_at_the_new_path() {
     git(&d, &["mv", "src/a.rs", "src/b.rs"]);
     commit_all(&d, "rename a to b");
 
-    // no session-start ran: the first read builds the cache itself
-    let out = hook_read(&d, "src/b.rs");
+    // no session-start ran: the first edit builds the cache itself
+    let out = hook_edit(&d, "src/b.rs");
     assert!(out.contains(&id[..8]), "{out}");
 
     let (ok, out, err) = fael(&d, &["find", "--files", "src/b.rs"], "");
@@ -140,7 +140,7 @@ fn rename_chain_pushes_at_the_end() {
     git(&d, &["mv", "src/b.rs", "src/c.rs"]);
     commit_all(&d, "b to c");
 
-    let out = hook_read(&d, "src/c.rs");
+    let out = hook_edit(&d, "src/c.rs");
     assert!(out.contains(&id[..8]), "{out}");
 }
 
@@ -149,13 +149,13 @@ fn session_start_refresh_picks_up_later_renames() {
     let d = repo();
     let id = add(&d, "src/a.rs");
 
-    // first read builds the cache at this HEAD …
-    assert!(hook_read(&d, "src/a.rs").contains(&id[..8]));
+    // first edit builds the cache at this HEAD …
+    assert!(hook_edit(&d, "src/a.rs").contains(&id[..8]));
     // … a rename committed after that is picked up by the next session-start
     git(&d, &["mv", "src/a.rs", "src/b.rs"]);
     commit_all(&d, "rename a to b");
     session_start(&d);
-    assert!(hook_read(&d, "src/b.rs").contains(&id[..8]));
+    assert!(hook_edit(&d, "src/b.rs").contains(&id[..8]));
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn no_renames_still_writes_the_cache_at_head() {
     // every read/edit hook would re-run the full git log (01M3CTV9Y)
     let d = repo();
     add(&d, "src/a.rs");
-    hook_read(&d, "src/a.rs");
+    hook_edit(&d, "src/a.rs");
     let cache = std::fs::read_to_string(d.join(".fael/cache/aliases.json")).unwrap();
     let head = Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -235,7 +235,7 @@ fn non_ascii_rename_pushes_at_the_new_path() {
     let id = add(&d, "src/ก.rs");
     git(&d, &["mv", "src/ก.rs", "src/ข.rs"]);
     commit_all(&d, "rename");
-    assert!(hook_read(&d, "src/ข.rs").contains(&id[..8]));
+    assert!(hook_edit(&d, "src/ข.rs").contains(&id[..8]));
 }
 
 #[test]
@@ -244,8 +244,8 @@ fn uncommitted_mv_pushes_at_the_new_path() {
     let d = repo();
     let id = add(&d, "src/a.rs");
     std::fs::rename(d.join("src/a.rs"), d.join("src/b.rs")).unwrap();
-    // no commit and no session-start: the hook read itself finds the move
-    assert!(hook_read(&d, "src/b.rs").contains(&id[..8]));
+    // no commit and no session-start: the hook edit itself finds the move
+    assert!(hook_edit(&d, "src/b.rs").contains(&id[..8]));
     let (ok, out, err) = fael(&d, &["find", "--files", "src/b.rs"], "");
     assert!(ok, "{err}");
     assert!(out.contains(&id[..8]), "{out}");
