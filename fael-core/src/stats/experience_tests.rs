@@ -228,7 +228,8 @@ fn close_shape_locks_the_label_table() {
 }
 
 /// The taught close text, filled in on each branch, reads as a label core and
-/// names its fix; only a `/` path makes it a guard (`names_check`). A `don't`
+/// names its fix only through the optional `(#N)` — it asks for no sha; only
+/// a `/` path makes it a guard (`names_check`). A `don't`
 /// branch that cites a path with a `/` therefore reads as a guard too — the
 /// known limit of a purely formal guard (PLAN-fael-capture-yield §5), kept
 /// here so a change to either side shows.
@@ -243,18 +244,22 @@ fn close_template_fills_into_a_label_core_and_a_fix() {
             .replace("<test path>", path)
             .replace("<X>", "add a third matcher")
             .replace("<Y>", "sameName already exists")
-            .replace("<sha or (#N)>", fix)
+            .replace("[; (#N)]", fix)
     };
     for (path, fix, guard) in [
-        ("fael/tests/a.rs", "a1b2c3d4", true),
-        ("fael/tests/a.rs", "(#12)", true),
-        ("none", "a1b2c3d4", false),
-        ("none", "(#12)", false),
+        ("fael/tests/a.rs", "; (#12)", true),
+        ("fael/tests/a.rs", "", true),
+        ("none", "; (#12)", false),
+        ("none", "", false),
     ] {
         let text = fill(path, fix);
         assert_eq!(close_shape(&text), Shape { core: true, guard }, "{text}");
-        assert!(names_fix(&text), "{text}");
+        assert_eq!(names_fix(&text), !fix.is_empty(), "{text}");
     }
+    assert!(
+        !CLOSE_TEMPLATE.contains("sha"),
+        "the template asks for no sha"
+    );
     // unfilled, the placeholders name no fix
     assert!(!names_fix(CLOSE_TEMPLATE));
     // the don't branch citing a path with a `/` reads as a guard

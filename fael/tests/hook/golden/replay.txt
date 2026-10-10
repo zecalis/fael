@@ -138,7 +138,7 @@ fael: done with one? fael close 01K00000000000000000B "<why>"
 
 ## 27 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001'"}}
 context:
-fael: 01K00000000000000000BBB001 cited in a commit — done? `fael close 01K00000000000000000BBB001 "<why>"`
+fael: 01K00000000000000000B cited in a commit — `(fael:01K00000000000000000B)` in its message links the fix on main; done? `fael close 01K00000000000000000B "<why>"`
 
 ## 28 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001 again'"}}
 ## 29 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'note 01K00000000000000000AAA001'"}}
@@ -154,5 +154,5 @@ bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true
 
 ## 32 prompt {"text":"fix the auth login flow"}
 ## usage
-27 lines · ~1720 tokens
+27 lines · ~1739 tokens
 session-start prompt read read read search read in-context in-context edit in-context edit edit capture read session-start read read read read read search shell-edit outcome search session-start read

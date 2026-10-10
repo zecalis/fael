@@ -247,7 +247,7 @@ fn fix_commit(files: &[String]) -> String {
         files.join(",")
     };
     format!(
-        "fael: this `fix:` commit names no fael row and this session closed none (a row id anywhere in the commit message names it) — keep what broke for the next agent: fael add issue \"<what broke>\" --files {files} --key <area:topic> then fael close --key <area:topic> \"{}\"\n",
+        "fael: this `fix:` commit names no fael row and this session closed none — keep what broke for the next agent: fael add issue \"<what broke>\" --files {files} --key <area:topic>, cite `(fael:<id>)` in a commit on this branch (a squash keeps it), then fael close --key <area:topic> \"{}\"\n",
         fael_core::stats::CLOSE_TEMPLATE
     )
 }
@@ -287,9 +287,13 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
         .into_iter()
         .filter(|id| !out.has(&format!("~cited:{id}")))
         .collect();
+    let ab = crate::core::abbrev(&c.log);
     let text: String = fresh
         .iter()
-        .map(|id| format!("fael: {id} cited in a commit — done? `fael close {id} \"<why>\"`\n"))
+        .map(|id| {
+            let id = ab.short(id);
+            format!("fael: {id} cited in a commit — `(fael:{id})` in its message links the fix on main; done? `fael close {id} \"<why>\"`\n")
+        })
         .collect();
     out.say(super::say::Line {
         kind: super::say::Kind::Cited { ids: fresh.clone() },

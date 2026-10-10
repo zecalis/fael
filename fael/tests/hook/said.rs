@@ -202,7 +202,10 @@ fn commit_citing_an_open_issue_says_its_close_once() {
     };
     let ctx = commit(&format!("fix {id}")).expect("the first commit is said");
     assert!(ctx.contains("cited in a commit"), "{ctx}");
-    assert!(ctx.contains(&format!("fael close {id}")), "{ctx}");
+    // one row in the log: abbrev prints the 8-char prefix
+    let short = &id[..8];
+    assert!(ctx.contains(&format!("`(fael:{short})`")), "{ctx}");
+    assert!(ctx.contains(&format!("fael close {short} ")), "{ctx}");
     assert_eq!(yield_of(&d, "cited"), (1, 0));
     assert!(
         commit(&format!("fix {id} again")).is_none(),
