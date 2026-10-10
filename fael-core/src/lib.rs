@@ -16,6 +16,7 @@ mod id;
 mod import;
 pub mod lang;
 mod log;
+pub mod plan;
 mod query;
 mod row;
 pub mod stats;

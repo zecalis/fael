@@ -82,7 +82,7 @@ Follow the repo-wide Git workflow. Validate before `push pr`:
 ```text
 cargo fmt --all --check
 RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked
-RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc
+RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc --no-default-features
 scripts/file-size.sh
 tests
 ```

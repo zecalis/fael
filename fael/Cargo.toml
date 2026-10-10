@@ -9,9 +9,13 @@ homepage = "https://github.com/zecalis/fael"
 description = "fael CLI — a repo's memory that agents can't skip writing"
 
 [dependencies]
-fael-core = { path = "../fael-core" }
+fael-core = { path = "../fael-core", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+
+[features]
+default = ["bundled-sqlite"]
+bundled-sqlite = ["fael-core/bundled-sqlite"]
 
 [lints]
 workspace = true
