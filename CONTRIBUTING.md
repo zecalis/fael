@@ -41,7 +41,8 @@ cwd cannot write into a shared `.fael`; `FAEL_STATE_DIR` only moves usage stats.
 
 CI runs the suite on Linux and macOS for every PR, and on Windows too once it lands on `main`
 (Windows is best effort: its run takes the longest, so a Windows-only break shows on `main` and
-the next PR fixes it). Two rules:
+the next PR fixes it; a PR that risks it runs Windows on demand, see AGENTS.md → Git). Two
+rules:
 
 - **No fake binaries on `PATH`.** A shell-script fake needs a shebang and `chmod`, and Windows
   `CreateProcess` never resolves a `.bat` fake off `PATH`. Stub an external tool through an env
