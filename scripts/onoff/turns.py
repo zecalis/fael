@@ -164,5 +164,31 @@ def main():
     sys.exit(1 if bad else 0)
 
 
+def selftest():
+    """trace finds each reason in the events, and fails one it cannot find."""
+    files = ["x.ts", "y.ts"]
+    ev = [{"files": ["x.ts"], "turn": 0, "said": [{"kind": "carry", "key": "01C"}]},
+          {"files": ["y.ts"], "turn": 0, "said": [{"kind": "merge", "key": "01D"}]}]
+    p = lambda r, cands=None: {"row": "01B", "guard_precheck": {"names_fix": True, "close": ""},
+                               "path": {"reason": r, "files": files, "candidates": cands or {}}}
+    t = lambda r, cands=None, mode="commit": trace(p(r, cands), "path", ev, ["y.ts"], mode)[0]
+    assert t("carry_spent_this_turn:01C") and not t("carry_spent_this_turn:01X")
+    # a turn per file: x's carry spent turn 0, not y's
+    assert not t("carry_spent_this_turn:01C", mode="file")
+    assert t("not_newest_on_file:01C", {"y.ts": ["01C", "01B"]})
+    assert not t("not_newest_on_file:01C", {"y.ts": ["01B"]})
+    assert t("turn_spent:merge:01D") and not t("unexplained")
+    assert not t("close_names_no_fix")
+    tab = {"path": {"n": 1}, "reverse": {"n": 1}}
+    base = {"orders": tab, "pairs": [{"sha": "s", "k": 1, "path": {"w": 1}, "reverse": {"w": 2}}]}
+    assert reproduce(base, base) == []
+    got = {"orders": tab | {"path": {"n": 2}},
+           "pairs": [{"sha": "s", "k": 1, "path": {"w": 1, "new": 0}, "reverse": {"w": 3}}]}
+    assert reproduce(base, got) == ["s reverse.w", "orders.path"]
+    assert cost({("s", "01C"): ev}) == {"carry": 1, "carry_unlabeled": 0, "check": 0,
+                                        "merge": 1, "promote": 0}
+
+
 if __name__ == "__main__":
+    selftest()
     main()

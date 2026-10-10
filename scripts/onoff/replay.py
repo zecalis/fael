@@ -11,7 +11,7 @@ hook's own usage lines (`said`: row = search push, carry, check, brief, …);
 `touch@1` is the shadow those lines already carry (`would_drop`).
 
 A label sits on one (sha, row) pair; any other row said in that commit is
-unlabeled, never right or wrong. Outputs <results>/push-noise/:
+unlabeled, never right or wrong. Outputs <results>/<--out, push-noise>/:
 cohort-1.json (aggregate + its sha256; time-dependent fields sit outside the
 aggregate) and events-<order>.jsonl (every usage line, raw).
 
