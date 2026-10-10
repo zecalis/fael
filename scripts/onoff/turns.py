@@ -13,6 +13,10 @@
 
 Exits 1 when any check fails. Usage: scripts/onoff/turns.py <results>
 <baseline.json> <commit dir> <file dir> [--again <file dir>] [--json <out>]
+
+`turns.py budget <base commit> <base file> <new commit> <new file>` holds a
+carry rule change (chunk 2) to the user's budget (decision
+carry-reach:chunk2-budget) against the same runs on the binary before it.
 """
 import argparse
 import glob
@@ -23,6 +27,8 @@ from collections import Counter
 
 ORDERS = ("path", "reverse")
 SAME = ("snapshot_sha256", "tip", "files", "candidates")
+# the gold pairs newest-per-file kept from carry in chunk 1 (sha prefixes)
+HIDDEN = ("dc060de8", "39fd39f6", "cd9e7b03")
 
 
 def run(d):
@@ -105,7 +111,52 @@ def cost(events):
     return {k: n[k] for k in ("carry", "carry_unlabeled", "check", "merge", "promote")}
 
 
+def peaks(events):
+    """Most carry lines in one edit, one turn and one session."""
+    edit = turn = sess = 0
+    for es in events.values():
+        per = Counter()
+        for e in es:
+            n = sum(s["kind"] == "carry" for s in e.get("said", []))
+            edit, per[e["turn"]] = max(edit, n), per[e["turn"]] + n
+        turn, sess = max([turn, *per.values()]), max(sess, sum(per.values()))
+    return {"edit": edit, "turn": turn, "session": sess}
+
+
+def budget(base, new):
+    """(row, ok) per budget item and turn mode × order; base/new: {mode: run()}."""
+    out = []
+    for m in base:
+        (bd, bev), (nd, nev) = base[m], new[m]
+        bp = {(p["sha"], p["row"]): p for p in bd["aggregate"]["pairs"]}
+        for o in ORDERS:
+            gold = [p for p in nd["aggregate"]["pairs"] if p["label"] == "gold"]
+            lost = [p["sha"][:8] for p in gold if bp[p["sha"], p["row"]][o]["warned"]
+                    and not p[o]["warned"]]
+            out.append((f"{m}/{o} gold lost {lost}", not lost))
+            if m == "file":
+                got = [p["sha"][:8] for p in gold if p["sha"][:8] in HIDDEN and p[o]["warned"]]
+                out.append((f"{m}/{o} hidden gold reached {got}", bool(got)))
+            bc, nc = cost(bev[o]), cost(nev[o])
+            out.append((f"{m}/{o} carry {bc['carry']} -> {nc['carry']}",
+                        nc["carry"] <= bc["carry"] * 1.2))
+            for k in ("check", "merge", "promote"):
+                out.append((f"{m}/{o} {k} {bc[k]} -> {nc[k]}",
+                            abs(nc[k] - bc[k]) <= max(bc[k] * 0.1, 3)))
+            bk, nk = peaks(bev[o]), peaks(nev[o])
+            out.append((f"{m}/{o} carry max edit/turn/session {bk} -> {nk}",
+                        nk["edit"] <= 1 and nk["turn"] <= 1 and nk["session"] <= bk["session"]))
+    return out
+
+
 def main():
+    if sys.argv[1:2] == ["budget"]:
+        dirs = sys.argv[2:6]
+        rows = budget({"commit": run(dirs[0]), "file": run(dirs[1])},
+                      {"commit": run(dirs[2]), "file": run(dirs[3])})
+        for r, ok in rows:
+            print(("ok   " if ok else "OVER ") + r)
+        sys.exit(0 if all(ok for _, ok in rows) else 1)
     ap = argparse.ArgumentParser()
     ap.add_argument("results")
     ap.add_argument("baseline")
@@ -187,6 +238,18 @@ def selftest():
     assert reproduce(base, got) == ["s reverse.w", "orders.path"]
     assert cost({("s", "01C"): ev}) == {"carry": 1, "carry_unlabeled": 0, "check": 0,
                                         "merge": 1, "promote": 0}
+    two = ev + [{"files": ["y.ts"], "turn": 1, "said": [{"kind": "carry", "key": "01B"}]}]
+    assert peaks({("s", "01C"): two}) == {"edit": 1, "turn": 1, "session": 2}
+    pair = lambda w: {"sha": "dc060de8aa", "row": "01B", "label": "gold",
+                      **{o: {"warned": w} for o in ORDERS}}
+    r = lambda w, evs: {"commit": ({"aggregate": {"pairs": [pair(w)]}}, {o: evs for o in ORDERS}),
+                        "file": ({"aggregate": {"pairs": [pair(w)]}}, {o: evs for o in ORDERS})}
+    one = {("s", "01C"): ev}
+    assert all(ok for _, ok in budget(r(False, one), r(True, one)))
+    # gold lost, and a second carry in one turn: both over
+    assert not budget(r(True, one), r(False, one))[0][1]
+    over = {("s", "01C"): two[:2] + [dict(two[2], turn=0)]}
+    assert not all(ok for _, ok in budget(r(True, one), r(True, over)))
 
 
 if __name__ == "__main__":
