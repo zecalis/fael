@@ -238,6 +238,7 @@ def main():
     cands = {c["sha"]: c for c in map(json.loads, open(cand_f))}
     out_dir = os.path.join(a.results, "push-noise")
     os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(replica.ROOT, exist_ok=True)  # /tmp is cleared on reboot
     git_sha = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True,
                              text=True).stdout.strip()
     agg = {"meta": {
