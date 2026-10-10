@@ -1,0 +1,154 @@
+{
+  "v": 1,
+  "at": "2026-10-10T09:00:00Z",
+  "needs_you": [
+    { "kind": "waiting", "uid": "01M4M0BRD000000000000000P2" },
+    { "kind": "review", "uid": "01M4M0BRD000000000000000A3" },
+    { "kind": "review", "uid": "01M4M0BRD000000000000000P1" },
+    { "kind": "ended", "uid": "01M4M0BRD000000000000000V3" },
+    { "kind": "inbox", "uid": "01M4M0BRD000000000000000N1" }
+  ],
+  "queue": ["01M4M0BRD000000000000000P4", "01M4M0BRD000000000000000V4"],
+  "running": ["01M4M0BRD000000000000000B1", "01M4M0BRD000000000000000V5"],
+  "blocked": ["01M4M0BRD000000000000000B2", "01M4M0BRD000000000000000B3"],
+  "projects": [
+    {
+      "name": "fael",
+      "root": "/Users/owner/Project/fael/fael",
+      "base": "origin/main",
+      "worktrees": [
+        { "path": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "run": null },
+        { "path": "/Users/owner/Project/fael/wt-fael-agent-2", "branch": "feat/plan-schema-v2", "run": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71" }
+      ],
+      "plans": [
+        { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "md", "source": ".fapony/plan/PLAN-fael-board.md", "spec": "SPEC-fael-board.md" },
+        { "app": "", "name": "launch-posts", "title": "October launch posts", "area": "marketing", "kind": "unit", "state": "active", "rank": 2, "truth": "db", "source": ".fapony/plan/PLAN-launch-posts.md", "spec": null },
+        { "app": "", "name": "inbox", "title": "Inbox", "area": "dev", "kind": null, "state": "active", "rank": null, "truth": "db", "source": "", "spec": null }
+      ],
+      "chunks": [
+        {
+          "uid": "01M4M0BRD000000000000000B1", "app": "", "plan": "fael-board", "label": "b1b",
+          "title": "schema v2: uid, edges, approval, wait_until, run.out, plan.truth", "state": "running",
+          "size": "L", "model_hint": "opus", "scope": ["fael-core/src/plan/"], "due": null, "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 2, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": null, "approval": null,
+          "run": { "id": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71", "client": "claude", "session": "c0ffee00-1111-4222-8333-444455556666", "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-2", "branch": "feat/plan-schema-v2", "pr": null, "out": null, "started": "2026-10-10T07:40:00Z", "last_seen": "2026-10-10T08:58:00Z", "ended": null },
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000B2", "app": "", "plan": "fael-board", "label": "b2a",
+          "title": "core contract: chunk add/start/wait/done/accept, run end", "state": "open",
+          "size": "L", "model_hint": "opus", "scope": ["fael/src/plan.rs", "fael-core/src/plan/"], "due": null, "pin": null,
+          "ready": false, "blocked_by": [{ "uid": "01M4M0BRD000000000000000B1", "ref": "b1b" }], "unblocks": 1, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000B3", "app": "", "plan": "fael-board", "label": "b3b",
+          "title": "fael board --json matches board-v1.json", "state": "open",
+          "size": "M", "model_hint": "sonnet", "scope": ["fael/src/board/"], "due": null, "pin": null,
+          "ready": false, "blocked_by": [{ "uid": "01M4M0BRD000000000000000B2", "ref": "b2a" }, { "uid": null, "ref": "x9" }], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000A3", "app": "", "plan": "fael-board", "label": "b3a",
+          "title": "pin board JSON v1 as a fixture", "state": "review",
+          "size": "S", "model_hint": "sonnet", "scope": ["fael/tests/golden/"], "due": null, "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": null, "approval": null,
+          "run": { "id": "0d9b7f3a-5e21-4a8c-b6f0-2c4e8a1d9f53", "client": "claude", "session": "ab12cd34-5555-4666-8777-888899990000", "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "pr": 341, "out": null, "started": "2026-10-10T08:10:00Z", "last_seen": "2026-10-10T08:40:00Z", "ended": "2026-10-10T08:41:00Z" },
+          "merge": "open", "fetched_at": "2026-10-10T08:55:00Z"
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P1", "app": "", "plan": "launch-posts", "label": "1",
+          "title": "post: the board in one screenshot", "state": "review",
+          "size": "S", "model_hint": "haiku", "scope": [], "due": "2026-10-11", "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 1, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": null, "approval": null,
+          "run": { "id": "9a3e5c71-2f4b-4d8e-a0c6-7b1d3e5f9a24", "client": "claude", "session": "de56ef78-aaaa-4bbb-8ccc-ddddeeeeffff", "model": "haiku", "worktree": "/Users/owner/Project/fael/wt-fael-agent-3", "branch": null, "pr": null, "out": "/Users/owner/Project/fael/fael/.git/fael/out/01M4M0BRD000000000000000P1/9a3e5c71-2f4b-4d8e-a0c6-7b1d3e5f9a24", "started": "2026-10-10T06:00:00Z", "last_seen": "2026-10-10T06:20:00Z", "ended": "2026-10-10T06:21:00Z" },
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P2", "app": "", "plan": "launch-posts", "label": "2",
+          "title": "post: why a ledger, not memory", "state": "waiting",
+          "size": "S", "model_hint": "haiku", "scope": [], "due": "2026-10-14", "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false,
+          "wait": { "on": "owner", "text": "Lead with the hand-off story or the decision story?", "until": null },
+          "approval": null,
+          "run": { "id": "4c8e0a2b-6d1f-4e3a-9b75-1f2a3c4d5e6f", "client": "claude", "session": "01234567-89ab-4cde-8f01-23456789abcd", "model": "haiku", "worktree": "/Users/owner/Project/fael/wt-fael-agent-3", "branch": null, "pr": null, "out": null, "started": "2026-10-10T07:00:00Z", "last_seen": "2026-10-10T07:12:00Z", "ended": "2026-10-10T07:13:00Z" },
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P3", "app": "", "plan": "launch-posts", "label": "1m",
+          "title": "measure: reach of post 1 after a week", "state": "waiting",
+          "size": "S", "model_hint": "haiku", "scope": [], "due": null, "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false,
+          "wait": { "on": "data", "text": "Reach settles after 7 days.", "until": "2026-10-18" },
+          "approval": null, "run": null,
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P4", "app": "", "plan": "launch-posts", "label": "3",
+          "title": "post: five agents, one board", "state": "open",
+          "size": "S", "model_hint": "haiku", "scope": [], "due": "2026-10-12", "pin": null,
+          "ready": true, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": null,
+          "approval": { "at": "2026-10-10T08:30:00Z", "model": "haiku", "client": "claude" },
+          "run": null,
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000N1", "app": "", "plan": "inbox", "label": null,
+          "title": "Thai labels in the menu bar", "state": "draft",
+          "size": null, "model_hint": null, "scope": [], "due": null, "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
+          "merge": null, "fetched_at": null
+        }
+      ]
+    },
+    {
+      "name": "zecalis",
+      "root": "/Users/owner/Project/zecalis",
+      "base": "origin/main",
+      "worktrees": [
+        { "path": "/Users/owner/Project/zecalis-wt-1", "branch": "feat/feed-cache", "run": "b7e2d4f6-8a0c-4e1b-9d3f-5a7c9e1b3d5f" },
+        { "path": "/Users/owner/Project/zecalis-wt-2", "branch": "feat/vela-onboarding", "run": null }
+      ],
+      "plans": [
+        { "app": "apps/vela", "name": "vela", "title": "vela beta", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "md", "source": "apps/vela/.fapony/plan/PLAN-vela.md", "spec": "SPEC-vela.md" }
+      ],
+      "chunks": [
+        {
+          "uid": "01M4M0BRD000000000000000V3", "app": "apps/vela", "plan": "vela", "label": "3",
+          "title": "onboarding: skip button", "state": "running",
+          "size": "S", "model_hint": "sonnet", "scope": ["apps/vela/src/onboarding/"], "due": null, "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": true, "wait": null, "approval": null,
+          "run": { "id": "e1f3a5c7-9b2d-4f6a-8c0e-2d4f6a8c0e1b", "client": "claude", "session": "fedcba98-7654-4321-8fed-cba987654321", "model": "sonnet", "worktree": "/Users/owner/Project/zecalis-wt-2", "branch": "feat/vela-onboarding", "pr": null, "out": null, "started": "2026-10-10T05:00:00Z", "last_seen": "2026-10-10T05:30:00Z", "ended": "2026-10-10T05:31:00Z" },
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000V4", "app": "apps/vela", "plan": "vela", "label": "4",
+          "title": "feed: pull to refresh", "state": "open",
+          "size": "S", "model_hint": "sonnet", "scope": ["apps/vela/src/feed/refresh.ts"], "due": null, "pin": null,
+          "ready": true, "blocked_by": [], "unblocks": 0, "overlaps": ["01M4M0BRD000000000000000V5"], "pair": [],
+          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
+          "merge": null, "fetched_at": null
+        },
+        {
+          "uid": "01M4M0BRD000000000000000V5", "app": "apps/vela", "plan": "vela", "label": "5",
+          "title": "feed: cache the first page", "state": "running",
+          "size": "M", "model_hint": "opus", "scope": ["apps/vela/src/feed/"], "due": null, "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": ["01M4M0BRD000000000000000V4"], "pair": [],
+          "stalled": true, "ended": false, "wait": null, "approval": null,
+          "run": { "id": "b7e2d4f6-8a0c-4e1b-9d3f-5a7c9e1b3d5f", "client": "claude", "session": null, "model": "opus", "worktree": "/Users/owner/Project/zecalis-wt-1", "branch": "feat/feed-cache", "pr": null, "out": null, "started": "2026-10-10T08:00:00Z", "last_seen": null, "ended": null },
+          "merge": null, "fetched_at": null
+        }
+      ]
+    }
+  ]
+}
