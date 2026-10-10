@@ -120,3 +120,68 @@ impl Started {
         o
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::start::{Brief, Started};
+    use super::*;
+
+    const DOC: &str = "# PLAN-x\n\n## TL;DR\n- [ ] 1 — one\n\n## 1. Goal\nship it\n\n\
+                       ## 2. Scope\nonly cli\n\n## 3. Done criteria\ntests pass\n\n\
+                       ## 4. Constraints\n400 lines\n\n## 5. Risks\nnone said\n";
+
+    fn chunk(uid: &str) -> Brief {
+        Brief {
+            uid: uid.into(),
+            label: Some("1".into()),
+            title: format!("title {uid}"),
+            brief: format!("brief {uid}"),
+            size: None,
+            model_hint: None,
+            scope: None,
+            plan: "x".into(),
+            plan_title: "PLAN-x".into(),
+            source: ".fapony/plan/PLAN-x.md".into(),
+            refs: vec!["SPEC-x.md#block".into(), "gone.rs".into()],
+            said: vec![],
+        }
+    }
+
+    #[test]
+    fn the_brief_reads_the_plan_md_live_and_marks_missing_refs() {
+        let s = sections(DOC);
+        for keep in [
+            "## 1. Goal\nship it",
+            "## 2. Scope",
+            "## 3. Done criteria",
+            "## 4. Constraints\n400 lines",
+        ] {
+            assert!(s.contains(keep), "{keep} in {s}");
+        }
+        assert!(!s.contains("TL;DR") && !s.contains("Risks"), "{s}");
+        let st = Started {
+            run: "R".into(),
+            chunks: vec![chunk("A"), chunk("B")],
+        };
+        let md = |src: &str| (src == ".fapony/plan/PLAN-x.md").then(|| DOC.to_string());
+        let t = st.text(&md, &|p| p == "SPEC-x.md");
+        assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
+        assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
+        assert_eq!(
+            t.matches("## 1. Goal").count(),
+            1,
+            "plan context once per plan: {t}"
+        );
+        assert!(
+            t.contains("refs: SPEC-x.md#block · gone.rs (missing)"),
+            "{t}"
+        );
+        assert!(t.contains("fael chunk done A"), "{t}");
+        // no plan file (inbox, or a moved md): the brief still prints
+        let t = st.text(&|_| None, &|_| true);
+        assert!(
+            !t.contains("Goal") && t.contains("refs: SPEC-x.md#block · gone.rs\n"),
+            "{t}"
+        );
+    }
+}

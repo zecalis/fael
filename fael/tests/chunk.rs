@@ -87,3 +87,37 @@ fn done_out_copies_the_output_per_run() {
     let (_, out, _) = fael(&d, &["chunk", "accept", &u]);
     assert_eq!(out, format!("chunk {u} → done\n"));
 }
+
+/// `fael hook stop` with this worktree as cwd: the event reaches plans.db.
+fn stop(d: &Path, session: &str) {
+    use std::io::Write as _;
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["hook", "stop"])
+        .current_dir(d)
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .env_remove("FAEL_DIR")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let e = serde_json::json!({"cwd": d, "session": session, "text": ""});
+    c.stdin
+        .take()
+        .unwrap()
+        .write_all(e.to_string().as_bytes())
+        .unwrap();
+    assert!(c.wait().unwrap().success());
+}
+
+#[test]
+fn the_stop_hook_stamps_its_worktree_run() {
+    let d = repo();
+    let u = add(&d);
+    assert!(fael(&d, &["chunk", "start", &u, "--run", "R1"]).0);
+    stop(&d, "2026-10-11T09:00:00Z");
+    // the hook filled `session`: another session's stamp now finds no run
+    let wt = d.canonicalize().unwrap().to_string_lossy().into_owned();
+    let mut s = fael_core::plan::Store::open(&d.join(".git/fael/plans.db")).unwrap();
+    assert_eq!(s.seen(&wt, "2026-10-11T10:00:00Z", "t").unwrap(), 0);
+    assert_eq!(s.seen(&wt, "2026-10-11T09:00:00Z", "t").unwrap(), 1);
+}
