@@ -2,6 +2,8 @@
 //! chunk state table. A state changes only by a command or by live git — never guessed.
 
 mod agent;
+mod board;
+mod board_math;
 mod brief;
 mod chunk;
 mod cutover;
@@ -16,6 +18,7 @@ mod start;
 mod store;
 
 pub use agent::Copy;
+pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};
 pub use brief::{rules, sections};
 pub use chunk::{Fields, Here};
 pub use cutover::mirror;

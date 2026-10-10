@@ -132,6 +132,15 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
      never changes the state and clears an approval)",
     ),
     (
+        "board",
+        "every registered repo's plans and chunks: needs you, queue, running, blocked",
+        "fael board [--json] [--open]
+    (the owner's view, run from anywhere: each repo whose plans.db a `fael plan
+     import` or `fael chunk …` wrote is listed in ~/.local/state/fael/projects;
+     --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
+     only open chunks — the planner's one read of scope, after and overlaps)",
+    ),
+    (
         "plan",
         "read plans into plans.db, print each one's next chunk, export one, cut one over",
         "fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan>

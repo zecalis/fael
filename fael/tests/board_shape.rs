@@ -1,6 +1,7 @@
 //! `tests/golden/board-v1.json` is the app contract (SPEC-fael-board §10): the SwiftUI app is
 //! built against it before `fael board --json` exists. This pins its keys and invariants, so
-//! a shape change is a deliberate edit here plus a `v` bump. b3b checks the binary against it.
+//! a shape change is a deliberate edit here plus a `v` bump; `tests/board.rs` holds the
+//! binary to it.
 
 use serde_json::Value;
 use std::collections::HashSet;
@@ -27,8 +28,10 @@ const CHUNK_KEYS: &[&str] = &[
     "wait",
     "approval",
     "run",
-    "merge",
-    "fetched_at",
+    "handoff",
+];
+const PLAN_KEYS: &[&str] = &[
+    "app", "name", "title", "area", "kind", "state", "rank", "truth", "source", "spec", "counts",
 ];
 const RUN_KEYS: &[&str] = &[
     "id",
@@ -56,10 +59,35 @@ fn board() -> Value {
     serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
 }
 
+fn truth_db(b: &Value, c: &Value) -> bool {
+    b["projects"].as_array().unwrap().iter().any(|p| {
+        p["plans"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|pl| pl["app"] == c["app"] && pl["name"] == c["plan"] && pl["truth"] == "db")
+    })
+}
+
 #[test]
 fn board_v1_shape() {
     let b = board();
     assert_eq!(b["v"], 1);
+    for p in b["projects"].as_array().unwrap() {
+        for pl in p["plans"].as_array().unwrap() {
+            assert_eq!(keys(pl), PLAN_KEYS, "{pl}");
+            if matches!(pl["state"].as_str(), Some("done" | "parked")) {
+                assert!(
+                    !p["chunks"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|c| c["plan"] == pl["name"]),
+                    "an archived plan lists counts only: {pl}"
+                );
+            }
+        }
+    }
     let chunks: Vec<&Value> = b["projects"]
         .as_array()
         .unwrap()
@@ -76,22 +104,10 @@ fn board_v1_shape() {
         if !c["run"].is_null() {
             assert_eq!(keys(&c["run"]), RUN_KEYS, "{uid}");
         }
-        let merge = c["merge"].as_str();
-        if c["state"] == "review" && !c["run"]["pr"].is_null() {
-            assert!(
-                matches!(merge, Some("merged" | "open" | "unknown")),
-                "{uid}"
-            );
-            assert!(
-                c["fetched_at"].is_string() || merge == Some("unknown"),
-                "{uid}"
-            );
-        } else {
-            assert!(
-                merge.is_none(),
-                "{uid}: merge only on a review chunk with a PR"
-            );
-        }
+        assert!(
+            c["ready"] == false || truth_db(&b, c),
+            "{uid}: only a db plan's chunk is ready (chunk start takes no md chunk)"
+        );
         for o in c["overlaps"].as_array().unwrap() {
             assert!(
                 uids.contains(o.as_str().unwrap()),
