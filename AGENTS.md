@@ -71,6 +71,12 @@ worktree): its note goes under `--key plan:<name>:chunk-<n>` so it can't wipe th
 chunk's handoff. Start the next session with `fael kickoff <path/to/PLAN-x.md>`;
 don't carry the old transcript forward.
 
+A chunk marked `(wait …)` waits on events: `scripts/checkpoints.py` prints every such
+gate's count against its locked bar. Run the chunk only when its line reads `ready`; its
+result goes in the decision that chunk names. Each run that moves a number appends to
+`~/fael-onoff-results/checkpoints.jsonl` (the trend, gold included); don't file a ledger
+row for a count that isn't ready.
+
 ## Git
 
 Follow the repo-wide Git workflow. Validate before `push pr`:
