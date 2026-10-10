@@ -8,7 +8,7 @@ use fael_core::plan::{Fields, Here, Owner, Start, Store};
 use std::path::Path;
 use std::process::ExitCode;
 
-const USAGE: &str = "fael chunk add|start|edit|wait|after|answer|done|accept|drop|park|unpark — try 'fael chunk --help'";
+const USAGE: &str = "fael chunk add|start|edit|note|wait|after|answer|done|accept|drop|park|unpark — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
@@ -52,6 +52,11 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             a.only("chunk edit", &["title", "brief", "size", "model", "scope"])?;
             s()?.edit(uid, &fields(a), &now)?;
             say(uid, "edited");
+        }
+        ["note", uid, text] => {
+            a.only("chunk note", &[])?;
+            s()?.note(uid, text, &now)?;
+            say(uid, "noted for the next start");
         }
         ["wait", uid, text] => {
             a.only("chunk wait", &["on", "until"])?;

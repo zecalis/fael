@@ -110,6 +110,21 @@ impl Store {
         tx.commit().map_err(err)
     }
 
+    /// `fael chunk note <uid> "<text>"`: a word for whoever starts the chunk next — from any
+    /// worktree, the owner too; state and approval stay (unlike `edit`), the next brief prints it.
+    pub fn note(&mut self, uid: &str, text: &str, now: &str) -> Result<(), String> {
+        let tx = tx(self)?;
+        let r = row(&tx, uid)?;
+        if r.state.terminal() {
+            return Err(format!(
+                "rejected: chunk {uid} is {} — a note reaches only a chunk still to run; `fael add note` keeps it in the ledger",
+                r.state.as_str()
+            ));
+        }
+        set(&tx, &r, r.state, "note", Some(text), now)?;
+        tx.commit().map_err(err)
+    }
+
     /// Live runs in a worktree, `(uid, title, R)` — what a resumed session holds.
     pub fn held(&self, worktree: &str) -> Result<Vec<(String, String, String)>, String> {
         self.conn

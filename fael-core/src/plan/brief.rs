@@ -14,7 +14,8 @@ pub fn rules(uid: &str) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
-         - work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note … --files <f>`\n"
+         - the done text is the hand-off: the brief of every chunk after this one prints it\n\
+         - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note … --files <f>`\n"
     )
 }
 
@@ -81,11 +82,22 @@ impl Started {
             if c.brief != c.title {
                 let _ = writeln!(o, "\n{}", c.brief.trim_end());
             }
-            if !c.said.is_empty() {
-                o.push_str("\nowner said:\n");
-                for s in &c.said {
-                    let _ = writeln!(o, "> {}", s.replace('\n', "\n> "));
+            let quote = |o: &mut String, head: &str, all: &[String]| {
+                if !all.is_empty() {
+                    let _ = writeln!(o, "\n{head}:");
+                    for s in all {
+                        let _ = writeln!(o, "> {}", s.replace('\n', "\n> "));
+                    }
                 }
+            };
+            quote(&mut o, "owner said", &c.said);
+            quote(&mut o, "notes left for this chunk", &c.notes);
+            for (who, text) in &c.after {
+                quote(
+                    &mut o,
+                    &format!("{who}, before this, handed off"),
+                    std::slice::from_ref(text),
+                );
             }
         }
         // plan context once per plan, after the chunks
@@ -146,6 +158,8 @@ mod tests {
             source: ".fapony/plan/PLAN-x.md".into(),
             refs: vec!["SPEC-x.md#block".into(), "gone.rs".into()],
             said: vec![],
+            notes: vec![],
+            after: vec![],
         }
     }
 
@@ -190,6 +204,19 @@ mod tests {
             "{t}"
         );
         assert!(t.contains("fael chunk done A"), "{t}");
+        let mut noted = chunk("D");
+        noted.notes = vec!["use v2\nnot v1".into()];
+        noted.after = vec![("b3b".into(), "board ships".into())];
+        let t2 = Started {
+            run: "R".into(),
+            chunks: vec![noted],
+        }
+        .text(&|_| None, &|_| true);
+        assert!(
+            t2.contains("\nnotes left for this chunk:\n> use v2\n> not v1\n")
+                && t2.contains("\nb3b, before this, handed off:\n> board ships\n"),
+            "{t2}"
+        );
         // no plan file (inbox, or a moved md): the brief still prints
         let t = st.text(&|_| None, &|_| true);
         assert!(
