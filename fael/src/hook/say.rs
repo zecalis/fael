@@ -104,6 +104,9 @@ pub(crate) enum Kind {
     /// The promote ask (PLAN-fael-context-loop chunk 4): a decision in front of
     /// agents at edits in many sessions — a test or check? Once ever per row.
     Promote { id: String },
+    /// Decisions this session wrote on a file it edited (PLAN-fael-decision-
+    /// held chunk 2): stashed by stop, held by the code now? Once per session.
+    Held { ids: Vec<String> },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -145,7 +148,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
         Kind::Carry { .. } => (Once::Key, Some("fael find"), true),
-        Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close"), false),
+        Kind::Fixed | Kind::FixCommit | Kind::Held { .. } => (Once::Key, Some("fael close"), false),
         Kind::Promote { .. } => (Once::Key, Some("fael close"), true),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
@@ -176,6 +179,7 @@ impl Kind {
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Promote { id } => vec![format!("~promote:{id}")],
+            Kind::Held { .. } => vec![super::held::KEY.into()],
             Kind::Brief | Kind::Notice => vec![],
         }
     }
@@ -207,6 +211,7 @@ impl Kind {
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
             Kind::Promote { id } => ("promote", vec![id.clone()]),
+            Kind::Held { ids } => ("held", ids.clone()),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {
@@ -337,10 +342,9 @@ impl Outbox {
     }
 
     /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
-    /// Over budget the stashed notice goes first, then the stashed fix line, then the consolidate or promote ask, then the
-    /// carry-back line, then the gone-check ask, then the
-    /// edit hint, then the commit-cite
-    /// hint, each whole. A cut line
+    /// Over budget the stashed notice goes first, then the stashed fix or held line, then the
+    /// consolidate or promote ask, then the carry-back line, then the gone-check ask, then the
+    /// edit hint, then the commit-cite hint, each whole. A cut line
     /// keeps its keys for a later push. True when a stashed line was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
@@ -348,7 +352,7 @@ impl Outbox {
         while cost(&keep) > budget {
             let first = |f: fn(&Kind) -> bool| keep.iter().position(|l| f(&l.kind));
             let cut = first(|k| matches!(k, Kind::Notice))
-                .or_else(|| first(|k| matches!(k, Kind::Fixed)))
+                .or_else(|| first(|k| matches!(k, Kind::Fixed | Kind::Held { .. })))
                 .or_else(|| first(|k| matches!(k, Kind::Merge { .. } | Kind::Promote { .. })))
                 .or_else(|| first(|k| matches!(k, Kind::Carry { .. })))
                 .or_else(|| first(|k| matches!(k, Kind::Check { .. })))

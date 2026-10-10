@@ -93,6 +93,8 @@ fn decide(e: &Event) -> Reply {
     if collect_reply(e, &c).stored > 0 {
         (c.log, c.tags) = crate::journal::read(&c.repo);
     }
+    // after the reply's lines: a decision it files is this session's too
+    super::held::stash(&c);
     // session start: an RFC 3339 time, or a transcript file's birthtime, at
     // ms precision — whole seconds race with rows filed just before it
     let Some(since_ms) = session_start(e) else {

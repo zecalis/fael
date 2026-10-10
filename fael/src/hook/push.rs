@@ -55,7 +55,8 @@ fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
             text: fixed_line(&p, if edited.is_empty() { files } else { &edited }),
         }
     });
-    notice.into_iter().chain(fixed).collect()
+    let held = super::held::line(c);
+    notice.into_iter().chain(fixed).chain(held).collect()
 }
 
 /// Render the selected rows with the token budget — the hard cap after the

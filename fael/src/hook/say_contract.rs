@@ -81,6 +81,12 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael: 01PROMO on a.rs was in front of agents at edits in 10+ sessions — a test or check? then `fael close 01PROMO \"moved to <where>\"`\n",
         ),
+        line(
+            Kind::Held {
+                ids: vec!["01HELD".into()],
+            },
+            "fael: decision 01HELD was written this session and `a.rs` edited — if the code holds it now: fael close 01HELD \"now in `a.rs`\"\n",
+        ),
     ]
 }
 
@@ -100,6 +106,7 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::FixCommit => 11,
         Kind::Carry { .. } => 12,
         Kind::Promote { .. } => 13,
+        Kind::Held { .. } => 14,
     }
 }
 
@@ -371,7 +378,8 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "fixed",
             "fixcommit",
             "carry",
-            "promote"
+            "promote",
+            "held"
         ]
     );
 }
