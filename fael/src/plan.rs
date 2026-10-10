@@ -26,7 +26,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
 
 /// Beside the journal, so every worktree of the clone reads one db; the tree's `.fael/`
 /// (or `FAEL_DIR`) without git.
-fn db(r: &Repo) -> PathBuf {
+pub(crate) fn db(r: &Repo) -> PathBuf {
     r.journal.as_deref().unwrap_or(&r.fael).join("plans.db")
 }
 

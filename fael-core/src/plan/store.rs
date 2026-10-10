@@ -45,6 +45,8 @@ pub struct PlanRow {
     pub area: String,
     pub state: String,
     pub truth: String,
+    /// the md path, repo-relative (`""` for `inbox`)
+    pub source: String,
 }
 
 pub(super) fn err(e: rusqlite::Error) -> String {
@@ -91,6 +93,14 @@ impl Store {
     }
 
     fn migrate(&mut self) -> Result<(), String> {
+        // the common open takes no write lock: every hook and command opens the db
+        let v: i32 = self
+            .conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .map_err(err)?;
+        if v == VERSION {
+            return Ok(());
+        }
         // re-read under the write lock: two first opens race, one creates
         let tx = self
             .conn
@@ -117,7 +127,7 @@ impl Store {
     pub fn plans(&self) -> Result<Vec<PlanRow>, String> {
         let mut q = self
             .conn
-            .prepare("SELECT id, app, name, title, area, state, truth FROM plan ORDER BY app, name")
+            .prepare("SELECT id, app, name, title, area, state, truth, source FROM plan ORDER BY app, name")
             .map_err(err)?;
         q.query_map([], |r| {
             Ok(PlanRow {
@@ -128,6 +138,7 @@ impl Store {
                 area: r.get(4)?,
                 state: r.get(5)?,
                 truth: r.get(6)?,
+                source: r.get(7)?,
             })
         })
         .map_err(err)?

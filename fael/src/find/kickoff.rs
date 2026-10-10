@@ -18,6 +18,13 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
         .first()
         .and_then(|f| core::plan_anchor(f, &r.cfg.anchor_prefixes).map(|p| (f, p)));
     let page_limit = limit.or(plan.as_ref().map(|_| core::PLAN_KICKOFF_ROWS));
+    // a plan whose chunks live in plans.db: the chunk to work on comes first
+    if let Some((file, _)) = &plan
+        && offset == 0
+        && !a.has("json")
+    {
+        crate::chunk::kickoff(&r, file);
+    }
     let f = Filter {
         files: al.expand_all(&files),
         limit,

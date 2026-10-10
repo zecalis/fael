@@ -1,7 +1,7 @@
 //! Re-import keeps uids (SPEC §7), never touches a `db` plan's chunks, and an export
 //! reads back through the same grammar.
 
-use super::super::{export, md};
+use super::super::{Fields, Ready, export, md};
 use super::*;
 
 fn plan(name: &str, lines: &str) -> Import {
@@ -159,4 +159,56 @@ fn export_reads_back() {
     };
     assert_eq!(ticks(&back), ticks(&orig));
     assert_eq!(back.title, "PLAN-a");
+}
+
+#[test]
+fn an_md_after_names_a_db_plan_chunk() {
+    let mut s = Store::open_in_memory().unwrap();
+    let files = [
+        plan("a", "- [ ] 1 (after b:2) — waits on b"),
+        plan("b", "- [x] 1 — one\n- [ ] 2 — two"),
+    ];
+    s.import_all(&files, "t0").unwrap();
+    s.conn
+        .execute("UPDATE plan SET truth = 'db' WHERE name = 'b'", [])
+        .unwrap();
+    // b's chunks now come from db_chunks(): the edge still lands on b:2
+    let rep = s.import_all(&files, "t1").unwrap();
+    assert_eq!((rep.db_plans, rep.unresolved.len()), (1, 0));
+    let a1 = uids(&s, "a")[0].split_once('=').unwrap().1.to_string();
+    let b2 = uids(&s, "b")[1].split_once('=').unwrap().1.to_string();
+    match s.ready(&a1, "2026-10-11").unwrap() {
+        Ready::Blocked(u) => assert_eq!(u[0].uid.as_deref(), Some(b2.as_str())),
+        r => panic!("{r:?}"),
+    }
+    s.conn
+        .execute("UPDATE chunk SET state = 'done' WHERE uid = ?1", [&b2])
+        .unwrap();
+    assert_eq!(s.ready(&a1, "2026-10-11").unwrap(), Ready::Yes);
+}
+
+#[test]
+fn a_db_chunk_after_an_md_chunk_survives_reimport() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = |tick: &str| plan("a", &format!("- [{tick}] 1 — md work"));
+    s.import_all(&[a(" "), plan("b", "- [x] 0 — old")], "t0")
+        .unwrap();
+    s.conn
+        .execute("UPDATE plan SET truth = 'db' WHERE name = 'b'", [])
+        .unwrap();
+    let a1 = uids(&s, "a")[0].split_once('=').unwrap().1.to_string();
+    let f = Fields {
+        title: Some("db work".into()),
+        brief: Some("after the md chunk".into()),
+        ..Fields::default()
+    };
+    let c = s.add("b", &f, std::slice::from_ref(&a1), "t0").unwrap();
+    s.import_all(&[a(" "), plan("b", "")], "t1").unwrap();
+    assert!(matches!(
+        s.ready(&c, "2026-10-11").unwrap(),
+        Ready::Blocked(_)
+    ));
+    // the md tick reaches the db chunk through the same edge
+    s.import_all(&[a("x"), plan("b", "")], "t2").unwrap();
+    assert_eq!(s.ready(&c, "2026-10-11").unwrap(), Ready::Yes);
 }

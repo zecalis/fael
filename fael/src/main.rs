@@ -7,6 +7,7 @@ mod aliases;
 mod amend;
 mod args;
 mod batch;
+mod chunk;
 mod claim;
 mod close_key;
 mod filehash;
@@ -96,6 +97,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),
         ("plan", rest) => plan::cmd(&a, rest),
+        ("chunk", rest) => chunk::cmd(&a, rest),
+        ("run", [end, r]) if end == "end" => chunk::run_end(&a, r),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
