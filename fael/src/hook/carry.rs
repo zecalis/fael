@@ -3,9 +3,9 @@
 //! puts that pair — what broke, how it was fixed — in front of the agent,
 //! once per issue and session. A closed row never pushes (`push_tiered`), so
 //! without it the fix is written down and never read again. fael does not
-//! judge whether the old bug applies; the agent reads it and decides. A close
-//! whose only evidence is a branch sha that never reached this checkout or
-//! the default branch is skipped (`reached`).
+//! judge whether the old bug applies; the agent reads it and decides. A fix
+//! not found on this checkout or the default branch is skipped (`reached`):
+//! a new close needs a commit there citing it, an old one a sha that landed.
 
 use super::changed::Ask;
 use super::say::{Kind, Line};
@@ -15,11 +15,11 @@ use crate::core;
 const CLOSE_CHARS: usize = 160;
 
 /// Fixed issues whose fix is looked up in git per edit (two spawns each at
-/// most): past the newest few, an unmerged fix stays silent, not slow.
+/// most, `fix_reached`): past the newest few, an unmerged fix stays silent, not slow.
 const REACHED: usize = 3;
 
-/// The newest closed, not superseded, issue on an edited file whose close
-/// names its fix, as one `Carry` line — unless it is `skip` (the gone-check
+/// The newest closed, not superseded, issue on an edited file whose fix
+/// reached main (`fix_close`, then `fix_reached`), as one `Carry` line — unless it is `skip` (the gone-check
 /// line already names it). Only the newest per file: a file with thirty
 /// fixed bugs says one, not one per turn. `edit` is false off an edit.
 pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Line> {
@@ -29,7 +29,7 @@ pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Li
     let (closed, gone) = (core::closed(ask.log), core::superseded(ask.log));
     let on_file =
         |r: &&core::Row| r.kind == "issue" && ask.files.iter().any(|f| r.files.contains(f));
-    let (r, fix) = ask
+    let (r, (fix, _)) = ask
         .log
         .rows
         .iter()
@@ -40,9 +40,9 @@ pub(crate) fn carry_line(ask: &Ask, edit: bool, skip: Option<&str>) -> Option<Li
         .filter_map(|r| core::fix_close(ask.log, r).map(|t| (r, t)))
         .take(REACHED)
         // one said this session is spent anyway (the Outbox drops it): no spawn
-        .find(|(r, t)| {
+        .find(|(r, (t, new))| {
             ask.hinted.contains(&format!("carry:{}", r.id))
-                || super::reached::fix_reached(ask.root, t, &r.id)
+                || super::reached::fix_reached(ask.root, ask.log, &r.id, t, *new) == Some(true)
         })?;
     if skip == Some(r.id.as_str()) {
         return None;

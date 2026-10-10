@@ -89,19 +89,26 @@ pub fn stale_close_refs(root: &Path, log: &Log, row: &Row, al: &Aliases) -> Vec<
     gone
 }
 
-/// The text `row` was closed with when it names its fix — a sha or `(#N)`,
-/// what `fael stats` counts as fixed (PLAN-fael-experience-loop chunk 6):
-/// the newest close record, else the close `fael compact` folded in. A fix
-/// linked only by a commit naming the id is not here: the push reads no git.
-pub fn fix_close<'a>(log: &'a Log, row: &'a Row) -> Option<&'a str> {
+/// The text `row` was closed with, and whether that close is new
+/// (`stats::new_close`): the newest close record, else the close `fael
+/// compact` folded in. An old close only when it names its fix — a sha or
+/// `(#N)` (PLAN-fael-experience-loop chunk 6); a new close always, since its
+/// evidence is a commit on main citing it (`stats::cites_fix`), which the
+/// caller reads from git.
+pub fn fix_close<'a>(log: &'a Log, row: &'a Row) -> Option<(&'a str, bool)> {
     let close = log
         .closes
         .iter()
         .filter(|c| c.reference.as_deref() == Some(row.id.as_str()))
         .max_by(|a, b| a.ts.cmp(&b.ts))
-        .map(|c| c.text.as_str());
-    let folded = || row.extra.get("closed").and_then(|c| c["text"].as_str());
-    close.or_else(folded).filter(|t| crate::stats::names_fix(t))
+        .map(|c| (c.ts.as_str(), c.text.as_str()));
+    let folded = || {
+        let c = row.extra.get("closed")?;
+        Some((c["ts"].as_str().unwrap_or_default(), c["text"].as_str()?))
+    };
+    let (ts, text) = close.or_else(folded)?;
+    let new = crate::stats::new_close(ts);
+    (new || crate::stats::names_fix(text)).then_some((text, new))
 }
 
 fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<String> {
