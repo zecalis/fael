@@ -11,11 +11,22 @@ hook's own usage lines (`said`: row = search push, carry, check, brief, …);
 `touch@1` is the shadow those lines already carry (`would_drop`).
 
 A label sits on one (sha, row) pair; any other row said in that commit is
-unlabeled, never right or wrong. Outputs <results>/push-noise/:
+unlabeled, never right or wrong. Outputs <results>/<--out, push-noise>/:
 cohort-1.json (aggregate + its sha256; time-dependent fields sit outside the
 aggregate) and events-<order>.jsonl (every usage line, raw).
 
+PLAN-fael-carry-reach chunk 1 adds `--turns`: `commit` (the default, the
+run above) is one prompt per commit, so every edit shares one turn; `file`
+sends a prompt before every edit, a turn per file. Only where the prompts
+sit changes: each event is tagged with its turn and pair row, each pair keeps
+its file order and carry's candidates, so turns.py can hold two runs to the
+same inputs.
+
+Each finished pair is kept in <out>/progress.jsonl, so a rerun of the same
+command resumes where a cut-off run stopped; delete it to start over.
+
 Usage: scripts/onoff/replay.py <src> <results> [--fael <bin>] [--only <n>]
+       [--turns commit|file] [--out <dir under results>]
 """
 import argparse
 import hashlib
@@ -33,8 +44,10 @@ import trial
 ORDERS = ("path", "reverse")
 CHANNEL = {"row": "push", "carry": "carry", "check": "check", "brief": "brief"}
 LABELS = {"a": "a", "b": "b", "c": "c", None: "gold"}
-# say.rs `policy()` kinds with `per_turn`: one per user turn, and a replay is
-# one turn (one prompt, like an on/off `claude -p` trial)
+# say.rs `policy()` kinds with `per_turn`: they share one mark, so one line of
+# any of them per user turn (`--turns commit`: a turn per commit, like an
+# on/off `claude -p` trial; `file`: a turn per edited file)
+TURNS = ("commit", "file")
 PER_TURN = ("carry", "check", "merge", "promote")
 
 
@@ -102,6 +115,27 @@ def ledger_rows(ws):
             for l in open(os.path.join(d, f)) if l.strip()]
 
 
+def candidates(rows, files):
+    """carry_line's pool per touched file: closed, not superseded issues whose
+    newest close names a fix, newest first. ponytail: ULID order stands in for
+    log order, and carry's SCAN/REACHED caps and fix_reached are left out
+    (replica rewrites every sha, so all reach)."""
+    gone = {r.get("supersedes") for r in rows}
+    closes = {}
+    for r in rows:
+        if r.get("ref") and "kind" not in r and r["ts"] >= closes.get(r["ref"], {}).get("ts", ""):
+            closes[r["ref"]] = r
+    out = {}
+    for r in rows:
+        if r.get("kind") != "issue" or r["id"] in gone:
+            continue
+        close = (closes.get(r["id"]) or r.get("closed") or {}).get("text")
+        if close and names_fix(close):
+            for f in set(r.get("files", [])) & set(files):
+                out.setdefault(f, []).append(r["id"])
+    return {f: sorted(v, reverse=True) for f, v in sorted(out.items())}
+
+
 def exists_at(src, rev, p):
     return subprocess.run(["git", "-C", src, "cat-file", "-e", f"{rev}:{p}"],
                           capture_output=True).returncode == 0
@@ -135,38 +169,50 @@ def replay(a, pair, cand, order):
         err = None if pair["row"] in ids else "row not in snapshot"
         err = err or hook(a.fael, "session-start", base | {
             "hook_event_name": "SessionStart", "source": "startup"}, ws, env)
-        err = err or hook(a.fael, "prompt", base | {
-            "hook_event_name": "UserPromptSubmit", "prompt": "replay"}, ws, env)
-        for f in files:
+        for i, f in enumerate(files):
+            if i == 0 or a.turns == "file":
+                err = err or hook(a.fael, "prompt", base | {
+                    "hook_event_name": "UserPromptSubmit", "prompt": "replay"}, ws, env)
             err = err or hook(a.fael, "edit", base | {
                 "hook_event_name": "PostToolUse", "tool_name": "Edit",
                 "tool_input": {"file_path": os.path.join(ws, f)}, "tool_response": {}}, ws, env)
         usage = os.path.join(env["FAEL_STATE_DIR"], "usage.jsonl")
         events = [json.loads(l) for l in open(usage)] if os.path.exists(usage) else []
+        turn_of = turns_of(files, a.turns)
+        for e in events:  # the prompt hook logs nothing: an event's turn is its file's
+            e["turn"] = turn_of.get((e.get("files") or [None])[0], -1)
         err = err or turn_leak(events)
-        close = latest_close(ledger_rows(ws), pair["row"])
+        rows = ledger_rows(ws)
+        close = latest_close(rows, pair["row"])
         paths = guard_paths(close or "")
         pre = {"close": close, "names_fix": bool(close and names_fix(close)),
                "guard_paths": {p: exists_at(a.src, cand["parent"], p) for p in paths}}
-        return events, err, {"snapshot_sha256": snap, "tip": tip, "files": len(files)}, pre
+        return events, err, {"snapshot_sha256": snap, "tip": tip, "files": files,
+                             "candidates": candidates(rows, files)}, pre
     finally:
         shutil.rmtree(tdir, ignore_errors=True)
 
 
+def turns_of(files, turns):
+    """{file: the turn its edit ran in}."""
+    return {f: i if turns == "file" else 0 for i, f in enumerate(files)}
+
+
 def turn_leak(events):
-    """A per-turn kind said twice means no turn was marked: the replay is not
-    the one-prompt session it claims to be. Counted per push, not per `said`
-    entry: one merge line names each of its ids."""
-    n = Counter(k for e in events for k in {s["kind"] for s in e.get("said", [])}
-                if k in PER_TURN)
-    over = {k: v for k, v in n.items() if v > 1}
-    return f"per-turn kind said more than once: {over}" if over else None
+    """Two per-turn lines in one turn mean the turn was not marked: the replay
+    is not the session it claims to be. Counted per push and kind, not per
+    `said` entry: one merge line names each of its ids."""
+    n = Counter(e.get("turn", 0) for e in events
+                for k in {s["kind"] for s in e.get("said", [])} if k in PER_TURN)
+    over = {t: v for t, v in n.items() if v > 1}
+    return f"per-turn lines said more than once in a turn: {over}" if over else None
 
 
 def said(events):
-    """{row id: first channel} in event order, plus touch@1's would_drop and
-    each edit's cut records."""
-    first, drop, cut, carried = {}, set(), {}, {}
+    """{row id: first channel} in event order, plus touch@1's would_drop,
+    each edit's cut records, {file: carry said there} and {turn: the
+    per-turn line that spent it}."""
+    first, drop, cut, carried, spent = {}, set(), {}, {}, {}
     for e in events:
         for s in e.get("said", []):
             if s.get("key") and s["kind"] in ("row", "carry", "check", "ask", "cited", "merge",
@@ -175,16 +221,18 @@ def said(events):
                 if s["kind"] == "carry":
                     for f in e.get("files", []):
                         carried.setdefault(f, s["key"])
+            if s["kind"] in PER_TURN:
+                spent.setdefault(e.get("turn", 0), f"{s['kind']}:{s.get('key')}")
         if e.get("event") == "session-start":
             for i in e.get("ids", []):
                 first.setdefault(i, "brief")
         drop |= set((e.get("would_drop") or {}).get("ids", []))
         for c in e.get("cut", []):
             cut.setdefault(c["id"], c["r"])
-    return first, drop, cut, carried
+    return first, drop, cut, carried, spent
 
 
-def reason(p, cand_row, first, cut, carried, pre, err):
+def reason(p, cand_row, first, cut, carried, pre, err, ctx=None):
     """Why a gold pair was not said (baseline): the channel's own rule, or not."""
     if err:
         return "replay_error"
@@ -197,9 +245,21 @@ def reason(p, cand_row, first, cut, carried, pre, err):
     other = [carried[f] for f in cand_row["overlap"] if carried.get(f, p["row"]) != p["row"]]
     if other:
         return f"not_newest_on_file:{other[0]}"
+    # ctx (--turns): {file: turn}, carry's candidates, {turn: per-turn line}
+    turn_of, cands, used = ctx or ({}, {}, {})
+    turns = {turn_of.get(f, 0) for f in cand_row["overlap"]}
     # the turn's one carry went to another file's issue first
-    spent = [i for i in carried.values() if i != p["row"]]
-    return f"carry_spent_this_turn:{spent[0]}" if spent else "unexplained"
+    spent = [i for f, i in carried.items() if i != p["row"] and turn_of.get(f, 0) in turns]
+    if spent:
+        return f"carry_spent_this_turn:{spent[0]}"
+    # the file's newest was carried at an earlier file: Once::Key keeps it silent here
+    hid = [i for f in cand_row["overlap"] for i in cands.get(f, [])
+           if i > p["row"] and i in carried.values()]
+    if hid:
+        return f"not_newest_on_file:{hid[0]}"
+    # check, merge or promote spent the turn first
+    other = [used[t] for t in sorted(turns) if t in used]
+    return f"turn_spent:{other[0]}" if other else "unexplained"
 
 
 def tally(pairs):
@@ -223,6 +283,18 @@ def tally(pairs):
     return out
 
 
+def absorb(agg, per, step):
+    """Fold one finished pair (a progress.jsonl line) into the aggregate."""
+    agg["pairs"].append(step["pair"])
+    for o in ORDERS:
+        per[o].append(step["per"][o])
+        if step["errors"][o]:
+            agg["errors"].setdefault(o, {})[step["pair"]["sha"]] = step["errors"][o]
+        u = agg["unlabeled"].setdefault(o, {"warned": 0, "touch_would_drop": 0})
+        u["warned"] += step["unlabeled"][o][0]
+        u["touch_would_drop"] += step["unlabeled"][o][1]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
@@ -230,13 +302,15 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     ap.add_argument("--fael", default=os.path.join(here, "..", "..", "target", "release", "fael"))
     ap.add_argument("--only", type=int, help="first n pairs (a smoke run)")
+    ap.add_argument("--turns", choices=TURNS, default="commit")
+    ap.add_argument("--out", default="push-noise", help="output dir under results")
     a = ap.parse_args()
     a.src, a.results, a.fael = map(os.path.abspath, (a.src, a.results, a.fael))
     screened_f = os.path.join(a.results, "screened.jsonl")
     cand_f = os.path.join(a.results, "cohort-1", "candidates.jsonl")
     screened = [json.loads(l) for l in open(screened_f)][:a.only]
     cands = {c["sha"]: c for c in map(json.loads, open(cand_f))}
-    out_dir = os.path.join(a.results, "push-noise")
+    out_dir = os.path.join(a.results, a.out)
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(replica.ROOT, exist_ok=True)  # /tmp is cleared on reboot
     git_sha = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True,
@@ -249,7 +323,9 @@ def main():
                                        text=True).stdout.strip(),
         "worktree_head": git_sha,
         "replay_sha256": sha256(open(__file__, "rb").read()), "orders": ORDERS, "policies": ["baseline@1", "touch@1"],
-        "events": "SessionStart, then PostToolUse Edit per file C changed",
+        "turns": a.turns,
+        "events": "SessionStart, then PostToolUse Edit per file C changed; a "
+                  "UserPromptSubmit before the first edit (commit) or every edit (file)",
         "field_map": {"actual_warned": "usage said[kind∈row,carry,check,…].key ∪ "
                       "session-start ids", "channel": "said kind: row→push, carry, check, "
                       "brief, other", "touch@1": "usage would_drop.ids (shadow)",
@@ -257,7 +333,25 @@ def main():
         "orders": {}, "pairs": [], "unlabeled": {}, "errors": {}}
     started = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     per = {o: [] for o in ORDERS}
+    # each finished pair lands in progress.jsonl: a run cut short resumes after
+    # the last one, if its inputs, binary, replay.py and --turns are the same
+    run_key = {k: agg["meta"][k] for k in ("screened_sha256", "candidates_sha256", "fael_sha256",
+                                           "replay_sha256", "turns")} | {"only": a.only}
+    prog_f = os.path.join(out_dir, "progress.jsonl" if not a.only else f"progress-{a.only}.jsonl")
+    done = [json.loads(l) for l in open(prog_f)] if os.path.exists(prog_f) else []
+    done = done if all(d["key"] == run_key for d in done) else []
+    keep = {(d["pair"]["sha"], d["pair"]["row"]) for d in done}
+    for o in ORDERS:  # drop the events of a pair cut off before its progress line
+        ef = os.path.join(out_dir, f"events-{o}.jsonl")
+        old = open(ef).readlines() if os.path.exists(ef) else []
+        open(ef, "w").writelines(l for l in old if tuple(json.loads(l)[k] for k in ("sha", "row"))
+                                 in keep)
+    open(prog_f, "w").writelines(json.dumps(d) + "\n" for d in done)
+    for d in done:
+        absorb(agg, per, d)
     for i, p in enumerate(screened):
+        if i < len(done):
+            continue
         cand = cands[p["sha"]]
         crow = next(r for r in cand["rows"] if r["id"] == p["row"])
         rec = {"sha": p["sha"], "row": p["row"], "label": LABELS[p["reason"]],
@@ -265,30 +359,34 @@ def main():
         # replica.base()'s cache dir: one we build goes after, 255 would fill /tmp
         bdir = os.path.join(replica.ROOT, "base", f"{cand['parent'][:12]}-plain.git")
         kept = os.path.exists(bdir)
+        step = {"key": run_key, "per": {}, "errors": {}, "unlabeled": {}, "events": {}}
         for o in ORDERS:
             events, err, ident, pre = replay(a, p, cand, o)
-            with open(os.path.join(out_dir, f"events-{o}.jsonl"), "a" if i else "w") as f:
-                for e in events:
-                    f.write(json.dumps({"sha": p["sha"], **e}) + "\n")
-            first, drop, cut, carried = said(events)
+            step["events"][o] = events
+            first, drop, cut, carried, spent = said(events)
             warned = p["row"] in first and not err
             r = rec | {"warned": warned, "channel": first.get(p["row"]) if warned else None,
                        "would_drop": p["row"] in drop, "snapshot_sha256": ident["snapshot_sha256"],
-                       "tip": ident["tip"]}
+                       "tip": ident["tip"], "files": ident["files"],
+                       "candidates": ident["candidates"]}
             if rec["label"] == "gold" and not warned:
-                r["reason"] = reason(p, crow, first, cut, carried, pre, err)
-            per[o].append(r)
-            if err:
-                agg["errors"].setdefault(o, {})[p["sha"]] = err
+                ctx = (turns_of(ident["files"], a.turns), ident["candidates"], spent)
+                r["reason"] = reason(p, crow, first, cut, carried, pre, err, ctx)
+            step["per"][o], step["errors"][o] = r, err
             others = set(first) - {p["row"]}
-            u = agg["unlabeled"].setdefault(o, {"warned": 0, "touch_would_drop": 0})
-            u["warned"] += len(others)
-            u["touch_would_drop"] += len(others & drop)
+            step["unlabeled"][o] = [len(others), len(others & drop)]
         if not kept:
             shutil.rmtree(bdir, ignore_errors=True)
         rec["guard_precheck"] = pre if rec["kind"] == "closed_issue" else None
-        agg["pairs"].append(rec | {o: {k: per[o][-1][k] for k in per[o][-1] if k not in rec}
-                                   for o in ORDERS})
+        step["pair"] = rec | {o: {k: v for k, v in step["per"][o].items() if k not in rec}
+                              for o in ORDERS}
+        for o, events in step.pop("events").items():
+            with open(os.path.join(out_dir, f"events-{o}.jsonl"), "a") as f:
+                f.writelines(json.dumps({"sha": p["sha"], "row": p["row"], **e}) + "\n"
+                             for e in events)
+        with open(prog_f, "a") as f:
+            f.write(json.dumps(step) + "\n")
+        absorb(agg, per, step)
         print(f"{i + 1}/{len(screened)} {p['sha'][:8]} {rec['label']}", flush=True)
     for o in ORDERS:
         agg["orders"][o] = tally(per[o]) | {"replay_error": len(agg["errors"].get(o, {}))}
@@ -318,7 +416,7 @@ def selftest():
           {"event": "edit", "files": ["y.ts"], "said": [{"kind": "row", "key": "D1"}]}]
     assert turn_leak(ev) is None and turn_leak(ev + ev[:1])
     assert turn_leak([{"said": [{"kind": "merge", "key": k} for k in "ABC"]}]) is None
-    first, _, cut, carried = said(ev)
+    first, _, cut, carried, _ = said(ev)
     assert first == {"I1": "carry", "D1": "push"} and carried == {"x.ts": "I1"}
     row = lambda files: {"why": "closed_issue", "overlap": files}
     pre = {"names_fix": True}
@@ -328,6 +426,23 @@ def selftest():
         == "not_newest_on_file:I1"
     assert reason({"row": "G"}, row(["x.ts"]), first, cut, carried,
                   {"names_fix": False}, None) == "close_names_no_fix"
+    # a turn per file: x's carry spends turn 0 only; gold 01B on y loses to
+    # its newer 01C said at x (Once::Key), or to a check that spent turn 1
+    ev = [{"event": "edit", "files": ["x.ts"], "turn": 0, "said": [{"kind": "carry", "key": "01C"}]},
+          {"event": "edit", "files": ["y.ts"], "turn": 1, "said": [{"kind": "check", "key": "01D"}]}]
+    assert turn_leak(ev) is None and turn_leak(ev + ev[1:])
+    first, _, cut, carried, used = said(ev)
+    assert used == {0: "carry:01C", 1: "check:01D"}
+    turn_of = turns_of(["x.ts", "y.ts"], "file")
+    g = lambda cands: reason({"row": "01B"}, row(["y.ts"]), first, cut, carried, pre, None,
+                             (turn_of, cands, used))
+    assert g({"y.ts": ["01C", "01B"]}) == "not_newest_on_file:01C"
+    assert g({"y.ts": ["01B"]}) == "turn_spent:check:01D"
+    assert candidates([{"id": "01B", "kind": "issue", "files": ["y.ts"]},
+                       {"ref": "01B", "ts": "1", "text": "fixed in e6deb61"},
+                       {"id": "01A", "kind": "issue", "files": ["y.ts"]},
+                       {"ref": "01A", "ts": "1", "text": "by design"}], ["y.ts"]) \
+        == {"y.ts": ["01B"]}
 
 
 if __name__ == "__main__":
