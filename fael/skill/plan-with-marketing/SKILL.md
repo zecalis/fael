@@ -26,8 +26,8 @@ make the copy, images and video from your briefs. The owner decides; you find fa
    - shipped: `git log --since <date> --format='%s' | grep -E '^feat'`
    - users' asks and pains: `fael find --kind decision` / `--kind issue` rows marked `(from user)`
    - last results: `fael find --key 'post:<app>:*' --all` — what landed, what didn't
-4. Plan dir: `fapony.config.json` `paths.planDir`, else `.fapony/plan`. Never overwrite an existing
-   `PLAN-<app>-content-<yyyy-mm>.md`.
+4. Plan dir: the app's own `.fapony/plan` (spec: `.fapony/spec`), the nearest one beside
+   `PRODUCT.md`. Never overwrite an existing `PLAN-<app>-content-<yyyy-mm>.md`; check `.fapony/done` too.
 
 ## Phase 1 — VOICE.md (once per app)
 
