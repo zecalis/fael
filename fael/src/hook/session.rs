@@ -41,7 +41,6 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // one pass over the open rows: the Focus keys the branch rows carry, and
     // the to-do's issues — `find` hides closed and superseded either way
     let all: Vec<&core::Row> = core::find(&c.log, &core::Filter::default());
-    super::promote::refresh(&c.repo.root, &all);
     let f = core::Focus::from_rows(branch.as_deref(), &all);
     focus::write(&c.session, &c.repo.root, &f);
     let work = core::on_work(&f, &all, &c.repo.cfg.anchor_prefixes);

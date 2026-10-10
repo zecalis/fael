@@ -82,28 +82,18 @@ pub(crate) enum Kind {
     /// A `git commit` that named open issues (PLAN-fael-agent-ergonomics
     /// chunk 5): each named once per session with its ready `fael close`.
     Cited { ids: Vec<String> },
-    /// The consolidate ask (PLAN-fael-context-loop chunk 3): a file whose
-    /// open decision/note rows crowd the agent's context, asked once per file.
-    Merge { file: String, ids: Vec<String> },
     /// A review finding (PLAN-fael-experience-loop chunk 2): the ready
     /// `fael add issue` for a ReportFindings entry, once per file and line.
     Finding { file: String, line: i64 },
     /// A closed issue whose close named a path that is gone (PLAN-fael-
     /// experience-loop chunk 3): asked once per issue and session.
     Check { id: String },
-    /// A closed issue on the edited file whose close named its fix (PLAN-
-    /// fael-experience-loop chunk 6): the pair "broke → fixed", once per
-    /// issue and session.
-    Carry { id: String },
     /// The agent said it fixed a bug and filed nothing after (PLAN-fael-
     /// experience-loop chunk 5a): stashed by stop, said once per session.
     Fixed,
     /// A `fix:` commit naming no fael row in a session that closed none
     /// (chunk 5b): said once per session.
     FixCommit,
-    /// The promote ask (PLAN-fael-context-loop chunk 4): a decision in front of
-    /// agents at edits in many sessions — a test or check? Once ever per row.
-    Promote { id: String },
     /// Decisions this session wrote on a file it edited (PLAN-fael-decision-
     /// held chunk 2): stashed by stop, held by the code now? Once per session.
     Held { ids: Vec<String> },
@@ -144,12 +134,9 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Pointer { .. } => (Once::Key, Some("fael find --key"), false),
         Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
         Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
-        Kind::Merge { .. } => (Once::Key, Some("fael add"), true),
         Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
-        Kind::Carry { .. } => (Once::Key, Some("fael find"), true),
         Kind::Fixed | Kind::FixCommit | Kind::Held { .. } => (Once::Key, Some("fael close"), false),
-        Kind::Promote { .. } => (Once::Key, Some("fael close"), true),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
     };
     Policy {
@@ -172,13 +159,10 @@ impl Kind {
             Kind::Pointer { keys } => keys.clone(),
             Kind::Bodies => vec!["~bodies".into()],
             Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
-            Kind::Merge { file, .. } => vec![format!("~merge:{file}")],
             Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
             Kind::Check { id } => vec![format!("~check:{id}")],
-            Kind::Carry { id } => vec![format!("~carry:{id}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
-            Kind::Promote { id } => vec![format!("~promote:{id}")],
             Kind::Held { .. } => vec![super::held::KEY.into()],
             Kind::Brief | Kind::Notice => vec![],
         }
@@ -204,13 +188,10 @@ impl Kind {
             Kind::Pointer { keys } => ("pointer", keys.clone()),
             Kind::Bodies => ("bodies", vec![]),
             Kind::Cited { ids } => ("cited", ids.clone()),
-            Kind::Merge { ids, .. } => ("merge", ids.clone()),
             Kind::Finding { file, .. } => ("finding", vec![file.clone()]),
             Kind::Check { id } => ("check", vec![id.clone()]),
-            Kind::Carry { id } => ("carry", vec![id.clone()]),
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
-            Kind::Promote { id } => ("promote", vec![id.clone()]),
             Kind::Held { ids } => ("held", ids.clone()),
             Kind::Notice => ("notice", vec![]),
         };
@@ -343,8 +324,7 @@ impl Outbox {
 
     /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
     /// Over budget the stashed notice goes first, then the stashed fix or held line, then the
-    /// consolidate or promote ask, then the carry-back line, then the gone-check ask, then the
-    /// edit hint, then the commit-cite hint, each whole. A cut line
+    /// gone-check ask, then the edit hint, then the commit-cite hint, each whole. A cut line
     /// keeps its keys for a later push. True when a stashed line was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
@@ -353,8 +333,6 @@ impl Outbox {
             let first = |f: fn(&Kind) -> bool| keep.iter().position(|l| f(&l.kind));
             let cut = first(|k| matches!(k, Kind::Notice))
                 .or_else(|| first(|k| matches!(k, Kind::Fixed | Kind::Held { .. })))
-                .or_else(|| first(|k| matches!(k, Kind::Merge { .. } | Kind::Promote { .. })))
-                .or_else(|| first(|k| matches!(k, Kind::Carry { .. })))
                 .or_else(|| first(|k| matches!(k, Kind::Check { .. })))
                 .or_else(|| {
                     keep.iter()

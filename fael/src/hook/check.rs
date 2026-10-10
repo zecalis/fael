@@ -11,37 +11,10 @@ use crate::core;
 /// Paths named in the line; the rest are one `fael find <id>` away.
 const NAMED: usize = 2;
 
-/// The edit-time asks beyond the edit hint: the gone-check ask, the
-/// carry-back line (`carry`) — never on the issue the gone-check line names —
-/// then the consolidate ask, then the promote ask. One per turn, in that
-/// order: the repo's experience goes before upkeep of the rows, which keeps
-/// its key for a later turn. A read (`edit` false) gets none.
-pub(crate) fn asks(
-    ask: &Ask,
-    t0: &[(&core::Row, usize)],
-    said: &[&core::Row],
-    edit: bool,
-) -> Vec<Line> {
-    let merge = super::merge::merge_line(ask, t0, said);
-    let check = check_line(ask, edit);
-    let checked = check.as_ref().and_then(|l| match &l.kind {
-        Kind::Check { id } => Some(id.as_str()),
-        _ => None,
-    });
-    let carry = super::carry::carry_line(ask, edit, checked);
-    let promote = super::promote::promote_line(ask, t0);
-    check
-        .into_iter()
-        .chain(carry)
-        .chain(merge)
-        .chain(promote)
-        .collect()
-}
-
 /// Closed issues examined per edit, newest first: a hub file with hundreds
 /// of them would otherwise cost every edit a close scan and a stat each.
 // ponytail: newest 50 only, a gone check on an older issue goes unsaid
-pub(super) const SCAN: usize = 50;
+const SCAN: usize = 50;
 
 /// The newest closed issue on an edited file whose close names a gone path,
 /// as one `Check` line. `edit` is false off an edit: a read gets no line.
