@@ -86,6 +86,56 @@ pub(crate) fn names_fix(text: &str) -> bool {
     words(text).any(|w| sha_like(w) || pr_like(w))
 }
 
+/// Fix-evidence cutoff (fael:01M4HX74): the commit time of v0.40.1,
+/// 2026-10-10T03:59:25Z, the first release whose skill and close template
+/// ask the fix commit to cite `(fael:<id>)` and the close for no sha. A close
+/// at or after it is judged by `cites_fix` alone; one before keeps the
+/// `bare_shas` + subject rule, so no old close changes (append-only).
+pub const FIX_CUTOFF_MS: i64 = 1_791_604_765_000;
+
+/// A close written at or after `FIX_CUTOFF_MS`. An unreadable ts is old.
+pub fn new_close(ts: &str) -> bool {
+    ts_ms(ts).is_some_and(|t| t >= FIX_CUTOFF_MS)
+}
+
+/// The prefix of each `(fael:<prefix>)` token in `message`: the exact token,
+/// 8–26 ULID characters, never a bare id in passing (fael:01M4HVK2).
+pub fn fael_cites(message: &str) -> impl Iterator<Item = &str> {
+    message.split("(fael:").skip(1).filter_map(|rest| {
+        let (p, _) = rest.split_once(')')?;
+        let ulid = p
+            .bytes()
+            .all(|b| b.is_ascii_digit() || b.is_ascii_uppercase());
+        ((SHORT..=26).contains(&p.len()) && ulid).then_some(p)
+    })
+}
+
+/// The one id of `ids` that `prefix` starts: none when it starts none or
+/// several — never the first (vela's two `01M4G1N1…` rows, fael:01M4HW99).
+pub fn resolve<'a>(prefix: &str, ids: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    let mut hit = ids.into_iter().filter(|id| id.starts_with(prefix));
+    let one = hit.next()?;
+    hit.next().is_none().then_some(one)
+}
+
+/// Each `(#N)` token of `text`, parens kept: what a squash title ends on.
+pub fn pr_cites(text: &str) -> impl Iterator<Item = &str> {
+    text.match_indices("(#").filter_map(|(i, _)| {
+        let n = text[i + 2..].find(')')?;
+        let digits = &text[i + 2..i + 2 + n];
+        (n > 0 && digits.bytes().all(|b| b.is_ascii_digit())).then(|| &text[i..i + 3 + n])
+    })
+}
+
+/// A new close's fix evidence in one main-branch commit `message`: it cites
+/// a `(fael:<prefix>)` that `is_id` resolves to the closed issue alone, or
+/// holds a `(#N)` the close names. A sha the close names is never evidence
+/// (fael:01M4HTZ4); a found reference proves the link, not the fix. Carry
+/// (`fix_reached`) and `fael stats` read this one rule.
+pub fn cites_fix(message: &str, close: &str, is_id: impl Fn(&str) -> bool) -> bool {
+    fael_cites(message).any(is_id) || pr_cites(close).any(|pr| pr_cites(message).any(|m| m == pr))
+}
+
 /// The shas a close names when it names no `(#N)` — the fix evidence a reader
 /// must find in git (fael:01M4GQVP). A `(#N)` survives a squash, so a close
 /// naming one yields none.
@@ -146,6 +196,11 @@ fn guard(text: &str) -> bool {
 
 pub(super) fn names_check(texts: &[&str]) -> bool {
     texts.iter().any(|t| guard(t))
+}
+
+/// The ids sharing `prefix`'s first `SHORT` chars, for `resolve`.
+fn ids_by<'a>(by_prefix: &HashMap<&str, Vec<&'a str>>, prefix: &str) -> Vec<&'a str> {
+    by_prefix.get(&prefix[..SHORT]).cloned().unwrap_or_default()
 }
 
 /// Row ids a commit message names (a full id or a ≥ 8-char prefix).
@@ -220,8 +275,14 @@ pub(super) fn experience(
             if with_check[repo.as_str()].contains(id) {
                 checked.insert(id);
             }
-            let evidence = said.iter().any(|t| names_fix(t));
-            if !evidence && !in_commit.contains(id) {
+            let evidence = match crate::fix_close(log, r) {
+                Some((close, true)) => repo_commits.iter().any(|c| {
+                    let is_id = |p: &str| resolve(p, ids_by(&by_prefix, p)) == Some(id);
+                    cites_fix(&c.message, close, is_id)
+                }),
+                _ => said.iter().any(|t| names_fix(t)) || in_commit.contains(id),
+            };
+            if !evidence {
                 continue;
             }
             fixed.insert(id);

@@ -272,3 +272,99 @@ fn close_template_fills_into_a_label_core_and_a_fix() {
         }
     );
 }
+
+/// PLAN-fael-fix-evidence §3, the one rule carry (`fix_reached`) and stats
+/// read: (main commit message, close, issue id, fixed).
+#[test]
+fn cites_fix_locks_the_fix_evidence_table() {
+    use super::experience::{cites_fix, new_close, resolve};
+    // vela's two rows sharing 8 chars (fael:01M4HW99)
+    let ids = [
+        "01M4G1N16R2X00000000000000",
+        "01M4G1N199XP00000000000000",
+        "01M3MPZDGMG0PE0F2X4ZFHFDDY",
+    ];
+    let (a, z) = (ids[0], ids[2]);
+    assert_eq!(resolve("01M4G1N1", ids), None, "ambiguous: never the first");
+    assert_eq!(resolve("01M4G1N16", ids), Some(a));
+    assert_eq!(resolve("01ZZZZZZ", ids), None);
+    let picked = "fix: keep state (fael:01M3MPZD)\n\n(cherry picked from commit 22703f2)";
+    let table = [
+        ("fix: keep state (fael:01M3MPZD)", "x → y", z, true),
+        (
+            "feat: page (#405)\n\n* fix: x (fael:01M3MPZD)",
+            "x → y",
+            z,
+            true,
+        ), // squash
+        (picked, "x → y", z, true),
+        ("fixes 01M3MPZD in passing", "x → y", z, false), // not the token
+        ("fix: x (fael:01m3mpzd)", "x → y", z, false),
+        ("fix: x (fael:01M3MPZ)", "x → y", z, false), // under 8
+        ("fix: x (fael:01M4G1N1)", "x → y", a, false), // ambiguous
+        ("fix: x (fael:01M4G1N16R)", "x → y", a, true), // a longer prefix
+        ("fix: x (fael:01M3MPZD)", "x → y", a, false), // another row's
+        ("fix: x (#326)", "x → y; (#326)", a, true),
+        ("fix: x (#3261)", "x → y; (#326)", a, false),
+        ("fix: x (#326)", "x → y; #326", a, false), // not the token
+        ("fix: x 22703f2", "x → y; 22703f2", a, false), // a sha never
+    ];
+    for (msg, close, id, want) in table {
+        let is_id = |p: &str| resolve(p, ids) == Some(id);
+        assert_eq!(cites_fix(msg, close, is_id), want, "{msg} / {close}");
+    }
+    // v0.40.1, the cutoff (fael:01M4HX74), in any zone
+    assert!(new_close("2026-10-10T03:59:25.000Z") && new_close("2026-10-10T10:59:25+07:00"));
+    assert!(!new_close("2026-10-10T03:59:24.999Z") && !new_close("not a time"));
+}
+
+/// Stats reads the same rule: K cited on main · L its sha on main (no
+/// evidence) · M an ambiguous 8-char cite, then a longer one · N `(#77)` ·
+/// O an old close naming a sha, on the old rule.
+#[test]
+fn a_new_close_is_fixed_only_by_a_cite_on_main() {
+    let sibling = format!(
+        "{{\"v\":1,\"id\":\"01KMMMMMZ{}\",\"ts\":\"2026-10-01T00:10:00Z\",\"by\":\"w\",\"kind\":\"note\",\"text\":\"t\",\"files\":[\"m.rs\"]}}\n",
+        "Z".repeat(17)
+    );
+    let log = Log {
+        rows: rows(
+            &("KLMNO".chars())
+                .map(|l| issue(l, "10-01", "k.rs", ""))
+                .chain([sibling])
+                .collect::<String>(),
+        ),
+        closes: rows(
+            &(close('K', "10-11", "x → y")
+                + &close('L', "10-11", "x → y; 9bb1038f")
+                + &close('M', "10-11", "x → y")
+                + &close('N', "10-11", "x → y; (#77)")
+                + &close('O', "10-02", "fixed in abc1234")),
+        ),
+        ..Log::default()
+    };
+    let usage = "{\"ts\":\"2026-10-01T00:05:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s.jsonl\",\"ids\":[],\"event\":\"read\"}\n";
+    let p = super::parse::parse(
+        usage,
+        Path::new("/w/state/usage.jsonl"),
+        &[PathBuf::from("/tmp")],
+    );
+    let commit = |sha: &str, message: &str| Commit {
+        sha: sha.into(),
+        message: message.into(),
+    };
+    let mut commits = vec![
+        commit("1111111a", "fix: k (fael:01KKKKKKKK)"),
+        commit("9bb1038f", "fix: l"),
+        commit("2222222b", "fix: m (fael:01KMMMMM)"),
+        commit("3333333c", "feat: n (#77)"),
+    ];
+    let logs = HashMap::from([("/w/r".to_string(), log)]);
+    let fixed = |commits: &[Commit]| {
+        let all = HashMap::from([("/w/r".to_string(), commits.to_vec())]);
+        experience(&p, &logs, &all).fixed
+    };
+    assert_eq!(fixed(&commits), 3, "K, N, O");
+    commits.push(commit("4444444d", "fix: m (fael:01KMMMMMM)"));
+    assert_eq!(fixed(&commits), 4, "M by its longer prefix");
+}

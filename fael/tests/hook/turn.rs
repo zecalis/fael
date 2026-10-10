@@ -101,11 +101,13 @@ fn the_carry_back_goes_before_the_merge_ask() {
             "close",
             "--key",
             "a:retry",
-            "no cap → cap at 3; fixed in abc1234",
+            "no cap → cap at 3; fixed in (#7)",
         ],
         "",
     );
     assert!(ok, "{err}");
+    // the fix on main: carry speaks only once a commit there names it
+    super::git(&d, &["commit", "-q", "--allow-empty", "-m", "cap (#7)"]);
     // two reads put all six decisions in context (five per push)
     read(&d, "t4", "src/a.rs");
     read(&d, "t4", "src/a.rs");

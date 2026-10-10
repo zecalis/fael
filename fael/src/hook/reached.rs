@@ -1,46 +1,113 @@
 //! Whether a closed issue's fix reached this checkout or the default branch
 //! (fael:01M4GQVP): a close naming only a branch sha read as fixed while that
 //! branch never merged, and carry put a fix in front of agents that main did
-//! not have. A squash rewrites every branch sha, so ancestry alone would
-//! silence nearly every carry (vela: 0 of 46 sha-only closes are ancestors of
-//! main); the squash message keeps each commit's subject, and a commit citing
-//! `(fael:<id>)` keeps the id — both are evidence found in git, never a guess.
+//! not have. A close at or after the cutoff (`stats::new_close`) is judged by
+//! what git keeps under every merge style — a commit citing `(fael:<prefix>)`
+//! or the close's `(#N)` (`stats::cites_fix`, fael:01M4HTZ4) — never a sha.
+//! An older close keeps its rule: a squash rewrites every branch sha, so
+//! ancestry alone would silence nearly every carry (vela: 0 of 46 sha-only
+//! closes are ancestors of main); the squash message keeps each commit's
+//! subject, and a commit naming the id keeps the id.
+//!
+//! "Main" is HEAD and `origin/HEAD`, HEAD alone when `origin/HEAD` is unset,
+//! as the local refs stand: nothing is fetched on the hook path.
 
 use std::path::Path;
 use std::process::Command;
 
-/// True when `close` names no bare sha (a `(#N)` survives a squash), when a
-/// named sha is not in this clone (no evidence either way), or when HEAD or
-/// `origin/HEAD` holds a commit carrying one sha's subject — the sha itself
-/// when it is an ancestor, the squash that kept its subject otherwise — or
-/// naming issue `id`. Two git spawns at most per sha: the edit push budget.
+/// `Some(true)` reached, `Some(false)` not, `None` unknown — git could read
+/// no main ref for a new close (`new`), which is never reported as "not
+/// reached". A new close is one spawn, two when `origin/HEAD` is unset; an
+/// old one two per named sha at most: the edit push budget. An old close
+/// keeps its rule whole: reached when it names no bare sha, a named sha is
+/// not in this clone, or main holds that sha's subject or the id (missing
+/// refs read as not reached, as the chunk 1 baseline counted them).
 /// ponytail: a generic subject ("wip") matches any commit that repeats it;
-/// read PR merge data if that ever lets a stale fix through.
-pub(crate) fn fix_reached(root: &Path, close: &str, id: &str) -> bool {
+/// only old closes read subjects, so this ceiling no longer grows.
+pub(crate) fn fix_reached(
+    root: &Path,
+    log: &crate::core::Log,
+    id: &str,
+    close: &str,
+    new: bool,
+) -> Option<bool> {
     let cite = &id[..id.len().min(8)];
+    if new {
+        let mut args = vec!["--format=%B%x00".to_string(), "-F".into()];
+        args.push(format!("--grep=(fael:{cite}"));
+        args.extend(crate::core::stats::pr_cites(close).map(|p| format!("--grep={p}")));
+        let out = on_main(root, &args)?;
+        let ids = || log.rows.iter().map(|r| r.id.as_str());
+        let is_id = |p: &str| crate::core::stats::resolve(p, ids()) == Some(id);
+        return Some(
+            out.split('\0')
+                .any(|m| crate::core::stats::cites_fix(m, close, is_id)),
+        );
+    }
     let shas = crate::core::stats::bare_shas(close);
-    shas.is_empty()
-        || shas.iter().any(|sha| {
-            let Some(subject) = crate::git(
-                root,
-                &["log", "-1", "--format=%s", &format!("{sha}^{{commit}}")],
-            ) else {
-                return true;
-            };
-            let grep = |refs: &[&str]| {
-                let (s, c) = (format!("--grep={subject}"), format!("--grep={cite}"));
-                let mut args = vec!["log", "-1", "--format=%h", "-F", &s, &c];
-                args.extend(refs);
-                Command::new("git")
-                    .args(&args)
-                    .current_dir(root)
-                    .output()
-                    .ok()
-            };
-            // no `origin/HEAD` (no remote, or never set) fails the pair: HEAD alone
-            match grep(&["HEAD", "origin/HEAD"]).filter(|o| o.status.success()) {
-                Some(o) => !o.stdout.is_empty(),
-                None => grep(&["HEAD"]).is_some_and(|o| !o.stdout.is_empty()),
-            }
-        })
+    Some(
+        shas.is_empty()
+            || shas.iter().any(|sha| {
+                let Some(subject) = crate::git(
+                    root,
+                    &["log", "-1", "--format=%s", &format!("{sha}^{{commit}}")],
+                ) else {
+                    return true;
+                };
+                let args = ["-1", "--format=%h", "-F"].map(String::from);
+                let greps = [format!("--grep={subject}"), format!("--grep={cite}")];
+                on_main(root, &[&args[..], &greps[..]].concat()).is_some_and(|o| !o.is_empty())
+            }),
+    )
+}
+
+/// `git log <args>` over HEAD and `origin/HEAD`, else HEAD alone (no remote,
+/// or never set); `None` when neither reads.
+fn on_main(root: &Path, args: &[String]) -> Option<String> {
+    let log = |refs: &[&str]| {
+        let o = Command::new("git")
+            .arg("log")
+            .args(args)
+            .args(refs)
+            .current_dir(root)
+            .output()
+            .ok()?;
+        o.status
+            .success()
+            .then(|| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    log(&["HEAD", "origin/HEAD"]).or_else(|| log(&["HEAD"]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fix_reached;
+
+    fn git(d: &std::path::Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(d)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    /// Done criterion: no readable main ref is unknown, never "not
+    /// reached"; with a ref and no cite it is not reached.
+    #[test]
+    fn no_main_ref_is_unknown_not_unreached() {
+        let d = std::env::temp_dir().join(format!("fael-reached-{}", crate::core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        git(&d, &["init", "-q"]);
+        let (log, id) = (crate::core::Log::default(), "01AAAAAAAAAAAAAAAAAAAAAAAA");
+        assert_eq!(fix_reached(&d, &log, id, "x → y; (#9)", true), None);
+        let who = ["-c", "user.name=t", "-c", "user.email=t@t"];
+        git(
+            &d,
+            &[&who[..], &["commit", "-q", "--allow-empty", "-m", "init"]].concat(),
+        );
+        assert_eq!(fix_reached(&d, &log, id, "x → y; (#9)", true), Some(false));
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
