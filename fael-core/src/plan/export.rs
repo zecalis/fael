@@ -102,7 +102,7 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
         let _ = write!(o, "\n  uid {uid} · {state}");
         for (k, v) in names.iter().zip(rest) {
             if !v.trim().is_empty() {
-                let _ = write!(o, " · {k} {}", v.trim());
+                let _ = write!(o, " · {k} {}", v.trim().replace('\n', ", "));
             }
         }
         o.push('\n');

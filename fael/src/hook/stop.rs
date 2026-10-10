@@ -18,8 +18,34 @@ pub(crate) fn stop(e: &Event) -> Reply {
     }
     let mut r = decide(e);
     super::autosync::start(e);
+    seen(e);
     r.notice = receipt(e);
     r
+}
+
+/// PLAN-fael-board: stamp the live chunk run of this worktree (SPEC §7) — `session` on the
+/// first stop, `last_seen` on each. No plans.db, no open; any failure stays silent.
+fn seen(e: &Event) {
+    let Some(session) = e.session.as_deref().filter(|s| !s.is_empty()) else {
+        return;
+    };
+    let Some(r) = e
+        .cwd
+        .as_deref()
+        .and_then(|c| crate::repo_at(Path::new(c)).ok())
+    else {
+        return;
+    };
+    let db = crate::plan::db(&r);
+    if db.exists()
+        && let Ok(mut s) = fael_core::plan::Store::open(&db)
+    {
+        let _ = s.seen(
+            &r.root.to_string_lossy(),
+            session,
+            &core::rfc3339(core::now_ms()),
+        );
+    }
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the turn's receipt for the user —

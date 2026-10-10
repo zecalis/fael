@@ -1,15 +1,27 @@
 //! Plans and chunks (SPEC-fael-board): the markdown reader, the SQLite store, and the
 //! chunk state table. A state changes only by a command or by live git — never guessed.
 
+mod agent;
+mod brief;
+mod chunk;
 mod export;
 mod import;
 pub mod md;
 mod next;
+mod owner;
+mod ready;
 mod schema;
+mod start;
 mod store;
 
+pub use agent::Copy;
+pub use brief::{rules, sections};
+pub use chunk::{Fields, Here};
 pub use export::export;
 pub use next::{Next, next};
+pub use owner::Owner;
+pub use ready::{Ready, Unmet};
+pub use start::{Brief, Start, Started};
 pub use store::{Import, PlanRow, Report, Store};
 
 /// A chunk's one stored state (SPEC §1).
@@ -71,11 +83,13 @@ impl State {
     fn command(self) -> &'static str {
         match self {
             State::Draft => "fael chunk add (no brief)",
-            State::Open => "fael chunk add (with a brief) · fael chunk answer · fael chunk unpark",
+            State::Open => {
+                "fael chunk add (with a brief) · fael chunk answer · fael chunk after · fael chunk unpark"
+            }
             State::Running => "fael chunk start",
-            State::Waiting => "fael chunk wait --on owner|data|<chunk>",
-            State::Review => "fael chunk done --pr N",
-            State::Done => "fael chunk done (no PR) · the PR merging",
+            State::Waiting => "fael chunk wait --on owner|data",
+            State::Review => "fael chunk done [--pr N | --out <path>]",
+            State::Done => "fael chunk accept · the PR merging",
             State::Replaced => "fael chunk apply (merge · split)",
             State::Dropped => "fael chunk drop",
             State::Parked => "fael chunk park",
@@ -111,13 +125,16 @@ fn allowed(from: State, to: State) -> bool {
     use State::*;
     !from.terminal()
         && match to {
-            Open => matches!(from, Draft | Waiting | Parked),
-            Running => from == Open,
+            // answer (waiting, review) · after (running) · unpark
+            Open => matches!(from, Draft | Waiting | Review | Running | Parked),
+            // a data wait past its date is ready (SPEC §2)
+            Running => matches!(from, Open | Waiting),
             Waiting => from == Running,
             Review => from == Running,
-            Done => matches!(from, Running | Review),
+            // owner accept or the PR merging: every done passes review
+            Done => from == Review,
             Replaced | Dropped => true,
-            Parked => matches!(from, Draft | Open | Waiting),
+            Parked => matches!(from, Draft | Open | Waiting | Running),
             Draft => false,
         }
 }
@@ -141,9 +158,10 @@ mod tests {
             (Draft, Open),
             (Open, Running),
             (Running, Waiting),
+            (Waiting, Running),
             (Waiting, Open),
             (Running, Review),
-            (Running, Done),
+            (Running, Parked),
             (Review, Done),
             (Open, Replaced),
             (Review, Dropped),
@@ -155,16 +173,16 @@ mod tests {
         for (from, to) in [
             (Draft, Running),
             (Open, Done),
-            (Waiting, Running),
             (Done, Open),
             (Replaced, Dropped),
-            (Running, Parked),
+            (Running, Done),
+            (Review, Parked),
         ] {
             assert!(check(from, to).is_err(), "{from:?} → {to:?}");
         }
         let e = check(Open, Done).unwrap_err();
         assert!(
-            e.contains("fael chunk done") && e.contains("from running | review"),
+            e.contains("fael chunk accept") && e.contains("from review"),
             "{e}"
         );
     }
