@@ -129,6 +129,9 @@ fn run_end_forced_takeover_and_fencing() {
     assert_eq!(live(&s, &c), 1);
     // one start per worktree
     let other = add(&mut s, "other", Some("b"));
+    let e = s.after(&c, &other, "why", &here("/b")).unwrap_err();
+    assert!(e.contains("taken over"), "after is fenced too: {e}");
+    assert_eq!(live(&s, &c), 1, "a fenced after ends no run");
     let e = start(&mut s, &other, "/c").unwrap_err();
     assert!(e.contains(&format!("holds run {r3}")), "{e}");
     assert_eq!(state(&s, &other), "open", "a refused start claims nothing");
