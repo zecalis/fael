@@ -132,8 +132,8 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
     ),
     (
         "plan",
-        "read plans into plans.db, print each one's next chunk, export one as markdown",
-        "fael plan import | fael plan next | fael plan export [<plan>]
+        "read plans into plans.db, print each one's next chunk, export one, cut one over",
+        "fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan>
     (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
      parked/, done/ — into <git-common-dir>/fael/plans.db; a chunk keeps its uid by a
      unique label, else a unique title (an ambiguous one is listed), a plan whose chunks
@@ -142,7 +142,9 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
      `fapony plan` makes: your own (wip) claim, else the first open chunk no live
      worktree claimed whose (after …) is met and that has no (wait …); export: every
      plan, or the one named (name or app/name), as markdown to stdout — uid, state and
-     fields under each line)",
+     fields under each line; cutover: import, then the plan's chunks live in the db
+     (`fael chunk …`) and its md's chunk lines become one banner — refused while a
+     chunk is a draft, held by (wip …), or waits on an (after …) naming no chunk)",
     ),
     (
         "run",
