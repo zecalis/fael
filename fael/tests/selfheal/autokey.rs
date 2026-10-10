@@ -143,3 +143,28 @@ fn mcp_add_auto_keys_too() {
     assert_eq!(key_of(&d, "follow-up").as_deref(), Some("auth:session"));
     assert!(usage(&d).is_empty(), "self-heal info is no ask");
 }
+
+/// 01M4HW7E: a plan's handoff (or parallel chunk) key is a slot, not a
+/// topic. A keyless note on that plan's anchor stays keyless, so it can't
+/// become the newest handoff and hide the real one.
+#[test]
+fn a_plan_slot_key_is_never_adopted() {
+    for slot in ["plan:x:handoff", "plan:x:chunk-2"] {
+        let d = repo();
+        // --force: a lone chunk-<n> key is a shape reject otherwise
+        let seed = [
+            "add", "note", "handoff", "--files", "plan:x", "--key", slot, "--force",
+        ];
+        let (ok, _, err) = fael(&d, &seed, "");
+        assert!(ok, "{err}");
+        let (ok, _, err) = fael(&d, &["add", "note", "cross-plan", "--files", "plan:x"], "");
+        assert!(ok, "{err}");
+        assert!(!err.contains("the only key"), "{slot}: {err}");
+        assert_eq!(key_of(&d, "cross-plan"), None, "{slot}");
+        assert_eq!(
+            key_of(&d, "handoff").as_deref(),
+            Some(slot),
+            "handoff stays open"
+        );
+    }
+}

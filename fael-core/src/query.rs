@@ -36,7 +36,8 @@ pub use focus::{
 pub use groups::{groups, render_groups};
 pub use keyhint::key_hints;
 pub use lookup::{
-    KeyUse, NO_ROW_WITH_ID, fat_reasons, keys, levenshtein, query, resolve, resolve_row, warnings,
+    KeyUse, NO_ROW_WITH_ID, chunk_stem, fat_reasons, keys, levenshtein, query, resolve,
+    resolve_row, warnings,
 };
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
