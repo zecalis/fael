@@ -78,3 +78,36 @@ fn on_main(root: &Path, args: &[String]) -> Option<String> {
     };
     log(&["HEAD", "origin/HEAD"]).or_else(|| log(&["HEAD"]))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::fix_reached;
+
+    fn git(d: &std::path::Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(d)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    /// Done criterion: no readable main ref is unknown, never "not
+    /// reached"; with a ref and no cite it is not reached.
+    #[test]
+    fn no_main_ref_is_unknown_not_unreached() {
+        let d = std::env::temp_dir().join(format!("fael-reached-{}", crate::core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        git(&d, &["init", "-q"]);
+        let (log, id) = (crate::core::Log::default(), "01AAAAAAAAAAAAAAAAAAAAAAAA");
+        assert_eq!(fix_reached(&d, &log, id, "x → y; (#9)", true), None);
+        let who = ["-c", "user.name=t", "-c", "user.email=t@t"];
+        git(
+            &d,
+            &[&who[..], &["commit", "-q", "--allow-empty", "-m", "init"]].concat(),
+        );
+        assert_eq!(fix_reached(&d, &log, id, "x → y; (#9)", true), Some(false));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}

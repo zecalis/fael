@@ -247,3 +247,99 @@ fn an_old_unmerged_sha_is_carried_once_a_commit_names_the_issue() {
     commit_msg(&d, &format!("cap retries ({})", short_id(&d)));
     assert!(hook(&d, "edit", "s2").contains(SAID));
 }
+
+/// fael:01M4HW99: two rows sharing 8 chars, as vela's `01M4G1N1…` do. The
+/// hook resolves the cite against the log on disk: the shared 8-char prefix
+/// names neither row, a longer one names the closed issue alone.
+#[test]
+fn a_cite_two_rows_share_is_not_carried_a_longer_one_is() {
+    let d = repo();
+    let row = |id: &str, kind: &str, file: &str| {
+        format!(
+            "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"2026-10-11T00:00:00.000Z\",\"by\":\"t\",\"kind\":\"{kind}\",\"text\":\"retry loops\",\"files\":[\"{file}\"]}}\n"
+        )
+    };
+    let (issue, twin) = ("01AAAA0000000000000000000A", "01AAAA0000000000000000000B");
+    std::fs::create_dir_all(d.join(".fael/log/t")).unwrap();
+    std::fs::write(
+        d.join(".fael/log/t/2026-10.jsonl"),
+        row(issue, "issue", "src/a.rs") + &row(twin, "note", "src/b.rs"),
+    )
+    .unwrap();
+    std::fs::write(
+        d.join(".fael/log/t/2026-10.close.jsonl"),
+        format!(
+            "{{\"v\":1,\"id\":\"01AAAA0000000000000000000C\",\"ts\":\"2026-10-11T00:00:01.000Z\",\"by\":\"t\",\"text\":\"no cap → cap at 3\",\"ref\":\"{issue}\"}}\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    commit_msg(&d, "fix: cap at 3 (fael:01AAAA00)");
+    assert!(
+        !hook(&d, "edit", "s1").contains(SAID),
+        "ambiguous cite carried"
+    );
+    commit_msg(&d, "fix: cap at 3 (fael:01AAAA0000000000000000000A)");
+    assert!(hook(&d, "edit", "s2").contains(SAID), "unique cite missed");
+}
+
+/// The push budget for new closes: each closed issue on the file is a
+/// candidate (its evidence is in git), yet one edit looks up `REACHED` (3)
+/// of them, two spawns each at most (`origin/HEAD` unset here). A `git` shim
+/// on PATH logs every call; only the fix lookups are counted.
+#[cfg(unix)]
+#[test]
+fn new_closes_stay_inside_the_reached_spawn_budget() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    for i in 0..8 {
+        let key = format!("a:retry{i}");
+        let add = [
+            "add",
+            "issue",
+            "retry loops",
+            "--files",
+            "src/a.rs",
+            "--key",
+            &key,
+        ];
+        let (ok, _, err) = fael(&d, &add, "");
+        assert!(ok, "{err}");
+        let (ok, _, err) = fael(&d, &["close", "--key", &key, "no cap → cap at 3"], "");
+        assert!(ok, "{err}");
+    }
+    let real = String::from_utf8(
+        std::process::Command::new("sh")
+            .args(["-c", "command -v git"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let (bin, calls) = (d.join("shim"), d.join("git-calls"));
+    std::fs::create_dir_all(&bin).unwrap();
+    let shim = format!(
+        "#!/bin/sh\necho \"$*\" >> '{}'\nexec '{}' \"$@\"\n",
+        calls.display(),
+        real.trim()
+    );
+    std::fs::write(bin.join("git"), shim).unwrap();
+    std::fs::set_permissions(bin.join("git"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"s1","tool_input":{{"file_path":{}}}}}"#,
+        json(&d),
+        json(&d.join("src/a.rs"))
+    );
+    let args = ["hook", "edit", "--client", "claude"];
+    let (ok, out, err) = fael_env(&d, &args, &input, &[("PATH", &path)]);
+    assert!(ok, "{err}");
+    assert!(!out.contains(SAID), "{out}");
+    let log = std::fs::read_to_string(&calls).unwrap_or_default();
+    let lookups = log.lines().filter(|l| l.contains("--grep=(fael:")).count();
+    assert_eq!(
+        lookups, 6,
+        "3 closes × (HEAD origin/HEAD, then HEAD):\n{log}"
+    );
+}
