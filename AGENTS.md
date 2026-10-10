@@ -2,26 +2,21 @@
 
 ## North star and product invariant
 
-North star: the repo's experience, handed to a new agent — what broke here and how it was
-fixed (a closed issue: cause → fix → tried → guard), what was chosen over what and why, how
-this repo works (a constraint with its evidence). Experience is what those rows add up to,
-never a row kind. Fael does not make the agent smarter; "new agent + fael works closer to one
-with experience here" is a thesis to prove, never a promise. The agent discovers, judges and
-records; fael captures, carries and surfaces — never infers, never judges, never fixes for it.
-Capture is at the fix, not at a commit.
+North star: the ledger behind plan work — the hand-off where a chunk stopped, the decision and
+why, the open issue, the note the next session needs, what the user asked for — pulled at
+`fael kickoff`, in plan briefs, and at session start for work routed to an agent. Git owns what
+changed; fael keeps what git and the code cannot say. The agent discovers, judges and records;
+fael captures, carries and surfaces — never infers, never judges, never fixes for it.
 
 The mechanism is the team's shared work ledger — context and hand-offs (decisions, requirements,
 assigned issues, claims, where a plan stopped) that pass between sessions and agents — not the
 agent's memory, not a personal notebook, not a generic AI memory store, and not a process or git
 guard. Value is work context (`task (key) → decision → evidence → outcome → closure`) in front
-of the right agent, once, at the file it touches — never more rows. Measured as capture → acted
-→ outcome. Rounds and tokens are a cost to keep low, never a promise.
+of the right agent, once — never more rows. Rounds and tokens are a cost to keep low, never a promise.
 
-Ship a feature only if all six hold: a new agent lacks it · someone who has worked here has it ·
-code, diff, tests and git don't say it plainly · fael keeps its evidence without interpreting
-it · the next agent at that file or task gets it back · `fael stats` can show it helped — and it never starts an agent turn or
-re-prompts on idle, adds no daemon,
-never guesses, never polices the developer's process (worktree, branch, git flow).
+Maintenance mode (decision `product:mission`): no new dev features. A change ships when it fixes
+a bug, cuts noise, or removes code — and it never starts an agent turn or re-prompts on idle,
+adds no daemon, never guesses, never polices the developer's process (worktree, branch, git flow).
 Assigning and claiming inform. A claim is race-safe (of two agents, one wins) but only gates the claim — `--force` takes it over, no edit is ever blocked.
 Claims about value (README, docs, PRs) say only what `fael stats` shows — what fael handed over
 and how often it was in front of the agent at an edit (`value.by_event`, `value.cross_agent`).

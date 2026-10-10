@@ -43,13 +43,6 @@ pub(super) fn all() -> Vec<Line> {
             "fael: 01CITED cited in a commit — done? fael close 01CITED \"<why>\"\n",
         ),
         line(
-            Kind::Merge {
-                file: "a.rs".into(),
-                ids: vec!["01MERGE".into()],
-            },
-            "fael: a.rs has 6 open rows, among them 01MERGE — fael add decision \"<the one rule>\" --supersedes 01MERGE · fael close <id>\n",
-        ),
-        line(
             Kind::Finding {
                 file: "a.rs".into(),
                 line: 7,
@@ -70,18 +63,6 @@ pub(super) fn all() -> Vec<Line> {
             "fael: a fix: commit names no fael row — fael add issue \"x\" --key a:b then fael close --key a:b \"y\"\n",
         ),
         line(
-            Kind::Carry {
-                id: "01CARRY".into(),
-            },
-            "fael: a.rs broke before — 01CARRY \"x\" was fixed: y in e6deb61 · whole story: `fael find 01CARRY`\n",
-        ),
-        line(
-            Kind::Promote {
-                id: "01PROMO".into(),
-            },
-            "fael: 01PROMO on a.rs was in front of agents at edits in 10+ sessions — a test or check? then `fael close 01PROMO \"moved to <where>\"`\n",
-        ),
-        line(
             Kind::Held {
                 ids: vec!["01HELD".into()],
             },
@@ -98,15 +79,12 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Pointer { .. } => 3,
         Kind::Bodies => 4,
         Kind::Cited { .. } => 5,
-        Kind::Merge { .. } => 6,
-        Kind::Finding { .. } => 7,
-        Kind::Check { .. } => 8,
-        Kind::Notice => 9,
-        Kind::Fixed => 10,
-        Kind::FixCommit => 11,
-        Kind::Carry { .. } => 12,
-        Kind::Promote { .. } => 13,
-        Kind::Held { .. } => 14,
+        Kind::Finding { .. } => 6,
+        Kind::Check { .. } => 7,
+        Kind::Notice => 8,
+        Kind::Fixed => 9,
+        Kind::FixCommit => 10,
+        Kind::Held { .. } => 11,
     }
 }
 
@@ -191,13 +169,10 @@ fn a_spent_mark_says_nothing_and_is_seen_next_time() {
 fn a_per_turn_kind_is_said_once_per_turn() {
     for l in all().into_iter().filter(|l| policy(&l.kind).per_turn) {
         let p = seen("s.seen");
-        // turns share one mark across per-turn kinds: a merge on a fresh file
+        // turns share one mark across per-turn kinds: a check on a fresh issue
         let other = |id: &str| Line {
-            kind: Kind::Merge {
-                file: id.into(),
-                ids: vec![],
-            },
-            text: format!("fael add decision --files {id}\n"),
+            kind: Kind::Check { id: id.into() },
+            text: format!("fael add issue --supersedes {id}\n"),
         };
         let in_turn = |t: &str, l: Line| {
             let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
@@ -214,7 +189,7 @@ fn a_per_turn_kind_is_said_once_per_turn() {
         assert!(in_turn("t2", other("01B")).is_some());
         // the held-back line spent nothing: 01B is asked once, in t2
         let (_, hinted) = read_seen(&std::fs::read_to_string(&p).unwrap());
-        assert!(hinted.contains("merge:01A") && hinted.contains("merge:01B"));
+        assert!(hinted.contains("check:01A") && hinted.contains("check:01B"));
         assert!(said(lock_seen(&p), other("01C")).is_some());
         let _ = std::fs::remove_dir_all(p.parent().unwrap());
     }
@@ -371,14 +346,11 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "pointer",
             "bodies",
             "cited",
-            "merge",
             "finding",
             "check",
             "notice",
             "fixed",
             "fixcommit",
-            "carry",
-            "promote",
             "held"
         ]
     );

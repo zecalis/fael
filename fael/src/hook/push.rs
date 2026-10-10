@@ -256,7 +256,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         kind: Kind::Ask { ids: h.spent },
         text: format!("{}\n", h.text),
     }));
-    lines.extend(check::asks(&ask, &t0, said, edit));
+    lines.extend(check::check_line(&ask, edit));
     lines.extend(notes);
     // the hint and the stashed notice share the budget the rows left
     if out.say_within(policy.budget, lines) && has_notes {

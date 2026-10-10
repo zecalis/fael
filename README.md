@@ -5,12 +5,11 @@
 [![CI](https://github.com/zecalis/fael/actions/workflows/ci.yml/badge.svg)](https://github.com/zecalis/fael/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Your repo's experience, kept for every new agent.** Every agent arrives capable and new to your
-repo. fael keeps what the ones before it learned there — why a choice was made, what broke and how
-it was fixed, what is still open — in a shared work ledger. Hand work from one session, agent or
-person to the next — a decision, a requirement, an issue assigned to someone, a claim, where a plan
-stopped — and it shows up where the next agent is working: on the file it opens, and at session start
-for what is routed to it.
+**The ledger behind plan work.** Work runs as plans cut into chunks, one session or agent at a
+time, and no session shares another's chat. fael keeps what passes between them — where a chunk
+stopped, what was decided and why, the issue still open, what the user asked for — in a shared work
+ledger inside the repo, and hands it back when the next session picks the work up: at kickoff of the
+plan or file it names, on the file it opens, and at session start for what is routed to it.
 
 One person runs five agents; a team runs fifty — and each of those hands work to sub-agents. They
 don't share a chat, so every one starts from zero: it finds the same flaky test, re-asks why that

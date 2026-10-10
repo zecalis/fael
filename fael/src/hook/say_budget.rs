@@ -18,7 +18,7 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 4, 2, 9]); // row, bodies, hint, notice
+    let lines = pick(&[0, 4, 2, 8]); // row, bodies, hint, notice
     let keep = cost(&pick(&[0, 4]));
     let run = |budget: usize| {
         let p = seen("s.seen");
@@ -51,11 +51,10 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
     assert!(run(0).0.contains("bodies:"));
 }
 
-/// Over the budget the cut order is the notice, the consolidate ask, the
-/// carry-back line, the gone-check ask, then the edit hint — each whole, a
-/// cut line spending no key.
+/// Over the budget the cut order is the notice, the gone-check ask, then the
+/// edit hint — each whole, a cut line spending no key.
 #[test]
-fn over_the_budget_the_cut_order_is_notice_merge_carry_check_then_ask() {
+fn over_the_budget_the_cut_order_is_notice_check_then_ask() {
     let pick = |slots: &[usize]| -> Vec<Line> {
         all()
             .into_iter()
@@ -63,7 +62,7 @@ fn over_the_budget_the_cut_order_is_notice_merge_carry_check_then_ask() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 2, 6, 8, 9, 12]); // row, hint, merge, check, notice, carry
+    let lines = pick(&[0, 2, 7, 8]); // row, hint, check, notice
     let said_at = |budget: usize| {
         let p = seen("s.seen");
         let mut out = Outbox::open(lock_seen(&p));
@@ -73,30 +72,18 @@ fn over_the_budget_the_cut_order_is_notice_merge_carry_check_then_ask() {
         let _ = std::fs::remove_dir_all(p.parent().unwrap());
         (said, keys)
     };
-    let has = |said: &str| {
-        [
-            "a stashed line",
-            "01MERGE",
-            "01CARRY",
-            "01CHK",
-            "fael close 01ASK",
-        ]
-        .map(|t| said.contains(t))
-    };
-    assert_eq!(has(&said_at(usize::MAX).0), [true; 5]);
+    let has =
+        |said: &str| ["a stashed line", "01CHK", "fael close 01ASK"].map(|t| said.contains(t));
+    assert_eq!(has(&said_at(usize::MAX).0), [true; 3]);
     let kept = |slots: &[usize]| cost(&pick(slots));
     // each budget keeps one line more than the one below it
     let at = |slots: &[usize]| has(&said_at(kept(slots)).0);
-    assert_eq!(at(&[0, 2, 6, 8, 12]), [false, true, true, true, true]);
-    assert_eq!(at(&[0, 2, 8, 12]), [false, false, true, true, true]);
-    assert_eq!(at(&[0, 2, 8]), [false, false, false, true, true]);
+    assert_eq!(at(&[0, 2, 7]), [false, true, true]);
     let (said, keys) = said_at(kept(&[0, 2]));
-    assert_eq!(has(&said), [false, false, false, false, true], "{said}");
-    // the cut lines kept their keys for a later push
+    assert_eq!(has(&said), [false, false, true], "{said}");
+    // the cut line kept its key for a later push
     assert!(
-        !keys.contains("~check:01CHK")
-            && !keys.contains("~carry:01CARRY")
-            && keys.contains("~01ASK"),
+        !keys.contains("~check:01CHK") && keys.contains("~01ASK"),
         "{keys}"
     );
 }

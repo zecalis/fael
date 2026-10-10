@@ -125,7 +125,7 @@ meaning:
   rewrites every sha, so the taught close asks for no sha and ends on an optional `(#N)`
   (decision key `plan:fael-fix-evidence:citation`). The template every channel teaches is
   `CLOSE_TEMPLATE`: ``<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]``.
-- **fix reached main** (`cites_fix`, read by the carry-back line and `fael stats`): a close
+- **fix reached main** (`cites_fix`, read by `fael stats`): a close
   written at or after `FIX_CUTOFF_MS` (2026-10-10T03:59:25Z, v0.40.1) counts only when a
   commit on main holds the exact token `(fael:<prefix>)` — 8–26 ULID characters that start
   this issue's id and no other row's (a prefix two rows share is rejected, never the first)
