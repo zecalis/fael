@@ -18,7 +18,7 @@ mod store;
 pub use agent::Copy;
 pub use brief::{rules, sections};
 pub use chunk::{Fields, Here};
-pub use cutover::banner;
+pub use cutover::mirror;
 pub use export::export;
 pub use next::{Next, next};
 pub use owner::Owner;
@@ -90,8 +90,8 @@ impl State {
             }
             State::Running => "fael chunk start",
             State::Waiting => "fael chunk wait --on owner|data",
-            State::Review => "fael chunk done [--pr N | --out <path>]",
-            State::Done => "fael chunk accept · the PR merging",
+            State::Review => "fael chunk done [--out <path>]",
+            State::Done => "fael chunk done --pr N · fael chunk accept",
             State::Replaced => "fael chunk apply (merge · split)",
             State::Dropped => "fael chunk drop",
             State::Parked => "fael chunk park",
@@ -133,8 +133,8 @@ fn allowed(from: State, to: State) -> bool {
             Running => matches!(from, Open | Waiting),
             Waiting => from == Running,
             Review => from == Running,
-            // owner accept or the PR merging: every done passes review
-            Done => from == Review,
+            // `done --pr` (the owner said push pr: that is the ok) · owner accept
+            Done => matches!(from, Running | Review),
             Replaced | Dropped => true,
             Parked => matches!(from, Draft | Open | Waiting | Running),
             Draft => false,
@@ -165,6 +165,7 @@ mod tests {
             (Running, Review),
             (Running, Parked),
             (Review, Done),
+            (Running, Done),
             (Open, Replaced),
             (Review, Dropped),
             (Open, Parked),
@@ -177,14 +178,13 @@ mod tests {
             (Open, Done),
             (Done, Open),
             (Replaced, Dropped),
-            (Running, Done),
             (Review, Parked),
         ] {
             assert!(check(from, to).is_err(), "{from:?} → {to:?}");
         }
         let e = check(Open, Done).unwrap_err();
         assert!(
-            e.contains("fael chunk accept") && e.contains("from review"),
+            e.contains("fael chunk done --pr N") && e.contains("from running | review"),
             "{e}"
         );
     }

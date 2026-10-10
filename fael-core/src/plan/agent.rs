@@ -72,7 +72,8 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael chunk done "<handoff>" [--pr N | --out <path>]` → review, always. `out` copies the
+    /// `fael chunk done "<handoff>" [--pr N | --out <path>]`: with a PR → done (the owner's
+    /// push pr is the ok; a later problem is a new chunk or issue), else review. `out` copies the
     /// output for this run R (inside the transaction: a failed copy changes nothing) and
     /// returns the path kept in `run.out`.
     pub fn done(
@@ -86,7 +87,12 @@ impl Store {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         fence(&tx, &r, here)?;
-        set(&tx, &r, State::Review, "agent", Some(handoff), here.now)?;
+        let to = if pr.is_some() {
+            State::Done
+        } else {
+            State::Review
+        };
+        set(&tx, &r, to, "agent", Some(handoff), here.now)?;
         let (run, start): (i64, String) = tx
             .query_row(
                 "SELECT id, start FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1",

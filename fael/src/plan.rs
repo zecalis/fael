@@ -76,16 +76,32 @@ fn cutover(r: &Repo, want: &str) -> Result<(), String> {
     let mut s = open(r)?;
     let p = one(&s, want)?;
     let n = s.cut_over(p.id)?;
-    let file = r.root.join(&p.source);
-    let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-    if let Some(md) = fael_core::plan::banner(&text, &key(&p)) {
-        std::fs::write(&file, md).map_err(|e| format!("{}: {e}", file.display()))?;
-    }
+    mirror(r, &s)?;
     println!(
         "{} cut over: its {n} chunks live in plans.db (`fael chunk …`); {} keeps Goal, Scope, Done and the rest",
         key(&p),
         p.source
     );
+    Ok(())
+}
+
+/// Each cut-over plan's md: its TL;DR lists the db's chunks again, read-only, so the owner
+/// sees state in the md until the board app shows it. Import never reads them back.
+pub(crate) fn mirror(r: &Repo, s: &Store) -> Result<(), String> {
+    for p in s
+        .plans()?
+        .iter()
+        .filter(|p| p.truth == "db" && !p.source.is_empty())
+    {
+        let file = r.root.join(&p.source);
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        let md = fael_core::plan::mirror(&text, &key(p), &s.ticks(p.id)?);
+        if let Some(md) = md.filter(|md| *md != text) {
+            std::fs::write(&file, md).map_err(|e| format!("{}: {e}", file.display()))?;
+        }
+    }
     Ok(())
 }
 

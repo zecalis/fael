@@ -59,26 +59,52 @@ impl Store {
     }
 }
 
-/// The md with its TL;DR checkbox lines replaced by one banner line, where the first one
-/// stood and at its indent. `None` when the TL;DR holds no checkbox.
-pub fn banner(text: &str, plan: &str) -> Option<String> {
+/// The md with its TL;DR chunk lines — the checkboxes, or a banner and the mirror below
+/// it — replaced by the banner and `ticks`, where the first one stood and at its indent.
+/// `None` when the TL;DR holds neither.
+pub fn mirror(text: &str, plan: &str, ticks: &[String]) -> Option<String> {
     let mut out = Vec::new();
     let (mut h2, mut done) = (0, false);
     for l in text.lines() {
         h2 += usize::from(md::is_h2(l));
-        if h2 != 1 || md::checkbox(l).is_none() {
+        if h2 != 1 || (md::checkbox(l).is_none() && !l.trim_start().starts_with(BANNER)) {
             out.push(l.to_string());
             continue;
         }
         if !done {
             let indent = &l[..l.len() - l.trim_start().len()];
             out.push(format!(
-                "{indent}- chunks live in fael — `fael board`, `fael plan export {plan}`"
+                "{indent}{BANNER} — `fael board`, `fael plan export {plan}` (mirror: edits here change nothing)"
             ));
+            out.extend(ticks.iter().map(|t| format!("{indent}{t}")));
             done = true;
         }
     }
     done.then(|| out.join("\n") + if text.ends_with('\n') { "\n" } else { "" })
+}
+
+const BANNER: &str = "- chunks live in fael";
+
+impl Store {
+    /// Plan `id`'s chunks as checkbox lines for [`mirror`], state named when it is neither
+    /// open nor closed.
+    pub fn ticks(&self, id: i64) -> Result<Vec<String>, String> {
+        self.conn
+            .prepare("SELECT title, state FROM chunk WHERE plan = ?1 ORDER BY seq")
+            .map_err(err)?
+            .query_map([id], |r| {
+                let (title, state): (String, String) = (r.get(0)?, r.get(1)?);
+                Ok(match state.as_str() {
+                    "done" => format!("- [x] {title}"),
+                    "dropped" | "replaced" => format!("- [~] {title}"),
+                    "open" => format!("- [ ] {title}"),
+                    s => format!("- [ ] {title} · **{s}**"),
+                })
+            })
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)
+    }
 }
 
 #[cfg(test)]
@@ -108,22 +134,26 @@ mod tests {
         assert_eq!(s.cut_over(id), Ok(2));
         assert_eq!(s.plans().unwrap()[0].truth, "db");
         assert!(s.cut_over(id).unwrap_err().contains("already cut over"));
-        // the banner md re-imported: plan fields refresh, the two chunks stay
-        let md = banner(DOC, "t").unwrap();
+        // the mirrored md re-imported: plan fields refresh, the db's chunks win
+        s.conn
+            .execute("UPDATE chunk SET state = 'review' WHERE label = 'c2'", [])
+            .unwrap();
+        let md = mirror(DOC, "t", &s.ticks(id).unwrap()).unwrap();
+        let banner = "  - chunks live in fael — `fael board`, `fael plan export t` (mirror: edits here change nothing)\n";
+        let want = format!("{banner}  - [x] c1 — one\n  - [ ] c2 — two · **review**\n");
         assert_eq!(
             md,
-            DOC.replace(
-                "  - [x] c1 — one\n  - [ ] c2 — two\n",
-                "  - chunks live in fael — `fael board`, `fael plan export t`\n"
-            )
+            DOC.replace("  - [x] c1 — one\n  - [ ] c2 — two\n", &want)
         );
-        import(&mut s, &md);
-        let n: i64 = s
-            .conn
-            .query_row("SELECT COUNT(*) FROM chunk", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(n, 2);
-        assert_eq!(banner(&md, "t"), None, "no checkbox left in the TL;DR");
+        import(&mut s, &md.replace("[x] c1", "[ ] c1"));
+        assert_eq!(
+            s.ticks(id).unwrap()[0],
+            "- [x] c1 — one",
+            "md edits change nothing"
+        );
+        // a second mirror replaces the first, never stacks
+        assert_eq!(mirror(&md, "t", &s.ticks(id).unwrap()).unwrap(), md);
+        assert_eq!(mirror("# P\n\n## TL;DR\n- x\n", "t", &[]), None);
     }
 
     #[test]

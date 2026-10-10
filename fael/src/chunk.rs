@@ -81,6 +81,10 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         }
         _ => return Err(format!("rejected: {USAGE}")),
     }
+    // the db already holds the change: a stale md mirror is said, never a failed command
+    if let Err(e) = s().and_then(|s| crate::plan::mirror(&r, &s)) {
+        eprintln!("fael: md mirror not written: {e}");
+    }
     Ok(ExitCode::SUCCESS)
 }
 
@@ -152,7 +156,8 @@ fn done(a: &Args, r: &Repo, uid: &str, handoff: &str, here: &Here) -> Result<(),
         .is_some()
         .then_some(&mut copy as &mut fael_core::plan::Copy<'_>);
     Store::open(&db(r))?.done(uid, handoff, pr, out, here)?;
-    println!("chunk {uid} → review");
+    let to = if pr.is_some() { "done" } else { "review" };
+    println!("chunk {uid} → {to}");
     Ok(())
 }
 
