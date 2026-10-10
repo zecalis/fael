@@ -39,7 +39,8 @@ jsonl. Planner skills (plan-with-pony for dev, plan-with-marketing) cut the chun
 judges size and model hint, fael stores them, the owner picks. A change ships when it fixes a
 bug, cuts noise, removes code, or serves that plan → chunk → agent → ship loop. The owner's
 window is a separate SwiftUI app reading `fael board --json`: it watches, notifies, and starts
-an agent only on the owner's click. `fael stats` still shows what fael handed over and what
+an agent only on the owner's click or from a queue of chunks the owner approved; the planner
+agent applies merge / split / pair itself, and every git merge is the owner's. `fael stats` still shows what fael handed over and what
 followed (capture → acted → outcome), never the counterfactual, so claims about value say
 only that.
 

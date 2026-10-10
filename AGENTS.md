@@ -17,7 +17,8 @@ of the right agent, once — never more rows. Rounds and tokens are a cost to ke
 
 Decision `product:mission` (plan `PLAN-fael-board`): a change ships when it fixes a bug, cuts
 noise, removes code, or serves the plan → chunk → agent → ship loop. The owner's SwiftUI app
-reads `fael board --json` and starts an agent only on the owner's click; fael itself
+reads `fael board --json` and starts an agent only on the owner's click or from a queue
+the owner approved; the owner merges every PR; fael itself
 never starts an agent turn or re-prompts on idle,
 adds no daemon, never guesses, never polices the developer's process (worktree, branch, git flow).
 Assigning and claiming inform. A claim is race-safe (of two agents, one wins) but only gates the claim — `--force` takes it over, no edit is ever blocked.
