@@ -83,7 +83,7 @@ pub fn mirror(text: &str, plan: &str, ticks: &[String]) -> Option<String> {
     done.then(|| out.join("\n") + if text.ends_with('\n') { "\n" } else { "" })
 }
 
-const BANNER: &str = "- chunks live in fael";
+pub(super) const BANNER: &str = "- chunks live in fael";
 
 impl Store {
     /// Plan `id`'s chunks as checkbox lines for [`mirror`], state named when it is neither

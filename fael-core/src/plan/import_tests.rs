@@ -146,7 +146,19 @@ fn export_reads_back() {
     let lines = "- [x] 1 — done\n- [ ] 2 (wip feat/x) — running\n- [~] 3 — dropped\n- [?] 4 — odd\n- [ ] 5 (after 1) — open";
     s.import_all(&[plan("a", lines)], "t0").unwrap();
     let id = s.plans().unwrap()[0].id;
-    let out = export(&s, id).unwrap();
+    // the md's own text follows the chunks: TL;DR prose and every section, no chunk twice
+    let file = format!(
+        "---\narea: dev\n---\n# x\n\n## TL;DR\n{lines}\n- **Why:** lanes\n\n\
+         ## 1. Goal\nship it\n\n## 3. Done criteria\n- [ ] tests pass\n"
+    );
+    let out = export(&s, id, &|_: &str| Some(file.clone())).unwrap();
+    assert!(
+        out.ends_with(
+            "- **Why:** lanes\n\n## 1. Goal\nship it\n\n## 3. Done criteria\n- [ ] tests pass\n"
+        ),
+        "{out}"
+    );
+    assert_eq!(out.matches("— done").count(), 1, "{out}");
     assert!(out.contains("· running · after 1 · run "), "{out}");
     assert!(out.contains("· open · after 1"), "{out}");
     let back = md::parse("PLAN-a.md", &out).unwrap();
@@ -159,6 +171,15 @@ fn export_reads_back() {
     };
     assert_eq!(ticks(&back), ticks(&orig));
     assert_eq!(back.title, "PLAN-a");
+    // plan.doc once set is the plan's text, the md no longer read
+    s.conn
+        .execute("UPDATE plan SET doc = '## 1. Goal\nfrom the db\n'", [])
+        .unwrap();
+    let out = export(&s, id, &|_: &str| Some(file.clone())).unwrap();
+    assert!(
+        out.ends_with("· open · after 1\n\n## 1. Goal\nfrom the db\n"),
+        "{out}"
+    );
 }
 
 #[test]

@@ -1,7 +1,11 @@
 //! `fael plan export`: one plan as markdown, for review and backup — the db is a binary
 //! git cannot merge (SPEC §7). Checkbox lines stay in the import grammar, so a snapshot
 //! reads back with `fael plan import`; each chunk's db fields follow on an indented line.
+//! The plan's own text (Goal, Scope, Done, Constraints, …) follows the chunks, read by the
+//! brief's rule: `plan.doc` once set, else the md — so one export is the whole plan.
 
+use super::cutover::BANNER;
+use super::md;
 use super::store::{Store, err};
 use rusqlite::types::Value;
 use rusqlite::{Connection, params};
@@ -21,7 +25,8 @@ fn cols<const N: usize>(r: &rusqlite::Row) -> rusqlite::Result<[String; N]> {
     Ok(out)
 }
 
-pub fn export(s: &Store, plan: i64) -> Result<String, String> {
+/// `md` reads a repo-relative file (the plan's `source`), `None` when it is gone.
+pub fn export(s: &Store, plan: i64, md: &dyn Fn(&str) -> Option<String>) -> Result<String, String> {
     let [
         app,
         name,
@@ -33,10 +38,11 @@ pub fn export(s: &Store, plan: i64) -> Result<String, String> {
         source,
         truth,
         refs,
+        doc,
     ] = s
         .conn
         .query_row(
-            "SELECT app, name, title, area, kind, state, spec, source, truth, refs
+            "SELECT app, name, title, area, kind, state, spec, source, truth, refs, doc
              FROM plan WHERE id = ?1",
             [plan],
             cols,
@@ -65,7 +71,36 @@ pub fn export(s: &Store, plan: i64) -> Result<String, String> {
     }
     o.push_str("\n## TL;DR\n");
     chunks(s, plan, &mut o)?;
+    let text = if doc.trim().is_empty() {
+        (!source.is_empty())
+            .then(|| md(&source))
+            .flatten()
+            .map(|t| prose(&t))
+            .unwrap_or_default()
+    } else {
+        doc
+    };
+    if !text.trim().is_empty() {
+        let _ = writeln!(o, "\n{}", text.trim());
+    }
     Ok(o)
+}
+
+/// An md plan's text minus what the export already wrote: front matter, title, and the
+/// TL;DR's heading and chunk lines (checkboxes, the cutover banner) — its prose stays.
+fn prose(text: &str) -> String {
+    let mut out = String::new();
+    let mut h2 = 0;
+    for l in text.lines() {
+        h2 += usize::from(md::is_h2(l));
+        let tldr = h2 == 1 && l.trim_start_matches(['#', ' ']).starts_with("TL;DR");
+        let chunk = h2 == 1 && (md::checkbox(l).is_some() || l.trim_start().starts_with(BANNER));
+        if h2 > 0 && !tldr && !chunk {
+            out.push_str(l);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {

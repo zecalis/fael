@@ -176,7 +176,8 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      `fapony plan` makes: your own (wip) claim, else the first open chunk no live
      worktree claimed whose (after …) is met and that has no (wait …); export: every
      plan, or the one named (name or app/name), as markdown to stdout — uid, state and
-     fields under each line; export <plan> --json: the plan as one bill (\"v\": 1) —
+     fields under each line, then the plan's text (plan.doc, else its md's TL;DR prose
+     and sections: Goal, Scope, Done, …); export <plan> --json: the plan as one bill (\"v\": 1) —
      rev, title, area, state, doc, refs, repo and a line per planned chunk (uid, label,
      title, brief, size, model, client, scope, after); apply: the bill edited and sent
      back, one transaction — a stale rev rejects it and writes nothing; a header key
