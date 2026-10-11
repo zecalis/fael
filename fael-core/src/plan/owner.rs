@@ -155,6 +155,52 @@ impl Store {
         tx.commit().map_err(err)
     }
 
+    /// `fael plan park|unpark|done <plan>` on a `truth = db` plan: the owner moves
+    /// `plan.state` (an md plan's folder is its state, import sets it). Refused while a
+    /// chunk runs — a parked or done plan leaves the board and its agent with it. Returns
+    /// the state it left.
+    pub fn plan_state(&mut self, id: i64, to: &str, now: &str) -> Result<String, String> {
+        let tx = tx(self)?;
+        let (app, name, state, truth, running): (String, String, String, String, i64) = tx
+            .query_row(
+                "SELECT app, name, state, truth,
+                        (SELECT COUNT(*) FROM chunk WHERE plan = p.id AND state = 'running')
+                 FROM plan p WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .map_err(err)?;
+        if truth != "db" {
+            return Err(format!(
+                "rejected: {name}'s chunks live in its md — move the file to .fapony/parked/ or done/ (or `fael plan cutover {name}` first)"
+            ));
+        }
+        let from_ok = match to {
+            "active" => state == "parked",
+            "parked" => matches!(state.as_str(), "active" | "blocked"),
+            _ => state != "done",
+        };
+        if !from_ok {
+            return Err(format!("rejected: {name} is {state}"));
+        }
+        if running > 0 && to != "active" {
+            return Err(format!(
+                "rejected: {name} has {running} running chunk(s) — finish or park them first"
+            ));
+        }
+        tx.execute("UPDATE plan SET state = ?1 WHERE id = ?2", params![to, id])
+            .map_err(err)?;
+        // ponytail: event rows key on chunk_uid; a plan's own row uses `plan:<app/name>`,
+        // which no chunk uid can be — a plan column when a reader needs plan history
+        tx.execute(
+            "INSERT INTO event(chunk_uid, at, by, from_state, to_state) VALUES (?1, ?2, 'owner', ?3, ?4)",
+            params![format!("plan:{app}/{name}"), now, state, to],
+        )
+        .map_err(err)?;
+        tx.commit().map_err(err)?;
+        Ok(state)
+    }
+
     /// `fael run end R [--cost USD]`: ends every live row of start R and nothing else —
     /// never a chunk's state, never another start. None left (wait/done ended them) is not
     /// an error. `cost` lands on every row of R, ended or not: the agent's own `chunk done`

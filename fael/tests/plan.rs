@@ -1,4 +1,4 @@
-//! `fael plan import` / `next` / `export` / `cutover` through the real binary: plans.db lands in the
+//! `fael plan import` / `next` / `export` / `cutover` / `park` through the real binary: plans.db lands in the
 //! git common dir, an app under apps/ is found, and `next` without a db is a reject.
 
 use std::path::{Path, PathBuf};
@@ -149,5 +149,52 @@ fn a_refused_cutover_leaves_the_md_and_an_app_plan_cuts_over_by_app_name() {
     let text = std::fs::read_to_string(&app).unwrap();
     assert!(text.contains("`fael plan export apps/vela/x`"), "{text}");
     assert_eq!(std::fs::read_to_string(&root).unwrap(), bad);
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn park_unpark_done_move_a_cut_over_plan_and_a_reimport_keeps_it() {
+    let d = repo();
+    write(
+        d.join(".fapony/plan/PLAN-p.md"),
+        "# PLAN-p\n\n## TL;DR\n- [ ] p1 — one\n",
+    );
+    write(
+        d.join(".fapony/plan/PLAN-m.md"),
+        "# PLAN-m\n\n## TL;DR\n- [ ] m1 — one\n",
+    );
+    assert!(fael(&d, &["plan", "cutover", "p"]).0);
+    // an md plan's folder is its state
+    let (ok, _, err) = fael(&d, &["plan", "park", "m"]);
+    assert!(
+        !ok && err.contains("move the file to .fapony/parked/"),
+        "{err}"
+    );
+    let (ok, out, err) = fael(&d, &["plan", "park", "p"]);
+    assert!(ok && out == "plan p active → parked\n", "{err}{out}");
+    let board = || fael(&d, &["board"]).1;
+    assert!(!board().contains("p p1"), "{}", board());
+    // the md still sits in plan/: a re-import leaves the db plan parked
+    assert!(fael(&d, &["plan", "import"]).0);
+    assert!(fael(&d, &["plan", "export", "p"]).1.contains("· parked ·"));
+    let (ok, _, err) = fael(&d, &["plan", "park", "p"]);
+    assert!(!ok && err.contains("p is parked"), "{err}");
+    assert!(fael(&d, &["plan", "unpark", "p"]).0);
+    assert!(board().contains("p p1"), "{}", board());
+    // a running chunk keeps its plan on the board
+    let (_, out, _) = fael(&d, &["plan", "export", "p"]);
+    let uid = out
+        .split("uid ")
+        .nth(1)
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap();
+    assert!(fael(&d, &["chunk", "start", uid]).0);
+    let (ok, _, err) = fael(&d, &["plan", "done", "p"]);
+    assert!(!ok && err.contains("1 running chunk(s)"), "{err}");
+    assert!(fael(&d, &["chunk", "done", uid, "shipped", "--pr", "1"]).0);
+    let (ok, out, err) = fael(&d, &["plan", "done", "p"]);
+    assert!(ok && out == "plan p active → done\n", "{err}{out}");
     let _ = std::fs::remove_dir_all(d);
 }
