@@ -89,11 +89,11 @@ fn done_out_copies_the_output_per_run() {
     assert_eq!(out, format!("chunk {u} → done\n"));
 }
 
-/// `fael hook stop` with this worktree as cwd: the event reaches plans.db.
-fn stop(d: &Path, session: &str) {
+/// `fael hook <event>` with this worktree as cwd: the event reaches plans.db.
+fn hook(d: &Path, event: &str, session: &str) {
     use std::io::Write as _;
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
-        .args(["hook", "stop"])
+        .args(["hook", event])
         .current_dir(d)
         .env("FAEL_STATE_DIR", d.join("state"))
         .env_remove("FAEL_DIR")
@@ -117,12 +117,43 @@ fn the_stop_hook_stamps_its_worktree_run() {
     let d = repo();
     let u = add(&d);
     assert!(fael(&d, &["chunk", "start", &u, "--run", "R1"]).0);
-    stop(&d, "2026-10-11T09:00:00Z");
+    hook(&d, "stop", "2026-10-11T09:00:00Z");
     // the hook filled `session`: another session's stamp now finds no run
     let wt = d.canonicalize().unwrap().to_string_lossy().into_owned();
     let mut s = fael_core::plan::Store::open(&d.join(".git/fael/plans.db")).unwrap();
     assert_eq!(s.seen(&wt, "2026-10-11T10:00:00Z", "t").unwrap(), 0);
     assert_eq!(s.seen(&wt, "2026-10-11T09:00:00Z", "t").unwrap(), 1);
+}
+
+#[test]
+fn a_run_killed_mid_turn_resumes_from_its_session_notes_and_branch() {
+    let d = repo();
+    let u = add(&d);
+    assert!(
+        fael(
+            &d,
+            &["chunk", "start", &u, "--run", "R1", "--client", "claude"]
+        )
+        .0
+    );
+    // session start stamps the run before any Stop: a kill mid-turn keeps the session
+    hook(&d, "session-start", "S1");
+    assert!(fael(&d, &["chunk", "note", &u, "parser done; next the CLI"]).0);
+    let (ok, brief, err) = fael(&d, &["chunk", "start", &u, "--run", "R2", "--force"]);
+    assert!(ok, "{err}");
+    assert!(
+        brief.contains("\nresume — run R1 (claude) started "),
+        "{brief}"
+    );
+    assert!(brief.contains("\nsession S1\n"), "{brief}");
+    assert!(
+        brief.contains("`git log origin/main..main` · `git status`"),
+        "{brief}"
+    );
+    assert!(brief.contains("> parser done; next the CLI\n"), "{brief}");
+    // a plain start of a fresh chunk has nothing to resume
+    let (_, fresh, _) = fael(&d, &["chunk", "start", &add(&d), "--no-worktree"]);
+    assert!(!fresh.contains("resume —"), "{fresh}");
 }
 
 #[test]

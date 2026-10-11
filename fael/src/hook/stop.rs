@@ -24,8 +24,9 @@ pub(crate) fn stop(e: &Event) -> Reply {
 }
 
 /// PLAN-fael-board: stamp the live chunk run of this worktree (SPEC §7) — `session` on the
-/// first stop, `last_seen` on each. No plans.db, no open; any failure stays silent.
-fn seen(e: &Event) {
+/// first stop (or session start), `last_seen` on each. No plans.db, no open; any failure
+/// stays silent.
+pub(super) fn seen(e: &Event) {
     let Some(session) = e.session.as_deref().filter(|s| !s.is_empty()) else {
         return;
     };

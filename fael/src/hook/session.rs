@@ -12,10 +12,9 @@ use std::path::{Path, PathBuf};
 
 pub(crate) fn session_start(e: &Event) -> Reply {
     let no = Reply::default;
-    let c = match ctx(e) {
-        Some(c) => c,
-        None => return no(),
-    };
+    let Some(c) = ctx(e) else { return no() };
+    // a run killed mid-turn never reaches Stop: its session is kept from the first turn
+    super::stop::seen(e);
     prune_sessions(&state_dir().join("sessions"));
     mark_started(&c.session, &c.repo.root);
     // detached: teammates' rows land before the first read, never awaited
