@@ -123,6 +123,8 @@ fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD]
 fael chunk after <uid> <other-uid> \"<why>\"
 fael chunk done <uid> \"<handoff>\" [--pr N | --out <path>]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
+fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
+fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
     (only a plan whose chunks live in plans.db — inbox, or one cut over; add prints
      the new uid, no brief = draft; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
@@ -130,7 +132,9 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
      latest run and end it; done --pr N lands in done (push pr is the ok), done
      without a PR in review until accept; each command rewrites a cut-over plan's
      md TL;DR as a read-only mirror; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
-     never changes the state and clears an approval)",
+     never changes the state and clears an approval; apply runs every op or none —
+     merge and split leave the old chunks replaced and move their after edges to the
+     new ones; pin ranks the queue, lowest first)",
     ),
     (
         "board",

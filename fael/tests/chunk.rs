@@ -97,6 +97,8 @@ fn stop(d: &Path, session: &str) {
         .env("FAEL_STATE_DIR", d.join("state"))
         .env_remove("FAEL_DIR")
         .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .spawn()
         .unwrap();
@@ -120,4 +122,56 @@ fn the_stop_hook_stamps_its_worktree_run() {
     let mut s = fael_core::plan::Store::open(&d.join(".git/fael/plans.db")).unwrap();
     assert_eq!(s.seen(&wt, "2026-10-11T10:00:00Z", "t").unwrap(), 0);
     assert_eq!(s.seen(&wt, "2026-10-11T09:00:00Z", "t").unwrap(), 1);
+}
+
+#[test]
+fn apply_reads_stdin_and_the_board_sees_pin_and_approval() {
+    let d = repo();
+    let (a, b) = (add(&d), add(&d));
+    let apply = |json: String| {
+        use std::io::Write;
+        let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+            .args(["chunk", "apply", "--json", "-"])
+            .current_dir(&d)
+            .env("FAEL_STATE_DIR", d.join("state"))
+            .env_remove("FAEL_DIR")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        c.stdin.take().unwrap().write_all(json.as_bytes()).unwrap();
+        let o = c.wait_with_output().unwrap();
+        (
+            o.status.success(),
+            String::from_utf8_lossy(&o.stdout).into_owned(),
+        )
+    };
+    let (ok, out) = apply(format!(r#"[{{"op":"pair","chunks":["{a}","{b}"]}}]"#));
+    assert!(ok && out == format!("paired {a}, {b}\n"), "{out}");
+    assert!(!apply("{}".into()).0, "an object, not an array");
+    let (ok, _, err) = fael(&d, &["chunk", "approve", &a, "--model", "opus"]);
+    assert!(!ok && err.contains("--model M --client C"), "{err}");
+    let (ok, out, _) = fael(
+        &d,
+        &[
+            "chunk", "approve", &a, "--model", "opus", "--client", "claude",
+        ],
+    );
+    assert!(
+        ok && out.contains("approved · model opus · client claude"),
+        "{out}"
+    );
+    assert!(fael(&d, &["chunk", "pin", &b, "1"]).0);
+    assert!(!fael(&d, &["chunk", "pin", &b, "first"]).0);
+    let (_, json, _) = fael(&d, &["board", "--json"]);
+    assert!(
+        json.contains(r#""model":"opus""#) || json.contains(r#""model": "opus""#),
+        "{json}"
+    );
+    let q = json.split(r#""queue""#).nth(1).unwrap();
+    assert!(
+        q.find(&b).unwrap() < q.find(&a).unwrap(),
+        "pinned first: {q}"
+    );
 }

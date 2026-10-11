@@ -8,7 +8,7 @@ use fael_core::plan::{Fields, Here, Owner, Start, Store};
 use std::path::Path;
 use std::process::ExitCode;
 
-const USAGE: &str = "fael chunk add|start|edit|note|wait|after|answer|done|accept|drop|park|unpark — try 'fael chunk --help'";
+const USAGE: &str = "fael chunk add|start|edit|note|wait|after|answer|done|accept|drop|park|unpark|apply|pin|unpin|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
@@ -84,6 +84,9 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             s()?.owner(uid, cmd, None, &now)?;
             say(uid, to);
         }
+        ["apply" | "pin" | "unpin" | "approve" | "unapprove", ..] => {
+            queue(a, &rest, &mut s()?, &now)?
+        }
         _ => return Err(format!("rejected: {USAGE}")),
     }
     // the db already holds the change: a stale md mirror is said, never a failed command
@@ -92,6 +95,53 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     }
     crate::board::register(&r);
     Ok(ExitCode::SUCCESS)
+}
+
+/// The planner's batch and the owner's queue marks: `apply`, `pin`, `approve` and their undo.
+fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String> {
+    let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
+    match rest {
+        ["apply", "-"] if a.has("json") => {
+            a.only("chunk apply", &["json"])?;
+            let mut stdin = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin)
+                .map_err(|e| format!("rejected: cannot read stdin: {e}"))?;
+            let ops: Vec<fael_core::plan::Op> = serde_json::from_str(&stdin).map_err(|e| {
+                format!("rejected: stdin is not a JSON array of merge/split/pair/after ops: {e}")
+            })?;
+            for line in s.apply(ops, now)? {
+                println!("{line}");
+            }
+        }
+        ["pin", uid, rank] => {
+            a.only("chunk pin", &[])?;
+            let n = rank
+                .parse::<i64>()
+                .map_err(|_| "rejected: chunk pin <uid> <rank> — a whole number, lowest first")?;
+            s.pin(uid, Some(n), now)?;
+            say(uid, &format!("pinned {n}"));
+        }
+        ["unpin", uid] => {
+            a.only("chunk unpin", &[])?;
+            s.pin(uid, None, now)?;
+            say(uid, "unpinned");
+        }
+        ["approve", uid] => {
+            a.only("chunk approve", &["model", "client"])?;
+            let (Some(m), Some(c)) = (a.one("model"), a.one("client")) else {
+                return Err("rejected: chunk approve needs --model M --client C".into());
+            };
+            s.approve(uid, Some((&m, &c)), now)?;
+            say(uid, &format!("approved · model {m} · client {c}"));
+        }
+        ["unapprove", uid] => {
+            a.only("chunk unapprove", &[])?;
+            s.approve(uid, None, now)?;
+            say(uid, "unapproved");
+        }
+        _ => return Err(format!("rejected: {USAGE}")),
+    }
+    Ok(())
 }
 
 /// `fael run end R [--cost USD]`: ends start R's live rows, nothing else; none left is fine
