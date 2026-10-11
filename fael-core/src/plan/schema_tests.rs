@@ -1,4 +1,4 @@
-//! v1 → v5 (and v2 → v5) on a fixture written with b1's schema: every row carried over, a failure
+//! v1 → v6 (and v2, v5 → v6) on a fixture written with b1's schema: every row carried over, a failure
 //! leaves v1 for the next open, two first opens migrate once.
 
 use super::super::store::Store;
@@ -111,7 +111,7 @@ fn rows(s: &Store, sql: &str) -> Vec<String> {
 fn v1_rows_carry_over() {
     let path = v1_db("");
     let s = Store::open(&path).unwrap();
-    assert_eq!(version(&path), 5);
+    assert_eq!(version(&path), 6);
     assert_eq!(
         rows(
             &s,
@@ -162,11 +162,12 @@ fn v2_gains_run_cost_client_hint_and_plan_repo() {
         .unwrap()
         .execute_batch(
             "ALTER TABLE run DROP COLUMN cost; ALTER TABLE chunk DROP COLUMN client_hint;
-             ALTER TABLE plan DROP COLUMN repo; PRAGMA user_version = 2;",
+             ALTER TABLE plan DROP COLUMN repo;",
         )
         .unwrap();
+    to_v5(&path, "PRAGMA user_version = 2;");
     let s = Store::open(&path).unwrap();
-    assert_eq!(version(&path), 5);
+    assert_eq!(version(&path), 6);
     assert_eq!(
         rows(&s, "SELECT COALESCE(cost, '-') || ' ' || branch FROM run"),
         ["- feat/b"]
@@ -180,6 +181,73 @@ fn v2_gains_run_cost_client_hint_and_plan_repo() {
         ["-"]
     );
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// Undo v5 → v6 on a migrated db, then run `then`.
+fn to_v5(path: &Path, then: &str) {
+    Connection::open(path)
+        .unwrap()
+        .execute_batch(&format!(
+            "DROP INDEX event_plan; ALTER TABLE event DROP COLUMN plan;
+             ALTER TABLE event DROP COLUMN batch; DROP TABLE meta;
+             ALTER TABLE plan RENAME COLUMN doc TO goal; PRAGMA user_version = 5; {then}"
+        ))
+        .unwrap();
+}
+
+fn db_id(path: &Path) -> String {
+    Connection::open(path)
+        .unwrap()
+        .query_row("SELECT value FROM meta WHERE key = 'db_id'", [], |r| {
+            r.get(0)
+        })
+        .unwrap()
+}
+
+#[test]
+fn v5_gains_plan_doc_event_plan_batch_and_a_stable_db_id() {
+    let path = v1_db("");
+    drop(Store::open(&path).unwrap());
+    to_v5(
+        &path,
+        "UPDATE plan SET goal = 'why';
+         INSERT INTO event(chunk_uid, at, by, to_state)
+           VALUES ('plan:/t', 't1', 'owner', 'parked'), ('gone', 't1', 'import', 'open');",
+    );
+    let s = Store::open(&path).unwrap();
+    assert_eq!(version(&path), 6);
+    assert_eq!(rows(&s, "SELECT doc FROM plan"), ["why"]);
+    assert_eq!(
+        rows(
+            &s,
+            "SELECT chunk_uid || ' ' || COALESCE(plan || '', '-') || ' ' || COALESCE(batch, '-')
+             FROM event WHERE chunk_uid IN ('plan:/t', 'gone') ORDER BY id"
+        ),
+        ["plan:/t 1 -", "gone - -"]
+    );
+    assert_eq!(
+        rows(
+            &s,
+            "SELECT COALESCE(plan || '', '-') FROM event WHERE to_state = 'running'"
+        ),
+        ["1"]
+    );
+    let id = db_id(&path);
+    assert_eq!(id.len(), 26);
+    drop(s);
+    drop(Store::open(&path).unwrap());
+    assert_eq!(db_id(&path), id, "reopen keeps the id");
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[test]
+fn a_fresh_db_has_a_db_id() {
+    let dir = std::env::temp_dir().join(format!("fael-v0-{}", crate::ulid()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("plans.db");
+    drop(Store::open(&path).unwrap());
+    assert_eq!(db_id(&path).len(), 26);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -198,7 +266,7 @@ fn a_failed_step_leaves_v1_and_the_next_open_retries() {
     c.execute_batch("DROP TABLE edge").unwrap();
     drop(c);
     Store::open(&path).unwrap();
-    assert_eq!(version(&path), 5);
+    assert_eq!(version(&path), 6);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
@@ -221,6 +289,6 @@ fn two_first_opens_round() {
     for o in opens {
         assert_eq!(o.join().unwrap().unwrap().len(), 4);
     }
-    assert_eq!(version(&path), 5);
+    assert_eq!(version(&path), 6);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

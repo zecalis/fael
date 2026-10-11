@@ -76,12 +76,27 @@ pub(super) fn set(
         .map_err(err)?;
     }
     tx.execute(
-        "INSERT INTO event(chunk_uid, at, by, from_state, to_state, text)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![r.uid, now, by, r.state.as_str(), to.as_str(), text],
+        "INSERT INTO event(chunk_uid, at, by, from_state, to_state, text, plan)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, (SELECT plan FROM chunk WHERE id = ?7))",
+        params![r.uid, now, by, r.state.as_str(), to.as_str(), text, r.id],
     )
     .map_err(err)?;
     Ok(())
+}
+
+/// The newest event id, taken before a `chunk apply` so [`batch`] knows its rows.
+pub(super) fn last_event(tx: &Transaction) -> Result<i64, String> {
+    tx.query_row("SELECT COALESCE(MAX(id), 0) FROM event", [], |r| r.get(0))
+        .map_err(err)
+}
+
+/// One ulid on every event after `since`: the rows one apply wrote (it holds the lock).
+pub(super) fn batch(tx: &Transaction, since: i64) -> Result<usize, String> {
+    tx.execute(
+        "UPDATE event SET batch = ?1 WHERE id > ?2",
+        params![crate::ulid(), since],
+    )
+    .map_err(err)
 }
 
 /// End the chunk's live run: the slot frees even while the shell still runs.
@@ -260,8 +275,8 @@ impl Store {
             add_after(&tx, id, dst)?;
         }
         tx.execute(
-            "INSERT INTO event(chunk_uid, at, by, to_state) VALUES (?1, ?2, 'planner', ?3)",
-            params![uid, now, state.as_str()],
+            "INSERT INTO event(chunk_uid, at, by, to_state, plan) VALUES (?1, ?2, 'planner', ?3, ?4)",
+            params![uid, now, state.as_str(), pid],
         )
         .map_err(err)?;
         tx.commit().map_err(err)?;

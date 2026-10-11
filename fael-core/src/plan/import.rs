@@ -227,9 +227,9 @@ fn sync_chunks<'a>(
         .map_err(err)?;
         if was != Some(state) {
             tx.execute(
-                "INSERT INTO event(chunk_uid, at, by, from_state, to_state, text)
-                 VALUES (?1, ?2, 'import', ?3, ?4, ?5)",
-                params![uid, now, was, state, p.source],
+                "INSERT INTO event(chunk_uid, at, by, from_state, to_state, text, plan)
+                 VALUES (?1, ?2, 'import', ?3, ?4, ?5, ?6)",
+                params![uid, now, was, state, p.source, plan],
             )
             .map_err(err)?;
         }

@@ -4,7 +4,7 @@
 //! and every op is an `event` row.
 
 use super::State;
-use super::chunk::{Fields, Row, add_after, row, scope, set, tx};
+use super::chunk::{Fields, Row, add_after, batch, last_event, row, scope, set, tx};
 use super::store::{Store, err};
 use rusqlite::{Transaction, params};
 use serde::Deserialize;
@@ -168,8 +168,9 @@ fn insert(
     .map_err(err)?;
     let id = tx.last_insert_rowid();
     tx.execute(
-        "INSERT INTO event(chunk_uid, at, by, to_state, text) VALUES (?1, ?2, 'planner', ?3, ?4)",
-        params![uid, now, state, text],
+        "INSERT INTO event(chunk_uid, at, by, to_state, text, plan)
+         VALUES (?1, ?2, 'planner', ?3, ?4, ?5)",
+        params![uid, now, state, text, plan],
     )
     .map_err(err)?;
     Ok((id, uid))
@@ -356,6 +357,7 @@ impl Store {
             return Err("rejected: nothing to apply — stdin held an empty array".into());
         }
         let tx = tx(self)?;
+        let since = last_event(&tx)?;
         let mut out = Vec::new();
         for (i, op) in ops.into_iter().enumerate() {
             let line = match op {
@@ -385,6 +387,7 @@ impl Store {
             };
             out.push(line.map_err(|e| format!("op {}: {e} — nothing applied", i + 1))?);
         }
+        batch(&tx, since)?;
         tx.commit().map_err(err)?;
         Ok(out)
     }

@@ -58,6 +58,11 @@ fn merge_joins_and_takes_the_old_ones_place() {
         get(&s, "SELECT brief FROM chunk WHERE uid = ?1", &m).unwrap(),
         "a\n\nb"
     );
+    // v6: the apply's rows share one batch and name their plan; `add`'s rows have neither
+    let n = |sql: &str| -> i64 { s.conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+    assert_eq!(n("SELECT COUNT(DISTINCT batch) FROM event"), 1);
+    assert_eq!(n("SELECT COUNT(*) FROM event WHERE batch IS NULL"), 5);
+    assert_eq!(n("SELECT COUNT(*) FROM event WHERE plan IS NULL"), 0);
     assert_eq!(
         get(&s, "SELECT scope FROM chunk WHERE uid = ?1", &m).unwrap(),
         "x/"

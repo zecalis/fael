@@ -4,7 +4,7 @@
 
 use rusqlite::Transaction;
 
-pub(super) const VERSION: i32 = 5;
+pub(super) const VERSION: i32 = 6;
 
 pub(super) const SCHEMA: &str = "
 CREATE TABLE plan(
@@ -16,7 +16,8 @@ CREATE TABLE plan(
   kind TEXT,
   state TEXT NOT NULL CHECK(state IN ('active','blocked','parked','done')),
   rank INTEGER,
-  goal TEXT,
+  -- the plan's Goal/Scope/Done/Constraints text (master-detail: md is export only)
+  doc TEXT,
   spec TEXT,
   source TEXT NOT NULL,
   -- who owns the chunk list: the md file until the plan's cutover, then the db
@@ -75,13 +76,19 @@ CREATE TABLE event(
   by TEXT NOT NULL,
   from_state TEXT,
   to_state TEXT NOT NULL,
-  text TEXT);
+  text TEXT,
+  -- the plan the row belongs to; MAX(id) of a plan is its rev
+  plan INTEGER,
+  -- one ulid shared by every row one `chunk apply` wrote
+  batch TEXT);
+CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tr(
   key TEXT NOT NULL, lang TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY(key, lang));
 CREATE INDEX edge_src ON edge(src);
 CREATE INDEX edge_dst ON edge(dst);
 CREATE INDEX run_chunk ON run(chunk);
 CREATE INDEX event_chunk ON event(chunk_uid);
+CREATE INDEX event_plan ON event(plan, id);
 ";
 
 /// v1 (b1) → v2: rename the old tables away, create v2, copy, drop. The caller holds
@@ -98,7 +105,7 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
     .map_err(e)?;
     tx.execute_batch(SCHEMA).map_err(e)?;
     tx.execute_batch(
-        "INSERT INTO plan(id, app, name, title, area, kind, state, rank, goal, spec, source)
+        "INSERT INTO plan(id, app, name, title, area, kind, state, rank, doc, spec, source)
            SELECT id, app, name, title, area, kind, state, rank, goal, spec, source FROM plan_v1;
          INSERT INTO chunk(id, uid, plan, seq, label, title, state, brief, wait_on, wait_text,
                            size, model_hint, scope, due, pin)
@@ -170,6 +177,40 @@ pub(super) fn v3_to_v4(tx: &Transaction) -> Result<(), String> {
 pub(super) fn v4_to_v5(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE plan ADD COLUMN repo TEXT;")
         .map_err(|e| format!("plans.db v4 → v5: {e}"))
+}
+
+/// Master-detail (decision fael-board:master-detail): `plan.doc`, `event.plan` + `batch`,
+/// and `meta` for the db's stable id. `goal` had no reader or writer.
+pub(super) fn v5_to_v6(tx: &Transaction) -> Result<(), String> {
+    tx.execute_batch(
+        "ALTER TABLE plan RENAME COLUMN goal TO doc;
+         ALTER TABLE event ADD COLUMN plan INTEGER;
+         ALTER TABLE event ADD COLUMN batch TEXT;
+         CREATE INDEX event_plan ON event(plan, id);
+         CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+    )
+    .map_err(|e| format!("plans.db v5 → v6: {e}"))
+}
+
+/// Every migration ends here: `event.plan` for rows written before v6 (a chunk's via its
+/// uid, a plan's own via `plan:<app>/<name>`; a vanished chunk's stays NULL) and the
+/// `db_id` fael-sync keys on, set once and never changed.
+pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
+    tx.execute_batch(
+        "UPDATE event SET plan = (SELECT plan FROM chunk WHERE uid = event.chunk_uid)
+           WHERE plan IS NULL;
+         UPDATE event SET plan = (SELECT id FROM plan p
+                                  WHERE 'plan:' || p.app || '/' || p.name = event.chunk_uid)
+           WHERE plan IS NULL AND chunk_uid LIKE 'plan:%';",
+    )
+    .and_then(|_| {
+        tx.execute(
+            "INSERT OR IGNORE INTO meta(key, value) VALUES ('db_id', ?1)",
+            [crate::ulid()],
+        )
+    })
+    .map(drop)
+    .map_err(|e| format!("plans.db v6: {e}"))
 }
 
 #[cfg(test)]
