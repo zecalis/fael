@@ -1,16 +1,12 @@
-//! `fael chunk ask|reply|ask withdraw` and the owner's `chunk answer <contract>` (PLAN-fael-parallel
-//! §2): the CLI over `fael_core::plan` contracts. All of it is plans.db; no run of the caller ends.
+//! `fael chunk ask|reply|ask withdraw` (PLAN-fael-parallel §2): the CLI over `fael_core::plan`
+//! contracts. All of it is plans.db; no run of the caller ends. The holder's answer is final.
 
 use crate::Args;
 use fael_core::plan::{Ask, Here, Reply, Store};
 
-/// Is this command a contract's? `answer` is one only when its id names no chunk.
-pub(crate) fn takes(rest: &[&str], s: &Store) -> bool {
-    match rest {
-        ["ask", ..] | ["reply", ..] => true,
-        ["answer", id, _] => !s.is_chunk(id) && s.is_contract(id),
-        _ => false,
-    }
+/// Is this command a contract's?
+pub(crate) fn takes(rest: &[&str]) -> bool {
+    matches!(rest, ["ask", ..] | ["reply", ..])
 }
 
 pub(crate) fn run(a: &Args, rest: &[&str], s: &mut Store, here: &Here) -> Result<(), String> {
@@ -25,42 +21,35 @@ pub(crate) fn run(a: &Args, rest: &[&str], s: &mut Store, here: &Here) -> Result
             let returns = a.one("returns").ok_or(
                 "rejected: chunk ask needs --returns \"<shape>\" — what you will code against",
             )?;
-            let id = s.ask(to, want, &returns, a.one("check").as_deref(), here)?;
-            println!(
-                "contract {id} → open · {to} agrees or counters with `fael chunk reply {id} agree|counter`; your run goes on"
-            );
+            let (id, refused) = s.ask(to, want, &returns, a.one("check").as_deref(), here)?;
+            match refused {
+                Some(why) => println!("contract {id} → refused: {why}"),
+                None => println!(
+                    "contract {id} → open · {to} answers with `fael chunk reply {id} agree|refuse`, final; your run goes on"
+                ),
+            }
         }
         ["reply", id, "agree"] | ["reply", id, "agree", _] => {
-            a.only("chunk reply", &["run"])?;
-            let note = rest.get(3).copied();
-            say(id, s.reply(id, Reply::Agree(note), here)?);
+            a.only("chunk reply", &["returns", "run"])?;
+            let returns = a.one("returns");
+            let r = Reply::Agree {
+                note: rest.get(3).copied(),
+                returns: returns.as_deref(),
+            };
+            println!("contract {id} → {}", s.reply(id, r, here)?);
         }
-        ["reply", id, "counter", shape, why] => {
+        ["reply", id, "refuse", why] => {
             a.only("chunk reply", &["run"])?;
-            say(id, s.reply(id, Reply::Counter { shape, why }, here)?);
-        }
-        ["answer", id, shape] => {
-            a.only("chunk answer", &[])?;
-            s.answer_contract(id, shape, here.now)?;
-            say(id, "agreed".into());
+            println!("contract {id} → {}", s.reply(id, Reply::Refuse(why), here)?);
         }
         _ => {
             return Err(
-                "rejected: fael chunk ask <to> \"<want>\" --returns \"<shape>\" [--check cmd] · ask withdraw <id> · reply <id> agree [note] | counter \"<shape>\" \"<why>\""
+                "rejected: fael chunk ask <to> \"<want>\" --returns \"<shape>\" [--check cmd] · ask withdraw <id> · reply <id> agree [note] [--returns \"<shape>\"] | refuse \"<why>\""
                     .into(),
             );
         }
     }
     Ok(())
-}
-
-fn say(id: &str, state: String) {
-    let more = if state == "owner" {
-        format!(" — waits on the owner: `fael chunk answer {id} \"<shape>\"`")
-    } else {
-        String::new()
-    };
-    println!("contract {id} → {state}{more}");
 }
 
 /// The lines `chunk show` adds for a chunk's asks, in and out. The check is printed, never run.
@@ -76,8 +65,8 @@ pub(crate) fn lines(asks: &[Ask]) -> Vec<String> {
             "ask {} {arrow} {} ({who}) · {} · {} → {}",
             k.id, k.chunk, k.state, k.want, k.returns
         ));
-        if let Some(c) = &k.counter {
-            out.push(format!("  counter ({} round(s)): {c}", k.rounds));
+        if let Some(r) = &k.reason {
+            out.push(format!("  refused: {r}"));
         }
         if let Some(c) = &k.check {
             out.push(format!("  check: {c}"));

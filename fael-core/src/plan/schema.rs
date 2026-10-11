@@ -13,8 +13,9 @@ pub(super) const VERSION: i32 = 6;
 /// `CREATE TABLE` and indexes, `IF NOT EXISTS` so a race is harmless.
 pub(super) const TABLES: &[(&str, &str)] = &[(
     "contract",
-    // an ask between two chunks (PLAN-fael-parallel §2): `returns` is the asker's shape,
-    // `counter` the holder's; `state` has no CHECK so a later state needs no epoch
+    // an ask between two chunks (PLAN-fael-parallel §2): `returns` is the shape the asker
+    // codes against (the holder's agree may replace it), `reason` why it was refused;
+    // `state` has no CHECK so a later state needs no epoch
     "CREATE TABLE IF NOT EXISTS contract(
        id TEXT PRIMARY KEY,
        from_chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
@@ -22,9 +23,8 @@ pub(super) const TABLES: &[(&str, &str)] = &[(
        want TEXT NOT NULL,
        returns TEXT NOT NULL,
        check_cmd TEXT,
-       counter TEXT,
        state TEXT NOT NULL,
-       rounds INTEGER NOT NULL DEFAULT 0);
+       reason TEXT);
      CREATE INDEX IF NOT EXISTS contract_from ON contract(from_chunk);
      CREATE INDEX IF NOT EXISTS contract_to ON contract(to_chunk)",
 )];

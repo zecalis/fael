@@ -1,5 +1,5 @@
 //! `fael chunk ask|reply|answer` through the real binary: two runs (`--no-worktree`, named by
-//! `--run R`) agree on a shape, counter twice into the owner, and show it in `chunk show`.
+//! `--run R`) agree or refuse, and `chunk show` lists the asks. The holder's answer is final.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -46,7 +46,7 @@ fn contract_id(out: &str) -> String {
 }
 
 #[test]
-fn ask_counter_agree_and_the_holder_sees_it() {
+fn ask_agree_with_the_shape_the_holder_will_deliver() {
     let (d, a, b) = lanes();
     let (ok, out, err) = fael(
         &d,
@@ -65,11 +65,10 @@ fn ask_counter_agree_and_the_holder_sees_it() {
     );
     assert!(ok && out.contains("→ open"), "{out}{err}");
     let id = contract_id(&out);
-    // the asker's run goes on: it asks again, and it still holds a
     let (_, show, _) = fael(&d, &["chunk", "show", &b]);
     assert!(show.contains(&format!("ask {id} ← {a}")), "{show}");
     assert!(show.contains("  check: cargo test col"), "{show}");
-    // only the holder answers an open ask
+    // only the holder answers
     let (ok, _, err) = fael(&d, &["chunk", "reply", &id, "agree", "--run", "RA"]);
     assert!(!ok && err.contains("answers it"), "{err}");
     let (ok, out, err) = fael(
@@ -78,15 +77,13 @@ fn ask_counter_agree_and_the_holder_sees_it() {
             "chunk",
             "reply",
             &id,
-            "counter",
+            "agree",
+            "--returns",
             "fn col() -> u16",
-            "u8 overflows",
             "--run",
             "RB",
         ],
     );
-    assert!(ok && out.contains("→ countered"), "{out}{err}");
-    let (ok, out, err) = fael(&d, &["chunk", "reply", &id, "agree", "--run", "RA"]);
     assert!(ok && out.contains("→ agreed"), "{out}{err}");
     let (_, json, _) = fael(&d, &["chunk", "show", &a, "--json"]);
     assert!(json.contains("\"returns\": \"fn col() -> u16\""), "{json}");
@@ -94,67 +91,77 @@ fn ask_counter_agree_and_the_holder_sees_it() {
         json.contains("\"state\": \"agreed\"") && json.contains("\"dir\": \"out\""),
         "{json}"
     );
-}
-
-#[test]
-fn two_counters_wait_on_the_owner_and_chunk_answer_settles_it() {
-    let (d, _, b) = lanes();
-    let (_, out, _) = fael(
+    // final
+    let (ok, _, err) = fael(
         &d,
-        &["chunk", "ask", &b, "w", "--returns", "u8", "--run", "RA"],
-    );
-    let id = contract_id(&out);
-    assert!(
-        fael(
-            &d,
-            &[
-                "chunk", "reply", &id, "counter", "u16", "why", "--run", "RB"
-            ]
-        )
-        .0
-    );
-    let (ok, out, _) = fael(
-        &d,
-        &[
-            "chunk", "reply", &id, "counter", "u32", "why not", "--run", "RA",
-        ],
+        &["chunk", "reply", &id, "refuse", "late", "--run", "RB"],
     );
     assert!(
-        ok && out.contains("waits on the owner") && out.contains("chunk answer"),
-        "{out}"
-    );
-    let (ok, out, err) = fael(&d, &["chunk", "answer", &id, "u64"]);
-    assert!(ok && out.contains("→ agreed"), "{out}{err}");
-    // a chunk uid still goes the owner's way
-    let (ok, _, err) = fael(&d, &["chunk", "answer", &b, "x"]);
-    assert!(
-        !ok && err.contains("`answer` replies to a waiting chunk"),
+        !ok && err.contains("is agreed") && err.contains("final"),
         "{err}"
     );
 }
 
 #[test]
-fn a_loop_a_missing_shape_and_a_withdraw() {
+fn refuse_keeps_its_reason_and_a_loop_is_refused_at_once() {
     let (d, a, b) = lanes();
-    let (ok, _, err) = fael(&d, &["chunk", "ask", &b, "w", "--run", "RA"]);
-    assert!(!ok && err.contains("--returns"), "{err}");
     let (_, out, _) = fael(
         &d,
-        &["chunk", "ask", &b, "w", "--returns", "r", "--run", "RA"],
+        &["chunk", "ask", &b, "w", "--returns", "u8", "--run", "RA"],
     );
     let id = contract_id(&out);
-    let (ok, _, err) = fael(
+    // b started later: its ask back to a closes a loop and is refused at once
+    let (ok, out, err) = fael(
         &d,
         &["chunk", "ask", &a, "w", "--returns", "r", "--run", "RB"],
     );
-    assert!(!ok && err.contains("closes a loop"), "{err}");
+    assert!(
+        ok && out.contains("→ refused: ") && out.contains("older claim wins"),
+        "{out}{err}"
+    );
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "reply",
+            &id,
+            "refuse",
+            "schema is frozen",
+            "--run",
+            "RB",
+        ],
+    );
+    assert!(ok && out.contains("→ refused"), "{out}{err}");
+    let (_, show, _) = fael(&d, &["chunk", "show", &a]);
+    assert!(show.contains("  refused: schema is frozen"), "{show}");
+    // `answer` is no longer a contract's: a contract id is no chunk
+    let (ok, _, err) = fael(&d, &["chunk", "answer", &id, "x"]);
+    assert!(!ok && err.contains("no chunk"), "{err}");
+}
+
+#[test]
+fn a_holder_that_is_gone_refuses_at_once_and_withdraw_works_while_open() {
+    let (d, _, b) = lanes();
+    let (ok, _, err) = fael(&d, &["chunk", "ask", &b, "w", "--run", "RA"]);
+    assert!(!ok && err.contains("--returns"), "{err}");
+    assert!(fael(&d, &["chunk", "done", &b, "out", "--run", "RB"]).0);
+    let (ok, out, err) = fael(
+        &d,
+        &["chunk", "ask", &b, "w", "--returns", "r", "--run", "RA"],
+    );
+    assert!(
+        ok && out.contains("→ refused: ") && out.contains("is review"),
+        "{out}{err}"
+    );
+    // a is still running: it asks a live chunk and takes the ask back
+    let (_, c, _) = fael(&d, &["chunk", "add", "C", "--brief", "c"]);
+    let c = c.trim().to_string();
+    assert!(fael(&d, &["chunk", "start", &c, "--run", "RC", "--no-worktree"]).0);
+    let (_, out, _) = fael(
+        &d,
+        &["chunk", "ask", &c, "w", "--returns", "r", "--run", "RA"],
+    );
+    let id = contract_id(&out);
     let (ok, out, err) = fael(&d, &["chunk", "ask", "withdraw", &id, "--run", "RA"]);
     assert!(ok && out.contains("→ withdrawn"), "{out}{err}");
-    assert!(
-        fael(
-            &d,
-            &["chunk", "ask", &a, "w", "--returns", "r", "--run", "RB"]
-        )
-        .0
-    );
 }

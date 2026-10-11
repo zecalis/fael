@@ -1,10 +1,12 @@
-//! Contracts (PLAN-fael-parallel §2): every transition of the lifecycle, who may speak, loops.
+//! Contracts (PLAN-fael-parallel §2): every transition of the lifecycle, who may speak,
+//! what is refused at once, loops.
 
-use super::super::chunk::tests::{NOW, add, here, start};
+use super::super::chunk::tests::{NOW, add, here, live, start, state as chunk_state};
 use super::super::{Here, Store};
 use super::Reply;
 
-/// Two chunks, each running in its own worktree: `(store, a, b)`; a will ask b.
+/// Two chunks, each running in its own worktree: `(store, a, b)`; a started first, so a's
+/// claim is the older.
 fn lanes() -> (Store, String, String) {
     let mut s = Store::open_in_memory().unwrap();
     let a = add(&mut s, "a", Some("a"));
@@ -14,37 +16,57 @@ fn lanes() -> (Store, String, String) {
     (s, a, b)
 }
 
+/// An ask that is not refused at once.
 fn ask(s: &mut Store, wt: &str, to: &str) -> String {
-    s.ask(
-        to,
-        "a new column",
-        "fn col() -> u8",
-        Some("cargo test"),
-        &here(wt),
-    )
-    .unwrap()
+    let (id, refused) = s
+        .ask(
+            to,
+            "a new column",
+            "fn col() -> u8",
+            Some("cargo test"),
+            &here(wt),
+        )
+        .unwrap();
+    assert_eq!(refused, None);
+    id
 }
 
-fn state(s: &Store, id: &str) -> String {
-    s.conn
-        .query_row("SELECT state FROM contract WHERE id = ?1", [id], |r| {
-            r.get(0)
-        })
-        .unwrap()
+/// An ask the store refuses at once: `(id, reason)`.
+fn refused(s: &mut Store, wt: &str, to: &str) -> (String, String) {
+    let (id, why) = s.ask(to, "w", "r", None, &here(wt)).unwrap();
+    (id, why.expect("refused at once"))
 }
 
-fn column(s: &Store, id: &str, col: &str) -> Option<String> {
+fn col(s: &Store, id: &str, col: &str) -> Option<String> {
     s.conn
         .query_row(
-            &format!("SELECT CAST({col} AS TEXT) FROM contract WHERE id = ?1"),
+            &format!("SELECT {col} FROM contract WHERE id = ?1"),
             [id],
             |r| r.get(0),
         )
         .unwrap()
 }
 
-fn counter<'a>(shape: &'a str) -> Reply<'a> {
-    Reply::Counter { shape, why: "why" }
+fn state(s: &Store, id: &str) -> String {
+    col(s, id, "state").unwrap()
+}
+
+fn agree(note: Option<&str>) -> Reply<'_> {
+    Reply::Agree {
+        note,
+        returns: None,
+    }
+}
+
+fn last_event(s: &Store, id: &str) -> (String, String, String) {
+    s.conn
+        .query_row(
+            "SELECT to_state, text, by FROM event WHERE chunk_uid = 'contract:' || ?1
+             ORDER BY id DESC",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
 }
 
 #[test]
@@ -52,17 +74,9 @@ fn ask_keeps_the_askers_run_and_writes_the_event() {
     let (mut s, a, b) = lanes();
     let id = ask(&mut s, "/a", &b);
     assert_eq!(state(&s, &id), "open");
-    assert_eq!(super::super::chunk::tests::live(&s, &a), 1);
-    assert_eq!(super::super::chunk::tests::state(&s, &a), "running");
-    let (to, text): (String, String) = s
-        .conn
-        .query_row(
-            "SELECT to_state, text FROM event WHERE chunk_uid = 'contract:' || ?1",
-            [&id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .unwrap();
-    assert_eq!(to, "open");
+    assert_eq!((live(&s, &a), chunk_state(&s, &a).as_str()), (1, "running"));
+    let (to, text, by) = last_event(&s, &id);
+    assert_eq!((to.as_str(), by.as_str()), ("open", "agent"));
     assert!(
         text.contains("a new column") && text.contains("fn col()"),
         "{text}"
@@ -76,7 +90,7 @@ fn ask_keeps_the_askers_run_and_writes_the_event() {
 }
 
 #[test]
-fn ask_is_refused_for_itself_nobody_a_finished_chunk_and_missing_words() {
+fn ask_is_rejected_for_itself_nobody_and_missing_words() {
     let (mut s, a, b) = lanes();
     let e = s.ask(&a, "w", "r", None, &here("/a")).unwrap_err();
     assert!(e.contains("cannot ask itself"), "{e}");
@@ -84,145 +98,31 @@ fn ask_is_refused_for_itself_nobody_a_finished_chunk_and_missing_words() {
     assert!(e.contains("live run"), "{e}");
     let e = s.ask(&b, "w", " ", None, &here("/a")).unwrap_err();
     assert!(e.contains("--returns"), "{e}");
-    s.done(&b, "ok", Some(1), None, &here("/b")).unwrap();
-    let e = s.ask(&b, "w", "r", None, &here("/a")).unwrap_err();
-    assert!(e.contains("is done"), "{e}");
-}
-
-#[test]
-fn an_ask_that_closes_a_loop_is_refused() {
-    let (mut s, a, b) = lanes();
-    let c = add(&mut s, "c", Some("c"));
-    start(&mut s, &c, "/c").unwrap();
-    ask(&mut s, "/a", &b);
-    ask(&mut s, "/b", &c);
-    let e = s.ask(&a, "w", "r", None, &here("/c")).unwrap_err();
-    assert!(e.contains("closes a loop"), "{e}");
-    // two chunks asking each other is the shortest loop
-    let e = s.ask(&a, "w", "r", None, &here("/b")).unwrap_err();
-    assert!(e.contains("closes a loop"), "{e}");
-}
-
-#[test]
-fn a_withdrawn_ask_no_longer_holds_a_loop_open() {
-    let (mut s, a, b) = lanes();
-    let id = ask(&mut s, "/a", &b);
-    s.withdraw(&id, &here("/a")).unwrap();
-    assert_eq!(state(&s, &id), "withdrawn");
-    ask(&mut s, "/b", &a);
-}
-
-#[test]
-fn the_holder_agrees() {
-    let (mut s, _, b) = lanes();
-    let id = ask(&mut s, "/a", &b);
-    // the asker cannot answer its own ask
-    let e = s.reply(&id, Reply::Agree(None), &here("/a")).unwrap_err();
-    assert!(e.contains("answers it"), "{e}");
-    assert_eq!(state(&s, &id), "open");
-    assert_eq!(
-        s.reply(&id, Reply::Agree(Some("done by noon")), &here("/b"))
-            .unwrap(),
-        "agreed"
-    );
-    assert_eq!(
-        column(&s, &id, "returns").as_deref(),
-        Some("fn col() -> u8")
-    );
-    let last: String = s
+    let n: i64 = s
         .conn
-        .query_row(
-            "SELECT text FROM event WHERE chunk_uid = 'contract:' || ?1 ORDER BY id DESC",
-            [&id],
-            |r| r.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM contract", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(last, "done by noon");
-    // an agreed contract takes no further reply
-    let e = s.reply(&id, Reply::Agree(None), &here("/b")).unwrap_err();
-    assert!(e.contains("is agreed"), "{e}");
+    assert_eq!(n, 0);
 }
 
 #[test]
-fn the_holder_counters_and_the_asker_agrees_to_the_counter_shape() {
-    let (mut s, _, b) = lanes();
-    let id = ask(&mut s, "/a", &b);
-    assert_eq!(
-        s.reply(&id, counter("fn col() -> u16"), &here("/b"))
-            .unwrap(),
-        "countered"
-    );
-    assert_eq!(
-        (
-            column(&s, &id, "rounds").unwrap().as_str(),
-            column(&s, &id, "counter").unwrap().as_str()
-        ),
-        ("1", "fn col() -> u16")
-    );
-    // the holder does not answer its own counter
-    let e = s.reply(&id, Reply::Agree(None), &here("/b")).unwrap_err();
-    assert!(e.contains("answers it"), "{e}");
-    assert_eq!(
-        s.reply(&id, Reply::Agree(None), &here("/a")).unwrap(),
-        "agreed"
-    );
-    assert_eq!(
-        column(&s, &id, "returns").as_deref(),
-        Some("fn col() -> u16")
-    );
-}
-
-#[test]
-fn a_second_counter_goes_to_the_owner_who_settles_it() {
-    let (mut s, _, b) = lanes();
-    let id = ask(&mut s, "/a", &b);
-    s.reply(&id, counter("u16"), &here("/b")).unwrap();
-    assert_eq!(s.reply(&id, counter("u32"), &here("/a")).unwrap(), "owner");
-    assert_eq!(column(&s, &id, "rounds").as_deref(), Some("2"));
-    let e = s.reply(&id, Reply::Agree(None), &here("/b")).unwrap_err();
-    assert!(
-        e.contains("waits on the owner") && e.contains("chunk answer"),
-        "{e}"
-    );
-    assert!(s.is_contract(&id[..8]));
-    s.answer_contract(&id[..8], "u64", NOW).unwrap();
-    assert_eq!(state(&s, &id), "agreed");
-    assert_eq!(column(&s, &id, "returns").as_deref(), Some("u64"));
-    let by: String = s
-        .conn
-        .query_row(
-            "SELECT by FROM event WHERE chunk_uid = 'contract:' || ?1 ORDER BY id DESC",
-            [&id],
-            |r| r.get(0),
-        )
+fn a_holder_that_is_not_live_refuses_at_once_and_the_asker_goes_on() {
+    let (mut s, a, b) = lanes();
+    let idle = add(&mut s, "idle", Some("never started"));
+    let parked = add(&mut s, "parked", Some("p"));
+    s.owner(&parked, super::super::Owner::Park, None, NOW)
         .unwrap();
-    assert_eq!(by, "owner");
-    let e = s.answer_contract(&id, "x", NOW).unwrap_err();
-    assert!(e.contains("is agreed"), "{e}");
-}
-
-#[test]
-fn withdraw_is_the_askers_while_nothing_is_agreed() {
-    let (mut s, _, b) = lanes();
-    let id = ask(&mut s, "/a", &b);
-    let e = s.withdraw(&id, &here("/b")).unwrap_err();
-    assert!(e.contains("answers it"), "{e}");
-    s.reply(&id, counter("u16"), &here("/b")).unwrap();
-    s.withdraw(&id, &here("/a")).unwrap();
-    assert_eq!(state(&s, &id), "withdrawn");
-    let e = s.reply(&id, Reply::Agree(None), &here("/a")).unwrap_err();
-    assert!(e.contains("is withdrawn"), "{e}");
-    let id = ask(&mut s, "/a", &b);
-    s.reply(&id, Reply::Agree(None), &here("/b")).unwrap();
-    let e = s.withdraw(&id, &here("/a")).unwrap_err();
-    assert!(e.contains("not yet agreed"), "{e}");
-}
-
-#[test]
-fn a_reply_comes_only_from_a_live_run_and_a_shell_may_name_its_start() {
-    let (mut s, _, b) = lanes();
-    let id = ask(&mut s, "/a", &b);
-    // b's worktree took over by someone else, or ended: no live run, no reply
+    let parked_run = add(&mut s, "pr", Some("p"));
+    start(&mut s, &parked_run, "/p").unwrap();
+    s.owner(&parked_run, super::super::Owner::Park, None, NOW)
+        .unwrap();
+    // review (a file out, no PR), done (a PR), ended (the run is over, the chunk still running)
+    let review = add(&mut s, "review", Some("r"));
+    start(&mut s, &review, "/r").unwrap();
+    s.done(&review, "out", None, None, &here("/r")).unwrap();
+    let done = add(&mut s, "done", Some("d"));
+    start(&mut s, &done, "/d").unwrap();
+    s.done(&done, "pr", Some(1), None, &here("/d")).unwrap();
     s.run_end(
         &s.conn
             .query_row(
@@ -235,30 +135,188 @@ fn a_reply_comes_only_from_a_live_run_and_a_shell_may_name_its_start() {
         NOW,
     )
     .unwrap();
-    let e = s.reply(&id, Reply::Agree(None), &here("/b")).unwrap_err();
-    assert!(e.contains("answers it"), "{e}");
+    for (to, word) in [
+        (&idle, "is open"),
+        (&parked, "is parked"),
+        (&parked_run, "is parked"),
+        (&review, "is review"),
+        (&done, "is done"),
+        (&b, "run ended"),
+    ] {
+        let (id, why) = refused(&mut s, "/a", to);
+        assert!(why.contains(word), "{to}: {why}");
+        assert_eq!(state(&s, &id), "refused");
+        assert_eq!(col(&s, &id, "reason"), Some(why.clone()));
+        let (to_state, text, _) = last_event(&s, &id);
+        assert!(to_state == "refused" && text.contains(&why), "{text}");
+    }
+    assert_eq!((live(&s, &a), chunk_state(&s, &a).as_str()), (1, "running"));
+    // a refused ask is over: it answers nothing more and cannot be withdrawn
+    let (id, _) = refused(&mut s, "/a", &idle);
+    let e = s.reply(&id, agree(None), &here("/b")).unwrap_err();
+    assert!(e.contains("is refused"), "{e}");
+    assert!(
+        s.withdraw(&id, &here("/a"))
+            .unwrap_err()
+            .contains("is refused")
+    );
+}
+
+#[test]
+fn the_younger_ask_closing_a_loop_is_refused_at_once() {
     let (mut s, a, b) = lanes();
-    let run_a: String = s
-        .conn
-        .query_row(
-            "SELECT start FROM run r JOIN chunk c ON c.id = r.chunk WHERE c.uid = ?1",
-            [&a],
-            |r| r.get(0),
-        )
-        .unwrap();
+    let first = ask(&mut s, "/a", &b);
+    // b started later: its ask back to a is the younger claim's
+    let (id, why) = refused(&mut s, "/b", &a);
+    assert!(why.contains("older claim wins"), "{why}");
+    assert_eq!(
+        (state(&s, &id).as_str(), state(&s, &first).as_str()),
+        ("refused", "open")
+    );
+    // a longer loop: a → b → c, and c (the youngest) asks a
+    let c = add(&mut s, "c", Some("c"));
+    start(&mut s, &c, "/c").unwrap();
+    ask(&mut s, "/b", &c);
+    let (id, _) = refused(&mut s, "/c", &a);
+    assert_eq!(state(&s, &id), "refused");
+}
+
+#[test]
+fn the_older_ask_closing_a_loop_refuses_the_younger_open_ask_on_it() {
+    let (mut s, a, b) = lanes();
+    let young = ask(&mut s, "/b", &a);
+    // a is the older claim: its ask stands and b's open ask to a gives way
+    let old = ask(&mut s, "/a", &b);
+    assert_eq!(
+        (state(&s, &old).as_str(), state(&s, &young).as_str()),
+        ("open", "refused")
+    );
+    assert!(
+        col(&s, &young, "reason")
+            .unwrap()
+            .contains("older claim wins")
+    );
+    let (to, _, _) = last_event(&s, &young);
+    assert_eq!(to, "refused");
+}
+
+#[test]
+fn an_agreed_ask_on_the_loop_is_not_given_up() {
+    let (mut s, a, b) = lanes();
+    let young = ask(&mut s, "/b", &a);
+    s.reply(&young, agree(None), &here("/a")).unwrap();
+    let (id, why) = refused(&mut s, "/a", &b);
+    assert!(why.contains("older claim wins"), "{why}");
+    assert_eq!(
+        (state(&s, &id).as_str(), state(&s, &young).as_str()),
+        ("refused", "agreed")
+    );
+}
+
+#[test]
+fn a_withdrawn_ask_no_longer_holds_a_loop_open() {
+    let (mut s, a, b) = lanes();
+    let id = ask(&mut s, "/a", &b);
+    s.withdraw(&id, &here("/a")).unwrap();
+    assert_eq!(state(&s, &id), "withdrawn");
+    ask(&mut s, "/b", &a);
+}
+
+#[test]
+fn the_holder_agrees_and_may_name_the_shape_it_will_deliver() {
+    let (mut s, _, b) = lanes();
+    let id = ask(&mut s, "/a", &b);
+    // the asker cannot answer its own ask
+    let e = s.reply(&id, agree(None), &here("/a")).unwrap_err();
+    assert!(e.contains("answers it"), "{e}");
+    assert_eq!(state(&s, &id), "open");
+    assert_eq!(
+        s.reply(&id, agree(Some("by noon")), &here("/b")).unwrap(),
+        "agreed"
+    );
+    assert_eq!(col(&s, &id, "returns").as_deref(), Some("fn col() -> u8"));
+    assert_eq!(last_event(&s, &id).1, "by noon");
+    // its answer is final
+    let e = s.reply(&id, Reply::Refuse("no"), &here("/b")).unwrap_err();
+    assert!(e.contains("is agreed") && e.contains("final"), "{e}");
+    let id = ask(&mut s, "/a", &b);
+    let r = Reply::Agree {
+        note: None,
+        returns: Some("fn col() -> u16"),
+    };
+    s.reply(&id, r, &here("/b")).unwrap();
+    assert_eq!(col(&s, &id, "returns").as_deref(), Some("fn col() -> u16"));
+    assert_eq!(last_event(&s, &id).1, "fn col() -> u16");
+}
+
+#[test]
+fn the_holder_refuses_with_a_reason_and_it_is_final() {
+    let (mut s, _, b) = lanes();
+    let id = ask(&mut s, "/a", &b);
+    assert_eq!(
+        s.reply(&id, Reply::Refuse("schema is frozen"), &here("/b"))
+            .unwrap(),
+        "refused"
+    );
+    assert_eq!(col(&s, &id, "reason").as_deref(), Some("schema is frozen"));
+    assert_eq!(col(&s, &id, "returns").as_deref(), Some("fn col() -> u8"));
+    assert_eq!(last_event(&s, &id).1, "schema is frozen");
+    let e = s.reply(&id, agree(None), &here("/b")).unwrap_err();
+    assert!(e.contains("is refused") && e.contains("final"), "{e}");
+    assert_eq!(
+        s.asks(&b).unwrap()[0].reason.as_deref(),
+        Some("schema is frozen")
+    );
+}
+
+#[test]
+fn withdraw_is_the_askers_while_the_ask_is_open() {
+    let (mut s, _, b) = lanes();
+    let id = ask(&mut s, "/a", &b);
+    let e = s.withdraw(&id, &here("/b")).unwrap_err();
+    assert!(e.contains("withdraws it"), "{e}");
+    s.withdraw(&id, &here("/a")).unwrap();
+    assert_eq!(state(&s, &id), "withdrawn");
+    let e = s.reply(&id, agree(None), &here("/b")).unwrap_err();
+    assert!(e.contains("is withdrawn"), "{e}");
+    let id = ask(&mut s, "/a", &b);
+    s.reply(&id, agree(None), &here("/b")).unwrap();
+    let e = s.withdraw(&id, &here("/a")).unwrap_err();
+    assert!(e.contains("only an open ask"), "{e}");
+}
+
+#[test]
+fn a_reply_comes_only_from_a_live_run_and_a_shell_may_name_its_start() {
+    let (mut s, a, b) = lanes();
+    let id = ask(&mut s, "/a", &b);
+    let start_of = |s: &Store, uid: &str| -> String {
+        s.conn
+            .query_row(
+                "SELECT start FROM run r JOIN chunk c ON c.id = r.chunk WHERE c.uid = ?1",
+                [uid],
+                |r| r.get(0),
+            )
+            .unwrap()
+    };
+    // b's run is over: nobody answers from its worktree any more
+    s.run_end(&start_of(&s, &b), None, NOW).unwrap();
+    let e = s.reply(&id, agree(None), &here("/b")).unwrap_err();
+    assert!(e.contains("answers it"), "{e}");
+    let run_a = start_of(&s, &a);
     let by_run = Here {
         run: Some(&run_a),
         ..here("/elsewhere")
     };
-    let id = s.ask(&b, "w", "r", None, &by_run).unwrap();
-    assert_eq!(state(&s, &id), "open");
+    // a's start, named from a shell elsewhere, asks the live chunk it names
+    let c = add(&mut s, "c", Some("c"));
+    start(&mut s, &c, "/c").unwrap();
+    let (id, refused) = s.ask(&c, "w", "r", None, &by_run).unwrap();
+    assert_eq!((refused, state(&s, &id).as_str()), (None, "open"));
 }
 
 #[test]
 fn an_unknown_contract_is_named() {
     let (mut s, _, _) = lanes();
-    let e = s
-        .reply("NOPE", Reply::Agree(None), &here("/a"))
-        .unwrap_err();
+    let e = s.reply("NOPE", agree(None), &here("/a")).unwrap_err();
     assert!(e.contains("no contract NOPE"), "{e}");
 }

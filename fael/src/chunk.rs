@@ -27,7 +27,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     match rest.as_slice() {
         ["show", key] => return crate::chunk_show::show(a, &r, key),
-        [_, ..] if s().is_ok_and(|s| crate::chunk_ask::takes(&rest, &s)) => {
+        [_, ..] if crate::chunk_ask::takes(&rest) => {
             crate::chunk_ask::run(a, &rest, &mut s()?, &here)?
         }
         ["add", title] => {
