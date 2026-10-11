@@ -39,7 +39,13 @@ fn read(p: &Path) -> String {
 fn install_writes_every_shipped_skill() {
     let home = std::env::temp_dir().join(format!("fael-skills-{}", fael_core::ulid()));
     install(&home);
-    for name in ["fael", "fael-content", "fael-debug", "fael-review"] {
+    for name in [
+        "fael",
+        "fael-content",
+        "fael-debug",
+        "fael-plan",
+        "fael-review",
+    ] {
         let s = read(&home.join(".claude/skills").join(name).join("SKILL.md"));
         // lines(), not "\n": a Windows checkout embeds the skill with CRLF
         assert!(
