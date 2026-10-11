@@ -118,7 +118,45 @@
           "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
           "handoff": null, "owner_actions": ["park", "drop"]
         }
-      ]
+      ],
+      "ledger": {
+        "issues": [
+          {
+            "id": "01M4NA00000000000000000001", "title": "Board shows a stale count",
+            "text": "The plan card count lags one refresh behind the chunk list.", "key": "board:counts",
+            "files": ["fael/src/board.rs", "plan:fael-board"], "at": "2026-10-11T08:00:00.000Z",
+            "by": "owner-1a2b", "to": null, "revisit": null, "held": "agent-1/counts", "group": 0, "signals": []
+          },
+          {
+            "id": "01M4NA00000000000000000002", "title": null,
+            "text": "board --json prints worktrees in git's order, not path order.", "key": null,
+            "files": ["fael/src/board.rs"], "at": "2026-10-11T08:10:00.000Z",
+            "by": "owner-1a2b", "to": null, "revisit": null, "held": null, "group": 0, "signals": []
+          },
+          {
+            "id": "01M4NA00000000000000000003", "title": null,
+            "text": "The Thai view has no decision on where translations live.", "key": null,
+            "files": ["fael-core/src/plan/schema.rs"], "at": "2026-10-11T08:20:00.000Z",
+            "by": "owner-1a2b", "to": "agent-2", "revisit": null, "held": null, "group": 1, "signals": ["drifted"]
+          }
+        ],
+        "decisions": [
+          {
+            "id": "01M4NA00000000000000000004", "title": "Board reads only board --json",
+            "text": "The app never opens plans.db; the board shape is the contract.", "key": "fael-board:contract",
+            "files": ["plan:fael-board"], "at": "2026-10-10T09:00:00.000Z",
+            "by": "owner-1a2b", "to": null, "revisit": null, "held": null, "signals": []
+          }
+        ],
+        "notes": [
+          {
+            "id": "01M4NA00000000000000000005", "title": null,
+            "text": "b3b shipped; next: smoke the app against the real board.", "key": "plan:fael-board:handoff",
+            "files": ["plan:fael-board", ".fapony/plan/PLAN-fael-board.md"], "at": "2026-10-10T18:00:00.000Z",
+            "by": "owner-1a2b", "to": null, "revisit": "after b5a", "held": null, "signals": ["drifted"]
+          }
+        ]
+      }
     },
     {
       "name": "zecalis",
@@ -158,7 +196,8 @@
           "run": { "id": "b7e2d4f6-8a0c-4e1b-9d3f-5a7c9e1b3d5f", "client": "claude", "session": null, "model": "opus", "worktree": "/Users/owner/Project/zecalis-wt-1", "branch": "feat/feed-cache", "pr": null, "out": null, "started": "2026-10-10T08:00:00Z", "last_seen": null, "ended": null, "cost": null },
           "handoff": null, "owner_actions": ["park", "drop"]
         }
-      ]
+      ],
+      "ledger": { "issues": [], "decisions": [], "notes": [] }
     }
   ]
 }
