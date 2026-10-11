@@ -17,8 +17,9 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some("next") if rest.len() == 1 => next(&r),
         Some("export") if rest.len() <= 2 => export(&r, rest.get(1).map(String::as_str)),
         Some("cutover") if rest.len() == 2 => cutover(&r, &rest[1]),
+        Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         _ => Err(
-            "rejected: fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan> — try 'fael plan --help'"
+            "rejected: fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan> | fael plan park|unpark|done <plan> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -83,6 +84,21 @@ fn cutover(r: &Repo, want: &str) -> Result<(), String> {
         key(&p),
         p.source
     );
+    Ok(())
+}
+
+/// `park` · `unpark` · `done` on a cut-over plan: the owner's word on `plan.state`.
+fn state(r: &Repo, verb: &str, want: &str) -> Result<(), String> {
+    let to = match verb {
+        "park" => "parked",
+        "unpark" => "active",
+        _ => "done",
+    };
+    let mut s = open(r)?;
+    let p = one(&s, want)?;
+    let from = s.plan_state(p.id, to, &fael_core::rfc3339(fael_core::now_ms()))?;
+    crate::board::register(r);
+    println!("plan {} {from} → {to}", key(&p));
     Ok(())
 }
 

@@ -90,7 +90,8 @@ impl Store {
     }
 }
 
-/// Insert or refresh the plan's own fields; its id and `truth` stay.
+/// Insert or refresh the plan's own fields; its id and `truth` stay, and so does a `db`
+/// plan's state (`fael plan park|unpark|done` owns it, not the md's folder).
 fn upsert_plan(tx: &Transaction, p: &Import) -> Result<(i64, String), String> {
     let f = &p.md.front;
     let state = match p.dir.as_str() {
@@ -103,7 +104,8 @@ fn upsert_plan(tx: &Transaction, p: &Import) -> Result<(i64, String), String> {
         "INSERT INTO plan(app, name, title, area, kind, state, spec, source)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(app, name) DO UPDATE SET title = excluded.title, area = excluded.area,
-           kind = excluded.kind, state = excluded.state, spec = excluded.spec,
+           kind = excluded.kind, spec = excluded.spec,
+           state = CASE WHEN truth = 'db' THEN state ELSE excluded.state END,
            source = excluded.source
          RETURNING id, truth",
         params![

@@ -148,8 +148,9 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     ),
     (
         "plan",
-        "read plans into plans.db, print each one's next chunk, export one, cut one over",
+        "read plans into plans.db, print each one's next chunk, export one, cut one over, park one",
         "fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan>
+     | fael plan park|unpark|done <plan>
     (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
      parked/, done/ — into <git-common-dir>/fael/plans.db; a chunk keeps its uid by a
      unique label, else a unique title (an ambiguous one is listed), a plan whose chunks
@@ -160,7 +161,10 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      plan, or the one named (name or app/name), as markdown to stdout — uid, state and
      fields under each line; cutover: import, then the plan's chunks live in the db
      (`fael chunk …`) and its md's chunk lines become one banner — refused while a
-     chunk is a draft, held by (wip …), or waits on an (after …) naming no chunk)",
+     chunk is a draft, held by (wip …), or waits on an (after …) naming no chunk;
+     park|unpark|done: a cut-over plan's state (an md plan's folder is its state) —
+     parked or done leaves the board; refused while one of its chunks runs; import
+     never overwrites it)",
     ),
     (
         "run",
