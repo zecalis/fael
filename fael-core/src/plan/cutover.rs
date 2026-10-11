@@ -10,7 +10,8 @@ use rusqlite::TransactionBehavior;
 impl Store {
     /// Flip plan `id` to `truth = db` in one `BEGIN IMMEDIATE`. Rejected when it already is,
     /// or while a chunk is a draft (an unknown checkbox), held by a `(wip …)` marker (a run
-    /// with no R), or waits on an `(after …)` naming no chunk. Returns its chunk count.
+    /// with no R), waits on an `(after …)` naming no chunk, or shares its label with another
+    /// chunk (the md allows it; a `db` plan's label is unique). Returns its chunk count.
     pub fn cut_over(&mut self, id: i64) -> Result<usize, String> {
         let tx = self
             .conn
@@ -29,11 +30,14 @@ impl Store {
                 "SELECT COALESCE(c.label, c.title) || ': ' || CASE
                    WHEN c.state = 'draft' THEN 'unknown checkbox — use [ ], [x] or [~]'
                    WHEN c.state = 'running' THEN '(wip …) — finish or drop the claim first'
+                   WHEN e.src IS NULL THEN 'label on more than one chunk — give each its own'
                    ELSE '(after ' || e.ref || ') names no chunk' END
                  FROM chunk c LEFT JOIN edge e
                    ON e.src = c.id AND e.kind = 'after' AND e.dst IS NULL
                  WHERE c.plan = ?1
-                   AND (c.state IN ('draft','running') OR e.src IS NOT NULL)
+                   AND (c.state IN ('draft','running') OR e.src IS NOT NULL
+                     OR EXISTS (SELECT 1 FROM chunk d
+                                WHERE d.plan = c.plan AND d.label = c.label AND d.id <> c.id))
                  ORDER BY c.seq",
             )
             .map_err(err)?
@@ -162,13 +166,14 @@ mod tests {
         let id = import(
             &mut s,
             "# PLAN-t\n\n## TL;DR\n- [?] c1 — odd\n- [ ] c2 (wip feat/a) — held\n\
-             - [ ] c3 (after zz) — waits on nothing\n",
+             - [ ] c3 (after zz) — waits on nothing\n- [x] c4 — once\n- [x] c4 — twice\n",
         );
         let e = s.cut_over(id).unwrap_err();
         for want in [
             "c1 — odd: unknown checkbox",
             "c2: (wip …)",
             "c3: (after zz) names no chunk",
+            "c4: label on more than one chunk",
         ] {
             assert!(e.contains(want), "{want} in {e}");
         }
