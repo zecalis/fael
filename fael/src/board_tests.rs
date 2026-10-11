@@ -36,6 +36,7 @@ fn ready(
         owner_actions: Vec::new(),
         rank,
         seq: 0,
+        code: None,
     }
 }
 

@@ -52,7 +52,8 @@ pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Res
         .collect();
     for &a in &hot {
         for &b in &hot {
-            if a != b && overlap(&chunks[a].scope, &chunks[b].scope) {
+            let same = chunks[a].code == chunks[b].code;
+            if a != b && same && overlap(&chunks[a].scope, &chunks[b].scope) {
                 let u = chunks[b].uid.clone();
                 chunks[a].overlaps.push(u);
             }

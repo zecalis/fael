@@ -4,7 +4,7 @@
 
 use rusqlite::Transaction;
 
-pub(super) const VERSION: i32 = 4;
+pub(super) const VERSION: i32 = 5;
 
 pub(super) const SCHEMA: &str = "
 CREATE TABLE plan(
@@ -23,6 +23,8 @@ CREATE TABLE plan(
   truth TEXT NOT NULL DEFAULT 'md' CHECK(truth IN ('md','db')),
   -- the paths every brief points at, one per line (`SPEC-x.md#block` allowed)
   refs TEXT,
+  -- the checkout the plan's code lives in when it is not this repo (`fael plan repo`)
+  repo TEXT,
   UNIQUE(app, name));
 CREATE TABLE chunk(
   id INTEGER PRIMARY KEY,
@@ -162,6 +164,12 @@ pub(super) fn v2_to_v3(tx: &Transaction) -> Result<(), String> {
 pub(super) fn v3_to_v4(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE chunk ADD COLUMN client_hint TEXT;")
         .map_err(|e| format!("plans.db v3 → v4: {e}"))
+}
+
+/// `plan.repo` (issue 01M4N4CVH): a plan whose code is in another checkout.
+pub(super) fn v4_to_v5(tx: &Transaction) -> Result<(), String> {
+    tx.execute_batch("ALTER TABLE plan ADD COLUMN repo TEXT;")
+        .map_err(|e| format!("plans.db v4 → v5: {e}"))
 }
 
 #[cfg(test)]

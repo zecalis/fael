@@ -68,6 +68,9 @@ impl Started {
                 "\n# {label}{} ({})\nplan {} — {}",
                 c.title, c.uid, c.plan, c.plan_title
             );
+            if let Some(repo) = &c.repo {
+                let _ = writeln!(o, "code in {repo} — work, scope and PR there");
+            }
             let fields: Vec<String> = [
                 ("size", &c.size),
                 ("client", &c.client_hint),
@@ -162,6 +165,7 @@ mod tests {
             plan: "x".into(),
             plan_title: "PLAN-x".into(),
             source: ".fapony/plan/PLAN-x.md".into(),
+            repo: None,
             refs: vec!["SPEC-x.md#block".into(), "gone.rs".into()],
             said: vec![],
             notes: vec![],

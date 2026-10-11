@@ -6,12 +6,12 @@
 //! and the command exits 1: never an empty board that reads as live (issue 01M4N4CV7).
 
 use crate::plan::db;
-use crate::{Args, Repo, git, repo, repo_at};
+use crate::{Args, git, repo, repo_at};
 use fael_core::plan::{BoardChunk, BoardPlan, Store};
 use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::ExitCode;
 
 #[derive(Serialize)]
@@ -61,7 +61,6 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
     }
     let (at, stale) = clock();
     let mut projects = Vec::new();
-    let mut broken = false;
     for root in registered() {
         match project(&root, &at[..10], &stale, a.has("open")) {
             Ok(Some(p)) => projects.push(p),
@@ -69,7 +68,6 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
             // one broken repo never hides the others, and is never silent
             Err(e) => {
                 eprintln!("fael board: {}: {e}", root.display());
-                broken = true;
                 projects.push(Project {
                     error: Some(e),
                     ..Project::named(&root)
@@ -85,6 +83,8 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         }
         projects.retain(|p| !p.plans.is_empty() || p.error.is_some());
     }
+    code(&mut projects);
+    let broken = projects.iter().any(|p| p.error.is_some());
     let b = lists(at, projects);
     if a.has("json") {
         let s = serde_json::to_string_pretty(&b).map_err(|e| e.to_string())?;
@@ -121,6 +121,58 @@ impl Project {
             error: None,
         }
     }
+}
+
+/// A plan whose code is in another checkout (`fael plan repo`, issue 01M4N4CVH): the plan
+/// gets that checkout's `remote` for a PR link, and the checkout is a project of its own —
+/// base and worktree pool, no plans — so the app can show and act on it.
+fn code(projects: &mut Vec<Project>) {
+    let live: HashMap<String, String> = projects
+        .iter()
+        .flat_map(|p| &p.chunks)
+        .filter_map(|c| c.run.as_ref().filter(|r| r.ended.is_none()))
+        .filter_map(|r| Some((r.worktree.clone()?, r.id.clone())))
+        .collect();
+    let live: HashMap<&str, &str> = live.iter().map(|(w, r)| (w.as_str(), r.as_str())).collect();
+    let mut roots: Vec<String> = projects.iter().map(|p| p.root.clone()).collect();
+    let mut extra = Vec::new();
+    for plan in projects.iter_mut().flat_map(|p| &mut p.plans) {
+        let Some(repo) = plan.repo.clone() else {
+            continue;
+        };
+        let root = Path::new(&repo);
+        plan.remote = remote(root);
+        if roots.contains(&repo) {
+            continue;
+        }
+        roots.push(repo.clone());
+        extra.push(match repo_at(root) {
+            Ok(r) if root.exists() => Project {
+                base: git(root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]),
+                worktrees: worktrees(root, r.cfg.plan_worktrees.as_deref(), &live),
+                ..Project::named(root)
+            },
+            _ => Project {
+                error: Some(format!(
+                    "no checkout at {repo} — `fael plan repo {} <path>`",
+                    plan.name
+                )),
+                ..Project::named(root)
+            },
+        });
+    }
+    projects.extend(extra);
+}
+
+/// `owner/name` of a checkout's origin: `git@github.com:o/n.git`, `https://…/o/n`.
+fn remote(root: &Path) -> Option<String> {
+    let url = git(root, &["remote", "get-url", "origin"])?;
+    let mut parts = url
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .rsplit(['/', ':']);
+    let name = parts.next()?;
+    Some(format!("{}/{name}", parts.next()?))
 }
 
 fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<Project>, String> {
@@ -321,73 +373,10 @@ fn text(b: &Board) -> String {
     out
 }
 
-/// `~/.local/state/fael/projects`: one main-checkout root per line — every repo the board
-/// covers (SPEC §10). The app runs `fael board` from home, outside any repo.
-fn registry() -> PathBuf {
-    fael_core::stats::state_dir().join("projects")
-}
-
-fn registered() -> Vec<PathBuf> {
-    let text = std::fs::read_to_string(registry()).unwrap_or_default();
-    let all: Vec<PathBuf> = text
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(PathBuf::from)
-        .collect();
-    let keep: Vec<PathBuf> = all.iter().filter(|p| !scratch(p)).cloned().collect();
-    // prune what older faels registered (issue 01M4MH3H7); a failed write only skips again
-    if keep.len() < all.len() {
-        let text: String = keep.iter().map(|p| format!("{}\n", p.display())).collect();
-        let _ = std::fs::write(registry(), text);
-    }
-    keep
-}
-
-/// A repo under the temp dir (an agent's or a test's scratch repo) belongs only on a
-/// registry that is itself under the temp dir — a test's `FAEL_STATE_DIR`.
-fn scratch(root: &Path) -> bool {
-    // canonical (`/private/var/…` on macOS) through the nearest dir that exists yet
-    let tmp = |p: &Path| {
-        let p = p
-            .ancestors()
-            .find_map(|a| Some(a.canonicalize().ok()?.join(p.strip_prefix(a).ok()?)))
-            .unwrap_or_else(|| p.to_path_buf());
-        [std::env::temp_dir(), PathBuf::from("/tmp")]
-            .iter()
-            .filter_map(|d| d.canonicalize().ok())
-            .any(|d| p.starts_with(d))
-    };
-    tmp(root) && !tmp(&fael_core::stats::state_dir())
-}
-
-/// Put this repo on the board: called by every command that writes its plans.db.
-pub(crate) fn register(r: &Repo) {
-    // the main checkout, not this worktree: `<main>/.git/fael` is the journal
-    let root = r
-        .journal
-        .as_deref()
-        .and_then(Path::parent)
-        .filter(|g| g.file_name().is_some_and(|n| n == ".git"))
-        .and_then(Path::parent)
-        .unwrap_or(&r.root);
-    if scratch(root) || registered().iter().any(|p| p == root) {
-        return;
-    }
-    let f = registry();
-    let line = format!("{}\n", root.display());
-    let ok = f
-        .parent()
-        .is_some_and(|d| std::fs::create_dir_all(d).is_ok())
-        && std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&f)
-            .and_then(|mut h| std::io::Write::write_all(&mut h, line.as_bytes()))
-            .is_ok();
-    if !ok {
-        eprintln!("fael: could not add {} to {}", root.display(), f.display());
-    }
-}
+#[path = "board_registry.rs"]
+mod registry;
+pub(crate) use registry::register;
+use registry::registered;
 
 #[cfg(test)]
 #[path = "board_tests.rs"]

@@ -24,8 +24,9 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some("export") if rest.len() <= 2 => export(&r, rest.get(1).map(String::as_str)),
         Some("cutover") if rest.len() == 2 => cutover(&r, &rest[1]),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
+        Some("repo") if rest.len() == 3 => code_repo(&r, &rest[1], &rest[2]),
         _ => Err(
-            "rejected: fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> — try 'fael plan --help'"
+            "rejected: fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -157,6 +158,31 @@ fn state(r: &Repo, verb: &str, want: &str) -> Result<(), String> {
     let from = s.plan_state(p.id, to, &fael_core::rfc3339(fael_core::now_ms()))?;
     crate::board::register(r);
     println!("plan {} {from} → {to}", key(&p));
+    Ok(())
+}
+
+/// `repo <plan> <path|->`: the checkout the plan's code lives in (its top level), `-` = this
+/// repo again. Briefs name it; the board lists it as a project with its remote.
+fn code_repo(r: &Repo, want: &str, path: &str) -> Result<(), String> {
+    let mut s = open(r)?;
+    let p = one(&s, want)?;
+    let top = (path != "-")
+        .then(|| {
+            let dir = r.cwd.join(path);
+            let top = crate::git(&dir, &["rev-parse", "--show-toplevel"])
+                .ok_or(format!("rejected: {path} is not a git checkout"))?;
+            Path::new(&top)
+                .canonicalize()
+                .map(|t| t.to_string_lossy().into_owned())
+                .map_err(|e| format!("{top}: {e}"))
+        })
+        .transpose()?;
+    s.set_repo(p.id, top.as_deref())?;
+    crate::board::register(r);
+    match top {
+        Some(t) => println!("plan {} → code in {t}", key(&p)),
+        None => println!("plan {} → code in this repo", key(&p)),
+    }
     Ok(())
 }
 

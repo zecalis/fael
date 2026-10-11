@@ -122,7 +122,7 @@ fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--mode
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD]
 fael chunk after <uid> <other-uid> \"<why>\"
-fael chunk done <uid> \"<handoff>\" [--pr N | --out <path>] [--run R]
+fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
@@ -157,7 +157,7 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
         "read plans into plans.db, print each one's next chunk, export one, cut one over, create or park one",
         "fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan>
      | fael plan new <name> \"<title>\" [--app A] [--area dev|marketing]
-     | fael plan park|unpark|done <plan>
+     | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|->
     (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
      parked/, done/ — into <git-common-dir>/fael/plans.db; a chunk keeps its uid by a
      unique label, else a unique title (an ambiguous one is listed), a plan whose chunks
@@ -174,7 +174,9 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      unless the file exists — read live by every brief;
      park|unpark|done: a cut-over plan's state (an md plan's folder is its state) —
      parked or done leaves the board; refused while one of its chunks runs; import
-     never overwrites it)",
+     never overwrites it; repo: the checkout a plan's code lives in when it is not
+     this repo (- = this repo) — its briefs say so, the board lists that checkout as a
+     project and gives the plan its remote, scopes overlap only within one checkout)",
     ),
     (
         "run",
