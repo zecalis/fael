@@ -7,8 +7,7 @@ use super::store::err;
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
 
-/// pair, unblocks (transitive, over chunks not yet closed), overlaps (ready or live
-/// running chunks whose scopes share a path prefix).
+/// pair, unblocks (transitive, over chunks not yet closed), overlaps (see `overlaps`).
 pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Result<(), String> {
     let at: HashMap<i64, usize> = ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
     let mut waits_on_me: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -44,10 +43,23 @@ pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Res
         }
         chunks[i].unblocks = seen.into_iter().filter(|&j| live(&chunks[j])).count();
     }
+    overlaps(chunks, &HashSet::new());
+    Ok(())
+}
+
+/// Ready, live running, review and `open_pr` chunks (a done chunk whose PR is not on the
+/// base yet: the CLI reads git) whose scopes share a path prefix — their files are taken.
+pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>) {
+    for c in chunks.iter_mut() {
+        c.overlaps.clear();
+    }
     let hot: Vec<usize> = (0..chunks.len())
         .filter(|&i| {
             let c = &chunks[i];
-            c.ready || (c.state == "running" && !c.ended)
+            c.ready
+                || c.state == "review"
+                || (c.state == "running" && !c.ended)
+                || open_pr.contains(&c.uid)
         })
         .collect();
     for &a in &hot {
@@ -59,7 +71,6 @@ pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Res
             }
         }
     }
-    Ok(())
 }
 
 /// SPEC §2: two scopes overlap when a path of one is a prefix of a path of the other on a
