@@ -301,11 +301,19 @@ fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
 
 fn done(a: &Args, r: &Repo, uid: &str, handoff: &str, here: &Here) -> Result<(), String> {
     a.only("chunk done", &["pr", "out", "run"])?;
+    // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number;
+    // the repo is the plan's (`fael plan repo`), so a link resolves there
     let pr = a
         .one("pr")
-        .map(|n| n.trim_start_matches('#').parse::<i64>())
+        .map(|n| {
+            n.trim_end_matches('/')
+                .rsplit(['#', '/'])
+                .next()
+                .unwrap_or("")
+                .parse::<i64>()
+        })
         .transpose()
-        .map_err(|_| "rejected: --pr takes a PR number")?;
+        .map_err(|_| "rejected: --pr takes a PR number, owner/repo#N or its URL")?;
     let src = a.one("out").map(|o| r.cwd.join(o));
     if pr.is_some() && src.is_some() {
         return Err("rejected: --pr or --out, not both".into());

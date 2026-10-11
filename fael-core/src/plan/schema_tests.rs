@@ -1,4 +1,4 @@
-//! v1 → v4 (and v2 → v4) on a fixture written with b1's schema: every row carried over, a failure
+//! v1 → v5 (and v2 → v5) on a fixture written with b1's schema: every row carried over, a failure
 //! leaves v1 for the next open, two first opens migrate once.
 
 use super::super::store::Store;
@@ -111,7 +111,7 @@ fn rows(s: &Store, sql: &str) -> Vec<String> {
 fn v1_rows_carry_over() {
     let path = v1_db("");
     let s = Store::open(&path).unwrap();
-    assert_eq!(version(&path), 4);
+    assert_eq!(version(&path), 5);
     assert_eq!(
         rows(
             &s,
@@ -155,24 +155,28 @@ fn v1_rows_carry_over() {
 }
 
 #[test]
-fn v2_gains_run_cost_and_client_hint() {
+fn v2_gains_run_cost_client_hint_and_plan_repo() {
     let path = v1_db("");
     drop(Store::open(&path).unwrap());
     Connection::open(&path)
         .unwrap()
         .execute_batch(
             "ALTER TABLE run DROP COLUMN cost; ALTER TABLE chunk DROP COLUMN client_hint;
-             PRAGMA user_version = 2;",
+             ALTER TABLE plan DROP COLUMN repo; PRAGMA user_version = 2;",
         )
         .unwrap();
     let s = Store::open(&path).unwrap();
-    assert_eq!(version(&path), 4);
+    assert_eq!(version(&path), 5);
     assert_eq!(
         rows(&s, "SELECT COALESCE(cost, '-') || ' ' || branch FROM run"),
         ["- feat/b"]
     );
     assert_eq!(
         rows(&s, "SELECT COALESCE(client_hint, '-') FROM chunk LIMIT 1"),
+        ["-"]
+    );
+    assert_eq!(
+        rows(&s, "SELECT COALESCE(repo, '-') FROM plan LIMIT 1"),
         ["-"]
     );
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
@@ -194,7 +198,7 @@ fn a_failed_step_leaves_v1_and_the_next_open_retries() {
     c.execute_batch("DROP TABLE edge").unwrap();
     drop(c);
     Store::open(&path).unwrap();
-    assert_eq!(version(&path), 4);
+    assert_eq!(version(&path), 5);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
@@ -217,6 +221,6 @@ fn two_first_opens_round() {
     for o in opens {
         assert_eq!(o.join().unwrap().unwrap().len(), 4);
     }
-    assert_eq!(version(&path), 4);
+    assert_eq!(version(&path), 5);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

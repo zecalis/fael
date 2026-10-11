@@ -21,6 +21,10 @@ pub struct Plan {
     pub truth: String,
     pub source: String,
     pub spec: Option<String>,
+    /// the checkout the plan's code lives in, null = this project (`fael plan repo`)
+    pub repo: Option<String>,
+    /// `owner/name` of that checkout's origin, for a PR link (the CLI fills it from git)
+    pub remote: Option<String>,
     /// state → chunks in it; an archived (done/parked) plan lists only this
     pub counts: BTreeMap<String, usize>,
 }
@@ -57,6 +61,9 @@ pub struct Chunk {
     pub rank: Option<i64>,
     #[serde(skip)]
     pub seq: i64,
+    /// the plan's `repo`: scopes overlap only within one checkout
+    #[serde(skip)]
+    pub code: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,7 +135,7 @@ impl Store {
                 "SELECT c.id, c.uid, p.app, p.name, c.label, c.title, c.state, c.size,
                         c.model_hint, c.scope, c.due, c.pin, c.wait_on, c.wait_text,
                         c.wait_until, c.approved_at, c.approved_model, c.approved_client,
-                        p.rank, c.seq, c.client_hint
+                        p.rank, c.seq, c.client_hint, p.repo
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
                  ORDER BY p.rank IS NULL, p.rank, p.app, p.name, c.seq",
@@ -190,6 +197,7 @@ impl Store {
                         owner_actions: Owner::actions(&state),
                         rank: r.get(18)?,
                         seq: r.get(19)?,
+                        code: r.get(21)?,
                         label,
                         state,
                         uid,
@@ -268,7 +276,7 @@ impl Store {
         let mut q = self
             .conn
             .prepare(
-                "SELECT id, app, name, title, area, kind, state, rank, truth, source, spec
+                "SELECT id, app, name, title, area, kind, state, rank, truth, source, spec, repo
                  FROM plan ORDER BY state IN ('done', 'parked'), rank IS NULL, rank, app, name",
             )
             .map_err(err)?;
@@ -287,6 +295,8 @@ impl Store {
                 truth: r.get(8)?,
                 source: r.get(9)?,
                 spec: r.get(10)?,
+                repo: r.get(11)?,
+                remote: None,
             })
         })
         .map_err(err)?

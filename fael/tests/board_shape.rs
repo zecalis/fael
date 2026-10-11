@@ -33,7 +33,8 @@ const CHUNK_KEYS: &[&str] = &[
     "owner_actions",
 ];
 const PLAN_KEYS: &[&str] = &[
-    "app", "name", "title", "area", "kind", "state", "rank", "truth", "source", "spec", "counts",
+    "app", "name", "title", "area", "kind", "state", "rank", "truth", "source", "spec", "repo",
+    "remote", "counts",
 ];
 const RUN_KEYS: &[&str] = &[
     "id",

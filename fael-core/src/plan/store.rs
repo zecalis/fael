@@ -3,7 +3,7 @@
 //! schema version and an older db upgrades on open (release gate: no manual step).
 
 use super::md::PlanMd;
-use super::schema::{SCHEMA, VERSION, v1_to_v2, v2_to_v3, v3_to_v4};
+use super::schema::{SCHEMA, VERSION, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5};
 use rusqlite::{Connection, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
@@ -123,8 +123,11 @@ impl Store {
             0 => tx.execute_batch(SCHEMA).map_err(err)?,
             // v1 → v2 creates the current SCHEMA; each later step chains to the next
             1 => v1_to_v2(&tx)?,
-            2 => v2_to_v3(&tx).and_then(|_| v3_to_v4(&tx))?,
-            3 => v3_to_v4(&tx)?,
+            2 => v2_to_v3(&tx)
+                .and_then(|_| v3_to_v4(&tx))
+                .and_then(|_| v4_to_v5(&tx))?,
+            3 => v3_to_v4(&tx).and_then(|_| v4_to_v5(&tx))?,
+            4 => v4_to_v5(&tx)?,
             _ => return Ok(()),
         }
         tx.pragma_update(None, "user_version", VERSION)
@@ -152,6 +155,19 @@ impl Store {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)
+    }
+
+    /// `fael plan repo <plan> <path|->`: the checkout the plan's code lives in (None = this
+    /// repo). The board lists it as a project, a PR resolves against its remote, and scope
+    /// overlaps only between chunks of one checkout.
+    pub fn set_repo(&mut self, id: i64, repo: Option<&str>) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE plan SET repo = ?1 WHERE id = ?2",
+                rusqlite::params![repo, id],
+            )
+            .map(|_| ())
+            .map_err(err)
     }
 
     /// Is `tok` a chunk uid, or the prefix of one? Ledger ids share the ULID shape.

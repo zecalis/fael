@@ -103,3 +103,46 @@ fn a_chunk_uid_or_its_prefix_is_known() {
     assert!(s.is_chunk(&a) && s.is_chunk(&a[..10].to_lowercase()));
     assert!(!s.is_chunk("01M4N4CV7"));
 }
+
+#[test]
+fn scopes_overlap_only_within_one_checkout_and_the_brief_names_it() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.conn
+        .execute(
+            "INSERT INTO plan(app, name, title, state, source, truth)
+             VALUES ('', 'app', 'app', 'active', '', 'db')",
+            [],
+        )
+        .unwrap();
+    let scoped = |s: &mut Store, plan: &str| {
+        let f = Fields {
+            title: Some("t".into()),
+            brief: Some("b".into()),
+            scope: Some(vec!["src/".into()]),
+            ..Fields::default()
+        };
+        s.add(plan, &f, &[], NOW).unwrap()
+    };
+    let (a, b) = (scoped(&mut s, "inbox"), scoped(&mut s, "app"));
+    let overlaps = |s: &Store, u: &str| {
+        let t = s.board("2026-10-11", NOW).unwrap();
+        t.chunks.into_iter().find(|c| c.uid == u).unwrap().overlaps
+    };
+    assert_eq!(
+        overlaps(&s, &a),
+        std::slice::from_ref(&b),
+        "one checkout: src/ is the same tree"
+    );
+    let app = s
+        .plans()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.name == "app")
+        .unwrap();
+    s.set_repo(app.id, Some("/code/board")).unwrap();
+    assert!(overlaps(&s, &a).is_empty(), "another checkout's src/");
+    let st = s.start(&b, &Start::default(), &here("/w")).unwrap();
+    assert_eq!(st.chunks[0].repo.as_deref(), Some("/code/board"));
+    let text = st.text(&|_| None, &|_| true);
+    assert!(text.contains("code in /code/board"), "{text}");
+}
