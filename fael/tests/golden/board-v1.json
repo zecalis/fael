@@ -2,6 +2,7 @@
   "v": 1,
   "at": "2026-10-10T09:00:00Z",
   "needs_you": [
+    { "kind": "waiting", "uid": "01M4M0BRD000000000000000A4" },
     { "kind": "waiting", "uid": "01M4M0BRD000000000000000P2" },
     { "kind": "review", "uid": "01M4M0BRD000000000000000A3" },
     { "kind": "review", "uid": "01M4M0BRD000000000000000P1" },
@@ -21,7 +22,7 @@
         { "path": "/Users/owner/Project/fael/wt-fael-agent-2", "branch": "feat/plan-schema-v2", "run": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71" }
       ],
       "plans": [
-        { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "md", "source": ".fapony/plan/PLAN-fael-board.md", "spec": "SPEC-fael-board.md", "counts": { "open": 2, "review": 1, "running": 1 } },
+        { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "md", "source": ".fapony/plan/PLAN-fael-board.md", "spec": "SPEC-fael-board.md", "counts": { "open": 2, "review": 1, "running": 1, "waiting": 1 } },
         { "app": "", "name": "launch-posts", "title": "October launch posts", "area": "marketing", "kind": "unit", "state": "active", "rank": 2, "truth": "db", "source": ".fapony/plan/PLAN-launch-posts.md", "spec": null, "counts": { "open": 1, "review": 1, "waiting": 2 } },
         { "app": "", "name": "inbox", "title": "Inbox", "area": "dev", "kind": null, "state": "active", "rank": null, "truth": "db", "source": "", "spec": null, "counts": { "draft": 1 } },
         { "app": "", "name": "fael-v0", "title": "a repo memory agents cannot skip writing", "area": "dev", "kind": "unit", "state": "done", "rank": null, "truth": "md", "source": ".fapony/done/PLAN-fael-v0.md", "spec": "SPEC-fael-v0.md", "counts": { "done": 12 } }
@@ -60,6 +61,14 @@
           "stalled": false, "ended": false, "wait": null, "approval": null,
           "run": { "id": "0d9b7f3a-5e21-4a8c-b6f0-2c4e8a1d9f53", "client": "claude", "session": "ab12cd34-5555-4666-8777-888899990000", "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "pr": 341, "out": null, "started": "2026-10-10T08:10:00Z", "last_seen": "2026-10-10T08:40:00Z", "ended": "2026-10-10T08:41:00Z", "cost": 2.17 },
           "handoff": { "at": "2026-10-10T08:41:00Z", "text": "Fixture pinned; board_shape.rs holds the keys. PR #341." }, "owner_actions": ["answer", "accept", "drop"]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000A4", "app": "", "plan": "fael-board", "label": "g2",
+          "title": "gate: push policy after 30 sessions", "state": "waiting",
+          "size": null, "model_hint": null, "client_hint": null, "scope": [], "due": null, "pin": null,
+          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
+          "stalled": false, "ended": false, "wait": { "on": null, "text": "30 sessions", "until": null }, "approval": null, "run": null,
+          "handoff": null, "owner_actions": ["answer", "park", "drop"]
         },
         {
           "uid": "01M4M0BRD000000000000000P1", "app": "", "plan": "launch-posts", "label": "1",

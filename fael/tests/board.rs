@@ -201,8 +201,35 @@ fn a_linked_worktree_pool_and_the_registry() {
     let wt2 = tmp.join("wt2").canonicalize().unwrap();
     assert_eq!(
         slots,
-        [(wt1, "w1", &Value::from("R1")), (wt2, "w2", &Value::Null),]
+        [
+            (wt1, "w1", &Value::from("R1")),
+            (wt2.clone(), "w2", &Value::Null),
+        ]
     );
+    // `[plan] worktrees` keeps the agent slots, leaves a topic worktree out
+    write(d.join(".fael/config.toml"), "[plan]\nworktrees = \"wt2\"\n");
+    let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
+    let wt = v["projects"][0]["worktrees"].as_array().unwrap().clone();
+    assert_eq!(wt.len(), 1, "{wt:?}");
+    assert_eq!(canon(wt[0]["path"].as_str().unwrap()), wt2);
+}
+
+#[test]
+fn a_temp_repo_stays_off_a_real_registry() {
+    let tmp = std::env::temp_dir().join(format!("fael-board-{}", fael_core::ulid()));
+    let d = repo(&tmp);
+    // a state dir outside the temp dir stands in for the owner's
+    let state = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("fael-board-{}", fael_core::ulid()))
+        .join("state");
+    fael(&d, &state, &["chunk", "add", "x", "--brief", "b"]);
+    let reg = state.join("projects");
+    assert!(!reg.exists(), "a scratch repo is never registered");
+    // one an older fael wrote is skipped and pruned
+    write(reg.clone(), &format!("{}\n", d.display()));
+    let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
+    assert_eq!(v["projects"], serde_json::json!([]));
+    assert_eq!(std::fs::read_to_string(&reg).unwrap(), "");
 }
 
 #[test]
@@ -211,7 +238,7 @@ fn an_md_plan_is_never_ready_and_a_done_plan_shows_counts() {
     let (d, state) = (repo(&tmp), tmp.join("state"));
     write(
         d.join(".fapony/plan/PLAN-m.md"),
-        "# PLAN-m — live\n\n## TL;DR\n- [ ] m1 — open one\n",
+        "# PLAN-m — live\n\n## TL;DR\n- [ ] m1 — open one\n- [ ] m2 (wait 30 rows) — gated\n",
     );
     write(
         d.join(".fapony/done/PLAN-old.md"),
@@ -233,8 +260,12 @@ fn an_md_plan_is_never_ready_and_a_done_plan_shows_counts() {
     assert_eq!(p["plans"][0]["title"], "live");
     assert_eq!(p["plans"][1]["counts"], serde_json::json!({"done": 2}));
     let chunks = p["chunks"].as_array().unwrap();
-    assert_eq!(chunks.len(), 1, "the done plan lists no chunk");
+    assert_eq!(chunks.len(), 2, "the done plan lists no chunk");
     assert_eq!(chunks[0]["title"], "open one");
     assert_eq!(chunks[0]["ready"], false, "only a db plan's chunk starts");
     assert_eq!(v["queue"], serde_json::json!([]));
+    // an md wait names no `on`: it still waits on the owner
+    assert_eq!(chunks[1]["wait"]["on"], Value::Null);
+    let need = serde_json::json!([{"kind": "waiting", "uid": chunks[1]["uid"]}]);
+    assert_eq!(v["needs_you"], need);
 }
