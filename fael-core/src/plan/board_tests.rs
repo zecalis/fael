@@ -2,7 +2,8 @@
 
 use super::super::board_math::{clean, overlap, plan_title};
 use super::super::chunk::tests::{NOW, add, here, start};
-use super::super::{Fields, Store};
+use super::super::{ALL, Fields, Owner, Store};
+use rusqlite::params;
 
 fn scoped(s: &mut Store, title: &str, scope: &[&str], after: &[String]) -> String {
     let f = Fields {
@@ -86,4 +87,28 @@ fn md_titles_come_clean() {
     );
     assert_eq!(clean("chunk 2 — two (wait owner)", Some("2")), "two");
     assert_eq!(clean("(wipe) stays", None), "(wipe) stays");
+}
+
+#[test]
+fn owner_actions_are_the_verbs_that_succeed() {
+    for st in ALL {
+        let (mut listed, mut ok) = (None, Vec::new());
+        for o in Owner::ALL {
+            let mut s = Store::open_in_memory().unwrap();
+            let c = add(&mut s, "c", Some("b"));
+            s.conn
+                .execute(
+                    "UPDATE chunk SET state = ?1 WHERE uid = ?2",
+                    params![st.as_str(), c],
+                )
+                .unwrap();
+            let b = s.board("2026-10-11", NOW).unwrap();
+            let ch = b.chunks.iter().find(|x| x.uid == c).unwrap();
+            listed.get_or_insert(ch.owner_actions.clone());
+            if s.owner(&c, o, Some("x"), NOW).is_ok() {
+                ok.push(o.as_str());
+            }
+        }
+        assert_eq!(listed.unwrap(), ok, "{}", st.as_str());
+    }
 }

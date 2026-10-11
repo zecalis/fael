@@ -339,6 +339,7 @@ mod tests {
             approval: None,
             run: None,
             handoff: None,
+            owner_actions: Vec::new(),
             rank,
             seq: 0,
         }

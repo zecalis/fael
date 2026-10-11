@@ -1,8 +1,8 @@
 //! The owner's half (SPEC §1, §5): commands from the board, never fenced, and `run end`.
 
-use super::State;
 use super::chunk::{end_live, row, set, tx};
 use super::store::{Store, err};
+use super::{State, allowed, check};
 use rusqlite::params;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,6 +12,49 @@ pub enum Owner {
     Drop,
     Park,
     Unpark,
+}
+
+impl Owner {
+    pub const ALL: [Owner; 5] = [
+        Owner::Answer,
+        Owner::Accept,
+        Owner::Park,
+        Owner::Unpark,
+        Owner::Drop,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Owner::Answer => "answer",
+            Owner::Accept => "accept",
+            Owner::Drop => "drop",
+            Owner::Park => "park",
+            Owner::Unpark => "unpark",
+        }
+    }
+
+    /// Does this command take a chunk in `s`? The one rule `owner()` rejects by and the
+    /// board's `owner_actions` lists, so the app keeps no copy of it.
+    pub fn takes(self, s: State) -> bool {
+        match self {
+            Owner::Answer => matches!(s, State::Waiting | State::Review),
+            Owner::Accept => s == State::Review,
+            Owner::Unpark => s == State::Parked,
+            Owner::Park => allowed(s, State::Parked),
+            Owner::Drop => allowed(s, State::Dropped),
+        }
+    }
+
+    /// The owner verbs a chunk in `state` takes now, in `ALL` order (board `owner_actions`).
+    pub fn actions(state: &str) -> Vec<&'static str> {
+        State::parse(state).map_or_else(Vec::new, |s| {
+            Owner::ALL
+                .into_iter()
+                .filter(|o| o.takes(s))
+                .map(Owner::as_str)
+                .collect()
+        })
+    }
 }
 
 impl Store {
@@ -27,28 +70,26 @@ impl Store {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         let to = match cmd {
-            Owner::Answer if !matches!(r.state, State::Waiting | State::Review) => {
-                return Err(format!(
-                    "rejected: chunk {uid} is {} — `answer` replies to a waiting chunk or sends a review back",
-                    r.state.as_str()
-                ));
-            }
-            Owner::Accept if r.state != State::Review => {
-                return Err(format!(
-                    "rejected: chunk {uid} is {} — `accept` takes a chunk in review",
-                    r.state.as_str()
-                ));
-            }
             Owner::Answer | Owner::Unpark => State::Open,
             Owner::Accept => State::Done,
             Owner::Drop => State::Dropped,
             Owner::Park => State::Parked,
         };
-        if cmd == Owner::Unpark && r.state != State::Parked {
-            return Err(format!(
-                "rejected: chunk {uid} is {}, not parked",
-                r.state.as_str()
-            ));
+        if !cmd.takes(r.state) {
+            let st = r.state.as_str();
+            return Err(match cmd {
+                Owner::Answer => format!(
+                    "rejected: chunk {uid} is {st} — `answer` replies to a waiting chunk or sends a review back"
+                ),
+                Owner::Accept => {
+                    format!("rejected: chunk {uid} is {st} — `accept` takes a chunk in review")
+                }
+                Owner::Unpark => format!("rejected: chunk {uid} is {st}, not parked"),
+                // the state table's reject; set() skips it when the state stays (park a parked)
+                Owner::Park | Owner::Drop => {
+                    format!("{} ({uid})", check(r.state, to).err().unwrap_or_default())
+                }
+            });
         }
         set(&tx, &r, to, "owner", text, now)?;
         if to == State::Open {
