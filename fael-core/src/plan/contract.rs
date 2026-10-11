@@ -36,6 +36,7 @@ pub struct Ask {
     pub reason: Option<String>,
 }
 
+#[derive(Clone)]
 struct Row {
     id: String,
     from: i64,
@@ -193,10 +194,7 @@ fn loop_path(tx: &Transaction, from: i64, to: i64) -> Result<Option<Vec<Row>>, S
         path.push(k);
         at = edges[k].from;
     }
-    let mut edges: Vec<Option<Row>> = edges.into_iter().map(Some).collect();
-    Ok(Some(
-        path.into_iter().filter_map(|k| edges[k].take()).collect(),
-    ))
+    Ok(Some(path.into_iter().map(|k| edges[k].clone()).collect()))
 }
 
 impl Store {
