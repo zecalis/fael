@@ -4,7 +4,7 @@
 
 use rusqlite::Transaction;
 
-pub(super) const VERSION: i32 = 2;
+pub(super) const VERSION: i32 = 3;
 
 pub(super) const SCHEMA: &str = "
 CREATE TABLE plan(
@@ -61,6 +61,7 @@ CREATE TABLE run(
   chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
   client TEXT, session TEXT, model TEXT, worktree TEXT, branch TEXT, pr INTEGER, out TEXT,
   started TEXT NOT NULL, last_seen TEXT, ended TEXT,
+  cost REAL,
   UNIQUE(start, chunk));
 -- append-only history of every transition, keyed on uid so it outlives a re-import
 CREATE TABLE event(
@@ -147,6 +148,12 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// `run.cost` (k1): what the client reported start R cost, in USD.
+pub(super) fn v2_to_v3(tx: &Transaction) -> Result<(), String> {
+    tx.execute_batch("ALTER TABLE run ADD COLUMN cost REAL;")
+        .map_err(|e| format!("plans.db v2 → v3: {e}"))
 }
 
 #[cfg(test)]

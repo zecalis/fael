@@ -94,13 +94,21 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `fael run end R`: ends start R's live rows, nothing else; none left is fine (exit 0).
+/// `fael run end R [--cost USD]`: ends start R's live rows, nothing else; none left is fine
+/// (exit 0). `--cost` is what the client reported (`total_cost_usd`); fael never prices.
 pub(crate) fn run_end(a: &Args, run: &str) -> Result<ExitCode, String> {
-    a.only("run end", &[])?;
+    a.only("run end", &["cost"])?;
+    let cost = match a.one("cost") {
+        None => None,
+        Some(v) => match v.parse::<f64>() {
+            Ok(c) if c.is_finite() && c >= 0.0 => Some(c),
+            _ => return Err(format!("rejected: --cost {v} — a decimal >= 0, in USD")),
+        },
+    };
     let r = repo()?;
     let path = db(&r);
     if path.exists() {
-        Store::open(&path)?.run_end(run, &fael_core::rfc3339(fael_core::now_ms()))?;
+        Store::open(&path)?.run_end(run, cost, &fael_core::rfc3339(fael_core::now_ms()))?;
     }
     Ok(ExitCode::SUCCESS)
 }

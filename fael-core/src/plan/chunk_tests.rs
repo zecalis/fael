@@ -96,8 +96,8 @@ fn run_end_forced_takeover_and_fencing() {
         "{e}"
     );
     // run end ends the run, never the state; again is a no-op
-    assert_eq!(s.run_end(&r1, NOW).unwrap(), 1);
-    assert_eq!(s.run_end(&r1, NOW).unwrap(), 0);
+    assert_eq!(s.run_end(&r1, None, NOW).unwrap(), 1);
+    assert_eq!(s.run_end(&r1, None, NOW).unwrap(), 0);
     assert_eq!((state(&s, &c), live(&s, &c)), ("running".into(), 0));
     // an ended run starts again without --force; a reused R is refused
     let reuse = Start {
@@ -125,7 +125,7 @@ fn run_end_forced_takeover_and_fencing() {
     );
     assert!(s.done(&c, "h", Some(1), None, &here("/b")).is_err());
     // the old shell's cleanup never ends the new start
-    assert_eq!(s.run_end(&r2, NOW).unwrap(), 0);
+    assert_eq!(s.run_end(&r2, None, NOW).unwrap(), 0);
     assert_eq!(live(&s, &c), 1);
     // one start per worktree
     let other = add(&mut s, "other", Some("b"));
@@ -140,6 +140,10 @@ fn run_end_forced_takeover_and_fencing() {
     assert_eq!((state(&s, &c), live(&s, &c)), ("done".into(), 0));
     let pr = get(&s, "SELECT CAST(pr AS TEXT) FROM run WHERE start = ?1", &r3);
     assert_eq!(pr.as_deref(), Some("7"));
+    // done ended the run first: the launcher's run end still records what R cost, only R
+    assert_eq!(s.run_end(&r3, Some(1.25), NOW).unwrap(), 0);
+    let cost = |r: &str| get(&s, "SELECT CAST(cost AS TEXT) FROM run WHERE start = ?1", r);
+    assert_eq!((cost(&r3), cost(&r2)), (Some("1.25".into()), None));
 }
 
 #[test]
@@ -271,7 +275,7 @@ fn the_stop_hook_stamps_only_its_own_live_run() {
     assert_eq!(s.seen("/w", "s1", NOW).unwrap(), 1, "fills session");
     assert_eq!(s.seen("/w", "s2", NOW).unwrap(), 0, "another session's run");
     assert_eq!(s.seen("/x", "s1", NOW).unwrap(), 0, "another worktree");
-    s.run_end(&r, NOW).unwrap();
+    s.run_end(&r, None, NOW).unwrap();
     assert_eq!(s.seen("/w", "s1", NOW).unwrap(), 0, "never an ended run");
     assert!(s.held("/w").unwrap().is_empty());
 }

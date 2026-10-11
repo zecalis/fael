@@ -160,9 +160,11 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
     (
         "run",
         "end one chunk start",
-        "fael run end R
+        "fael run end R [--cost USD]
     (ends every live run row of start R — the launcher's cleanup after the agent
-     exits; never another start, never a chunk's state; none left exits 0)",
+     exits; never another start, never a chunk's state; none left exits 0)
+  --cost USD   what the client reported the run cost (claude's total_cost_usd), a
+               decimal >= 0; kept on start R's rows and shown as run.cost on the board",
     ),
     (
         "restore",

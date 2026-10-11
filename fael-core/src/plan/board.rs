@@ -90,6 +90,8 @@ pub struct Run {
     pub started: String,
     pub last_seen: Option<String>,
     pub ended: Option<String>,
+    /// USD, as the client reported it to `fael run end R --cost`
+    pub cost: Option<f64>,
 }
 
 /// The agent's last word on the chunk: its `done` / `wait` / `after` text.
@@ -291,7 +293,7 @@ impl Store {
             .conn
             .prepare(
                 "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
-                        started, last_seen, ended
+                        started, last_seen, ended, cost
                  FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)",
             )
             .map_err(err)?;
@@ -310,6 +312,7 @@ impl Store {
                     started: r.get(9)?,
                     last_seen: r.get(10)?,
                     ended: r.get(11)?,
+                    cost: r.get(12)?,
                 },
             ))
         })

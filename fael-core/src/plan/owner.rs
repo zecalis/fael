@@ -56,14 +56,26 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael run end R`: ends every live row of start R and nothing else — never a chunk's
-    /// state, never another start. None left (wait/done ended them) is not an error.
-    pub fn run_end(&mut self, run: &str, now: &str) -> Result<usize, String> {
-        self.conn
+    /// `fael run end R [--cost USD]`: ends every live row of start R and nothing else —
+    /// never a chunk's state, never another start. None left (wait/done ended them) is not
+    /// an error. `cost` lands on every row of R, ended or not: the agent's own `chunk done`
+    /// usually ended the run before the launcher reports what it cost.
+    pub fn run_end(&mut self, run: &str, cost: Option<f64>, now: &str) -> Result<usize, String> {
+        let tx = self.conn.transaction().map_err(err)?;
+        let n = tx
             .execute(
                 "UPDATE run SET ended = ?1 WHERE start = ?2 AND ended IS NULL",
                 params![now, run],
             )
-            .map_err(err)
+            .map_err(err)?;
+        if cost.is_some() {
+            tx.execute(
+                "UPDATE run SET cost = ?1 WHERE start = ?2",
+                params![cost, run],
+            )
+            .map_err(err)?;
+        }
+        tx.commit().map_err(err)?;
+        Ok(n)
     }
 }

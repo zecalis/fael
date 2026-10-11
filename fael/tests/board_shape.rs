@@ -45,6 +45,7 @@ const RUN_KEYS: &[&str] = &[
     "started",
     "last_seen",
     "ended",
+    "cost",
 ];
 const STATES: &[&str] = &[
     "draft", "open", "running", "waiting", "review", "done", "replaced", "dropped", "parked",
