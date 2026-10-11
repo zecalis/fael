@@ -2,15 +2,52 @@
 //! Every step runs inside the caller's `BEGIN IMMEDIATE`, so a failure rolls back to the
 //! old version and the next open retries.
 
-use rusqlite::Transaction;
+use rusqlite::{Connection, Transaction};
 
+/// The breaking epoch: only a rename, drop or retype bumps it, in a chunk of its own run
+/// alone. An addition goes in [`TABLES`] or [`COLUMNS`] instead, so two lanes that each
+/// add something open the shared db both ways (issue 01M4MN60).
 pub(super) const VERSION: i32 = 6;
 
-/// The oldest `VERSION` that still reads and writes a db at this one, kept in `meta.reads`:
-/// a step that only adds (a nullable column, a table, an index) leaves it, so one lane's
-/// bump never locks the other worktrees' faels out of the shared db (issue 01M4MN60);
-/// a step that renames, drops or retypes raises it to its `VERSION`.
-pub(super) const READS: i32 = 6;
+/// New tables, `(name, sql)`: the sql runs once when the table is missing — its
+/// `CREATE TABLE` and indexes, `IF NOT EXISTS` so a race is harmless.
+pub(super) const TABLES: &[(&str, &str)] = &[];
+
+/// New columns, `(table, column, decl)`, added when missing. Nullable or with a DEFAULT,
+/// so a fael without the column still inserts rows.
+pub(super) const COLUMNS: &[(&str, &str, &str)] = &[];
+
+/// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open
+/// checks, and only one that finds something missing takes the write lock.
+pub(super) fn missing(
+    c: &Connection,
+    tables: &[(&str, &str)],
+    columns: &[(&str, &str, &str)],
+) -> rusqlite::Result<String> {
+    let mut sql = String::new();
+    for (name, create) in tables {
+        let n: i64 = c.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [name],
+            |r| r.get(0),
+        )?;
+        if n == 0 {
+            sql += create;
+            sql += ";";
+        }
+    }
+    for (table, col, decl) in columns {
+        let n: i64 = c.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+            [table, col],
+            |r| r.get(0),
+        )?;
+        if n == 0 {
+            sql += &format!("ALTER TABLE {table} ADD COLUMN {col} {decl};");
+        }
+    }
+    Ok(sql)
+}
 
 pub(super) const SCHEMA: &str = "
 CREATE TABLE plan(
@@ -200,7 +237,8 @@ pub(super) fn v5_to_v6(tx: &Transaction) -> Result<(), String> {
 
 /// Every migration ends here: `event.plan` for rows written before v6 (a chunk's via its
 /// uid, a plan's own via `plan:<app>/<name>`; a vanished chunk's stays NULL) and the
-/// `db_id` fael-sync keys on, set once and never changed, and `reads` ([`READS`]).
+/// `db_id` fael-sync keys on, set once and never changed, and `reads` = [`VERSION`]:
+/// fael v0.44 opens a newer db while `reads` is at most its own version.
 pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch(
         "UPDATE event SET plan = (SELECT plan FROM chunk WHERE uid = event.chunk_uid)
@@ -218,7 +256,7 @@ pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
     .and_then(|_| {
         tx.execute(
             "INSERT OR REPLACE INTO meta(key, value) VALUES ('reads', ?1)",
-            [READS.to_string()],
+            [VERSION.to_string()],
         )
     })
     .map(drop)

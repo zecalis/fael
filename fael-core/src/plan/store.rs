@@ -1,12 +1,19 @@
 //! `plans.db` — SQLite in WAL mode beside the journal (`<git-common-dir>/fael/`), so every
 //! worktree of a clone shares it. Schema per SPEC-fael-board §7; `user_version` carries the
-//! schema version and an older db upgrades on open (release gate: no manual step).
+//! breaking epoch, an older db upgrades on open (release gate: no manual step) and every
+//! open adds the tables and columns it lacks.
 
 use super::md::PlanMd;
-use super::schema::{SCHEMA, VERSION, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_fill};
+use super::schema::{
+    COLUMNS, SCHEMA, TABLES, VERSION, missing, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6,
+    v6_fill,
+};
 use rusqlite::{Connection, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
+
+type Adds = &'static [(&'static str, &'static str)];
+type Cols = &'static [(&'static str, &'static str, &'static str)];
 
 pub struct Store {
     pub(super) conn: Connection,
@@ -66,6 +73,11 @@ impl Store {
     }
 
     fn init(conn: Connection) -> Result<Store, String> {
+        Store::init_with(conn, TABLES, COLUMNS)
+    }
+
+    /// `init` with the additions a build carries: a test plays a build with other ones.
+    fn init_with(conn: Connection, tables: Adds, columns: Cols) -> Result<Store, String> {
         // 8 agents write at once: wait for the writer instead of failing
         let wait = Duration::from_secs(10);
         conn.busy_timeout(wait).map_err(err)?;
@@ -85,7 +97,7 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", false)
             .map_err(err)?;
         let mut s = Store { conn };
-        s.migrate()?;
+        s.migrate(tables, columns)?;
         s.conn
             .pragma_update(None, "foreign_keys", true)
             .map_err(err)?;
@@ -93,17 +105,21 @@ impl Store {
         Ok(s)
     }
 
-    fn migrate(&mut self) -> Result<(), String> {
+    fn migrate(&mut self, tables: Adds, columns: Cols) -> Result<(), String> {
         // the common open takes no write lock: every hook and command opens the db
         let v: i32 = self
             .conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(err)?;
-        if v == VERSION {
-            return Ok(());
-        }
         if v > VERSION {
-            return newer(&self.conn, v);
+            return Err(newer(v));
+        }
+        if v == VERSION
+            && missing(&self.conn, tables, columns)
+                .map_err(err)?
+                .is_empty()
+        {
+            return Ok(());
         }
         // re-read under the write lock: two first opens race, one creates
         let tx = self
@@ -114,7 +130,7 @@ impl Store {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(err)?;
         if v > VERSION {
-            return newer(&tx, v);
+            return Err(newer(v));
         }
         type Step = fn(&rusqlite::Transaction) -> Result<(), String>;
         let steps: [Step; 4] = [v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6];
@@ -127,11 +143,16 @@ impl Store {
                     step(&tx)?;
                 }
             }
-            _ => return Ok(()),
+            _ => {}
         }
-        v6_fill(&tx)?;
-        tx.pragma_update(None, "user_version", VERSION)
-            .map_err(err)?;
+        if v < VERSION {
+            v6_fill(&tx)?;
+            tx.pragma_update(None, "user_version", VERSION)
+                .map_err(err)?;
+        }
+        // re-read under the lock: another open may have added them meanwhile
+        let add = missing(&tx, tables, columns).map_err(err)?;
+        tx.execute_batch(&add).map_err(err)?;
         tx.commit().map_err(err)
     }
 
@@ -182,20 +203,8 @@ impl Store {
     }
 }
 
-/// A db a newer fael migrated: this fael uses it while the db's `meta.reads` (the oldest
-/// version that still reads and writes it, `schema::READS`) is at most its own `VERSION`;
-/// else the error names the upgrade. A db from before `reads` existed is refused.
-fn newer(c: &Connection, v: i32) -> Result<(), String> {
-    let reads: Option<i32> = c
-        .query_row(
-            "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'reads'",
-            [],
-            |r| r.get(0),
-        )
-        .ok();
-    if reads.is_some_and(|r| r <= VERSION) {
-        return Ok(());
-    }
+/// A db past this fael's epoch: a breaking change it cannot read. The error names the upgrade.
+fn newer(v: i32) -> String {
     // a dev build is upgraded by building a newer main, not by the release channel
     let fix = match crate::GIT {
         Some(g) => format!(
@@ -203,7 +212,7 @@ fn newer(c: &Connection, v: i32) -> Result<(), String> {
         ),
         None => format!("this fael knows v{VERSION} — run `fael upgrade`"),
     };
-    Err(format!("plans.db is schema v{v}, {fix}"))
+    format!("plans.db is schema v{v}, {fix}")
 }
 
 #[cfg(test)]
