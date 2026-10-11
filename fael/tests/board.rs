@@ -52,6 +52,11 @@ fn repo(tmp: &Path) -> PathBuf {
     d.canonicalize().unwrap()
 }
 
+/// A path fael printed, as the test spells it: git prints `C:/…`, canonicalize `\\?\C:\…`.
+fn canon(p: &str) -> PathBuf {
+    Path::new(p.trim_end()).canonicalize().unwrap()
+}
+
 fn write(p: PathBuf, body: &str) {
     std::fs::create_dir_all(p.parent().unwrap()).unwrap();
     std::fs::write(p, body).unwrap();
@@ -152,7 +157,7 @@ fn a_linked_worktree_pool_and_the_registry() {
     fael(&wt1, &state, &["chunk", "start", &x, "--run", "R1"]);
     // written from a worktree, the registry names the main checkout
     let reg = std::fs::read_to_string(state.join("projects")).unwrap();
-    assert_eq!(reg, format!("{}\n", d.display()));
+    assert_eq!((canon(&reg), reg.lines().count()), (d.clone(), 1));
 
     // a root gone from disk and a repo whose plans.db is not a database: both skipped
     let bad = tmp.join("bad");
@@ -174,16 +179,16 @@ fn a_linked_worktree_pool_and_the_registry() {
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["projects"].as_array().unwrap().len(), 1, "{v}");
     let p = &v["projects"][0];
-    assert_eq!(p["root"], d.to_string_lossy().as_ref());
+    assert_eq!(canon(p["root"].as_str().unwrap()), d);
     // linked worktrees only: the main checkout is not a slot
     let wt = &p["worktrees"];
-    let slots: Vec<(&str, &str, &Value)> = wt
+    let slots: Vec<(PathBuf, &str, &Value)> = wt
         .as_array()
         .unwrap()
         .iter()
         .map(|w| {
             (
-                w["path"].as_str().unwrap(),
+                canon(w["path"].as_str().unwrap()),
                 w["branch"].as_str().unwrap(),
                 &w["run"],
             )
@@ -192,10 +197,7 @@ fn a_linked_worktree_pool_and_the_registry() {
     let wt2 = tmp.join("wt2").canonicalize().unwrap();
     assert_eq!(
         slots,
-        [
-            (&*wt1.to_string_lossy(), "w1", &Value::from("R1")),
-            (&*wt2.to_string_lossy(), "w2", &Value::Null),
-        ]
+        [(wt1, "w1", &Value::from("R1")), (wt2, "w2", &Value::Null),]
     );
 }
 
