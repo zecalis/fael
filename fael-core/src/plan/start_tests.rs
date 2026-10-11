@@ -43,7 +43,7 @@ fn a_pair_member_command_ends_only_its_own_run() {
             assert_eq!((live(&s, m), live(&s, rest)), (0, 1), "{at}");
             assert_eq!(state(&s, rest), "running", "{at}");
             assert_eq!(
-                s.run_end(&r, NOW).unwrap(),
+                s.run_end(&r, None, NOW).unwrap(),
                 1,
                 "{at}: run end ends the rest"
             );

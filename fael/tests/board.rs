@@ -73,7 +73,9 @@ fn the_binary_speaks_board_v1() {
     f(&["chunk", "start", &ask, "--run", "R0"]);
     f(&["chunk", "wait", &ask, "Which tone?", "--on", "owner"]);
     f(&["chunk", "start", &gone, "--run", "R1"]);
-    f(&["run", "end", "R1"]);
+    let bad = run(&d, &state, &["run", "end", "R1", "--cost", "-1"]);
+    assert!(!bad.status.success(), "a negative cost is rejected");
+    f(&["run", "end", "R1", "--cost", "0.42"]);
     f(&["chunk", "start", &a, "--run", "R2", "--client", "claude"]);
 
     // the app runs it from home: the registry, not the cwd, names the repo
@@ -99,6 +101,8 @@ fn the_binary_speaks_board_v1() {
     }
     assert_eq!(keys(&chunk(&a)["run"]), keys(&gp["chunks"][0]["run"]));
     assert_eq!(chunk(&a)["run"]["id"], "R2");
+    assert_eq!(chunk(&a)["run"]["cost"], Value::Null);
+    assert_eq!(chunk(&gone)["run"]["cost"], 0.42);
     assert_eq!(chunk(&a)["unblocks"], 1);
     assert_eq!(chunk(&a)["overlaps"], serde_json::json!([free]));
     assert_eq!(chunk(&ask)["handoff"]["text"], "Which tone?");
