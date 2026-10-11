@@ -4,7 +4,7 @@
 //! other — write a plan back out as markdown, and hand one plan's chunks to the db.
 
 use crate::{Args, Repo, repo};
-use fael_core::plan::{Import, Next, PlanRow, Store, md};
+use fael_core::plan::{Bill, Import, Next, PlanRow, Store, md};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -17,16 +17,24 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         a.only("plan new", &["app", "area"])?;
         return create(a, &r, name, title).map(|()| ExitCode::SUCCESS);
     }
-    a.only("plan", &[])?;
+    let flags: &[&str] = match rest.first().map(String::as_str) {
+        Some("export") => &["json"],
+        Some("apply") => &["dry-run"],
+        _ => &[],
+    };
+    a.only("plan", flags)?;
     match rest.first().map(String::as_str) {
         Some("import") if rest.len() == 1 => import(&r),
         Some("next") if rest.len() == 1 => next(&r),
-        Some("export") if rest.len() <= 2 => export(&r, rest.get(1).map(String::as_str)),
+        Some("export") if rest.len() <= 2 => {
+            export(&r, rest.get(1).map(String::as_str), a.has("json"))
+        }
+        Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
         Some("cutover") if rest.len() == 2 => cutover(&r, &rest[1]),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("repo") if rest.len() == 3 => code_repo(&r, &rest[1], &rest[2]),
         _ => Err(
-            "rejected: fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
+            "rejected: fael plan import | fael plan next | fael plan export [<plan>] [--json] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -109,41 +117,60 @@ fn cutover(r: &Repo, want: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `new`: the plan row (chunks in the db from the start) and its doc, a skeleton
-/// `<app>/.fapony/plan/PLAN-<name>.md` unless the planner already wrote it.
+/// `new`: the plan row (chunks in the db from the start) and its doc — a Goal/Scope/Done
+/// skeleton in `plan.doc`, no md file; `fael plan apply` fills it.
 fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     let app = a.one("app").unwrap_or_default();
-    let dir = Path::new(&app).join(".fapony/plan");
-    let source = dir.join(format!("PLAN-{name}.md"));
-    let source = source.to_string_lossy().replace('\\', "/");
     let area = a.one("area").unwrap_or_else(|| "dev".into());
     let now = fael_core::rfc3339(fael_core::now_ms());
     let mut s = Store::open(&db(r))?;
-    s.new_plan(&app, name, title, &area, &source, &now)?;
-    let file = r.root.join(&source);
+    s.new_plan(&app, name, title, &area, SKELETON, &now)?;
     let key = if app.is_empty() {
         name.to_string()
     } else {
         format!("{app}/{name}")
     };
-    if !file.exists() {
-        std::fs::create_dir_all(r.root.join(&dir))
-            .and_then(|()| std::fs::write(&file, skeleton(name, title, &key)))
-            .map_err(|e| format!("{}: {e}", file.display()))?;
-    }
     crate::board::register(r);
-    println!("plan {key} created → {source} (Goal/Scope/Done/Constraints: every brief reads them)");
+    println!("plan {key} created (Goal/Scope/Done/Constraints in its doc: every brief reads them)");
+    println!(
+        "fill the doc: fael plan export {key} --json > bill.json, edit \"doc\", fael plan apply bill.json"
+    );
     println!(
         "add chunks: fael chunk add \"<title>\" --plan {key} --brief \"…\" --size S|M|L --model M --scope <paths>"
     );
     Ok(())
 }
 
-fn skeleton(name: &str, title: &str, key: &str) -> String {
-    format!(
-        "# PLAN-{name} — {title}\n\n## TL;DR\n- chunks live in fael — `fael board`, `fael plan export {key}` (mirror: edits here change nothing)\n\n\
-         ## 1. Goal (why)\n\n## 2. Scope\n**Do:**\n**Don't:**\n\n## 3. Done criteria\n\n## 4. Constraints\n"
-    )
+const SKELETON: &str = "## 1. Goal (why)\n\n## 2. Scope\n**Do:**\n**Don't:**\n\n## 3. Done criteria\n\n## 4. Constraints\n";
+
+/// `apply <file|->`: the bill `export --json` wrote, edited (decision fael-board:plan-bill).
+fn apply(r: &Repo, from: &str, dry: bool) -> Result<(), String> {
+    let text = if from == "-" {
+        let mut t = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut t)
+            .map(|_| t)
+            .map_err(|e| format!("rejected: cannot read stdin: {e}"))?
+    } else {
+        std::fs::read_to_string(from).map_err(|e| format!("rejected: {from}: {e}"))?
+    };
+    let bill: Bill = serde_json::from_str(&text).map_err(|e| {
+        format!("rejected: not a plan bill (`fael plan export <plan> --json`): {e}")
+    })?;
+    let mut s = open(r)?;
+    let (lines, rev) = s.bill(bill, &fael_core::rfc3339(fael_core::now_ms()), dry)?;
+    for l in &lines {
+        println!("{l}");
+    }
+    match (dry, lines.is_empty()) {
+        (true, _) => println!("dry run: nothing written"),
+        (false, true) => println!("no change (rev {rev})"),
+        (false, false) => {
+            crate::board::register(r);
+            mirror(r, &s)?;
+            println!("applied (rev {rev})");
+        }
+    }
+    Ok(())
 }
 
 /// `park` · `unpark` · `done` on a cut-over plan: the owner's word on `plan.state`.
@@ -301,10 +328,22 @@ fn one(s: &Store, want: &str) -> Result<PlanRow, String> {
     named(s, Some(want)).map(|mut v| v.remove(0))
 }
 
-/// Every plan, or the one `want` names (`name` or `app/name`), to stdout.
-fn export(r: &Repo, want: Option<&str>) -> Result<(), String> {
+/// Every plan, or the one `want` names (`name` or `app/name`), to stdout; `--json` is the
+/// bill `apply` takes back, one plan only.
+fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
     let s = open(r)?;
     let plans = named(&s, want)?;
+    if json {
+        let [p] = plans.as_slice() else {
+            return Err("rejected: plan export --json names one plan".into());
+        };
+        let bill = fael_core::plan::export_json(&s, p.id)?;
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&bill).map_err(|e| e.to_string())?
+        );
+        return Ok(());
+    }
     let docs: Vec<String> = plans
         .iter()
         .map(|p| fael_core::plan::export(&s, p.id))

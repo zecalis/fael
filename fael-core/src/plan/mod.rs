@@ -3,6 +3,8 @@
 
 mod agent;
 mod apply;
+mod apply_graph;
+mod bill;
 mod board;
 mod board_math;
 mod brief;
@@ -25,13 +27,14 @@ mod store;
 
 pub use agent::Copy;
 pub use apply::Op;
+pub use bill::Bill;
 pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};
 pub use board_math::overlaps;
 pub use brief::{rules, sections};
 pub use chunk::{Fields, Here};
 pub use contract::{Ask, Reply};
 pub use cutover::mirror;
-pub use export::export;
+pub use export::{export, export_json};
 pub use issue::Fixer;
 pub use next::{Next, next};
 pub use owner::Owner;

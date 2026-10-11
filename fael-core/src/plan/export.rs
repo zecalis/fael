@@ -4,6 +4,8 @@
 
 use super::store::{Store, err};
 use rusqlite::types::Value;
+use rusqlite::{Connection, params};
+use serde_json::{Value as Json, json};
 use std::fmt::Write;
 
 /// The first `N` columns as text (NULL = empty), whatever their SQLite type.
@@ -113,4 +115,64 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// A plan's rev: the newest `event` row that belongs to it (0 = none yet). Every write to
+/// the plan or one of its chunks adds one, so a bill read at rev N is stale once it moves.
+pub(super) fn rev(c: &Connection, plan: i64) -> Result<i64, String> {
+    c.query_row(
+        "SELECT COALESCE(MAX(id), 0) FROM event WHERE plan = ?1",
+        [plan],
+        |r| r.get(0),
+    )
+    .map_err(err)
+}
+
+/// `fael plan export <plan> --json`: the bill `fael plan apply` takes back (decision
+/// fael-board:plan-bill, `"v": 1`) — the header and a line per chunk still planned (not
+/// `replaced` or `dropped`), read in one transaction so `rev` matches the lines.
+pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
+    let tx = s.conn.unchecked_transaction().map_err(err)?;
+    let [app, name, title, area, state, doc, refs, repo] = tx
+        .query_row(
+            "SELECT app, name, title, area, state, COALESCE(doc, ''), COALESCE(refs, ''),
+                    COALESCE(repo, '')
+             FROM plan WHERE id = ?1",
+            [plan],
+            cols,
+        )
+        .map_err(err)?;
+    let key = if app.is_empty() {
+        name
+    } else {
+        format!("{app}/{name}")
+    };
+    let mut q = tx
+        .prepare(
+            "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.client_hint,
+                    c.scope,
+                    (SELECT group_concat(a.uid, char(10)) FROM edge e JOIN chunk a ON a.id = e.dst
+                      WHERE e.src = c.id AND e.kind = 'after')
+             FROM chunk c WHERE c.plan = ?1 AND c.state NOT IN ('replaced', 'dropped')
+             ORDER BY c.seq",
+        )
+        .map_err(err)?;
+    let lines = |t: Option<String>| -> Vec<String> {
+        t.iter().flat_map(|t| t.lines()).map(String::from).collect()
+    };
+    let chunks: Vec<Json> = q
+        .query_map(params![plan], |r| {
+            let g = |i| r.get::<_, Option<String>>(i);
+            Ok(json!({
+                "uid": g(0)?, "label": g(1)?, "title": g(2)?, "brief": g(3)?, "size": g(4)?,
+                "model": g(5)?, "client": g(6)?, "scope": lines(g(7)?), "after": lines(g(8)?),
+            }))
+        })
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    Ok(json!({
+        "v": 1, "plan": key, "rev": rev(&tx, plan)?, "title": title, "area": area,
+        "state": state, "doc": doc, "refs": lines(Some(refs)), "repo": repo, "chunks": chunks,
+    }))
 }

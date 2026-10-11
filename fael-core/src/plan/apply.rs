@@ -4,6 +4,7 @@
 //! and every op is an `event` row.
 
 use super::State;
+use super::apply_graph::{inherit, replace};
 use super::chunk::{Fields, Row, add_after, batch, last_event, row, scope, set, tx};
 use super::store::{Store, err};
 use rusqlite::{Transaction, params};
@@ -49,12 +50,12 @@ pub struct Part {
 }
 
 /// A chunk an op may touch: in a `db` plan, not running, not history.
-struct Src {
-    row: Row,
-    plan: i64,
-    title: String,
-    brief: String,
-    scope: Vec<String>,
+pub(super) struct Src {
+    pub(super) row: Row,
+    pub(super) plan: i64,
+    pub(super) title: String,
+    pub(super) brief: String,
+    pub(super) scope: Vec<String>,
 }
 
 fn src(tx: &Transaction, uid: &str) -> Result<Src, String> {
@@ -132,7 +133,7 @@ fn slots(tx: &Transaction, plan: i64, id: i64, n: i64) -> Result<Vec<i64>, Strin
 }
 
 /// A new chunk at `seq`; no brief = `draft`. Returns `(id, uid)`.
-fn insert(
+pub(super) fn insert(
     tx: &Transaction,
     plan: i64,
     seq: i64,
@@ -174,83 +175,6 @@ fn insert(
     )
     .map_err(err)?;
     Ok((id, uid))
-}
-
-fn ids(tx: &Transaction, sql: &str, old: &[i64]) -> Result<Vec<i64>, String> {
-    let list = old.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
-    let sql = sql.replace("OLD", &list);
-    tx.prepare(&sql)
-        .map_err(err)?
-        .query_map([], |r| r.get(0))
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)
-}
-
-/// The new chunks take the old ones' place in the graph: each inherits their `after`,
-/// whatever waited on them waits on every new one, and a merge keeps their pairs (a split
-/// drops them: which part pairs is the planner's call). Returns the pairs dropped.
-fn inherit(tx: &Transaction, old: &[i64], new: &[i64]) -> Result<usize, String> {
-    let deps = ids(
-        tx,
-        "SELECT DISTINCT dst FROM edge WHERE kind = 'after' AND src IN (OLD)
-         AND dst IS NOT NULL AND dst NOT IN (OLD)",
-        old,
-    )?;
-    let waiting = ids(
-        tx,
-        "SELECT DISTINCT src FROM edge WHERE kind = 'after' AND dst IN (OLD) AND src NOT IN (OLD)",
-        old,
-    )?;
-    let partners = ids(
-        tx,
-        "SELECT dst FROM edge WHERE kind = 'pair' AND src IN (OLD) AND dst NOT IN (OLD)
-         UNION SELECT src FROM edge WHERE kind = 'pair' AND dst IN (OLD) AND src NOT IN (OLD)",
-        old,
-    )?;
-    for &n in new {
-        for &d in &deps {
-            add_after(tx, n, d)?;
-        }
-        for &w in &waiting {
-            add_after(tx, w, n)?;
-        }
-        if new.len() == 1 {
-            for &p in &partners {
-                tx.execute(
-                    "INSERT INTO edge(src, dst, kind) VALUES (?1, ?2, 'pair')",
-                    params![n, p],
-                )
-                .map_err(err)?;
-            }
-        }
-    }
-    super::issue::carry(tx, old, new)?;
-    let list = old.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
-    tx.execute_batch(&format!(
-        "DELETE FROM edge WHERE kind = 'after' AND dst IN ({list}) AND src NOT IN ({list});
-         DELETE FROM edge WHERE kind = 'pair' AND (src IN ({list}) OR dst IN ({list}));"
-    ))
-    .map_err(err)?;
-    Ok(if new.len() == 1 { 0 } else { partners.len() })
-}
-
-/// The old chunks → `replaced`, one `replaced_by` edge per new chunk.
-fn replace(tx: &Transaction, old: &[Src], new: &[(i64, String)], now: &str) -> Result<(), String> {
-    let names: Vec<&str> = new.iter().map(|(_, u)| u.as_str()).collect();
-    let verb = if new.len() == 1 { "merged" } else { "split" };
-    for o in old {
-        for (n, _) in new {
-            tx.execute(
-                "INSERT INTO edge(src, dst, kind) VALUES (?1, ?2, 'replaced_by')",
-                params![o.row.id, n],
-            )
-            .map_err(err)?;
-        }
-        let text = format!("{verb} into {}", names.join(", "));
-        set(tx, &o.row, State::Replaced, "planner", Some(&text), now)?;
-    }
-    Ok(())
 }
 
 fn merge(tx: &Transaction, uids: &[String], f: Fields, now: &str) -> Result<String, String> {
@@ -351,6 +275,35 @@ fn after(tx: &Transaction, uid: &str, on: &str, why: &str, now: &str) -> Result<
     Ok(format!("{uid} after {on}"))
 }
 
+/// One op in the caller's transaction: the line it reports.
+pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String> {
+    match op {
+        Op::Merge {
+            chunks,
+            title,
+            brief,
+            size,
+            model,
+            client,
+            scope,
+        } => {
+            let f = Fields {
+                title,
+                brief,
+                size,
+                model,
+                client,
+                scope,
+                ..Fields::default()
+            };
+            merge(tx, &chunks, f, now)
+        }
+        Op::Split { chunk, into } => split(tx, &chunk, into, now),
+        Op::Pair { chunks } => pair(tx, &chunks, now),
+        Op::After { chunk, on, why } => after(tx, &chunk, &on, &why, now),
+    }
+}
+
 impl Store {
     /// `fael chunk apply --json -`: every op or none. Returns one line per op.
     pub fn apply(&mut self, ops: Vec<Op>, now: &str) -> Result<Vec<String>, String> {
@@ -361,31 +314,7 @@ impl Store {
         let since = last_event(&tx)?;
         let mut out = Vec::new();
         for (i, op) in ops.into_iter().enumerate() {
-            let line = match op {
-                Op::Merge {
-                    chunks,
-                    title,
-                    brief,
-                    size,
-                    model,
-                    client,
-                    scope,
-                } => {
-                    let f = Fields {
-                        title,
-                        brief,
-                        size,
-                        model,
-                        client,
-                        scope,
-                        ..Fields::default()
-                    };
-                    merge(&tx, &chunks, f, now)
-                }
-                Op::Split { chunk, into } => split(&tx, &chunk, into, now),
-                Op::Pair { chunks } => pair(&tx, &chunks, now),
-                Op::After { chunk, on, why } => after(&tx, &chunk, &on, &why, now),
-            };
+            let line = run(&tx, op, now);
             out.push(line.map_err(|e| format!("op {}: {e} — nothing applied", i + 1))?);
         }
         batch(&tx, since)?;

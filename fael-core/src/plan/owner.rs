@@ -156,15 +156,15 @@ impl Store {
     }
 
     /// `fael plan new <name> "<title>"`: a plan whose chunks live in the db from the start
-    /// (`truth = db`, active) — no md chunk list to cut over. `source` is its doc, the
-    /// Goal/Scope/Done every brief reads. A taken `app/name` is refused.
+    /// (`truth = db`, active) — no md chunk list to cut over. `doc` is the Goal/Scope/Done
+    /// every brief reads (the plan has no md file). A taken `app/name` is refused.
     pub fn new_plan(
         &mut self,
         app: &str,
         name: &str,
         title: &str,
         area: &str,
-        source: &str,
+        doc: &str,
         now: &str,
     ) -> Result<(), String> {
         let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
@@ -179,9 +179,9 @@ impl Store {
         let tx = tx(self)?;
         let n = tx
             .execute(
-                "INSERT OR IGNORE INTO plan(app, name, title, area, state, source, truth)
-                 VALUES (?1, ?2, ?3, ?4, 'active', ?5, 'db')",
-                params![app, name, title.trim(), area, source],
+                "INSERT OR IGNORE INTO plan(app, name, title, area, state, source, truth, doc)
+                 VALUES (?1, ?2, ?3, ?4, 'active', '', 'db', NULLIF(?5, ''))",
+                params![app, name, title.trim(), area, doc],
             )
             .map_err(err)?;
         if n == 0 {

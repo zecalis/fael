@@ -42,6 +42,8 @@ pub struct Brief {
     pub plan_title: String,
     /// the md that keeps Goal, Scope, Done and Constraints after cutover (`""` = none)
     pub source: String,
+    /// the plan's own Goal/Scope/Done/Constraints text (`plan.doc`); read before `source`
+    pub doc: Option<String>,
     /// the checkout the code lives in when it is not this repo (`fael plan repo`)
     pub repo: Option<String>,
     pub refs: Vec<String>,
@@ -258,7 +260,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
         .query_row(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope,
                     CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END,
-                    p.title, p.source, COALESCE(p.refs, ''), c.client_hint, p.repo
+                    p.title, p.source, COALESCE(p.refs, ''), c.client_hint, p.repo, p.doc
              FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
             [id],
             |r| {
@@ -275,6 +277,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     plan_title: r.get(8)?,
                     source: r.get(9)?,
                     repo: r.get(12)?,
+                    doc: r.get(13)?,
                     refs: r
                         .get::<_, String>(10)?
                         .lines()
