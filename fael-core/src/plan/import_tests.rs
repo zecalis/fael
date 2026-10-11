@@ -212,3 +212,25 @@ fn a_db_chunk_after_an_md_chunk_survives_reimport() {
     s.import_all(&[a("x"), plan("b", "")], "t2").unwrap();
     assert_eq!(s.ready(&c, "2026-10-11").unwrap(), Ready::Yes);
 }
+
+#[test]
+fn every_event_names_its_plan() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.import_all(&[plan("a", "- [x] 1 — first\n- [ ] 2 — second")], "t0")
+        .unwrap();
+    s.new_plan("", "b", "PLAN-b", "dev", "b.md", "t1").unwrap();
+    let b: i64 = s
+        .conn
+        .query_row("SELECT id FROM plan WHERE name = 'b'", [], |r| r.get(0))
+        .unwrap();
+    s.plan_state(b, "parked", "t2").unwrap();
+    let n = |sql: &str| -> i64 { s.conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+    assert_eq!(n("SELECT COUNT(*) FROM event"), 4);
+    // a chunk row names its chunk's plan, a plan row (`plan:<app>/<name>`) its own
+    assert_eq!(
+        n("SELECT COUNT(*) FROM event e JOIN plan p ON p.id = e.plan
+           WHERE e.chunk_uid IN (SELECT uid FROM chunk WHERE plan = p.id)
+              OR e.chunk_uid = 'plan:' || p.app || '/' || p.name"),
+        4
+    );
+}
