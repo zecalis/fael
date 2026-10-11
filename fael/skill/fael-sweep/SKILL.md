@@ -57,9 +57,9 @@ Already fixed in the code? It is still a `drop?`: the owner closes the issue, no
 - **size / model**: S (an hour, mechanical, one file) → `sonnet`; M (a session, cause clear
   but spread) → `sonnet` or `opus`; cause unclear or cross-module → `opus`. L → split it.
 
-## 4. Show the plan, then wait
+## 4. The plan table
 
-Before writing anything, one table in chat:
+One table:
 
 ```
 #  issues          verdict    title                         scope              after  size/model
@@ -68,13 +68,20 @@ Before writing anything, one table in chat:
 3  01M4…           ask owner  Cap or page the export?       —                  —      —
 ```
 
-Then: **"Tell me what's wrong with it."** Apply the corrections; write only after the owner's yes.
+Where it goes depends on how you were started:
+
+- **In chat** (the owner typed `/fael-sweep`): show it, ask **"Tell me what's wrong with it."**,
+  apply the corrections, and write only after the owner's yes.
+- **As a chunk** (you ran `fael chunk start` on a sweep chunk, e.g. from the board): nobody is
+  in the chat to answer — don't wait. Write it (step 5); the table is your `chunk done`
+  hand-off (step 6). Nothing you write starts before the owner approves it on the board, so
+  that approval is the yes.
 
 ## 5. Write
 
 Every brief is English and stands alone: the cause as you found it (symbol, file), what to
 change, what not to touch, how it is checked (the repro or test that fails today), the issue
-ids. Add in plan order so `--after` can name a uid already printed.
+ids, and "fix with /fael-debug". Add in plan order so `--after` can name a uid already printed.
 
 **fix:**
 
@@ -88,10 +95,13 @@ fael chunk add "<title>" --plan inbox --brief "<brief>" --issue <ids> \
 ```bash
 uid=$(fael chunk add "<title>" --plan inbox --brief "<what to do once answered>" \
   --issue <ids> [--scope <paths>] --size S|M --model <m>)
-fael chunk start "$uid" --no-worktree --run sweep
+fael chunk start "$uid" --no-worktree --run "sweep-$uid"
 fael chunk wait "$uid" "<question>" --on owner          # drop? and ask owner
 fael chunk wait "$uid" "<what is missing>" --on data [--until YYYY-MM-DD]
 ```
+
+`--run` is one id per start — never reuse one — and it keeps this start off your own
+session, which may hold the sweep chunk's run.
 
 The wait text is what the owner reads on the board, so it carries the whole decision:
 the question, 2–3 options each with what it costs, and **your recommendation and why** —
@@ -105,6 +115,9 @@ Never `fael chunk approve` — approval is the owner's, and it is what lets the 
 
 Three lines: how many chunks to approve (parallel / ordered), how many questions waiting on the
 owner, how many on data. Then `fael board` — that is where the owner acts.
+
+As a chunk, those lines and the table are the hand-off: `fael chunk done <uid> "<lines +
+table>"` (no PR — it lands in review, where the owner reads it and accepts).
 
 ## After a sweep
 
