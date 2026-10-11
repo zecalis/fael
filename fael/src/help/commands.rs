@@ -114,22 +114,23 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
-        "fael chunk <verb> … [--plan p] [--title t] [--brief b] [--size S] [--model m] [--scope a/,b.rs] [--after uid] [--client c] [--run R] [--force] [--on owner|data] [--until date] [--pr N] [--out path]
-fael chunk add \"<title>\" [--plan inbox|<plan>] [--brief b] [--size S] [--model m] [--scope a/,b.rs] [--after uid,…]
-fael chunk start <uid> [--client c] [--run R] [--force]
-fael chunk edit <uid> [--title t] [--brief b] [--size S] [--model m] [--scope …]
+        "fael chunk <verb> … [--plan p] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--pr N] [--out path]
+fael chunk add \"<title>\" [--plan inbox|<plan>] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid,…]
+fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
+fael chunk edit <uid> [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …]
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD]
 fael chunk after <uid> <other-uid> \"<why>\"
-fael chunk done <uid> \"<handoff>\" [--pr N | --out <path>]
+fael chunk done <uid> \"<handoff>\" [--pr N | --out <path>] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
     (only a plan whose chunks live in plans.db — inbox, or one cut over; add prints
      the new uid, no brief = draft; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
-     --force takes it over; wait, after and done answer only to the worktree of the
-     latest run and end it; done --pr N lands in done (push pr is the ok), done
+     --force takes it over; --no-worktree (a client that writes a file and exits)
+     takes no worktree slot; wait, after and done answer only to the worktree of the
+     latest run and end it, done also to --run R naming that run; done --pr N lands in done (push pr is the ok), done
      without a PR in review until accept; each command rewrites a cut-over plan's
      md TL;DR as a read-only mirror; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval; apply runs every op or none —

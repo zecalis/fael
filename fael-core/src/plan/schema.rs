@@ -4,7 +4,7 @@
 
 use rusqlite::Transaction;
 
-pub(super) const VERSION: i32 = 3;
+pub(super) const VERSION: i32 = 4;
 
 pub(super) const SCHEMA: &str = "
 CREATE TABLE plan(
@@ -46,6 +46,8 @@ CREATE TABLE chunk(
   approved_at TEXT,
   approved_model TEXT,
   approved_client TEXT,
+  -- free strings like model_hint: the app owns the list of clients (b6b)
+  client_hint TEXT,
   UNIQUE(plan, seq));
 -- after: src waits on dst · pair: src starts with dst · replaced_by: src lives on in dst
 -- dst NULL = an md `(after …)` that names no chunk: never met, shown blocked on `ref`
@@ -154,6 +156,12 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
 pub(super) fn v2_to_v3(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE run ADD COLUMN cost REAL;")
         .map_err(|e| format!("plans.db v2 → v3: {e}"))
+}
+
+/// `chunk.client_hint`: which client the planner or owner picked, next to `model_hint`.
+pub(super) fn v3_to_v4(tx: &Transaction) -> Result<(), String> {
+    tx.execute_batch("ALTER TABLE chunk ADD COLUMN client_hint TEXT;")
+        .map_err(|e| format!("plans.db v3 → v4: {e}"))
 }
 
 #[cfg(test)]

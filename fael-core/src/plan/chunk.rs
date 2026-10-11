@@ -7,11 +7,13 @@ use super::{State, check};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 
 /// Where an agent command runs. `wait`, `after` and `done` are accepted only from the
-/// worktree of the chunk's latest run, so an agent taken over by `--force` is fenced off.
+/// worktree of the chunk's latest run, so an agent taken over by `--force` is fenced off —
+/// or, with `run`, from the shell that holds that start R (a client that cannot call fael).
 pub struct Here<'a> {
     pub worktree: &'a str,
     pub branch: Option<&'a str>,
     pub now: &'a str,
+    pub run: Option<&'a str>,
 }
 
 /// The fields `add` sets and `edit` changes (None = leave as is).
@@ -21,6 +23,8 @@ pub struct Fields {
     pub brief: Option<String>,
     pub size: Option<String>,
     pub model: Option<String>,
+    /// free string like `model`: the app owns the list of clients
+    pub client: Option<String>,
     /// repo-relative path prefixes (SPEC §2 overlaps), stored one per line
     pub scope: Option<Vec<String>>,
 }
@@ -99,11 +103,8 @@ pub(super) fn end_live(tx: &Transaction, chunk: i64, now: &str) -> Result<usize,
     .map_err(err)
 }
 
-/// A running chunk answers only to the worktree of its latest run.
+/// A running chunk answers only to the worktree of its latest run, or to `--run R` naming it.
 pub(super) fn fence(tx: &Transaction, r: &Row, here: &Here) -> Result<(), String> {
-    if r.state != State::Running {
-        return Ok(());
-    }
     let Some((start, wt, client)): Option<(String, Option<String>, Option<String>)> = tx
         .query_row(
             "SELECT start, worktree, client FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1",
@@ -115,13 +116,27 @@ pub(super) fn fence(tx: &Transaction, r: &Row, here: &Here) -> Result<(), String
     else {
         return Ok(());
     };
-    match wt {
-        Some(w) if w != here.worktree => Err(format!(
-            "rejected: chunk {} was taken over by run {start} ({}) in {w} — this session no longer holds it",
-            r.uid,
-            client.as_deref().unwrap_or("agent")
+    let who = client.as_deref().unwrap_or("agent");
+    match (here.run, wt) {
+        (Some(run), _) if run != start => Err(format!(
+            "rejected: chunk {}'s latest run is {start} ({who}), not {run} — that start no longer holds it",
+            r.uid
+        )),
+        (Some(_), _) => Ok(()),
+        _ if r.state != State::Running => Ok(()),
+        (None, Some(w)) if w != here.worktree => Err(format!(
+            "rejected: chunk {} was taken over by run {start} ({who}) in {w} — this session no longer holds it",
+            r.uid
         )),
         _ => Ok(()),
+    }
+}
+
+/// S, M or L: the app routes a chunk with no hint by its size; `""` clears it on `edit`.
+pub(super) fn size(f: &Fields) -> Result<(), String> {
+    match f.size.as_deref() {
+        None | Some("S" | "M" | "L" | "") => Ok(()),
+        Some(v) => Err(format!("rejected: --size {v} — S, M or L")),
     }
 }
 
@@ -193,6 +208,7 @@ impl Store {
             return Err("rejected: a chunk needs a title".into());
         }
         let scope = scope(f.scope.as_deref().unwrap_or_default())?;
+        size(f)?;
         let tx = tx(self)?;
         if plan == "inbox" {
             tx.execute(
@@ -228,9 +244,10 @@ impl Store {
         };
         let uid = crate::ulid();
         tx.execute(
-            "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope)
+            "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
+                               client_hint)
              VALUES (?1, ?2, (SELECT COALESCE(MAX(seq), 0) + 1024 FROM chunk WHERE plan = ?2),
-                     ?3, ?4, ?5, ?6, ?7, ?8)",
+                     ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 uid,
                 pid,
@@ -239,7 +256,8 @@ impl Store {
                 brief.unwrap_or_default(),
                 f.size,
                 f.model,
-                scope
+                scope,
+                f.client
             ],
         )
         .map_err(err)?;
@@ -269,12 +287,14 @@ impl Store {
             ));
         }
         let scope = f.scope.as_deref().map(scope).transpose()?;
+        size(f)?;
         let mut what = Vec::new();
         for (col, v) in [
             ("title", f.title.as_deref().map(str::trim)),
             ("brief", f.brief.as_deref().map(str::trim)),
             ("size", f.size.as_deref()),
             ("model_hint", f.model.as_deref()),
+            ("client_hint", f.client.as_deref()),
             ("scope", scope.as_ref().map(|s| s.as_deref().unwrap_or(""))),
         ] {
             let Some(v) = v else { continue };
@@ -291,7 +311,8 @@ impl Store {
         }
         if what.is_empty() {
             return Err(
-                "rejected: nothing to edit — --title, --brief, --size, --model or --scope".into(),
+                "rejected: nothing to edit — --title, --brief, --size, --model, --client or --scope"
+                    .into(),
             );
         }
         let n = tx

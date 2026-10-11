@@ -171,3 +171,30 @@ fn pin_and_approve_keep_the_state() {
         .unwrap();
     assert!(s.pin(&c, Some(1), NOW).unwrap_err().contains("history"));
 }
+
+#[test]
+fn split_and_merge_carry_client_and_check_size() {
+    let mut s = Store::open_in_memory().unwrap();
+    let [a, b, c] = ["a", "b", "c"].map(|t| add(&mut s, t, Some(t)));
+    let j = format!(
+        r#"[{{"op":"split","chunk":"{a}","into":[{{"title":"a1","client":"opencode"}},{{"title":"a2"}}]}},
+            {{"op":"merge","chunks":["{b}","{c}"],"size":"M","client":"claude"}}]"#
+    );
+    let out = ops(&mut s, &j).unwrap();
+    let m = out[1].rsplit(' ').next().unwrap().to_string();
+    let q = "SELECT COALESCE(size, '-') || ' ' || client_hint FROM chunk WHERE uid = ?1";
+    assert_eq!(get(&s, q, &m).as_deref(), Some("M claude"));
+    let hints: Vec<Option<String>> = s
+        .conn
+        .prepare("SELECT client_hint FROM chunk WHERE title IN ('a1', 'a2') ORDER BY seq")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(hints, [Some("opencode".into()), None]);
+    let [d] = ["d"].map(|t| add(&mut s, t, Some(t)));
+    let j = format!(r#"[{{"op":"merge","chunks":["{d}","{m}"],"size":"huge"}}]"#);
+    let e = ops(&mut s, &j).unwrap_err();
+    assert!(e.contains("--size huge — S, M or L"), "{e}");
+}

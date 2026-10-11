@@ -3,7 +3,7 @@
 //! schema version and an older db upgrades on open (release gate: no manual step).
 
 use super::md::PlanMd;
-use super::schema::{SCHEMA, VERSION, v1_to_v2, v2_to_v3};
+use super::schema::{SCHEMA, VERSION, v1_to_v2, v2_to_v3, v3_to_v4};
 use rusqlite::{Connection, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
@@ -116,8 +116,10 @@ impl Store {
         }
         match v {
             0 => tx.execute_batch(SCHEMA).map_err(err)?,
+            // v1 → v2 creates the current SCHEMA; each later step chains to the next
             1 => v1_to_v2(&tx)?,
-            2 => v2_to_v3(&tx)?,
+            2 => v2_to_v3(&tx).and_then(|_| v3_to_v4(&tx))?,
+            3 => v3_to_v4(&tx)?,
             _ => return Ok(()),
         }
         tx.pragma_update(None, "user_version", VERSION)

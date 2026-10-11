@@ -175,3 +175,62 @@ fn apply_reads_stdin_and_the_board_sees_pin_and_approval() {
         "pinned first: {q}"
     );
 }
+
+#[test]
+fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
+    let d = repo();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "chunk", "add", "Hero", "--brief", "Draw it", "--size", "S", "--client", "image",
+        ],
+    );
+    assert!(ok, "{err}");
+    let u = out.trim().to_string();
+    let (ok, _, err) = fael(&d, &["chunk", "edit", &u, "--size", "XL"]);
+    assert!(!ok && err.contains("S, M or L"), "{err}");
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "start",
+            &u,
+            "--run",
+            "R1",
+            "--model",
+            "flux",
+            "--no-worktree",
+        ],
+    );
+    assert!(ok, "{err}");
+    // the worktree is still free: an agent starts here
+    let other = add(&d);
+    assert!(fael(&d, &["chunk", "start", &other, "--run", "R2"]).0);
+    // the launching shell, from a subdir, names its run
+    let sub = d.join("gen");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join("a.png"), "png").unwrap();
+    let (ok, _, err) = fael(&sub, &["chunk", "done", &u, "h", "--run", "R0"]);
+    assert!(!ok && err.contains("not R0"), "{err}");
+    let (ok, out, err) = fael(
+        &sub,
+        &[
+            "chunk", "done", &u, "drawn", "--run", "R1", "--out", "a.png",
+        ],
+    );
+    assert!(ok, "{err}");
+    assert_eq!(out, format!("chunk {u} → review\n"));
+    let (_, json, _) = fael(&d, &["board", "--json"]);
+    let b: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let c = b["projects"][0]["chunks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["uid"] == u.as_str())
+        .unwrap();
+    assert_eq!(
+        (&c["client_hint"], &c["run"]["model"], &c["run"]["worktree"]),
+        (&"image".into(), &"flux".into(), &serde_json::Value::Null),
+        "{c}"
+    );
+}
