@@ -76,16 +76,16 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
                  WHERE e.src = c.id AND e.kind = 'after'),
                (SELECT r.start || ' ' || COALESCE(r.branch, '') FROM run r
                  WHERE r.chunk = c.id AND r.ended IS NULL ORDER BY r.id DESC LIMIT 1),
-               c.wait_on, c.wait_text, c.wait_until, c.size, c.model_hint, c.scope, c.due,
-               c.pin, c.approved_model
+               c.wait_on, c.wait_text, c.wait_until, c.size, c.client_hint, c.model_hint, c.scope,
+               c.due, c.pin, c.approved_model
              FROM chunk c WHERE c.plan = ?1 ORDER BY c.seq",
         )
         .map_err(err)?;
     let names = [
-        "after", "run", "wait on", "wait", "until", "size", "model", "scope", "due", "pin",
-        "approved",
+        "after", "run", "wait on", "wait", "until", "size", "client", "model", "scope", "due",
+        "pin", "approved",
     ];
-    for row in q.query_map([plan], cols::<15>).map_err(err)? {
+    for row in q.query_map([plan], cols::<16>).map_err(err)? {
         let [title, brief, state, uid, rest @ ..] = row.map_err(err)?;
         let tick = match state.as_str() {
             "done" => 'x',

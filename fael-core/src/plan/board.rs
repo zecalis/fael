@@ -35,6 +35,7 @@ pub struct Chunk {
     pub state: String,
     pub size: Option<String>,
     pub model_hint: Option<String>,
+    pub client_hint: Option<String>,
     pub scope: Vec<String>,
     pub due: Option<String>,
     pub pin: Option<i64>,
@@ -127,7 +128,7 @@ impl Store {
                 "SELECT c.id, c.uid, p.app, p.name, c.label, c.title, c.state, c.size,
                         c.model_hint, c.scope, c.due, c.pin, c.wait_on, c.wait_text,
                         c.wait_until, c.approved_at, c.approved_model, c.approved_client,
-                        p.rank, c.seq
+                        p.rank, c.seq, c.client_hint
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
                  ORDER BY p.rank IS NULL, p.rank, p.app, p.name, c.seq",
@@ -151,6 +152,7 @@ impl Store {
                         title: clean(&title, label.as_deref()),
                         size: r.get(7)?,
                         model_hint: r.get(8)?,
+                        client_hint: r.get(20)?,
                         scope: scope
                             .iter()
                             .flat_map(|s| s.lines())

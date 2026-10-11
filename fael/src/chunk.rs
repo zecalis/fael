@@ -15,10 +15,12 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let now = fael_core::rfc3339(fael_core::now_ms());
     let wt = r.root.to_string_lossy().into_owned();
     let branch = crate::journal::head_branch(&r.root);
+    let run = a.one("run");
     let here = Here {
         worktree: &wt,
         branch: branch.as_deref(),
         now: &now,
+        run: run.as_deref(),
     };
     let s = || Store::open(&db(&r));
     let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
@@ -27,7 +29,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         ["add", title] => {
             a.only(
                 "chunk add",
-                &["plan", "brief", "size", "model", "scope", "after"],
+                &["plan", "brief", "size", "model", "client", "scope", "after"],
             )?;
             let f = Fields {
                 title: Some(title.to_string()),
@@ -37,10 +39,15 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             println!("{}", s()?.add(&plan, &f, &list(a, "after"), &now)?);
         }
         ["start", uid] => {
-            a.only("chunk start", &["client", "run", "force"])?;
+            a.only(
+                "chunk start",
+                &["client", "model", "run", "force", "no-worktree"],
+            )?;
             let o = Start {
                 run: a.one("run"),
                 client: a.one("client"),
+                model: a.one("model"),
+                no_worktree: a.has("no-worktree"),
                 force: a.has("force"),
             };
             let st = s()?.start(uid, &o, &here)?;
@@ -49,7 +56,10 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             print!("{}", st.text(&md, &exists));
         }
         ["edit", uid] => {
-            a.only("chunk edit", &["title", "brief", "size", "model", "scope"])?;
+            a.only(
+                "chunk edit",
+                &["title", "brief", "size", "model", "client", "scope"],
+            )?;
             s()?.edit(uid, &fields(a), &now)?;
             say(uid, "edited");
         }
@@ -191,12 +201,13 @@ fn fields(a: &Args) -> Fields {
         brief: a.one("brief"),
         size: a.one("size"),
         model: a.one("model"),
+        client: a.one("client"),
         scope: a.has("scope").then(|| list(a, "scope")),
     }
 }
 
 fn done(a: &Args, r: &Repo, uid: &str, handoff: &str, here: &Here) -> Result<(), String> {
-    a.only("chunk done", &["pr", "out"])?;
+    a.only("chunk done", &["pr", "out", "run"])?;
     let pr = a
         .one("pr")
         .map(|n| n.trim_start_matches('#').parse::<i64>())

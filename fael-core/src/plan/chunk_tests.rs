@@ -11,6 +11,7 @@ pub(crate) fn here(wt: &str) -> Here<'_> {
         worktree: wt,
         branch: Some("b"),
         now: NOW,
+        run: None,
     }
 }
 

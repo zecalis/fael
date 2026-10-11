@@ -1,8 +1,8 @@
 //! `chunk start`: one winner of a race, a pair all-or-none, per-member commands end only
 //! that member's run (SPEC §4 test matrix), and the md-plan refusal.
 
-use super::super::chunk::tests::{NOW, add, here, live, start, state};
-use super::super::{Import, Owner, Store, md};
+use super::super::chunk::tests::{NOW, add, get, here, live, start, state};
+use super::super::{Fields, Here, Import, Owner, Start, Store, md};
 use rusqlite::params;
 
 fn pair(s: &Store, a: &str, b: &str) {
@@ -116,4 +116,51 @@ fn an_md_plan_takes_no_chunk_command() {
         ..Default::default()
     };
     assert!(s.add("x", &f, &[], NOW).unwrap_err().contains("is md"));
+}
+
+#[test]
+fn a_no_worktree_start_takes_no_slot_and_its_shell_finishes_it() {
+    let mut s = Store::open_in_memory().unwrap();
+    let img = add(&mut s, "hero image", Some("draw it"));
+    let code = add(&mut s, "code", Some("c"));
+    let o = Start {
+        run: Some("R1".into()),
+        client: Some("image".into()),
+        model: Some("flux".into()),
+        no_worktree: true,
+        ..Start::default()
+    };
+    s.start(&img, &o, &here("/main")).unwrap();
+    let run = "SELECT r.model || ' ' || COALESCE(r.worktree, '-') || ' ' || COALESCE(r.branch, '-')
+               FROM run r JOIN chunk c ON c.id = r.chunk WHERE c.uid = ?1";
+    assert_eq!(get(&s, run, &img).as_deref(), Some("flux - -"));
+    // the shell's worktree is still free for an agent
+    start(&mut s, &code, "/main").unwrap();
+    let by = |r: &'static str| Here {
+        run: Some(r),
+        ..here("/elsewhere")
+    };
+    let e = s.done(&img, "h", None, None, &by("R0")).unwrap_err();
+    assert!(e.contains("latest run is R1 (image), not R0"), "{e}");
+    s.done(&img, "drawn", None, None, &by("R1")).unwrap();
+    assert_eq!((state(&s, &img), live(&s, &img)), ("review".into(), 0));
+}
+
+#[test]
+fn client_hint_is_a_free_string_size_is_s_m_or_l() {
+    let mut s = Store::open_in_memory().unwrap();
+    let f = |size: &str, client: &str| Fields {
+        title: Some("t".into()),
+        size: Some(size.into()),
+        client: Some(client.into()),
+        ..Fields::default()
+    };
+    let c = s.add("inbox", &f("S", "opencode"), &[], NOW).unwrap();
+    let e = s.add("inbox", &f("XL", "x"), &[], NOW).unwrap_err();
+    assert!(e.contains("--size XL — S, M or L"), "{e}");
+    s.approve(&c, Some(("deepseek", "opencode")), NOW).unwrap();
+    s.edit(&c, &f("L", "claude"), NOW).unwrap();
+    let q = "SELECT size || ' ' || client_hint || ' ' || COALESCE(approved_at, 'unapproved')
+             FROM chunk WHERE uid = ?1";
+    assert_eq!(get(&s, q, &c).as_deref(), Some("L claude unapproved"));
 }

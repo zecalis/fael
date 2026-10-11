@@ -13,6 +13,11 @@ pub struct Start {
     /// R: the launcher passes a fresh one, else fael makes it; a reused R is rejected
     pub run: Option<String>,
     pub client: Option<String>,
+    /// what the launcher runs it with → `run.model`
+    pub model: Option<String>,
+    /// a client that writes a file and exits (image gen): the run holds no worktree, so it
+    /// takes no slot, and `done --run R` from the launching shell finishes it
+    pub no_worktree: bool,
     /// take over a live run (its end names who took it), never a kill
     pub force: bool,
 }
@@ -26,6 +31,7 @@ pub struct Brief {
     pub brief: String,
     pub size: Option<String>,
     pub model_hint: Option<String>,
+    pub client_hint: Option<String>,
     pub scope: Option<String>,
     /// `app/name` or `name`
     pub plan: String,
@@ -80,6 +86,7 @@ impl Store {
     pub fn start(&mut self, uid: &str, o: &Start, here: &Here) -> Result<Started, String> {
         let run = o.run.clone().unwrap_or_else(crate::ulid);
         let today = &here.now[..here.now.len().min(10)];
+        let wt = (!o.no_worktree).then_some(here.worktree);
         let tx = tx(self)?;
         let first = row(&tx, uid)?;
         let reused: bool = tx
@@ -115,7 +122,7 @@ impl Store {
                         let who = o.client.as_deref().unwrap_or("agent");
                         format!(
                             "taken over from run {h} by run {run} ({who}) in {}",
-                            here.worktree
+                            wt.unwrap_or("no worktree")
                         )
                     }
                     None => format!("started again by run {run}: the last run ended"),
@@ -139,15 +146,7 @@ impl Store {
             }
             claim.push(r);
         }
-        let busy: Option<String> = tx
-            .query_row(
-                "SELECT start FROM run WHERE worktree = ?1 AND ended IS NULL LIMIT 1",
-                [here.worktree],
-                |r| r.get(0),
-            )
-            .optional()
-            .map_err(err)?;
-        if let Some(b) = busy {
+        if let Some(b) = wt.map(|w| busy(&tx, w)).transpose()?.flatten() {
             return Err(format!(
                 "rejected: {} holds run {b} — one start per worktree: `fael run end {b}` first, or another worktree",
                 here.worktree
@@ -156,9 +155,17 @@ impl Store {
         let mut chunks = Vec::new();
         for r in &claim {
             tx.execute(
-                "INSERT INTO run(start, chunk, client, worktree, branch, started)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![run, r.id, o.client, here.worktree, here.branch, here.now],
+                "INSERT INTO run(start, chunk, client, model, worktree, branch, started)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    run,
+                    r.id,
+                    o.client,
+                    o.model,
+                    wt,
+                    wt.and(here.branch),
+                    here.now
+                ],
             )
             .map_err(err)?;
             tx.execute(
@@ -173,12 +180,23 @@ impl Store {
     }
 }
 
+/// The live start R in a worktree, if any.
+fn busy(tx: &Transaction, worktree: &str) -> Result<Option<String>, String> {
+    tx.query_row(
+        "SELECT start FROM run WHERE worktree = ?1 AND ended IS NULL LIMIT 1",
+        [worktree],
+        |r| r.get(0),
+    )
+    .optional()
+    .map_err(err)
+}
+
 fn brief(tx: &Transaction, id: i64) -> Result<Brief, String> {
     let mut b = tx
         .query_row(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope,
                     CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END,
-                    p.title, p.source, COALESCE(p.refs, '')
+                    p.title, p.source, COALESCE(p.refs, ''), c.client_hint
              FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
             [id],
             |r| {
@@ -189,6 +207,7 @@ fn brief(tx: &Transaction, id: i64) -> Result<Brief, String> {
                     brief: r.get(3)?,
                     size: r.get(4)?,
                     model_hint: r.get(5)?,
+                    client_hint: r.get(11)?,
                     scope: r.get(6)?,
                     plan: r.get(7)?,
                     plan_title: r.get(8)?,

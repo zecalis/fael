@@ -1,7 +1,7 @@
 //! `tests/golden/board-v1.json` is the app contract (SPEC-fael-board §10): the SwiftUI app is
 //! built against it before `fael board --json` exists. This pins its keys and invariants, so
-//! a shape change is a deliberate edit here plus a `v` bump; `tests/board.rs` holds the
-//! binary to it.
+//! a shape change is a deliberate edit here; a removed or retyped key also bumps `v` (a new
+//! nullable key does not); `tests/board.rs` holds the binary to it.
 
 use serde_json::Value;
 use std::collections::HashSet;
@@ -15,6 +15,7 @@ const CHUNK_KEYS: &[&str] = &[
     "state",
     "size",
     "model_hint",
+    "client_hint",
     "scope",
     "due",
     "pin",

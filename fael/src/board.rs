@@ -325,6 +325,7 @@ mod tests {
             state: "open".into(),
             size: None,
             model_hint: None,
+            client_hint: None,
             scope: Vec::new(),
             due: due.map(String::from),
             pin,

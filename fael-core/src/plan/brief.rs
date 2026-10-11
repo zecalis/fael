@@ -67,15 +67,19 @@ impl Started {
                 "\n# {label}{} ({})\nplan {} — {}",
                 c.title, c.uid, c.plan, c.plan_title
             );
-            let fields: Vec<String> = [("size", &c.size), ("model", &c.model_hint)]
-                .iter()
-                .filter_map(|(k, v)| v.as_ref().map(|v| format!("{k} {v}")))
-                .chain(
-                    c.scope
-                        .as_ref()
-                        .map(|s| format!("scope {}", s.replace('\n', ", "))),
-                )
-                .collect();
+            let fields: Vec<String> = [
+                ("size", &c.size),
+                ("client", &c.client_hint),
+                ("model", &c.model_hint),
+            ]
+            .iter()
+            .filter_map(|(k, v)| v.as_ref().map(|v| format!("{k} {v}")))
+            .chain(
+                c.scope
+                    .as_ref()
+                    .map(|s| format!("scope {}", s.replace('\n', ", "))),
+            )
+            .collect();
             if !fields.is_empty() {
                 let _ = writeln!(o, "{}", fields.join(" · "));
             }
@@ -152,6 +156,7 @@ mod tests {
             brief: format!("brief {uid}"),
             size: None,
             model_hint: None,
+            client_hint: None,
             scope: None,
             plan: "x".into(),
             plan_title: "PLAN-x".into(),

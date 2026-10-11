@@ -17,15 +17,11 @@ pub enum Op {
     /// the union, unless the item says otherwise; the old ones → `replaced`
     Merge {
         chunks: Vec<String>,
-        #[serde(default)]
         title: Option<String>,
-        #[serde(default)]
         brief: Option<String>,
-        #[serde(default)]
         size: Option<String>,
-        #[serde(default)]
         model: Option<String>,
-        #[serde(default)]
+        client: Option<String>,
         scope: Option<Vec<String>>,
     },
     /// new chunks in its place, each inheriting its `after`; it → `replaced`
@@ -45,13 +41,10 @@ pub enum Op {
 #[serde(deny_unknown_fields)]
 pub struct Part {
     pub title: String,
-    #[serde(default)]
     pub brief: Option<String>,
-    #[serde(default)]
     pub size: Option<String>,
-    #[serde(default)]
     pub model: Option<String>,
-    #[serde(default)]
+    pub client: Option<String>,
     pub scope: Option<Vec<String>>,
 }
 
@@ -153,10 +146,12 @@ fn insert(
     }
     let brief = f.brief.as_deref().map(str::trim).filter(|b| !b.is_empty());
     let state = brief.map_or(State::Draft, |_| State::Open).as_str();
+    super::chunk::size(f)?;
     let uid = crate::ulid();
     tx.execute(
-        "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
+                           client_hint)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             uid,
             plan,
@@ -166,7 +161,8 @@ fn insert(
             brief.unwrap_or_default(),
             f.size,
             f.model,
-            scope(f.scope.as_deref().unwrap_or_default())?
+            scope(f.scope.as_deref().unwrap_or_default())?,
+            f.client
         ],
     )
     .map_err(err)?;
@@ -298,6 +294,7 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
             brief: p.brief,
             size: p.size,
             model: p.model,
+            client: p.client,
             scope: p.scope,
         };
         new.push(insert(tx, old.plan, seq, &f, &text, now)?);
@@ -367,6 +364,7 @@ impl Store {
                     brief,
                     size,
                     model,
+                    client,
                     scope,
                 } => {
                     let f = Fields {
@@ -374,6 +372,7 @@ impl Store {
                         brief,
                         size,
                         model,
+                        client,
                         scope,
                     };
                     merge(&tx, &chunks, f, now)
