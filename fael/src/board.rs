@@ -96,7 +96,7 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
         .filter(|r| r.ended.is_none())
         .filter_map(|r| Some((r.worktree.as_deref()?, r.id.as_str())))
         .collect();
-    let worktrees = worktrees(&r.root, &live);
+    let worktrees = worktrees(&r.root, r.cfg.plan_worktrees.as_deref(), &live);
     Ok(Some(Project {
         name: root
             .file_name()
@@ -111,9 +111,9 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
 }
 
 /// Every linked worktree; a repo with none pools its main checkout as one slot.
-/// ponytail: no `[plan] worktrees` prefix filter yet — add it when a repo keeps worktrees
-/// the launcher must not use.
-fn worktrees(root: &Path, live: &HashMap<&str, &str>) -> Vec<Worktree> {
+/// `[plan] worktrees = "<prefix>"` keeps only the linked ones whose path or dir name starts
+/// with it (`wt-fael-agent-` leaves topic worktrees out of the pool).
+fn worktrees(root: &Path, prefix: Option<&str>, live: &HashMap<&str, &str>) -> Vec<Worktree> {
     let list = git(root, &["worktree", "list", "--porcelain"]).unwrap_or_default();
     let mut all: Vec<Worktree> = list
         .split("\n\n")
@@ -136,6 +136,14 @@ fn worktrees(root: &Path, live: &HashMap<&str, &str>) -> Vec<Worktree> {
         .collect();
     if all.len() > 1 {
         all.remove(0);
+        if let Some(p) = prefix {
+            all.retain(|w| {
+                w.path.starts_with(p)
+                    || Path::new(&w.path)
+                        .file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with(p))
+            });
+        }
     }
     all
 }
@@ -149,11 +157,12 @@ fn lists(at: String, projects: Vec<Project>) -> Board {
         |f: Pick| -> Vec<String> { all.iter().filter(|c| f(c)).map(|c| c.uid.clone()).collect() };
     // SPEC §5 order: the owner's questions, then review, ended runs, inbox drafts
     let kinds: [(&'static str, Pick); 4] = [
+        // an md plan's `(wait …)` names no `on`: the owner is the one who can move it
         ("waiting", &|c| {
             c.state == "waiting"
                 && c.wait
                     .as_ref()
-                    .is_some_and(|w| w.on.as_deref() == Some("owner"))
+                    .is_some_and(|w| matches!(w.on.as_deref(), Some("owner") | None))
         }),
         ("review", &|c| c.state == "review"),
         ("ended", &|c| c.state == "running" && c.ended),
@@ -270,10 +279,35 @@ fn registry() -> PathBuf {
 
 fn registered() -> Vec<PathBuf> {
     let text = std::fs::read_to_string(registry()).unwrap_or_default();
-    text.lines()
+    let all: Vec<PathBuf> = text
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .map(PathBuf::from)
-        .collect()
+        .collect();
+    let keep: Vec<PathBuf> = all.iter().filter(|p| !scratch(p)).cloned().collect();
+    // prune what older faels registered (issue 01M4MH3H7); a failed write only skips again
+    if keep.len() < all.len() {
+        let text: String = keep.iter().map(|p| format!("{}\n", p.display())).collect();
+        let _ = std::fs::write(registry(), text);
+    }
+    keep
+}
+
+/// A repo under the temp dir (an agent's or a test's scratch repo) belongs only on a
+/// registry that is itself under the temp dir — a test's `FAEL_STATE_DIR`.
+fn scratch(root: &Path) -> bool {
+    // canonical (`/private/var/…` on macOS) through the nearest dir that exists yet
+    let tmp = |p: &Path| {
+        let p = p
+            .ancestors()
+            .find_map(|a| Some(a.canonicalize().ok()?.join(p.strip_prefix(a).ok()?)))
+            .unwrap_or_else(|| p.to_path_buf());
+        [std::env::temp_dir(), PathBuf::from("/tmp")]
+            .iter()
+            .filter_map(|d| d.canonicalize().ok())
+            .any(|d| p.starts_with(d))
+    };
+    tmp(root) && !tmp(&fael_core::stats::state_dir())
 }
 
 /// Put this repo on the board: called by every command that writes its plans.db.
@@ -286,7 +320,7 @@ pub(crate) fn register(r: &Repo) {
         .filter(|g| g.file_name().is_some_and(|n| n == ".git"))
         .and_then(Path::parent)
         .unwrap_or(&r.root);
-    if registered().iter().any(|p| p == root) {
+    if scratch(root) || registered().iter().any(|p| p == root) {
         return;
     }
     let f = registry();
@@ -306,78 +340,5 @@ pub(crate) fn register(r: &Repo) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn ready(
-        uid: &str,
-        pin: Option<i64>,
-        due: Option<&str>,
-        unblocks: usize,
-        rank: Option<i64>,
-    ) -> BoardChunk {
-        BoardChunk {
-            uid: uid.into(),
-            app: String::new(),
-            plan: "p".into(),
-            label: None,
-            title: String::new(),
-            state: "open".into(),
-            size: None,
-            model_hint: None,
-            client_hint: None,
-            scope: Vec::new(),
-            due: due.map(String::from),
-            pin,
-            ready: true,
-            blocked_by: Vec::new(),
-            unblocks,
-            overlaps: Vec::new(),
-            pair: Vec::new(),
-            stalled: false,
-            ended: false,
-            wait: None,
-            approval: None,
-            run: None,
-            handoff: None,
-            owner_actions: Vec::new(),
-            rank,
-            seq: 0,
-        }
-    }
-
-    #[test]
-    fn queue_order_is_pin_due_unblocks_rank() {
-        let mut held = ready("held", Some(0), None, 9, Some(0));
-        held.ready = false;
-        let chunks = vec![
-            ready("unranked", None, None, 1, None),
-            ready("rank2", None, None, 1, Some(2)),
-            held,
-            ready("due-late", None, Some("2026-10-20"), 0, None),
-            ready("rank1", None, None, 1, Some(1)),
-            ready("tie", None, None, 1, Some(1)),
-            ready("pin2", Some(2), None, 0, None),
-            ready("frees3", None, None, 3, Some(9)),
-            ready("due-soon", None, Some("2026-10-12"), 0, None),
-            ready("pin1", Some(1), Some("2026-12-01"), 0, None),
-        ];
-        let p = Project {
-            name: String::new(),
-            root: String::new(),
-            base: None,
-            worktrees: Vec::new(),
-            plans: Vec::new(),
-            chunks,
-        };
-        let b = lists(String::new(), vec![p]);
-        // stable: `tie` keeps its place after `rank1`
-        assert_eq!(
-            b.queue,
-            [
-                "pin1", "pin2", "due-soon", "due-late", "frees3", "rank1", "tie", "rank2",
-                "unranked"
-            ]
-        );
-    }
-}
+#[path = "board_tests.rs"]
+mod tests;

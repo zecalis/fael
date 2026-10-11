@@ -128,7 +128,8 @@ fn board_v1_shape() {
     for n in b["needs_you"].as_array().unwrap() {
         let c = by_uid(&n["uid"]);
         let ok = match n["kind"].as_str().unwrap() {
-            "waiting" => c["state"] == "waiting" && c["wait"]["on"] == "owner",
+            // an md plan's wait names no `on`
+            "waiting" => c["state"] == "waiting" && c["wait"]["on"] != "data",
             "review" => c["state"] == "review",
             "ended" => c["state"] == "running" && c["ended"] == true,
             "inbox" => c["state"] == "draft" && c["plan"] == "inbox",

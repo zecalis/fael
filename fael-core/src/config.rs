@@ -99,6 +99,9 @@ pub struct Config {
     /// `via "<word>"` the hint line prints. Empty = no word is stopped. A key
     /// typed whole in the prompt still hints.
     pub hint_stop: Vec<String>,
+    /// `[plan] worktrees`: the board pools only linked worktrees whose path or dir name
+    /// starts with it; unset = every linked worktree.
+    pub plan_worktrees: Option<String>,
 }
 
 impl Default for Config {
@@ -126,6 +129,7 @@ impl Default for Config {
             sync_auto: true,
             notify_user: true,
             hint_stop: vec![],
+            plan_worktrees: None,
         }
     }
 }
@@ -143,6 +147,13 @@ struct Notify {
 #[serde(default)]
 struct Sync {
     auto: Option<bool>,
+}
+
+/// `[plan]` in `.fael/config.toml` — outside `from_toml` for the same reason.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Plan {
+    worktrees: Option<String>,
 }
 
 /// `[hint]` in `.fael/config.toml` — outside `from_toml` only to keep that
@@ -175,6 +186,7 @@ impl Config {
             sync: Sync,
             notify: Notify,
             hint: Hint,
+            plan: Plan,
         }
 
         #[derive(Deserialize, Default)]
@@ -254,6 +266,7 @@ impl Config {
                 .map(|w| w.trim().to_ascii_lowercase())
                 .filter(|w| !w.is_empty())
                 .collect(),
+            plan_worktrees: f.plan.worktrees.filter(|w| !w.is_empty()),
         })
     }
 }
