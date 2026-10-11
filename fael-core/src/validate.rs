@@ -273,16 +273,28 @@ pub fn valid_key(k: &str) -> Result<(), String> {
 /// (add, import, sync ingest) shares; callers report the label, never the token.
 // ponytail: fixed prefix list, catches the common pasted tokens only; swap for a real scanner if one slips through
 pub fn secret(s: &str) -> Option<&'static str> {
-    const PREFIXES: [(&str, &str); 8] = [
+    const PREFIXES: [(&str, &str); 17] = [
         ("-----BEGIN", "private key block"),
         ("AKIA", "AWS access key"),
+        ("ASIA", "AWS access key"),
         ("ghp_", "GitHub token"),
+        ("gho_", "GitHub token"),
+        ("ghs_", "GitHub token"),
+        ("ghu_", "GitHub token"),
         ("github_pat_", "GitHub token"),
+        ("glpat-", "GitLab token"),
         ("sk-ant-", "Anthropic key"),
         ("sk-proj-", "OpenAI key"),
+        ("sk_live_", "Stripe key"),
+        ("rk_live_", "Stripe key"),
+        ("AIza", "Google API key"),
         ("xoxb-", "Slack token"),
         ("xoxp-", "Slack token"),
+        ("xapp-", "Slack token"),
     ];
+    if url_password(s) {
+        return Some("password in a URL");
+    }
     s.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
         .find_map(|tok| {
             PREFIXES.iter().find(|(p, _)| {
@@ -291,4 +303,50 @@ pub fn secret(s: &str) -> Option<&'static str> {
             })
         })
         .map(|(_, what)| *what)
+}
+
+/// `scheme://user:pass@host` — the `DATABASE_URL` line of a `.env`. A `$VAR`, `<pass>`
+/// or `***` password is a placeholder, not a secret.
+fn url_password(s: &str) -> bool {
+    s.match_indices("://").any(|(i, _)| {
+        let auth = s[i + 3..]
+            .split(|c: char| c == '/' || c.is_whitespace() || matches!(c, '"' | '\'' | '`'))
+            .next()
+            .unwrap_or("");
+        let Some((user, _)) = auth.rsplit_once('@') else {
+            return false;
+        };
+        user.split_once(':')
+            .is_some_and(|(_, p)| !p.is_empty() && !p.starts_with(['$', '<', '*']))
+    })
+}
+
+#[cfg(test)]
+mod secret_tests {
+    use super::secret;
+
+    #[test]
+    fn tokens_and_url_passwords() {
+        let long = "a".repeat(32);
+        for (s, what) in [
+            (format!("key sk_live_{long}"), "Stripe key"),
+            (format!("AIza{long}"), "Google API key"),
+            (format!("glpat-{long}"), "GitLab token"),
+            (
+                "DATABASE_URL=postgres://app:hunter2@db:5432/x".into(),
+                "password in a URL",
+            ),
+        ] {
+            assert_eq!(secret(&s), Some(what), "{s}");
+        }
+        for s in [
+            "postgres://app@db:5432/x",
+            "postgres://app:${PW}@db/x",
+            "https://example.com/a:b@c",
+            "see AKIA and sk_live_ in the docs",
+            "http://localhost:7151/health",
+        ] {
+            assert_eq!(secret(s), None, "{s}");
+        }
+    }
 }

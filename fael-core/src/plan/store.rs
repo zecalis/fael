@@ -89,6 +89,7 @@ impl Store {
         s.conn
             .pragma_update(None, "foreign_keys", true)
             .map_err(err)?;
+        super::secret::guard(&s.conn)?;
         Ok(s)
     }
 
