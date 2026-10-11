@@ -16,6 +16,7 @@ mod next;
 mod owner;
 mod ready;
 mod schema;
+mod secret;
 mod start;
 mod store;
 
