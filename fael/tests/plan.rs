@@ -153,6 +153,31 @@ fn a_refused_cutover_leaves_the_md_and_an_app_plan_cuts_over_by_app_name() {
 }
 
 #[test]
+fn a_name_in_two_folders_is_refused_and_names_both_files() {
+    let d = repo();
+    let live = "# PLAN-s\n\n## TL;DR\n- [ ] s1 — new\n";
+    write(d.join(".fapony/plan/PLAN-s.md"), live);
+    write(
+        d.join(".fapony/done/PLAN-s.md"),
+        "# PLAN-s\n\n## TL;DR\n- [x] s1 — shipped\n",
+    );
+    let (ok, _, err) = fael(&d, &["plan", "cutover", "s"]);
+    assert!(
+        !ok && err.contains(".fapony/done/PLAN-s.md, .fapony/plan/PLAN-s.md"),
+        "{err}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(d.join(".fapony/plan/PLAN-s.md")).unwrap(),
+        live
+    );
+    // one match left: it cuts over
+    std::fs::remove_file(d.join(".fapony/done/PLAN-s.md")).unwrap();
+    let (ok, out, err) = fael(&d, &["plan", "cutover", "s"]);
+    assert!(ok && out.contains("s cut over: its 1 chunks"), "{err}{out}");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
 fn park_unpark_done_move_a_cut_over_plan_and_a_reimport_keeps_it() {
     let d = repo();
     write(
