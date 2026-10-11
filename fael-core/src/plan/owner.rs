@@ -190,8 +190,9 @@ impl Store {
             ));
         }
         tx.execute(
-            "INSERT INTO event(chunk_uid, at, by, to_state) VALUES (?1, ?2, 'owner', 'active')",
-            params![format!("plan:{app}/{name}"), now],
+            "INSERT INTO event(chunk_uid, at, by, to_state, plan)
+             VALUES (?1, ?2, 'owner', 'active', ?3)",
+            params![format!("plan:{app}/{name}"), now, tx.last_insert_rowid()],
         )
         .map_err(err)?;
         tx.commit().map_err(err)
@@ -232,11 +233,11 @@ impl Store {
         }
         tx.execute("UPDATE plan SET state = ?1 WHERE id = ?2", params![to, id])
             .map_err(err)?;
-        // ponytail: event rows key on chunk_uid; a plan's own row uses `plan:<app/name>`,
-        // which no chunk uid can be — a plan column when a reader needs plan history
+        // a plan's own row keys on `plan:<app/name>`, which no chunk uid can be
         tx.execute(
-            "INSERT INTO event(chunk_uid, at, by, from_state, to_state) VALUES (?1, ?2, 'owner', ?3, ?4)",
-            params![format!("plan:{app}/{name}"), now, state, to],
+            "INSERT INTO event(chunk_uid, at, by, from_state, to_state, plan)
+             VALUES (?1, ?2, 'owner', ?3, ?4, ?5)",
+            params![format!("plan:{app}/{name}"), now, state, to, id],
         )
         .map_err(err)?;
         tx.commit().map_err(err)?;

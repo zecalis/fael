@@ -3,7 +3,7 @@
 //! schema version and an older db upgrades on open (release gate: no manual step).
 
 use super::md::PlanMd;
-use super::schema::{SCHEMA, VERSION, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5};
+use super::schema::{SCHEMA, VERSION, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_fill};
 use rusqlite::{Connection, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
@@ -119,17 +119,20 @@ impl Store {
             };
             return Err(format!("plans.db is schema v{v}, {fix}"));
         }
+        type Step = fn(&rusqlite::Transaction) -> Result<(), String>;
+        let steps: [Step; 4] = [v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6];
         match v {
             0 => tx.execute_batch(SCHEMA).map_err(err)?,
-            // v1 → v2 creates the current SCHEMA; each later step chains to the next
+            // v1 → v2 creates the current SCHEMA; each later step runs the ones after it
             1 => v1_to_v2(&tx)?,
-            2 => v2_to_v3(&tx)
-                .and_then(|_| v3_to_v4(&tx))
-                .and_then(|_| v4_to_v5(&tx))?,
-            3 => v3_to_v4(&tx).and_then(|_| v4_to_v5(&tx))?,
-            4 => v4_to_v5(&tx)?,
+            2..=5 => {
+                for step in &steps[v as usize - 2..] {
+                    step(&tx)?;
+                }
+            }
             _ => return Ok(()),
         }
+        v6_fill(&tx)?;
         tx.pragma_update(None, "user_version", VERSION)
             .map_err(err)?;
         tx.commit().map_err(err)
