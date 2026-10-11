@@ -155,6 +155,48 @@ impl Store {
         tx.commit().map_err(err)
     }
 
+    /// `fael plan new <name> "<title>"`: a plan whose chunks live in the db from the start
+    /// (`truth = db`, active) — no md chunk list to cut over. `source` is its doc, the
+    /// Goal/Scope/Done every brief reads. A taken `app/name` is refused.
+    pub fn new_plan(
+        &mut self,
+        app: &str,
+        name: &str,
+        title: &str,
+        area: &str,
+        source: &str,
+        now: &str,
+    ) -> Result<(), String> {
+        let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+        if name.is_empty() || !name.chars().all(ok) || name == "inbox" {
+            return Err(format!(
+                "rejected: plan name '{name}' — lowercase letters, digits and '-' (not inbox)"
+            ));
+        }
+        if !matches!(area, "dev" | "marketing") {
+            return Err(format!("rejected: --area {area} — dev or marketing"));
+        }
+        let tx = tx(self)?;
+        let n = tx
+            .execute(
+                "INSERT OR IGNORE INTO plan(app, name, title, area, state, source, truth)
+                 VALUES (?1, ?2, ?3, ?4, 'active', ?5, 'db')",
+                params![app, name, title.trim(), area, source],
+            )
+            .map_err(err)?;
+        if n == 0 {
+            return Err(format!(
+                "rejected: plan {name} already exists — see `fael plan next`"
+            ));
+        }
+        tx.execute(
+            "INSERT INTO event(chunk_uid, at, by, to_state) VALUES (?1, ?2, 'owner', 'active')",
+            params![format!("plan:{app}/{name}"), now],
+        )
+        .map_err(err)?;
+        tx.commit().map_err(err)
+    }
+
     /// `fael plan park|unpark|done <plan>` on a `truth = db` plan: the owner moves
     /// `plan.state` (an md plan's folder is its state, import sets it). Refused while a
     /// chunk runs — a parked or done plan leaves the board and its agent with it. Returns

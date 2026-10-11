@@ -223,3 +223,71 @@ fn park_unpark_done_move_a_cut_over_plan_and_a_reimport_keeps_it() {
     assert!(ok && out == "plan p active → done\n", "{err}{out}");
     let _ = std::fs::remove_dir_all(d);
 }
+
+#[test]
+fn plan_new_makes_a_db_plan_that_takes_chunks_and_keeps_a_written_doc() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["plan", "new", "n", "New work"]);
+    assert!(
+        ok && out.contains("plan n created → .fapony/plan/PLAN-n.md"),
+        "{err}{out}"
+    );
+    let doc = d.join(".fapony/plan/PLAN-n.md");
+    let text = std::fs::read_to_string(&doc).unwrap();
+    assert!(
+        text.starts_with("# PLAN-n — New work\n") && text.contains("## 1. Goal"),
+        "{text}"
+    );
+    let (ok, _, err) = fael(&d, &["plan", "new", "n", "again"]);
+    assert!(!ok && err.contains("plan n already exists"), "{err}");
+    let (ok, _, err) = fael(&d, &["plan", "new", "Bad Name", "x"]);
+    assert!(!ok && err.contains("lowercase letters"), "{err}");
+    // the planner fills the doc; a chunk lands in the db and its brief reads the doc live
+    std::fs::write(
+        &doc,
+        text.replace("## 1. Goal (why)\n", "## 1. Goal (why)\nship n\n"),
+    )
+    .unwrap();
+    let (ok, uid, err) = fael(
+        &d,
+        &["chunk", "add", "n1", "--plan", "n", "--brief", "do n1"],
+    );
+    assert!(ok, "{err}");
+    let (ok, out, err) = fael(&d, &["chunk", "start", uid.trim()]);
+    assert!(ok && out.contains("ship n"), "{err}{out}");
+    assert!(
+        std::fs::read_to_string(&doc)
+            .unwrap()
+            .contains("- [ ] n1 · **running**")
+    );
+    // an app plan whose doc the planner already wrote keeps it byte for byte
+    let mine = d.join("apps/v/.fapony/plan/PLAN-m.md");
+    write(
+        mine.clone(),
+        "# PLAN-m — mine\n\n## TL;DR\n- chunks live in fael\n\n## 1. Goal\nmine\n",
+    );
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "plan",
+            "new",
+            "m",
+            "mine",
+            "--app",
+            "apps/v",
+            "--area",
+            "marketing",
+        ],
+    );
+    assert!(ok && out.contains("plan apps/v/m created"), "{err}{out}");
+    assert!(
+        std::fs::read_to_string(&mine)
+            .unwrap()
+            .ends_with("## 1. Goal\nmine\n")
+    );
+    // a later import leaves both db plans alone
+    assert!(fael(&d, &["plan", "import"]).0);
+    let (_, out, _) = fael(&d, &["plan", "export", "n"]);
+    assert!(out.contains("· truth db ·") && out.contains("n1"), "{out}");
+    let _ = std::fs::remove_dir_all(d);
+}
