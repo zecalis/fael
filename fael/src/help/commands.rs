@@ -114,10 +114,11 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
-        "fael chunk <verb> … [--plan p] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--pr N] [--out path]
-fael chunk add \"<title>\" [--plan inbox|<plan>] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid,…]
+        "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--pr N] [--out path]
+fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid,…]
+fael chunk show <uid|label> [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
-fael chunk edit <uid> [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …]
+fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …]
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD]
 fael chunk after <uid> <other-uid> \"<why>\"
@@ -126,10 +127,13 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
     (only a plan whose chunks live in plans.db — inbox, or one cut over; add prints
-     the new uid, no brief = draft; start claims the chunk and its pair in one step
+     the new uid, no brief = draft; a --label is unique in its plan and every verb
+     takes it for the uid; show prints one chunk as the board has it, with the brief
+     and notes its next start prints; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
      --force takes it over; --no-worktree (a client that writes a file and exits)
-     takes no worktree slot; wait, after and done answer only to the worktree of the
+     takes no worktree slot, and from Claude Code without --run binds its session,
+     whose Stop hook keeps the run seen from any cwd; wait, after and done answer only to the worktree of the
      latest run and end it, done also to --run R naming that run; done --pr N lands in done (push pr is the ok), done
      without a PR in review until accept; each command rewrites a cut-over plan's
      md TL;DR as a read-only mirror; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
@@ -140,11 +144,13 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     (
         "board",
         "every registered repo's plans and chunks: needs you, queue, running, blocked",
-        "fael board [--json] [--open]
+        "fael board [--json] [--open] [--plan p]
     (the owner's view, run from anywhere: each repo whose plans.db a `fael plan
      import` or `fael chunk …` wrote is listed in ~/.local/state/fael/projects;
      --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
-     only open chunks — the planner's one read of scope, after and overlaps)",
+     only open chunks — the planner's one read of scope, after and overlaps; --plan
+     keeps one plan's chunks; a repo whose plans.db cannot be read stays listed with
+     its error and the command exits 1)",
     ),
     (
         "plan",
@@ -172,10 +178,12 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     ),
     (
         "run",
-        "end one chunk start",
-        "fael run end R [--cost USD]
+        "end one chunk start, or mark it seen",
+        "fael run end R [--cost USD] | fael run beat R
     (ends every live run row of start R — the launcher's cleanup after the agent
-     exits; never another start, never a chunk's state; none left exits 0)
+     exits; never another start, never a chunk's state; none left exits 0; beat:
+     start R's live rows are seen now — the launcher calls it while a headless client
+     runs, so a long run never reads stalled)
   --cost USD   what the client reported the run cost (claude's total_cost_usd), a
                decimal >= 0; kept on start R's rows and shown as run.cost on the board",
     ),

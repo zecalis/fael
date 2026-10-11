@@ -65,9 +65,14 @@ pub(crate) fn phantoms(r: &Repo, log: &core::Log, text: &str, skip: &[&str]) -> 
         return vec![];
     }
     let (wide, _) = with_branches(&r.root, log.clone());
+    // a chunk uid has the same ULID shape: citing the chunk a row is about is no phantom
+    let plans = Some(crate::plan::db(r))
+        .filter(|p| p.exists())
+        .and_then(|p| fael_core::plan::Store::open(&p).ok());
     missing
         .into_iter()
         .filter(|tok| matches!(core::ref_state(&wide, tok), core::Ref::Missing))
+        .filter(|tok| !plans.as_ref().is_some_and(|s| s.is_chunk(tok)))
         .map(String::from)
         .collect()
 }

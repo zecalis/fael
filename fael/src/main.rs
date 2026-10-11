@@ -64,7 +64,8 @@ fn main() -> ExitCode {
 
 fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     if matches!(argv.as_slice(), [v] if v == "--version" || v == "-v" || v == "-V") {
-        println!("fael {}", env!("CARGO_PKG_VERSION"));
+        let git = fael_core::GIT.map(|g| format!("+{g}")).unwrap_or_default();
+        println!("fael {}{git}", env!("CARGO_PKG_VERSION"));
         return Ok(ExitCode::SUCCESS);
     }
     // `fael help`, `fael --help`, `fael -h`, `fael <cmd> --help` — usage on
@@ -101,6 +102,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("board", []) => board::cmd(&a),
         ("chunk", rest) => chunk::cmd(&a, rest),
         ("run", [end, r]) if end == "end" => chunk::run_end(&a, r),
+        ("run", [beat, r]) if beat == "beat" => chunk::run_beat(&a, r),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),

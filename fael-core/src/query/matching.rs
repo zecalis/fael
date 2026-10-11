@@ -1,17 +1,18 @@
 use crate::{Row, anchor};
 
-/// Every word of the lowercased query `q` occurs in the row's text or title — lists show
-/// titles, so they count — in any order: `login timeout` finds "timeout on
-/// the login page". A blank `q` holds no word and matches every row.
+/// Every word of the lowercased query `q` occurs in the row's text, title or key — lists
+/// show titles and keys, so they count — in any order: `login timeout` finds "timeout on
+/// the login page", `schema-silent` finds the row keyed `board:schema-silent`. A blank `q`
+/// holds no word and matches every row.
 pub(super) fn all_words(q: &str, r: &Row) -> bool {
-    let text = r.text.to_lowercase();
-    let title = r
-        .title
-        .as_deref()
-        .map(str::to_lowercase)
-        .unwrap_or_default();
+    let low = |s: Option<&str>| s.map(str::to_lowercase).unwrap_or_default();
+    let (text, title, key) = (
+        r.text.to_lowercase(),
+        low(r.title.as_deref()),
+        low(r.key.as_deref()),
+    );
     q.split_whitespace()
-        .all(|w| text.contains(w) || title.contains(w))
+        .all(|w| text.contains(w) || title.contains(w) || key.contains(w))
 }
 
 /// Exact or under the directory (a zone) — an anchor's ref is opaque, never a zone.

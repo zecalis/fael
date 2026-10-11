@@ -163,7 +163,8 @@ fn a_linked_worktree_pool_and_the_registry() {
     let reg = std::fs::read_to_string(state.join("projects")).unwrap();
     assert_eq!((canon(&reg), reg.lines().count()), (d.clone(), 1));
 
-    // a root gone from disk and a repo whose plans.db is not a database: both skipped
+    // a root gone from disk is skipped; a plans.db that is not a database stays listed
+    // with its error and fails the board (issue 01M4N4CV7)
     let bad = tmp.join("bad");
     std::fs::create_dir_all(&bad).unwrap();
     git(&bad, &["init", "-q", "-b", "main"]);
@@ -177,12 +178,15 @@ fn a_linked_worktree_pool_and_the_registry() {
     let o = run(&tmp, &state, &["board", "--json"]);
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(
-        o.status.success() && err.contains(&*bad.to_string_lossy()),
+        !o.status.success() && err.contains(&*bad.to_string_lossy()),
         "{err}"
     );
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["projects"].as_array().unwrap().len(), 1, "{v}");
-    let p = &v["projects"][0];
+    let ps = v["projects"].as_array().unwrap();
+    assert_eq!(ps.len(), 2, "{v}");
+    assert_eq!(canon(ps[0]["root"].as_str().unwrap()), bad);
+    assert!(ps[0]["error"].is_string(), "{v}");
+    let p = &ps[1];
     assert_eq!(canon(p["root"].as_str().unwrap()), d);
     // linked worktrees only: the main checkout is not a slot
     let wt = &p["worktrees"];
@@ -207,6 +211,7 @@ fn a_linked_worktree_pool_and_the_registry() {
         ]
     );
     // `[plan] worktrees` keeps the agent slots, leaves a topic worktree out
+    write(state.join("projects"), &reg);
     write(d.join(".fael/config.toml"), "[plan]\nworktrees = \"wt2\"\n");
     let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
     let wt = v["projects"][0]["worktrees"].as_array().unwrap().clone();

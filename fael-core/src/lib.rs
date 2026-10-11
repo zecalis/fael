@@ -23,6 +23,9 @@ pub mod stats;
 pub mod sync;
 mod validate;
 
+/// The commit a dev build came from (`abc1234`, `abc1234.dirty`); None on a release.
+pub const GIT: Option<&str> = option_env!("FAEL_GIT");
+
 pub use aliases::{Aliases, is_alias_row, is_carrier_row};
 pub use blob::blob_id_stream;
 pub use compact::{Opts as CompactOpts, Report as CompactReport, WriterReport, compact};

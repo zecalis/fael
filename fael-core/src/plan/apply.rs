@@ -296,6 +296,7 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
             model: p.model,
             client: p.client,
             scope: p.scope,
+            label: None,
         };
         new.push(insert(tx, old.plan, seq, &f, &text, now)?);
     }
@@ -374,6 +375,7 @@ impl Store {
                         model,
                         client,
                         scope,
+                        label: None,
                     };
                     merge(&tx, &chunks, f, now)
                 }
