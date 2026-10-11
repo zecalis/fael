@@ -103,6 +103,58 @@ impl Store {
         tx.commit().map_err(err)
     }
 
+    /// `fael chunk pin <uid> <rank>` / `unpin` (None): the owner's rank, first in queue
+    /// order (SPEC §3), lowest first. State and approval stay.
+    pub fn pin(&mut self, uid: &str, rank: Option<i64>, now: &str) -> Result<(), String> {
+        let text = rank.map_or("unpinned".into(), |n| format!("pinned {n}"));
+        self.mark(uid, &text, now, |tx, id| {
+            tx.execute("UPDATE chunk SET pin = ?1 WHERE id = ?2", params![rank, id])
+        })
+    }
+
+    /// `fael chunk approve <uid> --model M --client C` / `unapprove` (None): the approved
+    /// queue may start it with that model and client when a slot frees (SPEC §8); `edit`
+    /// clears it.
+    pub fn approve(
+        &mut self,
+        uid: &str,
+        with: Option<(&str, &str)>,
+        now: &str,
+    ) -> Result<(), String> {
+        let text = with.map_or("unapproved".into(), |(m, c)| {
+            format!("approved · model {m} · client {c}")
+        });
+        let (m, c) = with.unzip();
+        self.mark(uid, &text, now, |tx, id| {
+            tx.execute(
+                "UPDATE chunk SET approved_at = ?1, approved_model = ?2, approved_client = ?3
+                 WHERE id = ?4",
+                params![m.map(|_| now), m, c, id],
+            )
+        })
+    }
+
+    /// An owner field on a chunk still to run, with its event; the state stays.
+    fn mark(
+        &mut self,
+        uid: &str,
+        text: &str,
+        now: &str,
+        f: impl FnOnce(&rusqlite::Transaction, i64) -> rusqlite::Result<usize>,
+    ) -> Result<(), String> {
+        let tx = tx(self)?;
+        let r = row(&tx, uid)?;
+        if r.state.terminal() {
+            return Err(format!(
+                "rejected: chunk {uid} is {} — history, never queued",
+                r.state.as_str()
+            ));
+        }
+        f(&tx, r.id).map_err(err)?;
+        set(&tx, &r, r.state, "owner", Some(text), now)?;
+        tx.commit().map_err(err)
+    }
+
     /// `fael run end R [--cost USD]`: ends every live row of start R and nothing else —
     /// never a chunk's state, never another start. None left (wait/done ended them) is not
     /// an error. `cost` lands on every row of R, ended or not: the agent's own `chunk done`
