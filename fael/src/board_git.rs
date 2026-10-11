@@ -1,4 +1,4 @@
-//! PLAN-fael-parallel: an open PR still holds its scope.
+//! PLAN-fael-parallel: an open PR still holds its scope, and does its branch still merge.
 //! An open PR = a review chunk, or a done chunk with `--pr N` whose `(#N)` (squash subject)
 //! or `Merge pull request #N` is not on the checkout's fetched base yet. Live git, no fetch
 //! (the app fetches, decision 01M4K4GFS), no gh, never a state change.
@@ -7,6 +7,7 @@ use crate::git;
 use fael_core::plan::{BoardChunk, overlaps};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// The base (`origin/HEAD`) and its subjects since the first shipped chunk started.
 type Base = Option<(String, String)>;
@@ -52,6 +53,9 @@ pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) {
             continue;
         }
         open.insert(c.uid.clone());
+        if let Some(b) = branch {
+            c.conflicts = merge_tree(&dir, base, &b);
+        }
     }
     if !open.is_empty() {
         overlaps(chunks, &open);
@@ -63,6 +67,30 @@ fn merged(log: &str, n: i64) -> bool {
     let (squash, merge) = (format!("(#{n})"), format!("Merge pull request #{n} "));
     log.lines()
         .any(|s| s.contains(&squash) || s.starts_with(&merge))
+}
+
+/// `git merge-tree --write-tree` (git >= 2.38): 0 = clean, 1 with a tree id = the conflicted
+/// paths after it; anything else (old git, no such branch) = unknown.
+fn merge_tree(dir: &Path, base: &str, branch: &str) -> Option<Vec<String>> {
+    let o = Command::new("git")
+        .args(["merge-tree", "--write-tree", "--name-only", "--no-messages"])
+        .args([base, branch])
+        .current_dir(dir)
+        .output()
+        .ok()?;
+    let out = String::from_utf8_lossy(&o.stdout);
+    let mut lines = out.lines();
+    lines.next().filter(|tree| !tree.is_empty())?;
+    match o.status.code()? {
+        0 => Some(Vec::new()),
+        1 => Some(
+            lines
+                .take_while(|l| !l.is_empty())
+                .map(String::from)
+                .collect(),
+        ),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

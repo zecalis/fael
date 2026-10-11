@@ -131,7 +131,23 @@ fn board_v1_shape() {
     for c in &chunks {
         let uid = c["uid"].as_str().unwrap();
         assert_eq!(uid.len(), 26, "{uid}: a ULID");
-        assert_eq!(keys(c), CHUNK_KEYS, "{uid}");
+        // `conflicts` (PLAN-fael-parallel merge-check): last, and only on an open PR
+        let mut k = keys(c);
+        if k.last() == Some(&"conflicts") {
+            k.pop();
+            assert!(
+                matches!(c["state"].as_str(), Some("review" | "done")),
+                "{uid}"
+            );
+            assert!(
+                c["conflicts"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(Value::is_string)
+            );
+        }
+        assert_eq!(k, CHUNK_KEYS, "{uid}");
         assert!(STATES.contains(&c["state"].as_str().unwrap()), "{uid}");
         if !c["run"].is_null() {
             assert_eq!(keys(&c["run"]), RUN_KEYS, "{uid}");
