@@ -10,8 +10,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
-    a.only("plan", &[])?;
     let r = repo()?;
+    if let [new, name, title] = rest
+        && new == "new"
+    {
+        a.only("plan new", &["app", "area"])?;
+        return create(a, &r, name, title).map(|()| ExitCode::SUCCESS);
+    }
+    a.only("plan", &[])?;
     match rest.first().map(String::as_str) {
         Some("import") if rest.len() == 1 => import(&r),
         Some("next") if rest.len() == 1 => next(&r),
@@ -19,7 +25,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some("cutover") if rest.len() == 2 => cutover(&r, &rest[1]),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         _ => Err(
-            "rejected: fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan> | fael plan park|unpark|done <plan> — try 'fael plan --help'"
+            "rejected: fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -85,6 +91,43 @@ fn cutover(r: &Repo, want: &str) -> Result<(), String> {
         p.source
     );
     Ok(())
+}
+
+/// `new`: the plan row (chunks in the db from the start) and its doc, a skeleton
+/// `<app>/.fapony/plan/PLAN-<name>.md` unless the planner already wrote it.
+fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
+    let app = a.one("app").unwrap_or_default();
+    let dir = Path::new(&app).join(".fapony/plan");
+    let source = dir.join(format!("PLAN-{name}.md"));
+    let source = source.to_string_lossy().replace('\\', "/");
+    let area = a.one("area").unwrap_or_else(|| "dev".into());
+    let now = fael_core::rfc3339(fael_core::now_ms());
+    let mut s = Store::open(&db(r))?;
+    s.new_plan(&app, name, title, &area, &source, &now)?;
+    let file = r.root.join(&source);
+    let key = if app.is_empty() {
+        name.to_string()
+    } else {
+        format!("{app}/{name}")
+    };
+    if !file.exists() {
+        std::fs::create_dir_all(r.root.join(&dir))
+            .and_then(|()| std::fs::write(&file, skeleton(name, title, &key)))
+            .map_err(|e| format!("{}: {e}", file.display()))?;
+    }
+    crate::board::register(r);
+    println!("plan {key} created → {source} (Goal/Scope/Done/Constraints: every brief reads them)");
+    println!(
+        "add chunks: fael chunk add \"<title>\" --plan {key} --brief \"…\" --size S|M|L --model M --scope <paths>"
+    );
+    Ok(())
+}
+
+fn skeleton(name: &str, title: &str, key: &str) -> String {
+    format!(
+        "# PLAN-{name} — {title}\n\n## TL;DR\n- chunks live in fael — `fael board`, `fael plan export {key}` (mirror: edits here change nothing)\n\n\
+         ## 1. Goal (why)\n\n## 2. Scope\n**Do:**\n**Don't:**\n\n## 3. Done criteria\n\n## 4. Constraints\n"
+    )
 }
 
 /// `park` · `unpark` · `done` on a cut-over plan: the owner's word on `plan.state`.
