@@ -29,8 +29,8 @@ make the copy, images and video from your briefs. The owner decides; you find fa
    - shipped: `git log --since <date> --format='%s' | grep -E '^feat'`
    - users' asks and pains: `fael find --kind decision` / `--kind issue` rows marked `(from user)`
    - last results: `fael find --key 'post:<app>:*' --all` — what landed, what didn't
-4. Plan dir: the app's own `.fapony/plan` (spec: `.fapony/spec`), the nearest one beside
-   `PRODUCT.md`. Never overwrite an existing `PLAN-<app>-content-<yyyy-mm>.md`; check `.fapony/done` too.
+4. Taken plan names: `fael board --plan <app>-content-<yyyy-mm>` — `fael plan new` refuses one
+   already there.
 
 ## Phase 1 — VOICE.md (once per app)
 
@@ -69,28 +69,24 @@ Round format:
 
 Recompute the frontier after each answer. Done when it is empty and the owner confirms.
 
-## Phase 3 — Write plan + spec
+## Phase 3 — Write the plan into plans.db
 
-`<planDir>/PLAN-<app>-content-<yyyy-mm>.md`:
-
-```markdown
----
-kind: unit
-spec: SPEC-<app>-content-<yyyy-mm>.md
----
-# PLAN-<app>-content-<yyyy-mm> — <goal of the month>
-## TL;DR
-- **Goal:** … · **Pillars:** … · **Cadence:** …
-- **Handoff (fael):** anchor `plan:<app>-content-<yyyy-mm>`
-- **Progress:**
-  - [ ] p01 — <topic> · <format> · <yyyy-mm-dd>
-  - [ ] p02 — …
+```bash
+fael plan new <app>-content-<yyyy-mm> "<goal of the month>" --app <app> --area marketing
 ```
 
-`<specDir>/SPEC-<app>-content-<yyyy-mm>.md`, one block per post:
+Fill the doc it prints (`<app>/.fapony/plan/PLAN-<app>-content-<yyyy-mm>.md`): Goal = goal of
+the month · pillars · cadence; Constraints = `VOICE.md` and the channel limits. Every post brief
+prints it. Then one chunk per post, in date order:
+
+```bash
+fael chunk add "<topic> · <format> · <yyyy-mm-dd>" --plan <app>-content-<yyyy-mm> \
+  --label p01 --size S --model <m> --brief "<the post block>"
+```
+
+The post block is the brief:
 
 ```
-## p01
 topic: one sentence
 pillar: …
 source: <fael id | PR #N | PRODUCT.md pain>
@@ -102,15 +98,17 @@ visual: subject · composition · text overlay — palette and mood per VOICE.md
 video: [scene · what's on screen (site section / component) · voiceover · seconds] — video only
 ```
 
-Hand back the 3–5 briefs you are least sure of and ask what's wrong with them.
+Posts don't wait on each other: no `--after`. Hand back the 3–5 briefs you are least sure of and
+ask what's wrong with them; fix one with `fael chunk edit <uid> --brief …`.
 
 ## Chunk = one post
 
-`fapony plan` prints dev closing rules (branch, PR, commit); for a content plan this section wins.
+The brief's chunk rules hold; for a post, done is a file, not a PR.
 
-The executing agent writes the copy and makes the assets from the post's block + `VOICE.md`.
+The executing agent writes the copy and makes the assets from the brief + `VOICE.md`.
 Done when: one topic · every claim traces to `source` · within the channel limits · VOICE.md
-say/never-say holds · owner approved. Tick `p01 — … — posted <date>`.
+say/never-say holds. It finishes with `fael chunk done <uid> "<copy + what to check>" --out
+<asset>`: the chunk goes to review, and the owner's `fael chunk accept` is the approval.
 
 ## After posting
 
