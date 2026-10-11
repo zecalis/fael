@@ -44,11 +44,27 @@ struct Item {
 }
 
 /// Every open row of `r`'s log, by kind; issues in group order. `fixers` = issue id → its
-/// newest linked chunk (`Store::fixers`).
+/// newest linked chunk (`Store::fixers`), found through the issue's older versions too.
 pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
     let log = crate::read(r);
     let open = core::find(&log, &core::Filter::default());
     let drifted = crate::maintain::drift::ids(&log, &r.root);
+    // a re-filed issue (`--supersedes`, self-heal) has a new id: walk back to the one linked
+    let pred: HashMap<&str, &str> = core::successors(&log)
+        .into_iter()
+        .map(|(old, new)| (new, old))
+        .collect();
+    let fixer = |id: &str| {
+        let mut id = id;
+        // bounded: a reverted edge pair could loop
+        for _ in 0..=pred.len() {
+            if let Some(f) = fixers.get(id) {
+                return Some(f.clone());
+            }
+            id = pred.get(id)?;
+        }
+        None
+    };
     let item = |row: &core::Row, group: Option<usize>| Item {
         id: row.id.clone(),
         title: row.title.clone(),
@@ -60,7 +76,7 @@ pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
         to: row.to.clone(),
         revisit: row.revisit.clone(),
         held: row.held().map(String::from),
-        chunk: group.and_then(|_| fixers.get(&row.id).cloned()),
+        chunk: group.and_then(|_| fixer(&row.id)),
         group,
         signals: drifted
             .contains(&row.id)
