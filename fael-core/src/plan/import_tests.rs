@@ -218,7 +218,7 @@ fn every_event_names_its_plan() {
     let mut s = Store::open_in_memory().unwrap();
     s.import_all(&[plan("a", "- [x] 1 — first\n- [ ] 2 — second")], "t0")
         .unwrap();
-    s.new_plan("", "b", "PLAN-b", "dev", "b.md", "t1").unwrap();
+    s.new_plan("", "b", "PLAN-b", "dev", "", "t1").unwrap();
     let b: i64 = s
         .conn
         .query_row("SELECT id FROM plan WHERE name = 'b'", [], |r| r.get(0))

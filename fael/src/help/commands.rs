@@ -154,8 +154,8 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     ),
     (
         "plan",
-        "read plans into plans.db, print each one's next chunk, export one, cut one over, create or park one",
-        "fael plan import | fael plan next | fael plan export [<plan>] | fael plan cutover <plan>
+        "read plans into plans.db, print each one's next chunk, export or edit one, cut one over, create or park one",
+        "fael plan import | fael plan next | fael plan export [<plan>] [--json] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan>
      | fael plan new <name> \"<title>\" [--app A] [--area dev|marketing]
      | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|->
     (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
@@ -166,12 +166,21 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      `fapony plan` makes: your own (wip) claim, else the first open chunk no live
      worktree claimed whose (after …) is met and that has no (wait …); export: every
      plan, or the one named (name or app/name), as markdown to stdout — uid, state and
-     fields under each line; cutover: import, then the plan's chunks live in the db
+     fields under each line; export <plan> --json: the plan as one bill (\"v\": 1) —
+     rev, title, area, state, doc, refs, repo and a line per planned chunk (uid, label,
+     title, brief, size, model, client, scope, after); apply: the bill edited and sent
+     back, one transaction — a stale rev rejects it and writes nothing; a header key
+     left out stays, a line without uid adds a chunk (no brief = draft), a line with uid
+     edits it (a changed field clears its approval), {uid, drop:true} drops it, a line
+     missing from the bill is left alone, and any change to a running or finished chunk
+     rejects the bill; an optional \"ops\" array takes the `chunk apply` ops; every row
+     shares one event batch; --dry-run prints what it would write and rolls back;
+     cutover: import, then the plan's chunks live in the db
      (`fael chunk …`) and its md's chunk lines become one banner — refused while a
      chunk is a draft, held by (wip …), or waits on an (after …) naming no chunk;
      new: a plan whose chunks live in plans.db from the start (`fael chunk add --plan`),
-     its doc <app>/.fapony/plan/PLAN-<name>.md — a Goal/Scope/Done/Constraints skeleton
-     unless the file exists — read live by every brief;
+     its doc (plan.doc, no md file) a Goal/Scope/Done/Constraints skeleton read by every
+     brief — edit it with export --json / apply;
      park|unpark|done: a cut-over plan's state (an md plan's folder is its state) —
      parked or done leaves the board; refused while one of its chunks runs; import
      never overwrites it; repo: the checkout a plan's code lives in when it is not

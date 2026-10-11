@@ -197,6 +197,79 @@ pub(super) fn add_after(tx: &Transaction, src: i64, dst: i64) -> Result<(), Stri
     Ok(())
 }
 
+/// `fael chunk edit`: fields, and the state only to open a draft that gains a brief
+/// (issue 01M4KJQE: an inbox draft has a way out). Any change clears the approval
+/// (SPEC §8), so the queue never starts work the owner did not approve as it now reads.
+pub(super) fn edit_in(
+    tx: &Transaction,
+    uid: &str,
+    f: &Fields,
+    now: &str,
+) -> Result<String, String> {
+    let r = row(tx, uid)?;
+    if r.state.terminal() {
+        return Err(format!(
+            "rejected: chunk {uid} is {} — history, not edited",
+            r.state.as_str()
+        ));
+    }
+    let scope = f.scope.as_deref().map(scope).transpose()?;
+    size(f)?;
+    if let Some(l) = f.label.as_deref().filter(|l| !l.is_empty()) {
+        let plan: i64 = tx
+            .query_row("SELECT plan FROM chunk WHERE id = ?1", [r.id], |q| q.get(0))
+            .map_err(err)?;
+        label(tx, plan, r.id, l)?;
+    }
+    let mut what = Vec::new();
+    for (col, v) in [
+        ("title", f.title.as_deref().map(str::trim)),
+        ("brief", f.brief.as_deref().map(str::trim)),
+        ("size", f.size.as_deref()),
+        ("model_hint", f.model.as_deref()),
+        ("client_hint", f.client.as_deref()),
+        ("scope", scope.as_ref().map(|s| s.as_deref().unwrap_or(""))),
+        ("label", f.label.as_deref()),
+    ] {
+        let Some(v) = v else { continue };
+        if col == "title" && v.is_empty() {
+            return Err("rejected: a chunk needs a title".into());
+        }
+        let v = (!v.is_empty() || matches!(col, "brief" | "title")).then_some(v);
+        tx.execute(
+            &format!("UPDATE chunk SET {col} = ?1 WHERE id = ?2"),
+            params![v, r.id],
+        )
+        .map_err(err)?;
+        what.push(col);
+    }
+    if what.is_empty() {
+        return Err(
+            "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope or --label"
+                .into(),
+        );
+    }
+    let n = tx
+        .execute(
+            "UPDATE chunk SET approved_at = NULL, approved_model = NULL, approved_client = NULL
+             WHERE id = ?1 AND approved_at IS NOT NULL",
+            [r.id],
+        )
+        .map_err(err)?;
+    let mut text = format!("edited {}", what.join(", "));
+    if n > 0 {
+        text.push_str(" · approval cleared");
+    }
+    let briefed = f.brief.as_deref().is_some_and(|b| !b.trim().is_empty());
+    let to = if r.state == State::Draft && briefed {
+        State::Open
+    } else {
+        r.state
+    };
+    set(tx, &r, to, "owner", Some(&text), now)?;
+    Ok(text)
+}
+
 impl Store {
     /// `fael chunk add`: a new chunk at the end of `plan` (`name` or `app/name`); `inbox` is
     /// created as a `db` plan on first use. No brief = `draft`.
@@ -283,72 +356,10 @@ impl Store {
         Ok(uid)
     }
 
-    /// `fael chunk edit`: fields, and the state only to open a draft that gains a brief
-    /// (issue 01M4KJQE: an inbox draft has a way out). Any change clears the approval
-    /// (SPEC §8), so the queue never starts work the owner did not approve as it now reads.
+    /// `fael chunk edit`: see [`edit_in`].
     pub fn edit(&mut self, uid: &str, f: &Fields, now: &str) -> Result<(), String> {
         let tx = tx(self)?;
-        let r = row(&tx, uid)?;
-        if r.state.terminal() {
-            return Err(format!(
-                "rejected: chunk {uid} is {} — history, not edited",
-                r.state.as_str()
-            ));
-        }
-        let scope = f.scope.as_deref().map(scope).transpose()?;
-        size(f)?;
-        if let Some(l) = f.label.as_deref().filter(|l| !l.is_empty()) {
-            let plan: i64 = tx
-                .query_row("SELECT plan FROM chunk WHERE id = ?1", [r.id], |q| q.get(0))
-                .map_err(err)?;
-            label(&tx, plan, r.id, l)?;
-        }
-        let mut what = Vec::new();
-        for (col, v) in [
-            ("title", f.title.as_deref().map(str::trim)),
-            ("brief", f.brief.as_deref().map(str::trim)),
-            ("size", f.size.as_deref()),
-            ("model_hint", f.model.as_deref()),
-            ("client_hint", f.client.as_deref()),
-            ("scope", scope.as_ref().map(|s| s.as_deref().unwrap_or(""))),
-            ("label", f.label.as_deref()),
-        ] {
-            let Some(v) = v else { continue };
-            if col == "title" && v.is_empty() {
-                return Err("rejected: a chunk needs a title".into());
-            }
-            let v = (!v.is_empty() || matches!(col, "brief" | "title")).then_some(v);
-            tx.execute(
-                &format!("UPDATE chunk SET {col} = ?1 WHERE id = ?2"),
-                params![v, r.id],
-            )
-            .map_err(err)?;
-            what.push(col);
-        }
-        if what.is_empty() {
-            return Err(
-                "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope or --label"
-                    .into(),
-            );
-        }
-        let n = tx
-            .execute(
-                "UPDATE chunk SET approved_at = NULL, approved_model = NULL, approved_client = NULL
-                 WHERE id = ?1 AND approved_at IS NOT NULL",
-                [r.id],
-            )
-            .map_err(err)?;
-        let mut text = format!("edited {}", what.join(", "));
-        if n > 0 {
-            text.push_str(" · approval cleared");
-        }
-        let briefed = f.brief.as_deref().is_some_and(|b| !b.trim().is_empty());
-        let to = if r.state == State::Draft && briefed {
-            State::Open
-        } else {
-            r.state
-        };
-        set(&tx, &r, to, "owner", Some(&text), now)?;
+        edit_in(&tx, uid, f, now)?;
         tx.commit().map_err(err)
     }
 }

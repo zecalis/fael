@@ -142,11 +142,16 @@ impl Started {
                 continue;
             }
             seen.push(&c.plan);
-            if let Some(s) = (!c.source.is_empty()).then(|| md(&c.source)).flatten() {
-                let s = sections(&s);
-                if !s.is_empty() {
-                    let _ = write!(o, "\n<!-- {} -->\n{s}", c.source);
-                }
+            // plan.doc is the plan's text once set; the md file only until then
+            let (from, text) = match c.doc.as_deref().filter(|d| !d.trim().is_empty()) {
+                Some(d) => ("plan doc", Some(d.to_string())),
+                None => (
+                    c.source.as_str(),
+                    (!c.source.is_empty()).then(|| md(&c.source)).flatten(),
+                ),
+            };
+            if let Some(s) = text.map(|t| sections(&t)).filter(|s| !s.is_empty()) {
+                let _ = write!(o, "\n<!-- {from} -->\n{s}");
             }
             if !c.refs.is_empty() {
                 let refs: Vec<String> = c
@@ -192,6 +197,7 @@ mod tests {
             plan: "x".into(),
             plan_title: "PLAN-x".into(),
             source: ".fapony/plan/PLAN-x.md".into(),
+            doc: None,
             repo: None,
             refs: vec!["SPEC-x.md#block".into(), "gone.rs".into()],
             said: vec![],
@@ -259,6 +265,18 @@ mod tests {
             t2.contains("\nnotes left for this chunk:\n> use v2\n> not v1\n")
                 && t2.contains("\nb3b, before this, handed off:\n> board ships\n"),
             "{t2}"
+        );
+        // a set plan.doc wins over the md file
+        let mut own = chunk("E");
+        own.doc = Some("## 1. Goal\nfrom the db\n".into());
+        let t3 = Started {
+            run: "R".into(),
+            chunks: vec![own],
+        }
+        .text(&md, &|_| true);
+        assert!(
+            t3.contains("<!-- plan doc -->\n## 1. Goal\nfrom the db\n") && !t3.contains("ship it"),
+            "{t3}"
         );
         // no plan file (inbox, or a moved md): the brief still prints
         let t = st.text(&|_| None, &|_| true);
