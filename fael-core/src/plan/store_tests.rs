@@ -127,6 +127,12 @@ fn a_newer_db_is_refused_and_reopen_keeps_rows() {
     c.pragma_update(None, "user_version", 99).unwrap();
     drop(c);
     let e = Store::open(&path).err().unwrap();
-    assert!(e.contains("v99") && e.contains("fael upgrade"), "{e}");
+    // a dev build names its commit and a newer main, never the release channel
+    let fix = if crate::GIT.is_some() {
+        "newer main"
+    } else {
+        "fael upgrade"
+    };
+    assert!(e.contains("v99") && e.contains(fix), "{e}");
     let _ = std::fs::remove_dir_all(dir);
 }

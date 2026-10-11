@@ -8,7 +8,7 @@ use fael_core::plan::{Fields, Here, Owner, Start, Store};
 use std::path::Path;
 use std::process::ExitCode;
 
-const USAGE: &str = "fael chunk add|start|edit|note|wait|after|answer|done|accept|drop|park|unpark|apply|pin|unpin|approve|unapprove — try 'fael chunk --help'";
+const USAGE: &str = "fael chunk add|show|start|edit|note|wait|after|answer|done|accept|drop|park|unpark|apply|pin|unpin|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
@@ -26,10 +26,13 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     match rest.as_slice() {
+        ["show", key] => return show(a, &r, key),
         ["add", title] => {
             a.only(
                 "chunk add",
-                &["plan", "brief", "size", "model", "client", "scope", "after"],
+                &[
+                    "plan", "brief", "size", "model", "client", "scope", "after", "label",
+                ],
             )?;
             let f = Fields {
                 title: Some(title.to_string()),
@@ -38,27 +41,13 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             let plan = a.one("plan").unwrap_or_else(|| "inbox".into());
             println!("{}", s()?.add(&plan, &f, &list(a, "after"), &now)?);
         }
-        ["start", uid] => {
-            a.only(
-                "chunk start",
-                &["client", "model", "run", "force", "no-worktree"],
-            )?;
-            let o = Start {
-                run: a.one("run"),
-                client: a.one("client"),
-                model: a.one("model"),
-                no_worktree: a.has("no-worktree"),
-                force: a.has("force"),
-            };
-            let st = s()?.start(uid, &o, &here)?;
-            let md = |src: &str| std::fs::read_to_string(r.root.join(src)).ok();
-            let exists = |p: &str| r.root.join(p).exists();
-            print!("{}", st.text(&md, &exists));
-        }
+        ["start", uid] => start(a, &r, uid, &here)?,
         ["edit", uid] => {
             a.only(
                 "chunk edit",
-                &["title", "brief", "size", "model", "client", "scope"],
+                &[
+                    "title", "brief", "size", "model", "client", "scope", "label",
+                ],
             )?;
             s()?.edit(uid, &fields(a), &now)?;
             say(uid, "edited");
@@ -105,6 +94,38 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     }
     crate::board::register(&r);
     Ok(ExitCode::SUCCESS)
+}
+
+/// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
+fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
+    a.only(
+        "chunk start",
+        &["client", "model", "run", "force", "no-worktree"],
+    )?;
+    // only an interactive `--no-worktree` start: a worktree run is stamped by its worktree,
+    // and a launcher (`--run R`) may sit in another agent's session, not the one it starts
+    // ponytail: Claude Code's session env only; another client's when it has one
+    let session = std::env::var("CLAUDE_CODE_SESSION_ID")
+        .ok()
+        .filter(|s| !s.is_empty() && a.has("no-worktree") && a.one("run").is_none());
+    let o = Start {
+        run: a.one("run"),
+        client: a.one("client"),
+        model: a.one("model"),
+        no_worktree: a.has("no-worktree"),
+        force: a.has("force"),
+        session: session.clone(),
+    };
+    let st = Store::open(&db(r))?.start(uid, &o, here)?;
+    if let Some(m) = session.as_deref().and_then(held) {
+        // the Stop hook finds this db from any cwd; a failed write only skips stamps
+        let _ = m.parent().map(std::fs::create_dir_all);
+        let _ = std::fs::write(m, db(r).to_string_lossy().as_bytes());
+    }
+    let md = |src: &str| std::fs::read_to_string(r.root.join(src)).ok();
+    let exists = |p: &str| r.root.join(p).exists();
+    print!("{}", st.text(&md, &exists));
+    Ok(())
 }
 
 /// The planner's batch and the owner's queue marks: `apply`, `pin`, `approve` and their undo.
@@ -173,6 +194,26 @@ pub(crate) fn run_end(a: &Args, run: &str) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// `fael run beat R`: start R's live rows are seen now — the launcher calls it while a
+/// headless client runs; none left exits 0.
+pub(crate) fn run_beat(a: &Args, run: &str) -> Result<ExitCode, String> {
+    a.only("run beat", &[])?;
+    let path = db(&repo()?);
+    if path.exists() {
+        Store::open(&path)?.beat(run, &fael_core::rfc3339(fael_core::now_ms()))?;
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `<state>/held/<session>`: the plans.db a session's `chunk start` bound a run in, so its
+/// Stop hook stamps that run from any cwd (a chunk whose code is in another repo).
+pub(crate) fn held(session: &str) -> Option<std::path::PathBuf> {
+    session
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        .then(|| fael_core::stats::state_dir().join("held").join(session))
+}
+
 /// The command and the state it lands in.
 fn owner(verb: &str) -> (Owner, &'static str) {
     match verb {
@@ -203,7 +244,59 @@ fn fields(a: &Args) -> Fields {
         model: a.one("model"),
         client: a.one("client"),
         scope: a.has("scope").then(|| list(a, "scope")),
+        label: a.one("label"),
     }
+}
+
+/// `fael chunk show <uid|label> [--json]`: the board's chunk object plus the brief, owner
+/// answers and notes its next start prints — one chunk, no filtering the whole board.
+fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
+    a.only("chunk show", &["json"])?;
+    let s = Store::open(&db(r))?;
+    let b = s.show(key)?;
+    let (at, stale) = crate::board::clock();
+    let c = s
+        .board(&at[..10], &stale)?
+        .chunks
+        .into_iter()
+        .find(|c| c.uid == b.uid)
+        .ok_or(format!("rejected: chunk {} is not on the board", b.uid))?;
+    if a.has("json") {
+        let mut v = serde_json::to_value(&c).map_err(|e| e.to_string())?;
+        v["brief"] = b.brief.into();
+        v["said"] = b.said.into();
+        v["notes"] = b.notes.into();
+        let s = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
+        println!("{s}");
+        return Ok(ExitCode::SUCCESS);
+    }
+    let label = c
+        .label
+        .as_deref()
+        .map(|l| format!(" {l}"))
+        .unwrap_or_default();
+    println!("{}  {}{label}  {}  {}", c.uid, c.plan, c.state, c.title);
+    if let Some(run) = &c.run {
+        let seen = run.last_seen.as_deref().unwrap_or("never");
+        let flag = if c.stalled { " · stalled" } else { "" };
+        let wt = run.worktree.as_deref().unwrap_or("no worktree");
+        println!(
+            "run {} in {wt} since {} · last seen {seen}{flag}",
+            run.id, run.started
+        );
+    }
+    for x in &c.blocked_by {
+        println!("after {}", x.what);
+    }
+    for l in b.brief.lines() {
+        println!("> {l}");
+    }
+    for (head, texts) in [("owner said", &b.said), ("note", &b.notes)] {
+        for t in texts {
+            println!("{head}: {t}");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn done(a: &Args, r: &Repo, uid: &str, handoff: &str, here: &Here) -> Result<(), String> {

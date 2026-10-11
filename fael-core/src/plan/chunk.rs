@@ -2,6 +2,7 @@
 //! `event` row, and a transition the table does not allow is rejected with the command that
 //! makes it valid. Only `truth = db` plans: an md plan's chunks follow its file until cutover.
 
+use super::lookup::{label, lookup};
 use super::store::{Store, err};
 use super::{State, check};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
@@ -27,6 +28,8 @@ pub struct Fields {
     pub client: Option<String>,
     /// repo-relative path prefixes (SPEC §2 overlaps), stored one per line
     pub scope: Option<Vec<String>>,
+    /// a short name (`b10`), unique in its plan; any command takes it for the uid
+    pub label: Option<String>,
 }
 
 pub(super) struct Row {
@@ -41,31 +44,18 @@ pub(super) fn tx(s: &mut Store) -> Result<Transaction<'_>, String> {
         .map_err(err)
 }
 
-/// A chunk of a `db` plan, by uid.
+/// A chunk of a `db` plan, by uid or label.
 pub(super) fn row(tx: &Transaction, uid: &str) -> Result<Row, String> {
-    let (id, state, truth, plan, source): (i64, String, String, String, String) = tx
-        .query_row(
-            "SELECT c.id, c.state, p.truth, p.name, p.source
-             FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.uid = ?1",
-            [uid],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-        )
-        .optional()
-        .map_err(err)?
-        .ok_or(format!(
-            "rejected: no chunk {uid} — `fael plan export` lists every uid"
-        ))?;
+    let (id, uid, state, truth, plan, source) = lookup(tx, uid)?.ok_or(format!(
+        "rejected: no chunk {uid} — `fael plan export` lists every uid"
+    ))?;
     if truth != "db" {
         return Err(format!(
             "rejected: chunk {uid} is in md plan {plan}: its state follows {source} until the plan's cutover (SPEC §9)"
         ));
     }
     let state = State::parse(&state).ok_or(format!("plans.db: chunk {uid} has state {state}"))?;
-    Ok(Row {
-        id,
-        uid: uid.to_string(),
-        state,
-    })
+    Ok(Row { id, uid, state })
 }
 
 /// Move `r` to `to` (or keep its state when `to == r.state`) and write the event.
@@ -159,12 +149,11 @@ pub(super) fn scope(paths: &[String]) -> Result<Option<String>, String> {
 }
 
 pub(super) fn uid_id(tx: &Transaction, uid: &str) -> Result<i64, String> {
-    tx.query_row("SELECT id FROM chunk WHERE uid = ?1", [uid], |r| r.get(0))
-        .optional()
-        .map_err(err)?
+    Ok(lookup(tx, uid)?
         .ok_or(format!(
             "rejected: no chunk {uid} — an `after` names a chunk that exists"
-        ))
+        ))?
+        .0)
 }
 
 /// The `after` edge `src → dst`, unless `dst` already waits on `src` (a cycle never opens).
@@ -242,12 +231,15 @@ impl Store {
         } else {
             State::Draft
         };
+        if let Some(l) = &f.label {
+            label(&tx, pid, 0, l)?;
+        }
         let uid = crate::ulid();
         tx.execute(
             "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                               client_hint)
+                               client_hint, label)
              VALUES (?1, ?2, (SELECT COALESCE(MAX(seq), 0) + 1024 FROM chunk WHERE plan = ?2),
-                     ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                     ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 uid,
                 pid,
@@ -257,7 +249,8 @@ impl Store {
                 f.size,
                 f.model,
                 scope,
-                f.client
+                f.client,
+                f.label
             ],
         )
         .map_err(err)?;
@@ -289,6 +282,12 @@ impl Store {
         }
         let scope = f.scope.as_deref().map(scope).transpose()?;
         size(f)?;
+        if let Some(l) = f.label.as_deref().filter(|l| !l.is_empty()) {
+            let plan: i64 = tx
+                .query_row("SELECT plan FROM chunk WHERE id = ?1", [r.id], |q| q.get(0))
+                .map_err(err)?;
+            label(&tx, plan, r.id, l)?;
+        }
         let mut what = Vec::new();
         for (col, v) in [
             ("title", f.title.as_deref().map(str::trim)),
@@ -297,6 +296,7 @@ impl Store {
             ("model_hint", f.model.as_deref()),
             ("client_hint", f.client.as_deref()),
             ("scope", scope.as_ref().map(|s| s.as_deref().unwrap_or(""))),
+            ("label", f.label.as_deref()),
         ] {
             let Some(v) = v else { continue };
             if col == "title" && v.is_empty() {
@@ -312,7 +312,7 @@ impl Store {
         }
         if what.is_empty() {
             return Err(
-                "rejected: nothing to edit — --title, --brief, --size, --model, --client or --scope"
+                "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope or --label"
                     .into(),
             );
         }

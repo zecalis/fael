@@ -110,9 +110,14 @@ impl Store {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(err)?;
         if v > VERSION {
-            return Err(format!(
-                "plans.db is schema v{v}, this fael knows v{VERSION} — run `fael upgrade`"
-            ));
+            // a dev build is upgraded by building a newer main, not by the release channel
+            let fix = match crate::GIT {
+                Some(g) => format!(
+                    "this fael (dev build {g}) knows v{VERSION} — use a fael built from a newer main: `cargo install --path fael --locked`"
+                ),
+                None => format!("this fael knows v{VERSION} — run `fael upgrade`"),
+            };
+            return Err(format!("plans.db is schema v{v}, {fix}"));
         }
         match v {
             0 => tx.execute_batch(SCHEMA).map_err(err)?,
@@ -147,6 +152,17 @@ impl Store {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)
+    }
+
+    /// Is `tok` a chunk uid, or the prefix of one? Ledger ids share the ULID shape.
+    pub fn is_chunk(&self, tok: &str) -> bool {
+        self.conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM chunk WHERE uid LIKE ?1 || '%')",
+                [tok.to_uppercase()],
+                |r| r.get(0),
+            )
+            .unwrap_or(false)
     }
 }
 

@@ -29,6 +29,9 @@ fn seen(e: &Event) {
     let Some(session) = e.session.as_deref().filter(|s| !s.is_empty()) else {
         return;
     };
+    // the id `chunk start` read from $CLAUDE_CODE_SESSION_ID, not the transcript path
+    let session = super::state::session_id(session);
+    seen_held(session);
     let Some(r) = e
         .cwd
         .as_deref()
@@ -36,15 +39,35 @@ fn seen(e: &Event) {
     else {
         return;
     };
+    let now = core::rfc3339(core::now_ms());
     let db = crate::plan::db(&r);
     if db.exists()
         && let Ok(mut s) = fael_core::plan::Store::open(&db)
     {
-        let _ = s.seen(
-            &r.root.to_string_lossy(),
-            session,
-            &core::rfc3339(core::now_ms()),
-        );
+        let _ = s.seen(&r.root.to_string_lossy(), session, &now);
+    }
+}
+
+/// The run this session's `chunk start` bound, wherever the session works now (issue
+/// 01M4N4CVC: a `--no-worktree` chunk whose code is in another repo). The marker goes
+/// once no live run is left.
+fn seen_held(session: &str) {
+    let Some(m) = crate::chunk::held(session) else {
+        return;
+    };
+    // a db that is gone is never created again by the open
+    let Some(db) = std::fs::read_to_string(&m)
+        .ok()
+        .filter(|d| Path::new(d).exists())
+    else {
+        let _ = std::fs::remove_file(m);
+        return;
+    };
+    let now = core::rfc3339(core::now_ms());
+    let n = fael_core::plan::Store::open(Path::new(&db))
+        .and_then(|mut s| s.seen_session(session, &now));
+    if matches!(n, Ok(0)) {
+        let _ = std::fs::remove_file(m);
     }
 }
 

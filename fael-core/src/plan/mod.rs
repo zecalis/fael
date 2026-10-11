@@ -10,6 +10,7 @@ mod chunk;
 mod cutover;
 mod export;
 mod import;
+mod lookup;
 pub mod md;
 mod next;
 mod owner;

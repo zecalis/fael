@@ -151,4 +151,25 @@ impl Store {
             )
             .map_err(err)
     }
+
+    /// The Stop hook in any cwd: the live runs `chunk start` bound to this session.
+    pub fn seen_session(&mut self, session: &str, now: &str) -> Result<usize, String> {
+        self.conn
+            .execute(
+                "UPDATE run SET last_seen = ?2 WHERE session = ?1 AND ended IS NULL",
+                params![session, now],
+            )
+            .map_err(err)
+    }
+
+    /// `fael run beat R`: the launcher's heartbeat on start R's live rows (decision
+    /// 01M4MRS8) — a headless run stops once, at its end. None left is fine.
+    pub fn beat(&mut self, run: &str, now: &str) -> Result<usize, String> {
+        self.conn
+            .execute(
+                "UPDATE run SET last_seen = ?2 WHERE start = ?1 AND ended IS NULL",
+                params![run, now],
+            )
+            .map_err(err)
+    }
 }

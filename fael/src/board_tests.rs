@@ -62,6 +62,7 @@ fn queue_order_is_pin_due_unblocks_rank() {
         worktrees: Vec::new(),
         plans: Vec::new(),
         chunks,
+        error: None,
     };
     let b = lists(String::new(), vec![p]);
     // stable: `tie` keeps its place after `rank1`

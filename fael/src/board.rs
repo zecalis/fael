@@ -2,6 +2,8 @@
 //! plans and chunks, and four lists of uids across them — needs you (§5), the queue (§3),
 //! running, blocked. The app's only read; `"v": 1` is the contract
 //! (`tests/golden/board-v1.json`). Live git: one worktree list and one base per project.
+//! A project fael cannot read (a newer plans.db) stays on with its `error` and empty lists,
+//! and the command exits 1: never an empty board that reads as live (issue 01M4N4CV7).
 
 use crate::plan::db;
 use crate::{Args, Repo, git, repo, repo_at};
@@ -37,6 +39,9 @@ struct Project {
     worktrees: Vec<Worktree>,
     plans: Vec<BoardPlan>,
     chunks: Vec<BoardChunk>,
+    /// why this project could not be read; only then present
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 /// A pool slot (SPEC §8): `run` = the live start R on it, null = free.
@@ -48,23 +53,37 @@ struct Worktree {
 }
 
 pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
-    a.only("board", &["json", "open"])?;
+    a.only("board", &["json", "open", "plan"])?;
     if let Ok(r) = repo()
         && db(&r).exists()
     {
         register(&r);
     }
-    let ms = fael_core::now_ms();
-    let at = fael_core::rfc3339(ms);
-    let stale = fael_core::rfc3339(ms.saturating_sub(30 * 60 * 1000));
+    let (at, stale) = clock();
     let mut projects = Vec::new();
+    let mut broken = false;
     for root in registered() {
         match project(&root, &at[..10], &stale, a.has("open")) {
             Ok(Some(p)) => projects.push(p),
             Ok(None) => {}
-            // one broken repo never hides the others
-            Err(e) => eprintln!("fael board: {}: {e}", root.display()),
+            // one broken repo never hides the others, and is never silent
+            Err(e) => {
+                eprintln!("fael board: {}: {e}", root.display());
+                broken = true;
+                projects.push(Project {
+                    error: Some(e),
+                    ..Project::named(&root)
+                });
+            }
         }
+    }
+    // an agent's cut: one plan's chunks, the projects that have it (and the unreadable)
+    if let Some(n) = a.one("plan") {
+        for p in &mut projects {
+            p.plans.retain(|x| x.name == n);
+            p.chunks.retain(|c| c.plan == n);
+        }
+        projects.retain(|p| !p.plans.is_empty() || p.error.is_some());
     }
     let b = lists(at, projects);
     if a.has("json") {
@@ -73,7 +92,35 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
     } else {
         print!("{}", text(&b));
     }
-    Ok(ExitCode::SUCCESS)
+    Ok(if broken {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    })
+}
+
+/// Now, and the RFC 3339 time 30 min ago: a live run last seen before it is `stalled`.
+pub(crate) fn clock() -> (String, String) {
+    let ms = fael_core::now_ms();
+    let stale = fael_core::rfc3339(ms.saturating_sub(30 * 60 * 1000));
+    (fael_core::rfc3339(ms), stale)
+}
+
+impl Project {
+    fn named(root: &Path) -> Project {
+        Project {
+            name: root
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            root: root.to_string_lossy().into_owned(),
+            base: None,
+            worktrees: Vec::new(),
+            plans: Vec::new(),
+            chunks: Vec::new(),
+            error: None,
+        }
+    }
 }
 
 fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<Project>, String> {
@@ -98,15 +145,11 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
         .collect();
     let worktrees = worktrees(&r.root, r.cfg.plan_worktrees.as_deref(), &live);
     Ok(Some(Project {
-        name: root
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default(),
-        root: root.to_string_lossy().into_owned(),
         base: git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]),
         worktrees,
         plans: b.plans,
         chunks: b.chunks,
+        ..Project::named(root)
     }))
 }
 
@@ -236,6 +279,13 @@ fn text(b: &Board) -> String {
         format!("  {tag:<8} {uid}  {}{label}  {title}{extra}\n", c.plan)
     };
     let mut out = String::new();
+    for p in b.projects.iter().filter(|p| p.error.is_some()) {
+        out.push_str(&format!(
+            "unreadable {}: {}\n",
+            p.root,
+            p.error.as_deref().unwrap_or("")
+        ));
+    }
     for (head, rows) in [
         (
             "needs you",

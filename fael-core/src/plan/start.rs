@@ -4,6 +4,7 @@
 
 use super::State;
 use super::chunk::{Here, end_live, row, set, tx};
+use super::lookup::lookup;
 use super::ready::{Ready, ready_in};
 use super::store::{Store, err};
 use rusqlite::{OptionalExtension, Transaction, params};
@@ -20,6 +21,9 @@ pub struct Start {
     pub no_worktree: bool,
     /// take over a live run (its end names who took it), never a kill
     pub force: bool,
+    /// the calling agent's session (`CLAUDE_CODE_SESSION_ID`) on an interactive
+    /// `--no-worktree` start: its Stop hook keeps the run seen from any cwd
+    pub session: Option<String>,
 }
 
 /// One claimed chunk, with what its brief needs.
@@ -104,7 +108,7 @@ impl Store {
         let mut claim = Vec::new();
         for m in members(&tx, first.id)? {
             let r = row(&tx, &m)?;
-            let pair = if m == uid {
+            let pair = if m == first.uid {
                 String::new()
             } else {
                 format!(" (paired with {uid})")
@@ -155,8 +159,8 @@ impl Store {
         let mut chunks = Vec::new();
         for r in &claim {
             tx.execute(
-                "INSERT INTO run(start, chunk, client, model, worktree, branch, started)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     run,
                     r.id,
@@ -164,7 +168,8 @@ impl Store {
                     o.model,
                     wt,
                     wt.and(here.branch),
-                    here.now
+                    here.now,
+                    o.session
                 ],
             )
             .map_err(err)?;
@@ -173,7 +178,7 @@ impl Store {
                 [r.id],
             )
             .map_err(err)?;
-            chunks.push(brief(&tx, r.id)?);
+            chunks.push(brief(&tx, r.id, 1)?);
         }
         tx.commit().map_err(err)?;
         Ok(Started { run, chunks })
@@ -191,7 +196,21 @@ fn busy(tx: &Transaction, worktree: &str) -> Result<Option<String>, String> {
     .map_err(err)
 }
 
-fn brief(tx: &Transaction, id: i64) -> Result<Brief, String> {
+impl Store {
+    /// `fael chunk show <uid|label>`: the brief, owner answers and notes the next start
+    /// prints — for a running chunk, the ones its start printed. Read-only, md plans too.
+    pub fn show(&self, key: &str) -> Result<Brief, String> {
+        let tx = self.conn.unchecked_transaction().map_err(err)?;
+        let (id, _, state, ..) = lookup(&tx, key)?.ok_or(format!(
+            "rejected: no chunk {key} — `fael board` lists every uid"
+        ))?;
+        brief(&tx, id, u32::from(state == "running"))
+    }
+}
+
+/// `skip` = how many starts back the answers and notes count from: 1 inside a start (its
+/// own event is the newest), 0 for the start still to come.
+fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
     let mut b = tx
         .query_row(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope,
@@ -232,7 +251,7 @@ fn brief(tx: &Transaction, id: i64) -> Result<Brief, String> {
              WHERE chunk_uid = ?1 AND {who} AND text IS NOT NULL
                AND id > COALESCE((SELECT id FROM event WHERE chunk_uid = ?1
                                     AND to_state = 'running' AND by != 'note'
-                                  ORDER BY id DESC LIMIT 1 OFFSET 1), 0)
+                                  ORDER BY id DESC LIMIT 1 OFFSET {skip}), 0)
              ORDER BY id"
         )
     };

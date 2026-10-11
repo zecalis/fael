@@ -33,7 +33,7 @@ pub(crate) fn edits_path(session: &str, root: &Path) -> PathBuf {
 /// `$CLAUDE_CODE_SESSION_ID` — the stem is what both share, so the seen list
 /// is keyed by it and a row filed before the session's first edit (no edit
 /// file yet to bridge the two) still lands where the push reads.
-fn session_id(s: &str) -> &str {
+pub(crate) fn session_id(s: &str) -> &str {
     if !s.contains(['/', '\\']) {
         return s;
     }
