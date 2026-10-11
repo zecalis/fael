@@ -6,6 +6,12 @@ use rusqlite::Transaction;
 
 pub(super) const VERSION: i32 = 6;
 
+/// The oldest `VERSION` that still reads and writes a db at this one, kept in `meta.reads`:
+/// a step that only adds (a nullable column, a table, an index) leaves it, so one lane's
+/// bump never locks the other worktrees' faels out of the shared db (issue 01M4MN60);
+/// a step that renames, drops or retypes raises it to its `VERSION`.
+pub(super) const READS: i32 = 6;
+
 pub(super) const SCHEMA: &str = "
 CREATE TABLE plan(
   id INTEGER PRIMARY KEY,
@@ -194,7 +200,7 @@ pub(super) fn v5_to_v6(tx: &Transaction) -> Result<(), String> {
 
 /// Every migration ends here: `event.plan` for rows written before v6 (a chunk's via its
 /// uid, a plan's own via `plan:<app>/<name>`; a vanished chunk's stays NULL) and the
-/// `db_id` fael-sync keys on, set once and never changed.
+/// `db_id` fael-sync keys on, set once and never changed, and `reads` ([`READS`]).
 pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch(
         "UPDATE event SET plan = (SELECT plan FROM chunk WHERE uid = event.chunk_uid)
@@ -207,6 +213,12 @@ pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
         tx.execute(
             "INSERT OR IGNORE INTO meta(key, value) VALUES ('db_id', ?1)",
             [crate::ulid()],
+        )
+    })
+    .and_then(|_| {
+        tx.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES ('reads', ?1)",
+            [READS.to_string()],
         )
     })
     .map(drop)

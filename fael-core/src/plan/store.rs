@@ -102,6 +102,9 @@ impl Store {
         if v == VERSION {
             return Ok(());
         }
+        if v > VERSION {
+            return newer(&self.conn, v);
+        }
         // re-read under the write lock: two first opens race, one creates
         let tx = self
             .conn
@@ -111,14 +114,7 @@ impl Store {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(err)?;
         if v > VERSION {
-            // a dev build is upgraded by building a newer main, not by the release channel
-            let fix = match crate::GIT {
-                Some(g) => format!(
-                    "this fael (dev build {g}) knows v{VERSION} — use a fael built from a newer main: `cargo install --path fael --locked`"
-                ),
-                None => format!("this fael knows v{VERSION} — run `fael upgrade`"),
-            };
-            return Err(format!("plans.db is schema v{v}, {fix}"));
+            return newer(&tx, v);
         }
         type Step = fn(&rusqlite::Transaction) -> Result<(), String>;
         let steps: [Step; 4] = [v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6];
@@ -184,6 +180,30 @@ impl Store {
             )
             .unwrap_or(false)
     }
+}
+
+/// A db a newer fael migrated: this fael uses it while the db's `meta.reads` (the oldest
+/// version that still reads and writes it, `schema::READS`) is at most its own `VERSION`;
+/// else the error names the upgrade. A db from before `reads` existed is refused.
+fn newer(c: &Connection, v: i32) -> Result<(), String> {
+    let reads: Option<i32> = c
+        .query_row(
+            "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'reads'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    if reads.is_some_and(|r| r <= VERSION) {
+        return Ok(());
+    }
+    // a dev build is upgraded by building a newer main, not by the release channel
+    let fix = match crate::GIT {
+        Some(g) => format!(
+            "this fael (dev build {g}) knows v{VERSION} — use a fael built from a newer main: `cargo install --path fael --locked`"
+        ),
+        None => format!("this fael knows v{VERSION} — run `fael upgrade`"),
+    };
+    Err(format!("plans.db is schema v{v}, {fix}"))
 }
 
 #[cfg(test)]

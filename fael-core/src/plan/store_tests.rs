@@ -112,7 +112,7 @@ fn reimport_replaces_and_unknown_is_draft() {
 }
 
 #[test]
-fn a_newer_db_is_refused_and_reopen_keeps_rows() {
+fn a_newer_db_opens_until_its_reads_passes_ours() {
     let dir = std::env::temp_dir().join(format!("fael-plans-{}", crate::ulid()));
     let path = dir.join("plans.db");
     let mut s = Store::open(&path).unwrap();
@@ -123,8 +123,14 @@ fn a_newer_db_is_refused_and_reopen_keeps_rows() {
     .unwrap();
     drop(s);
     assert_eq!(Store::open(&path).unwrap().plans().unwrap().len(), 1);
+    // a newer fael's additive step keeps `reads`: this fael still opens the db
     let c = Connection::open(&path).unwrap();
     c.pragma_update(None, "user_version", 99).unwrap();
+    drop(c);
+    assert_eq!(Store::open(&path).unwrap().plans().unwrap().len(), 1);
+    let c = Connection::open(&path).unwrap();
+    c.execute("UPDATE meta SET value = '99' WHERE key = 'reads'", [])
+        .unwrap();
     drop(c);
     let e = Store::open(&path).err().unwrap();
     // a dev build names its commit and a newer main, never the release channel
