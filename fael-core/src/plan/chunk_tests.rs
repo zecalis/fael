@@ -327,3 +327,35 @@ fn notes_and_the_handoff_before_reach_the_next_brief() {
         "a note is never the hand-off"
     );
 }
+
+#[test]
+fn accept_takes_only_a_review_chunk() {
+    let mut s = Store::open_in_memory().unwrap();
+    let events = |s: &Store| -> i64 {
+        s.conn
+            .query_row("SELECT COUNT(*) FROM event", [], |r| r.get(0))
+            .unwrap()
+    };
+    let [o, r, w, p] = ["o", "r", "w", "p"].map(|t| add(&mut s, t, Some("brief")));
+    start(&mut s, &r, "/r").unwrap();
+    start(&mut s, &w, "/w").unwrap();
+    s.wait(&w, "owner", "which?", None, &here("/w")).unwrap();
+    s.owner(&p, Owner::Park, Some("later"), NOW).unwrap();
+    for (c, st) in [
+        (&o, "open"),
+        (&r, "running"),
+        (&w, "waiting"),
+        (&p, "parked"),
+    ] {
+        let before = events(&s);
+        let e = s.owner(c, Owner::Accept, None, NOW).unwrap_err();
+        assert_eq!(
+            e,
+            format!("rejected: chunk {c} is {st} — `accept` takes a chunk in review")
+        );
+        assert_eq!((state(&s, c), events(&s)), (st.to_string(), before));
+    }
+    s.done(&r, "h", None, None, &here("/r")).unwrap();
+    s.owner(&r, Owner::Accept, None, NOW).unwrap();
+    assert_eq!(state(&s, &r), "done");
+}
