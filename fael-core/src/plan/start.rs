@@ -51,6 +51,20 @@ pub struct Brief {
     pub notes: Vec<String>,
     /// `(title, handoff)`: the done / review word of each chunk this one is after
     pub after: Vec<(String, String)>,
+    /// the run this start took over or restarted — where the last agent stopped
+    pub resume: Option<Prev>,
+}
+
+/// The last run of a chunk a start takes over: what a resume needs to find its work.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Prev {
+    pub start: String,
+    pub client: Option<String>,
+    pub session: Option<String>,
+    pub worktree: Option<String>,
+    pub branch: Option<String>,
+    pub started: String,
+    pub last_seen: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,6 +87,27 @@ fn members(tx: &Transaction, id: i64) -> Result<Vec<String>, String> {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)
+}
+
+fn prev(tx: &Transaction, id: i64) -> Result<Option<Prev>, String> {
+    tx.query_row(
+        "SELECT start, client, session, worktree, branch, started, last_seen
+         FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1",
+        [id],
+        |r| {
+            Ok(Prev {
+                start: r.get(0)?,
+                client: r.get(1)?,
+                session: r.get(2)?,
+                worktree: r.get(3)?,
+                branch: r.get(4)?,
+                started: r.get(5)?,
+                last_seen: r.get(6)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(err)
 }
 
 /// Who holds a running chunk now: its live run, if any.
@@ -115,7 +150,9 @@ impl Store {
             } else {
                 format!(" (paired with {uid})")
             };
+            let mut was = None;
             if r.state == State::Running {
+                was = prev(&tx, r.id)?;
                 // a running chunk whose run ended (the agent exited) starts again as is
                 let text = match holder(&tx, r.id)? {
                     Some(h) if !o.force => {
@@ -150,7 +187,7 @@ impl Store {
                 }
                 set(&tx, &r, State::Running, "agent", None, here.now)?;
             }
-            claim.push(r);
+            claim.push((r, was));
         }
         if let Some(b) = wt.map(|w| busy(&tx, w)).transpose()?.flatten() {
             return Err(format!(
@@ -159,7 +196,7 @@ impl Store {
             ));
         }
         let mut chunks = Vec::new();
-        for r in &claim {
+        for (r, was) in claim {
             tx.execute(
                 "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -180,7 +217,9 @@ impl Store {
                 [r.id],
             )
             .map_err(err)?;
-            chunks.push(brief(&tx, r.id, 1)?);
+            let mut b = brief(&tx, r.id, 1)?;
+            b.resume = was;
+            chunks.push(b);
         }
         tx.commit().map_err(err)?;
         Ok(Started { run, chunks })
@@ -242,6 +281,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     said: vec![],
                     notes: vec![],
                     after: vec![],
+                    resume: None,
                 })
             },
         )

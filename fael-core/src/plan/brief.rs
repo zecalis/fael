@@ -2,7 +2,7 @@
 //! names R; the plan md's Goal, Scope, Done criteria and Constraints are read live by
 //! heading (SPEC §9), and a ref that no longer exists is listed as missing.
 
-use super::start::Started;
+use super::start::{Prev, Started};
 use std::fmt::Write;
 
 /// How a chunk's state moves, said once at the end of every brief and kickoff.
@@ -16,6 +16,7 @@ pub fn rules(uid: &str) -> String {
          - one chunk = one branch = one PR; never merge, the owner does\n\
          - the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
          - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read\n\
+         - after each step that passes: a WIP commit + `fael chunk note {uid} \"<done; next>\"` — the checkpoint a resume reads\n\
          - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note … --files <f>`\n"
     )
 }
@@ -38,6 +39,29 @@ pub fn sections(md: &str) -> String {
         }
     }
     out
+}
+
+/// Where the run this start took over stopped. git owns what changed: its commands, never
+/// their output.
+fn resume(o: &mut String, p: &Prev) {
+    let _ = writeln!(
+        o,
+        "\nresume — run {} ({}) started {}, last seen {}",
+        p.start,
+        p.client.as_deref().unwrap_or("agent"),
+        p.started,
+        p.last_seen.as_deref().unwrap_or("never")
+    );
+    if let Some(s) = &p.session {
+        let _ = writeln!(o, "session {s}");
+    }
+    if let Some(b) = &p.branch {
+        let wt = p.worktree.as_deref().unwrap_or("?");
+        let _ = writeln!(
+            o,
+            "branch {b} in {wt} — what it did: `git log origin/main..{b}` · `git status`"
+        );
+    }
 }
 
 impl Started {
@@ -86,6 +110,9 @@ impl Started {
             .collect();
             if !fields.is_empty() {
                 let _ = writeln!(o, "{}", fields.join(" · "));
+            }
+            if let Some(p) = &c.resume {
+                resume(&mut o, p);
             }
             if c.brief != c.title {
                 let _ = writeln!(o, "\n{}", c.brief.trim_end());
@@ -170,6 +197,7 @@ mod tests {
             said: vec![],
             notes: vec![],
             after: vec![],
+            resume: None,
         }
     }
 
