@@ -123,6 +123,8 @@ fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD]
 fael chunk after <uid> <other-uid> \"<why>\"
 fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--run R]
+fael chunk ask <to> \"<want>\" --returns \"<shape>\" [--check cmd] [--run R] · fael chunk ask withdraw <id>
+fael chunk reply <id> agree [note] | counter \"<shape>\" \"<why>\" [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
@@ -139,7 +141,13 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      md TL;DR as a read-only mirror; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval; apply runs every op or none —
      merge and split leave the old chunks replaced and move their after edges to the
-     new ones; pin ranks the queue, lowest first)",
+     new ones; pin ranks the queue, lowest first; ask, from the live run of the chunk
+     that needs a change, asks the chunk that holds the file for it with the shape it
+     will code against — its run goes on, it is refused for itself or when it closes a
+     loop of open asks, --check is printed by show and never run; the holder replies
+     agree or counter from its own live run, the asker's agree takes the counter, a second
+     counter waits on the owner, who settles it with answer <id> \"<shape>\"; show lists
+     a chunk's asks in and out)",
     ),
     (
         "board",

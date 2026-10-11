@@ -11,7 +11,23 @@ pub(super) const VERSION: i32 = 6;
 
 /// New tables, `(name, sql)`: the sql runs once when the table is missing — its
 /// `CREATE TABLE` and indexes, `IF NOT EXISTS` so a race is harmless.
-pub(super) const TABLES: &[(&str, &str)] = &[];
+pub(super) const TABLES: &[(&str, &str)] = &[(
+    "contract",
+    // an ask between two chunks (PLAN-fael-parallel §2): `returns` is the asker's shape,
+    // `counter` the holder's; `state` has no CHECK so a later state needs no epoch
+    "CREATE TABLE IF NOT EXISTS contract(
+       id TEXT PRIMARY KEY,
+       from_chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
+       to_chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
+       want TEXT NOT NULL,
+       returns TEXT NOT NULL,
+       check_cmd TEXT,
+       counter TEXT,
+       state TEXT NOT NULL,
+       rounds INTEGER NOT NULL DEFAULT 0);
+     CREATE INDEX IF NOT EXISTS contract_from ON contract(from_chunk);
+     CREATE INDEX IF NOT EXISTS contract_to ON contract(to_chunk)",
+)];
 
 /// New columns, `(table, column, decl)`, added when missing. Nullable or with a DEFAULT,
 /// so a fael without the column still inserts rows.

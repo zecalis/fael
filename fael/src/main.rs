@@ -9,6 +9,8 @@ mod args;
 mod batch;
 mod board;
 mod chunk;
+mod chunk_ask;
+mod chunk_show;
 mod claim;
 mod close_key;
 mod filehash;
