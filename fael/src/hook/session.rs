@@ -181,7 +181,10 @@ fn warnings(repo: &crate::Repo, adopted: bool) -> Vec<String> {
     // doctor's [Wiring] note: a hook that shipped after the last install stays
     // off until then. Writes it now instead of asking the user to; only a pass
     // that fails (or leaves changes behind) falls back to the old warning.
-    if crate::install::pending() > 0 {
+    // a scratch repo under the temp dir never writes the real HOME's wiring (01M4NB34)
+    let scratch = crate::board::in_tmp(&repo.root)
+        && !crate::home().is_some_and(|h| crate::board::in_tmp(&h));
+    if !scratch && crate::install::pending() > 0 {
         let wrote = crate::install::apply_pending();
         let behind = crate::install::pending();
         match wrote {

@@ -139,3 +139,20 @@ fn session_start_falls_back_to_the_warning_when_the_write_fails() {
     assert!(out.contains("client wiring change(s) behind"), "{out}");
     assert!(out.contains("fael upgrade"), "{out}");
 }
+
+/// A scratch repo under the temp dir (a test's, an agent's) never writes a HOME outside
+/// it: a test run rewrote the developer's ~/.claude/skills (issue 01M4NB34).
+#[test]
+fn session_start_in_a_scratch_repo_leaves_a_real_home_alone() {
+    let (_, repo) = scratch();
+    // outside the temp dir, like a developer's HOME
+    let home = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("home-{}", fael_core::ulid()));
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(repo.join("a.rs"), "").unwrap();
+    fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
+    let out = session_start(&home, &repo);
+    assert!(!out.contains("wiring"), "{out}");
+    assert!(!home.join(".claude/settings.json").exists());
+    assert!(!home.join(".claude/skills").exists());
+    let _ = std::fs::remove_dir_all(&home);
+}

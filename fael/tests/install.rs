@@ -140,13 +140,11 @@ fn install_all_three_idempotent_and_replaces_fapony_on_request() {
         ]
     );
 
-    // --replace-fapony: blockers + MCP out, everything else of fapony stays
+    // --replace-fapony: every fapony hook + MCP out (fapony retires, 01M4MQTZ7)
     install(&home, &["--replace-fapony"]);
     let s = read(&claude);
     assert!(
-        !s.contains("hook-stop")
-            && s.contains("hook-read-hint")
-            && s.contains("hook stop --client claude"),
+        !s.contains("fapony") && s.contains("hook stop --client claude"),
         "{s}"
     );
     assert!(!read(&codex_hooks).contains("hook-stop"));

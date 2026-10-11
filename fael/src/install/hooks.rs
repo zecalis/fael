@@ -14,6 +14,13 @@ use std::path::Path;
 /// take milliseconds (docs/integrate.md), so 10s only ever ends a hang.
 const HOOK_TIMEOUT: u64 = 10;
 
+/// Any hook fapony wired (`fapony hook-*`): `--replace-fapony` takes them all out — fapony
+/// retires (decision fael-board:fapony-retire), and one left behind fails every call once
+/// fapony is uninstalled (issue 01M4MQTZ7).
+fn is_fapony_hook(cmd: &str) -> bool {
+    cmd.contains("fapony") && cmd.contains(" hook-")
+}
+
 pub(crate) fn is_fapony_blocker(cmd: &str) -> bool {
     cmd.contains("fapony") && (cmd.contains("hook-stop") || cmd.contains("hook-session-start"))
 }
@@ -68,7 +75,7 @@ pub(crate) fn hooks_json(
             if let Some(hs) = g.get_mut("hooks").and_then(Value::as_array_mut) {
                 let before = hs.len();
                 if c.replace {
-                    hs.retain(|h| !h["command"].as_str().is_some_and(is_fapony_blocker));
+                    hs.retain(|h| !h["command"].as_str().is_some_and(is_fapony_hook));
                     fapony += before - hs.len();
                 } else {
                     fapony += hs
