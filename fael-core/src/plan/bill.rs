@@ -139,6 +139,7 @@ fn add_line(tx: &Transaction, pid: i64, l: &Line, now: &str) -> Result<String, S
         client: l.client.clone(),
         scope: l.scope.clone(),
         label: l.label.clone(),
+        ..Fields::default()
     };
     let seq = tx
         .query_row(
@@ -201,6 +202,7 @@ fn edit_line(
         client: changed(&l.client, &cur[4]),
         scope: l.scope.clone().filter(|s| s.join("\n") != cur[5]),
         label: changed(&l.label, &cur[6]),
+        ..Fields::default()
     };
     let edits = f.title.is_some()
         || f.brief.is_some()

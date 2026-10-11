@@ -125,6 +125,12 @@ impl Started {
                     }
                 }
             };
+            quote(
+                &mut o,
+                "ledger issues this chunk fixes — once the fix holds, close each with \
+                 `fael close <id> \"<why>\"` (done never closes them)",
+                &c.issues,
+            );
             quote(&mut o, "owner said", &c.said);
             quote(&mut o, "notes left for this chunk", &c.notes);
             for (who, text) in &c.after {
@@ -135,7 +141,19 @@ impl Started {
                 );
             }
         }
-        // plan context once per plan, after the chunks
+        self.plan_context(&mut o, md, exists);
+        o.push('\n');
+        o.push_str(&rules(self.chunks.first().map_or("<uid>", |c| &c.uid)));
+        o
+    }
+
+    /// Plan context once per plan, after the chunks.
+    fn plan_context(
+        &self,
+        o: &mut String,
+        md: &dyn Fn(&str) -> Option<String>,
+        exists: &dyn Fn(&str) -> bool,
+    ) {
         let mut seen = Vec::new();
         for c in &self.chunks {
             if seen.contains(&&c.plan) {
@@ -169,9 +187,6 @@ impl Started {
                 let _ = writeln!(o, "\nrefs: {}", refs.join(" · "));
             }
         }
-        o.push('\n');
-        o.push_str(&rules(self.chunks.first().map_or("<uid>", |c| &c.uid)));
-        o
     }
 }
 
@@ -204,6 +219,7 @@ mod tests {
             notes: vec![],
             after: vec![],
             resume: None,
+            issues: vec![],
         }
     }
 

@@ -115,7 +115,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
         "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--pr N] [--out path]
-fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid,…]
+fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid,…] [--issue id,…]
 fael chunk show <uid|label> [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
 fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …]
@@ -129,7 +129,8 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
     (only a plan whose chunks live in plans.db — inbox, or one cut over; add prints
-     the new uid, no brief = draft; a --label is unique in its plan and every verb
+     the new uid, no brief = draft; --issue links open ledger issues it fixes (its
+     brief prints them; close each once the fix holds, done never does); a --label is unique in its plan and every verb
      takes it for the uid; show prints one chunk as the board has it, with the brief
      and notes its next start prints; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,

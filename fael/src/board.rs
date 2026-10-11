@@ -185,7 +185,8 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
     if !path.exists() {
         return Ok(None);
     }
-    let mut b = Store::open(&path)?.board(today, stale)?;
+    let s = Store::open(&path)?;
+    let mut b = s.board(today, stale)?;
     prs::open_prs(&mut b.chunks, &r.root);
     // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
     if open {
@@ -204,7 +205,7 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
         worktrees,
         plans: b.plans,
         chunks: b.chunks,
-        ledger: ledger::read(&r),
+        ledger: ledger::read(&r, &s.fixers()?),
         ..Project::named(root)
     }))
 }
@@ -254,8 +255,10 @@ fn lists(at: String, projects: Vec<Project>) -> Board {
     let all: Vec<&BoardChunk> = projects.iter().flat_map(|p| &p.chunks).collect();
     let uids =
         |f: Pick| -> Vec<String> { all.iter().filter(|c| f(c)).map(|c| c.uid.clone()).collect() };
+    // done chunks whose linked issue is still open (l2): fael never closes it
+    let fixed: Vec<String> = projects.iter().flat_map(|p| p.ledger.open_done()).collect();
     // SPEC §5 order: the owner's questions, then review, ended runs, inbox drafts
-    let kinds: [(&'static str, Pick); 4] = [
+    let kinds: [(&'static str, Pick); 5] = [
         // an md plan's `(wait …)` names no `on`: the owner is the one who can move it
         ("waiting", &|c| {
             c.state == "waiting"
@@ -266,6 +269,7 @@ fn lists(at: String, projects: Vec<Project>) -> Board {
         ("review", &|c| c.state == "review"),
         ("ended", &|c| c.state == "running" && c.ended),
         ("inbox", &|c| c.state == "draft" && c.plan == "inbox"),
+        ("issue-open", &|c| fixed.contains(&c.uid)),
     ];
     let needs_you = kinds
         .iter()

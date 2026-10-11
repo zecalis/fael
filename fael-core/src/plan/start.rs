@@ -55,6 +55,8 @@ pub struct Brief {
     pub after: Vec<(String, String)>,
     /// the run this start took over or restarted — where the last agent stopped
     pub resume: Option<Prev>,
+    /// the ledger issue ids it fixes (`add --issue`); the CLI swaps each for its row's text
+    pub issues: Vec<String>,
 }
 
 /// The last run of a chunk a start takes over: what a resume needs to find its work.
@@ -285,6 +287,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     notes: vec![],
                     after: vec![],
                     resume: None,
+                    issues: vec![],
                 })
             },
         )
@@ -307,6 +310,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
         &b.uid,
     )?;
     b.notes = texts(tx, &since("by = 'note'"), &b.uid)?;
+    b.issues = super::issue::of(tx, id)?;
     let mut q = tx
         .prepare(
             "SELECT c.title, e.text FROM edge g

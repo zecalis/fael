@@ -222,7 +222,7 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
             model: p.model,
             client: p.client,
             scope: p.scope,
-            label: None,
+            ..Fields::default()
         };
         new.push(insert(tx, old.plan, seq, &f, &text, now)?);
     }
@@ -294,7 +294,7 @@ pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String>
                 model,
                 client,
                 scope,
-                label: None,
+                ..Fields::default()
             };
             merge(tx, &chunks, f, now)
         }

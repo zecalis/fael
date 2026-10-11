@@ -56,6 +56,7 @@ pub(super) fn inherit(tx: &Transaction, old: &[i64], new: &[i64]) -> Result<usiz
             }
         }
     }
+    super::issue::carry(tx, old, new)?;
     let list = old.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
     tx.execute_batch(&format!(
         "DELETE FROM edge WHERE kind = 'after' AND dst IN ({list}) AND src NOT IN ({list});

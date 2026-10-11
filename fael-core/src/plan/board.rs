@@ -54,6 +54,8 @@ pub struct Chunk {
     pub approval: Option<Approval>,
     pub run: Option<Run>,
     pub handoff: Option<Handoff>,
+    /// the ledger issue ids it fixes (`chunk add --issue`)
+    pub issues: Vec<String>,
     /// the owner verbs fael takes for this chunk now (`Owner::takes`)
     pub owner_actions: Vec<&'static str>,
     /// an open PR's branch merged into the base (`git merge-tree`, the CLI fills it): the
@@ -198,6 +200,7 @@ impl Store {
                             .transpose()?,
                         run: runs.get(&id).cloned(),
                         handoff: None,
+                        issues: Vec::new(),
                         owner_actions: Owner::actions(&state),
                         conflicts: None,
                         rank: r.get(18)?,
@@ -217,6 +220,7 @@ impl Store {
         let mut ids = Vec::with_capacity(rows.len());
         for (id, mut c) in rows {
             c.handoff = handoffs.remove(&c.uid);
+            c.issues = super::issue::of(&self.conn, id)?;
             self.derive(id, &mut c, &truth, today, stale)?;
             ids.push(id);
             chunks.push(c);
