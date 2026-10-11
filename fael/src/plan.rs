@@ -344,9 +344,10 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
         );
         return Ok(());
     }
+    let md = |src: &str| std::fs::read_to_string(r.root.join(src)).ok();
     let docs: Vec<String> = plans
         .iter()
-        .map(|p| fael_core::plan::export(&s, p.id))
+        .map(|p| fael_core::plan::export(&s, p.id, &md))
         .collect::<Result<_, _>>()?;
     print!("{}", docs.join("\n"));
     Ok(())
