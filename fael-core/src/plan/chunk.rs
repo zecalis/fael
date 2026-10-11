@@ -275,7 +275,8 @@ impl Store {
         Ok(uid)
     }
 
-    /// `fael chunk edit`: fields only, never the state. Any change clears the approval
+    /// `fael chunk edit`: fields, and the state only to open a draft that gains a brief
+    /// (issue 01M4KJQE: an inbox draft has a way out). Any change clears the approval
     /// (SPEC §8), so the queue never starts work the owner did not approve as it now reads.
     pub fn edit(&mut self, uid: &str, f: &Fields, now: &str) -> Result<(), String> {
         let tx = tx(self)?;
@@ -326,7 +327,13 @@ impl Store {
         if n > 0 {
             text.push_str(" · approval cleared");
         }
-        set(&tx, &r, r.state, "owner", Some(&text), now)?;
+        let briefed = f.brief.as_deref().is_some_and(|b| !b.trim().is_empty());
+        let to = if r.state == State::Draft && briefed {
+            State::Open
+        } else {
+            r.state
+        };
+        set(&tx, &r, to, "owner", Some(&text), now)?;
         tx.commit().map_err(err)
     }
 }

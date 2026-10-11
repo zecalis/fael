@@ -14,7 +14,8 @@ pub fn rules(uid: &str) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
-         - the done text is the hand-off: the brief of every chunk after this one prints it\n\
+         - the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
+         - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read\n\
          - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note … --files <f>`\n"
     )
 }
@@ -209,6 +210,11 @@ mod tests {
             "{t}"
         );
         assert!(t.contains("fael chunk done A"), "{t}");
+        // what the agent leaves for the owner fits one board line
+        assert!(
+            t.contains("first sentence = the outcome") && t.contains("first line <= 100 chars"),
+            "{t}"
+        );
         let mut noted = chunk("D");
         noted.notes = vec!["use v2\nnot v1".into()];
         noted.after = vec![("b3b".into(), "board ships".into())];
