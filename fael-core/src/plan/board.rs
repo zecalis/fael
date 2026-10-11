@@ -2,6 +2,7 @@
 //! per-state counts and its chunks with every derived field of §2 — deterministic math over
 //! the stored rows and the clock. The cross-project lists (needs you, queue) are the CLI's.
 
+use super::Owner;
 use super::board_math::{clean, edges, plan_title};
 use super::ready::{Ready, ready_in};
 use super::store::{Store, err};
@@ -48,6 +49,8 @@ pub struct Chunk {
     pub approval: Option<Approval>,
     pub run: Option<Run>,
     pub handoff: Option<Handoff>,
+    /// the owner verbs fael takes for this chunk now (`Owner::takes`)
+    pub owner_actions: Vec<&'static str>,
     /// plan rank — the queue's last tie-break before the chunk's place in its plan
     #[serde(skip)]
     pub rank: Option<i64>,
@@ -182,6 +185,7 @@ impl Store {
                             .transpose()?,
                         run: runs.get(&id).cloned(),
                         handoff: None,
+                        owner_actions: Owner::actions(&state),
                         rank: r.get(18)?,
                         seq: r.get(19)?,
                         label,

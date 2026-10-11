@@ -29,6 +29,7 @@ const CHUNK_KEYS: &[&str] = &[
     "approval",
     "run",
     "handoff",
+    "owner_actions",
 ];
 const PLAN_KEYS: &[&str] = &[
     "app", "name", "title", "area", "kind", "state", "rank", "truth", "source", "spec", "counts",
