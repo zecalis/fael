@@ -33,6 +33,12 @@ impl Store {
                     r.state.as_str()
                 ));
             }
+            Owner::Accept if r.state != State::Review => {
+                return Err(format!(
+                    "rejected: chunk {uid} is {} — `accept` takes a chunk in review",
+                    r.state.as_str()
+                ));
+            }
             Owner::Answer | Owner::Unpark => State::Open,
             Owner::Accept => State::Done,
             Owner::Drop => State::Dropped,
