@@ -56,6 +56,10 @@ pub struct Chunk {
     pub handoff: Option<Handoff>,
     /// the owner verbs fael takes for this chunk now (`Owner::takes`)
     pub owner_actions: Vec<&'static str>,
+    /// an open PR's branch merged into the base (`git merge-tree`, the CLI fills it): the
+    /// conflicted paths, empty = merges clean; absent = not checked or git < 2.38
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflicts: Option<Vec<String>>,
     /// plan rank — the queue's last tie-break before the chunk's place in its plan
     #[serde(skip)]
     pub rank: Option<i64>,
@@ -195,6 +199,7 @@ impl Store {
                         run: runs.get(&id).cloned(),
                         handoff: None,
                         owner_actions: Owner::actions(&state),
+                        conflicts: None,
                         rank: r.get(18)?,
                         seq: r.get(19)?,
                         code: r.get(21)?,

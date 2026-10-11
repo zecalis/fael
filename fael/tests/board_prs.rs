@@ -1,5 +1,5 @@
 //! PLAN-fael-parallel: an open PR (a review chunk, or done with `--pr N` and no `(#N)` on
-//! `origin/HEAD` yet) still holds its scope.
+//! `origin/HEAD` yet) still holds its scope, and `conflicts` says whether its branch merges.
 
 use serde_json::Value;
 use std::path::Path;
@@ -42,7 +42,7 @@ fn ship(d: &Path, state: &Path, uid: &str, branch: &str, file: &str, done: &[&st
 }
 
 #[test]
-fn an_open_pr_holds_its_scope() {
+fn an_open_pr_holds_its_scope_and_says_if_it_merges() {
     let tmp = std::env::temp_dir().join(format!("fael-board-prs-{}", fael_core::ulid()));
     let (d, state) = (tmp.join("repo"), tmp.join("state"));
     std::fs::create_dir_all(&d).unwrap();
@@ -81,7 +81,17 @@ fn an_open_pr_holds_its_scope() {
         all.iter().find(|c| c["uid"] == u).unwrap().clone()
     };
     assert_eq!(chunk(&open)["state"], "done");
+    assert_eq!(chunk(&open)["conflicts"], serde_json::json!(["a.txt"]));
     assert_eq!(chunk(&on_a)["overlaps"], serde_json::json!([open]));
+    assert_eq!(
+        chunk(&rev)["conflicts"],
+        serde_json::json!([]),
+        "review merges clean"
+    );
+    assert!(
+        chunk(&gone).get("conflicts").is_none(),
+        "merged: not an open PR"
+    );
     assert_eq!(
         chunk(&on_b)["overlaps"],
         serde_json::json!([]),

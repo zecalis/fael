@@ -34,6 +34,7 @@ fn ready(
         run: None,
         handoff: None,
         owner_actions: Vec::new(),
+        conflicts: None,
         rank,
         seq: 0,
         code: None,
