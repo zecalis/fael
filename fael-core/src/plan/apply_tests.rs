@@ -203,3 +203,35 @@ fn split_and_merge_carry_client_and_check_size() {
     let e = ops(&mut s, &j).unwrap_err();
     assert!(e.contains("--size huge — S, M or L"), "{e}");
 }
+
+#[test]
+fn merge_and_split_carry_the_issues_the_old_chunks_fix() {
+    let mut s = Store::open_in_memory().unwrap();
+    let f = |t: &str, issue: &str| super::super::Fields {
+        title: Some(t.into()),
+        brief: Some(t.into()),
+        issues: vec![issue.into()],
+        ..Default::default()
+    };
+    let a = s.add("inbox", &f("a", "I1"), &[], NOW).unwrap();
+    let b = s.add("inbox", &f("b", "I2"), &[], NOW).unwrap();
+    ops(
+        &mut s,
+        &format!(r#"[{{"op":"merge","chunks":["{a}","{b}"]}}]"#),
+    )
+    .unwrap();
+    let fix = s.fixers().unwrap();
+    let m = fix["I1"].uid.clone();
+    assert!(m != a && fix["I2"].uid == m && fix["I1"].state == "open");
+    ops(
+        &mut s,
+        &format!(r#"[{{"op":"split","chunk":"{m}","into":[{{"title":"x"}},{{"title":"y"}}]}}]"#),
+    )
+    .unwrap();
+    let parts = s.board(NOW, NOW).unwrap().chunks;
+    let parts: Vec<_> = parts.iter().filter(|c| c.state == "draft").collect();
+    assert_eq!(parts.len(), 2);
+    for c in parts {
+        assert_eq!(c.issues, ["I1", "I2"], "{}", c.title);
+    }
+}

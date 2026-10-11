@@ -3,7 +3,7 @@
 //! clone's `plans.db`; `--out` copies under `<db dir>/out/<uid>/<R>/`.
 
 use crate::plan::db;
-use crate::{Args, Repo, repo};
+use crate::{Args, Repo, core, repo};
 use fael_core::plan::{Fields, Here, Owner, Start, Store};
 use std::path::Path;
 use std::process::ExitCode;
@@ -34,11 +34,12 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             a.only(
                 "chunk add",
                 &[
-                    "plan", "brief", "size", "model", "client", "scope", "after", "label",
+                    "plan", "brief", "size", "model", "client", "scope", "after", "label", "issue",
                 ],
             )?;
             let f = Fields {
                 title: Some(title.to_string()),
+                issues: issues(&r, &list(a, "issue"))?,
                 ..fields(a)
             };
             let plan = a.one("plan").unwrap_or_else(|| "inbox".into());
@@ -119,11 +120,21 @@ fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
         force: a.has("force"),
         session: session.clone(),
     };
-    let st = Store::open(&db(r))?.start(uid, &o, here)?;
+    let mut st = Store::open(&db(r))?.start(uid, &o, here)?;
     if let Some(m) = session.as_deref().and_then(held) {
         // the Stop hook finds this db from any cwd; a failed write only skips stamps
         let _ = m.parent().map(std::fs::create_dir_all);
         let _ = std::fs::write(m, db(r).to_string_lossy().as_bytes());
+    }
+    // each linked issue's id → its row, so the agent reads what to fix without a find
+    if st.chunks.iter().any(|c| !c.issues.is_empty()) {
+        let log = crate::read(r);
+        for id in st.chunks.iter_mut().flat_map(|c| &mut c.issues) {
+            if let Ok(row) = core::resolve_row(&log, id) {
+                let title = row.title.as_deref().map(|t| format!("{t}\n"));
+                *id = format!("{} {}{}", row.id, title.unwrap_or_default(), row.text);
+            }
+        }
     }
     let md = |src: &str| std::fs::read_to_string(r.root.join(src)).ok();
     let exists = |p: &str| r.root.join(p).exists();
@@ -248,7 +259,36 @@ fn fields(a: &Args) -> Fields {
         client: a.one("client"),
         scope: a.has("scope").then(|| list(a, "scope")),
         label: a.one("label"),
+        issues: vec![],
     }
+}
+
+/// `--issue a,b`: each an open issue row of this repo's ledger (a unique prefix will do),
+/// as its full id — the ledger is not in plans.db, so the check is here.
+fn issues(r: &Repo, ids: &[String]) -> Result<Vec<String>, String> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let log = crate::read(r);
+    let open = core::find(&log, &core::Filter::default());
+    ids.iter()
+        .map(|id| {
+            let row = core::resolve_row(&log, id)?;
+            if row.kind != "issue" {
+                return Err(format!(
+                    "rejected: {} is a {}, not an issue",
+                    row.id, row.kind
+                ));
+            }
+            if !open.iter().any(|o| o.id == row.id) {
+                return Err(format!(
+                    "rejected: issue {} is closed or superseded — link an open one (fael find)",
+                    row.id
+                ));
+            }
+            Ok(row.id.clone())
+        })
+        .collect()
 }
 
 fn done(a: &Args, r: &Repo, uid: &str, handoff: &str, here: &Here) -> Result<(), String> {

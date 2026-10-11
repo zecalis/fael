@@ -30,6 +30,7 @@ const CHUNK_KEYS: &[&str] = &[
     "approval",
     "run",
     "handoff",
+    "issues",
     "owner_actions",
 ];
 const PLAN_KEYS: &[&str] = &[
@@ -50,7 +51,8 @@ const RUN_KEYS: &[&str] = &[
     "ended",
     "cost",
 ];
-/// A ledger row (PLAN-fael-board l1); an issue also carries `group` before `signals`.
+/// A ledger row (PLAN-fael-board l1); an issue also carries `group` before `signals`, and a
+/// linked one its newest fixing `chunk` {uid, state} after `group` (l2).
 const ROW_KEYS: &[&str] = &[
     "id", "title", "text", "key", "files", "at", "by", "to", "revisit", "held", "signals",
 ];
@@ -87,6 +89,10 @@ fn ledger(l: &Value) {
             let mut want = ROW_KEYS.to_vec();
             if kind == "issues" {
                 want.insert(10, "group");
+                if !r["chunk"].is_null() {
+                    want.insert(11, "chunk");
+                    assert_eq!(keys(&r["chunk"]), ["uid", "state"], "{r}");
+                }
                 let g = r["group"].as_u64().unwrap();
                 assert!(g == last || g == last + 1, "{r}: groups in order");
                 last = g;
@@ -98,6 +104,17 @@ fn ledger(l: &Value) {
             }
         }
     }
+}
+
+/// An open ledger issue names `uid` as its newest fixing chunk, in `done` (l2).
+fn fixes_open(b: &Value, uid: &Value) -> bool {
+    b["projects"].as_array().unwrap().iter().any(|p| {
+        p["ledger"]["issues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["chunk"]["uid"] == *uid && i["chunk"]["state"] == "done")
+    })
 }
 
 #[test]
@@ -178,6 +195,8 @@ fn board_v1_shape() {
             "review" => c["state"] == "review",
             "ended" => c["state"] == "running" && c["ended"] == true,
             "inbox" => c["state"] == "draft" && c["plan"] == "inbox",
+            // a done chunk whose linked issue is still open: the issue names it
+            "issue-open" => c["state"] == "done" && fixes_open(&b, &n["uid"]),
             _ => true, // ponytail: an unknown kind is ignored by the app (b7 adds `ledger`)
         };
         assert!(ok, "needs_you {n}");
