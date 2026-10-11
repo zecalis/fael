@@ -8,6 +8,7 @@ mod board_math;
 mod brief;
 mod chunk;
 mod contract;
+mod contract_loop;
 mod cutover;
 mod export;
 mod import;

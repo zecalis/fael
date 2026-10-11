@@ -320,3 +320,60 @@ fn an_unknown_contract_is_named() {
     let e = s.reply("NOPE", agree(None), &here("/a")).unwrap_err();
     assert!(e.contains("no contract NOPE"), "{e}");
 }
+
+#[test]
+fn an_ask_of_a_finished_chunk_closes_no_loop() {
+    let (mut s, a, b) = lanes();
+    let c = add(&mut s, "c", Some("c"));
+    start(&mut s, &c, "/c").unwrap();
+    // c asked a and was agreed, b asked c; then c finished: a → b closes no loop
+    let c_a = ask(&mut s, "/c", &a);
+    s.reply(&c_a, agree(None), &here("/a")).unwrap();
+    let b_c = ask(&mut s, "/b", &c);
+    s.done(&c, "pr", Some(1), None, &here("/c")).unwrap();
+    ask(&mut s, "/a", &b);
+    // and no ask on the finished chunk's account is given up
+    assert_eq!(state(&s, &b_c), "open");
+}
+
+#[test]
+fn the_youngest_open_ask_in_the_middle_of_a_longer_loop_gives_way() {
+    let (mut s, a, b) = lanes();
+    let c = add(&mut s, "c", Some("c"));
+    start(&mut s, &c, "/c").unwrap();
+    let b_c = ask(&mut s, "/b", &c);
+    let c_a = ask(&mut s, "/c", &a);
+    // a is the oldest claim: a → b stands, c's ask (the youngest asker) gives way
+    let a_b = ask(&mut s, "/a", &b);
+    let st = |id: &str| state(&s, id);
+    assert_eq!(
+        (st(&b_c).as_str(), st(&c_a).as_str(), st(&a_b).as_str()),
+        ("open", "refused", "open")
+    );
+}
+
+#[test]
+fn a_contract_table_from_an_earlier_build_gains_the_reason_column() {
+    let dir = std::env::temp_dir().join(format!("fael-plans-{}", crate::ulid()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("plans.db");
+    drop(Store::open(&path).unwrap());
+    let c = rusqlite::Connection::open(&path).unwrap();
+    c.execute_batch(
+        "DROP TABLE contract;
+         CREATE TABLE contract(id TEXT PRIMARY KEY, from_chunk INTEGER NOT NULL,
+           to_chunk INTEGER NOT NULL, want TEXT NOT NULL, returns TEXT NOT NULL, check_cmd TEXT,
+           counter TEXT, state TEXT NOT NULL, rounds INTEGER NOT NULL DEFAULT 0);",
+    )
+    .unwrap();
+    drop(c);
+    let mut s = Store::open(&path).unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    let b = add(&mut s, "b", Some("b"));
+    start(&mut s, &a, "/a").unwrap();
+    start(&mut s, &b, "/b").unwrap();
+    let (id, _) = s.ask(&b, "w", "r", None, &here("/a")).unwrap();
+    s.reply(&id, Reply::Refuse("no"), &here("/b")).unwrap();
+    assert_eq!(col(&s, &id, "reason").as_deref(), Some("no"));
+    let _ = std::fs::remove_dir_all(dir);
+}

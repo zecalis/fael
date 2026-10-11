@@ -2,14 +2,14 @@
 //! that needs a file another chunk holds asks for a change with the shape it will code
 //! against. The holder agrees or refuses, and its answer is final: no counter, no owner step.
 //! An ask to a holder that cannot answer, or one that closes a loop, is refused at once.
-//! Every move is one `BEGIN IMMEDIATE` and an `event` row keyed `contract:<id>`; `ask`
-//! never ends the asker's run, and fael runs no check — it keeps it.
+//! Every move is one `BEGIN IMMEDIATE` and an `event` row keyed `contract:<id>`; `ask` never
+//! ends the asker's run, and fael runs no check — it keeps it.
 
 use super::chunk::{Here, row, tx};
+use super::contract_loop::{claimed, loop_path};
 use super::store::{Store, err};
-use rusqlite::{OptionalExtension, Transaction, params};
+use rusqlite::{Transaction, params};
 use serde::Serialize;
-use std::collections::HashMap;
 
 /// The holder's answer, final.
 pub enum Reply<'a> {
@@ -37,11 +37,11 @@ pub struct Ask {
 }
 
 #[derive(Clone)]
-struct Row {
-    id: String,
-    from: i64,
-    to: i64,
-    state: String,
+pub(super) struct Row {
+    pub(super) id: String,
+    pub(super) from: i64,
+    pub(super) to: i64,
+    pub(super) state: String,
 }
 
 /// The chunks with a live run in `here`'s worktree (or start R): who is speaking.
@@ -137,64 +137,6 @@ fn not_live(tx: &Transaction, id: i64, uid: &str) -> Result<Option<String>, Stri
             "chunk {uid} is {s}, not running — nobody is there to answer"
         )),
     })
-}
-
-/// Where the claim of chunk `id` began: its latest run's start (ties by run id).
-fn claimed(tx: &Transaction, id: i64) -> Result<(String, i64), String> {
-    tx.query_row(
-        "SELECT started, id FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1",
-        [id],
-        |r| Ok((r.get(0)?, r.get(1)?)),
-    )
-    .optional()
-    .map_err(err)
-    .map(|r| r.unwrap_or_default())
-}
-
-/// The open asks on the way from `to` back to `from` (an ask `from → to` would close the
-/// loop), with the agreed ones counted in the walk: `None` = no loop.
-fn loop_path(tx: &Transaction, from: i64, to: i64) -> Result<Option<Vec<Row>>, String> {
-    let mut q = tx
-        .prepare(
-            "SELECT id, from_chunk, to_chunk, state FROM contract WHERE state IN ('open','agreed')",
-        )
-        .map_err(err)?;
-    let edges: Vec<Row> = q
-        .query_map([], |r| {
-            Ok(Row {
-                id: r.get(0)?,
-                from: r.get(1)?,
-                to: r.get(2)?,
-                state: r.get(3)?,
-            })
-        })
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)?;
-    // breadth first from `to`; `via[n]` = the ask that first reached chunk n
-    let mut via: HashMap<i64, usize> = HashMap::new();
-    let mut seen = vec![to];
-    let mut i = 0;
-    while i < seen.len() && !via.contains_key(&from) {
-        let at = seen[i];
-        i += 1;
-        for (k, e) in edges.iter().enumerate().filter(|(_, e)| e.from == at) {
-            if e.to != to && !via.contains_key(&e.to) {
-                via.insert(e.to, k);
-                seen.push(e.to);
-            }
-        }
-    }
-    let mut path = Vec::new();
-    let mut at = from;
-    while at != to {
-        let Some(&k) = via.get(&at) else {
-            return Ok(None);
-        };
-        path.push(k);
-        at = edges[k].from;
-    }
-    Ok(Some(path.into_iter().map(|k| edges[k].clone()).collect()))
 }
 
 impl Store {
