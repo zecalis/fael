@@ -186,6 +186,7 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
         return Ok(None);
     }
     let mut b = Store::open(&path)?.board(today, stale)?;
+    prs::open_prs(&mut b.chunks, &r.root);
     // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
     if open {
         b.chunks.retain(|c| c.state == "open");
@@ -378,6 +379,8 @@ fn text(b: &Board) -> String {
 
 #[path = "board_ledger.rs"]
 mod ledger;
+#[path = "board_git.rs"]
+mod prs;
 #[path = "board_registry.rs"]
 mod registry;
 use registry::registered;

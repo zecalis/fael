@@ -61,6 +61,20 @@ fn derived_fields() {
 }
 
 #[test]
+fn a_review_chunk_still_holds_its_scope() {
+    let mut s = Store::open_in_memory().unwrap();
+    let pr = scoped(&mut s, "pr", &["src/"], &[]);
+    let next = scoped(&mut s, "next", &["src/a.rs"], &[]);
+    start(&mut s, &pr, "/wt/1").unwrap();
+    s.done(&pr, "h", None, None, &here("/wt/1")).unwrap();
+    let bd = s.board("2026-10-11", NOW).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|c| c.uid == u).unwrap();
+    assert_eq!(by(&pr).state, "review");
+    assert_eq!(by(&next).overlaps, vec![pr.clone()]);
+    assert_eq!(by(&pr).overlaps, vec![next]);
+}
+
+#[test]
 fn scopes_overlap_on_a_segment() {
     let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     assert!(overlap(&v(&["src/"]), &v(&["src/a.rs"])));

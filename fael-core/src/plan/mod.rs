@@ -23,6 +23,7 @@ mod store;
 pub use agent::Copy;
 pub use apply::Op;
 pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};
+pub use board_math::overlaps;
 pub use brief::{rules, sections};
 pub use chunk::{Fields, Here};
 pub use cutover::mirror;
