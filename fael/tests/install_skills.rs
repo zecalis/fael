@@ -41,7 +41,11 @@ fn install_writes_every_shipped_skill() {
     install(&home);
     for name in ["fael", "fael-content", "fael-debug", "fael-review"] {
         let s = read(&home.join(".claude/skills").join(name).join("SKILL.md"));
-        assert!(s.contains(&format!("name: {name}\n")), "{name}: {s}");
+        // lines(), not "\n": a Windows checkout embeds the skill with CRLF
+        assert!(
+            s.lines().any(|l| l == format!("name: {name}")),
+            "{name}: {s}"
+        );
     }
     let again = install(&home);
     assert!(again.contains("up to date"), "{again}");
