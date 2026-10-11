@@ -375,8 +375,8 @@ fn text(b: &Board) -> String {
 
 #[path = "board_registry.rs"]
 mod registry;
-pub(crate) use registry::register;
 use registry::registered;
+pub(crate) use registry::{in_tmp, register};
 
 #[cfg(test)]
 #[path = "board_tests.rs"]

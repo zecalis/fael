@@ -29,18 +29,20 @@ pub(super) fn registered() -> Vec<PathBuf> {
 /// A repo under the temp dir (an agent's or a test's scratch repo) belongs only on a
 /// registry that is itself under the temp dir — a test's `FAEL_STATE_DIR`.
 fn scratch(root: &Path) -> bool {
-    // canonical (`/private/var/…` on macOS) through the nearest dir that exists yet
-    let tmp = |p: &Path| {
-        let p = p
-            .ancestors()
-            .find_map(|a| Some(a.canonicalize().ok()?.join(p.strip_prefix(a).ok()?)))
-            .unwrap_or_else(|| p.to_path_buf());
-        [std::env::temp_dir(), PathBuf::from("/tmp")]
-            .iter()
-            .filter_map(|d| d.canonicalize().ok())
-            .any(|d| p.starts_with(d))
-    };
-    tmp(root) && !tmp(&fael_core::stats::state_dir())
+    in_tmp(root) && !in_tmp(&fael_core::stats::state_dir())
+}
+
+/// Under the temp dir — canonical (`/private/var/…` on macOS) through the nearest dir
+/// that exists yet.
+pub(crate) fn in_tmp(p: &Path) -> bool {
+    let p = p
+        .ancestors()
+        .find_map(|a| Some(a.canonicalize().ok()?.join(p.strip_prefix(a).ok()?)))
+        .unwrap_or_else(|| p.to_path_buf());
+    [std::env::temp_dir(), PathBuf::from("/tmp")]
+        .iter()
+        .filter_map(|d| d.canonicalize().ok())
+        .any(|d| p.starts_with(d))
 }
 
 /// Put this repo on the board: called by every command that writes its plans.db.
