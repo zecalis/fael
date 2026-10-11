@@ -39,6 +39,7 @@ struct Project {
     worktrees: Vec<Worktree>,
     plans: Vec<BoardPlan>,
     chunks: Vec<BoardChunk>,
+    ledger: ledger::Ledger,
     /// why this project could not be read; only then present
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
@@ -118,6 +119,7 @@ impl Project {
             worktrees: Vec::new(),
             plans: Vec::new(),
             chunks: Vec::new(),
+            ledger: Default::default(),
             error: None,
         }
     }
@@ -201,6 +203,7 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
         worktrees,
         plans: b.plans,
         chunks: b.chunks,
+        ledger: ledger::read(&r),
         ..Project::named(root)
     }))
 }
@@ -373,6 +376,8 @@ fn text(b: &Board) -> String {
     out
 }
 
+#[path = "board_ledger.rs"]
+mod ledger;
 #[path = "board_registry.rs"]
 mod registry;
 use registry::registered;

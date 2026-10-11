@@ -274,3 +274,78 @@ fn an_md_plan_is_never_ready_and_a_done_plan_shows_counts() {
     let need = serde_json::json!([{"kind": "waiting", "uid": chunks[1]["uid"]}]);
     assert_eq!(v["needs_you"], need);
 }
+
+/// Every file under `dir` with its bytes: what a run wrote to the state dir.
+fn snapshot(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(snapshot(&p));
+        } else {
+            out.push((p.clone(), std::fs::read(&p).unwrap()));
+        }
+    }
+    out.sort();
+    out
+}
+
+/// PLAN-fael-board l1: the open ledger rides the board, issues grouped by shared files, and
+/// the read leaves no trace — no find recorded, no row marked seen (issue 01M4MSMF).
+#[test]
+fn the_ledger_rides_the_board_and_reads_like_nothing() {
+    let tmp = std::env::temp_dir().join(format!("fael-board-{}", fael_core::ulid()));
+    let (d, state) = (repo(&tmp), tmp.join("state"));
+    for f in ["a.rs", "b.rs", "c.rs"] {
+        write(d.join("src").join(f), "");
+    }
+    let f = |args: &[&str]| fael(&d, &state, args);
+    let id = |out: String| out.split_whitespace().next().unwrap().to_string();
+    let a = id(f(&["add", "issue", "a breaks", "--files", "src/a.rs"]));
+    let ab = id(f(&[
+        "add",
+        "issue",
+        "a and b drift",
+        "--files",
+        "src/a.rs,src/b.rs",
+    ]));
+    let c = id(f(&["add", "issue", "c is slow", "--files", "src/c.rs"]));
+    let old = id(f(&["add", "issue", "c was odd", "--files", "src/c.rs"]));
+    f(&["close", &old, "fixed"]);
+    let dec = id(f(&[
+        "add",
+        "decision",
+        "keep c small",
+        "--files",
+        "src/c.rs",
+        "--key",
+        "c:size",
+    ]));
+    let note = id(f(&["add", "note", "next: b", "--files", "src/b.rs"]));
+    f(&["chunk", "add", "x", "--brief", "b"]);
+
+    let before = snapshot(&state);
+    let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
+    assert!(before == snapshot(&state), "board wrote to the state dir");
+    let l = &v["projects"][0]["ledger"];
+    let rows = |k: &str| -> Vec<(String, Option<u64>)> {
+        l[k].as_array()
+            .unwrap()
+            .iter()
+            .map(|r| (r["id"].as_str().unwrap().to_string(), r["group"].as_u64()))
+            .collect()
+    };
+    let mut issues = rows("issues");
+    issues[..2].sort();
+    let mut want = vec![(a, Some(0)), (ab, Some(0))];
+    want.sort();
+    want.push((c, Some(1)));
+    assert_eq!(
+        issues, want,
+        "a shared file is one group; a closed issue is gone"
+    );
+    assert_eq!(rows("decisions"), [(dec, None)]);
+    assert_eq!(rows("notes"), [(note, None)]);
+    assert_eq!(l["decisions"][0]["key"], "c:size");
+    assert_eq!(l["notes"][0]["signals"], serde_json::json!([]));
+}

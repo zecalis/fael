@@ -50,6 +50,11 @@ const RUN_KEYS: &[&str] = &[
     "ended",
     "cost",
 ];
+/// A ledger row (PLAN-fael-board l1); an issue also carries `group` before `signals`.
+const ROW_KEYS: &[&str] = &[
+    "id", "title", "text", "key", "files", "at", "by", "to", "revisit", "held", "signals",
+];
+const SIGNALS: &[&str] = &["drifted"];
 const STATES: &[&str] = &[
     "draft", "open", "running", "waiting", "review", "done", "replaced", "dropped", "parked",
 ];
@@ -73,11 +78,34 @@ fn truth_db(b: &Value, c: &Value) -> bool {
     })
 }
 
+/// Open rows by kind; issues in group order (largest group first, `find --groups`).
+fn ledger(l: &Value) {
+    assert_eq!(keys(l), ["issues", "decisions", "notes"]);
+    let mut last = 0;
+    for (kind, rows) in l.as_object().unwrap() {
+        for r in rows.as_array().unwrap() {
+            let mut want = ROW_KEYS.to_vec();
+            if kind == "issues" {
+                want.insert(10, "group");
+                let g = r["group"].as_u64().unwrap();
+                assert!(g == last || g == last + 1, "{r}: groups in order");
+                last = g;
+            }
+            assert_eq!(keys(r), want, "{r}");
+            assert_eq!(r["id"].as_str().unwrap().len(), 26, "{r}: a ULID");
+            for s in r["signals"].as_array().unwrap() {
+                assert!(SIGNALS.contains(&s.as_str().unwrap()), "{r}");
+            }
+        }
+    }
+}
+
 #[test]
 fn board_v1_shape() {
     let b = board();
     assert_eq!(b["v"], 1);
     for p in b["projects"].as_array().unwrap() {
+        ledger(&p["ledger"]);
         for pl in p["plans"].as_array().unwrap() {
             assert_eq!(keys(pl), PLAN_KEYS, "{pl}");
             if matches!(pl["state"].as_str(), Some("done" | "parked")) {

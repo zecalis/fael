@@ -57,13 +57,8 @@ fn queue_order_is_pin_due_unblocks_rank() {
         ready("pin1", Some(1), Some("2026-12-01"), 0, None),
     ];
     let p = Project {
-        name: String::new(),
-        root: String::new(),
-        base: None,
-        worktrees: Vec::new(),
-        plans: Vec::new(),
         chunks,
-        error: None,
+        ..Project::named(Path::new(""))
     };
     let b = lists(String::new(), vec![p]);
     // stable: `tie` keeps its place after `rank1`

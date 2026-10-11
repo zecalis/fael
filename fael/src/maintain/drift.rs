@@ -14,30 +14,7 @@ const DRIFT_COMMITS: usize = 10;
 
 /// The `[Drifted]` note, most-moved rows first.
 pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
-    let rows: Vec<(&core::Row, i64)> = core::find(log, &core::Filter::default())
-        .into_iter()
-        .filter_map(|r| Some((r, core::ts_ms(&r.ts)?)))
-        .filter(|(r, _)| r.files.iter().any(|f| !crate::hook::is_anchor(f)))
-        .collect();
-    let oldest = rows.iter().map(|(_, ms)| *ms).min()?;
-    let since = format!("@{}", oldest / 1000);
-    let out = crate::git(
-        root,
-        &[
-            "log",
-            "--format=%x01%ct",
-            "--name-only",
-            "--since",
-            &since,
-            "HEAD",
-        ],
-    )?;
-    let commits = parse(&out);
-    let mut drifted: Vec<(usize, &core::Row)> = rows
-        .into_iter()
-        .map(|(r, ms)| (moved(r, ms, &commits), r))
-        .filter(|(n, _)| *n >= DRIFT_COMMITS)
-        .collect();
+    let mut drifted = drifted(log, root);
     if drifted.is_empty() {
         return None;
     }
@@ -62,6 +39,45 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
         )
         .with_ids(drifted.iter().map(|(_, r)| r.id.clone()).collect()),
     )
+}
+
+/// Full ids of the drifted rows — the board's `drifted` signal (PLAN-fael-board l1).
+pub(crate) fn ids(log: &core::Log, root: &Path) -> std::collections::HashSet<String> {
+    drifted(log, root)
+        .into_iter()
+        .map(|(_, r)| r.id.clone())
+        .collect()
+}
+
+/// Every open row at `DRIFT_COMMITS`+ commits, in log order, with its count.
+fn drifted<'a>(log: &'a core::Log, root: &Path) -> Vec<(usize, &'a core::Row)> {
+    let rows: Vec<(&core::Row, i64)> = core::find(log, &core::Filter::default())
+        .into_iter()
+        .filter_map(|r| Some((r, core::ts_ms(&r.ts)?)))
+        .filter(|(r, _)| r.files.iter().any(|f| !crate::hook::is_anchor(f)))
+        .collect();
+    let Some(oldest) = rows.iter().map(|(_, ms)| *ms).min() else {
+        return vec![];
+    };
+    let since = format!("@{}", oldest / 1000);
+    let Some(out) = crate::git(
+        root,
+        &[
+            "log",
+            "--format=%x01%ct",
+            "--name-only",
+            "--since",
+            &since,
+            "HEAD",
+        ],
+    ) else {
+        return vec![];
+    };
+    let commits = parse(&out);
+    rows.into_iter()
+        .map(|(r, ms)| (moved(r, ms, &commits), r))
+        .filter(|(n, _)| *n >= DRIFT_COMMITS)
+        .collect()
 }
 
 /// `git log --format=%x01%ct --name-only` → (commit seconds, paths).
