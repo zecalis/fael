@@ -33,6 +33,7 @@ fn ready(
         approval: None,
         run: None,
         handoff: None,
+        issues: vec![],
         owner_actions: Vec::new(),
         conflicts: None,
         rank,

@@ -10,7 +10,9 @@
 // --rows` give them to the agent that reviews the ledger (l4).
 
 use crate::{Repo, core};
+use fael_core::plan::Fixer;
 use serde::Serialize;
+use std::collections::HashMap;
 
 #[derive(Serialize, Default)]
 pub(crate) struct Ledger {
@@ -35,15 +37,19 @@ struct Item {
     /// issues only: the index of its shared-file group, groups largest first
     #[serde(skip_serializing_if = "Option::is_none")]
     group: Option<usize>,
+    /// issues only: the newest chunk linked to it by `chunk add --issue` (l2)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    chunk: Option<Fixer>,
     signals: Vec<&'static str>,
 }
 
-/// Every open row of `r`'s log, by kind; issues in group order.
-pub(crate) fn read(r: &Repo) -> Ledger {
+/// Every open row of `r`'s log, by kind; issues in group order. `fixers` = issue id → its
+/// newest linked chunk (`Store::fixers`).
+pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
     let log = crate::read(r);
     let open = core::find(&log, &core::Filter::default());
     let drifted = crate::maintain::drift::ids(&log, &r.root);
-    let item = |row: &core::Row, group| Item {
+    let item = |row: &core::Row, group: Option<usize>| Item {
         id: row.id.clone(),
         title: row.title.clone(),
         text: row.text.clone(),
@@ -54,6 +60,7 @@ pub(crate) fn read(r: &Repo) -> Ledger {
         to: row.to.clone(),
         revisit: row.revisit.clone(),
         held: row.held().map(String::from),
+        chunk: group.and_then(|_| fixers.get(&row.id).cloned()),
         group,
         signals: drifted
             .contains(&row.id)
@@ -72,5 +79,18 @@ pub(crate) fn read(r: &Repo) -> Ledger {
             .collect(),
         decisions: of("decision").map(|r| item(r, None)).collect(),
         notes: of("note").map(|r| item(r, None)).collect(),
+    }
+}
+
+impl Ledger {
+    /// The chunks in `done` while an issue they fix is still open (needs you `issue-open`):
+    /// fael never closes the issue — the agent or the owner does, once the fix holds.
+    pub(crate) fn open_done(&self) -> Vec<String> {
+        self.issues
+            .iter()
+            .filter_map(|i| i.chunk.as_ref())
+            .filter(|c| c.state == "done")
+            .map(|c| c.uid.clone())
+            .collect()
     }
 }

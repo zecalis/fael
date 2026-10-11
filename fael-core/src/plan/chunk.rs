@@ -30,6 +30,8 @@ pub struct Fields {
     pub scope: Option<Vec<String>>,
     /// a short name (`b10`), unique in its plan; any command takes it for the uid
     pub label: Option<String>,
+    /// `add` only: open ledger issue ids the chunk fixes, checked by the caller (l2)
+    pub issues: Vec<String>,
 }
 
 pub(super) struct Row {
@@ -274,6 +276,7 @@ impl Store {
             let dst = uid_id(&tx, a)?;
             add_after(&tx, id, dst)?;
         }
+        super::issue::link(&tx, id, &f.issues)?;
         tx.execute(
             "INSERT INTO event(chunk_uid, at, by, to_state, plan) VALUES (?1, ?2, 'planner', ?3, ?4)",
             params![uid, now, state.as_str(), pid],

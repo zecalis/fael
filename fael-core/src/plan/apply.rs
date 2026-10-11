@@ -225,6 +225,7 @@ fn inherit(tx: &Transaction, old: &[i64], new: &[i64]) -> Result<usize, String> 
             }
         }
     }
+    super::issue::carry(tx, old, new)?;
     let list = old.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
     tx.execute_batch(&format!(
         "DELETE FROM edge WHERE kind = 'after' AND dst IN ({list}) AND src NOT IN ({list});
@@ -297,7 +298,7 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
             model: p.model,
             client: p.client,
             scope: p.scope,
-            label: None,
+            ..Fields::default()
         };
         new.push(insert(tx, old.plan, seq, &f, &text, now)?);
     }
@@ -377,7 +378,7 @@ impl Store {
                         model,
                         client,
                         scope,
-                        label: None,
+                        ..Fields::default()
                     };
                     merge(&tx, &chunks, f, now)
                 }
