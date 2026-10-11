@@ -74,6 +74,21 @@ fn import(r: &Repo) -> Result<(), String> {
 /// to the db and swap the md's chunk lines for the banner. The db flips first: a failed
 /// write leaves the old lines, which no import reads any more.
 fn cutover(r: &Repo, want: &str) -> Result<(), String> {
+    // plans.db keeps one row per app/name: two files sharing it collapse on import, so
+    // refuse before import rather than cut over whichever came last (issue 01M4MJ48)
+    let plans = scan(&r.root);
+    let mut hits: Vec<&Import> = plans
+        .iter()
+        .filter(|p| p.md.name == want || format!("{}/{}", p.app, p.md.name) == want)
+        .collect();
+    hits.sort_by(|a, b| (&a.app, &a.source).cmp(&(&b.app, &b.source)));
+    if hits.windows(2).any(|w| w[0].app == w[1].app) {
+        let paths: Vec<&str> = hits.iter().map(|p| p.source.as_str()).collect();
+        return Err(format!(
+            "rejected: '{want}' names more than one plan file: {} — rename one, or move the shipped one out of .fapony/",
+            paths.join(", ")
+        ));
+    }
     import(r)?;
     let mut s = open(r)?;
     let p = one(&s, want)?;
