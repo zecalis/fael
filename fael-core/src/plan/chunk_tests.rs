@@ -256,6 +256,24 @@ fn edit_clears_the_approval_and_never_the_state() {
 }
 
 #[test]
+fn edit_brief_opens_a_draft() {
+    let mut s = Store::open_in_memory().unwrap();
+    let d = add(&mut s, "idea", None);
+    let title = Fields {
+        title: Some("idea, named".into()),
+        ..Fields::default()
+    };
+    s.edit(&d, &title, NOW).unwrap();
+    assert_eq!(state(&s, &d), "draft", "no brief, still a draft");
+    let brief = Fields {
+        brief: Some("do it".into()),
+        ..Fields::default()
+    };
+    s.edit(&d, &brief, NOW).unwrap();
+    assert_eq!(state(&s, &d), "open");
+}
+
+#[test]
 fn the_stop_hook_stamps_only_its_own_live_run() {
     let mut s = Store::open_in_memory().unwrap();
     let a = add(&mut s, "a", Some("a"));
