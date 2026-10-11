@@ -112,25 +112,12 @@ fn reimport_replaces_and_unknown_is_draft() {
 }
 
 #[test]
-fn a_newer_db_opens_until_its_reads_passes_ours() {
+fn a_newer_epoch_is_refused() {
     let dir = std::env::temp_dir().join(format!("fael-plans-{}", crate::ulid()));
     let path = dir.join("plans.db");
-    let mut s = Store::open(&path).unwrap();
-    s.import_all(
-        &[plan("", "plan", "PLAN-t.md", &tldr("- [ ] r — open"))],
-        "t0",
-    )
-    .unwrap();
-    drop(s);
-    assert_eq!(Store::open(&path).unwrap().plans().unwrap().len(), 1);
-    // a newer fael's additive step keeps `reads`: this fael still opens the db
+    drop(Store::open(&path).unwrap());
     let c = Connection::open(&path).unwrap();
     c.pragma_update(None, "user_version", 99).unwrap();
-    drop(c);
-    assert_eq!(Store::open(&path).unwrap().plans().unwrap().len(), 1);
-    let c = Connection::open(&path).unwrap();
-    c.execute("UPDATE meta SET value = '99' WHERE key = 'reads'", [])
-        .unwrap();
     drop(c);
     let e = Store::open(&path).err().unwrap();
     // a dev build names its commit and a newer main, never the release channel
@@ -140,5 +127,55 @@ fn a_newer_db_opens_until_its_reads_passes_ours() {
         "fael upgrade"
     };
     assert!(e.contains("v99") && e.contains(fix), "{e}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn builds_with_different_additions_share_one_db_both_ways() {
+    let dir = std::env::temp_dir().join(format!("fael-plans-{}", crate::ulid()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("plans.db");
+    const T: &[(&str, &str)] = &[(
+        "ask",
+        "CREATE TABLE IF NOT EXISTS ask(id INTEGER PRIMARY KEY)",
+    )];
+    const C: &[(&str, &str, &str)] = &[("run", "beat", "TEXT")];
+    let open = |t, c| Store::init_with(Connection::open(&path).unwrap(), t, c);
+    // the other lane's build opens first: it adds its table and column, no version bump
+    let s = open(T, C).unwrap();
+    s.conn
+        .execute("INSERT INTO ask(id) VALUES (1)", [])
+        .unwrap();
+    drop(s);
+    let user_version = |s: &Store| -> i32 {
+        s.conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap()
+    };
+    // this build lacks both and still reads and writes
+    let mut s = open(&[], &[]).unwrap();
+    assert_eq!(user_version(&s), VERSION);
+    s.import_all(
+        &[plan("", "plan", "PLAN-t.md", &tldr("- [ ] r — open"))],
+        "t0",
+    )
+    .unwrap();
+    assert_eq!(s.plans().unwrap().len(), 1);
+    drop(s);
+    // and the other way: reopened by the build that has them, nothing lost or re-added
+    let s = open(T, C).unwrap();
+    let n: i64 = s
+        .conn
+        .query_row("SELECT COUNT(*) FROM ask", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(super::super::schema::missing(&s.conn, T, C).unwrap(), "");
+    drop(s);
+    // a db at this epoch made without them gains them on the next open by a build with them
+    let other = dir.join("other.db");
+    drop(Store::init_with(Connection::open(&other).unwrap(), &[], &[]).unwrap());
+    let s = Store::init_with(Connection::open(&other).unwrap(), T, C).unwrap();
+    assert_eq!(super::super::schema::missing(&s.conn, T, C).unwrap(), "");
+    assert_eq!(user_version(&s), VERSION);
     let _ = std::fs::remove_dir_all(dir);
 }
