@@ -108,6 +108,23 @@ fn a_chunk_fixes_open_issues_and_the_board_follows_it() {
     );
     assert!(issue_open(&b).is_empty(), "running: not yet the owner's");
 
+    // a re-filed issue (new id) keeps its chunk: the link follows the supersede chain
+    let lag = row(
+        &d,
+        &[
+            "add",
+            "issue",
+            "The count lags one refresh after a merge",
+            "--files",
+            "a.rs",
+            "--supersedes",
+            &lag,
+        ],
+    );
+    let i = &board(&d)["projects"][0]["ledger"]["issues"][0];
+    assert_eq!(i["id"], json!(lag));
+    assert_eq!(i["chunk"], json!({"uid": uid, "state": "running"}));
+
     // done does not close the issue: the owner sees it until someone does
     let (ok, _, err) = fael(
         &d,

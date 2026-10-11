@@ -45,6 +45,7 @@ fn install_writes_every_shipped_skill() {
         "fael-debug",
         "fael-plan",
         "fael-review",
+        "fael-sweep",
     ] {
         let s = read(&home.join(".claude/skills").join(name).join("SKILL.md"));
         // lines(), not "\n": a Windows checkout embeds the skill with CRLF
