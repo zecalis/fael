@@ -151,8 +151,8 @@ pub(super) fn insert(
     let uid = crate::ulid();
     tx.execute(
         "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                           client_hint)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                           client_hint, reads)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             uid,
             plan,
@@ -163,7 +163,8 @@ pub(super) fn insert(
             f.size,
             f.model,
             scope(f.scope.as_deref().unwrap_or_default())?,
-            f.client
+            f.client,
+            super::section::reads(f.reads.as_deref().unwrap_or_default())?
         ],
     )
     .map_err(err)?;

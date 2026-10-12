@@ -28,6 +28,8 @@ pub struct Fields {
     pub client: Option<String>,
     /// repo-relative path prefixes (SPEC §2 overlaps), stored one per line
     pub scope: Option<Vec<String>>,
+    /// the sections it works from, `<key>` or `<plan>/<key>`: its brief prints those
+    pub reads: Option<Vec<String>>,
     /// a short name (`b10`), unique in its plan; any command takes it for the uid
     pub label: Option<String>,
     /// `add` only: open ledger issue ids the chunk fixes, checked by the caller (l2)
@@ -216,6 +218,7 @@ pub(super) fn edit_in(
         ));
     }
     let scope = f.scope.as_deref().map(scope).transpose()?;
+    let reads = f.reads.as_deref().map(super::section::reads).transpose()?;
     size(f)?;
     if let Some(l) = f.label.as_deref().filter(|l| !l.is_empty()) {
         let plan: i64 = tx
@@ -231,6 +234,7 @@ pub(super) fn edit_in(
         ("model_hint", f.model.as_deref()),
         ("client_hint", f.client.as_deref()),
         ("scope", scope.as_ref().map(|s| s.as_deref().unwrap_or(""))),
+        ("reads", reads.as_ref().map(|s| s.as_deref().unwrap_or(""))),
         ("label", f.label.as_deref()),
     ] {
         let Some(v) = v else { continue };
@@ -247,7 +251,7 @@ pub(super) fn edit_in(
     }
     if what.is_empty() {
         return Err(
-            "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope or --label"
+            "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope, --reads or --label"
                 .into(),
         );
     }
@@ -287,6 +291,7 @@ impl Store {
             return Err("rejected: a chunk needs a title".into());
         }
         let scope = scope(f.scope.as_deref().unwrap_or_default())?;
+        let reads = super::section::reads(f.reads.as_deref().unwrap_or_default())?;
         size(f)?;
         let tx = tx(self)?;
         if plan == "inbox" {
@@ -327,9 +332,9 @@ impl Store {
         let uid = crate::ulid();
         tx.execute(
             "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                               client_hint, label)
+                               client_hint, label, reads)
              VALUES (?1, ?2, (SELECT COALESCE(MAX(seq), 0) + 1024 FROM chunk WHERE plan = ?2),
-                     ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                     ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 uid,
                 pid,
@@ -340,7 +345,8 @@ impl Store {
                 f.model,
                 scope,
                 f.client,
-                f.label
+                f.label,
+                reads
             ],
         )
         .map_err(err)?;

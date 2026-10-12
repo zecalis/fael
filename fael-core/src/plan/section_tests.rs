@@ -189,3 +189,104 @@ only cli
     assert_eq!(got, [("1", "ship"), ("2", "only cli")]);
     assert!(rows.iter().all(|r| !r.updated.is_empty()));
 }
+
+#[test]
+fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest() {
+    use super::super::{Fields, Started};
+    let (mut s, p) = plan();
+    s.new_plan("", "q", "Q", "dev", NOW).unwrap();
+    let q = s
+        .plans()
+        .unwrap()
+        .iter()
+        .find(|r| r.name == "q")
+        .unwrap()
+        .id;
+    let sec = json!([{"key": "1", "body": "ship p"}, {"key": "§5", "title": "§5 Risks", "body": "none said"}]);
+    let b = with(&s, p, sec);
+    apply(&mut s, &b, LATER).unwrap();
+    let sec = json!([{"key": "§1", "title": "§1 Access", "body": "who sees what"}]);
+    let b = with(&s, q, sec);
+    apply(&mut s, &b, LATER).unwrap();
+    let f = |reads: Option<&[&str]>| Fields {
+        title: Some("t".into()),
+        brief: Some("b".into()),
+        reads: reads.map(|r| r.iter().map(|x| x.to_string()).collect()),
+        ..Fields::default()
+    };
+    let reads = ["§5", "q/§1", "p/1", "gone", "q/nope", "x/1"];
+    let uid = s.add("p", &f(Some(&reads)), &[], NOW).unwrap();
+    let text = |s: &Store, uid: &str| {
+        let b = s.show(uid).unwrap();
+        Started {
+            run: "R".into(),
+            chunks: vec![b],
+        }
+        .text(&|_| None, &|_| true)
+    };
+    let t = text(&s, &uid);
+    // Goal and Done, then what it reads (its own plan's by key, another's by plan/key)
+    assert!(
+        t.contains(
+            "<!-- plan p -->\n\n## 1. Goal (why)\n> section 1 · updated 2026-10-12\n\nship p\n"
+        ) && t.contains("\n## 3. Done criteria\n")
+            && t.contains("\n## §5 Risks\n> section §5 · updated 2026-10-12\n\nnone said\n")
+            && t.contains("\n## §1 Access\n> section q/§1 · updated 2026-10-12\n\nwho sees what\n"),
+        "{t}"
+    );
+    assert_eq!(
+        t.matches("## 1. Goal").count(),
+        1,
+        "p/1 is Goal, printed once: {t}"
+    );
+    for miss in ["gone", "q/nope", "x/1"] {
+        assert!(t.contains(&format!("\nsection {miss} not found\n")), "{t}");
+    }
+    let day = &NOW[..10];
+    assert!(
+        !t.contains("## 2. Scope")
+            && t.contains(&format!(
+                "\nother sections of p — read one: `fael plan export p --section <key>`\n\
+                 - 2 · 2. Scope · {day}\n- 4 · 4. Constraints · {day}\n"
+            )),
+        "{t}"
+    );
+    assert!(
+        t.contains("a section you read that your change makes untrue"),
+        "{t}"
+    );
+    // the bill reads them back
+    let b = export_json(&s, p).unwrap();
+    assert_eq!(b["chunks"][0]["reads"], json!(reads));
+    // no reads: Goal, Scope, Done, Constraints, the rest indexed
+    let plain = s.add("p", &f(None), &[], NOW).unwrap();
+    let t = text(&s, &plain);
+    assert!(
+        t.contains("\n## 2. Scope\n")
+            && t.contains("\n## 4. Constraints\n")
+            && t.contains("\n- §5 · §5 Risks · 2026-10-12\n")
+            && !t.contains("## §5")
+            && !t.contains("not found"),
+        "{t}"
+    );
+    // edit sets them; a ref is one word
+    s.edit(
+        &plain,
+        &Fields {
+            reads: Some(vec!["§5".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    assert!(text(&s, &plain).contains("\n## §5 Risks\n"));
+    let bad = Fields {
+        reads: Some(vec!["a b".into()]),
+        ..Fields::default()
+    };
+    assert!(
+        s.edit(&plain, &bad, NOW)
+            .unwrap_err()
+            .starts_with("rejected: reads")
+    );
+}

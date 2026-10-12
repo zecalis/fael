@@ -90,7 +90,7 @@ pub fn export(s: &Store, plan: i64, md: &dyn Fn(&str) -> Option<String>) -> Resu
 }
 
 /// A section under its heading, its key and the day it last changed below it.
-fn one(r: &Row) -> String {
+pub(super) fn one(r: &Row) -> String {
     let day = r.updated.get(..10).unwrap_or(&r.updated);
     let mut o = format!("## {}\n> section {} · updated {day}\n", r.title, r.key);
     if !r.body.trim().is_empty() {
@@ -139,15 +139,15 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
                (SELECT r.start || ' ' || COALESCE(r.branch, '') FROM run r
                  WHERE r.chunk = c.id AND r.ended IS NULL ORDER BY r.id DESC LIMIT 1),
                c.wait_on, c.wait_text, c.wait_until, c.size, c.client_hint, c.model_hint, c.scope,
-               c.due, c.pin, c.approved_model
+               c.due, c.pin, c.approved_model, c.reads
              FROM chunk c WHERE c.plan = ?1 ORDER BY c.seq",
         )
         .map_err(err)?;
     let names = [
         "after", "run", "wait on", "wait", "until", "size", "client", "model", "scope", "due",
-        "pin", "approved",
+        "pin", "approved", "reads",
     ];
-    for row in q.query_map([plan], cols::<16>).map_err(err)? {
+    for row in q.query_map([plan], cols::<17>).map_err(err)? {
         let [title, brief, state, uid, rest @ ..] = row.map_err(err)?;
         let tick = match state.as_str() {
             "done" => 'x',
@@ -209,7 +209,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
     let mut q = tx
         .prepare(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.client_hint,
-                    c.scope,
+                    c.scope, c.reads,
                     (SELECT group_concat(a.uid, char(10)) FROM edge e JOIN chunk a ON a.id = e.dst
                       WHERE e.src = c.id AND e.kind = 'after')
              FROM chunk c WHERE c.plan = ?1 AND c.state NOT IN ('replaced', 'dropped')
@@ -224,7 +224,8 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
             let g = |i| r.get::<_, Option<String>>(i);
             Ok(json!({
                 "uid": g(0)?, "label": g(1)?, "title": g(2)?, "brief": g(3)?, "size": g(4)?,
-                "model": g(5)?, "client": g(6)?, "scope": lines(g(7)?), "after": lines(g(8)?),
+                "model": g(5)?, "client": g(6)?, "scope": lines(g(7)?), "reads": lines(g(8)?),
+                "after": lines(g(9)?),
             }))
         })
         .map_err(err)?

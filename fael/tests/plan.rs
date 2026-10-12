@@ -274,7 +274,8 @@ fn plan_new_keeps_its_sections_in_the_db_and_a_bill_edits_the_plan() {
         .unwrap();
     let (ok, out, err) = fael(&d, &["chunk", "start", uid]);
     assert!(
-        ok && out.contains("<!-- plan doc -->\n## 1. Goal (why)\nship n"),
+        ok && out.contains("<!-- plan n -->\n\n## 1. Goal (why)\n> section 1 · updated ")
+            && out.contains("\nship n\n"),
         "{err}{out}"
     );
     let _ = std::fs::remove_dir_all(d);
