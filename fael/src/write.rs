@@ -215,6 +215,7 @@ pub(crate) fn close_row(
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
     let log = crate::read(r);
     let mut warns = phantom_lines(r, &log, None, why, &[id]);
+    warns.extend(crate::unmerged::lines(&r.root, why));
     let (row, path, mut core_warns) = core::close_row(
         &r.fael,
         r.journal.as_deref(),
