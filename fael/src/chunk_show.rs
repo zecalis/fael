@@ -1,5 +1,5 @@
 //! `fael chunk show <uid|label> [--json]`: one chunk as the board sees it, with its hand-off,
-//! the text its next start prints and the asks it holds in and out.
+//! the text its next start prints.
 
 use crate::plan::db;
 use crate::{Args, Repo};
@@ -19,13 +19,11 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
         .into_iter()
         .find(|c| c.uid == b.uid)
         .ok_or(format!("rejected: chunk {} is not on the board", b.uid))?;
-    let asks = s.asks(&b.uid)?;
     if a.has("json") {
         let mut v = serde_json::to_value(&c).map_err(|e| e.to_string())?;
         v["brief"] = b.brief.into();
         v["said"] = b.said.into();
         v["notes"] = b.notes.into();
-        v["asks"] = serde_json::to_value(&asks).map_err(|e| e.to_string())?;
         let s = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
         println!("{s}");
         return Ok(ExitCode::SUCCESS);
@@ -57,9 +55,6 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
     }
     for l in b.brief.lines() {
         println!("> {l}");
-    }
-    for l in crate::chunk_ask::lines(&asks) {
-        println!("{l}");
     }
     for (head, texts) in [("owner said", &b.said), ("note", &b.notes)] {
         for t in texts {

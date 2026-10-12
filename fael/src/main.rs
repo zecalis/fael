@@ -9,7 +9,6 @@ mod args;
 mod batch;
 mod board;
 mod chunk;
-mod chunk_ask;
 mod chunk_run;
 mod chunk_scope;
 mod chunk_show;
