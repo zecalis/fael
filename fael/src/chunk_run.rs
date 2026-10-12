@@ -13,12 +13,13 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         "chunk start",
         &["client", "model", "run", "force", "no-worktree"],
     )?;
-    // only an interactive `--no-worktree` start: a worktree run is stamped by its worktree,
-    // and a launcher (`--run R`) may sit in another agent's session, not the one it starts
+    // the agent's own start: an agent that ends with `chunk done` in the same turn never
+    // reaches a Stop that could stamp it (issue 01M4NXDQ). Not a launcher (`--run R`): it
+    // may sit in another agent's session, and the started agent's SessionStart stamps it
     // ponytail: Claude Code's session env only; another client's when it has one
     let session = std::env::var("CLAUDE_CODE_SESSION_ID")
         .ok()
-        .filter(|s| !s.is_empty() && a.has("no-worktree") && a.one("run").is_none());
+        .filter(|s| !s.is_empty() && a.one("run").is_none());
     let o = Start {
         run: a.one("run"),
         client: a.one("client"),

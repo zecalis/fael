@@ -156,6 +156,31 @@ fn a_run_killed_mid_turn_resumes_from_its_session_notes_and_branch() {
     assert!(!fresh.contains("resume —"), "{fresh}");
 }
 
+/// An agent's own start binds its session: `done --pr` in the same turn ends the run
+/// before any Stop could stamp it, and the board still has the session to resume (01M4NXDQ).
+#[test]
+fn an_agent_start_keeps_its_session_through_done() {
+    let d = repo();
+    let u = add(&d);
+    let with = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_fael"))
+            .args(args)
+            .current_dir(&d)
+            .env("FAEL_STATE_DIR", d.join("state"))
+            .env_remove("FAEL_DIR")
+            .env("CLAUDE_CODE_SESSION_ID", "S9")
+            .output()
+            .unwrap()
+            .status
+            .success()
+    };
+    assert!(with(&["chunk", "start", &u]));
+    assert!(with(&["chunk", "done", &u, "shipped", "--pr", "7"]));
+    let (_, out, _) = fael(&d, &["board", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["projects"][0]["chunks"][0]["run"]["session"], "S9", "{v}");
+}
+
 #[test]
 fn apply_reads_stdin_and_the_board_sees_pin_and_approval() {
     let d = repo();

@@ -230,6 +230,16 @@ fn a_linked_worktree_pool_and_the_registry() {
     let wt = v["projects"][0]["worktrees"].as_array().unwrap().clone();
     assert_eq!(wt.len(), 1, "{wt:?}");
     assert_eq!(canon(wt[0]["path"].as_str().unwrap()), wt2);
+
+    // --drop takes a finished repo off the board; a root not on it is rejected
+    let gone = gone.to_string_lossy();
+    assert!(
+        !run(&tmp, &state, &["board", "--drop", &gone])
+            .status
+            .success()
+    );
+    fael(&tmp, &state, &["board", "--drop", &d.to_string_lossy()]);
+    assert_eq!(std::fs::read_to_string(state.join("projects")).unwrap(), "");
 }
 
 #[test]

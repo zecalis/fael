@@ -43,6 +43,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
+    #[cfg(unix)]
+    reset_sigpipe();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let argv = synonyms::rewrite(raw.clone());
     // usage event for rejects, so they join their command's warnings
@@ -63,6 +65,20 @@ fn main() -> ExitCode {
             hook::record_cli_reject(&event, &e);
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Rust ignores SIGPIPE, so `fael board --json | head` panicked in `println!` once
+/// head closed the pipe. The default action ends fael quietly, like any unix tool.
+#[cfg(unix)]
+fn reset_sigpipe() {
+    unsafe extern "C" {
+        fn signal(sig: i32, handler: usize) -> usize;
+    }
+    const SIGPIPE: i32 = 13; // same on Linux and macOS
+    const SIG_DFL: usize = 0;
+    unsafe {
+        signal(SIGPIPE, SIG_DFL);
     }
 }
 

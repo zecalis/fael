@@ -73,3 +73,25 @@ pub(crate) fn register(r: &Repo) {
         eprintln!("fael: could not add {} to {}", root.display(), f.display());
     }
 }
+
+/// `fael board --drop <root>`: take a finished repo off the board (issue 01M4NC9GR). The
+/// next `fael chunk …` or `fael plan import` in it puts it back.
+pub(super) fn unregister(root: &str) -> Result<std::process::ExitCode, String> {
+    let want = Path::new(root);
+    let want = want.canonicalize().unwrap_or_else(|_| want.to_path_buf());
+    let all = registered();
+    let keep: Vec<&PathBuf> = all
+        .iter()
+        .filter(|p| p.canonicalize().as_ref().unwrap_or(p) != &want)
+        .collect();
+    if keep.len() == all.len() {
+        return Err(format!(
+            "rejected: {} is not on the board — `fael board` lists its roots",
+            want.display()
+        ));
+    }
+    let text: String = keep.iter().map(|p| format!("{}\n", p.display())).collect();
+    std::fs::write(registry(), text).map_err(|e| format!("{}: {e}", registry().display()))?;
+    println!("dropped {}", want.display());
+    Ok(std::process::ExitCode::SUCCESS)
+}

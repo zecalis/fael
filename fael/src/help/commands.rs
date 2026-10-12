@@ -158,14 +158,15 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     (
         "board",
         "every registered repo's plans and chunks: needs you, queue, running, blocked",
-        "fael board [--json] [--open] [--plan p]
+        "fael board [--json] [--open] [--plan p] | fael board --drop <root>
     (the owner's view, run from anywhere: each repo whose plans.db a `fael plan
      import` or `fael chunk …` wrote is listed in ~/.local/state/fael/projects;
      --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
      only open chunks — the planner's one read of scope, after and overlaps; --plan
      keeps one plan's chunks; a path in .fael/shared (one prefix per line) is
      nobody's claim: it never makes an overlap; a repo whose plans.db cannot be read
-     stays listed with its error and the command exits 1)",
+     stays listed with its error and the command exits 1; --drop takes a finished repo
+     off the registry until a chunk command there adds it back)",
     ),
     (
         "plan",
