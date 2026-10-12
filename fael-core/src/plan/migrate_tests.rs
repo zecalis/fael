@@ -166,7 +166,10 @@ fn a_file_db_is_copied_before_the_commit() {
     let bak = dir.join("plans.db.pre-migrate.bak");
     // sqlite names the db by its real path (/private/var on macOS)
     assert!(
-        out.ends_with("/plans.db.pre-migrate.bak") && bak.exists(),
+        out.ends_with(&format!(
+            "{}plans.db.pre-migrate.bak",
+            std::path::MAIN_SEPARATOR
+        )) && bak.exists(),
         "{out}"
     );
     let old = Store::open(&bak).unwrap();
