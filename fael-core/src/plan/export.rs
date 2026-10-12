@@ -113,7 +113,7 @@ pub fn export_section(s: &Store, plan: i64, key: &str) -> Result<String, String>
 
 /// An md plan's text minus what the export already wrote: front matter, title, and the
 /// TL;DR's heading and chunk lines (checkboxes, the cutover banner) — its prose stays.
-fn prose(text: &str) -> String {
+pub(super) fn prose(text: &str) -> String {
     let mut out = String::new();
     let mut h2 = 0;
     for l in text.lines() {
