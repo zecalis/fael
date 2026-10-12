@@ -179,20 +179,25 @@ impl Store {
                 };
                 set(&tx, &r, State::Running, "agent", Some(&text), here.now)?;
             } else {
-                match ready_in(&tx, r.id, today)? {
-                    Ready::Yes => {}
+                // a chunk whose work shipped before its after was met still needs a run
+                // to reach done: `--force` starts it, and the event says what it skipped
+                let text = match ready_in(&tx, r.id, today)? {
+                    Ready::Yes => None,
                     Ready::Blocked(u) => {
                         let w: Vec<_> = u.into_iter().map(|u| u.uid.unwrap_or(u.what)).collect();
-                        return Err(format!(
-                            "rejected: chunk {m}{pair} is blocked — after {} first",
-                            w.join(", ")
-                        ));
+                        if !o.force {
+                            return Err(format!(
+                                "rejected: chunk {m}{pair} is blocked — after {} first, or `--force` starts it anyway",
+                                w.join(", ")
+                            ));
+                        }
+                        Some(format!("started by --force past after {}", w.join(", ")))
                     }
                     Ready::No(why) => {
                         return Err(format!("rejected: chunk {m}{pair} is not ready: {why}"));
                     }
-                }
-                set(&tx, &r, State::Running, "agent", None, here.now)?;
+                };
+                set(&tx, &r, State::Running, "agent", text.as_deref(), here.now)?;
             }
             claim.push((r, was));
         }
