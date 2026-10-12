@@ -159,7 +159,8 @@ fn size_is_s_m_or_l_and_an_edit_clears_the_approval() {
     let c = s.add("inbox", &f("S"), &[], NOW).unwrap();
     let e = s.add("inbox", &f("XL"), &[], NOW).unwrap_err();
     assert!(e.contains("--size XL — S, M or L"), "{e}");
-    s.approve(&c, Some(("deepseek", "opencode")), NOW).unwrap();
+    s.approve(&c, Some((Some("deepseek"), Some("opencode"))), NOW)
+        .unwrap();
     s.edit(&c, &f("L"), NOW).unwrap();
     let q = "SELECT size || ' ' || COALESCE(approved_at, 'unapproved') FROM chunk WHERE uid = ?1";
     assert_eq!(get(&s, q, &c).as_deref(), Some("L unapproved"));

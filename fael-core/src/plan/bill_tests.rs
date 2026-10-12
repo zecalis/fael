@@ -84,7 +84,8 @@ fn lines_add_edit_and_drop_and_a_missing_line_is_left_alone() {
     let a = add(&mut s, "a", Some("do a"));
     let b = add(&mut s, "b", Some("do b"));
     let c = add(&mut s, "c", Some("do c"));
-    s.approve(&a, Some(("opus", "claude")), NOW).unwrap();
+    s.approve(&a, Some((Some("opus"), Some("claude"))), NOW)
+        .unwrap();
     let v = bill(
         &s,
         json!({"title": "Inbox!",

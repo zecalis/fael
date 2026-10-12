@@ -182,16 +182,15 @@ fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String
         }
         ["approve", uid] => {
             a.only("chunk approve", &["model", "client"])?;
-            let (Some(m), Some(c)) = (a.one("model"), a.one("client")) else {
-                return Err("rejected: chunk approve needs --model M --client C".into());
-            };
-            s.approve(uid, Some((&m, &c)), now)?;
-            say(uid, &format!("approved · model {m} · client {c}"));
+            let (m, c) = (a.one("model"), a.one("client"));
+            say(
+                uid,
+                &s.approve(uid, Some((m.as_deref(), c.as_deref())), now)?,
+            );
         }
         ["unapprove", uid] => {
             a.only("chunk unapprove", &[])?;
-            s.approve(uid, None, now)?;
-            say(uid, "unapproved");
+            say(uid, &s.approve(uid, None, now)?);
         }
         _ => return Err(format!("rejected: {USAGE}")),
     }

@@ -29,6 +29,7 @@ const REJECTS: &[(&str, &str)] = &[
     ("--replace", "amend"),
     ("in the body of", "amend"),
     ("is not an id", "bad_id"),
+    ("is a path, not an id", "bad_id"),
     ("ids not shown", "bad_id"),
     ("no row with id", "bad_id"),
     (" rows (", "bad_id"),
