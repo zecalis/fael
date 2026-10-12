@@ -113,6 +113,10 @@ pub enum Kind {
     /// info-only and never `--fix`ed (a bump asserts "still true", a human's
     /// call).
     Unstamped,
+    /// a `.fael/shared` path with no `merge` attribute, or a line scope would
+    /// reject — `doctor` suggests the `.gitattributes` line, never writes it
+    /// (PLAN-fael-parallel shared-files); info-only, judged by `git check-attr`
+    Shared,
     /// per-rule self-heal precision from restore labels
     /// (PLAN-fael-selfheal-restore chunk 3): a `restores` row labels the edge
     /// it reverts as wrong, an explicit re-supersede after it as right;

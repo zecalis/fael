@@ -22,6 +22,7 @@
         { "path": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "run": null },
         { "path": "/Users/owner/Project/fael/wt-fael-agent-2", "branch": "feat/plan-schema-v2", "run": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71" }
       ],
+      "shared": ["AGENTS.md", "docs/architecture.md", "fael/tests/golden/"],
       "plans": [
         { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "md", "source": ".fapony/plan/PLAN-fael-board.md", "spec": "SPEC-fael-board.md", "repo": null, "remote": null, "counts": { "open": 2, "review": 1, "running": 1, "waiting": 1 } },
         { "app": "", "name": "launch-posts", "title": "October launch posts", "area": "marketing", "kind": "unit", "state": "active", "rank": 2, "truth": "db", "source": ".fapony/plan/PLAN-launch-posts.md", "spec": null, "repo": null, "remote": null, "counts": { "open": 1, "review": 1, "waiting": 2 } },

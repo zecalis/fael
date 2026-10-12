@@ -82,6 +82,7 @@ fn the_binary_speaks_board_v1() {
     assert!(!bad.status.success(), "a negative cost is rejected");
     f(&["run", "end", "R1", "--cost", "0.42"]);
     f(&["chunk", "start", &a, "--run", "R2", "--client", "claude"]);
+    write(d.join(".fael/shared"), "# every lane\ndocs/\n");
 
     // the app runs it from home: the registry, not the cwd, names the repo
     let out = fael(&tmp, &state, &["board", "--json"]);
@@ -110,6 +111,7 @@ fn the_binary_speaks_board_v1() {
     assert_eq!(chunk(&gone)["run"]["cost"], 0.42);
     assert_eq!(chunk(&a)["unblocks"], 1);
     assert_eq!(chunk(&a)["overlaps"], serde_json::json!([free]));
+    assert_eq!(p["shared"], serde_json::json!(["docs/"]));
     assert_eq!(chunk(&ask)["handoff"]["text"], "Which tone?");
     let need: Vec<(&str, &str)> = v["needs_you"]
         .as_array()
@@ -143,6 +145,17 @@ fn the_binary_speaks_board_v1() {
     let text = f(&["board"]);
     assert!(text.starts_with("needs you\n  waiting "), "{text}");
     assert!(text.contains("— Which tone?"), "{text}");
+
+    // a shared path is nobody's claim: src/x.rs no longer makes a and free overlap
+    write(d.join(".fael/shared"), "src/x.rs\n");
+    let v: Value = serde_json::from_str(&f(&["board", "--json"])).unwrap();
+    assert!(
+        v["projects"][0]["chunks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["overlaps"] == serde_json::json!([]))
+    );
 }
 
 #[test]

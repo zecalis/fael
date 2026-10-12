@@ -159,8 +159,9 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      import` or `fael chunk …` wrote is listed in ~/.local/state/fael/projects;
      --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
      only open chunks — the planner's one read of scope, after and overlaps; --plan
-     keeps one plan's chunks; a repo whose plans.db cannot be read stays listed with
-     its error and the command exits 1)",
+     keeps one plan's chunks; a path in .fael/shared (one prefix per line) is
+     nobody's claim: it never makes an overlap; a repo whose plans.db cannot be read
+     stays listed with its error and the command exits 1)",
     ),
     (
         "plan",
