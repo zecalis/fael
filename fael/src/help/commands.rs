@@ -171,7 +171,7 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     (
         "plan",
         "read plans into plans.db, print each one's next chunk, export or edit one, cut one over, create or park one",
-        "fael plan import | fael plan next | fael plan export [<plan>] [--json] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan>
+        "fael plan import | fael plan next | fael plan export [<plan>] [--json] | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan>
      | fael plan new <name> \"<title>\" [--app A] [--area dev|marketing]
      | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|->
     (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
@@ -185,7 +185,10 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      fields under each line, then the plan's text (plan.doc, else its md's TL;DR prose
      and sections: Goal, Scope, Done, …); export <plan> --json: the plan as one bill (\"v\": 1) —
      rev, title, area, state, doc, refs, repo and a line per planned chunk (uid, label,
-     title, brief, size, model, client, scope, after); apply: the bill edited and sent
+     title, brief, size, model, client, scope, after); export --since <event-id>: the
+     change feed for backup and fael-sync (\"v\": 1) — db_id, head (the next --since),
+     the events after the id and the current rows they touched, whole (plans, chunks,
+     the edges out of those chunks, their runs); 0 = everything; apply: the bill edited and sent
      back, one transaction — a stale rev rejects it and writes nothing; a header key
      left out stays, a line without uid adds a chunk (no brief = draft), a line with uid
      edits it (a changed field clears its approval), {uid, drop:true} drops it, a line

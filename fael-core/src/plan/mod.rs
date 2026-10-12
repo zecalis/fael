@@ -36,7 +36,7 @@ pub use brief::{rules, sections};
 pub use chunk::{Fields, Here};
 pub use contract::{Ask, Reply};
 pub use cutover::mirror;
-pub use export::{export, export_json};
+pub use export::{export, export_json, feed};
 pub use issue::Fixer;
 pub use next::{Next, next};
 pub use owner::Owner;

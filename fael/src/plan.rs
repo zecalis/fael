@@ -18,7 +18,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         return create(a, &r, name, title).map(|()| ExitCode::SUCCESS);
     }
     let flags: &[&str] = match rest.first().map(String::as_str) {
-        Some("export") => &["json"],
+        Some("export") => &["json", "since"],
         Some("apply") => &["dry-run"],
         _ => &[],
     };
@@ -26,6 +26,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     match rest.first().map(String::as_str) {
         Some("import") if rest.len() == 1 => import(&r),
         Some("next") if rest.len() == 1 => next(&r),
+        Some("export") if rest.len() == 1 && a.has("since") => feed(&r, &a.one("since").unwrap()),
         Some("export") if rest.len() <= 2 => {
             export(&r, rest.get(1).map(String::as_str), a.has("json"))
         }
@@ -350,6 +351,16 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
         .map(|p| fael_core::plan::export(&s, p.id, &md))
         .collect::<Result<_, _>>()?;
     print!("{}", docs.join("\n"));
+    Ok(())
+}
+
+/// `fael plan export --since <event-id>`: the change feed, JSON whatever `--json` says.
+fn feed(r: &Repo, since: &str) -> Result<(), String> {
+    let since = since
+        .parse::<i64>()
+        .map_err(|_| format!("rejected: --since takes an event id (0 = all), not {since:?}"))?;
+    let f = fael_core::plan::feed(&open(r)?, since)?;
+    println!("{}", serde_json::to_string(&f).map_err(|e| e.to_string())?);
     Ok(())
 }
 
