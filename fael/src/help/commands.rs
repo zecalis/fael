@@ -135,8 +135,8 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      brief prints them; close each once the fix holds, done never does); a --label is unique in its plan and every verb
      takes it for the uid; --reads names the plan sections it works from (another
      plan's as plan/key): its brief prints Goal, Done and those, then an index of the
-     rest (no --reads: Goal, Scope, Done, Constraints); show prints one chunk as the board has it, with the brief
-     and notes its next start prints; start claims the chunk and its pair in one step
+     rest (no --reads: Goal, Scope, Done, Constraints); show prints one chunk as the board has it, its hand-off,
+     the brief and notes its next start prints; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
      --force takes it over; --no-worktree (a client that writes a file and exits)
      takes no worktree slot, and from Claude Code without --run binds its session,
