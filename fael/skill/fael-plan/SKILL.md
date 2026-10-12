@@ -9,7 +9,8 @@ description: Draft a plan from "what's in your head" — one question, then a dr
 
 You are helping a dev turn an idea into a plan: a doc (Goal, Scope, Done, Constraints) and the
 chunks that do it, in `plans.db`. Every chunk's brief is what an agent reads when
-`fael chunk start` hands it over — the plan doc is printed under it, live.
+`fael chunk start` hands it over — the plan's Goal, Done and the sections it names are printed
+under it, live.
 
 **Ask one question, then write a draft they can correct.** Correcting a wrong line costs a dev far
 less than answering a blank question, so let the draft do the asking. Never open with a
@@ -133,8 +134,12 @@ jq --rawfile g 1.md --rawfile s 2.md --rawfile d 3.md --rawfile c 4.md \
 fael plan apply bill2.json --dry-run && fael plan apply bill2.json
 ```
 
-Every brief prints this doc under it, so it carries what every chunk shares; what one chunk
-needs goes in that chunk's brief. Detail (API shapes, schemas, edge-case tables) is Phase 4.
+A section left out of the bill stays as it is, so a later edit sends only the keys it changes;
+`fael plan export <name> --section <key>` prints one to start from.
+
+Every brief prints Goal and Done (all four when the chunk names no `--reads`), so the doc carries
+what every chunk shares; what one chunk needs goes in that chunk's brief. Detail (API shapes,
+schemas, edge-case tables) is Phase 4.
 
 **Label what each line rests on** — the labels are the whole technique (hard rule 1):
 - `(Observed: <command + result | symbol | fael id>)` — evidence attached; none attached = Proposal
@@ -184,7 +189,7 @@ One `fael chunk add` per chunk, in order; each prints the new uid:
 
 ```bash
 fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
-  --size S|M|L --model <m> --scope <paths> [--after <uid>,…] [--issue <id>,…]
+  --size S|M|L --model <m> --scope <paths> [--reads <key>,<plan>/<key>] [--after <uid>,…] [--issue <id>,…]
 ```
 
 - **brief** — what the agent that starts it needs and cannot get from the doc: what to build, where
@@ -202,6 +207,8 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   An order on a chunk already on the board goes through `fael chunk apply` op `after`
   (Review mode, step 3) — `fael chunk after` is the running agent's verb, answered only from the
   worktree of that chunk's run.
+- **reads** — the section keys it works from (`<plan>/<key>` for another plan's): its brief
+  prints Goal, Done and those, then an index of the rest. None = Goal, Scope, Done, Constraints.
 - **issue** — the open ledger issue ids the chunk fixes; its brief prints them. The agent closes
   each once the fix holds (`chunk done` never does).
 - **size / model** — a hint for the owner, who picks who runs it: S an hour, M a session, L split
@@ -233,10 +240,10 @@ Then — the part that must not be dropped — invite corrections in chat, in ~8
 - **the 3–5 `(Proposal)` / `(Threshold trial)` lines that would change the chunk order or scope if
   wrong**, one bullet each — this list is what the dev actually corrects, and a list of ten gets
   skimmed. End the list with `+N more labelled in the doc` so none is hidden
-- the doc path and `fael board --plan <name>`, then: **"Tell me what's wrong with it"** — never
-  "is this ok"
+- `fael plan export <name>` and `fael board --plan <name>`, then: **"Tell me what's wrong with
+  it"** — never "is this ok"
 
-> "Plan <name>: <n> chunks on the board, doc at <path>. Proposed: <p1>, <p2>, <p3>. **Tell me
+> "Plan <name>: <n> chunks on the board, doc in `fael plan export <name>`. Proposed: <p1>, <p2>, <p3>. **Tell me
 > what's wrong** — especially those. Blank sections are fine; we can decide those while building."
 
 Ask "what's wrong" and you get the real answer. Ask "is this ok" and you get "ok".
@@ -266,8 +273,16 @@ Everything else ships as-is or as `_TBD_`. Don't chase it.
 Only if the dev asks, or the doc keeps trying to describe *how*: add `## ` sections to the plan
 doc after Constraints, one per topic — API contract, entity states, edge cases, example
 input/output, and fail examples that make the boundaries clear. More concrete examples than
-abstract. Written through the same bill as Phase 2; no spec file. Each brief that needs one names
-its heading.
+abstract. Each is a section with its own key and title, sent alone through the bill — no spec
+file:
+
+```bash
+jq --rawfile b api.md '.sections = [{key:"api",title:"API contract",body:$b}]' bill.json > bill2.json
+fael plan apply bill2.json --dry-run && fael plan apply bill2.json
+```
+
+A chunk that works from one names it: `fael chunk add … --reads api` (or `chunk edit <uid>
+--reads api`); its brief prints that section in full and only lists the rest.
 
 ## Review mode — the chunks already on the board
 
@@ -288,6 +303,8 @@ Trigger: `/fael-plan review [<plan>]`, or the dev asks to tidy, re-cut or order 
    - **split** — a chunk with two outcomes, or L that can be cut
    - **pair** — two chunks that must start and land together
    - **after** — an order the board doesn't know (overlapping scope, one needs the other's output)
+   - **move** — a chunk whose outcome belongs to another open plan of this repo; it keeps its
+     uid, runs, notes and edges
    - **drop** — done already, or replaced by a decision; the evidence is the grep hit, commit or
      fael id from step 2, never "looks done"
    - **brief** — a chunk with no brief is a draft nobody can start: write it, or say what it
@@ -316,9 +333,10 @@ The rest are not apply ops:
 ```bash
 fael chunk drop <uid> "done in <commit|PR> / replaced by <fael id>: <evidence>"
 fael chunk edit <uid> --brief "…"          # or --title "…"; clears an approval — say so
+fael chunk move <uid> --plan <p>           # to the end of <p>; refused while it runs
 ```
 
-The doc goes through the bill, as in Phase 2.
+The doc goes through the bill, as in Phase 2, one section at a time.
 
 ## Hard rules
 
