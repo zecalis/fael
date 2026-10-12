@@ -94,7 +94,7 @@ CREATE TABLE plan(
   doc TEXT,
   spec TEXT,
   source TEXT NOT NULL,
-  -- who owns the chunk list: the md file until the plan's cutover, then the db
+  -- md era (plan fael-v8): read by nothing, dropped in epoch v8
   truth TEXT NOT NULL DEFAULT 'md' CHECK(truth IN ('md','db')),
   -- the paths every brief points at, one per line (`SPEC-x.md#block` allowed)
   refs TEXT,

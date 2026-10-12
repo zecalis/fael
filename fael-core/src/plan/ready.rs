@@ -36,7 +36,7 @@ impl Store {
     }
 
     /// The first ready chunk of one plan in plan order, `(uid, title, brief)` — what
-    /// `fael kickoff PLAN-x.md` offers. The cross-plan queue (pin, due, unblocks) is b3b's.
+    /// `fael kickoff PLAN-x.md` offers for plan `x`. The cross-plan queue (pin, due, unblocks) is b3b's.
     pub fn first_ready(
         &self,
         plan: i64,

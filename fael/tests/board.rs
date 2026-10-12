@@ -261,41 +261,38 @@ fn a_temp_repo_stays_off_a_real_registry() {
 }
 
 #[test]
-fn an_md_plan_is_never_ready_and_a_done_plan_shows_counts() {
+fn a_done_plan_shows_counts_and_lists_no_chunk() {
     let tmp = std::env::temp_dir().join(format!("fael-board-{}", fael_core::ulid()));
     let (d, state) = (repo(&tmp), tmp.join("state"));
-    write(
-        d.join(".fapony/plan/PLAN-m.md"),
-        "# PLAN-m — live\n\n## TL;DR\n- [ ] m1 — open one\n- [ ] m2 (wait 30 rows) — gated\n",
-    );
-    write(
-        d.join(".fapony/done/PLAN-old.md"),
-        "# PLAN-old\n\n## TL;DR\n- [x] o1 — one\n- [x] o2 — two\n",
-    );
-    fael(&d, &state, &["plan", "import"]);
+    let f = |args: &[&str]| fael(&d, &state, args);
+    f(&["plan", "new", "old", "Old work"]);
+    let uid = f(&["chunk", "add", "o1", "--plan", "old", "--brief", "b"]);
+    let uid = uid.split_whitespace().next().unwrap();
+    f(&["chunk", "start", uid, "--no-worktree"]);
+    f(&["chunk", "done", uid, "shipped", "--pr", "1"]);
+    f(&["plan", "done", "old"]);
     let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
     let p = &v["projects"][0];
-    let plans: Vec<(&str, &str, &str)> = p["plans"]
+    let old = p["plans"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|p| {
-            let s = |k: &str| p[k].as_str().unwrap();
-            (s("name"), s("state"), s("truth"))
-        })
-        .collect();
-    assert_eq!(plans, [("m", "active", "md"), ("old", "done", "md")]);
-    assert_eq!(p["plans"][0]["title"], "live");
-    assert_eq!(p["plans"][1]["counts"], serde_json::json!({"done": 2}));
-    let chunks = p["chunks"].as_array().unwrap();
-    assert_eq!(chunks.len(), 2, "the done plan lists no chunk");
-    assert_eq!(chunks[0]["title"], "open one");
-    assert_eq!(chunks[0]["ready"], false, "only a db plan's chunk starts");
-    assert_eq!(v["queue"], serde_json::json!([]));
-    // an md wait names no `on`: it still waits on the owner
-    assert_eq!(chunks[1]["wait"]["on"], Value::Null);
-    let need = serde_json::json!([{"kind": "waiting", "uid": chunks[1]["uid"]}]);
-    assert_eq!(v["needs_you"], need);
+        .find(|p| p["name"] == "old")
+        .unwrap();
+    // board JSON v1: truth stays, a constant the app reads
+    assert_eq!(
+        (&old["state"], &old["truth"]),
+        (&"done".into(), &"db".into())
+    );
+    assert_eq!(old["counts"], serde_json::json!({"done": 1}));
+    assert!(
+        p["chunks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["plan"] != "old"),
+        "the done plan lists no chunk: {p}"
+    );
 }
 
 /// Every file under `dir` with its bytes: what a run wrote to the state dir.

@@ -143,7 +143,7 @@ fn scopes_overlap_only_within_one_checkout_and_the_brief_names_it() {
     assert!(overlaps(&s, &a).is_empty(), "another checkout's src/");
     let st = s.start(&b, &Start::default(), &here("/w")).unwrap();
     assert_eq!(st.chunks[0].repo.as_deref(), Some("/code/board"));
-    let text = st.text(&|_| None, &|_| true);
+    let text = st.text(&|_| true);
     assert!(text.contains("code in /code/board"), "{text}");
 }
 

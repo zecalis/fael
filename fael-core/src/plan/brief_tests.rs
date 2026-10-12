@@ -1,12 +1,17 @@
-//! The brief: the md fallback by heading, refs, pairs, notes and hand-offs; reads and the
+//! The brief: plan sections once per plan, refs, pairs, notes and hand-offs; reads and the
 //! section index are in `section_tests.rs` (they need a store).
 
 use super::super::start::{Brief, Started};
 use super::*;
 
-const DOC: &str = "# PLAN-x\n\n## TL;DR\n- [ ] 1 — one\n\n## 1. Goal\nship it\n\n\
-                   ## 2. Scope\nonly cli\n\n## 3. Done criteria\ntests pass\n\n\
-                   ## 4. Constraints\n400 lines\n\n## 5. Risks\nnone said\n";
+fn sec(key: &str, title: &str, body: &str) -> Row {
+    Row {
+        key: key.into(),
+        title: title.into(),
+        body: body.into(),
+        updated: "2026-10-12T00:00:00Z".into(),
+    }
+}
 
 fn chunk(uid: &str) -> Brief {
     Brief {
@@ -19,9 +24,14 @@ fn chunk(uid: &str) -> Brief {
         client_hint: None,
         scope: None,
         plan: "x".into(),
-        plan_title: "PLAN-x".into(),
-        source: ".fapony/plan/PLAN-x.md".into(),
-        sections: vec![],
+        plan_title: "x".into(),
+        sections: vec![
+            sec("1", "1. Goal", "ship it"),
+            sec("2", "2. Scope", "only cli"),
+            sec("3", "3. Done criteria", "tests pass"),
+            sec("4", "4. Constraints", "400 lines"),
+            sec("5", "5. Risks", "none said"),
+        ],
         reads: vec![],
         repo: None,
         root: None,
@@ -35,34 +45,36 @@ fn chunk(uid: &str) -> Brief {
 }
 
 #[test]
-fn the_brief_reads_the_plan_md_live_and_marks_missing_refs() {
-    let s = sections(DOC);
-    for keep in [
-        "## 1. Goal\nship it",
-        "## 2. Scope",
-        "## 3. Done criteria",
-        "## 4. Constraints\n400 lines",
-    ] {
-        assert!(s.contains(keep), "{keep} in {s}");
-    }
-    assert!(!s.contains("TL;DR") && !s.contains("Risks"), "{s}");
+fn the_brief_prints_the_plan_sections_once_and_marks_missing_refs() {
     let st = Started {
         run: "R".into(),
         chunks: vec![chunk("A"), chunk("B")],
     };
-    let md = |src: &str| (src == ".fapony/plan/PLAN-x.md").then(|| DOC.to_string());
-    let t = st.text(&md, &|p| p == "SPEC-x.md");
+    let t = st.text(&|p| p == "SPEC-x.md");
     assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
     assert!(t.contains("\n# 1 — title A (A)\n"), "{t}");
-    let mut imported = chunk("C");
-    imported.title = "1 — from the md".into();
+    for keep in [
+        "<!-- plan x -->\n\n## 1. Goal\n> section 1 · updated 2026-10-12\n\nship it\n",
+        "## 2. Scope",
+        "## 3. Done criteria",
+        "## 4. Constraints",
+        "- 5 · 5. Risks · 2026-10-12",
+    ] {
+        assert!(t.contains(keep), "{keep} in {t}");
+    }
+    assert!(
+        !t.contains("none said"),
+        "Risks is indexed, not printed: {t}"
+    );
+    let mut labelled = chunk("C");
+    labelled.title = "1 — titled with its label".into();
     let one = Started {
         run: "R".into(),
-        chunks: vec![imported],
+        chunks: vec![labelled],
     };
     assert!(
-        one.text(&|_| None, &|_| true)
-            .contains("\n# 1 — from the md (C)\n")
+        one.text(&|_| true)
+            .contains("\n# 1 — titled with its label (C)\n")
     );
     assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
     assert_eq!(
@@ -87,33 +99,20 @@ fn the_brief_reads_the_plan_md_live_and_marks_missing_refs() {
         run: "R".into(),
         chunks: vec![noted],
     }
-    .text(&|_| None, &|_| true);
+    .text(&|_| true);
     assert!(
         t2.contains("\nnotes left for this chunk:\n> use v2\n> not v1\n")
             && t2.contains("\nb3b, before this, handed off:\n> board ships\n"),
         "{t2}"
     );
-    // a plan with sections reads them, not the md file
-    let mut own = chunk("E");
-    own.sections = vec![Row {
-        key: "1".into(),
-        title: "1. Goal".into(),
-        body: "from the db".into(),
-        updated: "2026-10-12T00:00:00Z".into(),
-    }];
-    let t3 = Started {
+    // a plan with no sections (inbox): the brief still prints
+    let mut bare = chunk("E");
+    bare.sections = vec![];
+    let t = Started {
         run: "R".into(),
-        chunks: vec![own],
+        chunks: vec![bare],
     }
-    .text(&md, &|_| true);
-    assert!(
-        t3.contains(
-            "<!-- plan x -->\n\n## 1. Goal\n> section 1 · updated 2026-10-12\n\nfrom the db\n"
-        ) && !t3.contains("ship it"),
-        "{t3}"
-    );
-    // no plan file (inbox, or a moved md): the brief still prints
-    let t = st.text(&|_| None, &|_| true);
+    .text(&|_| true);
     assert!(
         !t.contains("Goal") && t.contains("refs: SPEC-x.md#block · gone.rs\n"),
         "{t}"

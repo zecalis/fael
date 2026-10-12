@@ -89,7 +89,7 @@ fn export_prints_the_label_and_the_notes_the_next_brief_will() {
     s.note(&a, "read before start", NOW).unwrap();
     start(&mut s, &a, "/w").unwrap();
     s.note(&a, "line one\nline two", NOW).unwrap();
-    let md = super::export(&s, plan, &|_: &str| None).unwrap();
+    let md = super::export(&s, plan).unwrap();
     assert!(
         md.contains(&format!("  uid {a} · label b10 · running")),
         "{md}"

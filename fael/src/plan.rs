@@ -1,16 +1,10 @@
-//! `fael plan import` · `next` · `export` · `cutover` (PLAN-fael-board b1, b1b, c1): read
-//! every `.fapony/` of the repo into `plans.db`, print each plan's next chunk from the db —
-//! the same pick `fapony plan` makes, so `scripts/plan-parity.py` can hold the two to each
-//! other — write a plan back out as markdown, and hand one plan's chunks to the db.
+//! `fael plan new` · `export` · `apply` · `park|unpark|done` · `repo`: a plan is sections
+//! plus chunks in `plans.db`; `export --json` writes the bill `apply` takes back.
 
 use crate::{Args, Repo, repo};
-use fael_core::plan::{Bill, Import, Next, PlanRow, Store, md};
-use std::collections::HashSet;
+use fael_core::plan::{Bill, PlanRow, Store};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-
-#[path = "plan_migrate.rs"]
-mod migrate;
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
@@ -22,13 +16,11 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     }
     let flags: &[&str] = match rest.first().map(String::as_str) {
         Some("export") => &["json", "since", "section"],
-        Some("apply" | "migrate") => &["dry-run"],
+        Some("apply") => &["dry-run"],
         _ => &[],
     };
     a.only("plan", flags)?;
     match rest.first().map(String::as_str) {
-        Some("import") if rest.len() == 1 => import(&r),
-        Some("next") if rest.len() == 1 => next(&r),
         Some("export") if rest.len() == 1 && a.has("since") => feed(&r, &a.one("since").unwrap()),
         Some("export") if rest.len() == 2 && a.has("section") => {
             section(&r, &rest[1], &a.one("section").unwrap_or_default())
@@ -37,12 +29,10 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             export(&r, rest.get(1).map(String::as_str), a.has("json"))
         }
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
-        Some("cutover") if rest.len() == 2 => cutover(&r, &rest[1]),
-        Some("migrate") if rest.len() == 1 => migrate::run(&r, open(&r)?, a.has("dry-run")),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("repo") if rest.len() == 3 => code_repo(&r, &rest[1], &rest[2]),
         _ => Err(
-            "rejected: fael plan import | fael plan next | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan> | fael plan migrate [--dry-run] | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
+            "rejected: fael plan new <name> \"<title>\" | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -53,76 +43,6 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
 /// (or `FAEL_DIR`) without git.
 pub(crate) fn db(r: &Repo) -> PathBuf {
     r.journal.as_deref().unwrap_or(&r.fael).join("plans.db")
-}
-
-fn import(r: &Repo) -> Result<(), String> {
-    let plans = scan(&r.root);
-    if plans.is_empty() {
-        return Err(format!(
-            "rejected: no PLAN-*.md under a .fapony/ in {} — nothing to import",
-            r.root.display()
-        ));
-    }
-    let path = db(r);
-    let rep = Store::open(&path)?.import_all(&plans, &fael_core::rfc3339(fael_core::now_ms()))?;
-    crate::board::register(r);
-    println!(
-        "imported {} plans, {} chunks → {}",
-        rep.plans,
-        rep.chunks,
-        path.display()
-    );
-    if rep.drafts > 0 {
-        println!(
-            "⚠ {} unknown checkbox line(s) imported as draft (not startable) — use [ ], [x] or [~]",
-            rep.drafts
-        );
-    }
-    for u in &rep.unresolved {
-        println!("⚠ (after …) names no chunk, never met: {u}");
-    }
-    for a in &rep.ambiguous {
-        println!("⚠ label/title matches more than one chunk, new uid: {a}");
-    }
-    if rep.db_plans > 0 {
-        println!(
-            "{} plan(s) live in the db: plan fields refreshed, chunks untouched",
-            rep.db_plans
-        );
-    }
-    Ok(())
-}
-
-/// SPEC §9: re-import, so the db holds the md's chunks as written, then hand the chunk list
-/// to the db and swap the md's chunk lines for the banner. The db flips first: a failed
-/// write leaves the old lines, which no import reads any more.
-fn cutover(r: &Repo, want: &str) -> Result<(), String> {
-    // plans.db keeps one row per app/name: two files sharing it collapse on import, so
-    // refuse before import rather than cut over whichever came last (issue 01M4MJ48)
-    let plans = scan(&r.root);
-    let mut hits: Vec<&Import> = plans
-        .iter()
-        .filter(|p| p.md.name == want || format!("{}/{}", p.app, p.md.name) == want)
-        .collect();
-    hits.sort_by(|a, b| (&a.app, &a.source).cmp(&(&b.app, &b.source)));
-    if hits.windows(2).any(|w| w[0].app == w[1].app) {
-        let paths: Vec<&str> = hits.iter().map(|p| p.source.as_str()).collect();
-        return Err(format!(
-            "rejected: '{want}' names more than one plan file: {} — rename one, or move the shipped one out of .fapony/",
-            paths.join(", ")
-        ));
-    }
-    import(r)?;
-    let mut s = open(r)?;
-    let p = one(&s, want)?;
-    let n = s.cut_over(p.id)?;
-    mirror(r, &s)?;
-    println!(
-        "{} cut over: its {n} chunks live in plans.db (`fael chunk …`); {} keeps Goal, Scope, Done and the rest",
-        key(&p),
-        p.source
-    );
-    Ok(())
 }
 
 /// `new`: the plan row (chunks in the db from the start) and its Goal/Scope/Done/Constraints
@@ -172,14 +92,13 @@ fn apply(r: &Repo, from: &str, dry: bool) -> Result<(), String> {
         (false, true) => println!("no change (rev {rev})"),
         (false, false) => {
             crate::board::register(r);
-            mirror(r, &s)?;
             println!("applied (rev {rev})");
         }
     }
     Ok(())
 }
 
-/// `park` · `unpark` · `done` on a cut-over plan: the owner's word on `plan.state`.
+/// `park` · `unpark` · `done`: the owner's word on `plan.state`.
 fn state(r: &Repo, verb: &str, want: &str) -> Result<(), String> {
     let to = match verb {
         "park" => "parked",
@@ -219,70 +138,18 @@ fn code_repo(r: &Repo, want: &str, path: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Each cut-over plan's md: its TL;DR lists the db's chunks again, read-only, so the owner
-/// sees state in the md until the board app shows it. Import never reads them back.
-pub(crate) fn mirror(r: &Repo, s: &Store) -> Result<(), String> {
-    for p in s
-        .plans()?
-        .iter()
-        .filter(|p| p.truth == "db" && !p.source.is_empty())
-    {
-        let file = r.root.join(&p.source);
-        let Ok(text) = std::fs::read_to_string(&file) else {
-            continue;
-        };
-        let md = fael_core::plan::mirror(&text, &key(p), &s.ticks(p.id)?);
-        if let Some(md) = md.filter(|md| *md != text) {
-            std::fs::write(&file, md).map_err(|e| format!("{}: {e}", file.display()))?;
-        }
-    }
-    Ok(())
-}
-
-/// Every `.fapony/` of [`migrate::apps`]; each one's `plan/`, `parked/`, `done/`.
-fn scan(root: &Path) -> Vec<Import> {
-    let mut out = Vec::new();
-    for app in migrate::apps(root) {
-        let base = root.join(&app).join(".fapony");
-        for dir in ["plan", "parked", "done"] {
-            let Ok(rd) = std::fs::read_dir(base.join(dir)) else {
-                continue;
-            };
-            let mut files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
-            files.sort();
-            for f in files {
-                let name = f.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-                let Some(parsed) = std::fs::read_to_string(&f)
-                    .ok()
-                    .and_then(|t| md::parse(name, &t))
-                else {
-                    continue;
-                };
-                out.push(Import {
-                    app: app.to_string_lossy().replace('\\', "/"),
-                    dir: dir.to_string(),
-                    source: f
-                        .strip_prefix(root)
-                        .unwrap_or(&f)
-                        .to_string_lossy()
-                        .replace('\\', "/"),
-                    md: parsed,
-                });
-            }
-        }
-    }
-    out
-}
-
 fn open(r: &Repo) -> Result<Store, String> {
     let path = db(r);
     if !path.exists() {
-        return Err("rejected: no plans.db yet — run `fael plan import` first".into());
+        return Err(
+            "rejected: no plans.db yet — `fael plan new <name> \"<title>\"` makes the first plan"
+                .into(),
+        );
     }
     Store::open(&path)
 }
 
-/// `app/name`, or `name` at the root — how `next` and `export` name a plan.
+/// `app/name`, or `name` at the root — how `export` names a plan.
 fn key(p: &PlanRow) -> String {
     if p.app.is_empty() {
         p.name.clone()
@@ -300,7 +167,7 @@ fn named(s: &Store, want: Option<&str>) -> Result<Vec<PlanRow>, String> {
         .collect();
     match (want, plans.len()) {
         (Some(w), 0) => Err(format!(
-            "rejected: no plan '{w}' in plans.db — see `fael plan next`"
+            "rejected: no plan '{w}' in plans.db — `fael board` lists them"
         )),
         (Some(w), n) if n > 1 => Err(format!("rejected: '{w}' names {n} plans — use app/name")),
         _ => Ok(plans),
@@ -327,10 +194,9 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
         );
         return Ok(());
     }
-    let md = |src: &str| std::fs::read_to_string(r.root.join(src)).ok();
     let docs: Vec<String> = plans
         .iter()
-        .map(|p| fael_core::plan::export(&s, p.id, &md))
+        .map(|p| fael_core::plan::export(&s, p.id))
         .collect::<Result<_, _>>()?;
     print!("{}", docs.join("\n"));
     Ok(())
@@ -351,30 +217,5 @@ fn feed(r: &Repo, since: &str) -> Result<(), String> {
         .map_err(|_| format!("rejected: --since takes an event id (0 = all), not {since:?}"))?;
     let f = fael_core::plan::feed(&open(r)?, since)?;
     println!("{}", serde_json::to_string(&f).map_err(|e| e.to_string())?);
-    Ok(())
-}
-
-fn next(r: &Repo) -> Result<(), String> {
-    let s = open(r)?;
-    let branch = crate::journal::head_branch(&r.root);
-    // fapony `liveBranches`: a claim naming no checked-out branch holds nothing
-    let live: Option<HashSet<String>> = crate::git(&r.root, &["worktree", "list", "--porcelain"])
-        .map(|o| {
-            o.lines()
-                .filter_map(|l| l.strip_prefix("branch refs/heads/"))
-                .map(str::to_string)
-                .collect()
-        });
-    for p in s.plans()? {
-        let what = match fael_core::plan::next(&s, p.id, branch.as_deref(), live.as_ref())? {
-            Next::Chunk { text, .. } => format!("- [ ] {text}"),
-            Next::NoneReady => "(none ready)".into(),
-            Next::Blocked => "(blocked)".into(),
-            Next::Parked => "(parked)".into(),
-            Next::Closed => "(all closed)".into(),
-            Next::Shipped => continue,
-        };
-        println!("{}\t{what}", key(&p));
-    }
     Ok(())
 }

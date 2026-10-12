@@ -1,7 +1,7 @@
 //! What `fael chunk start` prints — the agent's first message (SPEC §8). The first line
 //! names R; then the plan's Goal and Done sections, each section the chunk reads, and an
-//! index of the rest (no reads: Goal, Scope, Done, Constraints) — a plan with no sections
-//! yet reads those from its md by heading. A ref that no longer exists is listed as missing.
+//! index of the rest (no reads: Goal, Scope, Done, Constraints). A ref that no longer
+//! exists is listed as missing.
 
 use super::export::one;
 use super::section::Row;
@@ -38,23 +38,6 @@ fn base(heading: &str, few: bool) -> bool {
     words.iter().any(|w| h.starts_with(w))
 }
 
-/// The md sections a brief carries: `## Goal`, `## 2. Scope`, `## Done criteria`,
-/// `## Constraints` (any numbering), each up to the next `## `.
-pub fn sections(md: &str) -> String {
-    let mut out = String::new();
-    let mut keep = false;
-    for l in md.lines() {
-        if let Some(h) = l.strip_prefix("## ") {
-            keep = base(h, false);
-        }
-        if keep {
-            out.push_str(l);
-            out.push('\n');
-        }
-    }
-    out
-}
-
 /// Where the run this start took over stopped. git owns what changed: its commands, never
 /// their output.
 fn resume(o: &mut String, p: &Prev) {
@@ -79,12 +62,8 @@ fn resume(o: &mut String, p: &Prev) {
 }
 
 impl Started {
-    /// `md(source)` = the plan file's text, `exists(path)` = whether a ref is still there.
-    pub fn text(
-        &self,
-        md: &dyn Fn(&str) -> Option<String>,
-        exists: &dyn Fn(&str) -> bool,
-    ) -> String {
+    /// `exists(path)` = whether a ref is still there.
+    pub fn text(&self, exists: &dyn Fn(&str) -> bool) -> String {
         let mut o = String::new();
         let n = self.chunks.len();
         let what = if n == 1 {
@@ -162,19 +141,14 @@ impl Started {
                 );
             }
         }
-        self.plan_context(&mut o, md, exists);
+        self.plan_context(&mut o, exists);
         o.push('\n');
         o.push_str(&rules(self.chunks.first().map_or("<uid>", |c| &c.uid)));
         o
     }
 
     /// Plan context once per plan, after the chunks.
-    fn plan_context(
-        &self,
-        o: &mut String,
-        md: &dyn Fn(&str) -> Option<String>,
-        exists: &dyn Fn(&str) -> bool,
-    ) {
+    fn plan_context(&self, o: &mut String, exists: &dyn Fn(&str) -> bool) {
         let mut seen = Vec::new();
         for c in &self.chunks {
             if seen.contains(&&c.plan) {
@@ -194,13 +168,7 @@ impl Started {
                 }
             }
             let mut shown: Vec<&str> = Vec::new();
-            if c.sections.is_empty() {
-                // ponytail: md fallback until `fael plan migrate` gives every plan sections
-                let text = (!c.source.is_empty()).then(|| md(&c.source)).flatten();
-                if let Some(s) = text.map(|t| sections(&t)).filter(|s| !s.is_empty()) {
-                    let _ = write!(o, "\n<!-- {} -->\n{s}", c.source);
-                }
-            } else {
+            if !c.sections.is_empty() {
                 let _ = writeln!(o, "\n<!-- plan {} -->", c.plan);
                 for s in c
                     .sections

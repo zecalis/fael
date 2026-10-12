@@ -99,10 +99,6 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         }
         _ => return Err(format!("rejected: {USAGE}")),
     }
-    // the db already holds the change: a stale md mirror is said, never a failed command
-    if let Err(e) = s().and_then(|s| crate::plan::mirror(&r, &s)) {
-        eprintln!("fael: md mirror not written: {e}");
-    }
     crate::board::register(&r);
     Ok(ExitCode::SUCCESS)
 }
@@ -257,9 +253,10 @@ fn issues(r: &Repo, ids: &[String]) -> Result<Vec<String>, String> {
         .collect()
 }
 
-/// `fael kickoff PLAN-x.md` on a `db` plan: the chunk this worktree holds, else the next
-/// ready one — `fael chunk start` prints its brief and the rules.
-pub(crate) fn kickoff(r: &Repo, file: &str) {
+/// `fael kickoff PLAN-x.md` (anchor `plan:x`): the chunk this worktree holds, else the next
+/// ready one of plan `x` — `fael chunk start` prints its brief and the rules.
+pub(crate) fn kickoff(r: &Repo, anchor: &str) {
+    let name = anchor.split_once(':').map_or(anchor, |(_, n)| n);
     let path = db(r);
     let Some(s) = path.exists().then(|| Store::open(&path).ok()).flatten() else {
         return;
@@ -269,7 +266,7 @@ pub(crate) fn kickoff(r: &Repo, file: &str) {
         .ok()
         .into_iter()
         .flatten()
-        .find(|p| p.truth == "db" && p.source == file)
+        .find(|p| p.name == name)
     else {
         return;
     };

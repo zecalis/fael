@@ -1,8 +1,8 @@
 //! `chunk start`: one winner of a race, a pair all-or-none, per-member commands end only
-//! that member's run (SPEC §4 test matrix), and the md-plan refusal.
+//! that member's run (SPEC §4 test matrix).
 
 use super::super::chunk::tests::{NOW, add, get, here, live, start, state};
-use super::super::{Fields, Here, Import, Owner, Start, Store, md};
+use super::super::{Fields, Here, Owner, Start, Store};
 use rusqlite::params;
 
 fn pair(s: &Store, a: &str, b: &str) {
@@ -68,7 +68,7 @@ fn a_pair_starts_whole_or_not_at_all() {
     s.owner(&b, Owner::Unpark, None, NOW).unwrap();
     let st = s.start(&b, &Default::default(), &here("/w")).unwrap();
     assert_eq!(st.chunks.len(), 2);
-    assert!(st.text(&|_| None, &|_| true).contains("2 paired chunks"));
+    assert!(st.text(&|_| true).contains("2 paired chunks"));
 }
 
 #[test]
@@ -118,30 +118,6 @@ fn two_starts_of_one_chunk_one_wins() {
         assert!(lost.contains(&format!("held by run {}", won[0])), "{lost}");
         let _ = std::fs::remove_dir_all(dir);
     }
-}
-
-#[test]
-fn an_md_plan_takes_no_chunk_command() {
-    let mut s = Store::open_in_memory().unwrap();
-    let doc = "# PLAN-x\n\n## TL;DR\n- [ ] 1 — one\n\n## 1. Goal\n";
-    let imp = Import {
-        app: String::new(),
-        dir: "plan".into(),
-        source: ".fapony/plan/PLAN-x.md".into(),
-        md: md::parse("PLAN-x.md", doc).unwrap(),
-    };
-    s.import_all(&[imp], NOW).unwrap();
-    let uid: String = s
-        .conn
-        .query_row("SELECT uid FROM chunk", [], |r| r.get(0))
-        .unwrap();
-    let e = start(&mut s, &uid, "/w").unwrap_err();
-    assert!(e.contains("md plan x") && e.contains("cutover"), "{e}");
-    let f = super::super::Fields {
-        title: Some("t".into()),
-        ..Default::default()
-    };
-    assert!(s.add("x", &f, &[], NOW).unwrap_err().contains("is md"));
 }
 
 #[test]

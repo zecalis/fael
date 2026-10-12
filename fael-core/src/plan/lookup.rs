@@ -5,9 +5,9 @@
 use super::store::err;
 use rusqlite::{OptionalExtension, Transaction, params};
 
-pub(super) type Hit = (i64, String, String, String, String, String);
+pub(super) type Hit = (i64, String, String);
 
-/// `(id, uid, state, truth, plan, source)` of the chunk `key` names: its uid, else a label
+/// `(id, uid, state)` of the chunk `key` names: its uid, else a label
 /// only one chunk carries (a label is unique in its plan, not across plans), else the one
 /// uid that starts with it (8+ chars, any case). None = no chunk.
 pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String> {
@@ -54,24 +54,12 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
 }
 
 fn hits(tx: &Transaction, cond: &str, key: &str) -> Result<Vec<Hit>, String> {
-    let sql = format!(
-        "SELECT c.id, c.uid, c.state, p.truth, p.name, p.source
-         FROM chunk c JOIN plan p ON p.id = c.plan WHERE {cond}"
-    );
+    let sql = format!("SELECT c.id, c.uid, c.state FROM chunk c WHERE {cond}");
     let mut q = tx.prepare(&sql).map_err(err)?;
-    q.query_map([key], |r| {
-        Ok((
-            r.get(0)?,
-            r.get(1)?,
-            r.get(2)?,
-            r.get(3)?,
-            r.get(4)?,
-            r.get(5)?,
-        ))
-    })
-    .map_err(err)?
-    .collect::<Result<_, _>>()
-    .map_err(err)
+    q.query_map([key], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)
 }
 
 /// A label is one word, not uid-shaped, and free in its plan (`id` = the chunk keeping it).

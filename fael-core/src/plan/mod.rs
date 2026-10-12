@@ -1,4 +1,4 @@
-//! Plans and chunks (SPEC-fael-board): the markdown reader, the SQLite store, and the
+//! Plans and chunks (SPEC-fael-board): the SQLite store of sections and chunks, and the
 //! chunk state table. A state changes only by a command or by live git — never guessed.
 
 mod agent;
@@ -9,16 +9,10 @@ mod board;
 mod board_math;
 mod brief;
 mod chunk;
-mod cutover;
 mod export;
-mod import;
 mod issue;
 mod lookup;
-pub mod md;
-mod migrate;
-mod migrate_reads;
 mod r#move;
-mod next;
 mod owner;
 mod ready;
 mod schema;
@@ -33,18 +27,15 @@ pub use apply::Op;
 pub use bill::Bill;
 pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};
 pub use board_math::overlaps;
-pub use brief::{rules, sections};
+pub use brief::rules;
 pub use chunk::{Fields, Here};
-pub use cutover::mirror;
 pub use export::{export, export_json, export_section, feed};
 pub use issue::Fixer;
-pub use migrate::Spec;
-pub use next::{Next, next};
 pub use owner::Owner;
 pub use ready::{Ready, Unmet};
 pub use shared::shared;
 pub use start::{Brief, Start, Started};
-pub use store::{Import, PlanRow, Report, Store};
+pub use store::{PlanRow, Store};
 
 /// A chunk's one stored state (SPEC §1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -276,23 +276,17 @@ impl Store {
             return Err(format!("rejected: bill v {} — this fael reads v 1", b.v));
         }
         let tx = tx(self)?;
-        let (pid, truth): (i64, String) = tx
+        let pid: i64 = tx
             .query_row(
-                "SELECT id, truth FROM plan
+                "SELECT id FROM plan
                  WHERE name = ?1 OR (app <> '' AND app || '/' || name = ?1)
                  ORDER BY app = '' DESC LIMIT 1",
                 [&b.plan],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| r.get(0),
             )
             .optional()
             .map_err(err)?
             .ok_or(format!("rejected: no plan '{}' in the bill", b.plan))?;
-        if truth != "db" {
-            return Err(format!(
-                "rejected: plan {} is md: its chunks follow its file until `fael plan cutover`",
-                b.plan
-            ));
-        }
         let now_rev = rev(&tx, pid)?;
         if now_rev != b.rev {
             return Err(format!(

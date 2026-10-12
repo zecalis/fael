@@ -58,37 +58,7 @@ pub fn shape_rejects(row: &Row, old: Option<&Row>) -> Vec<String> {
     if untitled(row).is_some() && old.is_none_or(|o| untitled(o).is_none()) {
         r.extend(untitled(row));
     }
-    if old.is_none_or(|o| o.key != row.key) {
-        r.extend(row.key.as_deref().and_then(|k| plan_key(k, &row.kind)));
-    }
     r
-}
-
-/// A plan key the handoff convention (AGENTS.md §Plan Workflow) says is
-/// wrong: a handoff spelled any other way than `plan:<name>:handoff`, a
-/// `chunk-` tail not led by a digit, or a note under `plan:<name>:chunk-<n>`
-/// — that key keeps the note beside the plan's handoff instead of replacing
-/// it, right only for a chunk run in parallel with another open chunk, which
-/// fael cannot see: `--force` says so (the vela `plan:vela:chunk-3` note was
-/// a sequential chunk).
-fn plan_key(k: &str, kind: &str) -> Option<String> {
-    let (stem, tail) = k.strip_prefix("plan:")?.rsplit_once(':')?;
-    let handoff = format!("plan:{stem}:handoff");
-    let chunk = tail.strip_prefix("chunk-");
-    if tail != "handoff" && tail.contains("handoff") {
-        Some(format!("key {k:?} — a plan's handoff key is {handoff}"))
-    } else if chunk.is_some_and(|n| !n.starts_with(|c: char| c.is_ascii_digit())) {
-        Some(format!(
-            "key {k:?} — a chunk key is plan:{stem}:chunk-<n>, <n> the chunk number"
-        ))
-    } else if chunk.is_some() && kind == "note" {
-        Some(format!(
-            "key {k:?} — a chunk's handoff note goes under {handoff} (each chunk's note \
-supersedes the last); chunk-<n> only for a chunk run in parallel with another open chunk"
-        ))
-    } else {
-        None
-    }
 }
 
 /// `shape_rejects` as the add path's reject: nothing is written, and the
