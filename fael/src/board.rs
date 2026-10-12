@@ -57,7 +57,10 @@ struct Worktree {
 }
 
 pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
-    a.only("board", &["json", "open", "plan"])?;
+    a.only("board", &["json", "open", "plan", "drop"])?;
+    if let Some(root) = a.one("drop") {
+        return registry::unregister(&root);
+    }
     if let Ok(r) = repo()
         && db(&r).exists()
     {
@@ -96,11 +99,7 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
     } else {
         print!("{}", text(&b));
     }
-    Ok(if broken {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    })
+    Ok(ExitCode::from(u8::from(broken)))
 }
 
 /// Now, and the RFC 3339 time 30 min ago: a live run last seen before it is `stalled`.

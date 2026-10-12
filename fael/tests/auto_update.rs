@@ -190,7 +190,8 @@ fn session_start_does_not_wait_for_the_update_and_the_next_one_says_it() {
     let base = world(
         &["v99.0.0"],
         r#"{"checked_at":0,"seen_at":0,"to":"99.0.0"}"#,
-        "sleep 3",
+        // 10s against a 5s bar: a loaded CI runner took 2.67s for a 2s bar
+        "sleep 10",
         "99.0.0",
     );
     let repo = base.join("repo");
@@ -224,12 +225,12 @@ fn session_start_does_not_wait_for_the_update_and_the_next_one_says_it() {
     let t = std::time::Instant::now();
     session_start();
     assert!(
-        t.elapsed().as_secs() < 2,
+        t.elapsed().as_secs() < 5,
         "waited {:?} for the update",
         t.elapsed()
     );
 
-    let end = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
     let json = || std::fs::read_to_string(base.join("state/update.json")).unwrap_or_default();
     while !json().contains("\"updated\"") && std::time::Instant::now() < end {
         std::thread::sleep(std::time::Duration::from_millis(100));

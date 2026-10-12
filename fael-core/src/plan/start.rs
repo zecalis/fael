@@ -21,8 +21,8 @@ pub struct Start {
     pub no_worktree: bool,
     /// take over a live run (its end names who took it), never a kill
     pub force: bool,
-    /// the calling agent's session (`CLAUDE_CODE_SESSION_ID`) on an interactive
-    /// `--no-worktree` start: its Stop hook keeps the run seen from any cwd
+    /// the calling agent's session (`CLAUDE_CODE_SESSION_ID`) on a start without `--run`:
+    /// kept for `--resume` even when `done` ends the run before any Stop
     pub session: Option<String>,
 }
 
