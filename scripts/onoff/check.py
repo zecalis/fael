@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Self-check for replica.py and trial.reached() on throwaway data: what
-C^'s copy keeps and drops, that each leak check fires on a planted leak, and
-when a row counts as delivered. Exits 0 or raises.
+"""Self-check for replica.py, trial.reached() and acted.py on throwaway data:
+what C^'s copy keeps and drops, that each leak check fires on a planted leak,
+when a row counts as delivered and when as used. Exits 0 or raises.
 
 Usage: scripts/onoff/check.py
 """
@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 
+import acted
 import replica
 import trial
 
@@ -95,6 +96,7 @@ def main():
     got = replica.git_leaks(off, c, cutoff)
     assert {"c_object", "second_history", "late_commits"} <= got.keys(), got
     reached(t)
+    used(t)
     put_suite(t)
     shutil.rmtree(t)
     print("check ok")
@@ -130,6 +132,29 @@ def reached(t):
     assert got("01M45SPWG" + "0" * 17) == (True, False)
     assert got("01M45SPWF" + "0" * 17) == (True, True)
     assert got("01M45SPWH" + "0" * 17) == (False, False)  # not a hook reply
+
+
+def used(t):
+    """A row is used when the agent names it after the push, not before; a
+    prompt key matches whole (credit-note-ref is not credit-note-refund)."""
+    hook = lambda event, text: json.dumps({"type": "system", "subtype": "hook_response",
+                                           "hook_event": event, "stdout": text})
+    say = lambda *blocks: json.dumps({"type": "assistant", "message": {"content": list(blocks)}})
+    bash = lambda cmd: {"type": "tool_use", "name": "Bash", "input": {"command": cmd}}
+    open(os.path.join(t, "transcript.jsonl"), "w").write("\n".join([
+        say(bash("fael claim 01M45SPWF")),  # before its push: not counted
+        hook("UserPromptSubmit", "fael: the prompt names open key(s) v:ref (1, via \"r\"), "
+             "v:refund (1, via \"r\") — fael find --key <key>"),
+        hook("PostToolUse", "fael mem for a.ts:\n- [01M45SPWF] decision #v:a → also: b.ts\n"
+             "- [01M45SPWG] issue #v:b\nfael: a.ts broke before — 01M45SPWH \"x\" was fixed"),
+        say(bash("fael close 01M45SPWG 'done'; git commit -m 'fix (fael:01M45SPWH)'"),
+            {"type": "text", "text": "see #v:refund"}),
+        say({"type": "tool_use", "name": "mcp__fael__find", "input": {"key": "v:a"}}),
+    ]) + "\n")
+    got = {r["id"]: (r["kind"], sorted(set(r["actions"]))) for r in acted.tally(t)["rows"]}
+    assert got == {"#v:ref": ("prompt-key", []), "#v:refund": ("prompt-key", ["cited"]),
+                   "01M45SPWF": ("decision", ["find"]), "01M45SPWG": ("issue", ["close"]),
+                   "01M45SPWH": ("broke", ["cited"])}, got
 
 
 if __name__ == "__main__":
