@@ -118,6 +118,7 @@ impl Store {
         let plans: Vec<&Plan> = rows.iter().map(|r| &r.0).collect();
         let (n, attached, orphans) = attach(&tx, &plans, &held, specs, &mut got, &now)?;
         sections += n;
+        let r = super::migrate_reads::run(&tx, &now)?;
         let mut o = String::new();
         for (k, g) in &got {
             let _ = writeln!(o, "{k}: {}", g.notes.join(" · "));
@@ -128,15 +129,17 @@ impl Store {
         for u in &orphans {
             let _ = writeln!(o, "unattached: {u}");
         }
+        o.push_str(&r.lines.concat());
         let _ = write!(
             o,
             "migrate: {} plans, {sections} sections, {attached} specs attached, {} unattached, \
-             {flipped} md plans → truth db",
+             {flipped} md plans → truth db, {}",
             rows.len(),
-            orphans.len()
+            orphans.len(),
+            r.counts()
         );
         let db = tx.path().filter(|p| !p.is_empty()).map(PathBuf::from);
-        if dry || sections + flipped == 0 {
+        if dry || sections + flipped + r.writes == 0 {
             o.push_str(if dry {
                 " — dry run, nothing written"
             } else {

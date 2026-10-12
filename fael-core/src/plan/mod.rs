@@ -16,6 +16,7 @@ mod issue;
 mod lookup;
 pub mod md;
 mod migrate;
+mod migrate_reads;
 mod r#move;
 mod next;
 mod owner;
