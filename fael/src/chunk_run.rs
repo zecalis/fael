@@ -91,7 +91,26 @@ pub(crate) fn done(
     Store::open(&db(r))?.done(uid, handoff, pr, out, here)?;
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
+    if pr.is_some() {
+        conflict_note(&r.root, here.branch);
+    }
     Ok(())
+}
+
+/// Decision 01M4QJPX: a PR whose branch no longer merges into the base (`origin/HEAD`, no
+/// fetch, as board does) is told which files — never refused; a git error says nothing.
+fn conflict_note(dir: &Path, branch: Option<&str>) {
+    let Some(base) = crate::git(dir, &["rev-parse", "--abbrev-ref", "origin/HEAD"]) else {
+        return;
+    };
+    let Some(b) = branch.filter(|b| Some(*b) != base.strip_prefix("origin/")) else {
+        return;
+    };
+    let files = crate::board::prs::merge_tree(dir, &base, "HEAD").unwrap_or_default();
+    if !files.is_empty() {
+        let files = files.join(", ");
+        println!("note: {b} conflicts with {base} in {files} — rebase before review");
+    }
 }
 
 /// `fael chunk move <uid> --plan <p>`: the chunk goes to the end of `p`, uid, runs, notes

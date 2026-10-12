@@ -103,3 +103,44 @@ fn an_open_pr_holds_its_scope_and_says_if_it_merges() {
         "z.txt: nobody else"
     );
 }
+
+/// Decision 01M4QJPX: `done --pr` on a branch that no longer merges names the files; done
+/// still succeeds, and a clean branch prints no note.
+#[test]
+fn done_says_which_files_conflict_with_the_base() {
+    let tmp = std::env::temp_dir().join(format!("fael-done-conflict-{}", fael_core::ulid()));
+    let (d, state) = (tmp.join("repo"), tmp.join("state"));
+    std::fs::create_dir_all(&d).unwrap();
+    let d = d.canonicalize().unwrap();
+    git(&d, &["init", "-q", "-b", "main"]);
+    std::fs::write(d.join("a.txt"), "base").unwrap();
+    git(&d, &["add", "a.txt"]);
+    git(&d, &["commit", "-qm", "init"]);
+    let f = |args: &[&str]| fael(&d, &state, args);
+    let (bad, ok) = (
+        f(&["chunk", "add", "bad", "--brief", "b"]),
+        f(&["chunk", "add", "ok", "--brief", "b"]),
+    );
+    // each branch starts before main moved
+    let done = |uid: &str, branch: &str, file: &str| {
+        git(&d, &["switch", "-q", "-c", branch, "main~1"]);
+        f(&["chunk", "start", uid]);
+        std::fs::write(d.join(file), branch).unwrap();
+        git(&d, &["add", file]);
+        git(&d, &["commit", "-qm", branch]);
+        f(&["chunk", "done", uid, "h", "--pr", "5"])
+    };
+    // main moves on under a.txt; the checkout's fetched base is origin/main
+    std::fs::write(d.join("a.txt"), "main").unwrap();
+    git(&d, &["commit", "-qam", "main"]);
+    git(&d, &["update-ref", "refs/remotes/origin/main", "main"]);
+    let head = "refs/remotes/origin/HEAD";
+    git(&d, &["symbolic-ref", head, "refs/remotes/origin/main"]);
+    let out = done(&bad, "feat/bad", "a.txt");
+    assert!(
+        out.contains("note: feat/bad conflicts with origin/main in a.txt — rebase"),
+        "{out}"
+    );
+    let out = done(&ok, "feat/ok", "b.txt");
+    assert!(!out.contains("note:"), "{out}");
+}

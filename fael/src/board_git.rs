@@ -77,7 +77,7 @@ fn merged(log: &str, n: i64) -> bool {
 
 /// `git merge-tree --write-tree` (git >= 2.38): 0 = clean, 1 with a tree id = the conflicted
 /// paths after it; anything else (old git, no such branch) = unknown.
-fn merge_tree(dir: &Path, base: &str, branch: &str) -> Option<Vec<String>> {
+pub(crate) fn merge_tree(dir: &Path, base: &str, branch: &str) -> Option<Vec<String>> {
     let o = Command::new("git")
         .args(["merge-tree", "--write-tree", "--name-only", "--no-messages"])
         .args([base, branch])
