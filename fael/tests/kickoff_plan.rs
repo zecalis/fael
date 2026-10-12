@@ -1,5 +1,5 @@
-//! `fael kickoff PLAN-x.md`: at most 5 rows without --limit, and rows of a
-//! chunk the plan ticked are left out (PLAN-fael-context-loop chunk 2).
+//! `fael kickoff PLAN-x.md` (anchor `plan:x`, no file needed): at most 5 rows
+//! without --limit, the plan's handoff first.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -33,11 +33,6 @@ fn repo() -> PathBuf {
                 .success()
         );
     }
-    std::fs::write(
-        d.join("PLAN-foo.md"),
-        "- [x] chunk 1 — done\n- [ ] chunk 2 — open\n",
-    )
-    .unwrap();
     d
 }
 
@@ -51,16 +46,13 @@ fn note(d: &Path, text: &str, key: &str) {
 }
 
 #[test]
-fn a_plan_kickoff_drops_ticked_chunks_and_caps_at_five_rows() {
+fn a_plan_kickoff_caps_at_five_rows() {
     let d = repo();
-    note(&d, "chunk one note", "plan:foo:chunk-1");
-    note(&d, "chunk two note", "plan:foo:chunk-2");
-    for i in 0..6 {
+    for i in 0..8 {
         note(&d, &format!("other note {i}"), &format!("foo:topic-{i}"));
     }
     let rows = |out: &str| out.lines().filter(|l| l.starts_with("- [")).count();
     let out = fael(&d, &["kickoff", "PLAN-foo.md"]);
-    assert!(!out.contains("chunk one note"), "{out}");
     assert_eq!(rows(&out), 5, "{out}");
     assert!(out.contains("--offset 5"), "{out}");
     // an explicit --limit wins, and a non-plan kickoff is not capped
@@ -76,35 +68,12 @@ fn rows(out: &str) -> Vec<&str> {
 }
 
 #[test]
-fn an_unreadable_plan_doc_still_caps_and_keeps_every_row() {
+fn a_plan_path_from_a_subdirectory_names_the_same_plan() {
     let d = repo();
-    note(&d, "chunk one note", "plan:foo:chunk-1");
-    for i in 0..6 {
-        note(&d, &format!("other note {i}"), &format!("foo:topic-{i}"));
-    }
-    std::fs::remove_file(d.join("PLAN-foo.md")).unwrap();
-    // the doc is gone: the anchor still widens, nothing is filtered, the cap holds
-    let out = fael(&d, &["kickoff", "PLAN-foo.md"]);
-    assert_eq!(rows(&out).len(), 5, "{out}");
-}
-
-#[test]
-fn a_nested_plan_doc_works_from_a_subdirectory() {
-    let d = repo();
-    std::fs::create_dir_all(d.join(".fapony/plan/sub")).unwrap();
-    std::fs::rename(d.join("PLAN-foo.md"), d.join(".fapony/plan/PLAN-foo.md")).unwrap();
-    note(&d, "chunk one note", "plan:foo:chunk-1");
+    std::fs::create_dir_all(d.join("docs/sub")).unwrap();
     note(&d, "chunk two note", "plan:foo:chunk-2");
-    let out = fael(&d, &["kickoff", ".fapony/plan/PLAN-foo.md"]);
-    assert!(
-        !out.contains("chunk one note") && out.contains("chunk two note"),
-        "{out}"
-    );
-    let out = fael(&d.join(".fapony/plan/sub"), &["kickoff", "../PLAN-foo.md"]);
-    assert!(
-        !out.contains("chunk one note") && out.contains("chunk two note"),
-        "{out}"
-    );
+    let out = fael(&d.join("docs/sub"), &["kickoff", "../PLAN-foo.md"]);
+    assert!(out.contains("chunk two note"), "{out}");
 }
 
 #[test]

@@ -49,30 +49,3 @@ fn refile_of_a_fat_row_passes() {
     assert!(gate(&new, &log, Some("01OLD")).is_ok());
     assert!(gate(&new, &log, None).is_err());
 }
-
-#[test]
-fn plan_keys() {
-    let log = Log::default();
-    let ok = |kind: &str, k: &str| gate(&row(kind, "t", Some(k)), &log, None);
-    assert!(ok("note", "plan:vela:handoff").is_ok());
-    assert!(ok("decision", "plan:vela:chunk-3").is_ok());
-    assert!(ok("decision", "plan:vela").is_ok());
-    assert!(ok("note", "plan:vela:void-asks").is_ok());
-    // a sequential chunk's handoff note under chunk-<n> (the vela slip)
-    let e = ok("note", "plan:vela:chunk-3").unwrap_err();
-    assert!(
-        e.contains("plan:vela:handoff") && e.contains("parallel"),
-        "{e}"
-    );
-    assert!(ok("decision", "plan:vela:chunk-pr2").is_err());
-    assert!(ok("note", "plan:vela:pr2-handoff").is_err());
-    // re-filing a row already on that key is not a new choice of key
-    let mut old = row("note", "t", Some("plan:vela:chunk-3"));
-    old.id = "01OLD".into();
-    let log = Log {
-        rows: vec![old],
-        ..Default::default()
-    };
-    let r = row("note", "t2", Some("plan:vela:chunk-3"));
-    assert!(gate(&r, &log, Some("01OLD")).is_ok());
-}

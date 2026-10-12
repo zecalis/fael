@@ -1,11 +1,8 @@
 //! `fael plan export`: one plan as markdown, for review and backup — the db is a binary
-//! git cannot merge (SPEC §7). Checkbox lines stay in the import grammar, so a snapshot
-//! reads back with `fael plan import`; each chunk's db fields follow on an indented line.
-//! The plan's own text (Goal, Scope, Done, Constraints, …) follows the chunks: its sections
-//! in order, each dated by its newest event — else, for a plan not migrated yet, the md's.
+//! git cannot merge (SPEC §7). One checkbox line per chunk, its db fields on an indented
+//! line. The plan's own text (Goal, Scope, Done, Constraints, …) follows the chunks: its
+//! sections in order, each dated by its newest event.
 
-use super::cutover::BANNER;
-use super::md;
 use super::section::{self, Row};
 use super::store::{Store, err};
 use rusqlite::types::Value;
@@ -26,24 +23,11 @@ fn cols<const N: usize>(r: &rusqlite::Row) -> rusqlite::Result<[String; N]> {
     Ok(out)
 }
 
-/// `md` reads a repo-relative file (the plan's `source`), `None` when it is gone.
-pub fn export(s: &Store, plan: i64, md: &dyn Fn(&str) -> Option<String>) -> Result<String, String> {
-    let [
-        app,
-        name,
-        title,
-        area,
-        kind,
-        state,
-        spec,
-        source,
-        truth,
-        refs,
-    ] = s
+pub fn export(s: &Store, plan: i64) -> Result<String, String> {
+    let [app, name, title, area, kind, state, spec, refs] = s
         .conn
         .query_row(
-            "SELECT app, name, title, area, kind, state, spec, source, truth, refs
-             FROM plan WHERE id = ?1",
+            "SELECT app, name, title, area, kind, state, spec, refs FROM plan WHERE id = ?1",
             [plan],
             cols,
         )
@@ -64,25 +48,14 @@ pub fn export(s: &Store, plan: i64, md: &dyn Fn(&str) -> Option<String>) -> Resu
     };
     let _ = writeln!(
         o,
-        "---\n\n# {title}\n\n> fael plan export — {key} · truth {truth} · {state} · source {source}"
+        "---\n\n# {title}\n\n> fael plan export — {key} · {state}"
     );
     for r in refs.lines().filter(|r| !r.is_empty()) {
         let _ = writeln!(o, "> ref: {r}");
     }
     o.push_str("\n## TL;DR\n");
     chunks(s, plan, &mut o)?;
-    let secs = section::list(&s.conn, plan)?;
-    if secs.is_empty() {
-        let text = (!source.is_empty())
-            .then(|| md(&source))
-            .flatten()
-            .map(|t| prose(&t))
-            .unwrap_or_default();
-        if !text.trim().is_empty() {
-            let _ = writeln!(o, "\n{}", text.trim());
-        }
-    }
-    for r in &secs {
+    for r in &section::list(&s.conn, plan)? {
         o.push('\n');
         o.push_str(&one(r));
     }
@@ -109,23 +82,6 @@ pub fn export_section(s: &Store, plan: i64, key: &str) -> Result<String, String>
             keys.join(", ")
         )
     })
-}
-
-/// An md plan's text minus what the export already wrote: front matter, title, and the
-/// TL;DR's heading and chunk lines (checkboxes, the cutover banner) — its prose stays.
-pub(super) fn prose(text: &str) -> String {
-    let mut out = String::new();
-    let mut h2 = 0;
-    for l in text.lines() {
-        h2 += usize::from(md::is_h2(l));
-        let tldr = h2 == 1 && l.trim_start_matches(['#', ' ']).starts_with("TL;DR");
-        let chunk = h2 == 1 && (md::checkbox(l).is_some() || l.trim_start().starts_with(BANNER));
-        if h2 > 0 && !tldr && !chunk {
-            out.push_str(l);
-            out.push('\n');
-        }
-    }
-    out
 }
 
 fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {

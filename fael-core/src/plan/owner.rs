@@ -151,9 +151,8 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael plan new <name> "<title>"`: a plan whose chunks live in the db from the start
-    /// (`truth = db`, active) — no md chunk list to cut over. Its text starts as the four
-    /// skeleton sections every brief reads (the plan has no md file). A taken `app/name` is refused.
+    /// `fael plan new <name> "<title>"`: an active plan whose text starts as the four
+    /// skeleton sections every brief reads. A taken `app/name` is refused.
     pub fn new_plan(
         &mut self,
         app: &str,
@@ -181,7 +180,7 @@ impl Store {
             .map_err(err)?;
         if n == 0 {
             return Err(format!(
-                "rejected: plan {name} already exists — see `fael plan next`"
+                "rejected: plan {name} already exists — see `fael plan export {name}`"
             ));
         }
         let pid = tx.last_insert_rowid();
@@ -197,26 +196,20 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael plan park|unpark|done <plan>` on a `truth = db` plan: the owner moves
-    /// `plan.state` (an md plan's folder is its state, import sets it). Refused while a
+    /// `fael plan park|unpark|done <plan>`: the owner moves `plan.state`. Refused while a
     /// chunk runs — a parked or done plan leaves the board and its agent with it. Returns
     /// the state it left.
     pub fn plan_state(&mut self, id: i64, to: &str, now: &str) -> Result<String, String> {
         let tx = tx(self)?;
-        let (app, name, state, truth, running): (String, String, String, String, i64) = tx
+        let (app, name, state, running): (String, String, String, i64) = tx
             .query_row(
-                "SELECT app, name, state, truth,
+                "SELECT app, name, state,
                         (SELECT COUNT(*) FROM chunk WHERE plan = p.id AND state = 'running')
                  FROM plan p WHERE id = ?1",
                 [id],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .map_err(err)?;
-        if truth != "db" {
-            return Err(format!(
-                "rejected: {name}'s chunks live in its md — move the file to .fapony/parked/ or done/ (or `fael plan cutover {name}` first)"
-            ));
-        }
         let from_ok = match to {
             "active" => state == "parked",
             "parked" => matches!(state.as_str(), "active" | "blocked"),

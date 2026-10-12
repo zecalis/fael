@@ -3,7 +3,6 @@
 //! breaking epoch, an older db upgrades on open (release gate: no manual step) and every
 //! open adds the tables and columns it lacks.
 
-use super::md::PlanMd;
 use super::schema::{
     COLUMNS, SCHEMA, TABLES, VERSION, backup, missing, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5,
     v5_to_v6, v6_fill,
@@ -19,30 +18,6 @@ pub struct Store {
     pub(super) conn: Connection,
 }
 
-/// One plan file to import: `app` = the `.fapony/`'s folder relative to the repo root
-/// (`""` at the root, `apps/vela`), `dir` = `plan` | `parked` | `done`.
-pub struct Import {
-    pub app: String,
-    pub dir: String,
-    pub source: String,
-    pub md: PlanMd,
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct Report {
-    pub plans: usize,
-    pub chunks: usize,
-    /// unknown checkbox lines, imported as `draft` (not startable)
-    pub drafts: usize,
-    /// `app/plan label → ref` for every `(after …)` that names no chunk
-    pub unresolved: Vec<String>,
-    /// `app/plan label-or-title` for every chunk whose old uid could not be told apart
-    /// (SPEC §7): it got a new uid
-    pub ambiguous: Vec<String>,
-    /// plans whose chunks the db owns (`truth = db`): plan fields refreshed, chunks untouched
-    pub db_plans: usize,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanRow {
     pub id: i64,
@@ -51,9 +26,6 @@ pub struct PlanRow {
     pub title: String,
     pub area: String,
     pub state: String,
-    pub truth: String,
-    /// the md path, repo-relative (`""` for `inbox`)
-    pub source: String,
 }
 
 pub(super) fn err(e: rusqlite::Error) -> String {
@@ -169,7 +141,7 @@ impl Store {
     pub fn plans(&self) -> Result<Vec<PlanRow>, String> {
         let mut q = self
             .conn
-            .prepare("SELECT id, app, name, title, area, state, truth, source FROM plan ORDER BY app, name")
+            .prepare("SELECT id, app, name, title, area, state FROM plan ORDER BY app, name")
             .map_err(err)?;
         q.query_map([], |r| {
             Ok(PlanRow {
@@ -179,8 +151,6 @@ impl Store {
                 title: r.get(3)?,
                 area: r.get(4)?,
                 state: r.get(5)?,
-                truth: r.get(6)?,
-                source: r.get(7)?,
             })
         })
         .map_err(err)?

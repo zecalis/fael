@@ -145,7 +145,7 @@ fn export_prints_sections_in_order_each_dated_and_one_alone() {
     let (mut s, id) = plan();
     let b = with(&s, id, json!([{"key": "2", "body": "only cli"}]));
     apply(&mut s, &b, LATER).unwrap();
-    let md = export(&s, id, &|_: &str| None).unwrap();
+    let md = export(&s, id).unwrap();
     let goal = md
         .find("## 1. Goal (why)\n> section 1 · updated 2026-10-11\n")
         .unwrap();
@@ -222,7 +222,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
             run: "R".into(),
             chunks: vec![b],
         }
-        .text(&|_| None, &|_| true)
+        .text(&|_| true)
     };
     let t = text(&s, &uid);
     // Goal and Done, then what it reads (its own plan's by key, another's by plan/key)

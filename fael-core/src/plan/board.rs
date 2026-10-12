@@ -137,10 +137,6 @@ impl Store {
     /// a live run last seen before it is `stalled` (a warning, never a state change).
     pub fn board(&self, today: &str, stale: &str) -> Result<Board, String> {
         let plans = self.board_plans()?;
-        let truth: HashMap<String, bool> = plans
-            .iter()
-            .map(|p| (format!("{}/{}", p.app, p.name), p.truth == "db"))
-            .collect();
         let runs = self.latest_runs()?;
         let handoffs = self.handoffs()?;
         let mut q = self
@@ -230,7 +226,7 @@ impl Store {
         for (id, mut c) in rows {
             c.handoff = handoffs.remove(&c.uid);
             c.issues = super::issue::of(&self.conn, id)?;
-            self.derive(id, &mut c, &truth, today, stale)?;
+            self.derive(id, &mut c, today, stale)?;
             ids.push(id);
             chunks.push(c);
         }
@@ -239,23 +235,10 @@ impl Store {
     }
 
     /// ready / blocked_by (the one `ready_in`), ended, stalled.
-    fn derive(
-        &self,
-        id: i64,
-        c: &mut Chunk,
-        truth: &HashMap<String, bool>,
-        today: &str,
-        stale: &str,
-    ) -> Result<(), String> {
+    fn derive(&self, id: i64, c: &mut Chunk, today: &str, stale: &str) -> Result<(), String> {
         if matches!(c.state.as_str(), "open" | "waiting") {
             match ready_in(&self.conn, id, today)? {
-                // `chunk start` takes only a db plan's chunk: an md one is never offered
-                Ready::Yes => {
-                    c.ready = truth
-                        .get(&format!("{}/{}", c.app, c.plan))
-                        .copied()
-                        .unwrap_or(false);
-                }
+                Ready::Yes => c.ready = true,
                 Ready::Blocked(u) => {
                     c.blocked_by = u
                         .into_iter()
@@ -294,7 +277,7 @@ impl Store {
         let mut q = self
             .conn
             .prepare(
-                "SELECT id, app, name, title, area, kind, state, rank, truth, source, spec, repo
+                "SELECT id, app, name, title, area, kind, state, rank, source, spec, repo
                  FROM plan ORDER BY state IN ('done', 'parked'), rank IS NULL, rank, app, name",
             )
             .map_err(err)?;
@@ -310,10 +293,11 @@ impl Store {
                 kind: r.get(5)?,
                 state: r.get(6)?,
                 rank: r.get(7)?,
-                truth: r.get(8)?,
-                source: r.get(9)?,
-                spec: r.get(10)?,
-                repo: r.get(11)?,
+                // every plan's chunks live in the db; the app reads it (board JSON v1)
+                truth: "db".into(),
+                source: r.get(8)?,
+                spec: r.get(9)?,
+                repo: r.get(10)?,
                 remote: None,
             })
         })

@@ -381,7 +381,7 @@ fn text(b: &Board) -> String {
         }
     }
     if out.is_empty() {
-        out.push_str("nothing on the board — `fael chunk add` or `fael plan import` in a repo\n");
+        out.push_str("nothing on the board — `fael chunk add` or `fael plan new` in a repo\n");
     }
     out
 }

@@ -75,7 +75,7 @@ pub(crate) fn register(r: &Repo) {
 }
 
 /// `fael board --drop <root>`: take a finished repo off the board (issue 01M4NC9GR). The
-/// next `fael chunk …` or `fael plan import` in it puts it back.
+/// next `fael chunk …` or `fael plan …` write in it puts it back.
 pub(super) fn unregister(root: &str) -> Result<std::process::ExitCode, String> {
     let want = Path::new(root);
     let want = want.canonicalize().unwrap_or_else(|_| want.to_path_buf());

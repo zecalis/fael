@@ -1,6 +1,6 @@
 //! The chunk contract (SPEC-fael-board §1): each command is one `BEGIN IMMEDIATE`, writes an
 //! `event` row, and a transition the table does not allow is rejected with the command that
-//! makes it valid. Only `truth = db` plans: an md plan's chunks follow its file until cutover.
+//! makes it valid.
 
 use super::lookup::{label, lookup};
 use super::store::{Store, err};
@@ -48,16 +48,11 @@ pub(super) fn tx(s: &mut Store) -> Result<Transaction<'_>, String> {
         .map_err(err)
 }
 
-/// A chunk of a `db` plan, by uid or label.
+/// A chunk, by uid or label.
 pub(super) fn row(tx: &Transaction, uid: &str) -> Result<Row, String> {
-    let (id, uid, state, truth, plan, source) = lookup(tx, uid)?.ok_or(format!(
+    let (id, uid, state) = lookup(tx, uid)?.ok_or(format!(
         "rejected: no chunk {uid} — `fael plan export` lists every uid"
     ))?;
-    if truth != "db" {
-        return Err(format!(
-            "rejected: chunk {uid} is in md plan {plan}: its state follows {source} until the plan's cutover (SPEC §9)"
-        ));
-    }
     let state = State::parse(&state).ok_or(format!("plans.db: chunk {uid} has state {state}"))?;
     Ok(Row { id, uid, state })
 }
@@ -302,24 +297,19 @@ impl Store {
             )
             .map_err(err)?;
         }
-        let (pid, truth, source): (i64, String, String) = tx
+        let pid: i64 = tx
             .query_row(
-                "SELECT id, truth, source FROM plan
+                "SELECT id FROM plan
                  WHERE name = ?1 OR (app <> '' AND app || '/' || name = ?1)
                  ORDER BY app = '' DESC LIMIT 1",
                 [plan],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                |r| r.get(0),
             )
             .optional()
             .map_err(err)?
             .ok_or(format!(
                 "rejected: no plan '{plan}' — `fael chunk add --plan inbox` takes new work"
             ))?;
-        if truth != "db" {
-            return Err(format!(
-                "rejected: plan '{plan}' is md: its chunks are lines in {source} until its cutover (SPEC §9)"
-            ));
-        }
         let brief = f.brief.as_deref().map(str::trim).filter(|b| !b.is_empty());
         let state = if brief.is_some() {
             State::Open

@@ -75,9 +75,8 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             }
         }
     }
-    let md = |src: &str| std::fs::read_to_string(r.root.join(src)).ok();
     let exists = |p: &str| r.root.join(p).exists();
-    print!("{}", st.text(&md, &exists));
+    print!("{}", st.text(&exists));
     Ok(())
 }
 

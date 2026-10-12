@@ -62,13 +62,12 @@ fn add_makes_the_inbox_and_a_draft_never_starts() {
     let e = start(&mut s, &d, "/wt").unwrap_err();
     assert!(e.contains("not ready: it is draft"), "{e}");
     let st = s.start(&o, &Start::default(), &here("/wt")).unwrap();
-    let text = st.text(&|_| None, &|_| true);
+    let text = st.text(&|_| true);
     assert!(
         text.starts_with(&format!("fael run {} ·", st.run)),
         "{text}"
     );
     assert!(text.contains("do the work") && text.contains(&format!("fael chunk done {o}")));
-    assert_eq!(s.plans().unwrap()[0].truth, "db");
     let bad = Fields {
         title: Some("x".into()),
         scope: Some(vec!["../etc".into()]),

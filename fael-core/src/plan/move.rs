@@ -31,15 +31,15 @@ impl Store {
                 |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?)),
             )
             .map_err(err)?;
-        let (pid, to_key, state, truth): (i64, String, String, String) = tx
+        let (pid, to_key, state): (i64, String, String) = tx
             .query_row(
                 &format!(
-                    "SELECT id, {key}, state, truth FROM plan
+                    "SELECT id, {key}, state FROM plan
                      WHERE name = ?1 OR (app <> '' AND app || '/' || name = ?1)
                      ORDER BY app = '' DESC LIMIT 1"
                 ),
                 [plan],
-                |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?, q.get(3)?)),
+                |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?)),
             )
             .optional()
             .map_err(err)?
@@ -48,11 +48,6 @@ impl Store {
             ))?;
         if pid == old {
             return Err(format!("rejected: chunk {} is already in {to_key}", r.uid));
-        }
-        if truth != "db" {
-            return Err(format!(
-                "rejected: plan {to_key} is md: its chunks are lines in its file until its cutover"
-            ));
         }
         if matches!(state.as_str(), "parked" | "done") {
             return Err(format!(

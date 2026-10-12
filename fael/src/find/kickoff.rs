@@ -12,18 +12,18 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let (log, branch_of) = working_or_branches(a, base, jtags, &r);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
-    // a plan doc shows its open work: rows of chunks the doc ticked leave, and
-    // without --limit the page is PLAN_KICKOFF_ROWS (the cut line names the rest)
+    // a plan anchor (`PLAN-x.md` → `plan:x`): without --limit the page is
+    // PLAN_KICKOFF_ROWS (the cut line names the rest)
     let plan = files
         .first()
         .and_then(|f| core::plan_anchor(f, &r.cfg.anchor_prefixes).map(|p| (f, p)));
     let page_limit = limit.or(plan.as_ref().map(|_| core::PLAN_KICKOFF_ROWS));
-    // a plan whose chunks live in plans.db: the chunk to work on comes first
-    if let Some((file, _)) = &plan
+    // the plan's chunk to work on comes first
+    if let Some((_, anchor)) = &plan
         && offset == 0
         && !a.has("json")
     {
-        crate::chunk::kickoff(&r, file);
+        crate::chunk::kickoff(&r, anchor);
     }
     let f = Filter {
         files: al.expand_all(&files),
@@ -33,11 +33,6 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     };
     // kickoff ranks the full set itself, so it pages after — same helper as query()
     let mut ranked = core::kickoff(&log, &f, &r.root, &al, &r.cfg.anchor_prefixes);
-    if let Some((file, anchor)) = &plan
-        && let Ok(doc) = std::fs::read_to_string(r.root.join(file))
-    {
-        ranked = core::drop_closed(ranked, anchor, &core::closed_chunks(&doc));
-    }
     if let Some((_, anchor)) = &plan {
         ranked = core::handoff_first(ranked, anchor);
     }
