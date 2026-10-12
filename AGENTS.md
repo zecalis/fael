@@ -40,7 +40,7 @@ A new kind gets a fixture in `fael/src/hook/say_contract.rs` (silent when empty,
 **Log as you work. Do not wait to be asked.** Use Fael MCP when available, else the CLI:
 
 ```text
-fael kickoff <file|PLAN>
+fael kickoff [file]
 fael add decision|issue|note "..." --files <files>
 fael find [text] [--files ...] [--key ...]
 fael close <id> "..."
@@ -59,24 +59,18 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 
 ## Plan Workflow
 
-How many chunks per session/PR, when to stop and how to close a chunk: `fapony plan <PLAN>`
-prints the rules (single source, fapony's `chunkRules()`) — don't restate them here.
+A plan is sections plus chunks in plans.db — no `PLAN-*.md`, no `.fapony/` path. Read it with
+`fael plan export <plan>` (`--section <key>` for one); change a section through the bill
+(`fael plan export <plan> --json`, edit `sections`, `fael plan apply --dry-run`, then apply).
+Draft or re-cut plans with the `fael-plan` skill.
 
-Fael's part: each chunk's handoff note goes on the plan, never a code path (every read of
-that file would re-push it): `--files plan:<name>,<path/to/PLAN-<name>.md> --key
-plan:<name>:handoff`, `<name>` lowercased. One key per plan, so each chunk's note
-supersedes the last — except a chunk run in parallel with another open chunk (another
-worktree): its note goes under `--key plan:<name>:chunk-<n>` so it can't wipe that
-chunk's handoff. Start the next session with `fael kickoff <path/to/PLAN-x.md>`;
-don't carry the old transcript forward.
+`fael chunk start <uid>` prints the brief and the chunk rules (how to close, wait, checkpoint)
+— don't restate them here. The `fael chunk done <uid> "<handoff>"` text is the handoff: the
+board shows it and the brief of every chunk `after` it prints it, so it needs no ledger row.
+A word for a chunk another agent will start goes in `fael chunk note <uid> "<text>"`, printed
+in that chunk's next brief; never `chunk edit` (it clears the owner's approval).
 
-A plan whose chunks live in plans.db (inbox, or cut over) skips that note: the
-`fael chunk done <uid> "<handoff>"` text is the handoff — the board shows it and the brief
-of every chunk `after` it prints it. A word for a chunk another agent will start goes in
-`fael chunk note <uid> "<text>"`, printed in that chunk's next brief; never `chunk edit`
-(it clears the owner's approval).
-
-A chunk marked `(wait …)` waits on events: `scripts/checkpoints.py` prints every such
+A chunk that waits on events (a draft titled with its gate, or `wait --on data`): `scripts/checkpoints.py` prints every such
 gate's count against its locked bar. Run the chunk only when its line reads `ready`; its
 result goes in the decision that chunk names. Each run that moves a number appends to
 `~/fael-onoff-results/checkpoints.jsonl` (the trend, gold included); don't file a ledger

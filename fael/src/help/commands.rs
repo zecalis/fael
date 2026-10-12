@@ -172,34 +172,35 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     ),
     (
         "plan",
-        "read plans into plans.db, print each one's next chunk, export or edit one, cut one over, create or park one",
-        "fael plan import | fael plan next | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan>
-     | fael plan migrate [--dry-run] | fael plan new <name> \"<title>\" [--app A] [--area dev|marketing]
-     | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|->
-    (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
-     parked/, done/ — into <git-common-dir>/fael/plans.db; a chunk keeps its uid by a
-     unique label, else a unique title (an ambiguous one is listed), a plan whose chunks
-     live in the db keeps them; an unknown checkbox imports as draft, an (after …)
-     naming no chunk is listed; next: one line per plan, the chunk a session takes next — the pick
-     `fapony plan` makes: your own (wip) claim, else the first open chunk no live
-     worktree claimed whose (after …) is met and that has no (wait …); export: every
-     plan, or the one named (name or app/name), as markdown to stdout — uid, state and
-     fields under each line, then the plan's sections in order, each under its heading
-     with its key and the day it last changed (a plan with none: its md's TL;DR prose and
-     sections); export <plan> --section <key>: that one section; export <plan> --json: the
-     plan as one bill (\"v\": 1) — rev, title, area, state, refs, repo, its sections
-     ({key, title, body}) and a line per planned chunk (uid, label,
-     title, brief, size, model, client, scope, after); export --since <event-id>: the
-     change feed for backup and fael-sync (\"v\": 1) — db_id, head (the next --since),
-     the events after the id and the current rows they touched, whole (plans, every
-     section of those plans, chunks, the edges out of those chunks, their runs); 0 = everything; apply: the bill edited and sent
-     back, one transaction — a stale rev rejects it and writes nothing; a header key
-     left out stays, a section is matched by key (a new key needs a title, {key,
-     drop:true} drops it, one left out stays), a line without uid adds a chunk (no brief = draft), a line with uid
-     edits it (a changed field clears its approval), {uid, drop:true} drops it, a line
-     missing from the bill is left alone, and any change to a running or finished chunk
-     rejects the bill; an optional \"ops\" array takes the `chunk apply` ops; every row
-     shares one event batch; --dry-run prints what it would write and rolls back;
+        "create a plan, export or edit its sections and chunks, park or finish it; migrate md plans in once",
+        "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
+     | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> | fael plan migrate [--dry-run]
+     | md era, until migrate has run: fael plan import | fael plan next | fael plan cutover <plan>
+    (a plan is sections and chunks in <git-common-dir>/fael/plans.db, no file;
+     new: a plan whose chunks live in the db from the start (`fael chunk add --plan`),
+     its text four skeleton sections (1 Goal, 2 Scope, 3 Done criteria, 4 Constraints);
+     export: every plan, or the one named (name or app/name), as markdown to stdout — uid,
+     state and fields under each chunk, then the plan's sections in order, each under its
+     heading with its key and the day it last changed (a plan with none: its md's TL;DR
+     prose and sections); export <plan> --section <key>: that one section; export <plan>
+     --json: the plan as one bill (\"v\": 1) — rev, title, area, state, refs, repo, its
+     sections ({key, title, body}) and a line per planned chunk (uid, label, title, brief,
+     size, model, client, scope, reads, after); export --since <event-id>: the change feed
+     for backup and fael-sync (\"v\": 1) — db_id, head (the next --since), the events
+     after the id and the current rows they touched, whole (plans, every section of those
+     plans, chunks, the edges out of those chunks, their runs); 0 = everything;
+     apply: the bill edited and sent back, one transaction — a stale rev rejects it and
+     writes nothing; a header key left out stays, a section is matched by key (a new key
+     needs a title, {key, drop:true} drops it, one left out stays), a line without uid
+     adds a chunk (no brief = draft), a line with uid edits it (a changed field clears its
+     approval), {uid, drop:true} drops it, a line missing from the bill is left alone, and
+     any change to a running or finished chunk rejects the bill; an optional \"ops\" array
+     takes the `chunk apply` ops; every row shares one event batch; --dry-run prints what
+     it would write and rolls back;
+     park|unpark|done: a db plan's state — parked or done leaves the board; refused while
+     one of its chunks runs; repo: the checkout a plan's code lives in when it is not this
+     repo (- = this repo) — its briefs say so, the board lists that checkout as a project
+     and gives the plan its remote, scopes overlap only within one checkout;
      migrate: once per repo, each plan with no sections gets its md's text as sections
      (TL;DR prose = section tldr, Summary) and an md plan that is done or parked moves to the db;
      each <app>/.fapony/spec/SPEC-<x>.md joins the first open plan its '> **Used by:**'
@@ -207,17 +208,11 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      unattached; an active md plan waits for cutover; prints per plan what it wrote and
      the files now safe to delete, deletes none; copies the db to
      <db>.pre-migrate.bak before it commits; --dry-run rolls back;
-     cutover: import, then the plan's chunks live in the db
-     (`fael chunk …`) and its md's chunk lines become one banner — refused while a
-     chunk is a draft, held by (wip …), or waits on an (after …) naming no chunk;
-     new: a plan whose chunks live in plans.db from the start (`fael chunk add --plan`),
-     its text four skeleton sections (1 Goal, 2 Scope, 3 Done criteria, 4 Constraints;
-     no md file) read by every brief — edit them with export --json / apply;
-     park|unpark|done: a cut-over plan's state (an md plan's folder is its state) —
-     parked or done leaves the board; refused while one of its chunks runs; import
-     never overwrites it; repo: the checkout a plan's code lives in when it is not
-     this repo (- = this repo) — its briefs say so, the board lists that checkout as a
-     project and gives the plan its remote, scopes overlap only within one checkout)",
+     md era: import reads every PLAN-*.md under .fapony/ (root, apps/*) into the db, a
+     chunk keeping its uid by a unique label or title; next prints each md plan's next
+     chunk; cutover imports, then the plan's chunks live in the db and its md's chunk
+     lines become one banner — refused while a chunk is a draft, held by (wip …), or
+     waits on an (after …) naming no chunk; import never overwrites a db plan)",
     ),
     (
         "run",
