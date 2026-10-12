@@ -73,7 +73,8 @@ fn add(d: &Path, kind: &str, text: &str, key: &str) -> String {
 }
 
 fn open_titles(d: &Path, key: &str) -> String {
-    fael(d, &["find", "--key", key]).1
+    // --json: open rows only, never the nearest closed ones
+    fael(d, &["find", "--json", "--key", key]).1
 }
 
 #[test]

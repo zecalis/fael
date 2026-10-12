@@ -171,7 +171,7 @@ fn an_empty_text_search_names_the_word_and_is_recorded() {
         "ranking headline",
         "ranking stays deterministic",
     );
-    let (ok, out, err) = fael(&d, &["find", "--text", "ranking vector"]);
+    let (ok, out, err) = fael(&d, &["find", "--text", "ranking vector index"]);
     assert!(ok && out.is_empty(), "{out}");
     assert!(
         err.contains("\"ranking\" ×1") && err.contains("\"vector\" ×0"),
@@ -181,7 +181,7 @@ fn an_empty_text_search_names_the_word_and_is_recorded() {
     let (_, _, _) = fael(&d, &["find", "--files", "src/none.rs"]);
     let (_, out, _) = fael(&d, &["stats", "--misses"]);
     assert!(
-        out.contains("\"ranking vector\"") && !out.contains("none.rs"),
+        out.contains("\"ranking vector index\"") && !out.contains("none.rs"),
         "{out}"
     );
     assert_eq!(out.lines().count(), 1, "{out}");
@@ -202,7 +202,7 @@ fn mcp_find_ids_pulls_several_bodies_and_explains_an_empty_search() {
         format!(
             r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"find","arguments":{{"ids":["{a}","01DEFACED01"]}}}}}}"#
         ),
-        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find","arguments":{"text":"first vector"}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find","arguments":{"text":"first vector index --all"}}}"#.to_string(),
     ];
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("mcp")
@@ -234,7 +234,10 @@ fn mcp_find_ids_pulls_several_bodies_and_explains_an_empty_search() {
     assert_eq!(r[1]["result"]["isError"], true, "{out}");
     assert!(text(1).contains("first body words") && text(1).contains("rejected: no row with id"));
     assert!(
-        text(2).contains("\"vector\" ×0") && text(2).contains("\"first\" ×1"),
+        // a CLI flag typed into the words is dropped, not searched
+        text(2).contains("\"vector\" ×0")
+            && text(2).contains("\"first\" ×1")
+            && !text(2).contains("--all"),
         "{}",
         text(2)
     );

@@ -3,7 +3,7 @@
 //! by. Local only: `find-misses.jsonl` sits beside `usage.jsonl`, never in git.
 //! Fails open — recording must never fail the find it rode along with.
 
-use crate::core::{self, Filter, Log};
+use crate::core::{self, Filter, Log, Row};
 use crate::hook::{now_rfc3339, state_dir};
 use std::path::{Path, PathBuf};
 
@@ -11,17 +11,19 @@ fn path() -> PathBuf {
     state_dir().join("find-misses.jsonl")
 }
 
-/// What an empty find prints, and (for a text search) records. A miss on a
-/// file or key alone is just "nothing filed there" — only words can be a
-/// vocabulary miss. `files_flag` is how the caller spells `--files`.
-pub(crate) fn explain(
+/// What an empty find prints instead: the nearest rows (`core::nearest`)
+/// under their label, else why nothing matched (no rows). A text search is
+/// recorded either way — the words still missed. A miss on a file or key alone
+/// is just "nothing filed there" — only words can be a vocabulary miss. Only
+/// an answer with no rows counts as empty for friction. `files_flag` is how
+/// the caller spells `--files`.
+pub(crate) fn explain<'a>(
     repo: &Path,
     client: &str,
-    log: &Log,
+    log: &'a Log,
     f: &Filter,
     files_flag: &str,
-) -> String {
-    crate::hook::note_empty();
+) -> (String, Vec<&'a Row>) {
     let why = core::why_empty(log, f, files_flag);
     if let Some(q) = f.text.as_deref().filter(|t| !t.trim().is_empty()) {
         let row = serde_json::json!({
@@ -33,7 +35,13 @@ pub(crate) fn explain(
         });
         append(&row);
     }
-    why
+    match core::nearest(log, f) {
+        Some(near) => near,
+        None => {
+            crate::hook::note_empty();
+            (why, vec![])
+        }
+    }
 }
 
 fn append(row: &serde_json::Value) {

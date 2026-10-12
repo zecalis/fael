@@ -64,7 +64,15 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         let text = crate::journal::tag(core::render_full(&log, &[row], 10_000), &branch_of);
         return Ok((with_mentioned(&log, row, text), vec![shown]));
     }
-    let text = s(a, "text");
+    // `text: "translate --all"`: a CLI flag typed into the words is no word
+    let text = s(a, "text").map(|t| {
+        let words: Vec<&str> = t
+            .split_whitespace()
+            .filter(|w| !w.starts_with("--"))
+            .collect();
+        words.join(" ")
+    });
+    let text = text.filter(|t| !t.is_empty());
     // `text: "plan:x"` reads the anchor the way `kickoff` does, `text: "#k"` the key (CLI parity)
     let (text, anchor, text_key) = crate::find::text_or_anchor(&log, None, text.as_ref(), r);
     let mut files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
@@ -115,7 +123,17 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // a list of one or two shows its bodies: the next call would be `find id=<id>`
     let full = a["full"].as_bool().unwrap_or(false) || core::expands(&rows, total, &f, budget);
     let text = if rows.is_empty() {
-        crate::find::misses::explain(&r.root, "mcp", &log, &f, "files")
+        let (head, near) = crate::find::misses::explain(&r.root, "mcp", &log, &f, "files");
+        let full = full || core::expands(&near, near.len(), &f, budget);
+        let body = match (near.is_empty(), full) {
+            (true, _) => String::new(),
+            (false, true) => core::render_full(&log, &near, budget),
+            (false, false) => core::render(&log, &near, budget),
+        };
+        let shown = near.iter().map(|r| r.id.clone());
+        let n = body.lines().filter(|l| l.starts_with("- [")).count();
+        let body = crate::journal::tag(body, &branch_of);
+        return Ok((format!("{head}\n{body}"), shown.take(n).collect()));
     } else if full {
         crate::journal::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
     } else {

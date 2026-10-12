@@ -285,7 +285,7 @@ The write path self-heals before it validates (`fael/src/selfheal.rs`): `core.va
 client ─(edit event)─▶ adapter.parse ─▶ core.find(files) ─▶ rank ─▶ cut to token budget ─▶ adapter.render ─▶ context attached to the edit
 ```
 The `read` and `search` hooks still fire (they count tool use for `fael stats`) but reply empty: a read or a search names no change, and the row reaches the agent at the edit if one follows.
-Ranking: an exact file match beats the same directory, which beats the same key. Open `issue` and `decision` rows go first, then newer before older by `id`. Text matching splits the query on whitespace: every word must be a case-insensitive substring of the row's text or title, in any order — no stemming, fuzzy match or hit-count ranking.
+Ranking: an exact file match beats the same directory, which beats the same key. Open `issue` and `decision` rows go first, then newer before older by `id`. Text matching splits the query on whitespace: every word must be a case-insensitive substring of the row's text or title, in any order — no stemming or fuzzy match. A find that comes back empty answers in the same call (`nearest`): the same call's closed or superseded rows, else — for two or more words — the rows matching the most of them (at least half), labelled as such; `--json` never gets those guesses.
 Ranking is **deterministic**: the same log, query and budget give the same output on any machine and any day — recency comes from `id` order, never from the clock, and ties break by `id`. No fuzzy, BM25 or semantic ranking.
 
 Rows are then bucketed by the session **Focus** — the start branch and the keys of the open rows filed on it, written once at session start to

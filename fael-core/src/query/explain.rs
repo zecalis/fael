@@ -2,7 +2,7 @@
 //! read the same log and filter the call already had, so no extra round and
 //! nothing a clock or a model could change.
 
-use super::{Filter, est_tokens, select::find};
+use super::{Filter, est_tokens, matching::all_words, select::find};
 use crate::{Log, Row};
 
 /// A list this short, from the first page with no `limit`, shows bodies
@@ -129,6 +129,63 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
         s.push_str(&format!(" · a path? use {files_flag}"));
     }
     s
+}
+
+/// Most rows a `nearest` answer lists: best guesses, not a page.
+const NEAREST_MAX: usize = 5;
+
+/// A find that came back empty, answered in the same call — the agent's next
+/// find would be its own guess at a wider one (the repeat `friction` counts).
+/// First the same call with closed rows in; else, for two or more words, the
+/// rows matching the most of them (at least half), every other filter kept. `None` when
+/// neither finds a row, or past the first page. The label says which it is.
+pub fn nearest<'a>(log: &'a Log, f: &Filter) -> Option<(String, Vec<&'a Row>)> {
+    if f.offset > 0 {
+        return None;
+    }
+    let top = |rows: Vec<&'a Row>| rows.into_iter().take(NEAREST_MAX).collect();
+    if !f.all {
+        let closed = find(
+            log,
+            &Filter {
+                all: true,
+                ..f.clone()
+            },
+        );
+        if !closed.is_empty() {
+            let label = format!(
+                "no open row matches — {} closed or superseded:",
+                closed.len()
+            );
+            return Some((label, top(closed)));
+        }
+    }
+    let q = f.text.as_deref()?.to_lowercase();
+    let words: Vec<&str> = q.split_whitespace().collect();
+    if words.len() < 2 {
+        return None;
+    }
+    let rest = find(
+        log,
+        &Filter {
+            text: None,
+            ..f.clone()
+        },
+    );
+    let hits = |r: &Row| words.iter().filter(|w| all_words(w, r)).count();
+    // at least half the words: one common word of four (`agent`) is no answer
+    let best = rest
+        .iter()
+        .map(|r| hits(r))
+        .max()
+        .filter(|&n| n > 0 && n * 2 >= words.len())?;
+    let rows: Vec<&Row> = rest.into_iter().filter(|r| hits(r) == best).collect();
+    let label = format!(
+        "no row has every word — {} with {best} of {}:",
+        rows.len(),
+        words.len()
+    );
+    Some((label, top(rows)))
 }
 
 /// `a/b`, or `name.ext` with a letters-only extension (`v0.17.1` is not one).

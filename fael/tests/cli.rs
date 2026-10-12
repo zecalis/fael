@@ -92,8 +92,13 @@ fn add_find_close_round_trip() {
     assert!(!ok && err.contains("already closed"), "{err}");
     let (_, out, _) = fael(&d, &["find", "--json", "--all", "--files", "src/a.rs"]);
     assert_eq!(out.matches("\"ref\":").count(), 1, "{out}");
-    let (_, out, err) = fael(&d, &["find", "--files", "src/a.rs"]);
-    assert!(out.is_empty() && err.contains("no rows match"), "{out}");
+    // no open row: the closed one answers in the same call, labelled
+    let (_, out, _) = fael(&d, &["find", "--files", "src/a.rs"]);
+    assert!(
+        out.starts_with("no open row matches — 1 closed or superseded:")
+            && out.contains("(closed)"),
+        "{out}"
+    );
     let (_, out, _) = fael(
         &d,
         &["find", "--all", "--limit", "10", "--files", "src/a.rs"],
@@ -291,8 +296,9 @@ fn add_to_routes_lowercases_and_supersedes() {
         ],
     );
     assert!(ok, "{err}");
+    // the superseded row answers only as such: no open row is routed there
     let (_, out, _) = fael(&d, &["find", "--to", "finance"]);
-    assert!(out.is_empty(), "{out}");
+    assert!(out.starts_with("no open row matches"), "{out}");
 }
 
 #[test]

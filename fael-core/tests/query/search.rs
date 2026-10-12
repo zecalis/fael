@@ -160,3 +160,57 @@ fn a_short_first_page_shows_bodies_that_fit() {
     // the brief (no narrowing) stays a map of titles
     assert!(!expands(&[&a], 1, &Filter::default(), 800));
 }
+
+/// An empty find answers in the same call: the closed rows the same call
+/// would match, else the rows with the most words (at least half) — never a
+/// guess off the first page or from a lone word.
+#[test]
+fn an_empty_find_answers_with_the_nearest_rows() {
+    let mut l = log_of(vec![
+        note(1, &["src/a.rs"], None, "find ranks by freshness"),
+        note(2, &["src/a.rs"], None, "search stays deterministic"),
+        note(3, &["src/b.rs"], None, "translate the brief"),
+    ]);
+    let mut close = row(&rid(9), "close", &[], None);
+    close.reference = Some(rid(3));
+    l.closes.push(close);
+    let text = |t: &str| Filter {
+        text: Some(t.into()),
+        ..Filter::default()
+    };
+    let got = |f: &Filter| {
+        nearest(&l, f).map(|(label, rows)| {
+            let ids = ids(&rows);
+            (label, ids.iter().map(|i| i.to_string()).collect::<Vec<_>>())
+        })
+    };
+    // open rows miss, a closed one matches: shown, labelled closed
+    assert_eq!(
+        got(&text("translate")),
+        Some((
+            "no open row matches — 1 closed or superseded:".into(),
+            vec!["03".to_string()]
+        ))
+    );
+    // no row has both words: the rows with the most, other filters kept
+    assert_eq!(
+        got(&text("ranks deterministic")),
+        Some((
+            "no row has every word — 2 with 1 of 2:".into(),
+            vec!["02".to_string(), "01".to_string()]
+        ))
+    );
+    let on_b = Filter {
+        files: vec!["src/a.rs".into()],
+        ..text("freshness vector")
+    };
+    assert_eq!(got(&on_b).map(|g| g.1), Some(vec!["01".to_string()]));
+    // one word of four is no answer; a lone word has no partial; nor page two
+    assert_eq!(got(&text("find vector index cache")), None);
+    assert_eq!(got(&text("vector")), None);
+    let page2 = Filter {
+        offset: 5,
+        ..text("translate")
+    };
+    assert_eq!(got(&page2), None);
+}
