@@ -22,6 +22,7 @@ mod owner;
 mod ready;
 mod schema;
 mod secret;
+mod shared;
 mod start;
 mod store;
 
@@ -39,6 +40,7 @@ pub use issue::Fixer;
 pub use next::{Next, next};
 pub use owner::Owner;
 pub use ready::{Ready, Unmet};
+pub use shared::shared;
 pub use start::{Brief, Start, Started};
 pub use store::{Import, PlanRow, Report, Store};
 

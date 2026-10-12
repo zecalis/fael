@@ -37,6 +37,9 @@ struct Project {
     root: String,
     base: Option<String>,
     worktrees: Vec<Worktree>,
+    /// `.fael/shared`: paths nobody's scope claims; absent = none
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    shared: Vec<String>,
     plans: Vec<BoardPlan>,
     chunks: Vec<BoardChunk>,
     ledger: ledger::Ledger,
@@ -117,6 +120,7 @@ impl Project {
             root: root.to_string_lossy().into_owned(),
             base: None,
             worktrees: Vec::new(),
+            shared: Vec::new(),
             plans: Vec::new(),
             chunks: Vec::new(),
             ledger: Default::default(),
@@ -187,7 +191,7 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
     }
     let s = Store::open(&path)?;
     let mut b = s.board(today, stale)?;
-    prs::open_prs(&mut b.chunks, &r.root);
+    let shared = prs::open_prs(&mut b.chunks, &r.root);
     // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
     if open {
         b.chunks.retain(|c| c.state == "open");
@@ -203,6 +207,7 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
     Ok(Some(Project {
         base: git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]),
         worktrees,
+        shared,
         plans: b.plans,
         chunks: b.chunks,
         ledger: ledger::read(&r, &s.fixers()?),

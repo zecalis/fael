@@ -3,6 +3,7 @@
 
 use super::State;
 use super::board::Chunk;
+use super::shared::unshared;
 use super::store::err;
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
@@ -43,13 +44,14 @@ pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Res
         }
         chunks[i].unblocks = seen.into_iter().filter(|&j| live(&chunks[j])).count();
     }
-    overlaps(chunks, &HashSet::new());
+    overlaps(chunks, &HashSet::new(), &[]);
     Ok(())
 }
 
 /// Ready, live running, review and `open_pr` chunks (a done chunk whose PR is not on the
 /// base yet: the CLI reads git) whose scopes share a path prefix — their files are taken.
-pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>) {
+/// A `shared` path (`.fael/shared`) is nobody's: it never makes an overlap.
+pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[String]) {
     for c in chunks.iter_mut() {
         c.overlaps.clear();
     }
@@ -62,10 +64,11 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>) {
                 || open_pr.contains(&c.uid)
         })
         .collect();
+    let own: Vec<Vec<String>> = chunks.iter().map(|c| unshared(&c.scope, shared)).collect();
     for &a in &hot {
         for &b in &hot {
             let same = chunks[a].code == chunks[b].code;
-            if a != b && same && overlap(&chunks[a].scope, &chunks[b].scope) {
+            if a != b && same && overlap(&own[a], &own[b]) {
                 let u = chunks[b].uid.clone();
                 chunks[a].overlaps.push(u);
             }
@@ -76,16 +79,14 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>) {
 /// SPEC §2: two scopes overlap when a path of one is a prefix of a path of the other on a
 /// `/` boundary (`src/` covers `src/a.rs`, `src/a` does not cover `src/ab.rs`).
 pub fn overlap(a: &[String], b: &[String]) -> bool {
-    let under = |x: &str, y: &str| {
-        let y = y.trim_end_matches('/');
-        x == y || x.strip_prefix(y).is_some_and(|r| r.starts_with('/'))
-    };
-    a.iter().any(|x| {
-        b.iter().any(|y| {
-            let (x, y) = (x.trim_end_matches('/'), y.as_str());
-            under(x, y) || under(y.trim_end_matches('/'), x)
-        })
-    })
+    a.iter()
+        .any(|x| b.iter().any(|y| under(x, y) || under(y, x)))
+}
+
+/// `x` is `y` or below it on a `/` boundary.
+pub(super) fn under(x: &str, y: &str) -> bool {
+    let (x, y) = (x.trim_end_matches('/'), y.trim_end_matches('/'));
+    x == y || x.strip_prefix(y).is_some_and(|r| r.starts_with('/'))
 }
 
 /// `# PLAN-x — title` as imported → `title` (also `PLAN-x: title`, `PLAN-x (v1): title`).

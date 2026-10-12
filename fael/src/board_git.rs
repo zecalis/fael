@@ -1,10 +1,11 @@
-//! PLAN-fael-parallel: an open PR still holds its scope, and does its branch still merge.
+//! PLAN-fael-parallel: an open PR still holds its scope (less `.fael/shared`), and does its
+//! branch still merge.
 //! An open PR = a review chunk, or a done chunk with `--pr N` whose `(#N)` (squash subject)
 //! or `Merge pull request #N` is not on the checkout's fetched base yet. Live git, no fetch
 //! (the app fetches, decision 01M4K4GFS), no gh, never a state change.
 
 use crate::git;
-use fael_core::plan::{BoardChunk, overlaps};
+use fael_core::plan::{BoardChunk, overlaps, shared};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -12,7 +13,8 @@ use std::process::Command;
 /// The base (`origin/HEAD`) and its subjects since the first shipped chunk started.
 type Base = Option<(String, String)>;
 
-pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) {
+/// Marks the open PRs and redoes `overlaps` with them and `.fael/shared`; returns that list.
+pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) -> Vec<String> {
     let shipped = |c: &BoardChunk| {
         c.run
             .as_ref()
@@ -57,9 +59,13 @@ pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) {
             c.conflicts = merge_tree(&dir, base, &b);
         }
     }
-    if !open.is_empty() {
-        overlaps(chunks, &open);
-    }
+    // a bad line never hides the board: said here, and by `fael doctor`
+    let shared = shared(root).unwrap_or_else(|e| {
+        eprintln!("fael board: {e}");
+        Vec::new()
+    });
+    overlaps(chunks, &open, &shared);
+    shared
 }
 
 /// PR `n` on the base: a squash subject ending `(#n)`, or GitHub's merge commit.

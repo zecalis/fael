@@ -10,6 +10,7 @@ mod noverdict;
 mod orphan;
 mod phantom;
 mod rows;
+mod shared;
 mod shipped;
 mod status;
 mod unstamped;
@@ -111,6 +112,7 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             ),
         ));
     }
+    rep.problems.extend(shared::notes(&r.root));
     // Gone is judged through the resolver: a file that was renamed still
     // exists under its new path, so its rows still push and are not gone.
     let al = crate::aliases::load(&r, &log, true);

@@ -123,6 +123,11 @@ fn board_v1_shape() {
     assert_eq!(b["v"], 1);
     for p in b["projects"].as_array().unwrap() {
         ledger(&p["ledger"]);
+        // `.fael/shared` (PLAN-fael-parallel shared-files): absent = none, never empty
+        if let Some(sh) = p.get("shared") {
+            let sh = sh.as_array().unwrap();
+            assert!(!sh.is_empty() && sh.iter().all(Value::is_string), "{sh:?}");
+        }
         for pl in p["plans"].as_array().unwrap() {
             assert_eq!(keys(pl), PLAN_KEYS, "{pl}");
             if matches!(pl["state"].as_str(), Some("done" | "parked")) {
