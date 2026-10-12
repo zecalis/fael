@@ -139,7 +139,7 @@ fn close_by_key_closes_the_chain_and_lands_on_the_receipt() {
     let (_, open, _) = fael(&d, &["find", "--key", "k"], "");
     assert!(!open.contains("v1") && !open.contains("v2"), "{open}");
     // chain-close: each version has its own close row
-    let closes: String = std::fs::read_dir(d.join(".fael/log"))
+    let closes: String = std::fs::read_dir(d.join(".git/fael/log"))
         .unwrap()
         .flatten()
         .flat_map(|who| {

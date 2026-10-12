@@ -33,11 +33,9 @@ pub(super) fn find(a: &Value) -> Result<String, String> {
 }
 
 fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
-    // `branches: true` merges unmerged branches' rows into the union log
-    // (HEAD wins on duplicate ids); their rows render with ` @<branch>`
-    let (base, jtags) = crate::journal::read(r);
+    let (log, branch_of) = crate::journal::read(r);
     if let Some(ids) = a["ids"].as_array() {
-        return ids_call(ids, r, base, jtags);
+        return ids_call(ids, r, log, branch_of);
     }
     // `find {"id": ...}` pulls that row's body — an id-shaped query is an id
     // lookup, never text (same messages as the CLI); pass it as `text` for a
@@ -45,12 +43,10 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     if let Some(id) = s(a, "id")
         && core::looks_like_id(&id)
     {
-        let (log, wide, btags) = crate::refs::resolve_wide(r, base, &id);
-        let branch_of = crate::journal::overlay(jtags, btags);
-        return match wide {
+        return match crate::refs::resolve_wide(&log, &id) {
             crate::refs::Wide::One(row) => {
                 let shown = row.id.clone();
-                let text = crate::find::branches::tag(
+                let text = crate::journal::tag(
                     core::render_full(&log, &[row.as_ref()], 10_000),
                     &branch_of,
                 );
@@ -60,17 +56,12 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             crate::refs::Wide::Missing => Err(crate::find::reject_missing(&log, &id)),
         };
     }
-    let (log, branch_of, note) = if a["branches"].as_bool().unwrap_or(false) {
-        crate::find::branches::widen(r, base, jtags)
-    } else {
-        (base, jtags, None)
-    };
     // a non-id-shaped `id` keeps the old prefix shortcut: an exact id or
     // unique prefix pulls that row's body, else the call is rejected
     if let Some(id) = s(a, "id") {
         let row = core::resolve_row(&log, &id)?;
         let shown = row.id.clone();
-        let text = crate::find::branches::tag(core::render_full(&log, &[row], 10_000), &branch_of);
+        let text = crate::journal::tag(core::render_full(&log, &[row], 10_000), &branch_of);
         return Ok((with_mentioned(&log, row, text), vec![shown]));
     }
     let text = s(a, "text");
@@ -126,17 +117,12 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let text = if rows.is_empty() {
         crate::find::misses::explain(&r.root, "mcp", &log, &f, "files")
     } else if full {
-        crate::find::branches::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
+        crate::journal::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
     } else {
-        crate::find::branches::tag(core::render_page(&log, &rows, budget, cut), &branch_of)
+        crate::journal::tag(core::render_page(&log, &rows, budget, cut), &branch_of)
     };
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
-    // the CLI's stderr line has no stderr here: it rides the result
-    let text = match note {
-        Some(n) => format!("{}\n{n}", text.trim_end()),
-        None => text,
-    };
     Ok((text, shown))
 }
 
@@ -147,7 +133,7 @@ fn ids_call(
     ids: &[Value],
     r: &Repo,
     base: core::Log,
-    jtags: crate::find::branches::BranchMap,
+    jtags: crate::journal::BranchMap,
 ) -> Result<(String, Vec<String>), String> {
     let ids: Vec<String> = ids
         .iter()
@@ -196,7 +182,7 @@ fn groups(
     r: &Repo,
     log: &core::Log,
     f: core::Filter,
-    branch_of: &crate::find::branches::BranchMap,
+    branch_of: &crate::journal::BranchMap,
 ) -> (String, Vec<String>) {
     let is_issue = f.kind.as_deref() == Some("issue");
     let rows = core::find(
@@ -213,7 +199,7 @@ fn groups(
         false if is_issue => {
             crate::find::issue::render_issue_groups(r, log, &rows, branch_of.clone())
         }
-        false => crate::find::branches::tag(core::render_groups(log, &rows), branch_of),
+        false => crate::journal::tag(core::render_groups(log, &rows), branch_of),
     };
     (text, rows.iter().map(|r| r.id.clone()).collect())
 }

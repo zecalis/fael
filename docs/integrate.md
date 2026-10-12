@@ -64,27 +64,9 @@ coordination: one checks out its branch and the other is suddenly on the wrong b
 next push or PR targets work it never meant to touch. fael does not guard this — it is a log,
 not a daemon, and each row already records the branch it was filed on. The fix is structural:
 give each agent its own worktree (`git worktree add ../wt-<agent>`) and never run two agents in
-the same one. `fael find --branches` reads the other worktree's unmerged rows without checking
-anything out, and `fael doctor` flags local branches whose PR already merged (`[Merged]`) for
+the same one. Every worktree of a clone shares one journal, so a row filed in one is read
+in all of them, and `fael doctor` flags local branches whose PR already merged (`[Merged]`) for
 deletion.
-
-## Moving a tracked repo to local
-
-A repo with no `store` line stops writing `.fael/log` on upgrade: the tree log is read as frozen
-history and new rows stay in the journal. A repo that set `store = "tracked"` keeps committing
-`.fael/log`, and every PR that appends to the same month file conflicts on GitHub (it ignores
-`merge=union`). To stop, or to fold the tree log in before removing it:
-
-```bash
-fael migrate local        # fold .fael/log into this clone's journal, set store = "local"
-git add .fael/config.toml && git commit -m "fael: keep rows out of the tree"
-```
-
-The simplest end state keeps `.fael/log` as frozen history: nothing appends to it any more, so it
-never conflicts again, and every clone keeps reading it. If you remove it instead
-(`git rm -r --cached .fael/log`), run `fael migrate local` in **every** clone before it pulls the
-removal — the fold reads the working tree, and it is what makes a row edited in the tree (say, a PR
-that renamed its files) win over the stale copy in that clone's journal.
 
 ## Private memory repo (public source, private memory)
 

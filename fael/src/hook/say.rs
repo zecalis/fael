@@ -100,9 +100,6 @@ pub(crate) enum Kind {
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
-    /// `store = "tracked"` goes away in the next release: session start says
-    /// it once per start (a compacted context hears it again), with its way out.
-    Deprecated,
 }
 
 /// How a kind is said only once.
@@ -141,7 +138,6 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
         Kind::Fixed | Kind::FixCommit | Kind::Held { .. } => (Once::Key, Some("fael close"), false),
         Kind::Brief | Kind::Notice => (Once::Event, None, false),
-        Kind::Deprecated => (Once::Event, Some("fael migrate local"), false),
     };
     Policy {
         once,
@@ -168,7 +164,7 @@ impl Kind {
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Held { .. } => vec![super::held::KEY.into()],
-            Kind::Brief | Kind::Notice | Kind::Deprecated => vec![],
+            Kind::Brief | Kind::Notice => vec![],
         }
     }
 }
@@ -198,7 +194,6 @@ impl Kind {
             Kind::FixCommit => ("fixcommit", vec![]),
             Kind::Held { ids } => ("held", ids.clone()),
             Kind::Notice => ("notice", vec![]),
-            Kind::Deprecated => ("deprecated", vec![]),
         };
         match keys.is_empty() {
             true => vec![Said { kind, key: None }],
@@ -260,17 +255,6 @@ impl Outbox {
             text: String::new(),
             said: vec![],
             turn: None,
-        }
-    }
-
-    /// Only an explicit `store = "tracked"` is told it goes away; unset and
-    /// `local` stay silent (the default is `local`).
-    pub(crate) fn deprecated(&mut self, cfg: &core::Config) {
-        if cfg.store_set && matches!(cfg.store, core::Store::Tracked) {
-            self.say(Line {
-                kind: Kind::Deprecated,
-                text: format!("fael: {}\n", core::TRACKED_DEPRECATED),
-            });
         }
     }
 

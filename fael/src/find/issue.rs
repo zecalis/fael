@@ -5,7 +5,7 @@
 //! one tag channel, no second writer: `(files changed since)` shares it — an
 //! issue fixed on another branch has no other sign (issue find:issue-changed).
 
-use super::branches::BranchMap;
+use crate::journal::BranchMap;
 use crate::{Args, aliases, core};
 use std::collections::HashSet;
 
@@ -51,7 +51,7 @@ pub(crate) fn groups(
     } else {
         print!(
             "{}",
-            super::branches::tag(core::render_groups(log, &rows), &branch_of)
+            crate::journal::tag(core::render_groups(log, &rows), &branch_of)
         );
     }
     Ok(())
@@ -71,7 +71,7 @@ pub(crate) fn render_issue_groups(
     let branch_of =
         super::merged::mark_changed(&r.root, branch_of, rows, &al, &r.cfg.anchor_prefixes);
     let gone = crate::maintain::gone_ids(&r.root, &al, rows);
-    let out = super::branches::tag(core::render_groups(log, rows), &branch_of);
+    let out = crate::journal::tag(core::render_groups(log, rows), &branch_of);
     tag_gone(&out, &gone)
 }
 

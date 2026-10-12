@@ -9,13 +9,13 @@ fn compact_round_trip_through_cli() {
     let (ok, _, err) = fael(&d, &["add", "note", "current row", "--files", "src/a.rs"]);
     assert!(ok, "{err}");
     // a past month with a close, written by hand (the CLI only writes this month)
-    let by = std::fs::read_dir(d.join(".fael/log"))
+    let by = std::fs::read_dir(d.join(".git/fael/log"))
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
         .file_name();
-    let dir = d.join(".fael/log").join(by);
+    let dir = d.join(".git/fael/log").join(by);
     let row = |id: &str, text: &str| {
         format!(
             r#"{{"v":1,"id":"{id}","ts":"2000-01-01T00:00:00.000Z","by":"test-user-","kind":"decision","text":"{text}","files":["old.rs"]}}"#

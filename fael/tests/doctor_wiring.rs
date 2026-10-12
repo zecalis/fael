@@ -156,30 +156,3 @@ fn session_start_in_a_scratch_repo_leaves_a_real_home_alone() {
     assert!(!home.join(".claude/skills").exists());
     let _ = std::fs::remove_dir_all(&home);
 }
-
-/// `store = "tracked"` goes away in the next release (step 1 of 2): an explicit
-/// tracked repo is told at session start and by `doctor`; unset and `local`
-/// stay silent.
-#[test]
-fn an_explicit_tracked_store_is_told_it_goes_away() {
-    let told = |store: Option<&str>| {
-        let (home, repo) = scratch();
-        std::fs::write(repo.join("a.rs"), "").unwrap();
-        fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
-        if let Some(s) = store {
-            std::fs::create_dir_all(repo.join(".fael")).unwrap();
-            std::fs::write(repo.join(".fael/config.toml"), format!("store = \"{s}\"\n")).unwrap();
-        }
-        let (start, again) = (session_start(&home, &repo), session_start(&home, &repo));
-        (start, again, fael(&home, &repo, &["doctor"]))
-    };
-    let (start, _, doctor) = told(Some("tracked"));
-    assert!(start.contains("fael migrate local"), "{start}");
-    assert!(start.contains("fael sync --remote <url>"), "{start}");
-    assert!(doctor.contains("[Deprecated]"), "{doctor}");
-    for store in [None, Some("local")] {
-        let (start, again, doctor) = told(store);
-        assert!(!start.contains("goes away") && !again.contains("goes away"));
-        assert!(!doctor.contains("[Deprecated]"), "{store:?}: {doctor}");
-    }
-}

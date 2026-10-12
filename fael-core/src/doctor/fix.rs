@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// Repair every fixable problem in `report`, under the `.fael/.lock`.
 /// Returns one line per action taken. Report-only problems are left alone.
-pub fn fix(fael: &Path, root: &Path, report: &Report) -> Result<Vec<String>, String> {
+pub fn fix(fael: &Path, report: &Report) -> Result<Vec<String>, String> {
     let _guard = lock(fael)?;
 
     let mut done = vec![];
@@ -17,18 +17,6 @@ pub fn fix(fael: &Path, root: &Path, report: &Report) -> Result<Vec<String>, Str
             Kind::Broken | Kind::Torn | Kind::Conflict | Kind::Encoding => {
                 if let Some(f) = p.file.clone().filter(|f| f.is_file()) {
                     files.insert(f);
-                }
-            }
-            Kind::Union => {
-                let attrs = root.join(".gitattributes");
-                let mut s = std::fs::read_to_string(&attrs).unwrap_or_default();
-                if !super::scan::has_union(&s) {
-                    if !s.is_empty() && !s.ends_with('\n') {
-                        s.push('\n');
-                    }
-                    s.push_str(".fael/log/**/*.jsonl merge=union\n");
-                    tmp_rename(&attrs, s.as_bytes())?;
-                    done.push(format!("{}: added the merge=union line", attrs.display()));
                 }
             }
             _ => {}

@@ -3,8 +3,7 @@
 //! Reading never fails and `doctor` without `--fix` only reports (exit 1 when
 //! an `Error` is present, so CI can gate on it). `--fix` repairs what it can —
 //! broken lines and torn tails move to `.fael/quarantine/` (never deleted),
-//! conflict markers are stripped, encoding is normalised, the
-//! `merge=union` line is added — every repair through tmp + rename under the
+//! conflict markers are stripped, encoding is normalised — every repair through tmp + rename under the
 //! `.fael/.lock`. What `--fix` cannot repair (duplicates → `compact`; legacy
 //! rows without `files` → never invent files) stays report-only.
 //!
@@ -34,18 +33,13 @@ pub enum Kind {
     Broken,
     Torn,
     Conflict,
-    Union,
     Duplicate,
     Encoding,
     NoFiles,
     MultiFael,
-    Ignored,
     NoLog,
-    /// `store = "local"`: rows live in the clone's journal, not the tree
+    /// rows live in the clone's journal, not the tree
     Local,
-    /// an explicit `store = "tracked"`: the mode goes away in the next release
-    /// (step 1 of 2 — said, nothing removed). Info-only.
-    Deprecated,
     Future,
     Oversize,
     /// open rows whose files all no longer exist — they never push again
@@ -133,9 +127,9 @@ pub enum Kind {
     /// dry pass in `doctor`, never in core (core never reads client configs).
     /// Info-only: it is machine state, not the repo's log.
     Wiring,
-    /// rows that have not reached their destination: uncommitted `.fael/log`
-    /// files under `store = "tracked"`, or this writer's rows not on the
-    /// remote after a failed `fael sync` (PLAN-fael-local-first chunk 2);
+    /// rows that have not reached their destination: this writer's rows not
+    /// on the remote after a failed `fael sync`, or a repo that shared by
+    /// commit with no remote set (PLAN-fael-local-first chunk 2);
     /// judged in the adapter (git, sync state), never in core. Info-only.
     Late,
     /// a row (open or closed) whose serialised line trips `validate::secret`

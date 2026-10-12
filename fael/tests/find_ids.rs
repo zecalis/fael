@@ -45,9 +45,7 @@ fn repo() -> PathBuf {
     ] {
         git(&d, args);
     }
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -264,41 +262,4 @@ fn fake_id_in_a_title_is_named_as_a_mention() {
         err.contains("mentioned (not owned) by:") && err.contains(&citing[..8]),
         "{err}"
     );
-}
-
-#[test]
-fn id_only_on_another_clones_unmerged_branch_is_found() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let (ok, _, err) = fael(&d, &["add", "note", "row on main", "--files", "src/a.rs"]);
-    assert!(ok, "{err}");
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "rows"]);
-
-    // another clone: its own journal, so the union here never sees its rows
-    let other = d.join("other");
-    git(
-        &d,
-        &["clone", "-q", d.to_str().unwrap(), other.to_str().unwrap()],
-    );
-    git(&other, &["config", "user.name", "Other Clone"]);
-    git(&other, &["config", "user.email", "o@example.com"]);
-    git(&other, &["checkout", "-qb", "feat/y"]);
-    std::fs::write(other.join("src/c.rs"), "// c\n").unwrap();
-    let (ok, out, err) = fael(
-        &other,
-        &["add", "note", "row C on feat", "--files", "src/c.rs"],
-    );
-    assert!(ok, "{err}");
-    let cid = out.split_whitespace().next().unwrap().to_string();
-    git(&other, &["add", "-A"]);
-    git(&other, &["commit", "-qm", "rows C"]);
-    git(&other, &["push", "-q", "origin", "feat/y"]);
-
-    // the union has no such row — only the escalation finds it, tagged
-    let (ok, out, _) = fael(&d, &["find"]);
-    assert!(ok && !out.contains("row C on feat"), "{out}");
-    let (ok, out, err) = fael(&d, &["find", &cid]);
-    assert!(ok && out.contains("row C on feat"), "{err}{out}");
-    assert!(out.contains("@feat/y"), "{out}");
 }

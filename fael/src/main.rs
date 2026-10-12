@@ -22,7 +22,6 @@ mod install;
 mod journal;
 mod maintain;
 mod mcp;
-mod migrate;
 mod mv;
 mod plan;
 mod purge;
@@ -126,7 +125,6 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
-        ("migrate", [to]) if to == "local" => migrate::local(&repo()?).map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
         ("stats", []) if a.has("misses") => {
             find::misses::print_recent(20);
@@ -205,13 +203,7 @@ pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
     let scratch = std::env::var_os("FAEL_DIR").filter(|d| !d.is_empty());
     let journal = scratch.is_none().then(|| journal::root(&root)).flatten();
     let fael = scratch.map_or_else(|| root.join(".fael"), PathBuf::from);
-    let mut cfg = config(&fael.join("config.toml"))?;
-    // unset store is `local` everywhere: a tree log from before stays read
-    // (the union, tree wins on ids) as frozen history, never written again —
-    // only an explicit `store = "tracked"` asks for rows to commit (01M3YQT4)
-    if !cfg.store_set {
-        cfg.store = core::Store::Local;
-    }
+    let cfg = config(&fael.join("config.toml"))?;
     Ok(Repo {
         root,
         cwd,

@@ -51,9 +51,7 @@ fn repo() -> PathBuf {
                 .success()
         );
     }
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -125,8 +123,8 @@ fn rename_pushes_at_the_new_path() {
     assert!(out.contains(&id[..8]), "{out}");
 
     // the cache and its gitignore landed where they should
-    assert!(d.join(".fael/cache/aliases.json").is_file());
-    let ignore = std::fs::read_to_string(d.join(".fael/.gitignore")).unwrap();
+    assert!(d.join(".git/fael/cache/aliases.json").is_file());
+    let ignore = std::fs::read_to_string(d.join(".git/fael/.gitignore")).unwrap();
     assert!(ignore.lines().any(|l| l.trim() == "cache/"), "{ignore}");
 }
 
@@ -181,7 +179,7 @@ fn no_renames_still_writes_the_cache_at_head() {
     let d = repo();
     add(&d, "src/a.rs");
     hook_edit(&d, "src/a.rs");
-    let cache = std::fs::read_to_string(d.join(".fael/cache/aliases.json")).unwrap();
+    let cache = std::fs::read_to_string(d.join(".git/fael/cache/aliases.json")).unwrap();
     let head = Command::new("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(&d)
@@ -342,7 +340,7 @@ fn deleted_row_file_is_cached_dead_so_the_hook_skips_git() {
     git(&d, &["rm", "-q", "src/a.rs"]);
     commit_all(&d, "delete a");
     session_start(&d);
-    let cache = std::fs::read_to_string(d.join(".fael/cache/aliases.json")).unwrap();
+    let cache = std::fs::read_to_string(d.join(".git/fael/cache/aliases.json")).unwrap();
     let v: serde_json::Value = serde_json::from_str(&cache).unwrap();
     assert_eq!(v["dead"], serde_json::json!(["src/a.rs"]), "{cache}");
 }

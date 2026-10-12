@@ -29,7 +29,7 @@ pub const GIT: Option<&str> = option_env!("FAEL_GIT");
 pub use aliases::{Aliases, is_alias_row, is_carrier_row};
 pub use blob::blob_id_stream;
 pub use compact::{Opts as CompactOpts, Report as CompactReport, WriterReport, compact};
-pub use config::{Config, CrossKey, Store, TRACKED_DEPRECATED, auto_update_on};
+pub use config::{Config, CrossKey, auto_update_on};
 pub use import::{Opts as ImportOpts, Report as ImportReport, import};
 
 pub use doctor::{
@@ -44,9 +44,9 @@ pub use id::{
 };
 pub use lang::{Hit, Lang, by_name, fixed_hit, marker_hit, row_language_check};
 pub use log::{
-    Adopted, BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, adopt_tree, append,
-    bump_row, close, close_row, decode_text, fold_bumps, is_month, mv_row, needs_seal, parse,
-    purge_row, read, read_imported, restore_row,
+    BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, append, bump_row, close, close_row,
+    decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, read_imported,
+    restore_row,
 };
 pub use query::{
     ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, AUTO, Abbrev, BASELINE, Background, Bucket, CUT_BUDGET,

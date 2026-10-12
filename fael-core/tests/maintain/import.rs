@@ -32,7 +32,7 @@ fn import_folds_closes_and_skips_what_is_not_a_fael_row() {
         r#"{"ts":"2026-01-04T00:00:00Z","agent":"delamind","id":"muft0009","kind":"bug","text":"old","v":2}"#.to_string(),
     ];
     fs::write(src.join("log.delamind.jsonl"), lines.join("\n") + "\n").unwrap();
-    let rep = import(&fael, None, Store::Tracked, &src, &ImportOpts::default()).unwrap();
+    let rep = import(&fael, None, &src, &ImportOpts::default()).unwrap();
     assert_eq!(
         (rep.adds, rep.folded, rep.carried, rep.skipped),
         (5, 1, 1, 1),
@@ -55,7 +55,7 @@ fn import_folds_closes_and_skips_what_is_not_a_fael_row() {
     assert!(by_id("m0007").files.is_empty()); // kept as-is, read-valid
     assert_eq!(by_id("m0008").files, vec!["doc:pricing"]);
     // importing twice is safe — dedupe by id
-    let rep2 = import(&fael, None, Store::Tracked, &src, &ImportOpts::default()).unwrap();
+    let rep2 = import(&fael, None, &src, &ImportOpts::default()).unwrap();
     assert_eq!(rep2.adds, 5);
     assert_eq!(read(&fael).rows.len(), log.rows.len());
 }
@@ -74,7 +74,6 @@ fn import_map_rewrites_prefixes_not_anchors() {
     let rep = import(
         &fael,
         None,
-        Store::Tracked,
         &src,
         &ImportOpts {
             maps: vec![("old/".into(), "new/".into())],
@@ -98,7 +97,7 @@ fn import_native_fael_log() {
         line.clone() + "\n",
     )
     .unwrap();
-    let rep = import(&fael, None, Store::Tracked, &other, &ImportOpts::default()).unwrap();
+    let rep = import(&fael, None, &other, &ImportOpts::default()).unwrap();
     assert_eq!((rep.adds, rep.skipped), (1, 0));
     assert_eq!(read(&fael).rows.len(), 1);
 }
@@ -124,7 +123,7 @@ fn import_350_rows_drops_nothing() {
         lines.push(close(c, t));
     }
     fs::write(src.join("log.jsonl"), lines.join("\n") + "\n").unwrap();
-    let rep = import(&fael, None, Store::Tracked, &src, &ImportOpts::default()).unwrap();
+    let rep = import(&fael, None, &src, &ImportOpts::default()).unwrap();
     assert_eq!(rep.skipped, 0, "{:?}", rep.warnings);
     assert_eq!(rep.adds + rep.folded + rep.carried, lines.len(), "{rep:?}");
     assert_eq!(rep.folded, 2);
@@ -146,7 +145,7 @@ fn import_skips_a_secret_row_and_never_echoes_it() {
         format!("{clean}\n{}\n", leaked.to_line()),
     )
     .unwrap();
-    let rep = import(&fael, None, Store::Tracked, &src, &ImportOpts::default()).unwrap();
+    let rep = import(&fael, None, &src, &ImportOpts::default()).unwrap();
     assert_eq!((rep.adds, rep.skipped), (1, 1));
     assert_eq!(read(&fael).rows.len(), 1);
     let w = rep.warnings.join("\n");

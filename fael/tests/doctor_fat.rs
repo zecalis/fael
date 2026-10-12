@@ -38,9 +38,7 @@ fn repo() -> PathBuf {
                 .success()
         );
     }
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -115,7 +113,7 @@ fn doctor_collapses_legacy_fat_rows_until_fat_flag() {
     let new_id = out.split_whitespace().next().unwrap().to_string();
     // one pre-self-heal fat row: a 2023 ULID appended straight to the tree
     // log (the journal copy never exists, so the union still sees it once)
-    let wdir = std::fs::read_dir(d.join(".fael/log"))
+    let wdir = std::fs::read_dir(d.join(".git/fael/log"))
         .unwrap()
         .next()
         .unwrap()

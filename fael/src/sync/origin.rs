@@ -1,17 +1,14 @@
-//! The public-origin warning: `store = local` keeps rows out of the tree, yet a
+//! The public-origin warning: rows stay out of the tree, yet a
 //! sync that pushes `refs/fael/*` to `origin` still makes them fetchable by
 //! anyone with read access. `fael.remote` may be a URL or a remote name, and one
 //! repo has many spellings (`.git` suffix, ssh vs https, a `pushurl`), so both
 //! sides are resolved through git and normalised before comparing.
 
-use crate::{Repo, core};
+use crate::Repo;
 
 /// One line to stderr when this sync's destination is `origin`. The push
 /// happens either way.
 pub(super) fn warn(r: &Repo, remote: &str) {
-    if !matches!(r.cfg.store, core::Store::Local) {
-        return;
-    }
     // `remote get-url` resolves a remote name (and `insteadOf`); a URL is not a
     // remote, so it fails and the string itself is the destination.
     let get = |args: &[&str]| crate::git(&r.root, &[&["remote", "get-url"], args].concat());

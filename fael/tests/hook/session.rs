@@ -1,22 +1,17 @@
-//! Session-start kickoff + gitignore warning, and the edit push (each row
-//! once per session).
+//! Session-start kickoff and the edit push (each row once per session).
 
 use super::{fael, json, repo};
 
 #[test]
 fn session_start_and_edit_push() {
     let d = repo();
-    // empty log = no brief, not an error; the fixture is an explicit
-    // `store = "tracked"`, so the deprecation line is all it says
+    // empty log = no brief, not an error
     let (ok, out, _) = fael(
         &d,
         &["hook", "session-start", "--client", "claude"],
         r#"{}"#,
     );
-    assert!(
-        ok && out.contains("fael migrate local") && !out.contains("open issue"),
-        "{out}"
-    );
+    assert!(ok && !out.contains("open issue"), "{out}");
 
     // kickoff drops rows whose files are all gone, so the file must exist
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
@@ -37,18 +32,6 @@ fn session_start_and_edit_push() {
     // the explicit-arg path keeps today's kickoff: the row is still there
     let (ok, out, _) = fael(&d, &["kickoff", "src/a.rs"], "");
     assert!(ok && out.contains("login loops"), "{out}");
-    assert!(!out.contains("gitignored"), "{out}");
-    // the cached check-ignore answer follows .gitignore both ways
-    std::fs::write(d.join(".gitignore"), ".fael/\n").unwrap();
-    let (_, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(out.contains("gitignored"), "{out}");
-    std::fs::remove_file(d.join(".gitignore")).unwrap();
-    let (_, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(!out.contains("gitignored"), "{out}");
-    // .git/info/exclude is a deliberate local-only choice — no warning
-    std::fs::write(d.join(".git/info/exclude"), ".fael/log/\n").unwrap();
-    let (_, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(!out.contains("gitignored"), "{out}");
 
     // edit: claude shape in, PostToolUse context out
     let f = d.join("src/a.rs");
@@ -87,11 +70,11 @@ fn session_start_and_edit_push() {
 
     // every injection is accounted, per machine
     let (ok, out, _) = fael(&d, &["stats"], "");
-    assert!(ok && out.contains("8 injections"), "{out}");
+    assert!(ok && out.contains("4 injections"), "{out}");
     let (ok, out, _) = fael(&d, &["stats", "--json"], "");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(
-        ok && v["events"] == 8 && v["by_event"]["edit"]["events"] == 3,
+        ok && v["events"] == 4 && v["by_event"]["edit"]["events"] == 3,
         "{out}"
     );
 }

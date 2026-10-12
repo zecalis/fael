@@ -2,8 +2,6 @@
 //! the edit push renders around the rows — the count footer and the
 //! `@branch` tag — for the real-session cases of notes 01M3S446P / 01M3S6NAH.
 
-#[cfg(unix)]
-use super::git;
 use super::{fael, json, repo};
 use std::path::Path;
 
@@ -52,67 +50,4 @@ fn shared_keys_outside_focus_are_not_counted() {
     let out = edit(&d, "src/a.rs");
     assert!(footer(&out).is_empty(), "{out}");
     assert!(out.contains("(5 of 8):"), "{out}");
-}
-
-/// A `.fael` symlinked out of the checkout — the tree every worktree of the
-/// clone shares, untouched by `git switch` (this repo's own setup).
-#[cfg(unix)]
-fn share_tree(d: &Path) {
-    let shared = d.with_file_name(format!(
-        "{}-shared",
-        d.file_name().unwrap().to_string_lossy()
-    ));
-    // the fixture's `.fael` (its tracked pin) becomes the shared dir
-    std::fs::rename(d.join(".fael"), &shared).unwrap();
-    std::os::unix::fs::symlink(&shared, d.join(".fael")).unwrap();
-}
-
-/// Case "off-branch" (01M3S4EBE): a row filed on another branch that is
-/// still alive reads as fact when the tree is shared. It used to read
-/// untagged; now it carries `@feat/x` while that branch exists.
-#[cfg(unix)]
-#[test]
-fn off_branch_row_in_a_shared_tree_is_tagged() {
-    let d = repo();
-    share_tree(&d);
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    git(&d, &["add", "src/a.rs"]);
-    git(&d, &["commit", "-qm", "a"]);
-    let main = git(&d, &["symbolic-ref", "--short", "HEAD"]);
-    git(&d, &["switch", "-qc", "feat/x"]);
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "decision", "only on feat/x", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    git(&d, &["switch", "-q", &main]);
-    let out = edit(&d, "src/a.rs");
-    assert!(out.contains("only on feat/x"), "{out}");
-    assert!(out.contains("@feat/x"), "{out}");
-}
-
-/// The same row once its branch is gone (merged and deleted, or a throwaway
-/// worktree branch): nothing to point at, so no tag — before and after.
-#[cfg(unix)]
-#[test]
-fn off_branch_row_of_a_deleted_branch_in_the_tree_stays_untagged() {
-    let d = repo();
-    share_tree(&d);
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    git(&d, &["add", "src/a.rs"]);
-    git(&d, &["commit", "-qm", "a"]);
-    let main = git(&d, &["symbolic-ref", "--short", "HEAD"]);
-    git(&d, &["switch", "-qc", "feat/x"]);
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "decision", "filed on feat/x", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    git(&d, &["switch", "-q", &main]);
-    git(&d, &["branch", "-D", "feat/x"]);
-    let out = edit(&d, "src/a.rs");
-    assert!(out.contains("filed on feat/x"), "{out}");
-    assert!(!out.contains("@feat/x"), "{out}");
 }

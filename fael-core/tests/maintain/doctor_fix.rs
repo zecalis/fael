@@ -4,9 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 fn scan_fix_rescan(fael: &Path, root: &Path) -> (DoctorReport, Vec<String>, DoctorReport) {
-    let before = doctor_scan(fael, root, false, MONTH);
-    let done = doctor_fix(fael, root, &before).unwrap();
-    let after = doctor_scan(fael, root, false, MONTH);
+    let before = doctor_scan(fael, root, MONTH);
+    let done = doctor_fix(fael, &before).unwrap();
+    let after = doctor_scan(fael, root, MONTH);
     (before, done, after)
 }
 
@@ -199,39 +199,13 @@ fn rows_without_files_and_future_month_are_notes() {
 }
 
 #[test]
-fn missing_union_line_is_added() {
-    let r = tmp();
-    let fael = fael_of(&r);
-    write_lines(
-        &month_file(&fael, "tester-0000", "2026-07", false),
-        &[row("A0000000000000000000000001", "note", &["a.rs"]).to_line()],
-    );
-    let before = doctor_scan(&fael, &r, false, MONTH);
-    assert!(
-        before.problems.iter().any(|x| x.kind == ProblemKind::Union),
-        "{before:?}"
-    );
-    doctor_fix(&fael, &r, &before).unwrap();
-    assert!(
-        fs::read_to_string(r.join(".gitattributes"))
-            .unwrap()
-            .contains(".fael/log/**/*.jsonl merge=union")
-    );
-    let after = doctor_scan(&fael, &r, false, MONTH);
-    assert!(
-        after.problems.iter().all(|x| x.kind != ProblemKind::Union),
-        "{after:?}"
-    );
-}
-
-#[test]
 fn several_fael_dirs_are_reported() {
     let r = root();
     let fael = fael_of(&r);
     let sub = r.join("sub").join(".fael").join("log").join("w-0000");
     fs::create_dir_all(&sub).unwrap();
     fs::write(sub.join("2026-07.jsonl"), "{}\n").unwrap();
-    let rep = doctor_scan(&fael, &r, false, MONTH);
+    let rep = doctor_scan(&fael, &r, MONTH);
     let m = rep
         .problems
         .iter()
@@ -255,7 +229,7 @@ fn oversize_month_is_an_error() {
         .unwrap()
         .set_len(MONTH_MAX)
         .unwrap();
-    let rep = doctor_scan(&fael, &r, false, MONTH);
+    let rep = doctor_scan(&fael, &r, MONTH);
     assert!(
         rep.problems
             .iter()
@@ -286,32 +260,6 @@ fn fix_leaves_a_secret_row_byte_identical() {
     assert!(after.problems.iter().any(|x| x.kind == ProblemKind::Secret));
 }
 
-#[test]
-fn commented_union_line_does_not_pass_the_gate() {
-    let r = tmp();
-    let fael = fael_of(&r);
-    fs::write(
-        r.join(".gitattributes"),
-        "# .fael/log/**/*.jsonl merge=union\n",
-    )
-    .unwrap();
-    write_lines(
-        &month_file(&fael, "tester-0000", "2026-07", false),
-        &[row("A0000000000000000000000001", "note", &["a.rs"]).to_line()],
-    );
-    let before = doctor_scan(&fael, &r, false, MONTH);
-    assert!(
-        before.problems.iter().any(|x| x.kind == ProblemKind::Union),
-        "{before:?}"
-    );
-    doctor_fix(&fael, &r, &before).unwrap();
-    let after = doctor_scan(&fael, &r, false, MONTH);
-    assert!(
-        after.problems.iter().all(|x| x.kind != ProblemKind::Union),
-        "{after:?}"
-    );
-}
-
 #[cfg(unix)]
 #[test]
 fn unreadable_file_does_not_abort_the_other_repairs() {
@@ -333,8 +281,8 @@ fn unreadable_file_does_not_abort_the_other_repairs() {
         ],
     );
     fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
-    let before = doctor_scan(&fael, &r, false, MONTH);
-    let done = doctor_fix(&fael, &r, &before);
+    let before = doctor_scan(&fael, &r, MONTH);
+    let done = doctor_fix(&fael, &before);
     fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
     let done = done.unwrap();
     assert!(

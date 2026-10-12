@@ -64,15 +64,7 @@ fn core_is_a_strict_subset_of_full() {
     for (cmd, hidden) in [
         (
             "find",
-            [
-                "--since",
-                "--by",
-                "--to",
-                "--revisit",
-                "--branches",
-                "--groups",
-            ]
-            .as_slice(),
+            ["--since", "--by", "--to", "--revisit", "--groups"].as_slice(),
         ),
         (
             "add",

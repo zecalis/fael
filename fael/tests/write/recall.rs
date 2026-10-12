@@ -134,7 +134,7 @@ fn the_line_is_info_never_a_counted_warning() {
 #[test]
 fn an_issue_closed_by_compact_is_still_named() {
     let d = repo();
-    let by = std::fs::read_dir(d.join(".fael/log"))
+    let by = std::fs::read_dir(d.join(".git/fael/log"))
         .unwrap()
         .next()
         .unwrap()

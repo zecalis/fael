@@ -66,7 +66,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "find",
         "search rows",
-        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--branches] [--full] [--limit N] [--offset M] [--groups] [--text query]
+        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M] [--groups] [--text query]
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
       why: `closed: <text> (<sha>)`; several ids print every body in one call,
       a bad id reports alone and the exit is 1; an id-shaped query is
@@ -85,10 +85,6 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
       (*.md and anchors never link);
       text finds rows holding every word, in any order; on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*';
-     --branches also reads branches not yet merged into HEAD, tagging their rows @<branch>;
-     it only adds rows committed to .fael/log on those branches that plain find
-      lacks — none under store = \"local\" (the default) or a gitignored
-      .fael/log; when it adds none it says why;
      a cut list prints the exact next call — rerun it with the new --offset)",
     ),
     (
@@ -100,7 +96,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "kickoff",
         "the session brief",
-        "fael kickoff [file|anchor] [--branches] [--full] [--limit N] [--offset M]
+        "fael kickoff [file|anchor] [--full] [--limit N] [--offset M]
     (the session brief: open rows ranked for a file, anchor or the whole repo;
     an explicit --limit N is not cut by budget.kickoff_tokens)",
     ),
@@ -223,15 +219,6 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      or when the file has lines `read` would skip — run `fael doctor --fix` first;
      the next sync keeps it from coming back; copies already in a teammate's
      journal stay until purged there too)",
-    ),
-    (
-        "migrate",
-        "move a tracked repo to store = local (store = tracked is deprecated)",
-        "fael migrate local
-    (fold the tree log into this clone's journal — the tree copy wins on every
-     id it holds, so rows edited in the tree never fall back to a stale journal
-     copy — then set store = \"local\" in .fael/config.toml; safe to rerun;
-     every clone runs it before the tree log is removed)",
     ),
     (
         "hook",

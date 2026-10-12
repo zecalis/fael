@@ -4,10 +4,9 @@ use crate::{MONTH_MAX, Row, is_alias_row, is_carrier_row};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Scan `.fael/log/**` plus the repo around it. `log_ignored` comes from the
-/// adapter (`git check-ignore` — core never spawns git); `month` is the
-/// current UTC `yyyy-mm` (injected so tests don't depend on the clock).
-pub fn scan(fael: &Path, root: &Path, log_ignored: bool, month: &str) -> Report {
+/// Scan `.fael/log/**` plus the repo around it. `month` is the current UTC
+/// `yyyy-mm` (injected so tests don't depend on the clock).
+pub fn scan(fael: &Path, root: &Path, month: &str) -> Report {
     let mut r = Report::default();
     let log = fael.join("log");
     let files: Vec<PathBuf> = collect_files(&log)
@@ -74,29 +73,6 @@ pub fn scan(fael: &Path, root: &Path, log_ignored: bool, month: &str) -> Report 
             )
             .with_ids(no_files_ids),
         );
-    }
-    // the cause of leftover conflict markers: without union every merge conflicts
-    let attrs = root.join(".gitattributes");
-    let has_union = std::fs::read_to_string(&attrs).is_ok_and(|s| has_union(&s));
-    if !has_union {
-        r.problems.push(Problem::error(
-            Kind::Union,
-            true,
-            None,
-            format!(
-                "{} has no `merge=union` line — concurrent appends conflict instead of merging",
-                attrs.display()
-            ),
-        ));
-    }
-    if log_ignored {
-        r.problems.push(Problem::error(
-            Kind::Ignored,
-            false,
-            None,
-            ".fael/log is gitignored — rows stay on this machine, `fael doctor` always reports it"
-                .into(),
-        ));
     }
     r
 }
@@ -237,14 +213,6 @@ fn scan_file(
             format!("{name}: ≥ 50 MiB, appends refuse — run `fael compact`"),
         ));
     }
-}
-
-/// A live `merge=union` attribute — a commented-out line does not count.
-pub(super) fn has_union(attrs: &str) -> bool {
-    attrs.lines().any(|l| {
-        let l = l.trim();
-        !l.starts_with('#') && l.split_whitespace().any(|t| t == "merge=union")
-    })
 }
 
 fn fmt_nums(ns: &[usize]) -> String {

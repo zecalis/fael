@@ -1,9 +1,8 @@
 //! Rows that have not reached their destination yet (PLAN-fael-local-first
-//! chunk 2) — late is fine, lost is not, silent is not. `store = "tracked"`:
-//! `.fael/log` files git sees as uncommitted. `local` with a remote: this
+//! chunk 2) — late is fine, lost is not, silent is not. With a remote: this
 //! writer's rows newer than the last good sync, shown only once a sync failed
-//! (a pending row is just late; the next sync carries it). `local` with no
-//! remote in a repo whose `.fael/log` is in git: the team used to share by
+//! (a pending row is just late; the next sync carries it). No remote in a
+//! repo whose `.fael/log` is in git: the team used to share by
 //! commit, and new rows no longer do. The Stop receipt and `doctor` both
 //! print [`line`].
 //!
@@ -13,7 +12,7 @@
 //! stripped, removed by the next success).
 
 use crate::{Repo, core};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const MARK: &str = "synced";
 const ERR: &str = "sync-error";
@@ -68,27 +67,7 @@ pub(crate) fn forget(r: &Repo) {
 /// The one late line for this repo, `None` when nothing is late. `log` is
 /// the union read the caller already holds.
 pub(crate) fn line(r: &Repo, log: &core::Log) -> Option<String> {
-    match r.cfg.store {
-        core::Store::Tracked => uncommitted(&r.root),
-        core::Store::Local => unsynced(r, log).or_else(|| unshared(r)),
-    }
-}
-
-fn uncommitted(root: &Path) -> Option<String> {
-    let out = crate::git(
-        root,
-        &[
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-            "--",
-            ".fael/log",
-        ],
-    )?;
-    Some(format!(
-        "fael: {} .fael/log file(s) uncommitted (store = tracked) — commit them, or `fael migrate local`",
-        out.lines().count()
-    ))
+    unsynced(r, log).or_else(|| unshared(r))
 }
 
 fn unsynced(r: &Repo, log: &core::Log) -> Option<String> {
@@ -113,22 +92,20 @@ fn unsynced(r: &Repo, log: &core::Log) -> Option<String> {
     })
 }
 
-/// Unset `store`, a `.fael/log` in git and no `fael.remote`: the repo shared
-/// memory by commit, and since unset `store` became `local` new rows stay in
-/// this clone. An explicit `store = "local"` chose that. Spawns git only
-/// when a tree log is on disk.
+/// A `.fael/log` in git and no `fael.remote`: the repo once shared memory by
+/// commit, and new rows now stay in this clone. Spawns git only when a tree
+/// log is on disk.
 // ponytail: up to two git spawns per Stop in such a repo until it is set up
 // (the receipt dedups after); cache per session if Stop latency matters
 fn unshared(r: &Repo) -> Option<String> {
-    if r.cfg.store_set
-        || !r.fael.join("log").is_dir()
+    if !r.fael.join("log").is_dir()
         || crate::git(&r.root, &["config", "fael.remote"]).is_some()
         || crate::git(&r.root, &["ls-files", "--", ".fael/log"]).is_none()
     {
         return None;
     }
     Some(
-        "fael: new rows stay in this clone — .fael/log in git is frozen history under store = local; \
+        "fael: new rows stay in this clone — .fael/log in git is frozen history; \
          share them with `fael sync --remote <url>`"
             .into(),
     )

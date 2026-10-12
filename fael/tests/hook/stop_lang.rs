@@ -43,7 +43,7 @@ fn stop_thai_marker_flags_by_default() {
 fn stop_marker_english_only_ignores_thai() {
     let d = repo();
     decide(&d);
-    lang_config(&d, "store = \"tracked\"\n[lang]\nmarker = [\"english\"]\n");
+    lang_config(&d, "[lang]\nmarker = [\"english\"]\n");
     // the Thai pack is off: neither a bug nor a risk phrase is flagged
     assert!(!stop_flags(&d, "เจอบั๊กใน login"));
     assert!(!stop_flags(&d, "doc กับโค้ดไม่ตรงกัน"));
@@ -55,7 +55,7 @@ fn stop_marker_english_only_ignores_thai() {
 fn stop_marker_empty_disables_the_bug_rule() {
     let d = repo();
     decide(&d);
-    lang_config(&d, "store = \"tracked\"\n[lang]\nmarker = []\n");
+    lang_config(&d, "[lang]\nmarker = []\n");
     assert!(!stop_flags(&d, "I found a bug in login"));
 }
 

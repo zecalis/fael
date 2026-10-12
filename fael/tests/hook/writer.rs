@@ -5,7 +5,7 @@ use super::{fael_env, json, repo};
 
 fn log_text(d: &std::path::Path) -> String {
     let mut out = String::new();
-    let mut stack = vec![d.join(".fael/log")];
+    let mut stack = vec![d.join(".git/fael/log")];
     while let Some(p) = stack.pop() {
         for e in std::fs::read_dir(&p).unwrap().flatten() {
             let q = e.path();

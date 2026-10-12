@@ -9,7 +9,7 @@
 
 use crate::compact::fold;
 use crate::log::{collect_files, decode_text, dedupe_ids, is_marker, lock, tmp_rename};
-use crate::{Row, Store, anchor, ulid};
+use crate::{Row, anchor, ulid};
 use serde_json::Value;
 use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
@@ -33,14 +33,12 @@ pub struct Report {
 
 /// Merge `src` into this clone's `_import/`.
 ///
-/// Like every other write, the journal is the commit point: the rows land
-/// there first (`journal`, when the clone has one) and in the tree unless
-/// `store` is `local`, so a deleted branch cannot take an import with it
-/// (01M3HQHJ2).
+/// Like every other write, the rows land in the journal (`journal`, when the
+/// clone has one), so a deleted branch cannot take an import with it
+/// (01M3HQHJ2); the tree only without one (no git).
 pub fn import(
     fael: &Path,
     journal: Option<&Path>,
-    store: Store,
     src: &Path,
     opts: &Opts,
 ) -> Result<Report, String> {
@@ -112,29 +110,9 @@ pub fn import(
     let close = (!carried.is_empty()).then_some(cbody.as_str());
     let carried_n = carried.len();
 
-    let mut paths = vec![];
-    // journal first — the commit point, so a deleted branch cannot take the
-    // imported rows with it
-    if let Some(j) = journal.filter(|j| *j != fael) {
-        let dir = j.join("log").join("_import");
-        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        paths.extend(write_import(&dir, &stamp, &body, close)?);
-    }
-    // tree next, unless `local` already committed to the journal only
-    if !(store == Store::Local && journal.is_some()) {
-        let dir = fael.join("log").join("_import");
-        let written = std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("{}: {e}", dir.display()))
-            .and_then(|_| write_import(&dir, &stamp, &body, close));
-        match written {
-            Ok(ps) => paths.extend(ps),
-            // the rows are already durable; a retry would import a second copy
-            Err(e) if journal.is_some() => warnings.push(format!(
-                "warning: tree write failed ({e}) — rows are in the journal; do not retry"
-            )),
-            Err(e) => return Err(e),
-        }
-    }
+    let dir = journal.unwrap_or(fael).join("log").join("_import");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let paths = write_import(&dir, &stamp, &body, close)?;
     Ok(Report {
         adds: adds.len(),
         folded: folded.len(),

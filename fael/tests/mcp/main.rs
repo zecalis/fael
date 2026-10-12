@@ -30,9 +30,7 @@ fn main_and_worktree() -> (PathBuf, PathBuf) {
     git(&main, &["config", "user.name", "Mcp Test"]);
     git(&main, &["config", "user.email", "mcp@example.com"]);
     std::fs::write(main.join("src/a.rs"), "// a\n").unwrap();
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(main.join(".fael")).unwrap();
-    std::fs::write(main.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     git(&main, &["add", "."]);
     git(&main, &["commit", "-qm", "init"]);
     git(&main, &["worktree", "add", "-q", wt.to_str().unwrap()]);
@@ -88,10 +86,16 @@ fn mcp_tool_env(
         .collect()
 }
 
-/// Every row text in `<root>/.fael/log`.
+/// Every row line in the clone's journal (`<git-common-dir>/fael/log`), which
+/// `root` and every worktree of its clone share.
 fn texts(root: &Path) -> String {
     let mut all = String::new();
-    let log = root.join(".fael/log");
+    let common = Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    let log = PathBuf::from(String::from_utf8_lossy(&common.stdout).trim()).join("fael/log");
     for dir in std::fs::read_dir(&log).into_iter().flatten().flatten() {
         for f in std::fs::read_dir(dir.path())
             .into_iter()
@@ -116,12 +120,15 @@ fn add_lands_in_the_worktree_the_call_names() {
         ],
     );
     assert!(r.iter().all(|v| v["result"]["isError"] == false), "{r:?}");
-    let (m, w) = (texts(&main), texts(&wt));
-    assert!(w.contains("by cwd") && w.contains("by abs path"), "{w}");
-    assert!(!m.contains("by cwd") && !m.contains("by abs path"), "{m}");
-    assert!(m.contains("plain") && !w.contains("plain"), "{m}");
+    // one journal for the clone: the worktree the call names is the branch
+    // its rows carry (`git worktree add` checked out branch `wt` there)
+    let log = texts(&main);
+    let line = |t: &str| log.lines().find(|l| l.contains(t)).unwrap_or_default();
+    assert!(line("by cwd").contains(r#""branch":"wt""#), "{log}");
+    assert!(line("by abs path").contains(r#""branch":"wt""#), "{log}");
+    assert!(!line("plain").contains(r#""branch":"wt""#), "{log}");
     // the absolute path is stored repo-relative, like any other
-    assert!(w.contains(r#""src/a.rs""#), "{w}");
+    assert!(line("by abs path").contains(r#""src/a.rs""#), "{log}");
 }
 
 /// Chunk 6b over MCP: `rows: [...]` with one bad row — it reports alone

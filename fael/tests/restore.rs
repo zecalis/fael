@@ -54,9 +54,7 @@ fn repo() -> PathBuf {
         .status()
         .unwrap();
     std::fs::write(d.join("src/a.rs"), "// a.rs\n").unwrap();
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -67,10 +65,10 @@ fn add(dir: &Path, args: &[&str]) -> String {
     out.split_whitespace().next().unwrap().to_string()
 }
 
-/// Lines in the tree log (row stream only — the restore row lands there too).
+/// Lines in the journal log (row stream only — the restore row lands there too).
 fn log_lines(dir: &Path) -> usize {
     let mut n = 0;
-    let log = dir.join(".fael/log");
+    let log = dir.join(".git/fael/log");
     let mut stack = vec![log];
     while let Some(p) = stack.pop() {
         let Ok(rd) = std::fs::read_dir(&p) else {

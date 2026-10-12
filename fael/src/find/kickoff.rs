@@ -1,15 +1,14 @@
 //! `fael kickoff <file|PLAN>`: the rows to start a session on. Split out of
 //! find.rs at the 400-line ratchet.
 
-use super::{show, working_or_branches};
+use super::show;
 use crate::{Args, aliases};
 use fael_core::{self as core, Filter};
 
 pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let r = crate::repo()?;
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
-    let (base, jtags) = crate::journal::read(&r);
-    let (log, branch_of) = working_or_branches(a, base, jtags, &r);
+    let (log, branch_of) = crate::journal::read(&r);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
     // a plan anchor (`PLAN-x.md` → `plan:x`): without --limit the page is
