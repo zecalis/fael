@@ -211,3 +211,61 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
         "state": state, "doc": doc, "refs": lines(Some(refs)), "repo": repo, "chunks": chunks,
     }))
 }
+
+/// Every column of each row `sql` returns, as a JSON object keyed on its name — whole rows,
+/// so a column added later rides along without touching the feed.
+fn rows(c: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<Json>, String> {
+    let mut q = c.prepare(sql).map_err(err)?;
+    let names: Vec<String> = q.column_names().into_iter().map(String::from).collect();
+    q.query_map(p, |r| {
+        let mut o = serde_json::Map::new();
+        for (i, n) in names.iter().enumerate() {
+            let v = match r.get::<_, Value>(i)? {
+                Value::Integer(n) => json!(n),
+                Value::Real(f) => json!(f),
+                Value::Text(t) => json!(t),
+                Value::Null | Value::Blob(_) => Json::Null,
+            };
+            o.insert(n.clone(), v);
+        }
+        Ok(Json::Object(o))
+    })
+    .map_err(err)?
+    .collect::<Result<_, _>>()
+    .map_err(err)
+}
+
+/// `fael plan export --since <event-id>`: the change feed fael-sync and any backup read
+/// (decision fael-board:sync-backup, `"v": 1`) — the events after `since` and the current
+/// rows they touched, whole, since an event alone can't rebuild a brief edit. `since` 0 =
+/// everything. `head` is the next call's `since`. One read transaction, no side effect.
+// ponytail: chunk_issue, contract and tr stay out until a reader needs them
+pub fn feed(s: &Store, since: i64) -> Result<Json, String> {
+    let tx = s.conn.unchecked_transaction().map_err(err)?;
+    let db_id: String = tx
+        .query_row("SELECT value FROM meta WHERE key = 'db_id'", [], |r| {
+            r.get(0)
+        })
+        .map_err(err)?;
+    let head: i64 = tx
+        .query_row("SELECT COALESCE(MAX(id), 0) FROM event", [], |r| r.get(0))
+        .map_err(err)?;
+    let touched = "SELECT chunk_uid FROM event WHERE id > ?1";
+    let chunks = format!("SELECT id FROM chunk WHERE uid IN ({touched})");
+    Ok(json!({
+        "v": 1, "db_id": db_id, "head": head,
+        "events": rows(&tx, "SELECT * FROM event WHERE id > ?1 ORDER BY id", [since])?,
+        "plans": rows(&tx, "SELECT * FROM plan WHERE id IN
+                   (SELECT plan FROM event WHERE id > ?1) ORDER BY id", [since])?,
+        "chunks": rows(&tx, &format!("SELECT * FROM chunk WHERE id IN ({chunks}) ORDER BY id"), [since])?,
+        "edges": rows(&tx, &format!(
+            "SELECT s.uid AS src, d.uid AS dst, e.ref, e.kind FROM edge e
+             JOIN chunk s ON s.id = e.src LEFT JOIN chunk d ON d.id = e.dst
+             WHERE e.src IN ({chunks}) ORDER BY s.id"), [since])?,
+        "runs": rows(&tx, &format!("SELECT * FROM run WHERE chunk IN ({chunks}) ORDER BY id"), [since])?,
+    }))
+}
+
+#[cfg(test)]
+#[path = "export_tests.rs"]
+mod tests;
