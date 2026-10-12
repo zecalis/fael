@@ -43,6 +43,7 @@ fn install_writes_every_shipped_skill() {
         "fael",
         "fael-content",
         "fael-debug",
+        "fael-lead",
         "fael-plan",
         "fael-review",
         "fael-sweep",

@@ -4,7 +4,7 @@ use super::Ctx;
 use std::path::Path;
 
 /// Every skill fael ships, by its dir name under a client's skills dir (issue 01M4N42X).
-pub(super) const SKILLS: [(&str, &str); 6] = [
+pub(super) const SKILLS: [(&str, &str); 7] = [
     ("fael", include_str!("../../skill/SKILL.md")),
     (
         "fael-content",
@@ -14,6 +14,7 @@ pub(super) const SKILLS: [(&str, &str); 6] = [
         "fael-debug",
         include_str!("../../skill/fael-debug/SKILL.md"),
     ),
+    ("fael-lead", include_str!("../../skill/fael-lead/SKILL.md")),
     ("fael-plan", include_str!("../../skill/fael-plan/SKILL.md")),
     (
         "fael-review",
