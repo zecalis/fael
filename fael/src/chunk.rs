@@ -7,7 +7,7 @@ use crate::{Args, Repo, core, repo};
 use fael_core::plan::{Fields, Here, Owner, Store};
 use std::process::ExitCode;
 
-const USAGE: &str = "fael chunk add|show|start|edit|note|wait|after|ask|reply|answer|done|accept|drop|park|unpark|apply|pin|unpin|approve|unapprove — try 'fael chunk --help'";
+const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|reply|answer|done|accept|drop|park|unpark|apply|pin|unpin|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
@@ -62,6 +62,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
                 crate::chunk_scope::warn(&st, &r.root, uid);
             }
         }
+        ["move", uid] => crate::chunk_run::move_to(a, &mut s()?, uid, &now)?,
         ["note", uid, text] => {
             a.only("chunk note", &[])?;
             s()?.note(uid, text, &now)?;

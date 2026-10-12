@@ -1,5 +1,6 @@
-//! `fael chunk start|done` (PLAN-fael-board b2a): claim a chunk and print its brief, finish it
-//! with a PR or an `--out` file copied under `<db dir>/out/<uid>/<R>/`.
+//! `fael chunk start|done|move` (PLAN-fael-board b2a): claim a chunk and print its brief,
+//! finish it with a PR or an `--out` file copied under `<db dir>/out/<uid>/<R>/`, move it to
+//! another plan of this db with its uid and history.
 
 use crate::plan::db;
 use crate::{Args, Repo, core};
@@ -89,6 +90,18 @@ pub(crate) fn done(
     Store::open(&db(r))?.done(uid, handoff, pr, out, here)?;
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
+    Ok(())
+}
+
+/// `fael chunk move <uid> --plan <p>`: the chunk goes to the end of `p`, uid, runs, notes
+/// and edges kept.
+pub(crate) fn move_to(a: &Args, s: &mut Store, uid: &str, now: &str) -> Result<(), String> {
+    a.only("chunk move", &["plan"])?;
+    let plan = a
+        .one("plan")
+        .ok_or("rejected: chunk move needs --plan <p>")?;
+    let from = s.move_to(uid, &plan, now)?;
+    println!("chunk {uid} → moved from {from} to {plan}");
     Ok(())
 }
 

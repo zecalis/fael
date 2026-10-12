@@ -119,6 +119,7 @@ fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size
 fael chunk show <uid|label> [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
 fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …]
+fael chunk move <uid> --plan <p>
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD]
 fael chunk after <uid> <other-uid> \"<why>\"
@@ -141,7 +142,9 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      latest run and end it, done also to --run R naming that run; done --pr N lands in done (push pr is the ok), done
      without a PR in review until accept; each command rewrites a cut-over plan's
      md TL;DR as a read-only mirror; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
-     never changes the state and clears an approval; apply runs every op or none —
+     never changes the state and clears an approval; move puts a chunk at the end of
+     another db plan of this repo with its uid, runs, notes and edges — refused while it
+     runs, into a parked or done plan, or onto a label the plan has; apply runs every op or none —
      merge and split leave the old chunks replaced and move their after edges to the
      new ones; pin ranks the queue, lowest first; ask, from the live run of the chunk
      that needs a change, asks the chunk that holds the file for it with the shape it

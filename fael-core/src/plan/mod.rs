@@ -17,6 +17,7 @@ mod import;
 mod issue;
 mod lookup;
 pub mod md;
+mod r#move;
 mod next;
 mod owner;
 mod ready;
