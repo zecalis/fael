@@ -126,3 +126,29 @@ fn owner_actions_are_the_verbs_that_succeed() {
         assert_eq!(listed.unwrap(), ok, "{}", st.as_str());
     }
 }
+
+#[test]
+fn done_keeps_the_branch_the_agent_switched_to() {
+    let mut s = Store::open_in_memory().unwrap();
+    let (a, b) = (add(&mut s, "a", Some("x")), add(&mut s, "b", Some("x")));
+    start(&mut s, &a, "/wt/1").unwrap();
+    let rb = start(&mut s, &b, "/wt/2").unwrap();
+    let moved = |wt| super::super::Here {
+        branch: Some("feat/real"),
+        ..here(wt)
+    };
+    s.done(&a, "h", Some(1), None, &moved("/wt/1")).unwrap();
+    // `--run R` from another checkout names the run, not its branch
+    let by_run = super::super::Here {
+        run: Some(&rb),
+        ..moved("/elsewhere")
+    };
+    s.done(&b, "h", Some(2), None, &by_run).unwrap();
+    let bd = s.board("2026-10-11", NOW).unwrap();
+    let branch = |u: &str| {
+        let c = bd.chunks.iter().find(|c| c.uid == u).unwrap();
+        c.run.as_ref().unwrap().branch.clone()
+    };
+    assert_eq!(branch(&a).as_deref(), Some("feat/real"));
+    assert_eq!(branch(&b).as_deref(), Some("b"), "started on b");
+}

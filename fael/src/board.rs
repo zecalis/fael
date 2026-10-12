@@ -91,6 +91,7 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         projects.retain(|p| !p.plans.is_empty() || p.error.is_some());
     }
     code(&mut projects);
+    prs::live_branches(&mut projects);
     let broken = projects.iter().any(|p| p.error.is_some());
     let b = lists(at, projects);
     if a.has("json") {

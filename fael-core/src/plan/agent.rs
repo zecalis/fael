@@ -5,7 +5,20 @@
 use super::State;
 use super::chunk::{Here, add_after, end_live, fence, is_date, row, set, tx, uid_id};
 use super::store::{Store, err};
-use rusqlite::params;
+use rusqlite::{Transaction, params};
+
+/// Ends the live run; from the run's own worktree it keeps the branch the agent is on now
+/// (it may have switched since start), so board and the app's Talk name the real one.
+fn end(tx: &Transaction, chunk: i64, here: &Here) -> Result<usize, String> {
+    if let Some(b) = here.branch {
+        tx.execute(
+            "UPDATE run SET branch = ?1 WHERE chunk = ?2 AND ended IS NULL AND worktree = ?3",
+            params![b, chunk, here.worktree],
+        )
+        .map_err(err)?;
+    }
+    end_live(tx, chunk, here.now)
+}
 
 /// `done --out`: copy the output for run R, return where it went.
 pub type Copy<'a> = dyn FnMut(&str) -> Result<String, String> + 'a;
@@ -35,7 +48,7 @@ impl Store {
             params![on, text, until, r.id],
         )
         .map_err(err)?;
-        end_live(&tx, r.id, here.now)?;
+        end(&tx, r.id, here)?;
         tx.commit().map_err(err)
     }
 
@@ -51,7 +64,7 @@ impl Store {
         }
         add_after(&tx, r.id, dst)?;
         let to = if r.state == State::Running {
-            end_live(&tx, r.id, here.now)?;
+            end(&tx, r.id, here)?;
             State::Open
         } else if r.state.terminal() || r.state == State::Review {
             return Err(format!(
@@ -106,7 +119,7 @@ impl Store {
             params![pr, out, run],
         )
         .map_err(err)?;
-        end_live(&tx, r.id, here.now)?;
+        end(&tx, r.id, here)?;
         tx.commit().map_err(err)
     }
 
