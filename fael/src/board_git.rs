@@ -7,7 +7,7 @@
 use crate::git;
 use fael_core::plan::{BoardChunk, overlaps, shared};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 /// The base (`origin/HEAD`) and its subjects since the first shipped chunk started.
@@ -27,19 +27,18 @@ pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) -> Vec<String> {
         .filter(|c| shipped(c).is_some())
         .filter_map(|c| c.run.as_ref().map(|r| r.started.clone()))
         .min();
-    let mut bases: HashMap<PathBuf, Base> = HashMap::new();
+    let mut base: Option<Base> = None;
     let mut open = HashSet::new();
     for c in chunks.iter_mut() {
         let pr = shipped(c);
         if c.state != "review" && pr.is_none() {
             continue;
         }
-        let dir = c.code.as_deref().map_or(root, Path::new).to_path_buf();
-        let base = bases.entry(dir.clone()).or_insert_with(|| {
-            let b = git(&dir, &["rev-parse", "--abbrev-ref", "origin/HEAD"])?;
+        let base = base.get_or_insert_with(|| {
+            let b = git(root, &["rev-parse", "--abbrev-ref", "origin/HEAD"])?;
             let log = since
                 .as_ref()
-                .and_then(|s| git(&dir, &["log", "--format=%s", &format!("--since={s}"), &b]));
+                .and_then(|s| git(root, &["log", "--format=%s", &format!("--since={s}"), &b]));
             Some((b, log.unwrap_or_default()))
         });
         let Some((base, log)) = base else {
@@ -56,7 +55,7 @@ pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) -> Vec<String> {
         }
         open.insert(c.uid.clone());
         if let Some(b) = branch {
-            c.conflicts = merge_tree(&dir, base, &b);
+            c.conflicts = merge_tree(root, base, &b);
         }
     }
     // a bad line never hides the board: said here, and by `fael doctor`

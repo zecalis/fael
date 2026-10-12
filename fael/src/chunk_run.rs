@@ -5,41 +5,14 @@
 use crate::plan::db;
 use crate::{Args, Repo, core};
 use fael_core::plan::{Here, Start, Store};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
 pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
     a.only(
         "chunk start",
-        &["client", "model", "run", "force", "no-worktree", "worktree"],
+        &["client", "model", "run", "force", "no-worktree"],
     )?;
-    // issue 01M4NC9GV: a plan whose code is in another checkout starts in a worktree of it,
-    // from this db's root — the run holds that worktree and its branch
-    let at = match a.one("worktree") {
-        Some(_) if a.has("no-worktree") => {
-            return Err("rejected: --worktree or --no-worktree, not both".into());
-        }
-        Some(p) => Some(
-            Path::new(&p)
-                .canonicalize()
-                .map_err(|_| format!("rejected: --worktree {p} does not exist"))?,
-        ),
-        None => None,
-    };
-    let wt = at.as_deref().map(|p| p.to_string_lossy().into_owned());
-    let branch = at.as_deref().and_then(crate::journal::head_branch);
-    let there;
-    let here = match &wt {
-        Some(w) => {
-            there = Here {
-                worktree: w,
-                branch: branch.as_deref(),
-                ..*here
-            };
-            &there
-        }
-        None => here,
-    };
     // the agent's own start: an agent that ends with `chunk done` in the same turn never
     // reaches a Stop that could stamp it (issue 01M4NXDQ). Not a launcher (`--run R`): it
     // may sit in another agent's session, and the started agent's SessionStart stamps it
@@ -56,10 +29,6 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         session: session.clone(),
     };
     let mut st = Store::open(&db(r))?.start(uid, &o, here)?;
-    let root = r.root.to_string_lossy();
-    for c in st.chunks.iter_mut().filter(|c| c.repo.is_some()) {
-        c.root = Some(root.to_string());
-    }
     if let Some(m) = session.as_deref().and_then(crate::chunk::held) {
         // the Stop hook finds this db from any cwd; a failed write only skips stamps
         let _ = m.parent().map(std::fs::create_dir_all);
@@ -75,8 +44,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             }
         }
     }
-    let exists = |p: &str| r.root.join(p).exists();
-    print!("{}", st.text(&exists));
+    print!("{}", st.text());
     Ok(())
 }
 
@@ -88,8 +56,7 @@ pub(crate) fn done(
     here: &Here,
 ) -> Result<(), String> {
     a.only("chunk done", &["pr", "out", "run"])?;
-    // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number;
-    // the repo is the plan's (`fael plan repo`), so a link resolves there
+    // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
     let raw = a.one("pr");
     let pr = raw
         .as_deref()
@@ -103,15 +70,10 @@ pub(crate) fn done(
         .transpose()
         .map_err(|_| "rejected: --pr takes a PR number, owner/repo#N or its URL")?;
     // issue 01M4QFJ6V: another repo's PR is refused, never dropped; no origin = no check
-    if let Some((raw, want)) = raw.as_deref().and_then(|p| Some((p, pr_repo(p)?))) {
-        let b = Store::open(&db(r))?.show(uid)?;
-        let at = b.repo.map_or_else(|| r.root.clone(), PathBuf::from);
-        if let Some(have) = crate::board::remote(&at).filter(|h| !h.eq_ignore_ascii_case(&want)) {
-            return Err(format!(
-                "rejected: --pr {raw} is not this plan's repo ({have}) — `fael plan repo {} <path>` first",
-                b.plan
-            ));
-        }
+    if let Some((raw, want)) = raw.as_deref().and_then(|p| Some((p, pr_repo(p)?)))
+        && let Some(have) = crate::board::remote(&r.root).filter(|h| !h.eq_ignore_ascii_case(&want))
+    {
+        return Err(format!("rejected: --pr {raw} is not this repo's ({have})"));
     }
     let src = a.one("out").map(|o| r.cwd.join(o));
     if pr.is_some() && src.is_some() {

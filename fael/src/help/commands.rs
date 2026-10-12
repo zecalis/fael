@@ -110,11 +110,11 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
-        "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--worktree path] [--on owner|data] [--until date] [--option A] [--pr N] [--out path]
-fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…]
+        "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--option A] [--pr N] [--out path]
+fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…]
 fael chunk show <uid|label> [--json]
-fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree | --worktree <path>]
-fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
+fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
+fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--scope …] [--reads …]
 fael chunk move <uid> --plan <p>
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
@@ -122,10 +122,10 @@ fael chunk after <uid> <other-uid> \"<why>\" [--run R]
 fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
-fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
-    (only a plan whose chunks live in plans.db — inbox, or one cut over; add prints
+fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
+    (inbox or a plan from `fael plan new`; add prints
      the new uid, no brief = draft; add and edit warn on a --scope path whose directory is
-     missing or a typo of a name beside it (the plan repo's checkout); --issue links open ledger issues it fixes (its
+     missing or a typo of a name beside it; --issue links open ledger issues it fixes (its
      brief prints them; close each once the fix holds, done never does); a --label is unique in its plan and every verb
      takes it for the uid; --reads names the plan sections it works from (another
      plan's as plan/key): its brief prints Goal, Done and those, then an index of the
@@ -133,28 +133,27 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      the brief and notes its next start prints; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
      --force takes it over, and starts one blocked by an after; --no-worktree (a client that writes a file and exits)
-     takes no worktree slot; --worktree <path> runs it in that worktree (a plan whose code is in another
-     checkout, from this repo's root), and from Claude Code without --run binds its session,
+     takes no worktree slot, and from Claude Code without --run binds its session,
      whose Stop hook keeps the run seen from any cwd; wait, after and done answer only to the worktree of the
      latest run and end it, or to --run R naming that run; wait --on owner --option offers the answers
      the owner picks from; done --pr N lands in done (push pr is the ok) — an owner/repo#N or URL of
-     another repo than the plan's is refused; done without a PR in review until accept; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
+     another repo than this one's origin is refused; done without a PR in review until accept; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval; move puts a chunk at the end of
      another db plan of this repo with its uid, runs, notes and edges — refused while it
      runs, into a parked or done plan, or onto a label the plan has; apply runs every op or none —
      merge and split leave the old chunks replaced and move their after edges to the
-     new ones; pin ranks the queue, lowest first)",
+     new ones)",
     ),
     (
         "board",
         "every registered repo's plans and chunks: needs you, queue, running, blocked",
         "fael board [--json] [--open] [--plan p] | fael board --drop <root>
-    (the owner's view, run from anywhere: each repo whose plans.db a `fael plan`
+    (the owner's view, run from anywhere: each repo whose fael.db a `fael plan`
      or `fael chunk` command wrote is listed in ~/.local/state/fael/projects;
      --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
      only open chunks — the planner's one read of scope, after and overlaps; --plan
      keeps one plan's chunks; a path in .fael/shared (one prefix per line) is
-     nobody's claim: it never makes an overlap; a repo whose plans.db cannot be read
+     nobody's claim: it never makes an overlap; a repo whose fael.db cannot be read
      stays listed with its error and the command exits 1; --drop takes a finished repo
      off the registry until a chunk command there adds it back)",
     ),
@@ -162,16 +161,16 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
         "plan",
         "create a plan, export or edit its sections and chunks, park or finish it",
         "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
-     | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|->
-    (a plan is sections and chunks in <git-common-dir>/fael/plans.db, no file;
+     | fael plan park|unpark|done <plan>
+    (a plan is sections and chunks in <git-common-dir>/fael/fael.db, no file;
      new: a plan whose chunks live in the db from the start (`fael chunk add --plan`),
      its text four skeleton sections (1 Goal, 2 Scope, 3 Done criteria, 4 Constraints);
      export: every plan, or the one named (name or app/name), as markdown to stdout — uid,
      state and fields under each chunk, then the plan's sections in order, each under its
      heading with its key and the day it last changed; export <plan> --section <key>: that one section; export <plan>
-     --json: the plan as one bill (\"v\": 1) — rev, title, area, state, refs, repo, its
+     --json: the plan as one bill (\"v\": 1) — rev, title, area, state, its
      sections ({key, title, body}) and a line per planned chunk (uid, label, title, brief,
-     size, model, client, scope, reads, after); export --since <event-id>: the change feed
+     size, model, scope, reads, after); export --since <event-id>: the change feed
      for backup and fael-sync (\"v\": 1) — db_id, head (the next --since), the events
      after the id and the current rows they touched, whole (plans, every section of those
      plans, chunks, the edges out of those chunks, their runs); 0 = everything;
@@ -184,9 +183,7 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      takes the `chunk apply` ops; every row shares one event batch; --dry-run prints what
      it would write and rolls back;
      park|unpark|done: the plan's state — parked or done leaves the board; refused while
-     one of its chunks runs; repo: the checkout a plan's code lives in when it is not this
-     repo (- = this repo) — its briefs say so, the board lists that checkout as a project
-     and gives the plan its remote, scopes overlap only within one checkout)",
+     one of its chunks runs)",
     ),
     (
         "run",

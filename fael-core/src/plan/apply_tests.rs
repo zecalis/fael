@@ -1,4 +1,4 @@
-//! `chunk apply` (SPEC §4), `pin`, `approve`.
+//! `chunk apply` (SPEC §4), `approve`.
 
 use super::super::Store;
 use super::super::chunk::tests::{NOW, add, get, start, state};
@@ -160,48 +160,37 @@ fn a_split_with_no_gap_renumbers_the_plan() {
 }
 
 #[test]
-fn pin_and_approve_keep_the_state() {
+fn approve_keeps_the_state() {
     let mut s = Store::open_in_memory().unwrap();
     let c = add(&mut s, "c", Some("c"));
-    s.pin(&c, Some(2), NOW).unwrap();
     s.approve(&c, Some(("opus", "claude")), NOW).unwrap();
-    let q = "SELECT pin || ' ' || approved_model || ' ' || approved_client || ' ' || approved_at FROM chunk WHERE uid = ?1";
-    assert_eq!(get(&s, q, &c).unwrap(), format!("2 opus claude {NOW}"));
-    s.pin(&c, None, NOW).unwrap();
+    let q = "SELECT approved_model || ' ' || approved_client || ' ' || approved_at FROM chunk WHERE uid = ?1";
+    assert_eq!(get(&s, q, &c).unwrap(), format!("opus claude {NOW}"));
     s.approve(&c, None, NOW).unwrap();
-    let q = "SELECT COALESCE(pin, approved_at, approved_model, 'clear') FROM chunk WHERE uid = ?1";
+    let q = "SELECT COALESCE(approved_at, approved_model, 'clear') FROM chunk WHERE uid = ?1";
     assert_eq!(get(&s, q, &c).unwrap(), "clear");
     assert_eq!(state(&s, &c), "open");
     s.owner(&c, super::super::Owner::Drop, Some("no"), NOW)
         .unwrap();
-    assert!(s.pin(&c, Some(1), NOW).unwrap_err().contains("history"));
+    assert!(s.approve(&c, None, NOW).unwrap_err().contains("history"));
 }
 
 #[test]
-fn split_and_merge_carry_client_and_check_size() {
+fn merge_carries_size_and_checks_it() {
     let mut s = Store::open_in_memory().unwrap();
-    let [a, b, c] = ["a", "b", "c"].map(|t| add(&mut s, t, Some(t)));
-    let j = format!(
-        r#"[{{"op":"split","chunk":"{a}","into":[{{"title":"a1","client":"opencode"}},{{"title":"a2"}}]}},
-            {{"op":"merge","chunks":["{b}","{c}"],"size":"M","client":"claude"}}]"#
-    );
+    let [b, c] = ["b", "c"].map(|t| add(&mut s, t, Some(t)));
+    let j = format!(r#"[{{"op":"merge","chunks":["{b}","{c}"],"size":"M"}}]"#);
     let out = ops(&mut s, &j).unwrap();
-    let m = out[1].rsplit(' ').next().unwrap().to_string();
-    let q = "SELECT COALESCE(size, '-') || ' ' || client_hint FROM chunk WHERE uid = ?1";
-    assert_eq!(get(&s, q, &m).as_deref(), Some("M claude"));
-    let hints: Vec<Option<String>> = s
-        .conn
-        .prepare("SELECT client_hint FROM chunk WHERE title IN ('a1', 'a2') ORDER BY seq")
-        .unwrap()
-        .query_map([], |r| r.get(0))
-        .unwrap()
-        .collect::<Result<_, _>>()
-        .unwrap();
-    assert_eq!(hints, [Some("opencode".into()), None]);
+    let m = out[0].rsplit(' ').next().unwrap().to_string();
+    let q = "SELECT COALESCE(size, '-') FROM chunk WHERE uid = ?1";
+    assert_eq!(get(&s, q, &m).as_deref(), Some("M"));
     let [d] = ["d"].map(|t| add(&mut s, t, Some(t)));
     let j = format!(r#"[{{"op":"merge","chunks":["{d}","{m}"],"size":"huge"}}]"#);
     let e = ops(&mut s, &j).unwrap_err();
     assert!(e.contains("--size huge — S, M or L"), "{e}");
+    // a client hint is gone (epoch v8): an op that names one is refused whole
+    let j = format!(r#"[{{"op":"merge","chunks":["{d}","{m}"],"client":"claude"}}]"#);
+    assert!(serde_json::from_str::<Vec<Op>>(&j).is_err());
 }
 
 #[test]

@@ -1,9 +1,9 @@
 //! `fael plan new` · `export` · `apply` · `park|unpark|done` · `repo`: a plan is sections
-//! plus chunks in `plans.db`; `export --json` writes the bill `apply` takes back.
+//! plus chunks in `fael.db`; `export --json` writes the bill `apply` takes back.
 
 use crate::{Args, Repo, repo};
 use fael_core::plan::{Bill, PlanRow, Store};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
@@ -30,9 +30,8 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         }
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
-        Some("repo") if rest.len() == 3 => code_repo(&r, &rest[1], &rest[2]),
         _ => Err(
-            "rejected: fael plan new <name> \"<title>\" | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
+            "rejected: fael plan new <name> \"<title>\" | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -42,7 +41,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
 /// Beside the journal, so every worktree of the clone reads one db; the tree's `.fael/`
 /// (or `FAEL_DIR`) without git.
 pub(crate) fn db(r: &Repo) -> PathBuf {
-    r.journal.as_deref().unwrap_or(&r.fael).join("plans.db")
+    fael_core::plan::db_at(r.journal.as_deref().unwrap_or(&r.fael))
 }
 
 /// `new`: the plan row (chunks in the db from the start) and its Goal/Scope/Done/Constraints
@@ -113,36 +112,11 @@ fn state(r: &Repo, verb: &str, want: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `repo <plan> <path|->`: the checkout the plan's code lives in (its top level), `-` = this
-/// repo again. Briefs name it; the board lists it as a project with its remote.
-fn code_repo(r: &Repo, want: &str, path: &str) -> Result<(), String> {
-    let mut s = open(r)?;
-    let p = one(&s, want)?;
-    let top = (path != "-")
-        .then(|| {
-            let dir = r.cwd.join(path);
-            let top = crate::git(&dir, &["rev-parse", "--show-toplevel"])
-                .ok_or(format!("rejected: {path} is not a git checkout"))?;
-            Path::new(&top)
-                .canonicalize()
-                .map(|t| t.to_string_lossy().into_owned())
-                .map_err(|e| format!("{top}: {e}"))
-        })
-        .transpose()?;
-    s.set_repo(p.id, top.as_deref())?;
-    crate::board::register(r);
-    match top {
-        Some(t) => println!("plan {} → code in {t}", key(&p)),
-        None => println!("plan {} → code in this repo", key(&p)),
-    }
-    Ok(())
-}
-
 fn open(r: &Repo) -> Result<Store, String> {
     let path = db(r);
     if !path.exists() {
         return Err(
-            "rejected: no plans.db yet — `fael plan new <name> \"<title>\"` makes the first plan"
+            "rejected: no fael.db yet — `fael plan new <name> \"<title>\"` makes the first plan"
                 .into(),
         );
     }
@@ -167,7 +141,7 @@ fn named(s: &Store, want: Option<&str>) -> Result<Vec<PlanRow>, String> {
         .collect();
     match (want, plans.len()) {
         (Some(w), 0) => Err(format!(
-            "rejected: no plan '{w}' in plans.db — `fael board` lists them"
+            "rejected: no plan '{w}' in fael.db — `fael board` lists them"
         )),
         (Some(w), n) if n > 1 => Err(format!("rejected: '{w}' names {n} plans — use app/name")),
         _ => Ok(plans),

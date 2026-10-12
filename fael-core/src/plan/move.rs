@@ -44,7 +44,7 @@ impl Store {
             .optional()
             .map_err(err)?
             .ok_or(format!(
-                "rejected: no plan '{plan}' in this repo's plans.db — a chunk moves only between plans of one db"
+                "rejected: no plan '{plan}' in this repo's fael.db — a chunk moves only between plans of one db"
             ))?;
         if pid == old {
             return Err(format!("rejected: chunk {} is already in {to_key}", r.uid));
