@@ -3,7 +3,7 @@
 ## North star and product invariant
 
 North star: the engine behind plan work — every chunk's brief, area (dev|marketing), size,
-model hint and state in `.fael/plans.db`, started, waited on and finished through
+model hint and state in `.git/fael/plans.db`, started, waited on and finished through
 `fael chunk start|wait|done` — plus the ledger: the hand-off where a chunk stopped, the decision
 and why, the open issue, the note the next session needs, what the user asked for. Git owns what
 changed; fael keeps what git and the code cannot say. The agent discovers, judges and records;

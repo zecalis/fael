@@ -34,7 +34,7 @@ owns what changed; fael keeps only what git and the code cannot say (why, what w
 what is unfinished), and retires a row once the code says it or contradicts it.
 
 Decision `product:mission` (2026-10-10, plan `PLAN-fael-board`): plans and chunks move from
-fapony's markdown into fael's SQLite store (`.fael/plans.db`, English); the ledger stays
+fapony's markdown into fael's SQLite store (`<git-common-dir>/fael/plans.db`, English); the ledger stays
 jsonl. Planner skills (fael-plan for dev, fael-content) cut the chunks; the agent
 judges size and model hint, fael stores them, the owner picks. A change ships when it fixes a
 bug, cuts noise, removes code, or serves that plan → chunk → agent → ship loop. The owner's
