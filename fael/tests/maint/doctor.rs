@@ -38,9 +38,9 @@ fn git(d: &std::path::Path, args: &[&str]) {
 #[test]
 fn doctor_fails_without_union_then_fix_repairs() {
     let d = repo();
-    // no log yet: info only, exit 0
+    // no log yet: info only, exit 0 (the fixture's explicit store = tracked adds [Deprecated])
     let (ok, out, _) = fael(&d, &["doctor"]);
-    assert!(ok && out.contains("1 problem(s)"), "{out}");
+    assert!(ok && out.contains("2 problem(s)"), "{out}");
     // adopt fael without the union line: error, exit 1
     std::fs::write(d.join("src/a.rs"), "").unwrap();
     let (ok, _, _) = fael(&d, &["add", "note", "first row", "--files", "src/a.rs"]);
@@ -51,10 +51,10 @@ fn doctor_fails_without_union_then_fix_repairs() {
     assert!(ok, "{out}");
     assert!(out.contains("merge=union"), "{out}");
     assert!(d.join(".gitattributes").exists());
-    // union repaired; the one note left is the uncommitted row (tracked)
+    // union repaired; the notes left are [Deprecated] and the uncommitted row (tracked)
     let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(
-        ok && out.contains("1 problem(s) (0 error(s), 1 note(s))")
+        ok && out.contains("2 problem(s) (0 error(s), 2 note(s))")
             && out.contains("note [Late]: 1 .fael/log file(s) uncommitted"),
         "{out}"
     );

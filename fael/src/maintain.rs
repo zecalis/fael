@@ -87,6 +87,12 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             local_note(&r),
         ));
     }
+    if r.cfg.store_set && matches!(r.cfg.store, core::Store::Tracked) {
+        rep.problems.push(core::Problem::info(
+            core::ProblemKind::Deprecated,
+            core::TRACKED_DEPRECATED.into(),
+        ));
+    }
     if excluded {
         rep.problems.push(core::Problem::info(
             core::ProblemKind::Ignored,

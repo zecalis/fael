@@ -118,7 +118,7 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
 
 - `<writer>` = `<git user.name slug>-<4 hex of sha256(email)>` — a writer is a **logical author, not a machine**: the same person on two machines shares a folder (their appends meet in git via union merge), and two people who share a name do not.
 - One file per month: last month's file is never written again, so rotation needs no command.
-- `.gitattributes` (tracked store only): `.fael/log/**/*.jsonl merge=union` — two branches that both appended keep both sides locally; readers remove the duplicates by `id`. GitHub ignores merge drivers, so PRs that append to the same month file still conflict there — the reason `local` is the default.
+- `.gitattributes` (tracked store only, deprecated): `.fael/log/**/*.jsonl merge=union` — two branches that both appended keep both sides locally; readers remove the duplicates by `id`. GitHub ignores merge drivers, so PRs that append to the same month file still conflict there — the reason `local` is the default.
 
 **Row** (one JSON object per line — full spec in [format.md](format.md)):
 
@@ -149,7 +149,7 @@ Adding a client touches only an adapter. Changing a rule touches only core. Chan
 - An unset `store` is `local`, also where a `.fael/log` already sits in the
   tree: that log stays read (the union above) as frozen history and nothing
   appends to it, so no memory file is ever left to commit (decision
-  01M3YQT4). Only an explicit `store = "tracked"` writes the tree. A repo whose rows live only in the journal keeps
+  01M3YQT4). Only an explicit `store = "tracked"` writes the tree — **deprecated**: it goes away in the next release (a clone that sets it is told once per session start, and `doctor` shows `[Deprecated]`; leave with `fael migrate local`, or share with `fael sync --remote <url>`). A repo whose rows live only in the journal keeps
   its alias cache there too (`<git-common-dir>/fael/cache`): the tree never grows a `.fael/`.
 - Across clones durability still comes from git; rows are not fsynced one by one.
 - Across clones and machines journals travel through `fael sync`: each writer's
@@ -213,7 +213,7 @@ Ids are accepted as a unique prefix and printed at the shortest length that stay
 kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
-store = "local"               # journal only (default, tree log or not); "tracked" also writes .fael/log to commit
+store = "local"               # journal only (default, tree log or not); "tracked" (deprecated, goes away in the next release) also writes .fael/log to commit
 # push_policy unset = auto: the repo's own stages (shadow → canary → ramp, rolled back on evidence; docs/learn-loop.md). A set value is a pin that always wins:
 push_policy = "touch@1"       # "touch@1" = the validation experiment: search pushes of candidate sessions lose the rows it cuts (usage `cut: gate`); "baseline@1" opts out
 push_holdout = 20             # percent of sessions (by hash of the session id) that keep baseline@1 while touch@1 is pinned

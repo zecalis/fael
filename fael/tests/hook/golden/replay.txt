@@ -1,6 +1,7 @@
 ## 0 session-start {"session":"2025-12-01T00:00:00Z"}
 context:
 fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
+fael: store = tracked goes away in the next release: run fael migrate local, or share with fael sync --remote <url>
 
 ## 1 prompt {"session":"2025-12-01T00:00:00Z","text":"fix the auth login flow"}
 context:
@@ -62,6 +63,7 @@ fael: 1 .fael/log file(s) uncommitted (store = tracked) — commit them, or `fae
 ## 19 session-start {"session":"2025-12-01T00:00:00Z","source":"compact"}
 context:
 fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
+fael: store = tracked goes away in the next release: run fael migrate local, or share with fael sync --remote <url>
 
 ## 20 read {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 ## 21 read {"session":"2025-12-01T00:00:00Z","agent":"sub1","files":["src/hub.rs"]}
@@ -86,9 +88,10 @@ fael: 01K00000000000000000B cited in a commit — `(fael:01K00000000000000000B)`
 ## 30 session-start {"session":"s2"}
 context:
 fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
+fael: store = tracked goes away in the next release: run fael migrate local, or share with fael sync --remote <url>
 
 ## 31 read {"session":"s2","files":["src/c.rs"]}
 ## 32 prompt {"text":"fix the auth login flow"}
 ## usage
-15 lines · ~762 tokens
+15 lines · ~849 tokens
 session-start prompt edit in-context edit in-context edit in-context edit capture session-start shell-edit outcome search session-start

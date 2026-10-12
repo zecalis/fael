@@ -43,6 +43,9 @@ pub enum Kind {
     NoLog,
     /// `store = "local"`: rows live in the clone's journal, not the tree
     Local,
+    /// an explicit `store = "tracked"`: the mode goes away in the next release
+    /// (step 1 of 2 — said, nothing removed). Info-only.
+    Deprecated,
     Future,
     Oversize,
     /// open rows whose files all no longer exist — they never push again

@@ -129,7 +129,7 @@ fn unshared(r: &Repo) -> Option<String> {
     }
     Some(
         "fael: new rows stay in this clone — .fael/log in git is frozen history under store = local; \
-         share them with `fael sync --remote <url>`, or set store = \"tracked\" to commit them again"
+         share them with `fael sync --remote <url>`"
             .into(),
     )
 }

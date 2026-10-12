@@ -6,13 +6,17 @@ use super::{fael, json, repo};
 #[test]
 fn session_start_and_edit_push() {
     let d = repo();
-    // empty log = silent, not an error
+    // empty log = no brief, not an error; the fixture is an explicit
+    // `store = "tracked"`, so the deprecation line is all it says
     let (ok, out, _) = fael(
         &d,
         &["hook", "session-start", "--client", "claude"],
         r#"{}"#,
     );
-    assert!(ok && out.is_empty(), "{out}");
+    assert!(
+        ok && out.contains("fael migrate local") && !out.contains("open issue"),
+        "{out}"
+    );
 
     // kickoff drops rows whose files are all gone, so the file must exist
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
@@ -83,11 +87,11 @@ fn session_start_and_edit_push() {
 
     // every injection is accounted, per machine
     let (ok, out, _) = fael(&d, &["stats"], "");
-    assert!(ok && out.contains("7 injections"), "{out}");
+    assert!(ok && out.contains("8 injections"), "{out}");
     let (ok, out, _) = fael(&d, &["stats", "--json"], "");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(
-        ok && v["events"] == 7 && v["by_event"]["edit"]["events"] == 3,
+        ok && v["events"] == 8 && v["by_event"]["edit"]["events"] == 3,
         "{out}"
     );
 }

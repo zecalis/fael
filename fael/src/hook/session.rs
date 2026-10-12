@@ -113,6 +113,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         kind: Kind::Brief,
         text: body,
     });
+    out.deprecated(&c.repo.cfg);
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
     }
