@@ -101,6 +101,10 @@ PR body and the chunk's done text.
 Only English in commits, PR titles/bodies, and review replies. Never merge PRs — the
 user reviews and merges them.
 
+PR titles follow Conventional Commits — `type(scope): summary`, type one of
+feat|fix|docs|refactor|perf|test|ci|chore|build|revert — the squash merge makes the title
+the commit subject on `main`. CI's `pr-title` check fails any other title.
+
 ## Multi-agent Safety
 
 * Run `git status` first.
