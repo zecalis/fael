@@ -35,7 +35,7 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
         [h] => Ok(Some(h.clone())),
         [] => Ok(None),
         _ => Err(format!(
-            "rejected: label {key} names chunks in more than one plan — use the uid"
+            "rejected: label {key} names more than one chunk — use the uid"
         )),
     }
 }

@@ -57,7 +57,7 @@ fn a_label_in_two_plans_asks_for_the_uid() {
     let a = labeled(&mut s, "inbox", "b1").unwrap();
     labeled(&mut s, "p2", "b1").unwrap();
     let e = s.show("b1").unwrap_err();
-    assert!(e.contains("more than one plan"), "{e}");
+    assert!(e.contains("more than one chunk"), "{e}");
     assert_eq!(s.show(&a).unwrap().uid, a, "the uid still works");
 }
 
