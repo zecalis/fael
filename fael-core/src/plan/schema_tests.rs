@@ -292,3 +292,66 @@ fn two_first_opens_round() {
     assert_eq!(version(&path), 6);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+fn baks(path: &Path, v: i32) -> Vec<PathBuf> {
+    let pre = format!("plans.db.v{v}.");
+    std::fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.file_name().unwrap().to_string_lossy().starts_with(&pre))
+        .collect()
+}
+
+#[test]
+fn an_epoch_upgrade_leaves_a_backup_at_the_old_version() {
+    let path = v1_db("");
+    drop(Store::open(&path).unwrap());
+    let bak = PathBuf::from(format!("{}.v1.bak", path.display()));
+    assert_eq!(version(&bak), 1);
+    let n: i64 = Connection::open(&bak)
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM chunk WHERE pos >= 0", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(n, 3, "v1 rows in the copy");
+    drop(Store::open(&path).unwrap());
+    assert_eq!(
+        baks(&path, 6),
+        Vec::<PathBuf>::new(),
+        "a plain open copies nothing"
+    );
+    for _ in 0..2 {
+        to_v5(&path, "");
+        drop(Store::open(&path).unwrap());
+    }
+    let five = baks(&path, 5);
+    assert_eq!(five.len(), 2, "the older copy is kept: {five:?}");
+    assert!(five.iter().all(|b| version(b) == 5));
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_backup_refuses_the_upgrade() {
+    // a read-only dir makes SQLite refuse the open itself; a db name that leaves room for
+    // `-wal` but not `.v1.bak` in a 255-byte file name fails the copy alone (WAL set first,
+    // so the open needs no `-journal`)
+    let v1 = v1_db("PRAGMA journal_mode=WAL;");
+    let path = v1.with_file_name("p".repeat(250));
+    std::fs::rename(&v1, &path).unwrap();
+    let e = Store::open(&path).err().expect("refused");
+    assert!(
+        e.contains(".v1.bak") && e.contains("nothing changed"),
+        "{e}"
+    );
+    assert_eq!(version(&path), 1);
+    let n: i64 = Connection::open(&path)
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM chunk WHERE pos >= 0", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(n, 3, "v1 rows intact");
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
