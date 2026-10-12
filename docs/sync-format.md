@@ -190,7 +190,7 @@ still public — hence the one-line warning above.
 - No cross-repo reads (`fael find --remote …`).
 - No cloud server or UI — that is separate work reusing this exact
   contract (`Meta` / month split / union / validate) over HTTP.
-- No plan files — fael never reads `PLAN-*.md` or `.fapony/`; `plan:<name>`
+- No plan files — `plan:<name>`
   keys are an opaque user convention (see [`format.md`](format.md) §Row), and
   sync carries rows, never plan documents.
 - No file contents — sync carries rows only, never the files they name. A path
