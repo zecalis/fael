@@ -79,7 +79,10 @@ impl Store {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         fence(&tx, &r, here)?;
-        let dst = uid_id(&tx, other)?;
+        let pid: i64 = tx
+            .query_row("SELECT plan FROM chunk WHERE id = ?1", [r.id], |q| q.get(0))
+            .map_err(err)?;
+        let dst = uid_id(&tx, pid, other)?;
         if dst == r.id {
             return Err("rejected: a chunk cannot wait on itself".into());
         }

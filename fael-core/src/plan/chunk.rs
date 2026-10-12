@@ -160,7 +160,20 @@ pub(super) fn scope(paths: &[String]) -> Result<Option<String>, String> {
     Ok((!paths.is_empty()).then(|| paths.join("\n")))
 }
 
-pub(super) fn uid_id(tx: &Transaction, uid: &str) -> Result<i64, String> {
+/// The chunk an `after` names: a label in plan `pid` first (a label is unique in its plan,
+/// not across plans), else what `lookup` finds.
+pub(super) fn uid_id(tx: &Transaction, pid: i64, uid: &str) -> Result<i64, String> {
+    let here: Option<i64> = tx
+        .query_row(
+            "SELECT id FROM chunk WHERE plan = ?1 AND label = ?2",
+            params![pid, uid],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(err)?;
+    if let Some(id) = here {
+        return Ok(id);
+    }
     Ok(lookup(tx, uid)?
         .ok_or(format!(
             "rejected: no chunk {uid} — an `after` names a chunk that exists"
@@ -338,7 +351,7 @@ impl Store {
         .map_err(err)?;
         let id = tx.last_insert_rowid();
         for a in after {
-            let dst = uid_id(&tx, a)?;
+            let dst = uid_id(&tx, pid, a)?;
             add_after(&tx, id, dst)?;
         }
         super::issue::link(&tx, id, &f.issues)?;

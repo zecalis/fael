@@ -111,6 +111,8 @@ fael find --files <paths>         # open issues and decisions on the files the i
 - An open issue or decision on those files is a known trap: cite its id in the brief that meets it.
 - Grep the symbols the idea names, and put what came back in the line it answers — a number you
   measured beats a number you guessed.
+- Find the tests and e2e flows that already run those paths (grep the test dirs for the files and
+  symbols): Done and each brief name the flow that proves the chunk, or say none exists yet.
 
 ## Phase 2 — Draft straight to fael.db
 
@@ -124,7 +126,9 @@ It writes the plan's doc into fael.db — four skeleton sections, keys `1` Goal,
 criteria, `4` Constraints, no file anywhere — and refuses a name already taken. Fill them now,
 from the Phase 0 harvest + the Phase 1 answer. Write each body as a plain markdown file in your
 scratchpad and swap them into the plan's bill by key — `--rawfile` takes long or non-English text
-without escaping; a section with a new key (and a `title`) is added, `{"key": k, "drop": true}` drops one:
+without escaping; a section with a new key (and a `title`) is added, `{"key": k, "drop": true}` drops one.
+Run every `fael` line from the repo the plan lives in and give the scratch files by absolute path —
+fael finds fael.db from the working directory:
 
 ```bash
 fael plan export <name> --json > bill.json
@@ -189,7 +193,7 @@ One `fael chunk add` per chunk, in order; each prints the new uid:
 
 ```bash
 fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
-  --size S|M|L --model <m> --scope <paths> [--reads <key>,<plan>/<key>] [--after <uid>,…] [--issue <id>,…]
+  --size S|M|L --model <m> --scope <paths> [--reads <key>,<plan>/<key>] [--after <label|uid>,…] [--issue <id>,…]
 ```
 
 - **brief** — what the agent that starts it needs and cannot get from the doc: what to build, where
@@ -233,6 +237,12 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   agent needs to know.
 
 ## Phase 3 — Hand back the proposals, not the plan
+
+First check the draft against this skill — `fael board --plan <name>` shows it all:
+
+- every `L` chunk is split, or its brief says why it can't be;
+- two chunks whose scopes overlap are ordered with `--after`, or the brief says why they can run together;
+- every `--scope` path exists (or is a new file in a directory that does).
 
 Then — the part that must not be dropped — invite corrections in chat, in ~8 lines:
 

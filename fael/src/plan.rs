@@ -63,6 +63,7 @@ fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     let app = a.one("app").unwrap_or_default();
     let area = a.one("area").unwrap_or_else(|| "dev".into());
     let now = fael_core::rfc3339(fael_core::now_ms());
+    in_repo(r)?;
     let mut s = Store::open(&db(r))?;
     s.new_plan(&app, name, title, &area, &now)?;
     let key = if app.is_empty() {
@@ -125,8 +126,21 @@ fn state(r: &Repo, verb: &str, want: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A dir with no git and no `.fael` is no repo: never point the agent at `plan new` there,
+/// and never leave a stray fael.db in it.
+pub(crate) fn in_repo(r: &Repo) -> Result<(), String> {
+    if r.journal.is_none() && !r.fael.exists() {
+        return Err(format!(
+            "rejected: no fael.db yet — {} is in no git repo; run fael from the repo the plan lives in",
+            r.cwd.display()
+        ));
+    }
+    Ok(())
+}
+
 fn open(r: &Repo) -> Result<Store, String> {
     let path = db(r);
+    in_repo(r)?;
     if !path.exists() {
         return Err(
             "rejected: no fael.db yet — `fael plan new <name> \"<title>\"` makes the first plan"

@@ -8,6 +8,14 @@ use serde_json::{Value, json};
 
 const LATER: &str = "2026-10-12T10:00:00Z";
 
+/// The day a section stamped `at` prints: the machine's local day, as `list` dates it.
+fn day(at: &str) -> String {
+    rusqlite::Connection::open_in_memory()
+        .unwrap()
+        .query_row("SELECT date(?1, 'localtime')", [at], |r| r.get(0))
+        .unwrap()
+}
+
 fn plan() -> (Store, i64) {
     let mut s = Store::open_in_memory().unwrap();
     s.new_plan("", "p", "P", "dev", NOW).unwrap();
@@ -146,17 +154,22 @@ fn export_prints_sections_in_order_each_dated_and_one_alone() {
     let b = with(&s, id, json!([{"key": "2", "body": "only cli"}]));
     apply(&mut s, &b, LATER).unwrap();
     let md = export(&s, id).unwrap();
+    let (first, later) = (day(NOW), day(LATER));
     let goal = md
-        .find("## 1. Goal (why)\n> section 1 · updated 2026-10-11\n")
+        .find(&format!(
+            "## 1. Goal (why)\n> section 1 · updated {first}\n"
+        ))
         .unwrap();
     let scope = md
-        .find("## 2. Scope\n> section 2 · updated 2026-10-12\n\nonly cli\n")
+        .find(&format!(
+            "## 2. Scope\n> section 2 · updated {later}\n\nonly cli\n"
+        ))
         .unwrap();
     let done = md.find("## 3. Done criteria\n").unwrap();
     assert!(goal < scope && scope < done, "{md}");
     assert_eq!(
         export_section(&s, id, "2").unwrap(),
-        "## 2. Scope\n> section 2 · updated 2026-10-12\n\nonly cli\n"
+        format!("## 2. Scope\n> section 2 · updated {later}\n\nonly cli\n")
     );
     let e = export_section(&s, id, "9").unwrap_err();
     assert!(
@@ -231,12 +244,17 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
     };
     let t = text(&s, &uid);
     // Goal and Done, then what it reads (its own plan's by key, another's by plan/key)
+    let later = day(LATER);
     assert!(
-        t.contains(
-            "<!-- plan p -->\n\n## 1. Goal (why)\n> section 1 · updated 2026-10-12\n\nship p\n"
-        ) && t.contains("\n## 3. Done criteria\n")
-            && t.contains("\n## §5 Risks\n> section §5 · updated 2026-10-12\n\nnone said\n")
-            && t.contains("\n## §1 Access\n> section q/§1 · updated 2026-10-12\n\nwho sees what\n"),
+        t.contains(&format!(
+            "<!-- plan p -->\n\n## 1. Goal (why)\n> section 1 · updated {later}\n\nship p\n"
+        )) && t.contains("\n## 3. Done criteria\n")
+            && t.contains(&format!(
+                "\n## §5 Risks\n> section §5 · updated {later}\n\nnone said\n"
+            ))
+            && t.contains(&format!(
+                "\n## §1 Access\n> section q/§1 · updated {later}\n\nwho sees what\n"
+            )),
         "{t}"
     );
     assert_eq!(
@@ -247,7 +265,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
     for miss in ["gone", "q/nope", "x/1"] {
         assert!(t.contains(&format!("\nsection {miss} not found\n")), "{t}");
     }
-    let day = &LATER[..10];
+    let day = day(LATER);
     assert!(
         !t.contains("## 2. Scope")
             && t.contains(&format!(
@@ -269,7 +287,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
     assert!(
         t.contains("\n## 2. Scope\n")
             && t.contains("\n## 4. Constraints\n")
-            && t.contains("\n- §5 · §5 Risks · 2026-10-12\n")
+            && t.contains(&format!("\n- §5 · §5 Risks · {later}\n"))
             && !t.contains("## §5")
             && !t.contains("not found"),
         "{t}"

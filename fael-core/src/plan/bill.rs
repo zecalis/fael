@@ -138,7 +138,7 @@ fn add_line(tx: &Transaction, pid: i64, l: &Line, now: &str) -> Result<String, S
         .map_err(err)?;
     let (id, uid) = insert(tx, pid, seq, &f, "added by plan apply", now)?;
     for a in l.after.iter().flatten() {
-        add_after(tx, id, uid_id(tx, a)?)?;
+        add_after(tx, id, uid_id(tx, pid, a)?)?;
     }
     let state = if l.brief.as_deref().is_some_and(|b| !b.trim().is_empty()) {
         "open"
@@ -195,7 +195,7 @@ fn edit_line(
     let want = match &l.after {
         Some(a) => a
             .iter()
-            .map(|u| uid_id(tx, u))
+            .map(|u| uid_id(tx, pid, u))
             .collect::<Result<Vec<_>, _>>()?,
         None => have.clone(),
     };
