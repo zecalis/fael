@@ -160,7 +160,7 @@ impl Started {
                 continue;
             }
             seen.push(&c.plan);
-            // plan.doc is the plan's text once set; the md file only until then
+            // the plan's sections once it has any; the md file only until then
             let (from, text) = match c.doc.as_deref().filter(|d| !d.trim().is_empty()) {
                 Some(d) => ("plan doc", Some(d.to_string())),
                 None => (

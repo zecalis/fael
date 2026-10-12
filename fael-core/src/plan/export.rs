@@ -1,11 +1,12 @@
 //! `fael plan export`: one plan as markdown, for review and backup — the db is a binary
 //! git cannot merge (SPEC §7). Checkbox lines stay in the import grammar, so a snapshot
 //! reads back with `fael plan import`; each chunk's db fields follow on an indented line.
-//! The plan's own text (Goal, Scope, Done, Constraints, …) follows the chunks, read by the
-//! brief's rule: `plan.doc` once set, else the md — so one export is the whole plan.
+//! The plan's own text (Goal, Scope, Done, Constraints, …) follows the chunks: its sections
+//! in order, each dated by its newest event — else, for a plan not migrated yet, the md's.
 
 use super::cutover::BANNER;
 use super::md;
+use super::section::{self, Row};
 use super::store::{Store, err};
 use rusqlite::types::Value;
 use rusqlite::{Connection, params};
@@ -38,11 +39,10 @@ pub fn export(s: &Store, plan: i64, md: &dyn Fn(&str) -> Option<String>) -> Resu
         source,
         truth,
         refs,
-        doc,
     ] = s
         .conn
         .query_row(
-            "SELECT app, name, title, area, kind, state, spec, source, truth, refs, doc
+            "SELECT app, name, title, area, kind, state, spec, source, truth, refs
              FROM plan WHERE id = ?1",
             [plan],
             cols,
@@ -71,19 +71,44 @@ pub fn export(s: &Store, plan: i64, md: &dyn Fn(&str) -> Option<String>) -> Resu
     }
     o.push_str("\n## TL;DR\n");
     chunks(s, plan, &mut o)?;
-    let text = if doc.trim().is_empty() {
-        (!source.is_empty())
+    let secs = section::list(&s.conn, plan)?;
+    if secs.is_empty() {
+        let text = (!source.is_empty())
             .then(|| md(&source))
             .flatten()
             .map(|t| prose(&t))
-            .unwrap_or_default()
-    } else {
-        doc
-    };
-    if !text.trim().is_empty() {
-        let _ = writeln!(o, "\n{}", text.trim());
+            .unwrap_or_default();
+        if !text.trim().is_empty() {
+            let _ = writeln!(o, "\n{}", text.trim());
+        }
+    }
+    for r in &secs {
+        o.push('\n');
+        o.push_str(&one(r));
     }
     Ok(o)
+}
+
+/// A section under its heading, its key and the day it last changed below it.
+fn one(r: &Row) -> String {
+    let day = r.updated.get(..10).unwrap_or(&r.updated);
+    let mut o = format!("## {}\n> section {} · updated {day}\n", r.title, r.key);
+    if !r.body.trim().is_empty() {
+        let _ = writeln!(o, "\n{}", r.body.trim());
+    }
+    o
+}
+
+/// `fael plan export <plan> --section <key>`: that section alone.
+pub fn export_section(s: &Store, plan: i64, key: &str) -> Result<String, String> {
+    let secs = section::list(&s.conn, plan)?;
+    secs.iter().find(|r| r.key == key).map(one).ok_or_else(|| {
+        let keys: Vec<&str> = secs.iter().map(|r| r.key.as_str()).collect();
+        format!(
+            "rejected: no section {key} — the plan has: {}",
+            keys.join(", ")
+        )
+    })
 }
 
 /// An md plan's text minus what the export already wrote: front matter, title, and the
@@ -168,10 +193,9 @@ pub(super) fn rev(c: &Connection, plan: i64) -> Result<i64, String> {
 /// `replaced` or `dropped`), read in one transaction so `rev` matches the lines.
 pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
     let tx = s.conn.unchecked_transaction().map_err(err)?;
-    let [app, name, title, area, state, doc, refs, repo] = tx
+    let [app, name, title, area, state, refs, repo] = tx
         .query_row(
-            "SELECT app, name, title, area, state, COALESCE(doc, ''), COALESCE(refs, ''),
-                    COALESCE(repo, '')
+            "SELECT app, name, title, area, state, COALESCE(refs, ''), COALESCE(repo, '')
              FROM plan WHERE id = ?1",
             [plan],
             cols,
@@ -206,9 +230,14 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)?;
+    let sections: Vec<Json> = section::list(&tx, plan)?
+        .into_iter()
+        .map(|r| json!({"key": r.key, "title": r.title, "body": r.body}))
+        .collect();
     Ok(json!({
         "v": 1, "plan": key, "rev": rev(&tx, plan)?, "title": title, "area": area,
-        "state": state, "doc": doc, "refs": lines(Some(refs)), "repo": repo, "chunks": chunks,
+        "state": state, "refs": lines(Some(refs)), "repo": repo, "sections": sections,
+        "chunks": chunks,
     }))
 }
 
@@ -257,6 +286,9 @@ pub fn feed(s: &Store, since: i64) -> Result<Json, String> {
         "events": rows(&tx, "SELECT * FROM event WHERE id > ?1 ORDER BY id", [since])?,
         "plans": rows(&tx, "SELECT * FROM plan WHERE id IN
                    (SELECT plan FROM event WHERE id > ?1) ORDER BY id", [since])?,
+        // every section of a touched plan: one missing from the set was dropped
+        "sections": rows(&tx, "SELECT * FROM section WHERE plan IN
+                   (SELECT plan FROM event WHERE id > ?1) ORDER BY plan, seq", [since])?,
         "chunks": rows(&tx, &format!("SELECT * FROM chunk WHERE id IN ({chunks}) ORDER BY id"), [since])?,
         "edges": rows(&tx, &format!(
             "SELECT s.uid AS src, d.uid AS dst, e.ref, e.kind FROM edge e

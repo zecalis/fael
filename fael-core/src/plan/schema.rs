@@ -40,6 +40,19 @@ pub(super) const TABLES: &[(&str, &str)] = &[
      CREATE INDEX IF NOT EXISTS contract_from ON contract(from_chunk);
      CREATE INDEX IF NOT EXISTS contract_to ON contract(to_chunk)",
     ),
+    (
+        "section",
+        // a plan's text, one row per heading (plan fael-v8): replaces `plan.doc` and the spec
+        // file; `key` stable per plan, `seq` order only. Every write is an event (section.rs)
+        "CREATE TABLE IF NOT EXISTS section(
+       id INTEGER PRIMARY KEY,
+       plan INTEGER NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
+       key TEXT NOT NULL,
+       title TEXT NOT NULL,
+       body TEXT NOT NULL DEFAULT '',
+       seq INTEGER NOT NULL,
+       UNIQUE(plan, key))",
+    ),
 ];
 
 /// New columns, `(table, column, decl)`, added when missing. Nullable or with a DEFAULT,
@@ -88,7 +101,7 @@ CREATE TABLE plan(
   kind TEXT,
   state TEXT NOT NULL CHECK(state IN ('active','blocked','parked','done')),
   rank INTEGER,
-  -- the plan's Goal/Scope/Done/Constraints text (master-detail: md is export only)
+  -- read and written by nothing since the section table (dropped in epoch v8)
   doc TEXT,
   spec TEXT,
   source TEXT NOT NULL,

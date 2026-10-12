@@ -225,7 +225,7 @@ fn park_unpark_done_move_a_cut_over_plan_and_a_reimport_keeps_it() {
 }
 
 #[test]
-fn plan_new_keeps_its_doc_in_the_db_and_a_bill_edits_the_plan() {
+fn plan_new_keeps_its_sections_in_the_db_and_a_bill_edits_the_plan() {
     let d = repo();
     let (ok, out, err) = fael(&d, &["plan", "new", "n", "New work"]);
     assert!(ok && out.contains("plan n created"), "{err}{out}");
@@ -241,12 +241,9 @@ fn plan_new_keeps_its_doc_in_the_db_and_a_bill_edits_the_plan() {
         (bill["v"].as_i64(), bill["plan"].as_str()),
         (Some(1), Some("n"))
     );
-    assert!(
-        bill["doc"].as_str().unwrap().contains("## 1. Goal"),
-        "{json}"
-    );
-    // the planner fills the doc and adds a chunk in one bill; --dry-run writes nothing
-    bill["doc"] = "## 1. Goal (why)\nship n\n".into();
+    assert_eq!(bill["sections"][0]["title"], "1. Goal (why)", "{json}");
+    // the planner fills a section and adds a chunk in one bill; --dry-run writes nothing
+    bill["sections"] = serde_json::json!([{"key": "1", "body": "ship n"}]);
     bill["chunks"] = serde_json::json!([{"title": "n1", "brief": "do n1"}]);
     let file = d.join("bill.json");
     write(file.clone(), &bill.to_string());
@@ -260,6 +257,12 @@ fn plan_new_keeps_its_doc_in_the_db_and_a_bill_edits_the_plan() {
     assert_eq!(now, json, "dry run changed the plan");
     let (ok, out, err) = fael(&d, &["plan", "apply", path]);
     assert!(ok && out.contains("applied (rev "), "{err}{out}");
+    let (ok, out, err) = fael(&d, &["plan", "export", "n", "--section", "1"]);
+    assert!(
+        ok && out.starts_with("## 1. Goal (why)\n> section 1 · updated ")
+            && out.ends_with("\nship n\n"),
+        "{err}{out}"
+    );
     // the same bill again is stale: the plan moved on
     let (ok, _, err) = fael(&d, &["plan", "apply", path]);
     assert!(!ok && err.contains("stale rev"), "{err}");

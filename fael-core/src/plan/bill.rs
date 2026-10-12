@@ -9,6 +9,7 @@ use super::apply::{Op, insert, run};
 use super::chunk::{Fields, add_after, batch, edit_in, last_event, row, set, tx, uid_id};
 use super::export::rev;
 use super::lookup::label;
+use super::section::{self, Part};
 use super::store::{Store, err};
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde::Deserialize;
@@ -26,9 +27,11 @@ pub struct Bill {
     area: Option<String>,
     /// read back, never set: `fael plan park|unpark|done` moves it
     state: Option<String>,
-    doc: Option<String>,
     refs: Option<Vec<String>>,
     repo: Option<String>,
+    /// by key: one left out is left alone
+    #[serde(default)]
+    sections: Vec<Part>,
     #[serde(default)]
     chunks: Vec<Line>,
     #[serde(default)]
@@ -59,15 +62,14 @@ fn changed(new: &Option<String>, old: &str) -> Option<String> {
 }
 
 fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<String>, String> {
-    let (app, name, state, cur): (String, String, String, [String; 5]) = tx
+    let (app, name, state, cur): (String, String, String, [String; 4]) = tx
         .query_row(
-            "SELECT app, name, state, title, area, COALESCE(doc, ''), COALESCE(refs, ''),
-                    COALESCE(repo, '')
+            "SELECT app, name, state, title, area, COALESCE(refs, ''), COALESCE(repo, '')
              FROM plan WHERE id = ?1",
             [pid],
             |r| {
                 let g = |i| r.get::<_, String>(i);
-                Ok((g(0)?, g(1)?, g(2)?, [g(3)?, g(4)?, g(5)?, g(6)?, g(7)?]))
+                Ok((g(0)?, g(1)?, g(2)?, [g(3)?, g(4)?, g(5)?, g(6)?]))
             },
         )
         .map_err(err)?;
@@ -81,9 +83,8 @@ fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<Stri
     for (col, new, old) in [
         ("title", &b.title, &cur[0]),
         ("area", &b.area, &cur[1]),
-        ("doc", &b.doc, &cur[2]),
-        ("refs", &refs, &cur[3]),
-        ("repo", &b.repo, &cur[4]),
+        ("refs", &refs, &cur[2]),
+        ("repo", &b.repo, &cur[3]),
     ] {
         let Some(v) = new.as_ref().filter(|n| n != &old) else {
             continue;
@@ -302,6 +303,12 @@ impl Store {
         }
         let since = last_event(&tx)?;
         let mut out: Vec<String> = header(&tx, pid, &b, now)?.into_iter().collect();
+        for (i, p) in b.sections.iter().enumerate() {
+            if b.sections[..i].iter().any(|q| q.key == p.key) {
+                return Err(format!("rejected: the bill names section {} twice", p.key));
+            }
+            out.extend(section::apply(&tx, pid, p, now)?);
+        }
         let mut seen = Vec::new();
         for l in &b.chunks {
             let line = match &l.uid {

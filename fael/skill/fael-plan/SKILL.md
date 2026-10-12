@@ -119,14 +119,17 @@ fael find --files <paths>         # open issues and decisions on the files the i
 fael plan new <name> "<title>" [--app <app>] [--area dev|marketing]
 ```
 
-It writes the plan's doc into plans.db — a Goal / Scope / Done criteria / Constraints skeleton,
-no file anywhere — and refuses a name already taken. Fill those four sections now, from the
-Phase 0 harvest + the Phase 1 answer. Write the doc as a plain markdown file in your scratchpad
-and swap it into the plan's bill — `--rawfile` takes long or non-English text without escaping:
+It writes the plan's doc into plans.db — four skeleton sections, keys `1` Goal, `2` Scope, `3` Done
+criteria, `4` Constraints, no file anywhere — and refuses a name already taken. Fill them now,
+from the Phase 0 harvest + the Phase 1 answer. Write each body as a plain markdown file in your
+scratchpad and swap them into the plan's bill by key — `--rawfile` takes long or non-English text
+without escaping; a section with a new key (and a `title`) is added, `{"key": k, "drop": true}` drops one:
 
 ```bash
 fael plan export <name> --json > bill.json
-jq --rawfile doc doc.md '.doc = $doc' bill.json > bill2.json
+jq --rawfile g 1.md --rawfile s 2.md --rawfile d 3.md --rawfile c 4.md \
+  '.sections = [{key:"1",body:$g},{key:"2",body:$s},{key:"3",body:$d},{key:"4",body:$c}]' \
+  bill.json > bill2.json
 fael plan apply bill2.json --dry-run && fael plan apply bill2.json
 ```
 

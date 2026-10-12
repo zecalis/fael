@@ -87,7 +87,8 @@ fn lines_add_edit_and_drop_and_a_missing_line_is_left_alone() {
     s.approve(&a, Some(("opus", "claude")), NOW).unwrap();
     let v = bill(
         &s,
-        json!({"title": "Inbox!", "doc": "## 1. Goal\nship\n", "refs": ["SPEC.md"]}),
+        json!({"title": "Inbox!", "refs": ["SPEC.md"],
+               "sections": [{"key": "1", "title": "1. Goal", "body": "ship"}]}),
         json!([
             {"uid": a, "brief": "do a better", "after": [b]},
             {"uid": c, "drop": true},
@@ -96,11 +97,12 @@ fn lines_add_edit_and_drop_and_a_missing_line_is_left_alone() {
         ]),
     );
     let out = apply(&mut s, v, false).unwrap();
-    assert_eq!(out.len(), 5, "{out:?}");
+    assert_eq!(out.len(), 6, "{out:?}");
     let e = export(&s);
+    assert_eq!(e["title"], "Inbox!");
     assert_eq!(
-        (e["title"].as_str(), e["doc"].as_str()),
-        (Some("Inbox!"), Some("## 1. Goal\nship\n"))
+        e["sections"],
+        json!([{"key": "1", "title": "1. Goal", "body": "ship"}])
     );
     assert_eq!(e["refs"], json!(["SPEC.md"]));
     let lines = e["chunks"].as_array().unwrap();

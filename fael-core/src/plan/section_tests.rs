@@ -1,0 +1,191 @@
+//! Sections (plan fael-v8): keys, the bill round trip by key, rev, drop, export order and
+//! dates, one section alone, and `plan.doc` carried over once.
+
+use super::super::chunk::tests::NOW;
+use super::super::{Bill, Store, export, export_json, export_section};
+use super::{carry, key_of, list, split};
+use serde_json::{Value, json};
+
+const LATER: &str = "2026-10-12T10:00:00Z";
+
+fn plan() -> (Store, i64) {
+    let mut s = Store::open_in_memory().unwrap();
+    s.new_plan("", "p", "P", "dev", NOW).unwrap();
+    let id = s.plans().unwrap()[0].id;
+    (s, id)
+}
+
+fn apply(s: &mut Store, b: &Value, at: &str) -> Result<Vec<String>, String> {
+    s.bill(
+        serde_json::from_value::<Bill>(b.clone()).unwrap(),
+        at,
+        false,
+    )
+    .map(|(l, _)| l)
+}
+
+fn with(s: &Store, id: i64, sections: Value) -> Value {
+    let mut b = export_json(s, id).unwrap();
+    b["sections"] = sections;
+    b
+}
+
+fn keys(s: &Store, id: i64) -> Vec<String> {
+    list(&s.conn, id)
+        .unwrap()
+        .into_iter()
+        .map(|r| r.key)
+        .collect()
+}
+
+#[test]
+fn a_heading_keys_on_its_number_else_its_slug() {
+    assert_eq!(key_of("1. Goal (why)"), "1");
+    assert_eq!(key_of("§3 Risks"), "§3");
+    assert_eq!(key_of("chunk rules"), "chunk-rules");
+    let s = split("lead\n\n## 1. Goal\nship\n\n## Notes\na\n## Notes\nb\n");
+    let k: Vec<(&str, &str, &str)> = s
+        .iter()
+        .map(|(k, t, b)| (k.as_str(), t.as_str(), b.as_str()))
+        .collect();
+    assert_eq!(
+        k,
+        [
+            ("intro", "Intro", "lead"),
+            ("1", "1. Goal", "ship"),
+            ("notes", "Notes", "a"),
+            ("notes-2", "Notes", "b"),
+        ]
+    );
+}
+
+#[test]
+fn a_bill_adds_edits_and_drops_sections_by_key_and_leaves_the_rest() {
+    let (mut s, id) = plan();
+    assert_eq!(keys(&s, id), ["1", "2", "3", "4"]);
+    // the export read back changes nothing
+    let e = export_json(&s, id).unwrap();
+    assert_eq!(e["sections"][1]["body"], "**Do:**\n**Don't:**");
+    assert!(apply(&mut s, &e, LATER).unwrap().is_empty());
+    let b = with(
+        &s,
+        id,
+        json!([
+            {"key": "1", "body": "ship it"},
+            {"key": "§5", "title": "§5 Spec", "body": "the api"},
+            {"key": "3", "drop": true},
+            {"key": "9", "drop": true},
+        ]),
+    );
+    let out = apply(&mut s, &b, LATER).unwrap();
+    assert_eq!(out, ["§ 1 edited", "§ §5 added", "§ 3 dropped"]);
+    let e = export_json(&s, id).unwrap();
+    assert_eq!(
+        e["sections"],
+        json!([
+            {"key": "1", "title": "1. Goal (why)", "body": "ship it"},
+            {"key": "2", "title": "2. Scope", "body": "**Do:**\n**Don't:**"},
+            {"key": "4", "title": "4. Constraints", "body": ""},
+            {"key": "§5", "title": "§5 Spec", "body": "the api"},
+        ])
+    );
+    let texts: Vec<String> = s
+        .conn
+        .prepare("SELECT text FROM event WHERE at = ?1 ORDER BY id")
+        .unwrap()
+        .query_map([LATER], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        texts,
+        [
+            "1: 1. Goal (why)",
+            "§5: §5 Spec",
+            "3: 3. Done criteria — dropped"
+        ]
+    );
+    // a new key needs a title, and a key twice is refused: nothing written
+    for bad in [
+        json!([{"key": "1", "body": "x"}, {"key": "6", "body": "no title"}]),
+        json!([{"key": "1", "body": "x"}, {"key": "1", "body": "y"}]),
+    ] {
+        let b = with(&s, id, bad);
+        assert!(
+            apply(&mut s, &b, LATER)
+                .unwrap_err()
+                .starts_with("rejected")
+        );
+    }
+    assert_eq!(export_json(&s, id).unwrap()["sections"], e["sections"]);
+}
+
+#[test]
+fn a_section_edit_moves_the_rev_so_an_older_bill_is_stale() {
+    let (mut s, id) = plan();
+    let old = export_json(&s, id).unwrap();
+    let b = with(&s, id, json!([{"key": "2", "body": "only cli"}]));
+    apply(&mut s, &b, LATER).unwrap();
+    assert!(export_json(&s, id).unwrap()["rev"].as_i64() > old["rev"].as_i64());
+    let mut stale = old;
+    stale["sections"] = json!([{"key": "2", "body": "everything"}]);
+    assert!(
+        apply(&mut s, &stale, LATER)
+            .unwrap_err()
+            .contains("stale rev")
+    );
+    assert_eq!(
+        export_json(&s, id).unwrap()["sections"][1]["body"],
+        "only cli"
+    );
+}
+
+#[test]
+fn export_prints_sections_in_order_each_dated_and_one_alone() {
+    let (mut s, id) = plan();
+    let b = with(&s, id, json!([{"key": "2", "body": "only cli"}]));
+    apply(&mut s, &b, LATER).unwrap();
+    let md = export(&s, id, &|_: &str| None).unwrap();
+    let goal = md
+        .find("## 1. Goal (why)\n> section 1 · updated 2026-10-11\n")
+        .unwrap();
+    let scope = md
+        .find("## 2. Scope\n> section 2 · updated 2026-10-12\n\nonly cli\n")
+        .unwrap();
+    let done = md.find("## 3. Done criteria\n").unwrap();
+    assert!(goal < scope && scope < done, "{md}");
+    assert_eq!(
+        export_section(&s, id, "2").unwrap(),
+        "## 2. Scope\n> section 2 · updated 2026-10-12\n\nonly cli\n"
+    );
+    let e = export_section(&s, id, "9").unwrap_err();
+    assert!(
+        e.contains("no section 9") && e.contains("1, 2, 3, 4"),
+        "{e}"
+    );
+}
+
+#[test]
+fn a_plan_doc_is_cut_into_sections_once() {
+    let (s, id) = plan();
+    let tx = s.conn.unchecked_transaction().unwrap();
+    tx.execute_batch(
+        "DELETE FROM section;
+         UPDATE plan SET doc = '## 1. Goal (why)
+ship
+
+## 2. Scope
+only cli
+'",
+    )
+    .unwrap();
+    carry(&tx).unwrap();
+    tx.commit().unwrap();
+    let rows = list(&s.conn, id).unwrap();
+    let got: Vec<(&str, &str)> = rows
+        .iter()
+        .map(|r| (r.key.as_str(), r.body.as_str()))
+        .collect();
+    assert_eq!(got, [("1", "ship"), ("2", "only cli")]);
+    assert!(rows.iter().all(|r| !r.updated.is_empty()));
+}

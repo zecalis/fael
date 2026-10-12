@@ -75,8 +75,8 @@ Recompute the frontier after each answer. Done when it is empty and the owner co
 fael plan new <app>-content-<yyyy-mm> "<goal of the month>" --app <app> --area marketing
 ```
 
-Fill the doc it writes into plans.db (no file — `fael plan export <plan> --json`, swap `"doc"`,
-`fael plan apply`, as the line it prints says): Goal = goal of the month · pillars · cadence; Constraints = `VOICE.md` and the channel limits. Every post brief
+Fill the sections it writes into plans.db (no file — `fael plan export <plan> --json`, set each
+`"sections"` body by key, `fael plan apply`, as the line it prints says): Goal = goal of the month · pillars · cadence; Constraints = `VOICE.md` and the channel limits. Every post brief
 prints it. Then one chunk per post, in date order:
 
 ```bash
