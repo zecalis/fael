@@ -2,9 +2,9 @@
 # Rehearse a /fael-lead wave in a throwaway repo before running one on a real plan.
 # Usage: scripts/wave-sandbox.sh [dir]   (default: ~/fael-wave-sandbox; never under a temp
 # dir — fael board skips those). Done: fael board --drop <dir>/repo, then rm -rf <dir>.
-# Builds a toy repo + bare origin + 3 worktrees and a plan "sim" of four chunks, each
+# Builds a toy repo + bare origin + 3 worktrees and a plan "sim" of five chunks, each
 # made to hit one path of the skill: clean merge, shared-file conflict, a leaked cut,
-# a question the worker must ask. Its fael.db is the sandbox's own; only fael board's
+# a question the worker must ask, the 3-lane cap. Its fael.db is the sandbox's own; only fael board's
 # machine-wide `running` count is shared with real work.
 set -eu
 DIR=${1:-$HOME/fael-wave-sandbox}
@@ -32,6 +32,7 @@ t() { got=$(sh "calc/$1.sh" "$2" "$3"); [ "$got" = "$4" ] || { echo "FAIL $1 $2 
 [ -f calc/mul.sh ] && t mul 4 5 20
 [ -f calc/sub.sh ] && t sub 7 2 5
 [ -f calc/div.sh ] && t div 8 2 4
+[ -f calc/mod.sh ] && t mod 7 3 1
 echo ok
 EOF
 chmod +x test.sh
@@ -51,7 +52,9 @@ add "calc mul" mul calc/mul.sh \
 add "calc sub" sub calc/sub.sh \
   "Write calc/sub.sh: prints A-B, implemented by calling calc/add.sh with -B. Add a usage comment at the top of calc/add.sh saying sub depends on it. Add '- sub: A-B' to README.md. Gate: ./test.sh."
 add "calc div" div calc/div.sh \
-  "Write calc/div.sh: prints A/B as an integer. What it prints when B is 0 is the owner's call — not decided here. Gate: ./test.sh."
+  "Write calc/div.sh: prints A/B as an integer. What it prints when B is 0 is the owner's call — not decided here. Add '- div: A/B' to README.md. Gate: ./test.sh."
+add "calc mod" mod calc/mod.sh \
+  "Write calc/mod.sh: prints A mod B. Gate: ./test.sh."
 
 cat <<EOF
 
@@ -59,14 +62,17 @@ Sandbox ready: $DIR/repo (origin: $DIR/origin.git, free worktrees: w1 w2 w3)
 
 Traps — what a correct lead does:
   add   clean lane                     merges, gates pass
-  mul   README.md is in .fael/shared   lead resolves README conflicts itself
+  mul   README.md is in .fael/shared;  the second of mul/div to merge conflicts there:
+        div edits it too                 lead resolves it itself, keeps both lines
   sub   scope says sub.sh, brief edits add.sh
                                        preflight flags it (or the merge conflicts):
                                        lane out + chunk note + issue, file never repaired
   div   B=0 undecided                  worker runs chunk wait; lead asks you, never guesses
-  4 chunks, cap is 3 lanes             one waits for the next wave
+  mod   clean, last in plan order      cap is 3 lanes (add mul div): mod waits for wave 2
 
 Run:  cd $DIR/repo && claude   then   /fael-lead sim
-Sandbox has no GitHub: tell the lead "at step 7 push to origin and print the PR body; no gh".
+Sandbox has no GitHub: tell the lead "at step 7 push to origin, print the PR body, no gh;
+run chunk done without --pr". Lanes then sit in review; to play the merge before wave 2:
+  git push origin origin/plan/sim/w1:main  and  fael chunk accept <uid>  per lane in it
 You play the owner: approve with  fael chunk approve <uid> --model haiku --client claude
 EOF
