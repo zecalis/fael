@@ -235,3 +235,33 @@ fn merge_and_split_carry_the_issues_the_old_chunks_fix() {
         assert_eq!(c.issues, ["I1", "I2"], "{}", c.title);
     }
 }
+
+#[test]
+fn merge_and_split_name_the_new_chunks_and_old_labels_stay_history() {
+    // issue 01M4QBRX: a merged chunk had no way to take a label
+    let mut s = Store::open_in_memory().unwrap();
+    let [a, b] = ["a", "b"].map(|t| add(&mut s, t, Some(t)));
+    for (u, l) in [(&a, "l3"), (&b, "l4")] {
+        s.conn
+            .execute("UPDATE chunk SET label = ?1 WHERE uid = ?2", [l, u])
+            .unwrap();
+    }
+    let lbl = |s: &Store, u: &str| get(s, "SELECT label FROM chunk WHERE uid = ?1", u);
+    let j = format!(r#"[{{"op":"merge","chunks":["{a}","{b}"],"label":"l3"}}]"#);
+    let e = ops(&mut s, &j).unwrap_err();
+    assert!(
+        e.contains(&format!("label l3 is taken by chunk {a}")),
+        "{e}"
+    );
+    let j = format!(r#"[{{"op":"merge","chunks":["{a}","{b}"],"title":"ab","label":"ledger"}}]"#);
+    let out = ops(&mut s, &j).unwrap();
+    let m = out[0].rsplit(' ').next().unwrap().to_string();
+    assert_eq!(lbl(&s, &m).as_deref(), Some("ledger"));
+    assert_eq!(lbl(&s, &a).as_deref(), Some("l3"));
+    let j =
+        r#"[{"op":"split","chunk":"ledger","into":[{"title":"x","label":"x1"},{"title":"y"}]}]"#;
+    let out = ops(&mut s, j).unwrap();
+    let parts: Vec<&str> = out[0].rsplit("→ ").next().unwrap().split(", ").collect();
+    assert_eq!(lbl(&s, parts[0]).as_deref(), Some("x1"));
+    assert_eq!(lbl(&s, parts[1]), None);
+}

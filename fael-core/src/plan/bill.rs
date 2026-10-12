@@ -8,7 +8,6 @@ use super::State;
 use super::apply::{Op, insert, run};
 use super::chunk::{Fields, add_after, batch, edit_in, last_event, row, set, tx, uid_id};
 use super::export::rev;
-use super::lookup::label;
 use super::section::{self, Part};
 use super::store::{Store, err};
 use rusqlite::{OptionalExtension, Transaction, params};
@@ -150,14 +149,6 @@ fn add_line(tx: &Transaction, pid: i64, l: &Line, now: &str) -> Result<String, S
         )
         .map_err(err)?;
     let (id, uid) = insert(tx, pid, seq, &f, "added by plan apply", now)?;
-    if let Some(name) = l.label.as_deref().filter(|n| !n.is_empty()) {
-        label(tx, pid, id, name)?;
-        tx.execute(
-            "UPDATE chunk SET label = ?1 WHERE id = ?2",
-            params![name, id],
-        )
-        .map_err(err)?;
-    }
     for a in l.after.iter().flatten() {
         add_after(tx, id, uid_id(tx, a)?)?;
     }
