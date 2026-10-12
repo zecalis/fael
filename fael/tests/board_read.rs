@@ -173,3 +173,22 @@ fn a_bound_session_is_seen_by_its_stop_hook_in_another_repo() {
     assert!(stop.wait().unwrap().success());
     assert!(show("last_seen").is_string(), "stamped from another cwd");
 }
+
+/// A running run names the branch its worktree is on now: the agent switched after start
+/// (2026-10-12: the app's Talk hid, board showed the start's branch).
+#[test]
+fn a_running_run_shows_its_worktrees_branch_now() {
+    let t = tmp();
+    let (d, state) = (repo(&t, "r"), t.join("state"));
+    let git = |args: &[&str]| {
+        let s = Command::new("git").args(args).current_dir(&d).status();
+        assert!(s.unwrap().success(), "git {args:?}");
+    };
+    git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+    let uid = ok(run(&d, &state, &["chunk", "add", "a", "--brief", "b"]));
+    ok(run(&d, &state, &["chunk", "start", &uid]));
+    git(&["switch", "-q", "-c", "feat/real"]);
+    let v: Value = serde_json::from_str(&ok(run(&d, &state, &["board", "--json"]))).unwrap();
+    let c = &v["projects"][0]["chunks"][0];
+    assert_eq!(c["run"]["branch"], "feat/real", "{c}");
+}

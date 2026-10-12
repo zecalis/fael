@@ -68,6 +68,28 @@ pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) -> Vec<String> {
     shared
 }
 
+/// A running run's branch is its worktree's now, not the one it started on (the agent may
+/// switch after start), so the app's Talk (worktree branch == run branch) holds.
+// ponytail: pooled worktrees only (a main checkout beside linked ones is not listed); done
+// records the branch for those too
+pub(super) fn live_branches(projects: &mut [super::Project]) {
+    let now: HashMap<String, Option<String>> = projects
+        .iter()
+        .flat_map(|p| &p.worktrees)
+        .map(|w| (w.path.clone(), w.branch.clone()))
+        .collect();
+    let live = projects
+        .iter_mut()
+        .flat_map(|p| &mut p.chunks)
+        .filter_map(|c| c.run.as_mut())
+        .filter(|r| r.ended.is_none());
+    for r in live {
+        if let Some(b) = r.worktree.as_ref().and_then(|w| now.get(w)) {
+            r.branch.clone_from(b);
+        }
+    }
+}
+
 /// PR `n` on the base: a squash subject ending `(#n)`, or GitHub's merge commit.
 fn merged(log: &str, n: i64) -> bool {
     let (squash, merge) = (format!("(#{n})"), format!("Merge pull request #{n} "));
