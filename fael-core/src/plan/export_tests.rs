@@ -71,3 +71,40 @@ fn the_feed_carries_every_section_of_a_plan_it_touched() {
             .is_empty()
     );
 }
+
+#[test]
+fn export_prints_the_label_and_the_notes_the_next_brief_will() {
+    let mut s = Store::open_in_memory().unwrap();
+    let f = Fields {
+        title: Some("t".into()),
+        brief: Some("b".into()),
+        label: Some("b10".into()),
+        ..Fields::default()
+    };
+    let a = s.add("inbox", &f, &[], NOW).unwrap();
+    let plan: i64 = s
+        .conn
+        .query_row("SELECT plan FROM chunk WHERE uid = ?1", [&a], |r| r.get(0))
+        .unwrap();
+    s.note(&a, "read before start", NOW).unwrap();
+    start(&mut s, &a, "/w").unwrap();
+    s.note(&a, "line one\nline two", NOW).unwrap();
+    let md = super::export(&s, plan, &|_: &str| None).unwrap();
+    assert!(
+        md.contains(&format!("  uid {a} · label b10 · running")),
+        "{md}"
+    );
+    assert!(
+        md.contains("  > note 2026-10-11: line one line two\n"),
+        "{md}"
+    );
+    assert!(
+        !md.contains("read before start"),
+        "a note before the last start: {md}"
+    );
+    assert!(
+        super::export_json(&s, plan).unwrap()["chunks"][0]
+            .get("notes")
+            .is_none()
+    );
+}

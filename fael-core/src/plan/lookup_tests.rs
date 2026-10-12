@@ -146,3 +146,35 @@ fn scopes_overlap_only_within_one_checkout_and_the_brief_names_it() {
     let text = st.text(&|_| None, &|_| true);
     assert!(text.contains("code in /code/board"), "{text}");
 }
+
+#[test]
+fn a_unique_uid_prefix_of_8_names_the_chunk_for_every_verb() {
+    let mut s = Store::open_in_memory().unwrap();
+    let (a, b) = (add(&mut s, "a", Some("b")), add(&mut s, "b", Some("b")));
+    for (u, to) in [
+        (&a, "01AAAAAAAA0000000000000000"),
+        (&b, "01AAAAAAAA1000000000000000"),
+    ] {
+        let q = "UPDATE chunk SET uid = ?1 WHERE uid = ?2";
+        s.conn.execute(q, [to, u.as_str()]).unwrap();
+    }
+    // a hit, any case, and every verb takes it
+    assert_eq!(
+        s.show("01aaaaaaaa0").unwrap().uid,
+        "01AAAAAAAA0000000000000000"
+    );
+    s.note("01AAAAAAAA0", "n", NOW).unwrap();
+    s.start("01AAAAAAAA0", &Start::default(), &here("/w"))
+        .unwrap();
+    assert_eq!(state(&s, "01AAAAAAAA0000000000000000"), "running");
+    // ambiguous: rejected with both uids
+    let e = s.show("01AAAAAAAA").unwrap_err();
+    assert!(e.contains("names 2 chunks"), "{e}");
+    assert!(
+        e.contains("01AAAAAAAA0000000000000000, 01AAAAAAAA1000000000000000"),
+        "{e}"
+    );
+    // too short, and a prefix nothing starts with
+    assert!(s.show("01AAAAA").unwrap_err().contains("too short"));
+    assert!(s.show("01ZZZZZZZZ").unwrap_err().contains("no chunk"));
+}
