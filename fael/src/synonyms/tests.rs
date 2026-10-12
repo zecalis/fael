@@ -48,6 +48,15 @@ fn the_text_goes_last() {
             "add note --files a.rs x"
         );
     }
+    // a text before the body flag is its title, unless --title names one
+    assert_eq!(
+        rw("add note head --body x --files a.rs"),
+        "add note --title head --files a.rs x"
+    );
+    assert_eq!(
+        rw("add note head --title t --body x"),
+        "add note head --title t x"
+    );
     // nothing after the flag: the parser rejects it, not us
     assert_eq!(rw("close 01ABC --why"), "close 01ABC --why");
 }
@@ -219,7 +228,7 @@ fn reject_leaves_what_it_cannot_improve() {
 #[test]
 fn a_text_flag_next_to_a_text_is_named() {
     let wrong = "rejected: wrong arguments for \"add\" — try 'fael add --help'";
-    let raw = argv("add note x --body y --files a.rs");
+    let raw = argv("add note x --title t --body y --files a.rs");
     let got = text_twice(&raw, &rewrite(raw.clone()), wrong.into());
     assert!(
         got.starts_with("rejected: --body is the text, and a text was given too"),

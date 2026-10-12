@@ -126,3 +126,38 @@ fn plan_new_keeps_its_sections_in_the_db_and_a_bill_edits_the_plan() {
     );
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// What agents type for a plan or chunk: `plan show` reads it, and the rest is
+/// a reject naming the call that works — `plan list`, `chunk show --plan`, a
+/// ledger row's id, a flag and its value in one argument.
+#[test]
+fn the_guessed_plan_and_chunk_calls_answer_or_name_the_real_one() {
+    let d = repo();
+    assert!(fael(&d, &["plan", "new", "p", "P"]).0);
+    let (ok, uid, err) = fael(&d, &["chunk", "add", "p1", "--plan", "p"]);
+    assert!(ok, "{err}");
+    let uid = uid.trim();
+    let (ok, out, err) = fael(&d, &["plan", "show", "p"]);
+    assert!(ok && out == fael(&d, &["plan", "export", "p"]).1, "{err}");
+    let (ok, _, err) = fael(&d, &["plan", "list"]);
+    assert!(!ok && err.contains("`fael board` lists the plans"), "{err}");
+    // --plan names the plan a label or uid is in, and checks it
+    assert!(fael(&d, &["chunk", "edit", uid, "--label", "l1"]).0);
+    let (ok, out, err) = fael(&d, &["chunk", "show", "l1", "--plan", "p"]);
+    assert!(ok && out.contains(uid), "{err}");
+    assert!(fael(&d, &["chunk", "note", uid, "hi", "--plan", "p"]).0);
+    assert!(fael(&d, &["plan", "new", "q", "Q"]).0);
+    let (ok, _, err) = fael(&d, &["chunk", "show", uid, "--plan", "q"]);
+    assert!(!ok && err.contains("is in plan p, not q"), "{err}");
+    let (ok, _, err) = fael(&d, &["chunk", "add", "p2", "--plan p"]);
+    assert!(!ok && err.contains("is one argument"), "{err}");
+    write(d.join("a.rs"), "x\n");
+    let (ok, id, err) = fael(&d, &["add", "note", "n", "--files", "a.rs"]);
+    assert!(ok, "{err}");
+    let id = id.split_whitespace().next().unwrap();
+    let (ok, _, err) = fael(&d, &["chunk", "show", id]);
+    assert!(
+        !ok && err.contains("is a ledger note, not a chunk"),
+        "{err}"
+    );
+}

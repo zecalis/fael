@@ -13,7 +13,7 @@ Rows about a file come back when you touch it. One the code now says or contradi
 close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage of it:
 `--replace "<old>" --with "<new>"`), in that same message.
 
-**Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --files <path>` right there, one per finding — do not wait for the end of the task.**
+**Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --title "<headline>" --files <path>` right there, one per finding — do not wait for the end of the task.**
 That includes your own earlier bug, a regression you caused, and a reviewer's finding that outlives this turn.
 Fixed one with no row yet, however found (failing test, review, reading code)? File it now; close it after the commit — a row closes once:
 `fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]"``.
@@ -22,15 +22,15 @@ Name `(fael:<id>)` in the fix commit — a squash keeps it, a sha does not.
 In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).
 
 - `fael find [<text>] [--files <path>]` — the session brief, rows about a file, or a text search
-- `fael add decision "<the choice, why, what was rejected>" --files a,b` — never what code does, progress, or which files changed (git has those)
+- `fael add decision "<the choice, why, what was rejected>" --title "<headline>" --files a,b` — never what code does, progress, or which files changed (git has those)
   - the user said or decided it? `--from user`; ask them before you change a `(from user)` row
-- `fael add note "<state the next session needs>" --files a,b` — where work stopped, what is half-done
+- `fael add note "<state the next session needs>" --title "<headline>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
 - Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
-Each row is read months later with no chat: one or two standalone sentences, one topic (a `;`/`·` list is rejected).
-Over 60 words or 400 chars? Add `--title "<≤15 words>"` or it is rejected.
+Each row is read months later with no chat: one or two standalone sentences, one topic (a `;`/`·` list is rejected),
+with a ≤15-word `--title` (required past 60 words/400 chars).
 `--files` names the paths or an anchor (`doc:pricing`) `fael find` showed — never
 invent one; left out, it is this session's edited files.
 Type an id only once this session's `fael find` or `add` printed it — never from memory;

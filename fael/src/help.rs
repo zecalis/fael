@@ -46,7 +46,7 @@ global options:
   -v, -V, --version  print the version
 
 examples:
-  fael add issue \"login loops\" --files src/a.rs
+  fael add issue \"login loops after a token refresh\" --title \"login loop\" --files src/a.rs
   fael find --files src/
   fael kickoff src/a.rs
 

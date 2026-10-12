@@ -59,6 +59,14 @@ fn a_label_in_two_plans_asks_for_the_uid() {
     let e = s.show("b1").unwrap_err();
     assert!(e.contains("more than one chunk"), "{e}");
     assert_eq!(s.show(&a).unwrap().uid, a, "the uid still works");
+    // --plan picks the label's plan, and checks a uid it is given
+    assert_eq!(s.uid_in("b1", "inbox").unwrap(), a);
+    assert_ne!(s.uid_in("b1", "p2").unwrap(), a);
+    assert_eq!(s.uid_in(&a, "inbox").unwrap(), a);
+    let e = s.uid_in(&a, "p2").unwrap_err();
+    assert!(e.contains("is in plan inbox, not p2"), "{e}");
+    let e = s.uid_in("b9", "p2").unwrap_err();
+    assert!(e.contains("no chunk b9 in plan p2"), "{e}");
 }
 
 #[test]
