@@ -1,7 +1,7 @@
 //! `[Phantom]` in markdown (issue `ids:doctor-plans`): prose is scanned like a
 //! row's text, fenced code blocks are examples (never citations), and only
-//! `*.md` under the repo root is read — `.git`/`target`/`node_modules`/`vendor` and
-//! archived plans (`.fapony/done`) never.
+//! `*.md` under the repo root is read — `.git`/`target`/`node_modules`/`vendor`
+//! never, nor a symlinked directory.
 
 use super::row;
 use fael_core::*;
@@ -62,8 +62,7 @@ fn only_markdown_counts_and_build_dirs_are_skipped() {
     for path in [
         "README.md",
         "docs/README.MD",
-        ".fapony/plan/PLAN-x.md",
-        ".fapony/done/PLAN-old.md",
+        "notes/plan/PLAN-x.md",
         "target/gen.md",
         "node_modules/pkg/README.md",
         "vendor/lib/README.md",
@@ -78,7 +77,7 @@ fn only_markdown_counts_and_build_dirs_are_skipped() {
     let paths: Vec<&str> = found.iter().map(|(p, _, _, _)| p.as_str()).collect();
     assert_eq!(
         paths,
-        [".fapony/plan/PLAN-x.md", "README.md", "docs/README.MD"]
+        ["README.md", "docs/README.MD", "notes/plan/PLAN-x.md"]
     );
 }
 
@@ -118,21 +117,12 @@ fn a_superseded_citation_names_its_successor() {
     );
 }
 
-/// `.fapony` is a symlink to a shared plan dir here — the one symlink followed.
+/// A symlinked directory is never descended into: a loop would hang `doctor`.
 #[cfg(unix)]
 #[test]
-fn a_symlinked_fapony_is_scanned() {
+fn a_symlinked_dir_is_not_scanned() {
     let (r, shared) = (tmp("link"), tmp("shared"));
     put(&shared, "plan/PLAN-x.md", &format!("cites {DEAD}\n"));
-    std::os::unix::fs::symlink(&shared, r.join(".fapony")).unwrap();
-    let found = phantom_md_refs(&log(), &r);
-    assert_eq!(
-        found,
-        vec![(
-            ".fapony/plan/PLAN-x.md".to_string(),
-            1,
-            DEAD.to_string(),
-            None
-        )]
-    );
+    std::os::unix::fs::symlink(&shared, r.join("plans")).unwrap();
+    assert!(phantom_md_refs(&log(), &r).is_empty());
 }

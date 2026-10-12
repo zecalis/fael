@@ -167,11 +167,9 @@ pub(crate) fn notice() -> Option<String> {
 /// `fael upgrade --auto`: the detached child. Silent unless there is something to say.
 /// Flags that scope a hand-run upgrade are rejected, never silently ignored
 /// (--dry-run would be the worst: a real update wearing dry-run).
-pub(crate) fn run(dry: bool, client: bool, replace: bool) -> Result<(), String> {
-    if dry || client || replace {
-        return Err(
-            "rejected: `upgrade --auto` takes no --dry-run, --client or --replace-fapony".into(),
-        );
+pub(crate) fn run(dry: bool, client: bool) -> Result<(), String> {
+    if dry || client {
+        return Err("rejected: `upgrade --auto` takes no --dry-run or --client".into());
     }
     if off() {
         return Ok(());

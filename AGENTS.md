@@ -36,8 +36,7 @@ A new kind gets a fixture in `fael/src/hook/say_contract.rs` (silent when empty,
 
 ## Memory — `.fael/log/`
 
-`.fael/log/` is fael's local, append-only memory, excluded from git. The old
-`.fapony/.memory` log was imported 2026-09-25; never write new rows there.
+`.fael/log/` is fael's local, append-only memory, excluded from git.
 
 **Log as you work. Do not wait to be asked.** Use Fael MCP when available, else the CLI:
 
@@ -61,7 +60,7 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 
 ## Plan Workflow
 
-A plan is sections plus chunks in plans.db — no `PLAN-*.md`, no `.fapony/` path. Read it with
+A plan is sections plus chunks in plans.db — no plan file. Read it with
 `fael plan export <plan>` (`--section <key>` for one); change a section through the bill
 (`fael plan export <plan> --json`, edit `sections`, `fael plan apply --dry-run`, then apply).
 Draft or re-cut plans with the `fael-plan` skill.

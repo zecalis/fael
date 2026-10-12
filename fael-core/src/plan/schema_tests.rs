@@ -74,7 +74,7 @@ fn v1_db(extra: &str) -> PathBuf {
     c.execute_batch(V1).unwrap();
     c.execute_batch(
         "INSERT INTO plan VALUES (1, '', 't', 'PLAN-t', 'dev', NULL, 'active', NULL, NULL,
-           NULL, '.fapony/plan/PLAN-t.md');
+           NULL, 'plan/PLAN-t.md');
          INSERT INTO chunk(id, plan, pos, label, title, state, brief, wait_text, into_chunk)
            VALUES (1, 1, 0, 'a', 'a — old', 'merged', 'a — old', NULL, 3),
                   (2, 1, 1, 'b', 'b — wip', 'running', 'b — wip', NULL, NULL),

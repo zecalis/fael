@@ -141,16 +141,15 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("sync", []) => sync::sync(&repo()?, &a).map(|()| ExitCode::SUCCESS),
         ("mcp", []) => mcp::serve(a.has("pin")).map(|()| ExitCode::SUCCESS),
         ("install" | "upgrade" | "update", []) => {
-            let (client, dry, replace) =
-                (a.one("client"), a.has("dry-run"), a.has("replace-fapony"));
+            let (client, dry) = (a.one("client"), a.has("dry-run"));
             // install writes unasked; upgrade/update update the binary, look first and
             // ask (`--wiring` = the new binary's half)
             if cmd == "install" {
-                install::cmd(client, dry, replace, false)
+                install::cmd(client, dry, false)
             } else if a.has("auto") {
-                install::auto::run(a.has("dry-run"), client.is_some(), replace)
+                install::auto::run(a.has("dry-run"), client.is_some())
             } else {
-                install::upgrade(client, dry, replace, a.has("yes"), a.has("wiring"))
+                install::upgrade(client, dry, a.has("yes"), a.has("wiring"))
             }
             .map(|()| ExitCode::SUCCESS)
         }

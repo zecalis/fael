@@ -14,8 +14,8 @@ pub fn scan(fael: &Path, root: &Path, log_ignored: bool, month: &str) -> Report 
         .into_iter()
         .filter(|p| p.extension().is_some_and(|x| x == "jsonl"))
         .collect();
-    // The monorepo case is checked even before adoption — it is exactly the
-    // fapony lesson (several memory dirs, every hint went silent).
+    // The monorepo case is checked even before adoption: several memory dirs
+    // and every hint goes silent.
     let others = multi_fael(root);
     if !others.is_empty() {
         r.problems.push(Problem::info(

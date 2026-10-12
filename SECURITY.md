@@ -16,7 +16,7 @@ talks to no server. The main concerns are:
   repo or climbing past its root with `..` are rejected. A way to make fael read or write outside
   the repo is a vulnerability.
 - **Config written by `fael install`** — install edits `~/.claude/settings.json`, `~/.codex/` and
-  `~/.config/opencode/`. It must only add or repoint fael's own entries, and remove fapony's only with `--replace-fapony`.
+  `~/.config/opencode/`. It must only add or repoint fael's own entries.
 - **Rows are untrusted text** — the log is shared through git, so a row may be written by anyone
   who can push to the repo. fael hands rows to agents as context; treat a repo's `.fael/log` with the
   same trust as its code.

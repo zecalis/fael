@@ -14,17 +14,6 @@ use std::path::Path;
 /// take milliseconds (docs/integrate.md), so 10s only ever ends a hang.
 const HOOK_TIMEOUT: u64 = 10;
 
-/// Any hook fapony wired (`fapony hook-*`): `--replace-fapony` takes them all out — fapony
-/// retires (decision fael-board:fapony-retire), and one left behind fails every call once
-/// fapony is uninstalled (issue 01M4MQTZ7).
-fn is_fapony_hook(cmd: &str) -> bool {
-    cmd.contains("fapony") && cmd.contains(" hook-")
-}
-
-pub(crate) fn is_fapony_blocker(cmd: &str) -> bool {
-    cmd.contains("fapony") && (cmd.contains("hook-stop") || cmd.contains("hook-session-start"))
-}
-
 pub(crate) fn hooks_json(
     c: &Ctx,
     path: &Path,
@@ -67,37 +56,6 @@ pub(crate) fn hooks_json(
         if let Some(label) = adopt_hook(groups, *matcher, event, sub, client, &cmd) {
             changed.push(label);
         }
-    }
-    // fapony's Stop looks for rows in .fapony/ — next to fael it blocks every turn
-    let mut fapony = 0;
-    for groups in hooks.values_mut().filter_map(Value::as_array_mut) {
-        for g in groups.iter_mut() {
-            if let Some(hs) = g.get_mut("hooks").and_then(Value::as_array_mut) {
-                let before = hs.len();
-                if c.replace {
-                    hs.retain(|h| !h["command"].as_str().is_some_and(is_fapony_hook));
-                    fapony += before - hs.len();
-                } else {
-                    fapony += hs
-                        .iter()
-                        .filter(|h| h["command"].as_str().is_some_and(is_fapony_blocker))
-                        .count();
-                }
-            }
-        }
-        if c.replace {
-            groups.retain(|g| g["hooks"].as_array().is_none_or(|h| !h.is_empty()));
-        }
-    }
-    if fapony > 0 && c.replace {
-        changed.push(format!("removed {fapony} fapony hook(s)"));
-    } else if fapony > 0 {
-        out!(
-            c,
-            "  ! fapony's Stop/session-start hooks are still in {} — in a repo with .fael/ both block; \
-             rerun with --replace-fapony once that repo's log is imported",
-            path.display()
-        );
     }
     if changed.is_empty() {
         out!(c, "  hooks already set in {}", path.display());

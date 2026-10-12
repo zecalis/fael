@@ -311,7 +311,6 @@ fn auto_rejects_flags_it_would_ignore() {
     for args in [
         &["upgrade", "--auto", "--dry-run"][..],
         &["upgrade", "--auto", "--client", "codex"][..],
-        &["upgrade", "--auto", "--replace-fapony"][..],
     ] {
         let o = fael(&base, args, &[]).output().unwrap();
         let err = String::from_utf8_lossy(&o.stderr);

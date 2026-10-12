@@ -1,10 +1,10 @@
 //! Chunk 6 through the real binary: doctor exit codes + --fix, compact,
-//! import (incl. the fapony legacy no-drop rule) — each in a throwaway repo.
+//! import (another clone's log, no row dropped) — each in a throwaway repo.
 //!
 //! Thin entry only — the suites sit next to this file:
 //! `doctor` (union/fix, gone, stale, phantom, quarantine), `notenglish`
 //! ([lang] rows foreign-row batch), `branches` (orphan + merged
-//! branch notes), `noverdict` (rows on files over the push cap), `unstamped` (rows with no file stamp), `compact` (close folding), `import` (fapony legacy).
+//! branch notes), `noverdict` (rows on files over the push cap), `unstamped` (rows with no file stamp), `compact` (close folding), `import` (another log, `--map`).
 
 mod branches;
 mod compact;

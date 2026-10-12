@@ -223,7 +223,7 @@ fn load(files: &[PathBuf]) -> Result<(Vec<Row>, Vec<Row>), String> {
 }
 
 /// Fold each close into its row; returns the (row id, close) pairs that
-/// resolved — shared with `import`, which folds legacy fapony closes the
+/// resolved — shared with `import`, which folds an imported log's closes the
 /// same way. A close that names no row, or names one already closed, is
 /// carried forward instead.
 pub(crate) fn fold(rows: &mut [Row], closes: &[Row]) -> Vec<(String, Row)> {

@@ -4,9 +4,8 @@
 //! block is an example, never a citation (`docs/format.md` ships one), so
 //! fences are skipped the way `backtick_paths` skips multiline spans.
 //!
-//! Scope is a plain walk of `root`, not `cfg.plan_dirs`: that field was dropped
-//! with the plan resolver (#66), and plan files are gitignored here (`.fapony/`),
-//! so `git ls-files` would miss exactly the files that matter.
+//! Scope is a plain walk of `root`, not `git ls-files`: a gitignored doc the
+//! next agent reads still counts.
 
 use super::matching::is_md;
 use super::refs::{Ref, id_tokens, ref_state, successors};
@@ -60,18 +59,12 @@ pub fn phantom_md_refs(log: &Log, root: &Path) -> Vec<MdRef> {
 }
 
 /// Every `*.md` under `root`, sorted — the walk `multi_fael` takes, skipping
-/// `.git`/`target`/`node_modules`/`vendor` (third-party prose, not ours to fix)
-/// and `.fapony/done`. `DirEntry::file_type` never follows a
-/// symlink, so a symlinked directory is not descended into (a loop would hang
-/// `doctor`) — except `.fapony`, which this setup symlinks to a shared plan
-/// dir: it is followed once, and nothing inside it is.
+/// `.git`/`target`/`node_modules`/`vendor` (third-party prose, not ours to fix).
+/// `DirEntry::file_type` never follows a symlink, so a symlinked directory is
+/// not descended into (a loop would hang `doctor`).
 fn md_files(root: &Path) -> Vec<PathBuf> {
     let mut out = vec![];
     walk(root, &mut out);
-    let plans = root.join(".fapony");
-    if plans.is_symlink() {
-        walk(&plans, &mut out);
-    }
     out.sort();
     out
 }
@@ -86,11 +79,8 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         };
         let p = e.path();
         if ft.is_dir() {
-            // `.fapony/done` holds archived plans: a record of what was true
-            // then, not prose the next agent follows
             if [".git", "target", "node_modules", "vendor"]
                 .contains(&e.file_name().to_string_lossy().as_ref())
-                || p.ends_with(".fapony/done")
             {
                 continue;
             }

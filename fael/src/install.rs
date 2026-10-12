@@ -1,12 +1,8 @@
-//! `fael install [--client claude|codex|opencode] [--dry-run] [--replace-fapony]`
+//! `fael install [--client claude|codex|opencode] [--dry-run]`
 //! `fael upgrade|update` = the same, but looks first and asks before writing.
 //! Wires MCP + hooks + skill into every client found on this machine.
 //! Idempotent: an entry already pointing at this binary stays, one pointing at
 //! another fael binary is repointed, anything that is not fael's is never touched.
-//! `--replace-fapony` also takes out every fapony hook, its MCP and the fapony skill links
-//! fael's skills replace — left in, fapony's Stop blocks every turn that writes to
-//! `.fael/` instead of `.fapony/`, and every hook fails once fapony is gone. Opt-in because fapony's hooks are user scope: they serve every
-//! repo, including ones fael has not adopted yet.
 //!
 //! Thin entry only — the clients live in `install/`:
 //! `hooks` (the shared hooks-JSON shape), `claude`, `codex`, `opencode`, `skill`
@@ -71,7 +67,6 @@ pub(crate) struct Ctx {
     pub(crate) home: PathBuf,
     pub(crate) exe: String,
     pub(crate) dry: bool,
-    pub(crate) replace: bool,
     /// print nothing — `pending` only wants the count
     pub(crate) quiet: bool,
     /// things this pass wrote — or, dry, would write; the summary counts them
@@ -111,13 +106,7 @@ impl Ctx {
 
 /// `fael upgrade`: update the binary by its channel (the new binary then writes
 /// the wiring), else just the wiring. `wiring` = that second call: skip the binary.
-pub fn upgrade(
-    client: Option<String>,
-    dry: bool,
-    replace: bool,
-    yes: bool,
-    wiring: bool,
-) -> Result<(), String> {
+pub fn upgrade(client: Option<String>, dry: bool, yes: bool, wiring: bool) -> Result<(), String> {
     // the channel command mutates the system (brew/npm) — a typo'd --client
     // must error before it runs, not after (review #253 finding 1)
     if let Some(n) = client.as_deref()
@@ -132,17 +121,14 @@ pub fn upgrade(
         if let Some(c) = &client {
             fwd.extend(["--client".to_string(), c.clone()]);
         }
-        if replace {
-            fwd.push("--replace-fapony".into());
-        }
         if upgrade::binary(&home, &fwd, dry, yes)? {
             return Ok(());
         }
     }
-    cmd(client, dry, replace, !yes)
+    cmd(client, dry, !yes)
 }
 
-pub fn cmd(client: Option<String>, dry: bool, replace: bool, ask: bool) -> Result<(), String> {
+pub fn cmd(client: Option<String>, dry: bool, ask: bool) -> Result<(), String> {
     let home = crate::home().ok_or("fael install: cannot find the home directory")?;
     // Configs never use current_exe(): under npx that is a disposable cache dir.
     // ponytail: resolved from PATH now, so PATH at hook time must find it too
@@ -155,7 +141,6 @@ pub fn cmd(client: Option<String>, dry: bool, replace: bool, ask: bool) -> Resul
         home: home.clone(),
         exe: exe.clone(),
         dry,
-        replace,
         quiet: false,
         changed: Cell::new(0),
     };
@@ -221,7 +206,6 @@ fn quiet(home: PathBuf, dry: bool) -> Ctx {
     Ctx {
         exe: hook_exe().unwrap_or_else(|| "fael".into()),
         dry,
-        replace: false,
         quiet: true,
         changed: Cell::new(0),
         home,

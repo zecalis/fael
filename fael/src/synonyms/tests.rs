@@ -198,7 +198,7 @@ fn reject_leaves_what_it_cannot_improve() {
         flag_first
     );
     // another module's own "takes no" line, which does not end in our tail
-    let auto = "rejected: `upgrade --auto` takes no --dry-run, --client or --replace-fapony";
+    let auto = "rejected: `upgrade --auto` takes no --dry-run or --client";
     assert_eq!(reject(&argv("upgrade --auto --dry-run"), auto.into()), auto);
     // a command with no help section, an empty argv, an error of another kind
     assert_eq!(reject(&argv("zzz --x"), flag_first.into()), flag_first);

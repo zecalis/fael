@@ -266,7 +266,7 @@ fn imported_rows_survive_branch_deletion() {
     std::fs::create_dir_all(&src).unwrap();
     std::fs::write(
         src.join("log.jsonl"),
-        r#"{"ts":"2026-01-01T00:00:00Z","agent":"delamind","id":"muft0001","kind":"decision","text":"imported survives","files":["src/a.rs"],"v":2}"#
+        r#"{"v":1,"ts":"2026-01-01T00:00:00Z","by":"delamind","id":"01AAAAAAAAAAAAAAAAAAAAAAA1","kind":"decision","text":"imported survives","files":["src/a.rs"]}"#
             .to_string()
             + "\n",
     )

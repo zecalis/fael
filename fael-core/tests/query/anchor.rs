@@ -7,15 +7,15 @@ use fael_core::*;
 #[test]
 fn kickoff_matches_plan_anchor() {
     let r = std::env::temp_dir().join(format!("fael-kick-plan-{}", ulid()));
-    std::fs::create_dir_all(r.join(".fapony/plan")).unwrap();
-    std::fs::write(r.join(".fapony/plan/PLAN-foo.md"), "plan").unwrap();
+    std::fs::create_dir_all(r.join("docs/plan")).unwrap();
+    std::fs::write(r.join("docs/plan/PLAN-foo.md"), "plan").unwrap();
     let l = Log {
         rows: vec![
             row("A0000000000000000000000010", "note", &["plan:foo"], None),
             row(
                 "A0000000000000000000000011",
                 "note",
-                &[".fapony/plan/PLAN-bar.md"],
+                &["docs/plan/PLAN-bar.md"],
                 None,
             ),
         ],
@@ -24,7 +24,7 @@ fn kickoff_matches_plan_anchor() {
     };
     // the PLAN path widens to its `plan:<name>` anchor; the other plan stays out
     let f = Filter {
-        files: vec![".fapony/plan/PLAN-foo.md".into()],
+        files: vec!["docs/plan/PLAN-foo.md".into()],
         ..Filter::default()
     };
     assert_eq!(
