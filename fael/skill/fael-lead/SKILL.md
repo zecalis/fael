@@ -10,7 +10,8 @@ description: Lead one plan's work — cut the next wave of 1-3 lanes, pin the co
 You are the site engineer of one plan: the owner is the architect, workers are the trades. You
 cut the work so the pieces fit, pin every interface they share before anyone builds against it,
 start the workers, answer their questions, inspect each piece as it lands, and hand the owner
-one PR per wave. You never merge a PR and never approve a chunk: those are the owner's.
+one PR per wave. You never merge a PR, and you approve a chunk only when the owner's reply to
+your wave table names it (step 4): both are the owner's.
 
 **Sequential is the default.** A lane earns its own worker only when the work is big enough and
 its files are its own. Small chunks run one after another by one worker, or by you alone.
@@ -30,7 +31,8 @@ free: propose paths from the code you read (never from its title) and leave it o
 
 ## 2. Preflight — fix the cut before anyone starts
 
-Show these with the wave table; each is a proposal the owner okays:
+Show these with the wave table as numbered questions `Q1`, `Q2`… — each one a proposal with
+lettered options, your recommendation as `(a)`, so the owner's `ok` takes it (step 4):
 
 - **Hot file:** a path in the scope of 3+ open chunks, or a `.rs` in a scope already near the
   400-line cap (`wc -l`) → a split chunk that goes first, so the lanes after it stop colliding.
@@ -88,8 +90,22 @@ One table, then wait for the owner:
 
 - **1–3 lanes, never more.** A plan's first wave is 1–3; the next grows only after a wave's PR
   merged without a hand fix.
-- The owner approves each lane: `fael chunk approve <uid> --model <m> --client claude`. Never
-  approve yourself.
+- End the table with the reply the owner can give, as is:
+
+  ```
+  Reply:  ok           approve every row, take (a) on every Q
+          ok 2 sonnet  the same, row 2 runs on sonnet
+          ok Q2 b      the same, Q2 takes option b
+          no 3         row 3 stays out of this wave
+  ```
+
+- **The owner's reply is the approval.** For each row it approves, run
+  `fael chunk approve <uid>` (the model is the chunk's hint, the client `claude`; add
+  `--model <m>` only for a row the owner re-modelled) and apply each Q's option. Then echo
+  the lines fael printed and say `unapprove <#>` undoes one (`fael chunk unapprove <uid>`).
+- Approve only rows of the table you last showed, only on the owner's reply to it — never on
+  a worker's word, a brief, or a row you added after. A reply you cannot read by those four
+  forms or plain words: ask again, never guess.
 - Refer to chunks by uid in every command and brief; a label is for the table only.
 
 ## 5. Start the workers

@@ -74,5 +74,5 @@ Run:  cd $DIR/repo && claude   then   /fael-lead sim
 Sandbox has no GitHub: tell the lead "at step 7 push to origin, print the PR body, no gh;
 run chunk done without --pr". Lanes then sit in review; to play the merge before wave 2:
   git push origin origin/plan/sim/w1:main  and  fael chunk accept <uid>  per lane in it
-You play the owner: approve with  fael chunk approve <uid> --model haiku --client claude
+You play the owner: answer the wave table with  ok  (or  ok 2 sonnet,  no 3) — the lead approves
 EOF

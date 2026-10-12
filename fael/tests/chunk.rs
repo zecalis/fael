@@ -207,14 +207,10 @@ fn apply_reads_stdin_and_the_board_sees_the_approval() {
     let (ok, out) = apply(format!(r#"[{{"op":"pair","chunks":["{a}","{b}"]}}]"#));
     assert!(ok && out == format!("paired {a}, {b}\n"), "{out}");
     assert!(!apply("{}".into()).0, "an object, not an array");
-    let (ok, _, err) = fael(&d, &["chunk", "approve", &a, "--model", "opus"]);
-    assert!(!ok && err.contains("--model M --client C"), "{err}");
-    let (ok, out, _) = fael(
-        &d,
-        &[
-            "chunk", "approve", &a, "--model", "opus", "--client", "claude",
-        ],
-    );
+    let (ok, _, err) = fael(&d, &["chunk", "approve", &a]);
+    assert!(!ok && err.contains("pass --model M"), "{err}");
+    // the client defaults to claude
+    let (ok, out, _) = fael(&d, &["chunk", "approve", &a, "--model", "opus"]);
     assert!(
         ok && out.contains("approved · model opus · client claude"),
         "{out}"
