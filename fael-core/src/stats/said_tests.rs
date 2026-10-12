@@ -1,6 +1,6 @@
 //! Yield tests apart from `said.rs`, to keep it under the file-size limit:
-//! the `count` line's call, `finding` (PLAN-fael-experience-loop chunk 2) and
-//! `carry` (chunk 6).
+//! `finding` (PLAN-fael-experience-loop chunk 2) and the `count` line's call
+//! (`outcomes` still reads old count lines).
 
 use super::said::{Pull, counted, tests::rows, yields};
 use crate::Log;
@@ -79,39 +79,4 @@ fn a_count_line_earns_on_the_call_it_printed() {
     assert!(!key(&pull(&["src/a.rs"], None)), "a file pull");
     let keys = |p: &Pull| counted("src/a.rs|keys", p);
     assert!(keys(&pull(&[], Some("any:key"))), "`+N more under 3 keys`");
-}
-
-/// A carry line earns on the session's later `fael find` of the closed issue
-/// (a short id is a prefix) or a row superseding it within a day — not on a
-/// pull before the line, nor on a pull of another id.
-#[test]
-fn a_carry_line_earns_on_a_later_find_or_supersede() {
-    let usage = |pulls: &str| {
-        format!(
-            "{{\"ts\":\"2026-09-26T00:05:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",\"event\":\"edit\",\"ids\":[],\"said\":[{{\"kind\":\"carry\",\"key\":\"01ABCDEFGH\"}}]}}\n{pulls}"
-        )
-    };
-    let pull = |min: u8, id: &str| {
-        format!(
-            "{{\"ts\":\"2026-09-26T00:0{min}:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"s1\",\"event\":\"find\",\"found\":[],\"q\":{{\"id\":\"{id}\"}}}}\n"
-        )
-    };
-    let earned = |pulls: String, rows_: &str| {
-        let log = Log {
-            rows: rows(rows_),
-            ..Log::default()
-        };
-        let p = super::parse::parse(
-            &usage(&pulls),
-            Path::new("/w/state/usage.jsonl"),
-            &[PathBuf::from("/tmp")],
-        );
-        let y = yields(&p, &HashMap::from([("/w/r".to_string(), log)]));
-        (y["carry"].said, y["carry"].earned)
-    };
-    assert_eq!(earned(pull(6, "01ABCDEF"), ""), (1, 1), "short id after");
-    assert_eq!(earned(pull(4, "01ABCDEF"), ""), (1, 0), "before the line");
-    assert_eq!(earned(pull(6, "01ZZZZZZ"), ""), (1, 0), "another id");
-    let again = "{\"v\":1,\"id\":\"B\",\"ts\":\"2026-09-26T00:07:00Z\",\"by\":\"w\",\"kind\":\"issue\",\"text\":\"t\",\"files\":[\"a.rs\"],\"supersedes\":\"01ABCDEFGH\"}\n";
-    assert_eq!(earned(String::new(), again), (1, 1), "came back, re-filed");
 }
