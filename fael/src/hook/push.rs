@@ -68,7 +68,7 @@ fn cut_body(
     body: String,
     sel: &core::Selection,
     files: &[String],
-    tags: &crate::find::branches::BranchMap,
+    tags: &crate::journal::BranchMap,
 ) -> (String, usize, Option<String>) {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let mut row = 0; // render keeps `sel.shown` order: the k-th row line is shown[k]
@@ -89,7 +89,7 @@ fn cut_body(
         out.push_str(&l);
         out.push('\n');
     }
-    (crate::find::branches::tag(out, tags), n, bodies)
+    (crate::journal::tag(out, tags), n, bodies)
 }
 
 /// A `scheme:ref` anchor (opaque, never a filesystem path) — the same rule

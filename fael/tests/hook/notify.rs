@@ -96,13 +96,8 @@ fn reminder_once_per_file_then_the_turn_receipt() {
         "{line}"
     );
     assert!(line.contains("reminded 2 (#cache:keep, "), "{line}");
-    // tracked: the turn that filed a row also says the log is uncommitted
-    assert!(
-        line.ends_with(
-            "\nfael: 1 .fael/log file(s) uncommitted (store = tracked) — commit them, or `fael migrate local`"
-        ),
-        "{line}"
-    );
+    // the row sits in the journal: nothing late, no second line
+    assert!(!line.contains('\n'), "{line}");
     assert!(out.get("decision").is_none(), "{out}");
     // the next turn did nothing: silence, not "nothing new"
     assert!(stop(&d).is_none());
@@ -120,11 +115,7 @@ fn codex_and_notify_off_print_no_user_line() {
     assert!(ok, "{err}");
     let on = edit(&d, "codex").unwrap();
     assert!(on["systemMessage"].is_null(), "{on}");
-    std::fs::write(
-        d.join(".fael/config.toml"),
-        "store = \"tracked\"\n[notify]\nuser = false\n",
-    )
-    .unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "[notify]\nuser = false\n").unwrap();
     // a fresh session: the seen list would hide the row otherwise
     let input = format!(
         r#"{{"cwd":{},"session_id":"s2","tool_name":"Edit","tool_input":{{"file_path":"src/a.rs"}}}}"#,
@@ -174,11 +165,7 @@ fn session_start_briefs_the_user_on_issues_said() {
         on["systemMessage"], "fael: briefed agent — 1 open issue (#auth:loop)",
         "{on}"
     );
-    std::fs::write(
-        d.join(".fael/config.toml"),
-        "store = \"tracked\"\n[notify]\nuser = false\n",
-    )
-    .unwrap();
+    std::fs::write(d.join(".fael/config.toml"), "[notify]\nuser = false\n").unwrap();
     let off = start("s2");
     assert!(off["systemMessage"].is_null(), "{off}");
     assert_eq!(

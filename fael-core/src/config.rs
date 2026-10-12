@@ -1,21 +1,6 @@
 use crate::ROW_BYTES_MAX;
 use serde::Deserialize;
 
-/// Where `add`/`close`/`bump`/`mv` rows land (PLAN-fael-durable-log chunk 1):
-/// `tracked` writes the tree log (`.fael/log`, the transport) on top of the
-/// journal; `local` writes the journal only — for repos that gitignore `.fael`
-/// or are public, where the tree must carry no memory.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Store {
-    #[default]
-    Tracked,
-    Local,
-}
-
-/// The deprecation of `store = "tracked"` (step 1 of 2: said, nothing removed):
-/// the session-start line and `fael doctor`'s `[Deprecated]` carry this text.
-pub const TRACKED_DEPRECATED: &str = "store = tracked goes away in the next release: run fael migrate local, or share with fael sync --remote <url>";
-
 /// What a cross-key self-heal act prints (PLAN-fael-selfheal-verdict chunk
 /// 3): the key moved, so the act is the weakest-evidence one — `warn` says so
 /// in one `warning:` line (an ask), `info` keeps the info line, `off` acts
@@ -73,13 +58,6 @@ pub struct Config {
     /// Resolve renamed paths through the L2 alias set (`git log -M` + `fael mv`
     /// rows). `false` returns to pre-resolver matching — the escape hatch.
     pub resolve: bool,
-    /// Tree transport on top of the journal (`tracked`), or journal only
-    /// (`local`, for gitignored or public repos). Ignored without a journal
-    /// (no git): the tree is all there is.
-    pub store: Store,
-    /// `store` was written in `config.toml`. When it was not, the adapter
-    /// picks `local` — a tree log already in the repo is read, never written.
-    pub store_set: bool,
     /// Stop-hook phrase packs behind `[lang] marker` (PLAN-fael-languages).
     /// Default english+thai; empty switches the bug rule off entirely.
     pub lang_marker: Vec<String>,
@@ -125,8 +103,6 @@ impl Default for Config {
             warn_row_tokens: 400,
             warn_row_chars: 1200,
             resolve: true,
-            store: Store::Tracked,
-            store_set: false,
             lang_marker: vec!["english".into(), "thai".into()],
             lang_rows: vec!["english".into()],
             cross_key: CrossKey::Warn,
@@ -232,15 +208,19 @@ impl Config {
         let f: File = toml::from_str(s).map_err(|e| e.to_string())?;
         let d = Config::default();
         let (push_policy, push_holdout) = check_push(f.push_policy, f.push_holdout, &d)?;
-        let store = match f.store.as_deref() {
-            None | Some("tracked") => Store::Tracked,
-            Some("local") => Store::Local,
-            Some(v) => {
-                return Err(format!(
-                    "rejected: store = {v:?} — want \"tracked\" or \"local\""
-                ));
+        // rows live in the clone's journal only; `local` stays accepted as a no-op
+        match f.store.as_deref() {
+            None | Some("local") => {}
+            Some("tracked") => {
+                return Err(
+                    "rejected: store = \"tracked\" is gone — rows live in this clone's \
+                     journal; share them with `fael sync --remote <url>`, and drop the line \
+                     (or set store = \"local\")"
+                        .into(),
+                );
             }
-        };
+            Some(v) => return Err(format!("rejected: store = {v:?} — want \"local\"")),
+        }
         Ok(Config {
             kinds: f.kinds,
             key_domains: f.key_domains,
@@ -256,8 +236,6 @@ impl Config {
             warn_row_tokens: f.warn.row_tokens.unwrap_or(d.warn_row_tokens),
             warn_row_chars: f.warn.row_chars.unwrap_or(d.warn_row_chars),
             resolve: f.resolve.unwrap_or(d.resolve),
-            store,
-            store_set: f.store.is_some(),
             lang_marker: check_lang("marker", f.lang.marker.unwrap_or(d.lang_marker))?,
             lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
             cross_key: check_cross_key(f.selfheal.cross_key)?,

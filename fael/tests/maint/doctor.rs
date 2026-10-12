@@ -23,49 +23,22 @@ fn phantom_of(id: &str) -> String {
     f
 }
 
-fn git(d: &std::path::Path, args: &[&str]) {
-    assert!(
-        std::process::Command::new("git")
-            .args(args)
-            .current_dir(d)
-            .status()
-            .unwrap()
-            .success(),
-        "git {args:?}"
-    );
-}
-
 #[test]
-fn doctor_fails_without_union_then_fix_repairs() {
+fn doctor_notes_local_and_gone_rows() {
     let d = repo();
-    // no log yet: info only, exit 0 (the fixture's explicit store = tracked adds [Deprecated])
+    // no log yet: info only, exit 0 — the [NoLog] and [Local] notes
     let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(ok && out.contains("2 problem(s)"), "{out}");
-    // adopt fael without the union line: error, exit 1
+    // adopted: the row sits in the journal, no union line or commit asked for
     std::fs::write(d.join("src/a.rs"), "").unwrap();
     let (ok, _, _) = fael(&d, &["add", "note", "first row", "--files", "src/a.rs"]);
     assert!(ok);
     let (ok, out, _) = fael(&d, &["doctor"]);
-    assert!(!ok && out.contains("error"), "{out}");
-    let (ok, out, _) = fael(&d, &["doctor", "--fix"]);
-    assert!(ok, "{out}");
-    assert!(out.contains("merge=union"), "{out}");
-    assert!(d.join(".gitattributes").exists());
-    // union repaired; the notes left are [Deprecated] and the uncommitted row (tracked)
-    let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(
-        ok && out.contains("2 problem(s) (0 error(s), 2 note(s))")
-            && out.contains("note [Late]: 1 .fael/log file(s) uncommitted"),
+        ok && out.contains("1 problem(s) (0 error(s), 1 note(s))") && out.contains("note [Local]"),
         "{out}"
     );
-    // excluded locally on purpose: a note, not an error; in .gitignore: an error
-    std::fs::write(d.join(".git/info/exclude"), ".fael/log/\n").unwrap();
-    let (ok, out, _) = fael(&d, &["doctor"]);
-    assert!(ok && out.contains("note [Ignored]"), "{out}");
-    std::fs::write(d.join(".gitignore"), ".fael/log/\n").unwrap();
-    std::fs::write(d.join(".git/info/exclude"), "").unwrap();
-    let (ok, out, _) = fael(&d, &["doctor"]);
-    assert!(!ok && out.contains("error [Ignored]"), "{out}");
+    assert!(!d.join(".gitattributes").exists(), "{out}");
     // an open row on a deleted file is reported, never an error
     fael(
         &d,
@@ -300,43 +273,6 @@ fn doctor_stays_clean_for_real_ambiguous_and_closed_citations() {
 }
 
 #[test]
-fn doctor_ignores_id_only_on_another_clone_branch() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let (ok, _, err) = fael(&d, &["add", "note", "row on main", "--files", "src/a.rs"]);
-    assert!(ok, "{err}");
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "rows"]);
-
-    // another clone: its own journal, so the union here never sees its rows
-    let other = d.join("other");
-    git(
-        &d,
-        &["clone", "-q", d.to_str().unwrap(), other.to_str().unwrap()],
-    );
-    git(&other, &["config", "user.name", "Other Clone"]);
-    git(&other, &["config", "user.email", "o@example.com"]);
-    git(&other, &["checkout", "-qb", "feat/y"]);
-    std::fs::write(other.join("src/c.rs"), "// c\n").unwrap();
-    let (ok, out, err) = fael(
-        &other,
-        &["add", "note", "row C on feat", "--files", "src/c.rs"],
-    );
-    assert!(ok, "{err}");
-    let cid = out.split_whitespace().next().unwrap().to_string();
-    git(&other, &["add", "-A"]);
-    git(&other, &["commit", "-qm", "rows C"]);
-    git(&other, &["push", "-q", "origin", "feat/y"]);
-
-    let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
-    assert!(ok);
-    // the union has no such row — only the branch escalation clears it
-    add(&d, "note", "src/d.rs", &format!("ref {cid} for context"));
-    let (_, out, _) = fael(&d, &["doctor"]);
-    assert!(!out.contains("[Phantom]"), "{out}");
-}
-
-#[test]
 fn doctor_json_lists_full_row_ids() {
     let d = repo();
     let (ok, out, err) = fael(
@@ -369,7 +305,7 @@ fn doctor_quarantines_a_broken_line() {
     let d = repo();
     let (ok, _, err) = fael(&d, &["add", "decision", "keep me", "--files", "src/a.rs"]);
     assert!(ok, "{err}");
-    let wdir = std::fs::read_dir(d.join(".fael/log"))
+    let wdir = std::fs::read_dir(d.join(".git/fael/log"))
         .unwrap()
         .next()
         .unwrap()
@@ -387,7 +323,7 @@ fn doctor_quarantines_a_broken_line() {
     assert!(!ok);
     let (ok, out, _) = fael(&d, &["doctor", "--fix", "--json"]);
     assert!(ok, "{out}");
-    let q: Vec<_> = std::fs::read_dir(d.join(".fael/quarantine"))
+    let q: Vec<_> = std::fs::read_dir(d.join(".git/fael/quarantine"))
         .unwrap()
         .collect();
     assert_eq!(q.len(), 1);

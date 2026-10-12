@@ -68,10 +68,6 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael: decision 01HELD was written this session and `a.rs` edited — if the code holds it now: fael close 01HELD \"now in `a.rs`\"\n",
         ),
-        line(
-            Kind::Deprecated,
-            "fael: store = tracked goes away in the next release: run fael migrate local, or share with fael sync --remote <url>\n",
-        ),
     ]
 }
 
@@ -89,7 +85,6 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Fixed => 9,
         Kind::FixCommit => 10,
         Kind::Held { .. } => 11,
-        Kind::Deprecated => 12,
     }
 }
 
@@ -356,8 +351,7 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "notice",
             "fixed",
             "fixcommit",
-            "held",
-            "deprecated"
+            "held"
         ]
     );
 }

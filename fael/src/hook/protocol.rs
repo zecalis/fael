@@ -114,7 +114,7 @@ pub(crate) struct Ctx {
     pub(crate) log: core::Log,
     /// branch tags for journal-only rows (`journal::read`), so the session
     /// brief and the read/edit push render `@<branch>` like `find` does
-    pub(crate) tags: crate::find::branches::BranchMap,
+    pub(crate) tags: crate::journal::BranchMap,
     pub(crate) client: String,
     pub(crate) session: String,
     /// the sub-agent id, empty on the session's own thread

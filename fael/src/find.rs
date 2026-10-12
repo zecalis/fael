@@ -2,7 +2,6 @@
 //! Moved out of main.rs (file-size ratchet) — no logic of its own beyond the
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
-pub(crate) mod branches;
 pub(crate) mod issue;
 mod kickoff;
 pub(crate) mod many;
@@ -17,10 +16,8 @@ use fael_core::{self as core, Filter, Log, Row};
 
 pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
-    // the union read tags journal-only rows with their stamped branch;
-    // `--branches` merges unmerged branches' rows on top of it (HEAD wins on
-    // duplicate ids) and tags those ` @<branch>` on render
-    let (base, jtags) = super::journal::read(&r);
+    // the union read tags journal-only rows with their stamped branch
+    let (log, branch_of) = super::journal::read(&r);
     // an id-shaped query is an id lookup, never text — unless `--text`
     // forces a text search (the escape hatch for the old fallback)
     let forced = a.one("text");
@@ -28,19 +25,17 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         && let Some(t) = text
         && core::looks_like_id(t)
     {
-        let (log, wide, btags) = super::refs::resolve_wide(&r, base, t);
-        return match wide {
+        return match super::refs::resolve_wide(&log, t) {
             super::refs::Wide::One(row) => {
                 // the body was just printed — the next push must not say it again
                 super::hook::note_seen(&super::session::hook_session(&r.root), &r.root, &[&row.id]);
                 found(&r.root, &row.id);
-                show_one(a, &log, &row, &super::journal::overlay(jtags, btags))
+                show_one(a, &log, &row, &branch_of)
             }
             super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
             super::refs::Wide::Missing => Err(reject_missing(&log, t)),
         };
     }
-    let (log, branch_of) = working_or_branches(a, base, jtags, &r);
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
     // text search (a text query equalling a unique id prefix means the id)
     if forced.is_none()
@@ -173,27 +168,6 @@ pub(crate) fn text_or_anchor<'a>(
     }
 }
 
-/// The union log, or the union log plus unmerged branches' rows when
-/// `--branches` is passed (HEAD wins on duplicate ids — a merged-then-listed
-/// row never doubles, never tags). Read/edit push never pass the flag: no git
-/// spawn belongs on the 5 ms push path.
-pub(super) fn working_or_branches(
-    a: &Args,
-    log: Log,
-    journal: branches::BranchMap,
-    r: &super::Repo,
-) -> (Log, branches::BranchMap) {
-    if a.has("branches") {
-        let (log, tags, note) = branches::widen(r, log, journal);
-        if let Some(n) = note {
-            eprintln!("{n}");
-        }
-        (log, tags)
-    } else {
-        (log, journal)
-    }
-}
-
 pub(super) fn show(
     a: &Args,
     full: bool,
@@ -201,7 +175,7 @@ pub(super) fn show(
     rows: &[&Row],
     budget: usize,
     cut: core::Cut,
-    branch_of: &branches::BranchMap,
+    branch_of: &crate::journal::BranchMap,
 ) -> Result<Vec<String>, String> {
     if rows.is_empty() {
         eprintln!("fael: no rows match");
@@ -219,9 +193,9 @@ pub(super) fn show(
     // only what fit the budget was said — like the push, the cut rows may come
     // on a later read, so seen-ids take just the shown lines
     let out = if full {
-        branches::tag(core::render_full_page(log, rows, budget, cut), branch_of)
+        crate::journal::tag(core::render_full_page(log, rows, budget, cut), branch_of)
     } else {
-        branches::tag(core::render_page(log, rows, budget, cut), branch_of)
+        crate::journal::tag(core::render_page(log, rows, budget, cut), branch_of)
     };
     let n = out.lines().filter(|l| l.starts_with("- [")).count();
     print!("{out}");
@@ -231,14 +205,18 @@ pub(super) fn show(
 /// One row pulled by id: always the body (`render_full`), or the JSON line —
 /// plus the rows that merely mention the id, so the reader sees who cites it
 /// without knowing a flag for it (chunk 4). Silent when nobody cites it.
-fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &branches::BranchMap) -> Result<(), String> {
+fn show_one(
+    a: &Args,
+    log: &Log,
+    row: &Row,
+    branch_of: &crate::journal::BranchMap,
+) -> Result<(), String> {
     if a.has("json") {
         println!("{}", row.to_line());
     } else {
-        // `--branches` tags a row that only lives on another branch, same as a list
         print!(
             "{}",
-            branches::tag(core::render_full(log, &[row], 10_000), branch_of)
+            crate::journal::tag(core::render_full(log, &[row], 10_000), branch_of)
         );
         let who = mentions::mentioners(log, row);
         if !who.is_empty() {
@@ -262,7 +240,7 @@ pub(crate) fn reject_many(tok: &str, rows: &[Row]) -> String {
     )
 }
 
-/// An id-shaped query with no row behind it (union and unmerged branches):
+/// An id-shaped query with no row behind it in the union:
 /// the reject, plus up to 5 rows that only mention the string — a text hit
 /// is not the row existing.
 pub(crate) fn reject_missing(log: &Log, tok: &str) -> String {
@@ -338,11 +316,6 @@ impl Args {
             if self.has("all") {
                 s.push_str(" --all");
             }
-        }
-        // `--branches` replays on both find and kickoff — the cut line keeps
-        // the branch rows across pages instead of silently dropping them
-        if self.has("branches") {
-            s.push_str(" --branches");
         }
         if self.has("full") {
             s.push_str(" --full");

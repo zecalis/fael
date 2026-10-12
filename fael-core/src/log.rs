@@ -6,13 +6,11 @@
 //! edge) and `purge` (deleting a leaked row for good). Public paths never
 //! change — `fael_core::…` and `crate::log::…` resolve as before.
 
-mod adopt;
 mod append;
 mod bump;
 mod purge;
 mod restore;
 
-pub use adopt::{Adopted, adopt_tree};
 pub use append::{MONTH_MAX, add, add_row, append, close, close_row, mv_row, needs_seal};
 pub(crate) use append::{lock, tmp_rename, write_both};
 pub use bump::{BumpOpts, bump_row, fold_bumps};

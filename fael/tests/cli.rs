@@ -36,9 +36,7 @@ fn repo() -> PathBuf {
                 .success()
         );
     }
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -65,11 +63,11 @@ fn add_find_close_round_trip() {
     assert!(ok, "{err}");
     let id = out.split_whitespace().next().unwrap().to_string();
     // the first write keeps .lock out of git, even with no alias cache yet (01M3CM2P3)
-    let ignore = std::fs::read_to_string(d.join(".fael/.gitignore")).unwrap();
+    let ignore = std::fs::read_to_string(d.join(".git/fael/.gitignore")).unwrap();
     assert!(ignore.lines().any(|l| l == ".lock"), "{ignore}");
     // Windows prints `\` separators
     assert!(
-        out.replace('\\', "/").contains(".fael/log/test-user-"),
+        out.replace('\\', "/").contains(".git/fael/log/test-user-"),
         "{out}"
     );
 
@@ -355,15 +353,14 @@ fn worktree_root_is_where_dot_git_file_sits() {
     git(&["commit", "-q", "--allow-empty", "-m", "init"]);
     let wt = d.with_extension("wt");
     git(&["worktree", "add", "-q", wt.to_str().unwrap()]);
-    // the tracked pin moves to the worktree: the main root must stay bare
-    std::fs::rename(d.join(".fael"), wt.join(".fael")).unwrap();
     std::fs::create_dir_all(wt.join("src")).unwrap();
     let (ok, _, err) = fael(
         &wt.join("src"),
         &["add", "note", "wt row", "--files", "a.rs"],
     );
     assert!(ok, "{err}");
-    assert!(wt.join(".fael/log").is_dir() && !d.join(".fael").exists());
+    // the row lands in the clone's journal, never in either tree
+    assert!(d.join(".git/fael/log").is_dir() && !wt.join(".fael/log").exists());
     let (_, out, _) = fael(&wt, &["find", "--files", "src/a.rs"]);
     assert!(out.contains("wt row"), "{out}");
 }

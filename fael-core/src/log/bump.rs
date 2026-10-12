@@ -103,13 +103,13 @@ pub fn bump_row(
         ev.extra.insert("fh".into(), Value::Object(fh));
     }
     stamp.apply(&mut ev);
-    let (path, warns) = write_both(fael, journal, cfg, |d| {
+    let path = write_both(fael, journal, |d| {
         validate_bump(&ev, cfg)?;
         append(d, &ev, false)
     })?;
     let mut row = old;
     apply(&mut row, &ev);
-    Ok((row, path, warns))
+    Ok((row, path, vec![]))
 }
 
 /// Lay every bump event onto the row it names, oldest first, so the newest

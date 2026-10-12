@@ -8,9 +8,12 @@
 //! rev-parse`/`symbolic-ref` — the read/edit push shares this path and owns a
 //! 5 ms ceiling with no spawn in it, so the hooks take the `@branch` tags too.
 
-use crate::find::branches::BranchMap;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+
+/// Full row id → display branch for journal rows stamped on another branch
+/// (or a bare `(...)` suffix riding the same channel).
+pub type BranchMap = HashMap<String, String>;
 
 /// This checkout's git dir — `.git` itself in a plain repo, or the `gitdir:`
 /// target of a worktree/submodule's `.git` file. Spawn-free (the read/edit
@@ -234,16 +237,6 @@ pub(crate) fn read(r: &crate::Repo) -> (crate::core::Log, BranchMap) {
     (log, tags)
 }
 
-/// Journal tags under `--branches` tags — keys are disjoint by construction
-/// (branch rows merge into the journal union first, HEAD wins), journal wins
-/// if they ever meet.
-pub(crate) fn overlay(mut jtags: BranchMap, btags: BranchMap) -> BranchMap {
-    for (k, v) in btags {
-        jtags.entry(k).or_insert(v);
-    }
-    jtags
-}
-
 /// Read-side skew summary, same shape as the old tree-only one in `crate::read`.
 fn warn(log: &crate::core::Log) {
     if let Some(first) = log.warnings.first() {
@@ -252,6 +245,44 @@ fn warn(log: &crate::core::Log) {
             log.warnings.len()
         );
     }
+}
+
+/// Tag every rendered row line that came from another branch: `- [id] … rst`
+/// becomes `- [id] … rst @branch`. Cut/bodies lines never start with `- [`,
+/// so they pass through untouched. An empty map = identity.
+pub fn tag(out: String, branch_of: &BranchMap) -> String {
+    if branch_of.is_empty() {
+        return out;
+    }
+    let mut tagged = String::with_capacity(out.len());
+    for line in out.split_inclusive('\n') {
+        let short = line
+            .strip_prefix("- [")
+            .and_then(|l| l.split(']').next())
+            .filter(|s| s.len() >= 8);
+        let branch = short.and_then(|s| {
+            branch_of
+                .iter()
+                .find(|(id, _)| id.starts_with(s))
+                .map(|(_, b)| b)
+        });
+        match branch {
+            // a bare suffix with no branch behind it (`(files changed since)`)
+            // rides the same channel, minus the `@` — never `@(...)`
+            Some(b) => {
+                let (body, nl) = line
+                    .strip_suffix('\n')
+                    .map(|l| (l, "\n"))
+                    .unwrap_or((line, ""));
+                match b.starts_with('(') {
+                    true => tagged.push_str(&format!("{body} {b}{nl}")),
+                    false => tagged.push_str(&format!("{body} @{b}{nl}")),
+                }
+            }
+            None => tagged.push_str(line),
+        }
+    }
+    tagged
 }
 
 #[cfg(test)]

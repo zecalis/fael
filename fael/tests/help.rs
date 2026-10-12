@@ -93,20 +93,13 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     ] {
         assert!(out.contains(present), "{present} missing: {out}");
     }
-    for hidden in [
-        "--since",
-        "--by",
-        "--to",
-        "--revisit",
-        "--branches",
-        "--groups",
-    ] {
+    for hidden in ["--since", "--by", "--to", "--revisit", "--groups"] {
         assert!(!out.contains(hidden), "{hidden} leaks: {out}");
     }
     // `--help --all` is the full surface again
     let (ok, full, err) = fael(&d, &["find", "--help", "--all"]);
     assert!(ok, "{err}");
-    for hidden in ["--since", "--branches", "--groups"] {
+    for hidden in ["--since", "--groups"] {
         assert!(full.contains(hidden), "{hidden} missing: {full}");
     }
     // same for add: --force/--dry-run/--urgent-before hide, --urgent stays
@@ -137,7 +130,6 @@ fn hidden_flags_still_run() {
         &["find", "--by", "nobody"],
         &["find", "--to", "nobody"],
         &["find", "--revisit"],
-        &["find", "--branches"],
     ] {
         let (ok, _, err) = fael(&d, args);
         assert!(ok, "{args:?} {err}");

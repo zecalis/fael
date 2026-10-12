@@ -3,9 +3,7 @@
 //! citation written in any `*.md` under the repo (issue `ids:doctor-plans`).
 //! Split out of `rows.rs` next to `fat.rs`/`orphan.rs` so `files_notes` stays
 //! under the 100-line function cap. Union-scope candidates come from core
-//! (`phantom_refs`, `phantom_md_refs`); the one branch escalation lives here,
-//! never in core (core spawns no processes) — `doctor` already spawns `gh`,
-//! so one git spawn is fine.
+//! (`phantom_refs`, `phantom_md_refs`).
 //!
 //! Only close *texts* and open rows are scanned in the log: a closed row's own
 //! text went quiet with the row, but its close reason still speaks for it.
@@ -14,7 +12,6 @@
 //! markdown citation of a superseded row is reported too, with its successor.
 
 use crate::core;
-use crate::find::branches::with_branches;
 use std::path::Path;
 
 /// The prose a row shows: its title (every list) plus its text (the body).
@@ -27,8 +24,7 @@ fn prose(row: &core::Row) -> String {
 }
 
 /// Every `[Phantom]` problem: dead citations in the log (rows and close
-/// texts) and in markdown prose. Both halves share one branch escalation, and
-/// both need candidates before any git spawn happens.
+/// texts) and in markdown prose.
 pub(super) fn problems(log: &core::Log, root: &Path) -> Vec<core::Problem> {
     // no rows and no closes: fael was never adopted here, or every row has
     // been pruned away — `doctor` already says so with [NoLog], and flagging
@@ -37,18 +33,9 @@ pub(super) fn problems(log: &core::Log, root: &Path) -> Vec<core::Problem> {
         return vec![];
     }
     let rows = row_cands(log);
-    let docs = core::phantom_md_refs(log, root);
-    if rows.is_empty() && docs.is_empty() {
-        return vec![];
-    }
-    // one branch escalation for all candidates; anything resolving on an
-    // unmerged branch exists, so it is dropped, never reported
-    let (wide, _) = with_branches(root, log.clone());
-    let missing = |tok: &str| matches!(core::ref_state(&wide, tok), core::Ref::Missing);
-    let rows: Vec<(String, String)> = rows.into_iter().filter(|(_, t)| missing(t)).collect();
-    let (sup, dead): (Vec<core::MdRef>, Vec<core::MdRef>) =
-        docs.into_iter().partition(|(_, _, _, s)| s.is_some());
-    let dead: Vec<core::MdRef> = dead.into_iter().filter(|(_, _, t, _)| missing(t)).collect();
+    let (sup, dead): (Vec<core::MdRef>, Vec<core::MdRef>) = core::phantom_md_refs(log, root)
+        .into_iter()
+        .partition(|(_, _, _, s)| s.is_some());
     let mut out = vec![];
     if !rows.is_empty() {
         out.push(row_problem(log, &rows));

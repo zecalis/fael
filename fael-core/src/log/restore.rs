@@ -62,7 +62,7 @@ pub fn restore_row(
             } else {
                 format!("{} restored — supersede by {} reverted", s(&b), s(&e))
             };
-            let (path, warns) = write_both(fael, journal, cfg, |d| {
+            let path = write_both(fael, journal, |d| {
                 validate_restore(&row, cfg)?;
                 append(d, &row, false)
             })?;
@@ -70,7 +70,7 @@ pub fn restore_row(
                 row: Some(row),
                 path: Some(path),
                 message: msg,
-                warns,
+                warns: vec![],
             })
         }
     }

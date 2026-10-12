@@ -6,7 +6,7 @@
 //! patch-id of a commit on HEAD. Unproven = no mark. Kickoff only: no git
 //! spawn belongs on the push path.
 
-use super::branches::BranchMap;
+use crate::journal::BranchMap;
 use fael_core::Row;
 use std::collections::HashMap;
 use std::path::Path;

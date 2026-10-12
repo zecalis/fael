@@ -32,7 +32,7 @@ fn doctor_flags_a_chain_hidden_by_a_closed_head() {
     // the legacy trap: a pre-chain-close binary appended only B's close row,
     // so A sits hidden with no close row — write that close row raw, the way
     // the old binary did, since `fael close` now closes the whole chain
-    let writer = std::fs::read_dir(d.join(".fael/log"))
+    let writer = std::fs::read_dir(d.join(".git/fael/log"))
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.path())

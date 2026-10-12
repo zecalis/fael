@@ -2,7 +2,7 @@
 //! what a key list showed is one round, not one per row. Like batch `close`,
 //! a bad id reports alone and the rest still print.
 
-use super::branches::{self, BranchMap};
+use crate::journal::BranchMap;
 use crate::refs::Wide;
 use crate::{Args, Repo, core, journal, refs};
 
@@ -20,12 +20,12 @@ pub(crate) struct Pulled {
 pub(crate) fn pull(
     r: &Repo,
     base: core::Log,
-    jtags: BranchMap,
+    tags: BranchMap,
     ids: &[String],
     json: bool,
     spell: &dyn Fn(&[String]) -> String,
 ) -> Pulled {
-    let (mut log, mut tags) = (base, jtags);
+    let log = base;
     let mut found: Vec<core::Row> = vec![];
     let mut errors = vec![];
     for id in ids {
@@ -35,10 +35,7 @@ pub(crate) fn pull(
             ));
             continue;
         }
-        let (l, wide, bt) = refs::resolve_wide(r, log, id);
-        log = l;
-        tags = journal::overlay(tags, bt);
-        match wide {
+        match refs::resolve_wide(&log, id) {
             Wide::One(row) => found.push(*row),
             Wide::Many(rows) => errors.push(super::reject_many(id, &rows)),
             Wide::Missing => errors.push(super::reject_missing(&log, id)),
@@ -60,7 +57,7 @@ pub(crate) fn pull(
         offset: 0,
         next: &left,
     };
-    let text = branches::tag(
+    let text = journal::tag(
         core::render_full_page(&log, &rows, r.cfg.find_tokens, cut),
         &tags,
     );

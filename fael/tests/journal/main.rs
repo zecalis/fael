@@ -56,9 +56,7 @@ fn repo(name: &str) -> PathBuf {
     ] {
         git(&d, args);
     }
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -90,8 +88,8 @@ fn month_file(dir: &Path) -> Option<PathBuf> {
 }
 
 #[test]
-fn tracked_row_survives_its_branch_deletion_tagged() {
-    let d = repo("journal-tracked");
+fn a_row_survives_its_branch_deletion_tagged() {
+    let d = repo("journal-doomed");
     let main = git_out(&d, &["symbolic-ref", "--short", "HEAD"]);
     git(&d, &["checkout", "-qb", "feat/journal-x"]);
     let (ok, _, err) = fael(
@@ -105,69 +103,22 @@ fn tracked_row_survives_its_branch_deletion_tagged() {
         ],
     );
     assert!(ok, "{err}");
-    // the row reached the journal (clone-shared) and the branch's tree
+    // the row reached the journal (clone-shared), never the branch's tree
     let jf = month_file(&journal_log(&d)).expect("journal row file");
     assert!(
         std::fs::read_to_string(&jf).unwrap().contains("doomed"),
         "{jf:?}"
     );
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "doomed rows"]);
+    assert!(month_file(&d.join(".fael/log")).is_none());
     git(&d, &["checkout", "-q", &main]);
     git(&d, &["branch", "-D", "feat/journal-x"]);
 
-    // the tree no longer holds the row, but plain find still lists it — tagged
-    assert!(month_file(&d.join(".fael/log")).is_none());
+    // the branch is gone, but plain find still lists the row — tagged
     let (ok, out, _) = fael(&d, &["find"]);
     assert!(ok, "{out}");
     assert!(out.contains("doomed"), "{out}");
     let line = out.lines().find(|l| l.contains("doomed")).unwrap();
     assert!(line.ends_with("@feat/journal-x"), "{line}");
-}
-
-#[test]
-fn tracked_tree_failure_is_a_warning_not_an_error() {
-    let d = repo("journal-crash");
-    let (ok, _, err) = fael(&d, &["add", "note", "seed", "--files", "doc:seed"]);
-    assert!(ok, "{err}");
-    // block the tree month file with a directory: the tree write must fail
-    let tf = month_file(&d.join(".fael/log")).expect("tree row file");
-    std::fs::remove_file(&tf).unwrap();
-    std::fs::create_dir_all(&tf).unwrap();
-
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "note", "row through a crash", "--files", "doc:crash"],
-    );
-    assert!(ok, "journal commit must still succeed: {err}");
-    assert!(err.contains("tree write failed"), "{err}");
-    assert!(err.contains("do not retry"), "{err}");
-
-    // the journal-only row lists (untagged: stamped branch is this branch)
-    let (ok, out, _) = fael(&d, &["find"]);
-    assert!(ok, "{out}");
-    assert!(out.contains("row through a crash"), "{out}");
-    let line = out
-        .lines()
-        .find(|l| l.contains("row through a crash"))
-        .unwrap();
-    assert!(!line.contains('@'), "{line}");
-
-    // healed (the same bytes reach the tree later): the union lists the id once
-    std::fs::remove_dir(&tf).unwrap();
-    let jf = month_file(&journal_log(&d)).expect("journal row file");
-    std::fs::write(&tf, std::fs::read(&jf).unwrap()).unwrap();
-    let (ok, out, _) = fael(&d, &["find", "--json", "--all"]);
-    assert!(ok, "{out}");
-    let mut ids: Vec<String> = out
-        .lines()
-        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .filter_map(|v| v["id"].as_str().map(String::from))
-        .collect();
-    ids.sort();
-    let before = ids.len();
-    ids.dedup();
-    assert_eq!(before, ids.len(), "union must not double a healed row");
 }
 
 #[test]
@@ -195,13 +146,16 @@ fn local_shares_rows_across_worktrees_with_no_tree_log() {
 }
 
 #[test]
-fn unknown_store_is_rejected() {
+fn tracked_and_unknown_stores_are_rejected() {
     let d = repo("journal-store-bad");
     std::fs::create_dir_all(d.join(".fael")).unwrap();
+    // the dropped tracked mode points at sync, the way rows travel now
+    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
+    let (ok, _, err) = fael(&d, &["add", "note", "x", "--files", "doc:x"]);
+    assert!(!ok && err.contains("fael sync --remote"), "{err}");
     std::fs::write(d.join(".fael/config.toml"), "store = \"cloud\"\n").unwrap();
     let (ok, _, err) = fael(&d, &["add", "note", "x", "--files", "doc:x"]);
-    assert!(!ok);
-    assert!(err.contains("tracked") && err.contains("local"), "{err}");
+    assert!(!ok && err.contains("want \"local\""), "{err}");
 }
 
 fn past_row(id: &str, text: &str, file: &str) -> String {

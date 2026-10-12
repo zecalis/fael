@@ -25,8 +25,6 @@ fn hook_rows_carry_their_branch_tag() {
         "",
     );
     assert!(ok, "{err}");
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "rows"]);
     git(&d, &["switch", "-q", &main]);
     git(&d, &["branch", "-D", "feat/x"]);
 
@@ -60,8 +58,6 @@ fn session_brief_tags_a_journal_only_row() {
         "",
     );
     assert!(ok, "{err}");
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "rows"]);
     git(&d, &["switch", "-q", &main]);
     git(&d, &["branch", "-D", "feat/z"]);
 

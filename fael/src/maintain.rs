@@ -40,67 +40,21 @@ use std::process::ExitCode;
 
 pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     let r = repo()?;
-    // same symlink note as `fael install` (stdout only — `--json` stays pure JSON)
-    if !a.has("json")
-        && matches!(r.cfg.store, core::Store::Tracked)
-        && std::fs::symlink_metadata(&r.fael).is_ok_and(|m| m.file_type().is_symlink())
-    {
-        println!(
-            "note: {} is a symlink — store = \"local\" in .fael/config.toml keeps rows in this clone instead",
-            r.fael.display()
-        );
-    }
     let month = core::current_month();
-    let local = matches!(r.cfg.store, core::Store::Local);
-    // `local` keeps the log out of git on purpose: no ignore check to run
-    let source = (!local)
-        .then(|| crate::hook::ignore_source(&r.root))
-        .flatten();
-    let excluded = source.as_deref().is_some_and(crate::hook::deliberate);
-    let ignored = source.is_some() && !excluded;
-    // Rows may live only in the clone's journal (`store = "local"`, a fresh
-    // worktree): scan them there. Nothing of it is in git, so the `merge=union`
-    // and gitignore checks do not apply — nor under `local`, where a tree log
-    // is frozen history nothing appends to any more.
+    // rows live in the clone's journal (a fresh worktree has no tree log): scan
+    // them there; a tree log is frozen history nothing appends to any more
     let home = crate::journal::home(&r).unwrap_or(&r.fael);
-    let scan = || {
-        let mut rep = core::doctor_scan(home, &r.root, ignored, &month);
-        if home != r.fael || local {
-            rep.problems.retain(|p| {
-                !matches!(
-                    p.kind,
-                    core::ProblemKind::Union | core::ProblemKind::Ignored
-                )
-            });
-        }
-        rep
-    };
+    let scan = || core::doctor_scan(home, &r.root, &month);
     if a.has("fix") {
-        for action in core::doctor_fix(home, &r.root, &scan())? {
+        for action in core::doctor_fix(home, &scan())? {
             say(a.has("json"), &format!("fixed: {action}"));
         }
     }
     let mut rep = scan();
-    if local {
-        rep.problems.push(core::Problem::info(
-            core::ProblemKind::Local,
-            local_note(&r),
-        ));
-    }
-    if r.cfg.store_set && matches!(r.cfg.store, core::Store::Tracked) {
-        rep.problems.push(core::Problem::info(
-            core::ProblemKind::Deprecated,
-            core::TRACKED_DEPRECATED.into(),
-        ));
-    }
-    if excluded {
-        rep.problems.push(core::Problem::info(
-            core::ProblemKind::Ignored,
-            ".fael/log is kept local by .git/info/exclude — taken as deliberate; \
-             move the pattern to .gitignore if it is not"
-                .into(),
-        ));
-    }
+    rep.problems.push(core::Problem::info(
+        core::ProblemKind::Local,
+        local_note(&r),
+    ));
     let log = crate::read(&r);
     if let Some(l) = crate::sync::late_line(&r, &log) {
         let l = l.strip_prefix("fael: ").unwrap_or(&l).to_string();
@@ -149,8 +103,7 @@ fn local_note(r: &crate::Repo) -> String {
         .journal
         .as_deref()
         .map_or_else(|| r.fael.display().to_string(), |j| j.display().to_string());
-    let mut s =
-        format!("store = local — rows live in {at}, shared by every worktree of this clone");
+    let mut s = format!("rows live in {at}, shared by every worktree of this clone");
     if crate::git(&r.root, &["config", "fael.remote"]).is_none() {
         s.push_str(
             "; nothing copies them off this clone — `git config fael.remote <url>` then `fael sync` to back up or share",
@@ -320,7 +273,6 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
     let rep = core::import(
         &r.fael,
         r.journal.as_deref(),
-        r.cfg.store,
         &sp,
         &core::ImportOpts { maps },
     )?;

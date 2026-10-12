@@ -5,10 +5,10 @@ use super::asks::{UsageMeta, hook_meta};
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
-use super::state::{mark_started, prune_sessions, seen_path, session_key, state_dir};
+use super::state::{mark_started, prune_sessions, seen_path, state_dir};
 use super::usage::record_usage;
-use crate::{aliases, core, home};
-use std::path::{Path, PathBuf};
+use crate::{aliases, core};
+use std::path::Path;
 
 pub(crate) fn session_start(e: &Event) -> Reply {
     let no = Reply::default;
@@ -89,7 +89,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         .chain(decisions.iter())
         .copied()
         .collect();
-    let mut body = crate::find::branches::tag(
+    let mut body = crate::journal::tag(
         core::render(&c.log, &shown, c.repo.cfg.kickoff_tokens),
         &c.tags,
     );
@@ -113,7 +113,6 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         kind: Kind::Brief,
         text: body,
     });
-    out.deprecated(&c.repo.cfg);
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
     }
@@ -171,12 +170,6 @@ fn warnings(repo: &crate::Repo, adopted: bool) -> Vec<String> {
     let mut out = vec![];
     if !adopted {
         return out;
-    }
-    // `local` means the log is meant to stay out of git — an ignore is no problem
-    if matches!(repo.cfg.store, core::Store::Tracked) && check_ignore_hit(&repo.root) {
-        out.push(
-            "fael: .fael/log is gitignored — rows stay on this machine, run fael doctor".into(),
-        );
     }
     // doctor's [Wiring] note: a hook that shipped after the last install stays
     // off until then. Writes it now instead of asking the user to; only a pass
@@ -339,62 +332,4 @@ fn gone_line(
         "fael: {id} held @{branch}{more} — branch gone, issue still open: \
          fael close {id} \"<what shipped, where>\" (MCP close), or fael claim {id} --force\n"
     ))
-}
-
-/// `git check-ignore` is ~8 of session-start's ~10 ms, so its answer is cached
-/// per worktree, keyed by the mtime+size of every file that can change it.
-// ponytail: stamps root and .fael .gitignore, info/exclude, the default global
-// ignore and ~/.gitconfig (a moved core.excludesFile) — edits inside a custom
-// excludesFile or a worktree's common info/exclude are missed until another
-// stamp moves; `fael doctor` always asks git.
-fn check_ignore_hit(root: &Path) -> bool {
-    let home = home().unwrap_or_default();
-    let xdg = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home.join(".config"));
-    let stamp: String = [
-        root.join(".gitignore"),
-        root.join(".fael/.gitignore"),
-        root.join(".fael/log/.gitignore"),
-        root.join(".git/info/exclude"),
-        xdg.join("git/ignore"),
-        home.join(".gitconfig"),
-    ]
-    .iter()
-    .map(|p| match std::fs::metadata(p) {
-        Ok(m) => {
-            let t = m
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok());
-            format!("{}.{},", t.map_or(0, |t| t.as_nanos()), m.len())
-        }
-        Err(_) => "-,".into(),
-    })
-    .collect();
-    let cache = state_dir()
-        .join("ignore")
-        .join(session_key(&root.to_string_lossy()));
-    if let Some(hit) = std::fs::read_to_string(&cache)
-        .ok()
-        .and_then(|s| s.strip_prefix(&stamp).map(|v| v == "1"))
-    {
-        return hit;
-    }
-    let hit = ignore_source(root).is_some_and(|s| !deliberate(&s));
-    let _ = std::fs::create_dir_all(cache.parent().unwrap_or(root));
-    let _ = std::fs::write(&cache, format!("{stamp}{}", u8::from(hit)));
-    hit
-}
-
-/// Which ignore rule keeps `.fael/log` out of git (`git check-ignore -v`'s
-/// `<source>:<line>:<pattern>\t<path>`), or `None` when it is tracked.
-pub(crate) fn ignore_source(root: &Path) -> Option<String> {
-    crate::git(root, &["check-ignore", "-v", ".fael/log"])
-}
-
-/// `.git/info/exclude` is local to this clone and never shared, so ignoring the log
-/// there is a choice (a public repo keeping its memory private), not a mistake.
-pub(crate) fn deliberate(source: &str) -> bool {
-    source.replace('\\', "/").contains("info/exclude:")
 }

@@ -19,7 +19,6 @@ Reference implementation: [`fael-core`](../fael-core/src).
   .lock                        not in git
 ```
 
-- `.gitattributes`: `.fael/log/**/*.jsonl merge=union`
 - `<writer>` = `<slug of git user.name>-<first 4 hex of sha256(lowercase git user.email)>`, e.g. `delamind-3f9a`.
   Slug = lowercase ASCII letters and digits, anything else collapses to one `-`; empty → `anon`. No email → hash the hostname.
   The email is never written — only the hash. A writer id never starts with `_` or `.`.

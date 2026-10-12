@@ -4,7 +4,6 @@
 
 use super::{fael, repo, row_json};
 use std::path::Path;
-use std::process::Command;
 
 const LINE: &str = "copy ids from fael find";
 
@@ -29,18 +28,6 @@ fn phantom_of(id: &str) -> String {
     f.push(last);
     assert!(fael_core::looks_like_id(&f), "{f}");
     f
-}
-
-fn git(d: &Path, args: &[&str]) {
-    assert!(
-        Command::new("git")
-            .args(args)
-            .current_dir(d)
-            .status()
-            .unwrap()
-            .success(),
-        "git {args:?}"
-    );
 }
 
 #[test]
@@ -169,57 +156,6 @@ fn close_reason_citing_the_target_stays_silent() {
     let (ok, _, err) = fael(
         &d,
         &["close", &target, &format!("done, closing {target}")],
-        "",
-    );
-    assert!(ok, "{err}");
-    assert!(!err.contains("no row with id"), "{err}");
-}
-
-#[test]
-fn id_only_on_another_clones_branch_stays_silent() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "note", "row on main", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    git(&d, &["add", "-A"]);
-    git(&d, &["commit", "-qm", "rows"]);
-
-    // another clone: its own journal, so the union here never sees its rows
-    let other = d.join("other");
-    git(
-        &d,
-        &["clone", "-q", d.to_str().unwrap(), other.to_str().unwrap()],
-    );
-    git(&other, &["config", "user.name", "Other Clone"]);
-    git(&other, &["config", "user.email", "o@example.com"]);
-    git(&other, &["checkout", "-qb", "feat/y"]);
-    std::fs::write(other.join("src/c.rs"), "// c\n").unwrap();
-    let (ok, out, err) = fael(
-        &other,
-        &["add", "note", "row C on feat", "--files", "src/c.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let cid = out.split_whitespace().next().unwrap().to_string();
-    git(&other, &["add", "-A"]);
-    git(&other, &["commit", "-qm", "rows C"]);
-    git(&other, &["push", "-q", "origin", "feat/y"]);
-
-    // the union has no such row — only the branch escalation clears it
-    std::fs::write(d.join("src/d.rs"), "// d\n").unwrap();
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "note",
-            &format!("ref {cid} for context"),
-            "--files",
-            "src/d.rs",
-        ],
         "",
     );
     assert!(ok, "{err}");

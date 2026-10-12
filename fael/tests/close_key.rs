@@ -62,7 +62,6 @@ fn repo() -> PathBuf {
     }
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 

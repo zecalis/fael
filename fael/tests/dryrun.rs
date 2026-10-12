@@ -31,9 +31,7 @@ fn repo() -> PathBuf {
     }
     git(&d, &["add", "."]);
     git(&d, &["commit", "-qm", "init"]);
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -62,10 +60,10 @@ fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
     (o.status.success(), s(&o.stdout), s(&o.stderr))
 }
 
-/// Every byte under `<repo>/.fael/log` — a dry run must leave these identical.
+/// Every byte under the clone's journal log — a dry run must leave these identical.
 fn log_bytes(d: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     let mut out = vec![];
-    let log = d.join(".fael/log");
+    let log = d.join(".git/fael/log");
     if let Ok(top) = std::fs::read_dir(&log) {
         for dir in top.flatten() {
             if let Ok(files) = std::fs::read_dir(dir.path()) {
@@ -272,7 +270,7 @@ fn cli_batch_dry_run_rejected() {
     assert!(log_bytes(&d).is_empty(), "a refused batch writes nothing");
 }
 
-/// `FAEL_DIR` sends the write to a scratch dir: the repo's real `.fael/log`
+/// `FAEL_DIR` sends the write to a scratch dir: the repo's real log
 /// stays byte-identical, so a wrong-cwd manual run cannot pollute it.
 #[test]
 fn fael_dir_isolates_the_log() {

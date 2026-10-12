@@ -82,24 +82,18 @@ fn receipt(e: &Event) -> Option<String> {
         return None;
     }
     let turn = super::tally::take_receipt(&c.session, &c.repo.root, &c.log);
-    match (late(&c, turn.is_some()), turn) {
+    match (late(&c), turn) {
         (Some(l), Some(t)) => Some(format!("{t}\n{l}")),
         (l, t) => t.or(l),
     }
 }
 
 /// PLAN-fael-local-first chunk 2: rows that have not reached their
-/// destination (`sync::late_line`). `tracked`: only on a turn that filed or
-/// closed — that is when a row can be left uncommitted, and quiet turns skip
-/// the git spawn. `local`: once per session per distinct line, since a
-/// failed sync or a repo with no way to share stays so across turns.
-fn late(c: &super::protocol::Ctx, filed: bool) -> Option<String> {
-    let tracked = matches!(c.repo.cfg.store, core::Store::Tracked);
-    if tracked && !filed {
-        return None;
-    }
+/// destination (`sync::late_line`), once per session per distinct line, since
+/// a failed sync or a repo with no way to share stays so across turns.
+fn late(c: &super::protocol::Ctx) -> Option<String> {
     let l = crate::sync::late_line(&c.repo, &c.log)?;
-    (tracked || super::tally::first(&c.session, &c.repo.root, "late", &l)).then_some(l)
+    super::tally::first(&c.session, &c.repo.root, "late", &l).then_some(l)
 }
 
 /// A sub-agent's stop only files its own reply's lines: the bug rule and
@@ -117,8 +111,7 @@ fn subagent_stop(e: &Event) -> Reply {
 }
 
 /// A log under `.fael/` or in the clone's journal — without one fael was never
-/// adopted here. The journal counts: `store = "local"` keeps rows nowhere else,
-/// and a session or sub-agent in a fresh worktree has no `.fael/` of its own.
+/// adopted here. The journal counts: rows live nowhere else, and a session or sub-agent in a fresh worktree has no `.fael/` of its own.
 fn adopted(c: &super::protocol::Ctx) -> bool {
     crate::journal::home(&c.repo).is_some()
 }

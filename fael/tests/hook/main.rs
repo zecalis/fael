@@ -152,9 +152,7 @@ fn repo() -> PathBuf {
         .current_dir(&d)
         .status()
         .unwrap();
-    // these tests exercise the tree log: pin it over the `local` default
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     d
 }
 
@@ -225,7 +223,7 @@ fn json(v: &Path) -> String {
 /// stamped rows whose files still match earn no hint — the legacy hint only
 /// runs for rows with no verdict).
 fn strip_fh(d: &Path, needle: &str) {
-    let log = d.join(".fael/log");
+    let log = d.join(".git/fael/log");
     let mut stack = vec![log];
     while let Some(p) = stack.pop() {
         for e in std::fs::read_dir(&p).unwrap().flatten() {

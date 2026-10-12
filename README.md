@@ -141,9 +141,7 @@ git config fael.remote <url>   # any git remote you can push to — origin works
 fael sync                      # push your rows, pull everyone else's (the Stop hook also runs it once per session)
 ```
 
-Rather review memory in PRs? `store = "tracked"` in `.fael/config.toml` also writes the rows to
-`.fael/log/` in the tree, to commit like code. Repos that already have a `.fael/log/` keep that mode;
-`fael migrate local` moves one over ([docs/integrate.md](docs/integrate.md#moving-a-tracked-repo-to-local)).
+A `.fael/log/` already committed in a repo stays read as frozen history; new rows never go there.
 
 ## How it works
 
