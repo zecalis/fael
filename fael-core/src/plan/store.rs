@@ -158,7 +158,11 @@ impl Store {
         }
         // re-read under the lock: another open may have added them meanwhile
         let add = missing(&tx, tables, columns).map_err(err)?;
+        let carry = add.contains("EXISTS section(");
         tx.execute_batch(&add).map_err(err)?;
+        if carry {
+            super::section::carry(&tx)?;
+        }
         tx.commit().map_err(err)
     }
 

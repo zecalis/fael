@@ -18,7 +18,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         return create(a, &r, name, title).map(|()| ExitCode::SUCCESS);
     }
     let flags: &[&str] = match rest.first().map(String::as_str) {
-        Some("export") => &["json", "since"],
+        Some("export") => &["json", "since", "section"],
         Some("apply") => &["dry-run"],
         _ => &[],
     };
@@ -27,6 +27,9 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some("import") if rest.len() == 1 => import(&r),
         Some("next") if rest.len() == 1 => next(&r),
         Some("export") if rest.len() == 1 && a.has("since") => feed(&r, &a.one("since").unwrap()),
+        Some("export") if rest.len() == 2 && a.has("section") => {
+            section(&r, &rest[1], &a.one("section").unwrap_or_default())
+        }
         Some("export") if rest.len() <= 2 => {
             export(&r, rest.get(1).map(String::as_str), a.has("json"))
         }
@@ -35,7 +38,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("repo") if rest.len() == 3 => code_repo(&r, &rest[1], &rest[2]),
         _ => Err(
-            "rejected: fael plan import | fael plan next | fael plan export [<plan>] [--json] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
+            "rejected: fael plan import | fael plan next | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -118,31 +121,29 @@ fn cutover(r: &Repo, want: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `new`: the plan row (chunks in the db from the start) and its doc — a Goal/Scope/Done
-/// skeleton in `plan.doc`, no md file; `fael plan apply` fills it.
+/// `new`: the plan row (chunks in the db from the start) and its Goal/Scope/Done/Constraints
+/// skeleton sections, no md file; `fael plan apply` fills them.
 fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     let app = a.one("app").unwrap_or_default();
     let area = a.one("area").unwrap_or_else(|| "dev".into());
     let now = fael_core::rfc3339(fael_core::now_ms());
     let mut s = Store::open(&db(r))?;
-    s.new_plan(&app, name, title, &area, SKELETON, &now)?;
+    s.new_plan(&app, name, title, &area, &now)?;
     let key = if app.is_empty() {
         name.to_string()
     } else {
         format!("{app}/{name}")
     };
     crate::board::register(r);
-    println!("plan {key} created (Goal/Scope/Done/Constraints in its doc: every brief reads them)");
+    println!("plan {key} created (Goal/Scope/Done/Constraints sections: every brief reads them)");
     println!(
-        "fill the doc: fael plan export {key} --json > bill.json, edit \"doc\", fael plan apply bill.json"
+        "fill them: fael plan export {key} --json > bill.json, edit \"sections\", fael plan apply bill.json"
     );
     println!(
         "add chunks: fael chunk add \"<title>\" --plan {key} --brief \"…\" --size S|M|L --model M --scope <paths>"
     );
     Ok(())
 }
-
-const SKELETON: &str = "## 1. Goal (why)\n\n## 2. Scope\n**Do:**\n**Don't:**\n\n## 3. Done criteria\n\n## 4. Constraints\n";
 
 /// `apply <file|->`: the bill `export --json` wrote, edited (decision fael-board:plan-bill).
 fn apply(r: &Repo, from: &str, dry: bool) -> Result<(), String> {
@@ -351,6 +352,16 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
         .map(|p| fael_core::plan::export(&s, p.id, &md))
         .collect::<Result<_, _>>()?;
     print!("{}", docs.join("\n"));
+    Ok(())
+}
+
+/// `export <plan> --section <key>`: one section of one plan.
+fn section(r: &Repo, want: &str, key: &str) -> Result<(), String> {
+    let s = open(r)?;
+    print!(
+        "{}",
+        fael_core::plan::export_section(&s, one(&s, want)?.id, key)?
+    );
     Ok(())
 }
 

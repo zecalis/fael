@@ -171,13 +171,16 @@ fn export_reads_back() {
     };
     assert_eq!(ticks(&back), ticks(&orig));
     assert_eq!(back.title, "PLAN-a");
-    // plan.doc once set is the plan's text, the md no longer read
-    s.conn
-        .execute("UPDATE plan SET doc = '## 1. Goal\nfrom the db\n'", [])
-        .unwrap();
+    // the plan's sections once it has any: the md's text no longer read
+    let tx = s.conn.unchecked_transaction().unwrap();
+    let at = "2026-10-12T09:00:00Z";
+    super::super::section::put(&tx, id, "1", Some("1. Goal"), Some("from the db"), at).unwrap();
+    tx.commit().unwrap();
     let out = export(&s, id, &|_: &str| Some(file.clone())).unwrap();
     assert!(
-        out.ends_with("· open · after 1\n\n## 1. Goal\nfrom the db\n"),
+        out.ends_with(
+            "· open · after 1\n\n## 1. Goal\n> section 1 · updated 2026-10-12\n\nfrom the db\n"
+        ),
         "{out}"
     );
 }
@@ -239,19 +242,20 @@ fn every_event_names_its_plan() {
     let mut s = Store::open_in_memory().unwrap();
     s.import_all(&[plan("a", "- [x] 1 — first\n- [ ] 2 — second")], "t0")
         .unwrap();
-    s.new_plan("", "b", "PLAN-b", "dev", "", "t1").unwrap();
+    s.new_plan("", "b", "PLAN-b", "dev", "t1").unwrap();
     let b: i64 = s
         .conn
         .query_row("SELECT id FROM plan WHERE name = 'b'", [], |r| r.get(0))
         .unwrap();
     s.plan_state(b, "parked", "t2").unwrap();
     let n = |sql: &str| -> i64 { s.conn.query_row(sql, [], |r| r.get(0)).unwrap() };
-    assert_eq!(n("SELECT COUNT(*) FROM event"), 4);
+    // 2 chunks, b created + its 4 skeleton sections, b parked
+    assert_eq!(n("SELECT COUNT(*) FROM event"), 8);
     // a chunk row names its chunk's plan, a plan row (`plan:<app>/<name>`) its own
     assert_eq!(
         n("SELECT COUNT(*) FROM event e JOIN plan p ON p.id = e.plan
            WHERE e.chunk_uid IN (SELECT uid FROM chunk WHERE plan = p.id)
               OR e.chunk_uid = 'plan:' || p.app || '/' || p.name"),
-        4
+        8
     );
 }

@@ -50,3 +50,24 @@ fn since_head_is_empty_and_an_edit_after_returns_that_chunk_whole() {
     );
     assert!(next["head"].as_i64().unwrap() > head);
 }
+
+#[test]
+fn the_feed_carries_every_section_of_a_plan_it_touched() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.new_plan("", "p", "P", "dev", NOW).unwrap();
+    let all = feed(&s, 0).unwrap();
+    let keys: Vec<&str> = all["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["key"].as_str().unwrap())
+        .collect();
+    assert_eq!(keys, ["1", "2", "3", "4"]);
+    let head = all["head"].as_i64().unwrap();
+    assert!(
+        feed(&s, head).unwrap()["sections"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
