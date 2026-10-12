@@ -124,6 +124,17 @@ fn a_tag_seen_for_a_day_is_installed_by_the_channel() {
     assert!(r.json().contains("\"result\":\"updated\""), "{}", r.json());
 }
 
+/// Releases hours apart: a newer tag than the one already waiting keeps the
+/// wait's start, so the update still lands a day after the first sighting (01M4Q7YR).
+#[test]
+fn a_newer_tag_does_not_restart_the_wait() {
+    let r = auto(&["v99.0.0", "v99.1.0"], SEEN, "", "99.1.0", &[]);
+    assert!(r.ok);
+    assert!(r.brew_ran(), "{}", r.json());
+    assert!(r.json().contains("\"to\":\"99.1.0\""), "{}", r.json());
+    assert!(r.json().contains("\"result\":\"updated\""), "{}", r.json());
+}
+
 #[test]
 fn a_failed_command_and_a_lagging_channel_are_reported_not_hidden() {
     let r = auto(&["v99.0.0"], SEEN, "exit 1", "99.0.0", &[]);

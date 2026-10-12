@@ -191,19 +191,26 @@ pub(crate) fn run(dry: bool, client: bool, replace: bool) -> Result<(), String> 
         return Ok(()); // offline, or already the newest
     };
     let mut s = load();
+    // a tag newer than this binary already waits: a newer one keeps that wait's
+    // start, or releases hours apart restart it at every check and never install (01M4Q7YR)
+    let waiting = ver(&s.to).zip(ver(from)).is_some_and(|(t, c)| t > c);
     s.from = from.into();
     if s.to != to {
-        println!("{to} is out — installs after a day");
         s.to = to;
-        s.seen_at = s.checked_at;
         // a running exe cannot be replaced on Windows (yet): tell, never install
         s.result = cfg!(windows).then(|| "available".into());
+        if !waiting {
+            println!("{} is out — installs after a day", s.to);
+            s.seen_at = s.checked_at;
+            save(&s);
+            return Ok(());
+        }
         save(&s);
-        return Ok(());
     }
     if cfg!(windows) || s.checked_at.saturating_sub(s.seen_at) < DAY {
         return Ok(());
     }
+    let to = s.to.clone();
     match update(&home, &exe, &to) {
         Ok(()) => (s.result, s.why) = (Some("updated".into()), String::new()),
         Err(e) => {

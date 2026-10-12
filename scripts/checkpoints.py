@@ -3,7 +3,7 @@
 has now against what its locked decision needs. Read-only; it counts, it never
 judges a gate's outcome (each plan's own chunk does that).
 
-Usage: scripts/checkpoints.py [<vela repo>]   (default ~/Project/zecalis/zecalis)
+Usage: scripts/checkpoints.py [<vela repo>]   (default ~/Project/zecalis/vela/vela)
 
 Each run that moved a number appends one line to ~/fael-onoff-results/
 checkpoints.jsonl (outside the repo) and marks the move on the gate's line, so
@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FAEL = os.path.dirname(HERE)
-VELA = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/Project/zecalis/zecalis")
+VELA = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/Project/zecalis/vela/vela")
 RESULTS = os.path.expanduser("~/fael-onoff-results")
 STATE = os.environ.get("FAEL_STATE_DIR") or os.path.expanduser("~/.local/state/fael")
 sys.path.insert(0, os.path.join(HERE, "onoff"))
@@ -49,7 +49,8 @@ def stats(since, state=None):
 def vela_state():
     """vela-only usage, the one-liner of PLAN-fael-vela-dogfood §7 (01M4FN54)."""
     d = tempfile.mkdtemp(prefix="vela-stats-")
-    keep = re.compile(r'"repo":"[^"]*/zecalis/(wt-vela|zecalis)')
+    # the repo moved from zecalis/{zecalis,wt-vela-*} to zecalis/vela/{vela,wt-vela-*}
+    keep = re.compile(r'"repo":"[^"]*/zecalis/(vela/)?(wt-vela|zecalis|vela)')
     with open(os.path.join(d, "usage.jsonl"), "w") as out:
         for f in sorted(glob.glob(os.path.join(STATE, "usage", "*"))) + [os.path.join(STATE, "usage.jsonl")]:
             if os.path.isfile(f):
