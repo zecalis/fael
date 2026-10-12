@@ -83,7 +83,7 @@ fn bucket_focus_signals_are_now() {
         Bucket::Now
     );
     // a plan-keyed row filed on another branch is no signal: fael never infers
-    // the session's plan (PLAN-fael-plan-focus) — fapony asks for its keys
+    // the session's plan (PLAN-fael-plan-focus) — a chunk start names it
     let mut planned = row(
         "A0000000000000000000000024",
         "note",

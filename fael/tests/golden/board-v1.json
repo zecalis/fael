@@ -24,10 +24,10 @@
       ],
       "shared": ["AGENTS.md", "docs/architecture.md", "fael/tests/golden/"],
       "plans": [
-        { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "md", "source": ".fapony/plan/PLAN-fael-board.md", "spec": "SPEC-fael-board.md", "repo": null, "remote": null, "counts": { "open": 2, "review": 1, "running": 1, "waiting": 1 } },
-        { "app": "", "name": "launch-posts", "title": "October launch posts", "area": "marketing", "kind": "unit", "state": "active", "rank": 2, "truth": "db", "source": ".fapony/plan/PLAN-launch-posts.md", "spec": null, "repo": null, "remote": null, "counts": { "open": 1, "review": 1, "waiting": 2 } },
+        { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "md", "source": "plan/PLAN-fael-board.md", "spec": "SPEC-fael-board.md", "repo": null, "remote": null, "counts": { "open": 2, "review": 1, "running": 1, "waiting": 1 } },
+        { "app": "", "name": "launch-posts", "title": "October launch posts", "area": "marketing", "kind": "unit", "state": "active", "rank": 2, "truth": "db", "source": "plan/PLAN-launch-posts.md", "spec": null, "repo": null, "remote": null, "counts": { "open": 1, "review": 1, "waiting": 2 } },
         { "app": "", "name": "inbox", "title": "Inbox", "area": "dev", "kind": null, "state": "active", "rank": null, "truth": "db", "source": "", "spec": null, "repo": null, "remote": null, "counts": { "done": 1, "draft": 1 } },
-        { "app": "", "name": "fael-v0", "title": "a repo memory agents cannot skip writing", "area": "dev", "kind": "unit", "state": "done", "rank": null, "truth": "md", "source": ".fapony/done/PLAN-fael-v0.md", "spec": "SPEC-fael-v0.md", "repo": null, "remote": null, "counts": { "done": 12 } }
+        { "app": "", "name": "fael-v0", "title": "a repo memory agents cannot skip writing", "area": "dev", "kind": "unit", "state": "done", "rank": null, "truth": "md", "source": "done/PLAN-fael-v0.md", "spec": "SPEC-fael-v0.md", "repo": null, "remote": null, "counts": { "done": 12 } }
       ],
       "chunks": [
         {
@@ -166,7 +166,7 @@
           {
             "id": "01M4NA00000000000000000005", "title": null,
             "text": "b3b shipped; next: smoke the app against the real board.", "key": "plan:fael-board:handoff",
-            "files": ["plan:fael-board", ".fapony/plan/PLAN-fael-board.md"], "at": "2026-10-10T18:00:00.000Z",
+            "files": ["plan:fael-board", "plan/PLAN-fael-board.md"], "at": "2026-10-10T18:00:00.000Z",
             "by": "owner-1a2b", "to": null, "revisit": "after b5a", "held": null, "signals": ["drifted"]
           }
         ]
@@ -181,7 +181,7 @@
         { "path": "/Users/owner/Project/zecalis-wt-2", "branch": "feat/vela-onboarding", "run": null }
       ],
       "plans": [
-        { "app": "apps/vela", "name": "vela", "title": "vela beta", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "db", "source": "apps/vela/.fapony/plan/PLAN-vela.md", "spec": "SPEC-vela.md", "repo": null, "remote": null, "counts": { "open": 1, "running": 2 } }
+        { "app": "apps/vela", "name": "vela", "title": "vela beta", "area": "dev", "kind": "unit", "state": "active", "rank": 1, "truth": "db", "source": "apps/vela/plan/PLAN-vela.md", "spec": "SPEC-vela.md", "repo": null, "remote": null, "counts": { "open": 1, "running": 2 } }
       ],
       "chunks": [
         {

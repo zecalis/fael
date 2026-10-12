@@ -81,28 +81,6 @@ pub(crate) fn claude_mcp(c: &Ctx) {
             );
         }
     }
-    if get("fapony").is_some() {
-        if !c.replace {
-            println!("  ! MCP fapony is still set — --replace-fapony removes it");
-        } else if c.dry {
-            c.changed.set(c.changed.get() + 1);
-            println!("  would run: claude mcp remove fapony -s user");
-        } else {
-            c.changed.set(c.changed.get() + 1);
-            let ok = Command::new("claude")
-                .args(["mcp", "remove", "fapony", "-s", "user"])
-                .status()
-                .is_ok_and(|s| s.success());
-            println!(
-                "  {}",
-                if ok {
-                    "ran: claude mcp remove fapony -s user"
-                } else {
-                    "! failed: claude mcp remove fapony -s user"
-                }
-            );
-        }
-    }
 }
 
 #[cfg(test)]

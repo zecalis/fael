@@ -168,9 +168,6 @@ fael doctor                                              # check the setup (e.g.
 
 `fael` with no arguments lists every command.
 
-**Coming from fapony?** `fael install --replace-fapony` switches the hooks over, and
-`fael import .fapony/.memory` brings the old log with it — no row lost.
-
 ## Links
 
 - **Homebrew tap:** [zecalis/homebrew-tap](https://github.com/zecalis/homebrew-tap)

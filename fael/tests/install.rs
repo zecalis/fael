@@ -1,4 +1,4 @@
-//! `fael install` against a throwaway HOME with fapony already installed.
+//! `fael install` against a throwaway HOME where another tool already wired its hooks and MCP.
 
 use std::path::Path;
 use std::process::Command;
@@ -33,11 +33,7 @@ fn read(p: &Path) -> String {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "predates the lint — split, then drop"
-)]
-fn install_all_three_idempotent_and_replaces_fapony_on_request() {
+fn install_all_three_idempotent_and_leaves_what_is_not_fael_alone() {
     let home = std::env::temp_dir().join(format!("fael-install-{}", fael_core::ulid()));
     let claude = home.join(".claude/settings.json");
     let codex_hooks = home.join(".codex/hooks.json");
@@ -46,38 +42,29 @@ fn install_all_three_idempotent_and_replaces_fapony_on_request() {
     std::fs::create_dir_all(home.join(".config/opencode/plugins")).unwrap();
     std::fs::create_dir_all(home.join(".codex")).unwrap();
     std::fs::create_dir_all(home.join(".claude")).unwrap();
-    let fapony = r#"{"theme": "dark", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bun /x/fapony.ts hook-stop"}]}],
-      "PreToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "bun /x/fapony.ts hook-read-hint"}]}]}}"#;
-    std::fs::write(&claude, fapony).unwrap();
-    std::fs::write(&codex_hooks, fapony).unwrap();
+    let other = r#"{"theme": "dark", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bun /x/other.ts hook-stop"}]}],
+      "PreToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "bun /x/other.ts hook-read-hint"}]}]}}"#;
+    std::fs::write(&claude, other).unwrap();
+    std::fs::write(&codex_hooks, other).unwrap();
     std::fs::write(
         &codex_cfg,
-        "model = \"x\"\n\n[mcp_servers.fapony]\ncommand = \"bun\"\n",
+        "model = \"x\"\n\n[mcp_servers.other]\ncommand = \"bun\"\n",
     )
     .unwrap();
     std::fs::write(
         &oc,
-        "{\n  // mine\n  \"mcp\": {\n    \"fapony\": {\"type\": \"local\"}\n  }\n}\n",
-    )
-    .unwrap();
-    std::fs::write(
-        home.join(".config/opencode/plugins/fapony-session-start.ts"),
-        "",
+        "{\n  // mine\n  \"mcp\": {\n    \"other\": {\"type\": \"local\"}\n  }\n}\n",
     )
     .unwrap();
 
     // dry run writes nothing
     let out = install(&home, &["--dry-run"]);
-    assert!(
-        out.contains("would write") && out.contains("--replace-fapony"),
-        "{out}"
-    );
-    assert_eq!(read(&claude), fapony);
+    assert!(out.contains("would write"), "{out}");
+    assert_eq!(read(&claude), other);
     assert!(!home.join(".claude/skills/fael/SKILL.md").exists());
 
-    // real run: fael wired everywhere, fapony left in place and warned about
-    let out = install(&home, &[]);
-    assert!(out.contains("! fapony's Stop"), "{out}");
+    // real run: fael wired everywhere, the other tool's entries left in place
+    install(&home, &[]);
     let s = read(&claude);
     assert!(s.starts_with("{\n  \"theme\""), "key order kept: {s}");
     for sub in ["stop", "session-start", "read", "edit", "search", "review"] {
@@ -105,12 +92,14 @@ fn install_all_three_idempotent_and_replaces_fapony_on_request() {
     assert!(
         t.contains("[mcp_servers.fael]\ncommand = \"")
             && !t.contains(r"\\?\")
-            && t.contains("[mcp_servers.fapony]"),
+            && t.contains("[mcp_servers.other]"),
         "{t}"
     );
     let o = read(&oc);
     assert!(
-        o.contains("// mine") && o.contains("\"fael\": {\"type\": \"local\""),
+        o.contains("// mine")
+            && o.contains("\"fael\": {\"type\": \"local\"")
+            && o.contains("\"other\": {\"type\": \"local\"}"),
         "{o}"
     );
     let p = read(&home.join(".config/opencode/plugins/fael.js"));
@@ -138,25 +127,6 @@ fn install_all_three_idempotent_and_replaces_fapony_on_request() {
             read(&codex_cfg),
             read(&oc)
         ]
-    );
-
-    // --replace-fapony: every fapony hook + MCP out (fapony retires, 01M4MQTZ7)
-    install(&home, &["--replace-fapony"]);
-    let s = read(&claude);
-    assert!(
-        !s.contains("fapony") && s.contains("hook stop --client claude"),
-        "{s}"
-    );
-    assert!(!read(&codex_hooks).contains("hook-stop"));
-    let t = read(&codex_cfg);
-    assert!(
-        !t.contains("fapony") && t.contains("[mcp_servers.fael]"),
-        "{t}"
-    );
-    assert!(read(&oc).contains("\"fapony\": {\"enabled\": false,"));
-    assert!(
-        home.join(".config/opencode/plugins/fapony-session-start.ts.disabled")
-            .is_file()
     );
 }
 

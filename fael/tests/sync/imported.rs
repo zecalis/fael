@@ -1,5 +1,5 @@
-//! An imported row keeps its legacy `by` (`claude`, `legacy`), so no writer id
-//! owns it. The clone that ran `import` carries it under its own ref; clones
+//! An imported row keeps the `by` it was written with (`claude`), so no writer id
+//! of this repo owns it. The clone that ran `import` carries it under its own ref; clones
 //! that receive it ingest it and never push it again.
 
 use super::*;
@@ -18,7 +18,7 @@ fn imported_rows_travel_once_under_the_importing_clones_ref() {
     std::fs::write(
         legacy.join("2026-09.jsonl"),
         format!(
-            r#"{{"id":"{old}","ts":"2026-09-01T10:00:00.000Z","agent":"claude","kind":"decision","text":"legacy decision","files":["a.rs"]}}"#
+            r#"{{"v":1,"id":"{old}","ts":"2026-09-01T10:00:00.000Z","by":"claude","kind":"decision","text":"legacy decision","files":["a.rs"]}}"#
         ) + "\n",
     )
     .unwrap();

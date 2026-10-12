@@ -14,9 +14,8 @@ use std::collections::HashSet;
 /// filed on it. Built at session start (git is allowed there) and read back
 /// from the session state by the push; with no session state
 /// `Focus::default()` — no branch, no keys — keeps today's order and only
-/// adds the row cap. fael never infers which plan a session is in: `plan:*`
-/// keys are a fapony convention, and fapony's kickoff asks for them itself
-/// (PLAN-fael-plan-focus). A focus file an older fael wrote with a `plan`
+/// adds the row cap. fael never infers which plan a session is in: a chunk
+/// start names it (PLAN-fael-plan-focus). A focus file an older fael wrote with a `plan`
 /// field still reads — serde skips the field.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]

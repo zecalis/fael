@@ -42,46 +42,9 @@ pub(crate) fn opencode(c: &Ctx) -> Result<(), String> {
         ))?;
         what.push("mcp.fael");
     }
-    const OFF: &str = "\"fapony\": {\"enabled\": false,";
-    if let Some(i) = s.find("\"fapony\": {").filter(|_| !s.contains(OFF)) {
-        if c.replace {
-            s.replace_range(i..i + "\"fapony\": {".len(), OFF);
-            what.push("disabled mcp.fapony");
-        } else {
-            out!(
-                c,
-                "  ! mcp.fapony is still on in {} — --replace-fapony disables it",
-                path.display()
-            );
-        }
-    }
     if s != old {
         c.write(&path, &s)?;
         c.say(&what.join(", "), &path);
-    }
-    // fapony's session-start plugin is the only one that competes (OpenCode has
-    // no Stop): disable by rename, never delete
-    let fp = dir.join("plugins/fapony-session-start.ts");
-    if fp.is_file() {
-        if c.replace {
-            c.changed.set(c.changed.get() + 1);
-            if !c.dry {
-                std::fs::rename(&fp, fp.with_extension("ts.disabled"))
-                    .map_err(|e| e.to_string())?;
-            }
-            out!(
-                c,
-                "  {} {} → .disabled",
-                if c.dry { "would rename" } else { "renamed" },
-                fp.display()
-            );
-        } else {
-            out!(
-                c,
-                "  ! {} still runs — --replace-fapony disables it",
-                fp.display()
-            );
-        }
     }
     let plugin = dir.join("plugins/fael.js");
     let body = PLUGIN.replace(

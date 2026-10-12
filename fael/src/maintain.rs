@@ -322,7 +322,6 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
         r.journal.as_deref(),
         r.cfg.store,
         &sp,
-        &r.cfg.kinds,
         &core::ImportOpts { maps },
     )?;
     // imported rows are older than the late watermark but pushed by this clone

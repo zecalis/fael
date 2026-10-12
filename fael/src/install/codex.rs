@@ -8,16 +8,6 @@ pub(crate) fn codex_mcp(c: &Ctx) -> Result<(), String> {
     let old = std::fs::read_to_string(&path).unwrap_or_default();
     let mut s = old.clone();
     let mut what = vec![];
-    if c.replace && s.contains("[mcp_servers.fapony]") {
-        s = drop_toml_table(&s, "mcp_servers.fapony");
-        what.push("removed mcp_servers.fapony");
-    } else if s.contains("[mcp_servers.fapony]") {
-        out!(
-            c,
-            "  ! mcp_servers.fapony is still in {} — --replace-fapony removes it",
-            path.display()
-        );
-    }
     // a JSON string is a valid TOML basic string
     let exe = serde_json::to_string(&c.exe).map_err(|e| e.to_string())?;
     if s.contains("[mcp_servers.fael]") {
@@ -49,28 +39,6 @@ pub(crate) fn codex_mcp(c: &Ctx) -> Result<(), String> {
     Ok(())
 }
 
-/// `[name]` and its `[name.*]` sub-tables, up to the next other header.
-fn drop_toml_table(s: &str, name: &str) -> String {
-    let mut out = String::new();
-    let mut skip = false;
-    for line in s.split_inclusive('\n') {
-        let t = line.trim_start();
-        if t.starts_with('[') {
-            let h = t
-                .trim_start_matches('[')
-                .split(']')
-                .next()
-                .unwrap_or("")
-                .trim();
-            skip = h == name || h.starts_with(&format!("{name}."));
-        }
-        if !skip {
-            out.push_str(line);
-        }
-    }
-    out
-}
-
 /// Byte range of `key`'s value in `[table]` (not its sub-tables), so one line
 /// changes and comments elsewhere survive.
 // ponytail: a trailing `# comment` on that line counts as part of the value
@@ -94,7 +62,7 @@ fn toml_value(s: &str, table: &str, key: &str) -> Option<std::ops::Range<usize>>
 
 #[cfg(test)]
 mod tests {
-    use super::{drop_toml_table, toml_value};
+    use super::toml_value;
 
     #[test]
     fn toml_value_in_table_only() {
@@ -102,14 +70,5 @@ mod tests {
         let r = toml_value(t, "mcp_servers.fael", "command").unwrap();
         assert_eq!(&t[r], "\"/old/fael\"");
         assert!(toml_value(t, "mcp_servers.other", "command").is_none());
-    }
-
-    #[test]
-    fn toml_table_drop() {
-        let t = "a = 1\n[mcp_servers.fapony]\ncommand = \"bun\"\n[mcp_servers.fapony.env]\nX = \"1\"\n[mcp_servers.other]\nc = 2\n";
-        assert_eq!(
-            drop_toml_table(t, "mcp_servers.fapony"),
-            "a = 1\n[mcp_servers.other]\nc = 2\n"
-        );
     }
 }

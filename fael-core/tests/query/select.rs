@@ -230,13 +230,13 @@ fn push_ignores_same_dir_for_markdown() {
     l.rows.push(row(
         "C0000000000000000000000016",
         "note",
-        &[".fapony/plan/PLAN-a.md"],
+        &["docs/plan/PLAN-a.md"],
         None,
     ));
     l.rows.push(row(
         "C0000000000000000000000017",
         "note",
-        &[".fapony/plan/PLAN-b.md"],
+        &["docs/plan/PLAN-b.md"],
         None,
     ));
     let q = |f: &[&str]| {
@@ -249,7 +249,7 @@ fn push_ignores_same_dir_for_markdown() {
     };
     // the exact markdown file still pushes; the neighbouring plan does not —
     // a dir of docs is a pile of unrelated documents (chunk 6)
-    assert_eq!(q(&[".fapony/plan/PLAN-a.md"]), ["16"]);
+    assert_eq!(q(&["docs/plan/PLAN-a.md"]), ["16"]);
     // code keeps its same-dir tier
     assert_eq!(q(&["src/a.rs"]), ["14", "13"]);
     // a tail that ends mid multi-byte char is not markdown, and no panic

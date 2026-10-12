@@ -89,9 +89,9 @@ Planning rides the existing `key` and `files` fields — no new field, no format
 - `plan:<name>:chunk-<n>` — a row about chunk `n`, the chunk it was filed in. The `n` is a
   plain number.
 
-These are a **fapony convention**, not fael semantics: fael stores and matches them like any
+These are a **ledger convention**, not fael semantics: fael stores and matches them like any
 other anchor or key, and never infers from them which plan a session is inside — a session's
-intent is not a fact the shared log can answer. The workflow tool that knows the plan asks for
+intent is not a fact the shared log can answer. The agent that knows the plan asks for
 its rows itself (`fael find --key 'plan:<name>:*'`, `fael kickoff PLAN-<name>.md`).
 
 ### Label

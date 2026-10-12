@@ -300,9 +300,10 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     ),
     (
         "import",
-        "import a fapony log",
+        "import another clone's log",
         "fael import <path> [--map old/=new/]
-    (import rows from a fapony log; --map rewrites a path prefix, repeatable)",
+    (import rows from a log file, a .fael/log dir or a repo root; a close folds into its
+     row; importing twice is safe; --map rewrites a path prefix, repeatable)",
     ),
     (
         "sync",
@@ -322,13 +323,13 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     (
         "install",
         "install hooks and skills for a client",
-        "fael install [--client claude|codex|opencode] [--dry-run] [--replace-fapony]
+        "fael install [--client claude|codex|opencode] [--dry-run]
     (install hooks and skills for an agent client; --dry-run prints without writing)",
     ),
     (
         "upgrade",
         "update the binary, hooks and skills (alias: update)",
-        "fael upgrade [--client claude|codex|opencode] [--dry-run] [--yes] [--replace-fapony]
+        "fael upgrade [--client claude|codex|opencode] [--dry-run] [--yes]
     (updates the binary by the channel it came from — brew, npm or the shell/ps1 installer's fael-update — then the new binary writes hooks and skills; asks first, --yes skips the question, --dry-run shows the channel, the command and the wiring changes; `fael update` is the same; session-start runs `--auto` itself once a day, detached — off with FAEL_NO_AUTO_UPDATE=1 or `auto_update = false` in ~/.config/fael/config.toml)",
     ),
 ];

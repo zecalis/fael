@@ -8,7 +8,7 @@ use std::time::Instant;
 fn main() {
     for n in [10_000usize, 100_000, 300_000] {
         let dir = std::env::temp_dir().join(format!("fael-bench-{}", ulid()));
-        // 5 writers × 12 months, ~430-byte rows (fapony's real average: 150 KB / 350 rows)
+        // 5 writers × 12 months, ~430-byte rows (a real log's average: 150 KB / 350 rows)
         let mut bytes = 0;
         for w in 0..5 {
             for m in 1..=12 {

@@ -27,8 +27,7 @@ pub(super) const SKILLS: [(&str, &str); 7] = [
 ];
 
 /// The names fael's skills replace (decision fael-board:skill-names). A link under one
-/// goes when it points into a fael checkout, or into fapony's package under
-/// `--replace-fapony`; a real dir is someone's own copy and stays.
+/// goes when it points into a fael checkout; a real dir is someone's own copy and stays.
 const RETIRED: [&str; 5] = [
     "plan-with-marketing",
     "plan-with-pony",
@@ -45,9 +44,7 @@ pub(super) fn retire(c: &Ctx, dir: &Path) -> Result<(), String> {
             continue;
         };
         let t = t.to_string_lossy().replace('\\', "/");
-        if !(t.ends_with(&format!("fael/skill/{name}"))
-            || c.replace && t.contains("@zecalis/fapony/"))
-        {
+        if !t.ends_with(&format!("fael/skill/{name}")) {
             continue;
         }
         if !c.dry {
