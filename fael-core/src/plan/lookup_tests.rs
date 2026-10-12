@@ -49,8 +49,8 @@ fn a_label_in_two_plans_asks_for_the_uid() {
     let mut s = Store::open_in_memory().unwrap();
     s.conn
         .execute(
-            "INSERT INTO plan(app, name, title, state, source, truth)
-             VALUES ('', 'p2', 'p2', 'active', '', 'db')",
+            "INSERT INTO plan(app, name, title, state)
+             VALUES ('', 'p2', 'p2', 'active')",
             [],
         )
         .unwrap();
@@ -105,12 +105,12 @@ fn a_chunk_uid_or_its_prefix_is_known() {
 }
 
 #[test]
-fn scopes_overlap_only_within_one_checkout_and_the_brief_names_it() {
+fn scopes_overlap_across_the_plans_of_one_db() {
     let mut s = Store::open_in_memory().unwrap();
     s.conn
         .execute(
-            "INSERT INTO plan(app, name, title, state, source, truth)
-             VALUES ('', 'app', 'app', 'active', '', 'db')",
+            "INSERT INTO plan(app, name, title, state)
+             VALUES ('', 'app', 'app', 'active')",
             [],
         )
         .unwrap();
@@ -131,20 +131,8 @@ fn scopes_overlap_only_within_one_checkout_and_the_brief_names_it() {
     assert_eq!(
         overlaps(&s, &a),
         std::slice::from_ref(&b),
-        "one checkout: src/ is the same tree"
+        "one repo: src/ is the same tree"
     );
-    let app = s
-        .plans()
-        .unwrap()
-        .into_iter()
-        .find(|p| p.name == "app")
-        .unwrap();
-    s.set_repo(app.id, Some("/code/board")).unwrap();
-    assert!(overlaps(&s, &a).is_empty(), "another checkout's src/");
-    let st = s.start(&b, &Start::default(), &here("/w")).unwrap();
-    assert_eq!(st.chunks[0].repo.as_deref(), Some("/code/board"));
-    let text = st.text(&|_| true);
-    assert!(text.contains("code in /code/board"), "{text}");
 }
 
 #[test]

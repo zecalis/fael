@@ -1,4 +1,4 @@
-//! `fael plan new` / `export` / `apply` / `park` through the real binary: plans.db lands in
+//! `fael plan new` / `export` / `apply` / `park` through the real binary: fael.db lands in
 //! the git common dir, a read without a db is a reject, and the md-era verbs are gone.
 
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ fn park_unpark_done_move_a_plan_and_unknown_names_are_refused() {
     let (ok, _, err) = fael(&d, &["plan", "export"]);
     assert!(!ok && err.contains("fael plan new"), "{err}");
     assert!(fael(&d, &["plan", "new", "p", "P"]).0);
-    assert!(d.join(".git/fael/plans.db").exists());
+    assert!(d.join(".git/fael/fael.db").exists());
     let (ok, uid, err) = fael(&d, &["chunk", "add", "p1", "--plan", "p", "--brief", "b"]);
     assert!(ok, "{err}");
     let uid = uid.split_whitespace().next().unwrap();

@@ -15,10 +15,7 @@ const CHUNK_KEYS: &[&str] = &[
     "state",
     "size",
     "model_hint",
-    "client_hint",
     "scope",
-    "due",
-    "pin",
     "ready",
     "blocked_by",
     "unblocks",
@@ -35,10 +32,8 @@ const CHUNK_KEYS: &[&str] = &[
 ];
 /// `options`: the answers `chunk wait --option` offers, `[]` = none (issue 01M4NWFS)
 const WAIT_KEYS: &[&str] = &["on", "text", "until", "options"];
-const PLAN_KEYS: &[&str] = &[
-    "app", "name", "title", "area", "kind", "state", "rank", "truth", "source", "spec", "repo",
-    "remote", "counts",
-];
+/// `truth` is always `db` (epoch v8): the app gates `chunk add --plan` on it
+const PLAN_KEYS: &[&str] = &["app", "name", "title", "area", "state", "truth", "counts"];
 const RUN_KEYS: &[&str] = &[
     "id",
     "client",

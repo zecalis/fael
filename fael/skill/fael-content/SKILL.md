@@ -69,13 +69,13 @@ Round format:
 
 Recompute the frontier after each answer. Done when it is empty and the owner confirms.
 
-## Phase 3 — Write the plan into plans.db
+## Phase 3 — Write the plan into fael.db
 
 ```bash
 fael plan new <app>-content-<yyyy-mm> "<goal of the month>" --app <app> --area marketing
 ```
 
-Fill the sections it writes into plans.db (no file — `fael plan export <plan> --json`, set each
+Fill the sections it writes into fael.db (no file — `fael plan export <plan> --json`, set each
 `"sections"` body by key, `fael plan apply`, as the line it prints says): Goal = goal of the month · pillars · cadence; Constraints = `VOICE.md` and the channel limits. Every post brief
 prints it. Then one chunk per post, in date order:
 

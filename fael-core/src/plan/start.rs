@@ -37,7 +37,6 @@ pub struct Brief {
     pub brief: String,
     pub size: Option<String>,
     pub model_hint: Option<String>,
-    pub client_hint: Option<String>,
     pub scope: Option<String>,
     /// `app/name` or `name`
     pub plan: String,
@@ -46,11 +45,6 @@ pub struct Brief {
     pub sections: Vec<Section>,
     /// `(ref, section)` per `--reads` line, `None` = no such section
     pub reads: Vec<(String, Option<Section>)>,
-    /// the checkout the code lives in when it is not this repo (`fael plan repo`)
-    pub repo: Option<String>,
-    /// this db's repo root, where `fael chunk` runs when `repo` is elsewhere; the CLI sets it
-    pub root: Option<String>,
-    pub refs: Vec<String>,
     /// the owner's answers since this chunk last started (SPEC §1 "owner said")
     pub said: Vec<String>,
     /// `fael chunk note` texts since this chunk last started
@@ -265,8 +259,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
         .query_row(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope,
                     CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END,
-                    p.title, COALESCE(p.refs, ''), c.client_hint, p.repo, p.id,
-                    COALESCE(c.reads, '')
+                    p.title, p.id, COALESCE(c.reads, '')
              FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
             [id],
             |r| {
@@ -277,22 +270,18 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     brief: r.get(3)?,
                     size: r.get(4)?,
                     model_hint: r.get(5)?,
-                    client_hint: r.get(10)?,
                     scope: r.get(6)?,
                     plan: r.get(7)?,
                     plan_title: r.get(8)?,
-                    repo: r.get(11)?,
-                    root: None,
                     sections: vec![],
                     reads: vec![],
-                    refs: r.get::<_, String>(9)?.lines().map(str::to_string).collect(),
                     said: vec![],
                     notes: vec![],
                     after: vec![],
                     resume: None,
                     issues: vec![],
                 };
-                Ok((b, r.get::<_, i64>(12)?, r.get::<_, String>(13)?))
+                Ok((b, r.get::<_, i64>(9)?, r.get::<_, String>(10)?))
             },
         )
         .map_err(err)?;

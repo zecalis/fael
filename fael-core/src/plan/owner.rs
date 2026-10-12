@@ -99,15 +99,6 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael chunk pin <uid> <rank>` / `unpin` (None): the owner's rank, first in queue
-    /// order (SPEC §3), lowest first. State and approval stay.
-    pub fn pin(&mut self, uid: &str, rank: Option<i64>, now: &str) -> Result<(), String> {
-        let text = rank.map_or("unpinned".into(), |n| format!("pinned {n}"));
-        self.mark(uid, &text, now, |tx, id| {
-            tx.execute("UPDATE chunk SET pin = ?1 WHERE id = ?2", params![rank, id])
-        })
-    }
-
     /// `fael chunk approve <uid> --model M --client C` / `unapprove` (None): the approved
     /// queue may start it with that model and client when a slot frees (SPEC §8); `edit`
     /// clears it.
@@ -173,8 +164,8 @@ impl Store {
         let tx = tx(self)?;
         let n = tx
             .execute(
-                "INSERT OR IGNORE INTO plan(app, name, title, area, state, source, truth)
-                 VALUES (?1, ?2, ?3, ?4, 'active', '', 'db')",
+                "INSERT OR IGNORE INTO plan(app, name, title, area, state)
+                 VALUES (?1, ?2, ?3, ?4, 'active')",
                 params![app, name, title.trim(), area],
             )
             .map_err(err)?;

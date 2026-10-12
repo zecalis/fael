@@ -1,5 +1,5 @@
-//! v1 → v6 (and v2, v5 → v6) on a fixture written with b1's schema: every row carried over, a failure
-//! leaves v1 for the next open, two first opens migrate once.
+//! v1 → v8 on a fixture written with b1's schema: every row carried over, a failure leaves
+//! v1 for the next open, two first opens migrate once. v2, v5, v6 → v8: `schema_v6_tests.rs`.
 
 use super::super::store::Store;
 use rusqlite::Connection;
@@ -69,7 +69,7 @@ CREATE INDEX run_chunk ON run(chunk);
 fn v1_db(extra: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("fael-v1-{}", crate::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("plans.db");
+    let path = dir.join("fael.db");
     let c = Connection::open(&path).unwrap();
     c.execute_batch(V1).unwrap();
     c.execute_batch(
@@ -90,14 +90,14 @@ fn v1_db(extra: &str) -> PathBuf {
     path
 }
 
-fn version(path: &Path) -> i32 {
+pub(super) fn version(path: &Path) -> i32 {
     Connection::open(path)
         .unwrap()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap()
 }
 
-fn rows(s: &Store, sql: &str) -> Vec<String> {
+pub(super) fn rows(s: &Store, sql: &str) -> Vec<String> {
     s.conn
         .prepare(sql)
         .unwrap()
@@ -111,7 +111,7 @@ fn rows(s: &Store, sql: &str) -> Vec<String> {
 fn v1_rows_carry_over() {
     let path = v1_db("");
     let s = Store::open(&path).unwrap();
-    assert_eq!(version(&path), 6);
+    assert_eq!(version(&path), 8);
     assert_eq!(
         rows(
             &s,
@@ -154,48 +154,7 @@ fn v1_rows_carry_over() {
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-#[test]
-fn v2_gains_run_cost_client_hint_and_plan_repo() {
-    let path = v1_db("");
-    drop(Store::open(&path).unwrap());
-    Connection::open(&path)
-        .unwrap()
-        .execute_batch(
-            "ALTER TABLE run DROP COLUMN cost; ALTER TABLE chunk DROP COLUMN client_hint;
-             ALTER TABLE plan DROP COLUMN repo;",
-        )
-        .unwrap();
-    to_v5(&path, "PRAGMA user_version = 2;");
-    let s = Store::open(&path).unwrap();
-    assert_eq!(version(&path), 6);
-    assert_eq!(
-        rows(&s, "SELECT COALESCE(cost, '-') || ' ' || branch FROM run"),
-        ["- feat/b"]
-    );
-    assert_eq!(
-        rows(&s, "SELECT COALESCE(client_hint, '-') FROM chunk LIMIT 1"),
-        ["-"]
-    );
-    assert_eq!(
-        rows(&s, "SELECT COALESCE(repo, '-') FROM plan LIMIT 1"),
-        ["-"]
-    );
-    let _ = std::fs::remove_dir_all(path.parent().unwrap());
-}
-
-/// Undo v5 → v6 on a migrated db, then run `then`.
-fn to_v5(path: &Path, then: &str) {
-    Connection::open(path)
-        .unwrap()
-        .execute_batch(&format!(
-            "DROP INDEX event_plan; ALTER TABLE event DROP COLUMN plan;
-             ALTER TABLE event DROP COLUMN batch; DROP TABLE meta;
-             ALTER TABLE plan RENAME COLUMN doc TO goal; PRAGMA user_version = 5; {then}"
-        ))
-        .unwrap();
-}
-
-fn db_id(path: &Path) -> String {
+pub(super) fn db_id(path: &Path) -> String {
     Connection::open(path)
         .unwrap()
         .query_row("SELECT value FROM meta WHERE key = 'db_id'", [], |r| {
@@ -205,46 +164,10 @@ fn db_id(path: &Path) -> String {
 }
 
 #[test]
-fn v5_gains_plan_doc_event_plan_batch_and_a_stable_db_id() {
-    let path = v1_db("");
-    drop(Store::open(&path).unwrap());
-    to_v5(
-        &path,
-        "UPDATE plan SET goal = 'why';
-         INSERT INTO event(chunk_uid, at, by, to_state)
-           VALUES ('plan:/t', 't1', 'owner', 'parked'), ('gone', 't1', 'import', 'open');",
-    );
-    let s = Store::open(&path).unwrap();
-    assert_eq!(version(&path), 6);
-    assert_eq!(rows(&s, "SELECT doc FROM plan"), ["why"]);
-    assert_eq!(
-        rows(
-            &s,
-            "SELECT chunk_uid || ' ' || COALESCE(plan || '', '-') || ' ' || COALESCE(batch, '-')
-             FROM event WHERE chunk_uid IN ('plan:/t', 'gone') ORDER BY id"
-        ),
-        ["plan:/t 1 -", "gone - -"]
-    );
-    assert_eq!(
-        rows(
-            &s,
-            "SELECT COALESCE(plan || '', '-') FROM event WHERE to_state = 'running'"
-        ),
-        ["1"]
-    );
-    let id = db_id(&path);
-    assert_eq!(id.len(), 26);
-    drop(s);
-    drop(Store::open(&path).unwrap());
-    assert_eq!(db_id(&path), id, "reopen keeps the id");
-    let _ = std::fs::remove_dir_all(path.parent().unwrap());
-}
-
-#[test]
 fn a_fresh_db_has_a_db_id() {
     let dir = std::env::temp_dir().join(format!("fael-v0-{}", crate::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("plans.db");
+    let path = dir.join("fael.db");
     drop(Store::open(&path).unwrap());
     assert_eq!(db_id(&path).len(), 26);
     let _ = std::fs::remove_dir_all(dir);
@@ -266,7 +189,7 @@ fn a_failed_step_leaves_v1_and_the_next_open_retries() {
     c.execute_batch("DROP TABLE edge").unwrap();
     drop(c);
     Store::open(&path).unwrap();
-    assert_eq!(version(&path), 6);
+    assert_eq!(version(&path), 8);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
@@ -289,12 +212,12 @@ fn two_first_opens_round() {
     for o in opens {
         assert_eq!(o.join().unwrap().unwrap().len(), 4);
     }
-    assert_eq!(version(&path), 6);
+    assert_eq!(version(&path), 8);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-fn baks(path: &Path, v: i32) -> Vec<PathBuf> {
-    let pre = format!("plans.db.v{v}.");
+pub(super) fn baks(path: &Path, v: i32) -> Vec<PathBuf> {
+    let pre = format!("fael.db.v{v}.");
     std::fs::read_dir(path.parent().unwrap())
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -317,17 +240,10 @@ fn an_epoch_upgrade_leaves_a_backup_at_the_old_version() {
     assert_eq!(n, 3, "v1 rows in the copy");
     drop(Store::open(&path).unwrap());
     assert_eq!(
-        baks(&path, 6),
+        baks(&path, 8),
         Vec::<PathBuf>::new(),
         "a plain open copies nothing"
     );
-    for _ in 0..2 {
-        to_v5(&path, "");
-        drop(Store::open(&path).unwrap());
-    }
-    let five = baks(&path, 5);
-    assert_eq!(five.len(), 2, "the older copy is kept: {five:?}");
-    assert!(five.iter().all(|b| version(b) == 5));
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 

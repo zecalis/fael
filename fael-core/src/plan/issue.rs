@@ -1,6 +1,6 @@
 //! The ledger issues a chunk fixes (PLAN-fael-board l2, decision 01M4NCWEQ): `chunk add
 //! --issue` links them, the brief prints them, the board shows each issue's chunk. The ids
-//! come checked from the CLI (the ledger is not in plans.db); fael never closes an issue.
+//! come checked from the CLI (the ledger is not in fael.db); fael never closes an issue.
 
 use super::store::{Store, err};
 use rusqlite::{Connection, params};

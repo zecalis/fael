@@ -1,13 +1,13 @@
 //! `fael chunk …` and `fael run end R` (PLAN-fael-board b2a, SPEC §1): the CLI over the
 //! chunk contract in `fael_core::plan`. The worktree is this repo's root; the db is the
-//! clone's `plans.db`; `--out` copies under `<db dir>/out/<uid>/<R>/`.
+//! clone's `fael.db`; `--out` copies under `<db dir>/out/<uid>/<R>/`.
 
 use crate::plan::db;
 use crate::{Args, Repo, core, repo};
 use fael_core::plan::{Fields, Here, Owner, Store};
 use std::process::ExitCode;
 
-const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|reply|answer|done|accept|drop|park|unpark|apply|pin|unpin|approve|unapprove — try 'fael chunk --help'";
+const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
@@ -30,8 +30,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             a.only(
                 "chunk add",
                 &[
-                    "plan", "brief", "size", "model", "client", "scope", "reads", "after", "label",
-                    "issue",
+                    "plan", "brief", "size", "model", "scope", "reads", "after", "label", "issue",
                 ],
             )?;
             let f = Fields {
@@ -49,9 +48,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         ["edit", uid] => {
             a.only(
                 "chunk edit",
-                &[
-                    "title", "brief", "size", "model", "client", "scope", "reads", "label",
-                ],
+                &["title", "brief", "size", "model", "scope", "reads", "label"],
             )?;
             let mut st = s()?;
             st.edit(uid, &fields(a), &now)?;
@@ -94,16 +91,14 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             s()?.owner(uid, cmd, None, &now)?;
             say(uid, to);
         }
-        ["apply" | "pin" | "unpin" | "approve" | "unapprove", ..] => {
-            queue(a, &rest, &mut s()?, &now)?
-        }
+        ["apply" | "approve" | "unapprove", ..] => queue(a, &rest, &mut s()?, &now)?,
         _ => return Err(format!("rejected: {USAGE}")),
     }
     crate::board::register(&r);
     Ok(ExitCode::SUCCESS)
 }
 
-/// The planner's batch and the owner's queue marks: `apply`, `pin`, `approve` and their undo.
+/// The planner's batch and the owner's queue mark: `apply`, `approve` and its undo.
 fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String> {
     let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
     match rest {
@@ -118,19 +113,6 @@ fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String
             for line in s.apply(ops, now)? {
                 println!("{line}");
             }
-        }
-        ["pin", uid, rank] => {
-            a.only("chunk pin", &[])?;
-            let n = rank
-                .parse::<i64>()
-                .map_err(|_| "rejected: chunk pin <uid> <rank> — a whole number, lowest first")?;
-            s.pin(uid, Some(n), now)?;
-            say(uid, &format!("pinned {n}"));
-        }
-        ["unpin", uid] => {
-            a.only("chunk unpin", &[])?;
-            s.pin(uid, None, now)?;
-            say(uid, "unpinned");
         }
         ["approve", uid] => {
             a.only("chunk approve", &["model", "client"])?;
@@ -180,8 +162,8 @@ pub(crate) fn run_beat(a: &Args, run: &str) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `<state>/held/<session>`: the plans.db a session's `chunk start` bound a run in, so its
-/// Stop hook stamps that run from any cwd (a chunk whose code is in another repo).
+/// `<state>/held/<session>`: the fael.db a session's `chunk start` bound a run in, so its
+/// Stop hook stamps that run from any cwd (a `--no-worktree` run has no worktree to match).
 pub(crate) fn held(session: &str) -> Option<std::path::PathBuf> {
     session
         .chars()
@@ -217,7 +199,6 @@ fn fields(a: &Args) -> Fields {
         brief: a.one("brief"),
         size: a.one("size"),
         model: a.one("model"),
-        client: a.one("client"),
         scope: a.has("scope").then(|| list(a, "scope")),
         reads: a.has("reads").then(|| list(a, "reads")),
         label: a.one("label"),
@@ -226,7 +207,7 @@ fn fields(a: &Args) -> Fields {
 }
 
 /// `--issue a,b`: each an open issue row of this repo's ledger (a unique prefix will do),
-/// as its full id — the ledger is not in plans.db, so the check is here.
+/// as its full id — the ledger is not in fael.db, so the check is here.
 fn issues(r: &Repo, ids: &[String]) -> Result<Vec<String>, String> {
     if ids.is_empty() {
         return Ok(vec![]);

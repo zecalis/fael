@@ -67,8 +67,7 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
     let own: Vec<Vec<String>> = chunks.iter().map(|c| unshared(&c.scope, shared)).collect();
     for &a in &hot {
         for &b in &hot {
-            let same = chunks[a].code == chunks[b].code;
-            if a != b && same && overlap(&own[a], &own[b]) {
+            if a != b && overlap(&own[a], &own[b]) {
                 let u = chunks[b].uid.clone();
                 chunks[a].overlaps.push(u);
             }

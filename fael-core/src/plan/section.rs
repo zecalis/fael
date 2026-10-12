@@ -252,8 +252,8 @@ pub(super) fn read(c: &Connection, pid: i64, r: &str) -> Result<Option<Row>, Str
     }))
 }
 
-/// Once, when the `section` table is created: every plan's `plan.doc` cut into sections.
-/// The column stays (an older fael in another worktree still reads it) until epoch v8.
+/// Once, on a db from before the `section` table (epoch v8's step, before it drops
+/// `plan.doc`): every plan's `plan.doc` cut into sections.
 pub(super) fn carry(tx: &Transaction) -> Result<(), String> {
     let docs: Vec<(i64, String)> = tx
         .prepare("SELECT id, doc FROM plan WHERE COALESCE(doc, '') <> ''")

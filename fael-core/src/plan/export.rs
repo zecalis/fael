@@ -24,20 +24,15 @@ fn cols<const N: usize>(r: &rusqlite::Row) -> rusqlite::Result<[String; N]> {
 }
 
 pub fn export(s: &Store, plan: i64) -> Result<String, String> {
-    let [app, name, title, area, kind, state, spec, refs] = s
+    let [app, name, title, area, state] = s
         .conn
         .query_row(
-            "SELECT app, name, title, area, kind, state, spec, refs FROM plan WHERE id = ?1",
+            "SELECT app, name, title, area, state FROM plan WHERE id = ?1",
             [plan],
             cols,
         )
         .map_err(err)?;
-    let mut o = String::from("---\n");
-    for (k, v) in [("kind", &kind), ("area", &area), ("spec", &spec)] {
-        if !v.is_empty() {
-            let _ = writeln!(o, "{k}: {v}");
-        }
-    }
+    let mut o = format!("---\narea: {area}\n");
     if state == "blocked" {
         o.push_str("status: blocked\n");
     }
@@ -50,9 +45,6 @@ pub fn export(s: &Store, plan: i64) -> Result<String, String> {
         o,
         "---\n\n# {title}\n\n> fael plan export — {key} · {state}"
     );
-    for r in refs.lines().filter(|r| !r.is_empty()) {
-        let _ = writeln!(o, "> ref: {r}");
-    }
     o.push_str("\n## TL;DR\n");
     chunks(s, plan, &mut o)?;
     for r in &section::list(&s.conn, plan)? {
@@ -94,14 +86,13 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
                  WHERE e.src = c.id AND e.kind = 'after'),
                (SELECT r.start || ' ' || COALESCE(r.branch, '') FROM run r
                  WHERE r.chunk = c.id AND r.ended IS NULL ORDER BY r.id DESC LIMIT 1),
-               c.wait_on, c.wait_text, c.wait_until, c.size, c.client_hint, c.model_hint, c.scope,
-               c.due, c.pin, c.approved_model, c.reads
+               c.wait_on, c.wait_text, c.wait_until, c.size, c.model_hint, c.scope,
+               c.approved_model, c.reads
              FROM chunk c WHERE c.plan = ?1 ORDER BY c.seq",
         )
         .map_err(err)?;
     let names = [
-        "after", "run", "wait on", "wait", "until", "size", "client", "model", "scope", "due",
-        "pin", "approved", "reads",
+        "after", "run", "wait on", "wait", "until", "size", "model", "scope", "approved", "reads",
     ];
     // the notes the chunk's next brief prints: those since its last start
     let mut notes = s
@@ -114,7 +105,7 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
              ORDER BY id",
         )
         .map_err(err)?;
-    for row in q.query_map([plan], cols::<18>).map_err(err)? {
+    for row in q.query_map([plan], cols::<15>).map_err(err)? {
         let [title, brief, state, uid, label, rest @ ..] = row.map_err(err)?;
         let tick = match state.as_str() {
             "done" => 'x',
@@ -168,10 +159,9 @@ pub(super) fn rev(c: &Connection, plan: i64) -> Result<i64, String> {
 /// `replaced` or `dropped`), read in one transaction so `rev` matches the lines.
 pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
     let tx = s.conn.unchecked_transaction().map_err(err)?;
-    let [app, name, title, area, state, refs, repo] = tx
+    let [app, name, title, area, state] = tx
         .query_row(
-            "SELECT app, name, title, area, state, COALESCE(refs, ''), COALESCE(repo, '')
-             FROM plan WHERE id = ?1",
+            "SELECT app, name, title, area, state FROM plan WHERE id = ?1",
             [plan],
             cols,
         )
@@ -183,8 +173,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
     };
     let mut q = tx
         .prepare(
-            "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.client_hint,
-                    c.scope, c.reads,
+            "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope, c.reads,
                     (SELECT group_concat(a.uid, char(10)) FROM edge e JOIN chunk a ON a.id = e.dst
                       WHERE e.src = c.id AND e.kind = 'after')
              FROM chunk c WHERE c.plan = ?1 AND c.state NOT IN ('replaced', 'dropped')
@@ -199,8 +188,8 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
             let g = |i| r.get::<_, Option<String>>(i);
             Ok(json!({
                 "uid": g(0)?, "label": g(1)?, "title": g(2)?, "brief": g(3)?, "size": g(4)?,
-                "model": g(5)?, "client": g(6)?, "scope": lines(g(7)?), "reads": lines(g(8)?),
-                "after": lines(g(9)?),
+                "model": g(5)?, "scope": lines(g(6)?), "reads": lines(g(7)?),
+                "after": lines(g(8)?),
             }))
         })
         .map_err(err)?
@@ -212,8 +201,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
         .collect();
     Ok(json!({
         "v": 1, "plan": key, "rev": rev(&tx, plan)?, "title": title, "area": area,
-        "state": state, "refs": lines(Some(refs)), "repo": repo, "sections": sections,
-        "chunks": chunks,
+        "state": state, "sections": sections, "chunks": chunks,
     }))
 }
 

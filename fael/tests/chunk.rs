@@ -89,7 +89,7 @@ fn done_out_copies_the_output_per_run() {
     assert_eq!(out, format!("chunk {u} → done\n"));
 }
 
-/// `fael hook <event>` with this worktree as cwd: the event reaches plans.db.
+/// `fael hook <event>` with this worktree as cwd: the event reaches fael.db.
 fn hook(d: &Path, event: &str, session: &str) {
     use std::io::Write as _;
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
@@ -120,7 +120,7 @@ fn the_stop_hook_stamps_its_worktree_run() {
     hook(&d, "stop", "2026-10-11T09:00:00Z");
     // the hook filled `session`: another session's stamp now finds no run
     let wt = d.canonicalize().unwrap().to_string_lossy().into_owned();
-    let mut s = fael_core::plan::Store::open(&d.join(".git/fael/plans.db")).unwrap();
+    let mut s = fael_core::plan::Store::open(&d.join(".git/fael/fael.db")).unwrap();
     assert_eq!(s.seen(&wt, "2026-10-11T10:00:00Z", "t").unwrap(), 0);
     assert_eq!(s.seen(&wt, "2026-10-11T09:00:00Z", "t").unwrap(), 1);
 }
@@ -182,7 +182,7 @@ fn an_agent_start_keeps_its_session_through_done() {
 }
 
 #[test]
-fn apply_reads_stdin_and_the_board_sees_pin_and_approval() {
+fn apply_reads_stdin_and_the_board_sees_the_approval() {
     let d = repo();
     let (a, b) = (add(&d), add(&d));
     let apply = |json: String| {
@@ -219,17 +219,12 @@ fn apply_reads_stdin_and_the_board_sees_pin_and_approval() {
         ok && out.contains("approved · model opus · client claude"),
         "{out}"
     );
-    assert!(fael(&d, &["chunk", "pin", &b, "1"]).0);
-    assert!(!fael(&d, &["chunk", "pin", &b, "first"]).0);
+    // pin is gone with epoch v8: the queue is plan order and unblocks
+    assert!(!fael(&d, &["chunk", "pin", &b, "1"]).0);
     let (_, json, _) = fael(&d, &["board", "--json"]);
     assert!(
         json.contains(r#""model":"opus""#) || json.contains(r#""model": "opus""#),
         "{json}"
-    );
-    let q = json.split(r#""queue""#).nth(1).unwrap();
-    assert!(
-        q.find(&b).unwrap() < q.find(&a).unwrap(),
-        "pinned first: {q}"
     );
 }
 
@@ -238,9 +233,7 @@ fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
     let d = repo();
     let (ok, out, err) = fael(
         &d,
-        &[
-            "chunk", "add", "Hero", "--brief", "Draw it", "--size", "S", "--client", "image",
-        ],
+        &["chunk", "add", "Hero", "--brief", "Draw it", "--size", "S"],
     );
     assert!(ok, "{err}");
     let u = out.trim().to_string();
@@ -286,8 +279,8 @@ fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
         .find(|c| c["uid"] == u.as_str())
         .unwrap();
     assert_eq!(
-        (&c["client_hint"], &c["run"]["model"], &c["run"]["worktree"]),
-        (&"image".into(), &"flux".into(), &serde_json::Value::Null),
+        (&c["run"]["model"], &c["run"]["worktree"]),
+        (&"flux".into(), &serde_json::Value::Null),
         "{c}"
     );
 }

@@ -1,4 +1,4 @@
-//! The brief: plan sections once per plan, refs, pairs, notes and hand-offs; reads and the
+//! The brief: plan sections once per plan, pairs, notes and hand-offs; reads and the
 //! section index are in `section_tests.rs` (they need a store).
 
 use super::super::start::{Brief, Started};
@@ -21,7 +21,6 @@ fn chunk(uid: &str) -> Brief {
         brief: format!("brief {uid}"),
         size: None,
         model_hint: None,
-        client_hint: None,
         scope: None,
         plan: "x".into(),
         plan_title: "x".into(),
@@ -33,9 +32,6 @@ fn chunk(uid: &str) -> Brief {
             sec("5", "5. Risks", "none said"),
         ],
         reads: vec![],
-        repo: None,
-        root: None,
-        refs: vec!["SPEC-x.md#block".into(), "gone.rs".into()],
         said: vec![],
         notes: vec![],
         after: vec![],
@@ -45,12 +41,12 @@ fn chunk(uid: &str) -> Brief {
 }
 
 #[test]
-fn the_brief_prints_the_plan_sections_once_and_marks_missing_refs() {
+fn the_brief_prints_the_plan_sections_once() {
     let st = Started {
         run: "R".into(),
         chunks: vec![chunk("A"), chunk("B")],
     };
-    let t = st.text(&|p| p == "SPEC-x.md");
+    let t = st.text();
     assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
     assert!(t.contains("\n# 1 — title A (A)\n"), "{t}");
     for keep in [
@@ -72,19 +68,12 @@ fn the_brief_prints_the_plan_sections_once_and_marks_missing_refs() {
         run: "R".into(),
         chunks: vec![labelled],
     };
-    assert!(
-        one.text(&|_| true)
-            .contains("\n# 1 — titled with its label (C)\n")
-    );
+    assert!(one.text().contains("\n# 1 — titled with its label (C)\n"));
     assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
     assert_eq!(
         t.matches("## 1. Goal").count(),
         1,
         "plan context once per plan: {t}"
-    );
-    assert!(
-        t.contains("refs: SPEC-x.md#block · gone.rs (missing)"),
-        "{t}"
     );
     assert!(t.contains("fael chunk done A"), "{t}");
     // what the agent leaves for the owner fits one board line
@@ -99,7 +88,7 @@ fn the_brief_prints_the_plan_sections_once_and_marks_missing_refs() {
         run: "R".into(),
         chunks: vec![noted],
     }
-    .text(&|_| true);
+    .text();
     assert!(
         t2.contains("\nnotes left for this chunk:\n> use v2\n> not v1\n")
             && t2.contains("\nb3b, before this, handed off:\n> board ships\n"),
@@ -112,11 +101,8 @@ fn the_brief_prints_the_plan_sections_once_and_marks_missing_refs() {
         run: "R".into(),
         chunks: vec![bare],
     }
-    .text(&|_| true);
-    assert!(
-        !t.contains("Goal") && t.contains("refs: SPEC-x.md#block · gone.rs\n"),
-        "{t}"
-    );
+    .text();
+    assert!(!t.contains("Goal") && t.contains("brief E"), "{t}");
 }
 
 #[test]

@@ -1,14 +1,14 @@
-//! `plans.db` — SQLite in WAL mode beside the journal (`<git-common-dir>/fael/`), so every
+//! `fael.db` — SQLite in WAL mode beside the journal (`<git-common-dir>/fael/`), so every
 //! worktree of a clone shares it. Schema per SPEC-fael-board §7; `user_version` carries the
 //! breaking epoch, an older db upgrades on open (release gate: no manual step) and every
 //! open adds the tables and columns it lacks.
 
 use super::schema::{
     COLUMNS, SCHEMA, TABLES, VERSION, backup, missing, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5,
-    v5_to_v6, v6_fill,
+    v5_to_v6, v6_fill, v6_to_v8,
 };
 use rusqlite::{Connection, TransactionBehavior};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 type Adds = &'static [(&'static str, &'static str)];
@@ -29,7 +29,7 @@ pub struct PlanRow {
 }
 
 pub(super) fn err(e: rusqlite::Error) -> String {
-    format!("plans.db: {e}")
+    format!("fael.db: {e}")
 }
 
 impl Store {
@@ -111,12 +111,12 @@ impl Store {
             backup(Path::new(db), v)?;
         }
         type Step = fn(&rusqlite::Transaction) -> Result<(), String>;
-        let steps: [Step; 4] = [v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6];
+        let steps: [Step; 5] = [v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v8];
         match v {
             0 => tx.execute_batch(SCHEMA).map_err(err)?,
-            // v1 → v2 creates the current SCHEMA; each later step runs the ones after it
+            // v1 creates the current SCHEMA; each later version runs the steps after it
             1 => v1_to_v2(&tx)?,
-            2..=5 => {
+            2..=6 => {
                 for step in &steps[v as usize - 2..] {
                     step(&tx)?;
                 }
@@ -129,12 +129,8 @@ impl Store {
                 .map_err(err)?;
         }
         // re-read under the lock: another open may have added them meanwhile
-        let add = missing(&tx, tables, columns).map_err(err)?;
-        let carry = add.contains("EXISTS section(");
-        tx.execute_batch(&add).map_err(err)?;
-        if carry {
-            super::section::carry(&tx)?;
-        }
+        tx.execute_batch(&missing(&tx, tables, columns).map_err(err)?)
+            .map_err(err)?;
         tx.commit().map_err(err)
     }
 
@@ -158,19 +154,6 @@ impl Store {
         .map_err(err)
     }
 
-    /// `fael plan repo <plan> <path|->`: the checkout the plan's code lives in (None = this
-    /// repo). The board lists it as a project, a PR resolves against its remote, and scope
-    /// overlaps only between chunks of one checkout.
-    pub fn set_repo(&mut self, id: i64, repo: Option<&str>) -> Result<(), String> {
-        self.conn
-            .execute(
-                "UPDATE plan SET repo = ?1 WHERE id = ?2",
-                rusqlite::params![repo, id],
-            )
-            .map(|_| ())
-            .map_err(err)
-    }
-
     /// Is `tok` a chunk uid, or the prefix of one? Ledger ids share the ULID shape.
     pub fn is_chunk(&self, tok: &str) -> bool {
         self.conn
@@ -183,6 +166,55 @@ impl Store {
     }
 }
 
+/// `<dir>/fael.db`, the clone's db. Epoch v8 named it for the product: a `plans.db` there
+/// (and a `-wal`/`-shm` left) becomes `fael.db` on the first call, and a stub `plans.db`
+/// at user_version [`STUB`] stays behind so a fael from before v8 refuses it ("schema v…")
+/// instead of making an empty db. A rename that fails leaves `plans.db` the db (it upgrades
+/// in place) and the next call tries again.
+pub fn db_at(dir: &Path) -> PathBuf {
+    let (path, old) = (dir.join("fael.db"), dir.join("plans.db"));
+    if path.exists() || rename(&old, &path).is_ok() {
+        return path;
+    }
+    old
+}
+
+/// The hard link is the lock: of two first opens, one links, the other finds `fael.db`.
+pub(super) fn rename(old: &Path, new: &Path) -> Result<(), String> {
+    let e = |e: String| format!("plans.db → fael.db refused: {e}; nothing changed");
+    let Ok(c) = Connection::open_with_flags(old, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
+    else {
+        return Ok(());
+    };
+    let v: i32 = c
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .map_err(|x| e(x.to_string()))?;
+    if v > VERSION {
+        return Ok(()); // the stub itself: fael.db was removed, a fresh one starts
+    }
+    c.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
+        .map_err(|x| e(x.to_string()))?;
+    drop(c);
+    if let Err(x) = std::fs::hard_link(old, new) {
+        return match x.kind() {
+            std::io::ErrorKind::AlreadyExists => Ok(()),
+            _ => Err(e(x.to_string())),
+        };
+    }
+    for side in ["-wal", "-shm"] {
+        let from = format!("{}{side}", old.display());
+        let _ = std::fs::rename(&from, format!("{}{side}", new.display()));
+    }
+    let tmp = old.with_extension(format!("stub.{}", crate::ulid()));
+    Connection::open(&tmp)
+        .and_then(|c| c.pragma_update(None, "user_version", STUB))
+        .map_err(|x| e(x.to_string()))?;
+    std::fs::rename(&tmp, old).map_err(|x| e(x.to_string()))
+}
+
+/// The stub `plans.db`'s user_version: past any epoch a fael will ever reach.
+pub(super) const STUB: i32 = 1_000_000;
+
 /// A db past this fael's epoch: a breaking change it cannot read. The error names the upgrade.
 fn newer(v: i32) -> String {
     // a dev build is upgraded by building a newer main, not by the release channel
@@ -192,7 +224,7 @@ fn newer(v: i32) -> String {
         ),
         None => format!("this fael knows v{VERSION} — run `fael upgrade`"),
     };
-    format!("plans.db is schema v{v}, {fix}")
+    format!("fael.db is schema v{v}, {fix}")
 }
 
 #[cfg(test)]

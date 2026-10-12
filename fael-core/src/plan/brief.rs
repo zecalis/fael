@@ -1,7 +1,6 @@
 //! What `fael chunk start` prints — the agent's first message (SPEC §8). The first line
 //! names R; then the plan's Goal and Done sections, each section the chunk reads, and an
-//! index of the rest (no reads: Goal, Scope, Done, Constraints). A ref that no longer
-//! exists is listed as missing.
+//! index of the rest (no reads: Goal, Scope, Done, Constraints).
 
 use super::export::one;
 use super::section::Row;
@@ -62,8 +61,7 @@ fn resume(o: &mut String, p: &Prev) {
 }
 
 impl Started {
-    /// `exists(path)` = whether a ref is still there.
-    pub fn text(&self, exists: &dyn Fn(&str) -> bool) -> String {
+    pub fn text(&self) -> String {
         let mut o = String::new();
         let n = self.chunks.len();
         let what = if n == 1 {
@@ -85,29 +83,15 @@ impl Started {
                 "\n# {label}{} ({})\nplan {} — {}",
                 c.title, c.uid, c.plan, c.plan_title
             );
-            if let Some(repo) = &c.repo {
-                // issue 01M4NC9GV: that checkout has no plans.db; R fences wait/after/done
-                let at = c.root.as_deref().map_or(String::new(), |d| {
-                    format!(
-                        "; run `fael chunk` from {d}, wait/after/done with --run {}",
-                        self.run
-                    )
-                });
-                let _ = writeln!(o, "code in {repo} — work, scope and PR there{at}");
-            }
-            let fields: Vec<String> = [
-                ("size", &c.size),
-                ("client", &c.client_hint),
-                ("model", &c.model_hint),
-            ]
-            .iter()
-            .filter_map(|(k, v)| v.as_ref().map(|v| format!("{k} {v}")))
-            .chain(
-                c.scope
-                    .as_ref()
-                    .map(|s| format!("scope {}", s.replace('\n', ", "))),
-            )
-            .collect();
+            let fields: Vec<String> = [("size", &c.size), ("model", &c.model_hint)]
+                .iter()
+                .filter_map(|(k, v)| v.as_ref().map(|v| format!("{k} {v}")))
+                .chain(
+                    c.scope
+                        .as_ref()
+                        .map(|s| format!("scope {}", s.replace('\n', ", "))),
+                )
+                .collect();
             if !fields.is_empty() {
                 let _ = writeln!(o, "{}", fields.join(" · "));
             }
@@ -141,14 +125,14 @@ impl Started {
                 );
             }
         }
-        self.plan_context(&mut o, exists);
+        self.plan_context(&mut o);
         o.push('\n');
         o.push_str(&rules(self.chunks.first().map_or("<uid>", |c| &c.uid)));
         o
     }
 
     /// Plan context once per plan, after the chunks.
-    fn plan_context(&self, o: &mut String, exists: &dyn Fn(&str) -> bool) {
+    fn plan_context(&self, o: &mut String) {
         let mut seen = Vec::new();
         for c in &self.chunks {
             if seen.contains(&&c.plan) {
@@ -206,21 +190,6 @@ impl Started {
                     let day = s.updated.get(..10).unwrap_or(&s.updated);
                     let _ = writeln!(o, "- {} · {} · {day}", s.key, s.title);
                 }
-            }
-            if !c.refs.is_empty() {
-                let refs: Vec<String> = c
-                    .refs
-                    .iter()
-                    .map(|r| {
-                        let path = r.split('#').next().unwrap_or(r);
-                        if exists(path) {
-                            r.clone()
-                        } else {
-                            format!("{r} (missing)")
-                        }
-                    })
-                    .collect();
-                let _ = writeln!(o, "\nrefs: {}", refs.join(" · "));
             }
         }
     }
