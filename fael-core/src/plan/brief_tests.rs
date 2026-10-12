@@ -118,3 +118,13 @@ fn the_brief_reads_the_plan_md_live_and_marks_missing_refs() {
         "{t}"
     );
 }
+
+#[test]
+fn the_rules_ask_for_the_windows_ci_result_not_the_trigger() {
+    let r = rules("U1");
+    assert!(r.contains("gh run watch <id> --exit-status"), "{r}");
+    assert!(
+        r.contains("fail with the failing test, in the done text"),
+        "{r}"
+    );
+}
