@@ -28,6 +28,7 @@ mod changed;
 mod check;
 mod cited;
 mod claude;
+mod codes;
 mod decision;
 mod experience_text;
 mod focus;
@@ -55,9 +56,7 @@ mod usage;
 mod usage_files;
 mod verdict_text;
 
-pub(crate) use asks::{
-    ASK_REJECT, ASK_WARN, record_asks, record_cli_reject, record_mcp, record_row_asks,
-};
+pub(crate) use asks::{ASK_WARN, record_asks, record_row_asks};
 pub(crate) use friction::{note_empty, record_cli, record_mcp_call};
 pub(crate) use protocol::cmd;
 pub(crate) use usage::{aggregate, load, local_tz_offset_min, record_found, stats};

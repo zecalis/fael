@@ -7,7 +7,29 @@ use crate::{Args, Repo, core, repo};
 use fael_core::plan::{Fields, Here, Owner, Store};
 use std::process::ExitCode;
 
-const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
+/// The verbs `chunk` takes — what usage lines and the call line's `sub` name.
+pub(crate) const VERBS: &[&str] = &[
+    "add",
+    "show",
+    "start",
+    "edit",
+    "move",
+    "note",
+    "wait",
+    "after",
+    "ask",
+    "reply",
+    "answer",
+    "done",
+    "accept",
+    "drop",
+    "park",
+    "unpark",
+    "apply",
+    "approve",
+    "unapprove",
+];
+pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;

@@ -46,22 +46,12 @@ fn main() -> ExitCode {
     reset_sigpipe();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let argv = synonyms::rewrite(raw.clone());
-    // usage event for rejects, so they join their command's warnings
-    let event = argv
-        .first()
-        .filter(|c| c.bytes().all(|b| b.is_ascii_alphabetic() || b == b'-'))
-        .map(String::as_str)
-        .unwrap_or("cli")
-        .to_string();
     let res = run(argv.clone()).map_err(|e| synonyms::explain(&raw, &argv, e));
     hook::record_cli(&argv, &res);
     match res {
         Ok(code) => code,
         Err(e) => {
             eprintln!("{e}");
-            // every reject costs the agent a round — one choke point, so no
-            // command records its own rejects and nothing double-counts
-            hook::record_cli_reject(&event, &e);
             ExitCode::FAILURE
         }
     }

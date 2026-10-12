@@ -12,8 +12,13 @@
 //!
 //! A `SHAPE_GATE` reject (fael refused to write a row it could not read back,
 //! 01M4FNQ1) is a round asked for on purpose, not friction: it is counted
-//! apart and left out of the stream, so it neither counts as a call nor
-//! spoils the calls around it.
+//! apart (by the `rules` it named) and left out of the stream, so it neither
+//! counts as a call nor spoils the calls around it.
+//!
+//! Rejects split by `reason` per command, and `chunk`/`plan` per verb
+//! (`chunk start`): what a fix should aim at, read without transcripts.
+//! `bad_value` and a gate with no `rules` are lines written before the codes
+//! (2026-10-13); a new line never carries them.
 
 use super::parse::Parsed;
 use crate::ts_ms;
@@ -35,18 +40,20 @@ pub struct Tally {
     pub help: usize,
     pub find_repeat: usize,
     pub first_call_ok: usize,
+    /// Rejects by `reason` (`hook/codes.rs`: unknown_flag, no_chunk, …).
+    pub reasons: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct Friction {
     #[serde(flatten)]
     pub total: Tally,
-    /// Rejects by `reason` (unknown_flag, flag_not_taken, bad_id, bad_value,
-    /// unknown_command).
-    pub reasons: BTreeMap<String, usize>,
+    /// Per command, `chunk`/`plan` per verb (`chunk start`).
     pub by_command: BTreeMap<String, Tally>,
     /// `SHAPE_GATE` rejects — in no count above.
     pub shape_gate: usize,
+    /// The faults those gates named (untitled, topic_list, …; one gate can name several).
+    pub shape_gate_rules: BTreeMap<String, usize>,
 }
 
 #[derive(PartialEq)]
@@ -59,6 +66,9 @@ enum Outcome {
 struct Call<'a> {
     ms: i64,
     cmd: &'a str,
+    /// `cmd`, or `cmd sub` for a verb — the `by_command` key
+    by: String,
+    reason: &'a str,
     outcome: Outcome,
     empty: bool,
     sig: &'a str,
@@ -78,8 +88,7 @@ fn repeat(calls: &[Call], i: usize) -> bool {
 
 pub(super) fn friction(parsed: &Parsed) -> Friction {
     let mut streams: HashMap<String, Vec<Call>> = HashMap::new();
-    let mut reasons: BTreeMap<String, usize> = BTreeMap::new();
-    let mut shape_gate = 0;
+    let mut out = Friction::default();
     for v in parsed.kept.iter().filter(|v| v["event"] == "call") {
         let outcome = match v["outcome"].as_str() {
             Some("ok") => Outcome::Ok,
@@ -90,13 +99,15 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
         let Some(ms) = v["ts"].as_str().and_then(ts_ms) else {
             continue;
         };
-        if outcome == Outcome::Reject {
-            let r = v["reason"].as_str().unwrap_or("unknown");
-            if r == SHAPE_GATE {
-                shape_gate += 1;
-                continue;
+        let reason = v["reason"].as_str().unwrap_or("unknown");
+        if outcome == Outcome::Reject && reason == SHAPE_GATE {
+            out.shape_gate += 1;
+            for r in v["rules"].as_array().into_iter().flatten() {
+                *out.shape_gate_rules
+                    .entry(r.as_str().unwrap_or("?").into())
+                    .or_default() += 1;
             }
-            *reasons.entry(r.to_string()).or_default() += 1;
+            continue;
         }
         let key = match v["session"].as_str().filter(|s| !s.is_empty()) {
             Some(s) => s.to_string(),
@@ -106,19 +117,20 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
                 v["client"].as_str().unwrap_or("")
             ),
         };
+        let cmd = v["cmd"].as_str().unwrap_or("?");
         streams.entry(key).or_default().push(Call {
             ms,
-            cmd: v["cmd"].as_str().unwrap_or("?"),
+            cmd,
+            by: match v["sub"].as_str() {
+                Some(s) => format!("{cmd} {s}"),
+                None => cmd.to_string(),
+            },
+            reason,
             outcome,
             empty: v["empty"].as_bool().unwrap_or(false),
             sig: v["sig"].as_str().unwrap_or(""),
         });
     }
-    let mut out = Friction {
-        reasons,
-        shape_gate,
-        ..Friction::default()
-    };
     for calls in streams.values_mut() {
         calls.sort_by_key(|c| c.ms);
         let rep: Vec<bool> = (0..calls.len()).map(|i| repeat(calls, i)).collect();
@@ -126,10 +138,13 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
         for (i, c) in calls.iter().enumerate() {
             let first_ok = c.outcome == Outcome::Ok
                 && (i..calls.len().min(i + 1 + FIRST_CALL_WINDOW)).all(|j| !bad(j));
-            let by = out.by_command.entry(c.cmd.to_string()).or_default();
+            let by = out.by_command.entry(c.by.clone()).or_default();
             for t in [&mut out.total, by] {
                 t.calls += 1;
-                t.rejects += (c.outcome == Outcome::Reject) as usize;
+                if c.outcome == Outcome::Reject {
+                    t.rejects += 1;
+                    *t.reasons.entry(c.reason.to_string()).or_default() += 1;
+                }
                 t.help += (c.outcome == Outcome::Help) as usize;
                 t.find_repeat += rep[i] as usize;
                 t.first_call_ok += first_ok as usize;
@@ -257,24 +272,41 @@ mod tests {
             (1, "find", "reject", false, "b"),
         ]);
         assert_eq!((f.total.rejects, f.total.first_call_ok), (1, 0));
-        assert_eq!(f.reasons["unknown_flag"], 1);
-        assert_eq!(f.by_command["find"].rejects, 1);
+        assert_eq!(f.total.reasons["unknown_flag"], 1);
+        assert_eq!(f.by_command["find"].reasons["unknown_flag"], 1);
         assert_eq!(f.by_command["add"].first_call_ok, 0);
     }
 
     #[test]
     fn a_shape_gate_reject_is_counted_apart_and_spoils_nothing() {
-        let gate = line(1, "s", "cli", "add", "reject", false, "b")
-            .replace("\"reject\"", "\"reject\",\"reason\":\"shape_gate\"");
+        let gate = line(1, "s", "cli", "add", "reject", false, "b").replace(
+            "\"reject\"",
+            "\"reject\",\"reason\":\"shape_gate\",\"rules\":[\"untitled\",\"no_key\"]",
+        );
         let f = of(&[
             line(0, "s", "cli", "find", "ok", false, "a"),
             gate,
             line(2, "s", "cli", "add", "ok", false, "c"),
         ]);
         assert_eq!(f.shape_gate, 1);
+        assert_eq!(f.shape_gate_rules["untitled"], 1, "{f:?}");
         assert_eq!((f.total.calls, f.total.rejects), (2, 0));
         assert_eq!(f.total.first_call_ok, 2, "{f:?}");
-        assert!(f.reasons.is_empty(), "{f:?}");
+        assert!(f.total.reasons.is_empty(), "{f:?}");
+    }
+
+    #[test]
+    fn a_verb_gets_its_own_line() {
+        let start = line(0, "s", "cli", "chunk", "reject", false, "a").replace(
+            "\"reject\"",
+            "\"reject\",\"reason\":\"chunk_state\",\"sub\":\"start\"",
+        );
+        let f = of(&[start, line(1, "s", "cli", "chunk", "ok", false, "b")]);
+        assert_eq!(
+            f.by_command["chunk start"].reasons["chunk_state"], 1,
+            "{f:?}"
+        );
+        assert_eq!(f.by_command["chunk"].calls, 1, "{f:?}");
     }
 
     #[test]

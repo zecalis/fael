@@ -185,9 +185,8 @@ fn a_broken_flag_with_no_text_target_still_rejects() {
         "",
     );
     assert!(!ok && err.contains("rejected: no row with id"), "{err}");
-    let u = usage(&d);
-    assert_eq!(u.len(), 1, "{u:?}");
-    assert_eq!(u[0]["ask"], "reject", "{u:?}");
+    // a reject is no ask line: the call line (agent sessions only) counts it
+    assert!(usage(&d).is_empty());
 }
 
 /// The rescue honors §6d's merely-mentioned rule: a broken flag plus a text
@@ -212,9 +211,8 @@ fn a_broken_flag_with_a_mention_but_no_word_still_rejects() {
     );
     assert!(!ok && err.contains("rejected: no row with id"), "{err}");
     assert_eq!(open_notes(&d), vec![first], "the mention did not close it");
-    let u = usage(&d);
-    assert_eq!(u.len(), 1, "{u:?}");
-    assert_eq!(u[0]["ask"], "reject", "{u:?}");
+    // a reject is no ask line: the call line (agent sessions only) counts it
+    assert!(usage(&d).is_empty());
 }
 
 /// More than one candidate: which row did the agent mean? It has to say, so
@@ -238,7 +236,7 @@ fn a_broken_flag_with_two_text_targets_still_rejects() {
         "",
     );
     assert!(!ok && err.contains("rejected: no row with id"), "{err}");
-    assert_eq!(usage(&d).len(), 1);
+    assert!(usage(&d).is_empty());
 }
 
 #[test]

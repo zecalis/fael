@@ -3,7 +3,7 @@
 
 use super::args::{done, need, repo_for};
 use crate::close_key::{BOTH, open_row_on};
-use crate::hook::{ASK_REJECT, ASK_WARN, record_asks, record_mcp};
+use crate::hook::{ASK_WARN, record_asks};
 use crate::write::close_row;
 use serde_json::Value;
 
@@ -17,13 +17,7 @@ pub(super) fn close(a: &Value) -> Result<String, String> {
             return Err(BOTH.into());
         }
         // `key` closes the one open row on that topic; none or several close nothing
-        (Some(key), _) => match open_row_on(&r, key) {
-            Ok(id) => vec![id],
-            Err(e) => {
-                record_mcp(&r.root, "mcp-close", ASK_REJECT, &e);
-                return Err(e);
-            }
-        },
+        (Some(key), _) => vec![open_row_on(&r, key)?],
         (None, Some(v)) if v.is_empty() => {
             return Err("rejected: ids is empty — pass at least one id".into());
         }
@@ -39,7 +33,6 @@ pub(super) fn close(a: &Value) -> Result<String, String> {
         match close_row(&r, id, &why) {
             Err(e) => {
                 failed += 1;
-                record_mcp(&r.root, "mcp-close", ASK_REJECT, &e);
                 // one id keeps the plain error, as before
                 out.push(match ids.len() {
                     1 => e,

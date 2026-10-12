@@ -97,7 +97,7 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    assert_eq!(v["schema"], 2, "{v}");
+    assert_eq!(v["schema"], 3, "{v}");
     // every kind listed, zeros included
     assert_eq!(
         keys(&v["said"]).join(" "),
@@ -128,13 +128,12 @@ fn json_shape_keys_and_types_are_frozen() {
     }
     assert!(v["top_rows"].is_array(), "{v}");
     assert!(v.get("rows").is_none(), "no --rows, so absent: {v}");
-    assert_eq!(keys(&v["asks"]), ["reject", "warning"], "{v}");
-    for k in ["reject", "warning"] {
-        assert!(
-            v["asks"][k]["events"].is_u64() && v["asks"][k]["bytes"].is_u64(),
-            "{k}: {v}"
-        );
-    }
+    assert_eq!(keys(&v["asks"]), ["warning"], "{v}");
+    let w = &v["asks"]["warning"];
+    assert!(
+        w["events"].is_u64() && w["bytes"].is_u64() && w["codes"].is_object(),
+        "{v}"
+    );
     assert_eq!(
         keys(&v["constants"]),
         [
@@ -225,7 +224,7 @@ fn old_stop_block_rows_surface_nowhere() {
     );
     let v = value_of(text, false);
     assert_eq!(v["events"], 2, "{v}");
-    assert_eq!(keys(&v["asks"]), ["reject", "warning"], "{v}");
+    assert_eq!(keys(&v["asks"]), ["warning"], "{v}");
     for k in ["real_tokens", "stop_blocks", "repeat_blocks"] {
         assert!(v.get(k).is_none(), "{k}: {v}");
     }

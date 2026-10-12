@@ -12,6 +12,11 @@ fn run(dir: &Path, state: &Path, args: &[&str]) -> std::process::Output {
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)
         .env_remove("FAEL_DIR")
+        // the owner's app reads with no agent session — inside one, a call
+        // line (friction accounting) is the one write a board read makes
+        .env_remove("FAEL_SESSION")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap()
 }

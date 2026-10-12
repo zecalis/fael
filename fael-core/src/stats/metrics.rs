@@ -2,33 +2,33 @@
 //! counts, rows-added denominators and language share. Pure: values in,
 //! numbers out.
 
-use super::{ASK_REJECT, ASK_WARN};
+use super::ASK_WARN;
+use super::aggregate::AskCount;
 use crate::{Config, Log, is_carrier_row, row_language_check, ts_ms};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
-/// Ask kinds in fixed order — the same vocabulary `usage.jsonl` stores under
-/// `ask`, so the JSON shape never drifts from what is recorded.
-pub const ASK_ORDER: [&str; 2] = [ASK_REJECT, ASK_WARN];
+/// Ask kinds — the same vocabulary `usage.jsonl` stores under `ask`, so the
+/// JSON shape never drifts from what is recorded. Rejects left it on
+/// 2026-10-13: the `call` line counts each once, with its reason (`friction`).
+pub const ASK_ORDER: [&str; 1] = [ASK_WARN];
 
-/// Ask counts in fixed order (reject, warning): (count, bytes).
-/// Plain pushes carry no `ask` and never count here.
-pub(super) fn ask_totals(rows: &[serde_json::Value]) -> Vec<(&'static str, usize, u64)> {
-    ASK_ORDER
-        .into_iter()
-        .map(|ask| {
-            let (mut n, mut b) = (0usize, 0u64);
-            for r in rows {
-                if r.get("ask").and_then(|a| a.as_str()) == Some(ask) {
-                    n += 1;
-                    b += r
-                        .get("bytes")
-                        .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(0);
-                }
-            }
-            (ask, n, b)
-        })
-        .collect()
+/// Ask counts by kind, each split by `code` (`uncoded`: a line written before
+/// codes). Plain pushes carry no `ask` and never count here.
+pub(super) fn ask_totals(rows: &[serde_json::Value]) -> BTreeMap<String, AskCount> {
+    let mut out: BTreeMap<String, AskCount> = ASK_ORDER
+        .iter()
+        .map(|a| (a.to_string(), AskCount::default()))
+        .collect();
+    for r in rows {
+        let Some(c) = r["ask"].as_str().and_then(|a| out.get_mut(a)) else {
+            continue;
+        };
+        c.events += 1;
+        c.bytes += r["bytes"].as_u64().unwrap_or(0);
+        let code = r["code"].as_str().unwrap_or("uncoded");
+        *c.codes.entry(code.into()).or_default() += 1;
+    }
+    out
 }
 
 /// Rows filed at or after `since_ms` (the repo's first usage). Carriers

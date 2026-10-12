@@ -50,7 +50,7 @@ fn stats_text_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -65,7 +65,7 @@ fn stats_rows_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown) · shown 1\n  row B: pushed ×2 (unknown) · shown 1 · pulled 1 (+0 fael-induced)\n  asks: reject ×0 (0 bytes) · warning ×0 (0 bytes)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown) · shown 1\n  row B: pushed ×2 (unknown) · shown 1 · pulled 1 (+0 fael-induced)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -84,12 +84,12 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         v,
         serde_json::json!({
-            "schema": 2, "outcomes_v": 1,
+            "schema": 3, "outcomes_v": 1,
             "events": 3, "bytes": 60, "est_tokens": 15, "skipped_temp": 0,
             "by_event": {"read": {"events": 2, "est_tokens": 8}, "edit": {"events": 1, "est_tokens": 7}},
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
-            "asks": {"reject": {"events": 0, "bytes": 0}, "warning": {"events": 0, "bytes": 0}},
+            "asks": {"warning": {"events": 0, "bytes": 0, "codes": {}}},
             "constants": {"skill_bytes": 3275, "skill_est": 824, "mcp_schema_bytes": 3124, "mcp_schema_est": 784},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
@@ -99,7 +99,7 @@ fn stats_json_matches_golden_values() {
             "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0, "label": {"close_core": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "guard": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "key_reuse": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "find_hit": {"state": "unmeasurable", "num": 0, "den": 0, "since": null}, "gone_repos": 0}},
             "unused_rows": [],
             "incidents": {},
-            "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "shape_gate": 0},
+            "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "shape_gate": 0, "shape_gate_rules": {}},
             "file_verdict": {"changed": 0, "unchanged": 0, "no_verdict": 0, "no_fh": 0, "retire": {"changed": {"pairs": 0, "retired": 0}, "unchanged": {"pairs": 0, "retired": 0}}},
             "said": said,
             "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}},

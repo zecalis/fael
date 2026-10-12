@@ -1,32 +1,19 @@
-//! Rejects and warnings land in usage.jsonl with their ask type — CLI and
-//! MCP alike — and `stats` shows the split.
+//! Warnings land in usage.jsonl with their ask type and code — CLI and MCP
+//! alike — and `stats` shows the split. Rejects are no ask line: the `call`
+//! line counts each one once (friction.rs).
 
 use super::{fael, repo, stats_json, usage};
 
 #[test]
-fn reject_cli_counts_with_command_event() {
+fn a_reject_writes_no_ask_line() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let (ok, _, err) = fael(&d, &["add", "bogus", "zz", "--files", "src/a.rs"], "");
     assert!(!ok && err.contains("rejected: kind must be"), "{err}");
-    let u = usage(&d);
-    assert_eq!(u.len(), 1, "{u:?}");
-    assert_eq!(u[0]["ask"], "reject", "{u:?}");
-    assert_eq!(u[0]["event"], "add", "{u:?}");
-    assert_eq!(u[0]["client"], "cli", "{u:?}");
+    assert!(usage(&d).is_empty());
     let v = stats_json(&d);
-    assert_eq!(v["asks"]["reject"]["events"], 1, "{v}");
-    assert!(v["asks"].get("stop-block").is_none(), "{v}");
+    assert!(v["asks"].get("reject").is_none(), "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
-}
-
-#[test]
-fn reject_missing_files_counts() {
-    let d = repo();
-    // no hook session, no --files: the old "files is required" reject
-    let (ok, _, err) = fael(&d, &["add", "note", "nowhere"], "");
-    assert!(!ok && err.contains("rejected: files is required"), "{err}");
-    assert_eq!(stats_json(&d)["asks"]["reject"]["events"], 1);
 }
 
 #[test]
@@ -45,7 +32,12 @@ fn warning_cli_counts_once_per_line() {
     let u = usage(&d);
     assert_eq!(u.len(), 1, "{u:?}");
     assert_eq!(u[0]["ask"], "warning", "{u:?}");
-    assert_eq!(stats_json(&d)["asks"]["warning"]["events"], 1);
+    assert_eq!(u[0]["code"], "untitled", "{u:?}");
+    let w = &stats_json(&d)["asks"]["warning"];
+    assert_eq!(
+        (&w["events"], &w["codes"]["untitled"]),
+        (&1.into(), &1.into())
+    );
 }
 
 #[test]
@@ -59,7 +51,7 @@ fn successful_add_records_nothing() {
 }
 
 #[test]
-fn reject_mcp_counts_with_tool_event() {
+fn reject_mcp_counts_once_as_a_call() {
     use std::io::Write;
     use std::process::{Command, Stdio};
     let d = repo();
@@ -91,12 +83,8 @@ fn reject_mcp_counts_with_tool_event() {
         v["result"]["isError"] == true && text.contains("rejected:"),
         "{out}"
     );
-    let u = usage(&d);
-    assert_eq!(u.len(), 1, "{u:?}");
-    assert_eq!(u[0]["ask"], "reject", "{u:?}");
-    assert_eq!(u[0]["event"], "mcp-add", "{u:?}");
-    assert_eq!(u[0]["client"], "mcp", "{u:?}");
-    // the same call also leaves its friction line, session-less
+    assert!(usage(&d).is_empty(), "the call line alone counts it");
+    // its friction line, session-less
     let c = super::all_usage(&d)
         .into_iter()
         .find(|v| v["event"] == "call")
@@ -108,7 +96,12 @@ fn reject_mcp_counts_with_tool_event() {
             c["outcome"].as_str(),
             c["reason"].as_str()
         ),
-        (Some("mcp"), Some("add"), Some("reject"), Some("bad_value")),
+        (
+            Some("mcp"),
+            Some("add"),
+            Some("reject"),
+            Some("missing_value")
+        ),
         "{c}"
     );
     assert!(c.get("session").is_none(), "{c}");
@@ -137,13 +130,21 @@ fn phantom_info_line_counts_nothing() {
 }
 
 #[test]
-fn stats_text_shows_asks_and_constants() {
+fn stats_text_shows_warning_codes_and_constants() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let _ = fael(&d, &["add", "bogus", "zz", "--files", "src/a.rs"], "");
+    let text = vec!["word"; 70].join(" ");
+    let _ = fael(
+        &d,
+        &["add", "note", &text, "--files", "src/a.rs", "--force"],
+        "",
+    );
     let (ok, out, err) = fael(&d, &["stats"], "");
     assert!(ok, "{err}");
-    assert!(out.contains("asks: reject ×1"), "{out}");
+    assert!(
+        out.contains("warnings ×1") && out.contains("untitled ×1"),
+        "{out}"
+    );
     assert!(out.contains("constants per session: SKILL.md"), "{out}");
 }
 
@@ -174,17 +175,6 @@ fn warning_add_carries_row_and_session() {
     assert_eq!(u[0]["session"], "sess-add-1", "{u:?}");
     // `ids` means "pushed to the agent" — an add's own row never counts there
     assert!(u[0].get("ids").is_none(), "{u:?}");
-}
-
-#[test]
-fn reject_unknown_id_carries_its_reason() {
-    let d = repo();
-    let (ok, _, err) = fael(&d, &["close", "ZZZZZZZZ", "done"], "");
-    assert!(!ok && err.contains("rejected: no row with id"), "{err}");
-    let u = usage(&d);
-    let r: Vec<_> = u.iter().filter(|v| v["ask"] == "reject").collect();
-    assert_eq!(r.len(), 1, "{u:?}");
-    assert_eq!(r[0]["reason"], "unknown-id", "{u:?}");
 }
 
 #[test]

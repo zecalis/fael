@@ -249,23 +249,35 @@ fn reasons_come_from_the_real_reject_paths() {
         &["add"],
         &["find", "a b", "c"],
         &["frobnicate"],
+        &["fnd", "x"],
+        &["chunk", "start", "zz"],
     ] {
         let (ok, err) = call(&d, Some("s1"), args);
         assert!(!ok && err.contains("rejected:"), "{args:?}: {err}");
     }
     let f = &stats_json(&d)["friction"];
+    let chunk = calls(&d).into_iter().find(|v| v["cmd"] == "chunk").unwrap();
+    let start_reason = chunk["reason"].as_str().unwrap().to_string();
+    assert_ne!(start_reason, "other", "{chunk}");
     assert_eq!(
         f["reasons"],
         serde_json::json!({
             // `-k` is a flag now, not an id
-            "unknown_flag": 2, "bad_id": 1, "flag_not_taken": 1, "bad_value": 2, "unknown_command": 1
+            "unknown_flag": 2, "bad_id": 1, "flag_not_taken": 1, "missing_value": 1,
+            "usage": 1, "unknown_command": 2, start_reason.as_str(): 1
         }),
         "{f}"
     );
-    // the bare unknown command has no command to blame
-    assert_eq!(f["by_command"]["?"]["rejects"], 1, "{f}");
+    // an unknown command has no command to blame, but names the near one
+    assert_eq!(f["by_command"]["?"]["rejects"], 2, "{f}");
     assert_eq!(f["by_command"]["find"]["rejects"], 3, "{f}");
+    assert_eq!(f["by_command"]["chunk start"]["rejects"], 1, "{f}");
     assert_eq!(f["shape_gate"], 0, "{f}");
+    let near: Vec<_> = calls(&d)
+        .into_iter()
+        .filter_map(|v| v.get("near").cloned())
+        .collect();
+    assert_eq!(near, ["find"], "only fnd is a near miss");
 }
 
 #[test]
@@ -276,12 +288,17 @@ fn a_shape_gate_reject_is_counted_apart_not_as_friction() {
     assert!(!ok && err.starts_with("rejected: nothing written"), "{err}");
     let f = &stats_json(&d)["friction"];
     assert_eq!(f["shape_gate"], 1, "{f}");
+    assert_eq!(
+        f["shape_gate_rules"],
+        serde_json::json!({"untitled": 1}),
+        "{f}"
+    );
     assert_eq!((&f["calls"], &f["rejects"]), (&0.into(), &0.into()), "{f}");
     assert_eq!(f["reasons"], serde_json::json!({}), "{f}");
 }
 
 /// A batch whose every rejected row met the gate is the gate too, CLI and MCP;
-/// one row rejected for another reason makes the call a `bad_value` (01M4GD6C).
+/// one row rejected for another reason makes the call a `partial` (01M4GD6C).
 #[test]
 fn a_batch_rejected_only_by_the_gate_is_counted_as_the_gate() {
     let d = repo();
@@ -305,7 +322,7 @@ fn a_batch_rejected_only_by_the_gate_is_counted_as_the_gate() {
     );
     let f = &stats_json(&d)["friction"];
     assert_eq!(f["shape_gate"], 2, "{f}");
-    assert_eq!(f["reasons"], serde_json::json!({"bad_value": 1}), "{f}");
+    assert_eq!(f["reasons"], serde_json::json!({"partial": 1}), "{f}");
 }
 
 #[test]

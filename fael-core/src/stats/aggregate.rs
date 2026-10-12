@@ -30,16 +30,18 @@ pub struct TopRow {
     pub pushes: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct AskCount {
     pub events: usize,
     pub bytes: u64,
+    /// By warning code (`hook/codes.rs`: untitled, long_text, no_key, …).
+    pub codes: BTreeMap<String, usize>,
 }
 
 /// Schema of the `Stats` JSON shape below. Bump it only when a field is
 /// removed, renamed, retyped or redefined — adding a field never bumps
 /// (readers skip unknown keys), it just gets a `docs/stats.md` changelog line.
-pub const STATS_SCHEMA: u32 = 2;
+pub const STATS_SCHEMA: u32 = 3;
 
 /// Bytes the agent pays every session before saying anything — measured by
 /// the caller (CLI), never estimated here.
@@ -171,18 +173,7 @@ pub fn aggregate(
                 pushes: *c,
             })
             .collect(),
-        asks: ask_totals(&parsed.kept)
-            .into_iter()
-            .map(|(a, c, b)| {
-                (
-                    a.to_string(),
-                    AskCount {
-                        events: c,
-                        bytes: b,
-                    },
-                )
-            })
-            .collect(),
+        asks: ask_totals(&parsed.kept),
         constants,
         rounds: Rounds {
             rows_added,
