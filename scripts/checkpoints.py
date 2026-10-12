@@ -122,16 +122,6 @@ def gates():
         yield (d >= 100, "decision-held 5", f"vela decisions since {rel[0]} {bar(d, 100)} (installed on vela at or after the tag)",
                "01M4J0SSD", {"decisions": d})
 
-    no = stats("2026-10-04T05:31:09Z")["said"]["notice"]["said"]  # say-gate chunk 3 merge (#208)
-    s9 = stats("2026-10-09")["said"]
-    br, bo = s9["brief"]["said"], s9["bodies"]["said"]
-    yield (no >= 100 and br >= 100, "say-gate 4b", f"notice said {bar(no, 100)} · brief said {bar(br, 100)}",
-           "plan §6", {"notice": no, "brief": br})
-    tag, at = release_of(git(FAEL, "log", "--format=%H", "-S", "silent-start", "--reverse").split()[0])
-    st = stats(at.isoformat())["by_event"].get("session-start", {}).get("events", 0)
-    yield (bo >= 100 and st >= 200, "say-gate 4c", f"bodies said {bar(bo, 100)} · session-starts since {tag} {bar(st, 200)}",
-           "plan:fael-say-gate:revert-measure", {"bodies": bo, "session_starts": st})
-
     for name, repo in (("fael", FAEL), ("vela", VELA)):
         common = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
         try:
