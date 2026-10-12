@@ -317,3 +317,28 @@ fn a_scope_naming_nothing_is_warned_and_a_new_file_in_a_real_dir_is_not() {
         "{err}"
     );
 }
+
+#[test]
+fn a_wait_on_the_owner_offers_its_options() {
+    let d = repo();
+    let u = add(&d);
+    assert!(fael(&d, &["chunk", "start", &u, "--run", "R1"]).0);
+    let data = ["chunk", "wait", &u, "q", "--on", "data", "--option", "A"];
+    let (ok, _, err) = fael(&d, &data);
+    assert!(!ok && err.contains("--option needs --on owner"), "{err}");
+    // issue 01M4NWFS: in order, a comma kept inside one
+    let (warm, dry) = ("--option=Warm, plain", "--option=Dry");
+    let (ok, _, err) = fael(
+        &d,
+        &["chunk", "wait", &u, "Tone?", "--on", "owner", warm, dry],
+    );
+    assert!(ok, "{err}");
+    let (_, json, _) = fael(&d, &["chunk", "show", &u, "--json"]);
+    let c: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let keys: Vec<&String> = c["wait"].as_object().unwrap().keys().collect();
+    assert_eq!(keys, ["on", "text", "until", "options"]);
+    assert_eq!(
+        c["wait"]["options"],
+        serde_json::json!(["Warm, plain", "Dry"])
+    );
+}

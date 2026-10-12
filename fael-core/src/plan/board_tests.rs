@@ -24,7 +24,7 @@ fn derived_fields() {
     let d = scoped(&mut s, "d", &["src/x.rs"], &[]);
     let idea = add(&mut s, "idea", None);
     start(&mut s, &d, "/wt/1").unwrap();
-    s.wait(&d, "owner", "Which tone?", None, &here("/wt/1"))
+    s.wait(&d, "owner", "Which tone?", None, &[], &here("/wt/1"))
         .unwrap();
     // a's live run, last seen before the stale line
     start(&mut s, &a, "/wt/2").unwrap();

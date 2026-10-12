@@ -3,6 +3,7 @@
 //! insert one run row each under the same R, and hand back what the brief prints.
 
 use super::State;
+use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
 use super::lookup::lookup;
 use super::ready::{Ready, ready_in};
@@ -49,6 +50,8 @@ pub struct Brief {
     pub reads: Vec<(String, Option<Section>)>,
     /// the checkout the code lives in when it is not this repo (`fael plan repo`)
     pub repo: Option<String>,
+    /// this db's repo root, where `fael chunk` runs when `repo` is elsewhere; the CLI sets it
+    pub root: Option<String>,
     pub refs: Vec<String>,
     /// the owner's answers since this chunk last started (SPEC §1 "owner said")
     pub said: Vec<String>,
@@ -224,11 +227,7 @@ impl Store {
                 ],
             )
             .map_err(err)?;
-            tx.execute(
-                "UPDATE chunk SET wait_on = NULL, wait_text = NULL, wait_until = NULL WHERE id = ?1",
-                [r.id],
-            )
-            .map_err(err)?;
+            unwait(&tx, r.id)?;
             let mut b = brief(&tx, r.id, 1)?;
             b.resume = was;
             chunks.push(b);
@@ -286,6 +285,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     plan_title: r.get(8)?,
                     source: r.get(9)?,
                     repo: r.get(12)?,
+                    root: None,
                     sections: vec![],
                     reads: vec![],
                     refs: r

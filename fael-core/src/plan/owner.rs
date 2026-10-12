@@ -93,11 +93,7 @@ impl Store {
         }
         set(&tx, &r, to, "owner", text, now)?;
         if to == State::Open {
-            tx.execute(
-                "UPDATE chunk SET wait_on = NULL, wait_text = NULL, wait_until = NULL WHERE id = ?1",
-                [r.id],
-            )
-            .map_err(err)?;
+            super::agent::unwait(&tx, r.id)?;
         }
         end_live(&tx, r.id, now)?;
         tx.commit().map_err(err)

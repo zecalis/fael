@@ -29,7 +29,7 @@ fn a_pair_member_command_ends_only_its_own_run() {
             let (m, rest) = if first { (&a, &b) } else { (&b, &a) };
             let h = here("/w");
             match cmd {
-                "wait" => s.wait(m, "owner", "q", None, &h),
+                "wait" => s.wait(m, "owner", "q", None, &[], &h),
                 "after" => s.after(m, &other, "why", &h),
                 "done" => s.done(m, "h", Some(3), None, &h),
                 "drop" => s.owner(m, Owner::Drop, Some("no"), NOW),

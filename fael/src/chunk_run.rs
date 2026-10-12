@@ -5,14 +5,41 @@
 use crate::plan::db;
 use crate::{Args, Repo, core};
 use fael_core::plan::{Here, Start, Store};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
 pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
     a.only(
         "chunk start",
-        &["client", "model", "run", "force", "no-worktree"],
+        &["client", "model", "run", "force", "no-worktree", "worktree"],
     )?;
+    // issue 01M4NC9GV: a plan whose code is in another checkout starts in a worktree of it,
+    // from this db's root — the run holds that worktree and its branch
+    let at = match a.one("worktree") {
+        Some(_) if a.has("no-worktree") => {
+            return Err("rejected: --worktree or --no-worktree, not both".into());
+        }
+        Some(p) => Some(
+            Path::new(&p)
+                .canonicalize()
+                .map_err(|_| format!("rejected: --worktree {p} does not exist"))?,
+        ),
+        None => None,
+    };
+    let wt = at.as_deref().map(|p| p.to_string_lossy().into_owned());
+    let branch = at.as_deref().and_then(crate::journal::head_branch);
+    let there;
+    let here = match &wt {
+        Some(w) => {
+            there = Here {
+                worktree: w,
+                branch: branch.as_deref(),
+                ..*here
+            };
+            &there
+        }
+        None => here,
+    };
     // the agent's own start: an agent that ends with `chunk done` in the same turn never
     // reaches a Stop that could stamp it (issue 01M4NXDQ). Not a launcher (`--run R`): it
     // may sit in another agent's session, and the started agent's SessionStart stamps it
@@ -29,6 +56,10 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         session: session.clone(),
     };
     let mut st = Store::open(&db(r))?.start(uid, &o, here)?;
+    let root = r.root.to_string_lossy();
+    for c in st.chunks.iter_mut().filter(|c| c.repo.is_some()) {
+        c.root = Some(root.to_string());
+    }
     if let Some(m) = session.as_deref().and_then(crate::chunk::held) {
         // the Stop hook finds this db from any cwd; a failed write only skips stamps
         let _ = m.parent().map(std::fs::create_dir_all);
@@ -60,8 +91,9 @@ pub(crate) fn done(
     a.only("chunk done", &["pr", "out", "run"])?;
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number;
     // the repo is the plan's (`fael plan repo`), so a link resolves there
-    let pr = a
-        .one("pr")
+    let raw = a.one("pr");
+    let pr = raw
+        .as_deref()
         .map(|n| {
             n.trim_end_matches('/')
                 .rsplit(['#', '/'])
@@ -71,6 +103,17 @@ pub(crate) fn done(
         })
         .transpose()
         .map_err(|_| "rejected: --pr takes a PR number, owner/repo#N or its URL")?;
+    // issue 01M4QFJ6V: another repo's PR is refused, never dropped; no origin = no check
+    if let Some((raw, want)) = raw.as_deref().and_then(|p| Some((p, pr_repo(p)?))) {
+        let b = Store::open(&db(r))?.show(uid)?;
+        let at = b.repo.map_or_else(|| r.root.clone(), PathBuf::from);
+        if let Some(have) = crate::board::remote(&at).filter(|h| !h.eq_ignore_ascii_case(&want)) {
+            return Err(format!(
+                "rejected: --pr {raw} is not this plan's repo ({have}) — `fael plan repo {} <path>` first",
+                b.plan
+            ));
+        }
+    }
     let src = a.one("out").map(|o| r.cwd.join(o));
     if pr.is_some() && src.is_some() {
         return Err("rejected: --pr or --out, not both".into());
@@ -95,6 +138,18 @@ pub(crate) fn done(
         conflict_note(&r.root, here.branch);
     }
     Ok(())
+}
+
+/// `owner/repo` of `owner/repo#12` or `…/owner/repo/pull/12`; None for `12` or `#12`.
+fn pr_repo(pr: &str) -> Option<String> {
+    let pr = pr.trim_end_matches('/');
+    let head = match pr.split_once('#') {
+        Some((h, _)) => h,
+        None => pr.rsplit_once("/pull/")?.0,
+    };
+    let mut parts = head.rsplit('/').filter(|s| !s.is_empty());
+    let name = parts.next()?;
+    Some(format!("{}/{name}", parts.next()?))
 }
 
 /// Decision 01M4QJPX: a PR whose branch no longer merges into the base (`origin/HEAD`, no

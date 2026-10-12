@@ -119,7 +119,9 @@ fn run_end_forced_takeover_and_fencing() {
     };
     let r3 = s.start(&c, &force, &here("/c")).unwrap().run;
     assert_eq!(live(&s, &c), 1);
-    let e = s.wait(&c, "owner", "q?", None, &here("/b")).unwrap_err();
+    let e = s
+        .wait(&c, "owner", "q?", None, &[], &here("/b"))
+        .unwrap_err();
     assert!(
         e.contains(&format!("taken over by run {r3} (codex) in /c")),
         "{e}"
@@ -203,6 +205,7 @@ fn a_data_wait_turns_ready_on_its_date_and_after_blocks() {
         "data",
         "reach after 2 days",
         Some("2026-10-11"),
+        &[],
         &here("/b"),
     )
     .unwrap();
@@ -212,10 +215,13 @@ fn a_data_wait_turns_ready_on_its_date_and_after_blocks() {
     );
     assert_eq!(s.ready(&m, "2026-10-11").unwrap(), Ready::Yes);
     start(&mut s, &m, "/b").unwrap();
-    s.wait(&m, "owner", "which channel?", None, &here("/b"))
+    s.wait(&m, "owner", "which channel?", None, &[], &here("/b"))
         .unwrap();
     assert!(matches!(s.ready(&m, "2030-01-01").unwrap(), Ready::No(_)));
-    assert!(s.wait(&m, "boss", "x", None, &here("/b")).is_err());
+    assert!(s.wait(&m, "boss", "x", None, &[], &here("/b")).is_err());
+    let ab = ["A".to_string(), "B".to_string()];
+    let e = s.wait(&m, "data", "x", None, &ab, &here("/b")).unwrap_err();
+    assert_eq!(e, "rejected: --option needs --on owner");
 }
 
 #[test]
@@ -362,7 +368,8 @@ fn accept_takes_only_a_review_chunk() {
     let [o, r, w, p] = ["o", "r", "w", "p"].map(|t| add(&mut s, t, Some("brief")));
     start(&mut s, &r, "/r").unwrap();
     start(&mut s, &w, "/w").unwrap();
-    s.wait(&w, "owner", "which?", None, &here("/w")).unwrap();
+    s.wait(&w, "owner", "which?", None, &[], &here("/w"))
+        .unwrap();
     s.owner(&p, Owner::Park, Some("later"), NOW).unwrap();
     for (c, st) in [
         (&o, "open"),

@@ -24,6 +24,7 @@ fn chunk(uid: &str) -> Brief {
         sections: vec![],
         reads: vec![],
         repo: None,
+        root: None,
         refs: vec!["SPEC-x.md#block".into(), "gone.rs".into()],
         said: vec![],
         notes: vec![],

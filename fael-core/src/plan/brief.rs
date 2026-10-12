@@ -107,7 +107,14 @@ impl Started {
                 c.title, c.uid, c.plan, c.plan_title
             );
             if let Some(repo) = &c.repo {
-                let _ = writeln!(o, "code in {repo} — work, scope and PR there");
+                // issue 01M4NC9GV: that checkout has no plans.db; R fences wait/after/done
+                let at = c.root.as_deref().map_or(String::new(), |d| {
+                    format!(
+                        "; run `fael chunk` from {d}, wait/after/done with --run {}",
+                        self.run
+                    )
+                });
+                let _ = writeln!(o, "code in {repo} — work, scope and PR there{at}");
             }
             let fields: Vec<String> = [
                 ("size", &c.size),
