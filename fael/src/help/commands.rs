@@ -244,7 +244,7 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
     ),
     (
         "migrate",
-        "move a tracked repo to store = local",
+        "move a tracked repo to store = local (store = tracked is deprecated)",
         "fael migrate local
     (fold the tree log into this clone's journal — the tree copy wins on every
      id it holds, so rows edited in the tree never fall back to a stale journal

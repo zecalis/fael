@@ -12,6 +12,10 @@ pub enum Store {
     Local,
 }
 
+/// The deprecation of `store = "tracked"` (step 1 of 2: said, nothing removed):
+/// the session-start line and `fael doctor`'s `[Deprecated]` carry this text.
+pub const TRACKED_DEPRECATED: &str = "store = tracked goes away in the next release: run fael migrate local, or share with fael sync --remote <url>";
+
 /// What a cross-key self-heal act prints (PLAN-fael-selfheal-verdict chunk
 /// 3): the key moved, so the act is the weakest-evidence one — `warn` says so
 /// in one `warning:` line (an ask), `info` keeps the info line, `off` acts
