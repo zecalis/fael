@@ -29,6 +29,12 @@ pub(crate) fn pull(
     let mut found: Vec<core::Row> = vec![];
     let mut errors = vec![];
     for id in ids {
+        if id.contains('/') {
+            errors.push(format!(
+                "rejected: {id:?} is a path, not an id — several --files go comma-joined: --files a,b"
+            ));
+            continue;
+        }
         if !core::looks_like_id(id) {
             errors.push(format!(
                 "rejected: {id:?} is not an id — copy it from fael find"

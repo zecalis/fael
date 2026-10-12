@@ -151,14 +151,22 @@ impl Started {
                     reads.push(r);
                 }
             }
-            let mut shown: Vec<&str> = Vec::new();
-            if !c.sections.is_empty() {
+            // a section still as `plan new` left it says nothing: neither printed nor indexed
+            let mut shown: Vec<&str> = c
+                .sections
+                .iter()
+                .filter(|s| super::section::blank(s))
+                .map(|s| s.key.as_str())
+                .collect();
+            let heads: Vec<&Row> = c
+                .sections
+                .iter()
+                .filter(|s| !shown.contains(&s.key.as_str()))
+                .filter(|s| base(&s.title, !reads.is_empty()))
+                .collect();
+            if !heads.is_empty() {
                 let _ = writeln!(o, "\n<!-- plan {} -->", c.plan);
-                for s in c
-                    .sections
-                    .iter()
-                    .filter(|s| base(&s.title, !reads.is_empty()))
-                {
+                for s in heads {
                     let _ = write!(o, "\n{}", one(s));
                     shown.push(&s.key);
                 }

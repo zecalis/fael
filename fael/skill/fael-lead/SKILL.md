@@ -22,8 +22,9 @@ Parallel lanes cost a contract, a merge and the owner's review — buy them only
 ```bash
 fael board --json --open --plan <plan>     # chunks: scope, after, overlaps, state, approval
 fael board --json                           # every project: running[], worktrees[], shared
-fael find --files <each candidate's scope>  # decisions, open issues, contract:* keys on those files
+fael find --files a,b,c                     # each candidate's scope, comma-joined: decisions, issues, contract:* keys
 fael chunk show <uid>                       # each candidate's brief: the paths it really touches
+gh repo view --json url                     # fails: no GitHub here, step 7 ships without a PR
 ```
 
 Take the plan's `ready` chunks in plan order. A chunk whose `scope` is empty is unknown, never
@@ -43,6 +44,9 @@ lettered options, your recommendation as `(a)`, so the owner's `ok` takes it (st
   `after` (`fael chunk apply` op `after`).
 - **Shared interface:** two lanes that meet at a type, schema, table, CLI or JSON output →
   a contract (step 3) before either starts. No contract, no parallel: they run in sequence.
+- **Shared open question:** a question one chunk leaves to the owner (a brief that says "the
+  owner's call") that another candidate's code meets too (div's B=0 is mod's B=0) → one Q
+  for both, asked before either starts.
 - **Another plan's contract:** a `contract:<other-plan>:*` key on a lane's files → the lane
   builds against it and never changes it. If it must change, leave the lane out of the wave and
   tell the owner: the other plan's lead holds it.
@@ -60,9 +64,11 @@ fael add decision "<signature / schema / behaviour / errors · check: <command>>
   --title "contract <topic>: <one line>" --files <the interface files> --key contract:<plan>:<topic>
 ```
 
-The ledger puts it in front of every agent of every plan at those files. A long one also goes in
-a plan section (`fael plan export <plan> --json`, add the section, `fael plan apply`) and each
-lane that builds against it gets `--reads <key>`. The chunk that implements the interface runs
+The ledger puts it in front of every agent of every plan at those files, but a brief never
+prints it: you append it to each lane's brief (step 5). A long one also goes in a plan section
+(`fael plan export <plan> --json`, add the section, `fael plan apply`) and each lane that
+builds against it gets `--reads <section key>` — `--reads` names plan sections, never a
+ledger key. The chunk that implements the interface runs
 first (`after`) or alone; the lanes that consume it code against the contract, never against
 that chunk's code.
 
@@ -83,7 +89,7 @@ A worker that finds the contract wrong does not work around it: it stops on `fae
 One table, then wait for the owner:
 
 ```
-#  uid        label       scope                 contract reads    size/model   after
+#  uid        label       scope                 contracts         size/model   after
 1  01M4…      schema-x    fael-core/src/x.rs    contract:p:x      M opus       —
 2  01M4…      cli-x       fael/src/x.rs         contract:p:x      S sonnet     #1
 ```
@@ -110,17 +116,18 @@ One table, then wait for the owner:
 
 ## 5. Start the workers
 
-1. Wave branch from the latest base: `git fetch origin`, then
-   `git switch -c plan/<plan>/w<n> origin/main` in your own worktree. Each lane branches from it.
+1. Wave branch from the latest base, without switching any checkout: `git fetch origin`, then
+   `git branch plan/<plan>/w<n> origin/main`. Each lane branches from it.
 2. **Cap:** `fael board --json` — start a worker only while `running` (every project) is
    below 6.
 3. **Worktree:** a `worktrees[]` entry of this project with `run: null`, never the one the
    owner keeps for talking (ask once which; default the main checkout) and never one with
    uncommitted work. Never share `CARGO_TARGET_DIR` between worktrees.
 4. In that worktree: `git switch -c <lane-branch> plan/<plan>/w<n>`, then
-   `fael chunk start <uid> --run <R> --model <m> > <scratch>/brief-<uid>.md`
-   (`R` = a fresh ULID per start, kept for step 7).
-5. Append to that brief, then start the worker as a background process from that worktree:
+   `fael chunk start <uid> --model <m> > <scratch>/brief-<uid>.md`. Its first line names the
+   run `R` (`fael run R · …`): keep it for step 7.
+5. Append to that brief the body of each `contract:*` row the lane builds to or against
+   (`fael find --key contract:<plan>:<topic>`) and these rules, then start the worker as a background process from that worktree:
 
    ```text
    Lead's rules for this lane: do not run fael chunk done, do not push. After each step that
@@ -160,7 +167,8 @@ You learn it from your own process notification — never poll.
   the owner. A contract question goes by the step 3 table. Then start the lane again (step 5,
   a new `R`); its brief prints the answer and a resume block.
 - **It finished:** read its last note and `git log origin/main..<lane-branch>`. Merge it into the
-  wave branch with `git merge --no-ff <lane-branch>` and run the repo's gates (AGENTS.md, Git
+  wave branch in a worktree whose worker has exited (`git switch plan/<plan>/w<n>` there),
+  never in the checkout the owner talks in: `git merge --no-ff <lane-branch>` and run the repo's gates (AGENTS.md, Git
   section), each by its own exit code.
   - A conflict in a `project.shared` file: resolve it (an append-only list keeps both sides; a
     golden is re-blessed, never hand-merged).
@@ -185,6 +193,10 @@ Once every lane is in or out:
    that removed it. The owner reads it after the wave; bringing something back is a revert,
    decided then, not mid-wave. After the push no lane joins the PR.
 3. Per lane in the PR: `fael chunk done <uid> "<hand-off>" --pr <N> --run <R>`.
+   No GitHub (step 1): push the wave branch, print the PR body instead of opening one, and
+   `fael chunk done <uid> "<hand-off>" --run <R>` with no `--pr` — the lane sits in review.
+   When the owner says it is merged, `fael chunk accept <uid>` per lane: until then an
+   `after` on it stays blocked.
    A lane left out: `fael run end <R>`; it keeps its branch and notes, and the next wave
    takes it over with `fael chunk start <uid> --force`, whose resume block says where it stopped.
 4. Never merge. The next wave branches from `origin/main` again, after the owner merged this one.
