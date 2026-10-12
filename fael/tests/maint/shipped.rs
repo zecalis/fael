@@ -127,7 +127,7 @@ fn doctor_fix_closes_shipped_notes() {
     let (ok, out) = doctor(&d, "[]");
     assert!(ok && !out.contains("[Shipped"), "{out}");
     // the note is closed (no longer open); the decision beside it is untouched
-    let (_, out, _) = fael(&d, &["find", "--kind", "note"]);
+    let (_, out, _) = fael(&d, &["find", "--json", "--kind", "note"]);
     assert!(!out.contains("landed work"), "{out}");
     let (_, out, _) = fael(&d, &["find", "--kind", "decision"]);
     assert!(out.contains("landed choice"), "{out}");

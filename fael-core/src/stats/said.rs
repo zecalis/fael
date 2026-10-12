@@ -8,22 +8,16 @@
 //! - `cited` (PLAN-fael-agent-ergonomics chunk 5) — the id was closed,
 //!   superseded or bumped within a day, like `ask`: the line already names
 //!   the close, so earning is the close itself
-//! - `merge` (PLAN-fael-context-loop chunk 3) — a named id was closed,
-//!   superseded or bumped within a day, like `ask`
-//! - `promote` (PLAN-fael-context-loop chunk 4) — the id was closed within a
-//!   day: a bump or supersede keeps the rule a row, not a test or check
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
-//! - `count` — a later pull by the call the line printed: its files, a
-//!   directory over one, or its key
 //! - `check` (PLAN-fael-experience-loop chunk 3) — a row superseding or
 //!   bumping the (already closed) issue landed within a day after the line
-//! - `carry` (PLAN-fael-experience-loop chunk 6) — the session pulled the
-//!   closed issue's body (`fael find <id>`, the line's command) after it, or
-//!   a row superseding or bumping it landed within a day
 //! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
 //!   issue naming the finding's file after it
 //! - `fixed` / `fixcommit` (experience-loop chunk 5) — the session filed an issue after it
 //! - `notice` — the session filed a row after it
+//!
+//! The push no longer says `count`, `merge`, `carry` or `promote` (#247,
+//! #338): their old usage entries are skipped, not tallied.
 //!
 //! An upper bound: the agent may have done it anyway — use it only to cut.
 //! Pure: kept usage rows and loaded logs in.
@@ -95,28 +89,23 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 }
 
 /// Every kind a hook says, zeros included, so a kind never said still shows.
-/// `count` stays: usage from before the push dropped its count line still reads.
 /// `ask` split by whether its row sat on a hub file — the same earned, so the
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 17] = [
+pub const KINDS: [&str; 13] = [
     "row",
     "note",
     "brief",
     "ask",
     "pointer",
-    "count",
     "bodies",
     "notice",
     "cited",
-    "merge",
     "finding",
     "check",
-    "carry",
     "fixed",
     "fixcommit",
-    "promote",
     "held",
 ];
 
@@ -126,16 +115,6 @@ fn reopened(log: Option<&Log>, id: &str, ms: i64) -> bool {
         l.rows.iter().any(|r| {
             let names = [r.supersedes.as_deref(), r.bumps.as_deref()].contains(&Some(id));
             names && ts_ms(&r.ts).is_some_and(|t| t >= ms && t - ms <= RETIRE_WINDOW_MS)
-        })
-    })
-}
-
-/// Whether `id` was closed within a day after `ms`.
-fn closed_after(log: Option<&Log>, id: &str, ms: i64) -> bool {
-    log.is_some_and(|l| {
-        l.closes.iter().any(|c| {
-            c.reference.as_deref() == Some(id)
-                && ts_ms(&c.ts).is_some_and(|t| t >= ms && t - ms <= RETIRE_WINDOW_MS)
         })
     })
 }
@@ -232,16 +211,10 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "brief" => ("brief", used(key)),
                 // the generic clause names no row: nothing to join it to
                 "ask" if key == "*" => continue,
-                "ask" | "cited" | "merge" | "held" => (kind, retired(key)),
-                "promote" => ("promote", closed_after(log, key, ms)),
+                "ask" | "cited" | "held" => (kind, retired(key)),
                 // the issue was closed before the line, so `retired` (the
                 // earliest event) never lands after it: look for a later one
                 "check" => ("check", reopened(log, key, ms)),
-                // the agent types a short id: a prefix of the row's
-                "carry" => (
-                    "carry",
-                    pulled(&|p| p.id.is_some_and(|i| key.starts_with(i))) || reopened(log, key, ms),
-                ),
                 // an issue the session filed on the finding's file after it
                 "finding" => (
                     "finding",
@@ -251,7 +224,6 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 ),
                 "fixed" | "fixcommit" => (kind, filed_after(log, s, ms, |r| r.kind == "issue")),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
-                "count" => ("count", pulled(&|p| counted(key, p))),
                 "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
                 "notice" => ("notice", filed_after(log, s, ms, |_| true)),
                 _ => continue,
@@ -355,7 +327,7 @@ pub(super) mod tests {
             r#""event":"session-start","ids":["D","U"],"said":[{"kind":"brief"}]"#,
         ) + &line(
             1,
-            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"count","key":"a.rs,b.rs|dir:b/"},{"kind":"count","key":"a.rs,b.rs|key:k:z"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"finding","key":"a.rs"},{"kind":"finding","key":"z.rs"},{"kind":"notice"},{"kind":"fixed"},{"kind":"fixcommit"}]"#,
+            r#""event":"edit","ids":["D","N","U"],"said":[{"kind":"row","key":"D"},{"kind":"row","key":"N"},{"kind":"row","key":"U"},{"kind":"bodies"},{"kind":"ask","key":"A"},{"kind":"ask","key":"*"},{"kind":"cited","key":"G"},{"kind":"finding","key":"a.rs"},{"kind":"finding","key":"z.rs"},{"kind":"notice"},{"kind":"fixed"},{"kind":"fixcommit"}]"#,
         ) + &line(
             2,
             r#""event":"prompt","ids":[],"said":[{"kind":"pointer","key":"k:x"},{"kind":"pointer","key":"k:y"}]"#,
@@ -375,11 +347,6 @@ pub(super) mod tests {
         assert_eq!(got("note"), (1, 1));
         assert_eq!(got("ask"), (1, 1), "A closed, * not counted");
         assert_eq!(got("pointer"), (2, 1), "k:x pulled, k:y never");
-        assert_eq!(
-            got("count"),
-            (2, 1),
-            "the --files line pulled, the --key line never"
-        );
         assert_eq!(got("bodies"), (1, 0), "no find by id");
         assert_eq!(got("cited"), (1, 1), "G closed after the commit line");
         assert_eq!(

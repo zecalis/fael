@@ -71,10 +71,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     }
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
     if rows.is_empty() {
-        eprintln!(
-            "fael: {}",
-            misses::explain(&r.root, "cli", &log, &f, "--files")
-        );
+        nearest(a, &r.root, &log, &f, budget, &branch_of);
         return Ok(());
     }
     // a list of one or two shows its bodies: the next call would be `find <id>`
@@ -123,6 +120,40 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             .for_each(|c| println!("{}", c.to_line()));
     }
     Ok(())
+}
+
+/// An empty find: the nearest rows under their label, else why nothing
+/// matched. `--json` is the exact answer a script asked for — no guesses in it.
+fn nearest(
+    a: &Args,
+    root: &std::path::Path,
+    log: &Log,
+    f: &Filter,
+    budget: usize,
+    branch_of: &crate::journal::BranchMap,
+) {
+    let (head, near) = misses::explain(root, "cli", log, f, "--files");
+    if near.is_empty() || a.has("json") {
+        eprintln!("fael: {head}");
+        return;
+    }
+    let full = a.has("full") || core::expands(&near, near.len(), f, budget);
+    let out = match full {
+        true => core::render_full(log, &near, budget),
+        false => core::render(log, &near, budget),
+    };
+    let out = crate::journal::tag(out, branch_of);
+    println!("{head}");
+    print!("{out}");
+    let n = out.lines().filter(|l| l.starts_with("- [")).count();
+    let shown: Vec<String> = near.iter().take(n).map(|r| r.id.clone()).collect();
+    super::hook::record_found(
+        "cli",
+        "find",
+        root,
+        &shown,
+        (f.key.as_deref(), &f.files, None),
+    );
 }
 
 /// A body pulled by id: the outcome a `bodies:` line earns on.
