@@ -358,10 +358,8 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
 /// `export <plan> --section <key>`: one section of one plan.
 fn section(r: &Repo, want: &str, key: &str) -> Result<(), String> {
     let s = open(r)?;
-    print!(
-        "{}",
-        fael_core::plan::export_section(&s, one(&s, want)?.id, key)?
-    );
+    let text = fael_core::plan::export_section(&s, one(&s, want)?.id, key)?;
+    print!("{text}");
     Ok(())
 }
 
