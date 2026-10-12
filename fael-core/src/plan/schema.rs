@@ -1,4 +1,4 @@
-//! The plans.db schema (SPEC-fael-board §7) and the step from each older `user_version`.
+//! The fael.db schema (SPEC-fael-board §7) and the step from each older `user_version`.
 //! Every step runs inside the caller's `BEGIN IMMEDIATE`, so a failure rolls back to the
 //! old version and the next open retries.
 
@@ -9,7 +9,7 @@ use std::time::Duration;
 /// The breaking epoch: only a rename, drop or retype bumps it, in a chunk of its own run
 /// alone. An addition goes in [`TABLES`] or [`COLUMNS`] instead, so two lanes that each
 /// add something open the shared db both ways (issue 01M4MN60).
-pub(super) const VERSION: i32 = 6;
+pub(super) const VERSION: i32 = 8;
 
 /// New tables, `(name, sql)`: the sql runs once when the table is missing — its
 /// `CREATE TABLE` and indexes, `IF NOT EXISTS` so a race is harmless.
@@ -17,7 +17,7 @@ pub(super) const TABLES: &[(&str, &str)] = &[
     (
         "chunk_issue",
         // the ledger issues a chunk fixes (l2): `row_id` is a `.fael/log` row id, which
-        // plans.db cannot check — `chunk add --issue` rejects an unknown or closed one
+        // fael.db cannot check — `chunk add --issue` rejects an unknown or closed one
         "CREATE TABLE IF NOT EXISTS chunk_issue(
            chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
            row_id TEXT NOT NULL,
@@ -87,19 +87,7 @@ CREATE TABLE plan(
   name TEXT NOT NULL,
   title TEXT NOT NULL,
   area TEXT NOT NULL DEFAULT 'dev',
-  kind TEXT,
   state TEXT NOT NULL CHECK(state IN ('active','blocked','parked','done')),
-  rank INTEGER,
-  -- read and written by nothing since the section table (dropped in epoch v8)
-  doc TEXT,
-  spec TEXT,
-  source TEXT NOT NULL,
-  -- md era (plan fael-v8): read by nothing, dropped in epoch v8
-  truth TEXT NOT NULL DEFAULT 'md' CHECK(truth IN ('md','db')),
-  -- the paths every brief points at, one per line (`SPEC-x.md#block` allowed)
-  refs TEXT,
-  -- the checkout the plan's code lives in when it is not this repo (`fael plan repo`)
-  repo TEXT,
   UNIQUE(app, name));
 CREATE TABLE chunk(
   id INTEGER PRIMARY KEY,
@@ -118,13 +106,9 @@ CREATE TABLE chunk(
   size TEXT,
   model_hint TEXT,
   scope TEXT,
-  due TEXT,
-  pin INTEGER,
   approved_at TEXT,
   approved_model TEXT,
   approved_client TEXT,
-  -- free strings like model_hint: the app owns the list of clients (b6b)
-  client_hint TEXT,
   UNIQUE(plan, seq));
 -- after: src waits on dst · pair: src starts with dst · replaced_by: src lives on in dst
 -- dst NULL = an md `(after …)` that names no chunk: never met, shown blocked on `ref`
@@ -156,8 +140,6 @@ CREATE TABLE event(
   -- one ulid shared by every row one `chunk apply` wrote
   batch TEXT);
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS tr(
-  key TEXT NOT NULL, lang TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY(key, lang));
 CREATE INDEX edge_src ON edge(src);
 CREATE INDEX edge_dst ON edge(dst);
 CREATE INDEX run_chunk ON run(chunk);
@@ -170,7 +152,7 @@ CREATE INDEX event_plan ON event(plan, id);
 pub(super) fn backup(db: &Path, v: i32) -> Result<(), String> {
     copy(db, &format!("v{v}"))
         .map(drop)
-        .map_err(|e| format!("plans.db v{v} → v{VERSION} refused: {e}; nothing changed"))
+        .map_err(|e| format!("fael.db v{v} → v{VERSION} refused: {e}; nothing changed"))
 }
 
 /// `<db>.<tag>.bak` (an older one is kept: the new copy gets a ulid). The caller may hold
@@ -190,10 +172,11 @@ pub(super) fn copy(db: &Path, tag: &str) -> Result<PathBuf, String> {
         .map_err(|e| format!("the backup to {} failed ({e})", to.display()))
 }
 
-/// v1 (b1) → v2: rename the old tables away, create v2, copy, drop. The caller holds
+/// v1 (b1) → v8 in one step: rename the old tables away, create [`SCHEMA`], copy what it
+/// keeps (v1's `goal`, `kind`, `rank`, `due` and `pin` had no reader), drop. The caller holds
 /// `foreign_keys = OFF` (a pragma a transaction cannot change), so no drop cascades.
 pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
-    let e = |e: rusqlite::Error| format!("plans.db v1 → v2: {e}");
+    let e = |e: rusqlite::Error| format!("fael.db v1 → v2: {e}");
     tx.execute_batch(
         "DROP INDEX chunk_plan; DROP INDEX dep_chunk; DROP INDEX run_chunk;
          ALTER TABLE plan RENAME TO plan_v1;
@@ -204,13 +187,13 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
     .map_err(e)?;
     tx.execute_batch(SCHEMA).map_err(e)?;
     tx.execute_batch(
-        "INSERT INTO plan(id, app, name, title, area, kind, state, rank, doc, spec, source)
-           SELECT id, app, name, title, area, kind, state, rank, goal, spec, source FROM plan_v1;
+        "INSERT INTO plan(id, app, name, title, area, state)
+           SELECT id, app, name, title, area, state FROM plan_v1;
          INSERT INTO chunk(id, uid, plan, seq, label, title, state, brief, wait_on, wait_text,
-                           size, model_hint, scope, due, pin)
+                           size, model_hint, scope)
            SELECT id, 'v1:' || id, plan, (pos + 1) * 1024, label, title,
                   CASE state WHEN 'merged' THEN 'replaced' ELSE state END,
-                  brief, wait_on, wait_text, size, model_hint, scope, due, pin FROM chunk_v1;
+                  brief, wait_on, wait_text, size, model_hint, scope FROM chunk_v1;
          INSERT INTO edge(src, dst, ref, kind) SELECT chunk, after, ref, 'after' FROM dep;
          INSERT INTO edge(src, dst, kind) SELECT a, b, 'pair' FROM pair;
          INSERT INTO edge(src, dst, kind)
@@ -243,7 +226,7 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
            SELECT e.id, COALESCE(c.uid, 'v1:' || e.chunk, 'v1:none'), e.at, e.by, e.from_state,
                   e.to_state, e.text
            FROM event_v1 e LEFT JOIN chunk c ON c.id = e.chunk;
-         DROP TABLE dep; DROP TABLE pair; DROP TABLE run_v1; DROP TABLE event_v1;
+         DROP TABLE dep; DROP TABLE pair; DROP TABLE run_v1; DROP TABLE event_v1; DROP TABLE tr;
          DROP TABLE chunk_v1; DROP TABLE plan_v1;",
     )
     .map_err(e)?;
@@ -254,7 +237,7 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
         .map_err(e)?;
     if broken > 0 {
         return Err(format!(
-            "plans.db v1 → v2 left {broken} dangling reference(s)"
+            "fael.db v1 → v2 left {broken} dangling reference(s)"
         ));
     }
     Ok(())
@@ -263,19 +246,19 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
 /// `run.cost` (k1): what the client reported start R cost, in USD.
 pub(super) fn v2_to_v3(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE run ADD COLUMN cost REAL;")
-        .map_err(|e| format!("plans.db v2 → v3: {e}"))
+        .map_err(|e| format!("fael.db v2 → v3: {e}"))
 }
 
 /// `chunk.client_hint`: which client the planner or owner picked, next to `model_hint`.
 pub(super) fn v3_to_v4(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE chunk ADD COLUMN client_hint TEXT;")
-        .map_err(|e| format!("plans.db v3 → v4: {e}"))
+        .map_err(|e| format!("fael.db v3 → v4: {e}"))
 }
 
 /// `plan.repo` (issue 01M4N4CVH): a plan whose code is in another checkout.
 pub(super) fn v4_to_v5(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE plan ADD COLUMN repo TEXT;")
-        .map_err(|e| format!("plans.db v4 → v5: {e}"))
+        .map_err(|e| format!("fael.db v4 → v5: {e}"))
 }
 
 /// Master-detail (decision fael-board:master-detail): `plan.doc`, `event.plan` + `batch`,
@@ -288,7 +271,52 @@ pub(super) fn v5_to_v6(tx: &Transaction) -> Result<(), String> {
          CREATE INDEX event_plan ON event(plan, id);
          CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);",
     )
-    .map_err(|e| format!("plans.db v5 → v6: {e}"))
+    .map_err(|e| format!("fael.db v5 → v6: {e}"))
+}
+
+/// Epoch v8 (plan fael-v8): the md era's columns and two unread tables go — `plan.truth`,
+/// `source`, `kind`, `rank`, `refs`, `repo`, `doc`, `spec`; `chunk.due`, `pin`, `client_hint`;
+/// `tr` (issue 01M4NEYK) and `contract` (decision 01M4QVH4). `plan.doc` is cut into sections
+/// first when this db predates the `section` table.
+pub(super) fn v6_to_v8(tx: &Transaction) -> Result<(), String> {
+    let e = |e: rusqlite::Error| format!("fael.db v6 → v8: {e}");
+    let has_section: bool = tx
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'section')",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(e)?;
+    if !has_section {
+        tx.execute_batch(TABLES.iter().find(|t| t.0 == "section").map_or("", |t| t.1))
+            .map_err(e)?;
+        super::section::carry(tx)?;
+    }
+    let mut sql = String::from("DROP TABLE IF EXISTS tr; DROP TABLE IF EXISTS contract;");
+    for (table, cols) in [
+        (
+            "plan",
+            &[
+                "truth", "source", "kind", "rank", "refs", "repo", "doc", "spec",
+            ][..],
+        ),
+        ("chunk", &["due", "pin", "client_hint"]),
+    ] {
+        for col in cols {
+            // a db made by a lane that never added one (v4 `client_hint`, v5 `repo`) lacks it
+            let n: i64 = tx
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+                    [table, col],
+                    |r| r.get(0),
+                )
+                .map_err(e)?;
+            if n > 0 {
+                sql += &format!("ALTER TABLE {table} DROP COLUMN {col};");
+            }
+        }
+    }
+    tx.execute_batch(&sql).map_err(e)
 }
 
 /// Every migration ends here: `event.plan` for rows written before v6 (a chunk's via its
@@ -316,9 +344,13 @@ pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
         )
     })
     .map(drop)
-    .map_err(|e| format!("plans.db v6: {e}"))
+    .map_err(|e| format!("fael.db v6: {e}"))
 }
 
 #[cfg(test)]
 #[path = "schema_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "schema_v6_tests.rs"]
+mod v6_tests;

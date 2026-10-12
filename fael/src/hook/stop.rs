@@ -24,7 +24,7 @@ pub(crate) fn stop(e: &Event) -> Reply {
 }
 
 /// PLAN-fael-board: stamp the live chunk run of this worktree (SPEC §7) — `session` on the
-/// first stop (or session start), `last_seen` on each. No plans.db, no open; any failure
+/// first stop (or session start), `last_seen` on each. No fael.db, no open; any failure
 /// stays silent.
 pub(super) fn seen(e: &Event) {
     let Some(session) = e.session.as_deref().filter(|s| !s.is_empty()) else {
@@ -49,9 +49,9 @@ pub(super) fn seen(e: &Event) {
     }
 }
 
-/// The run this session's `chunk start` bound, wherever the session works now (issue
-/// 01M4N4CVC: a `--no-worktree` chunk whose code is in another repo). The marker goes
-/// once no live run is left.
+/// The run this session's `chunk start` bound, wherever the session works now: a
+/// `--no-worktree` run has no worktree for [`seen`] to match (issue 01M4N4CVC). The marker
+/// goes once no live run is left.
 fn seen_held(session: &str) {
     let Some(m) = crate::chunk::held(session) else {
         return;

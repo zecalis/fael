@@ -1,4 +1,4 @@
-//! The board's registry (SPEC §10): every repo whose plans.db a fael command wrote, so
+//! The board's registry (SPEC §10): every repo whose fael.db a fael command wrote, so
 //! `fael board` runs from anywhere — scratch repos under the temp dir stay off it.
 
 use crate::Repo;
@@ -45,7 +45,7 @@ pub(crate) fn in_tmp(p: &Path) -> bool {
         .any(|d| p.starts_with(d))
 }
 
-/// Put this repo on the board: called by every command that writes its plans.db.
+/// Put this repo on the board: called by every command that writes its fael.db.
 pub(crate) fn register(r: &Repo) {
     // the main checkout, not this worktree: `<main>/.git/fael` is the journal
     let root = r

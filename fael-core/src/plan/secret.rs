@@ -1,4 +1,4 @@
-//! plans.db text never holds a secret: a brief, note or hand-off goes to the model provider
+//! fael.db text never holds a secret: a brief, note or hand-off goes to the model provider
 //! and out through `fael board --json` and `fael plan export`. The check is
 //! [`crate::secret`], the one rows use; it runs in temp triggers on this connection, so every
 //! write path (add, edit, apply, import, done, note, wait) passes it without its own call.
@@ -40,7 +40,7 @@ pub(super) fn guard(conn: &Connection) -> Result<(), String> {
         let when = format!("fael_secret({}) IS NOT NULL", new.join(", "));
         // RAISE takes a literal only: the label stays out, the table says where
         let raise = format!(
-            "SELECT RAISE(ABORT, 'rejected: {t} text looks like a secret (key, token, password) — remove it; plans.db text goes to the model and the board');"
+            "SELECT RAISE(ABORT, 'rejected: {t} text looks like a secret (key, token, password) — remove it; fael.db text goes to the model and the board');"
         );
         sql += &format!(
             "CREATE TEMP TRIGGER IF NOT EXISTS fael_secret_{t}_ins BEFORE INSERT ON main.{t}
@@ -67,7 +67,7 @@ mod tests {
     }
 
     #[test]
-    fn a_secret_never_lands_in_plans_db() {
+    fn a_secret_never_lands_in_the_db() {
         let mut s = Store::open_in_memory().unwrap();
         let key = format!("ghp_{}", "a".repeat(36));
         let e = s

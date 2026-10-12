@@ -68,7 +68,7 @@ fn a_pair_starts_whole_or_not_at_all() {
     s.owner(&b, Owner::Unpark, None, NOW).unwrap();
     let st = s.start(&b, &Default::default(), &here("/w")).unwrap();
     assert_eq!(st.chunks.len(), 2);
-    assert!(st.text(&|_| true).contains("2 paired chunks"));
+    assert!(st.text().contains("2 paired chunks"));
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn two_starts_of_one_chunk_one_wins() {
     // a race shows on some runs only: 30 rounds make one test run catch it
     for _ in 0..30 {
         let dir = std::env::temp_dir().join(format!("fael-start-{}", crate::ulid()));
-        let path = dir.join("plans.db");
+        let path = dir.join("fael.db");
         let c = add(&mut Store::open(&path).unwrap(), "c", Some("brief"));
         let racers: Vec<_> = ["/a", "/b"]
             .into_iter()
@@ -149,20 +149,18 @@ fn a_no_worktree_start_takes_no_slot_and_its_shell_finishes_it() {
 }
 
 #[test]
-fn client_hint_is_a_free_string_size_is_s_m_or_l() {
+fn size_is_s_m_or_l_and_an_edit_clears_the_approval() {
     let mut s = Store::open_in_memory().unwrap();
-    let f = |size: &str, client: &str| Fields {
+    let f = |size: &str| Fields {
         title: Some("t".into()),
         size: Some(size.into()),
-        client: Some(client.into()),
         ..Fields::default()
     };
-    let c = s.add("inbox", &f("S", "opencode"), &[], NOW).unwrap();
-    let e = s.add("inbox", &f("XL", "x"), &[], NOW).unwrap_err();
+    let c = s.add("inbox", &f("S"), &[], NOW).unwrap();
+    let e = s.add("inbox", &f("XL"), &[], NOW).unwrap_err();
     assert!(e.contains("--size XL — S, M or L"), "{e}");
     s.approve(&c, Some(("deepseek", "opencode")), NOW).unwrap();
-    s.edit(&c, &f("L", "claude"), NOW).unwrap();
-    let q = "SELECT size || ' ' || client_hint || ' ' || COALESCE(approved_at, 'unapproved')
-             FROM chunk WHERE uid = ?1";
-    assert_eq!(get(&s, q, &c).as_deref(), Some("L claude unapproved"));
+    s.edit(&c, &f("L"), NOW).unwrap();
+    let q = "SELECT size || ' ' || COALESCE(approved_at, 'unapproved') FROM chunk WHERE uid = ?1";
+    assert_eq!(get(&s, q, &c).as_deref(), Some("L unapproved"));
 }

@@ -169,8 +169,10 @@ fn export_prints_sections_in_order_each_dated_and_one_alone() {
 fn a_plan_doc_is_cut_into_sections_once() {
     let (s, id) = plan();
     let tx = s.conn.unchecked_transaction().unwrap();
+    // `plan.doc` as a db before epoch v8 had it
     tx.execute_batch(
         "DELETE FROM section;
+         ALTER TABLE plan ADD COLUMN doc TEXT;
          UPDATE plan SET doc = '## 1. Goal (why)
 ship
 
@@ -222,7 +224,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
             run: "R".into(),
             chunks: vec![b],
         }
-        .text(&|_| true)
+        .text()
     };
     let t = text(&s, &uid);
     // Goal and Done, then what it reads (its own plan's by key, another's by plan/key)

@@ -15,16 +15,10 @@ pub struct Plan {
     pub name: String,
     pub title: String,
     pub area: String,
-    pub kind: Option<String>,
     pub state: String,
-    pub rank: Option<i64>,
-    pub truth: String,
-    pub source: String,
-    pub spec: Option<String>,
-    /// the checkout the plan's code lives in, null = this project (`fael plan repo`)
-    pub repo: Option<String>,
-    /// `owner/name` of that checkout's origin, for a PR link (the CLI fills it from git)
-    pub remote: Option<String>,
+    /// always `db` (every plan's chunks live in the db): the app's board JSON v1 gates
+    /// `chunk add --plan` on it
+    pub truth: &'static str,
     /// state → chunks in it; an archived (done/parked) plan lists only this
     pub counts: BTreeMap<String, usize>,
 }
@@ -39,10 +33,7 @@ pub struct Chunk {
     pub state: String,
     pub size: Option<String>,
     pub model_hint: Option<String>,
-    pub client_hint: Option<String>,
     pub scope: Vec<String>,
-    pub due: Option<String>,
-    pub pin: Option<i64>,
     pub ready: bool,
     pub blocked_by: Vec<Blocker>,
     pub unblocks: usize,
@@ -62,14 +53,8 @@ pub struct Chunk {
     /// conflicted paths, empty = merges clean; absent = not checked or git < 2.38
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conflicts: Option<Vec<String>>,
-    /// plan rank — the queue's last tie-break before the chunk's place in its plan
-    #[serde(skip)]
-    pub rank: Option<i64>,
     #[serde(skip)]
     pub seq: i64,
-    /// the plan's `repo`: scopes overlap only within one checkout
-    #[serde(skip)]
-    pub code: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -143,12 +128,11 @@ impl Store {
             .conn
             .prepare(
                 "SELECT c.id, c.uid, p.app, p.name, c.label, c.title, c.state, c.size,
-                        c.model_hint, c.scope, c.due, c.pin, c.wait_on, c.wait_text,
-                        c.wait_until, c.approved_at, c.approved_model, c.approved_client,
-                        p.rank, c.seq, c.client_hint, p.repo, c.wait_options
+                        c.model_hint, c.scope, c.wait_on, c.wait_text, c.wait_until,
+                        c.approved_at, c.approved_model, c.approved_client, c.seq, c.wait_options
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
-                 ORDER BY p.rank IS NULL, p.rank, p.app, p.name, c.seq",
+                 ORDER BY p.app, p.name, c.seq",
             )
             .map_err(err)?;
         let rows = q
@@ -159,7 +143,7 @@ impl Store {
                 let title: String = r.get(5)?;
                 let state: String = r.get(6)?;
                 let scope: Option<String> = r.get(9)?;
-                let at: Option<String> = r.get(15)?;
+                let at: Option<String> = r.get(13)?;
                 let waiting = state == "waiting";
                 Ok((
                     id,
@@ -169,14 +153,11 @@ impl Store {
                         title: clean(&title, label.as_deref()),
                         size: r.get(7)?,
                         model_hint: r.get(8)?,
-                        client_hint: r.get(20)?,
                         scope: scope
                             .iter()
                             .flat_map(|s| s.lines())
                             .map(String::from)
                             .collect(),
-                        due: r.get(10)?,
-                        pin: r.get(11)?,
                         ready: false,
                         blocked_by: Vec::new(),
                         unblocks: 0,
@@ -187,10 +168,10 @@ impl Store {
                         wait: waiting
                             .then(|| -> rusqlite::Result<Wait> {
                                 Ok(Wait {
-                                    on: r.get(12)?,
-                                    text: r.get(13)?,
-                                    until: r.get(14)?,
-                                    options: options(r.get(22)?),
+                                    on: r.get(10)?,
+                                    text: r.get(11)?,
+                                    until: r.get(12)?,
+                                    options: options(r.get(17)?),
                                 })
                             })
                             .transpose()?,
@@ -198,8 +179,8 @@ impl Store {
                             .map(|at| -> rusqlite::Result<Approval> {
                                 Ok(Approval {
                                     at,
-                                    model: r.get(16)?,
-                                    client: r.get(17)?,
+                                    model: r.get(14)?,
+                                    client: r.get(15)?,
                                 })
                             })
                             .transpose()?,
@@ -208,9 +189,7 @@ impl Store {
                         issues: Vec::new(),
                         owner_actions: Owner::actions(&state),
                         conflicts: None,
-                        rank: r.get(18)?,
-                        seq: r.get(19)?,
-                        code: r.get(21)?,
+                        seq: r.get(16)?,
                         label,
                         state,
                         uid,
@@ -277,8 +256,8 @@ impl Store {
         let mut q = self
             .conn
             .prepare(
-                "SELECT id, app, name, title, area, kind, state, rank, source, spec, repo
-                 FROM plan ORDER BY state IN ('done', 'parked'), rank IS NULL, rank, app, name",
+                "SELECT id, app, name, title, area, state
+                 FROM plan ORDER BY state IN ('done', 'parked'), app, name",
             )
             .map_err(err)?;
         q.query_map([], |r| {
@@ -290,15 +269,8 @@ impl Store {
                 title: plan_title(&title, &name),
                 name,
                 area: r.get(4)?,
-                kind: r.get(5)?,
-                state: r.get(6)?,
-                rank: r.get(7)?,
-                // every plan's chunks live in the db; the app reads it (board JSON v1)
-                truth: "db".into(),
-                source: r.get(8)?,
-                spec: r.get(9)?,
-                repo: r.get(10)?,
-                remote: None,
+                state: r.get(5)?,
+                truth: "db",
             })
         })
         .map_err(err)?

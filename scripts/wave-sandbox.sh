@@ -4,7 +4,7 @@
 # dir — fael board skips those). Done: fael board --drop <dir>/repo, then rm -rf <dir>.
 # Builds a toy repo + bare origin + 3 worktrees and a plan "sim" of four chunks, each
 # made to hit one path of the skill: clean merge, shared-file conflict, a leaked cut,
-# a question the worker must ask. Its plans.db is the sandbox's own; only fael board's
+# a question the worker must ask. Its fael.db is the sandbox's own; only fael board's
 # machine-wide `running` count is shared with real work.
 set -eu
 DIR=${1:-$HOME/fael-wave-sandbox}

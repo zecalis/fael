@@ -87,7 +87,7 @@ fn lines_add_edit_and_drop_and_a_missing_line_is_left_alone() {
     s.approve(&a, Some(("opus", "claude")), NOW).unwrap();
     let v = bill(
         &s,
-        json!({"title": "Inbox!", "refs": ["SPEC.md"],
+        json!({"title": "Inbox!",
                "sections": [{"key": "1", "title": "1. Goal", "body": "ship"}]}),
         json!([
             {"uid": a, "brief": "do a better", "after": [b]},
@@ -104,7 +104,7 @@ fn lines_add_edit_and_drop_and_a_missing_line_is_left_alone() {
         e["sections"],
         json!([{"key": "1", "title": "1. Goal", "body": "ship"}])
     );
-    assert_eq!(e["refs"], json!(["SPEC.md"]));
+    assert!(e.get("refs").is_none() && e.get("repo").is_none(), "{e}");
     let lines = e["chunks"].as_array().unwrap();
     let titles: Vec<&str> = lines.iter().map(|l| l["title"].as_str().unwrap()).collect();
     // b was not in the bill: still there; c dropped: out of the export

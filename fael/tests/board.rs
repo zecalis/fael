@@ -176,13 +176,13 @@ fn a_linked_worktree_pool_and_the_registry() {
     let reg = std::fs::read_to_string(state.join("projects")).unwrap();
     assert_eq!((canon(&reg), reg.lines().count()), (d.clone(), 1));
 
-    // a root gone from disk is skipped; a plans.db that is not a database stays listed
+    // a root gone from disk is skipped; a fael.db that is not a database stays listed
     // with its error and fails the board (issue 01M4N4CV7)
     let bad = tmp.join("bad");
     std::fs::create_dir_all(&bad).unwrap();
     git(&bad, &["init", "-q", "-b", "main"]);
     let bad = bad.canonicalize().unwrap();
-    write(bad.join(".git/fael/plans.db"), "not sqlite");
+    write(bad.join(".git/fael/fael.db"), "not sqlite");
     let gone = tmp.join("gone");
     write(
         state.join("projects"),

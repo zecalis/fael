@@ -24,8 +24,6 @@ pub struct Fields {
     pub brief: Option<String>,
     pub size: Option<String>,
     pub model: Option<String>,
-    /// free string like `model`: the app owns the list of clients
-    pub client: Option<String>,
     /// repo-relative path prefixes (SPEC §2 overlaps), stored one per line
     pub scope: Option<Vec<String>>,
     /// the sections it works from, `<key>` or `<plan>/<key>`: its brief prints those
@@ -53,7 +51,7 @@ pub(super) fn row(tx: &Transaction, uid: &str) -> Result<Row, String> {
     let (id, uid, state) = lookup(tx, uid)?.ok_or(format!(
         "rejected: no chunk {uid} — `fael plan export` lists every uid"
     ))?;
-    let state = State::parse(&state).ok_or(format!("plans.db: chunk {uid} has state {state}"))?;
+    let state = State::parse(&state).ok_or(format!("fael.db: chunk {uid} has state {state}"))?;
     Ok(Row { id, uid, state })
 }
 
@@ -227,7 +225,6 @@ pub(super) fn edit_in(
         ("brief", f.brief.as_deref().map(str::trim)),
         ("size", f.size.as_deref()),
         ("model_hint", f.model.as_deref()),
-        ("client_hint", f.client.as_deref()),
         ("scope", scope.as_ref().map(|s| s.as_deref().unwrap_or(""))),
         ("reads", reads.as_ref().map(|s| s.as_deref().unwrap_or(""))),
         ("label", f.label.as_deref()),
@@ -291,8 +288,8 @@ impl Store {
         let tx = tx(self)?;
         if plan == "inbox" {
             tx.execute(
-                "INSERT OR IGNORE INTO plan(app, name, title, state, source, truth)
-                 VALUES ('', 'inbox', 'inbox', 'active', '', 'db')",
+                "INSERT OR IGNORE INTO plan(app, name, title, state)
+                 VALUES ('', 'inbox', 'inbox', 'active')",
                 [],
             )
             .map_err(err)?;
@@ -322,9 +319,9 @@ impl Store {
         let uid = crate::ulid();
         tx.execute(
             "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                               client_hint, label, reads)
+                               label, reads)
              VALUES (?1, ?2, (SELECT COALESCE(MAX(seq), 0) + 1024 FROM chunk WHERE plan = ?2),
-                     ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                     ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 uid,
                 pid,
@@ -334,7 +331,6 @@ impl Store {
                 f.size,
                 f.model,
                 scope,
-                f.client,
                 f.label,
                 reads
             ],

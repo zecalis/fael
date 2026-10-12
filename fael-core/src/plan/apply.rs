@@ -24,7 +24,6 @@ pub enum Op {
         brief: Option<String>,
         size: Option<String>,
         model: Option<String>,
-        client: Option<String>,
         scope: Option<Vec<String>>,
         reads: Option<Vec<String>>,
     },
@@ -50,7 +49,6 @@ pub struct Part {
     pub brief: Option<String>,
     pub size: Option<String>,
     pub model: Option<String>,
-    pub client: Option<String>,
     pub scope: Option<Vec<String>>,
     pub reads: Option<Vec<String>>,
 }
@@ -163,8 +161,8 @@ pub(super) fn insert(
     let uid = crate::ulid();
     tx.execute(
         "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                           client_hint, label, reads)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                           label, reads)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             uid,
             plan,
@@ -175,7 +173,6 @@ pub(super) fn insert(
             f.size,
             f.model,
             scope(f.scope.as_deref().unwrap_or_default())?,
-            f.client,
             label,
             super::section::reads(f.reads.as_deref().unwrap_or_default())?
         ],
@@ -239,7 +236,6 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
             brief: p.brief,
             size: p.size,
             model: p.model,
-            client: p.client,
             scope: p.scope,
             reads: p.reads.or_else(|| Some(old.reads.clone())),
             ..Fields::default()
@@ -305,7 +301,6 @@ pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String>
             brief,
             size,
             model,
-            client,
             scope,
             reads,
         } => {
@@ -315,7 +310,6 @@ pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String>
                 brief,
                 size,
                 model,
-                client,
                 scope,
                 reads,
                 ..Fields::default()

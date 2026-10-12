@@ -26,8 +26,6 @@ pub struct Bill {
     area: Option<String>,
     /// read back, never set: `fael plan park|unpark|done` moves it
     state: Option<String>,
-    refs: Option<Vec<String>>,
-    repo: Option<String>,
     /// by key: one left out is left alone
     #[serde(default)]
     sections: Vec<Part>,
@@ -49,7 +47,6 @@ struct Line {
     brief: Option<String>,
     size: Option<String>,
     model: Option<String>,
-    client: Option<String>,
     scope: Option<Vec<String>>,
     reads: Option<Vec<String>>,
     /// the full set of chunks it waits on
@@ -62,14 +59,13 @@ fn changed(new: &Option<String>, old: &str) -> Option<String> {
 }
 
 fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<String>, String> {
-    let (app, name, state, cur): (String, String, String, [String; 4]) = tx
+    let (app, name, state, cur): (String, String, String, [String; 2]) = tx
         .query_row(
-            "SELECT app, name, state, title, area, COALESCE(refs, ''), COALESCE(repo, '')
-             FROM plan WHERE id = ?1",
+            "SELECT app, name, state, title, area FROM plan WHERE id = ?1",
             [pid],
             |r| {
                 let g = |i| r.get::<_, String>(i);
-                Ok((g(0)?, g(1)?, g(2)?, [g(3)?, g(4)?, g(5)?, g(6)?]))
+                Ok((g(0)?, g(1)?, g(2)?, [g(3)?, g(4)?]))
             },
         )
         .map_err(err)?;
@@ -78,14 +74,8 @@ fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<Stri
             "rejected: plan {name} is {state} — `fael plan park|unpark|done` moves it, a bill does not"
         ));
     }
-    let refs = b.refs.as_ref().map(|r| r.join("\n"));
     let mut what = Vec::new();
-    for (col, new, old) in [
-        ("title", &b.title, &cur[0]),
-        ("area", &b.area, &cur[1]),
-        ("refs", &refs, &cur[2]),
-        ("repo", &b.repo, &cur[3]),
-    ] {
+    for (col, new, old) in [("title", &b.title, &cur[0]), ("area", &b.area, &cur[1])] {
         let Some(v) = new.as_ref().filter(|n| n != &old) else {
             continue;
         };
@@ -94,9 +84,6 @@ fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<Stri
         }
         if col == "area" && !matches!(v.as_str(), "dev" | "marketing") {
             return Err(format!("rejected: area {v} — dev or marketing"));
-        }
-        if col == "refs" && b.refs.iter().flatten().any(|r| r.trim().is_empty()) {
-            return Err("rejected: a ref is a path, not empty".into());
         }
         tx.execute(
             &format!("UPDATE plan SET {col} = NULLIF(?1, '') WHERE id = ?2"),
@@ -137,7 +124,6 @@ fn add_line(tx: &Transaction, pid: i64, l: &Line, now: &str) -> Result<String, S
         brief: l.brief.clone(),
         size: l.size.clone(),
         model: l.model.clone(),
-        client: l.client.clone(),
         scope: l.scope.clone(),
         reads: l.reads.clone(),
         label: l.label.clone(),
@@ -173,19 +159,15 @@ fn edit_line(
     now: &str,
 ) -> Result<Option<String>, String> {
     let r = row(tx, uid)?;
-    let (plan, cur): (i64, [String; 8]) = tx
+    let (plan, cur): (i64, [String; 7]) = tx
         .query_row(
             "SELECT plan, title, brief, COALESCE(size, ''), COALESCE(model_hint, ''),
-                    COALESCE(client_hint, ''), COALESCE(scope, ''), COALESCE(label, ''),
-                    COALESCE(reads, '')
+                    COALESCE(scope, ''), COALESCE(label, ''), COALESCE(reads, '')
              FROM chunk WHERE id = ?1",
             [r.id],
             |q| {
                 let g = |i| q.get::<_, String>(i);
-                Ok((
-                    q.get(0)?,
-                    [g(1)?, g(2)?, g(3)?, g(4)?, g(5)?, g(6)?, g(7)?, g(8)?],
-                ))
+                Ok((q.get(0)?, [g(1)?, g(2)?, g(3)?, g(4)?, g(5)?, g(6)?, g(7)?]))
             },
         )
         .map_err(err)?;
@@ -197,17 +179,15 @@ fn edit_line(
         brief: changed(&l.brief, &cur[1]),
         size: changed(&l.size, &cur[2]),
         model: changed(&l.model, &cur[3]),
-        client: changed(&l.client, &cur[4]),
-        scope: l.scope.clone().filter(|s| s.join("\n") != cur[5]),
-        reads: l.reads.clone().filter(|s| s.join("\n") != cur[7]),
-        label: changed(&l.label, &cur[6]),
+        scope: l.scope.clone().filter(|s| s.join("\n") != cur[4]),
+        reads: l.reads.clone().filter(|s| s.join("\n") != cur[6]),
+        label: changed(&l.label, &cur[5]),
         ..Fields::default()
     };
     let edits = f.title.is_some()
         || f.brief.is_some()
         || f.size.is_some()
         || f.model.is_some()
-        || f.client.is_some()
         || f.scope.is_some()
         || f.reads.is_some()
         || f.label.is_some();

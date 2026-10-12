@@ -2,7 +2,7 @@
 //! plans and chunks, and four lists of uids across them — needs you (§5), the queue (§3),
 //! running, blocked. The app's only read; `"v": 1` is the contract
 //! (`tests/golden/board-v1.json`). Live git: one worktree list and one base per project.
-//! A project fael cannot read (a newer plans.db) stays on with its `error` and empty lists,
+//! A project fael cannot read (a newer fael.db) stays on with its `error` and empty lists,
 //! and the command exits 1: never an empty board that reads as live (issue 01M4N4CV7).
 
 use crate::plan::db;
@@ -90,7 +90,6 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         }
         projects.retain(|p| !p.plans.is_empty() || p.error.is_some());
     }
-    code(&mut projects);
     prs::live_branches(&mut projects);
     let broken = projects.iter().any(|p| p.error.is_some());
     let b = lists(at, projects);
@@ -127,47 +126,6 @@ impl Project {
             error: None,
         }
     }
-}
-
-/// A plan whose code is in another checkout (`fael plan repo`, issue 01M4N4CVH): the plan
-/// gets that checkout's `remote` for a PR link, and the checkout is a project of its own —
-/// base and worktree pool, no plans — so the app can show and act on it.
-fn code(projects: &mut Vec<Project>) {
-    let live: HashMap<String, String> = projects
-        .iter()
-        .flat_map(|p| &p.chunks)
-        .filter_map(|c| c.run.as_ref().filter(|r| r.ended.is_none()))
-        .filter_map(|r| Some((r.worktree.clone()?, r.id.clone())))
-        .collect();
-    let live: HashMap<&str, &str> = live.iter().map(|(w, r)| (w.as_str(), r.as_str())).collect();
-    let mut roots: Vec<String> = projects.iter().map(|p| p.root.clone()).collect();
-    let mut extra = Vec::new();
-    for plan in projects.iter_mut().flat_map(|p| &mut p.plans) {
-        let Some(repo) = plan.repo.clone() else {
-            continue;
-        };
-        let root = Path::new(&repo);
-        plan.remote = remote(root);
-        if roots.contains(&repo) {
-            continue;
-        }
-        roots.push(repo.clone());
-        extra.push(match repo_at(root) {
-            Ok(r) if root.exists() => Project {
-                base: git(root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]),
-                worktrees: worktrees(root, r.cfg.plan_worktrees.as_deref(), &live),
-                ..Project::named(root)
-            },
-            _ => Project {
-                error: Some(format!(
-                    "no checkout at {repo} — `fael plan repo {} <path>`",
-                    plan.name
-                )),
-                ..Project::named(root)
-            },
-        });
-    }
-    projects.extend(extra);
 }
 
 /// `owner/name` of a checkout's origin: `git@github.com:o/n.git`, `https://…/o/n`.
@@ -280,19 +238,9 @@ fn lists(at: String, projects: Vec<Project>) -> Board {
         .iter()
         .flat_map(|(kind, f)| uids(f).into_iter().map(|uid| Need { kind, uid }))
         .collect();
-    // SPEC §3: pin, due soonest, unblocks most, plan rank — stable, so plan order breaks ties
+    // unblocks most first — stable, so plan order breaks ties
     let mut queue: Vec<&&BoardChunk> = all.iter().filter(|c| c.ready).collect();
-    queue.sort_by_key(|c| {
-        (
-            c.pin.is_none(),
-            c.pin,
-            c.due.is_none(),
-            c.due.clone(),
-            Reverse(c.unblocks),
-            c.rank.is_none(),
-            c.rank,
-        )
-    });
+    queue.sort_by_key(|c| Reverse(c.unblocks));
     let queue = queue.iter().map(|c| c.uid.clone()).collect();
     let running = uids(&|c| c.state == "running" && !c.ended);
     let blocked = uids(&|c| c.state == "open" && !c.blocked_by.is_empty());
