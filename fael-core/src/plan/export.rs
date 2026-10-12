@@ -132,7 +132,7 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
     let mut q = s
         .conn
         .prepare(
-            "SELECT c.title, c.brief, c.state, c.uid,
+            "SELECT c.title, c.brief, c.state, c.uid, c.label,
                (SELECT group_concat(COALESCE(a.label, a.uid, e.ref), ', ')
                   FROM edge e LEFT JOIN chunk a ON a.id = e.dst
                  WHERE e.src = c.id AND e.kind = 'after'),
@@ -147,8 +147,19 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
         "after", "run", "wait on", "wait", "until", "size", "client", "model", "scope", "due",
         "pin", "approved", "reads",
     ];
-    for row in q.query_map([plan], cols::<17>).map_err(err)? {
-        let [title, brief, state, uid, rest @ ..] = row.map_err(err)?;
+    // the notes the chunk's next brief prints: those since its last start
+    let mut notes = s
+        .conn
+        .prepare(
+            "SELECT substr(at, 1, 10), text FROM event
+             WHERE chunk_uid = ?1 AND by = 'note' AND text IS NOT NULL
+               AND id > COALESCE((SELECT MAX(id) FROM event WHERE chunk_uid = ?1
+                                    AND to_state = 'running' AND by != 'note'), 0)
+             ORDER BY id",
+        )
+        .map_err(err)?;
+    for row in q.query_map([plan], cols::<18>).map_err(err)? {
+        let [title, brief, state, uid, label, rest @ ..] = row.map_err(err)?;
         let tick = match state.as_str() {
             "done" => 'x',
             "dropped" | "replaced" => '~',
@@ -161,7 +172,11 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
         } else {
             let _ = write!(o, "- [{tick}] {title}");
         }
-        let _ = write!(o, "\n  uid {uid} · {state}");
+        let _ = write!(o, "\n  uid {uid}");
+        if !label.is_empty() {
+            let _ = write!(o, " · label {label}");
+        }
+        let _ = write!(o, " · {state}");
         for (k, v) in names.iter().zip(rest) {
             if !v.trim().is_empty() {
                 let _ = write!(o, " · {k} {}", v.trim().replace('\n', ", "));
@@ -172,6 +187,10 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
             for l in brief.lines() {
                 let _ = writeln!(o, "  > {l}");
             }
+        }
+        for n in notes.query_map([&uid], cols::<2>).map_err(err)? {
+            let [day, text] = n.map_err(err)?;
+            let _ = writeln!(o, "  > note {day}: {}", text.replace('\n', " "));
         }
     }
     Ok(())
