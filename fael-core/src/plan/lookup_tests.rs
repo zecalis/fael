@@ -67,6 +67,15 @@ fn a_label_in_two_plans_asks_for_the_uid() {
     assert!(e.contains("is in plan inbox, not p2"), "{e}");
     let e = s.uid_in("b9", "p2").unwrap_err();
     assert!(e.contains("no chunk b9 in plan p2"), "{e}");
+    // an `after` label is read in the new chunk's plan first
+    let f = Fields {
+        title: Some("next".into()),
+        ..Fields::default()
+    };
+    let next = s.add("inbox", &f, &["b1".into()], NOW).unwrap();
+    let waits = "SELECT d.uid FROM edge e JOIN chunk s ON s.id = e.src
+                 JOIN chunk d ON d.id = e.dst WHERE s.uid = ?1 AND e.kind = 'after'";
+    assert_eq!(get(&s, waits, &next).as_deref(), Some(a.as_str()));
 }
 
 #[test]

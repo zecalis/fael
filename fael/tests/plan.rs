@@ -37,6 +37,24 @@ fn write(p: PathBuf, body: &str) {
 }
 
 #[test]
+fn outside_a_repo_says_so_and_leaves_no_db() {
+    let d = std::env::temp_dir().join(format!("fael-norepo-{}", fael_core::ulid()));
+    std::fs::create_dir_all(&d).unwrap();
+    for args in [
+        &["plan", "export", "p"][..],
+        &["chunk", "show", "b1"],
+        &["plan", "new", "p", "P"],
+    ] {
+        let (ok, _, err) = fael(&d, args);
+        assert!(
+            !ok && err.contains("is in no git repo") && !err.contains("plan new"),
+            "{args:?}: {err}"
+        );
+    }
+    assert!(!d.join(".fael").exists(), "no stray fael.db");
+}
+
+#[test]
 fn park_unpark_done_move_a_plan_and_unknown_names_are_refused() {
     let d = repo();
     let (ok, _, err) = fael(&d, &["plan", "export"]);

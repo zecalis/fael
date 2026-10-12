@@ -33,6 +33,7 @@ pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|af
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
+    crate::plan::in_repo(&r)?;
     let named;
     let (a, rest) = match in_plan(a, rest, &r).map_err(|e| row_id(&r, e))? {
         Some(n) => {

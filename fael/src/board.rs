@@ -82,11 +82,13 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
             }
         }
     }
-    // an agent's cut: one plan's chunks, the projects that have it (and the unreadable)
+    // an agent's cut: one plan's chunks, the projects that have it (and the unreadable);
+    // `name` or `app/name`, the key `plan new` and `plan export` print
     if let Some(n) = a.one("plan") {
+        let is = |app: &str, name: &str| name == n || format!("{app}/{name}") == n;
         for p in &mut projects {
-            p.plans.retain(|x| x.name == n);
-            p.chunks.retain(|c| c.plan == n);
+            p.plans.retain(|x| is(&x.app, &x.name));
+            p.chunks.retain(|c| is(&c.app, &c.plan));
         }
         projects.retain(|p| !p.plans.is_empty() || p.error.is_some());
     }

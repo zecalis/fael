@@ -112,6 +112,13 @@ fn labels_show_and_the_plan_cut() {
     };
     assert_eq!(cut("inbox")["projects"][0]["chunks"][0]["uid"], a.as_str());
     assert_eq!(cut("nope")["projects"], serde_json::json!([]));
+    // `app/name`, the key `plan new` prints, cuts the same plan as `name`
+    f(&["plan", "new", "pages", "Pages", "--app", "web"]);
+    let p = f(&["chunk", "add", "p1", "--plan", "web/pages", "--brief", "b"]);
+    let p = p.lines().next().unwrap();
+    for key in ["web/pages", "pages"] {
+        assert_eq!(cut(key)["projects"][0]["chunks"][0]["uid"], p, "{key}");
+    }
     // the text form carries the hand-off too: an owner without the board app reads it here
     assert!(!text.contains("hand-off"), "none before done: {text}");
     f(&["chunk", "start", &a]);

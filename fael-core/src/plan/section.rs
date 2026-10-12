@@ -27,7 +27,7 @@ pub(super) struct Part {
     drop: bool,
 }
 
-/// A section as export and the brief read it; `updated` = the `at` of its newest event.
+/// A section as export and the brief read it; `updated` = the local day of its newest event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
     pub key: String,
@@ -189,11 +189,12 @@ pub(super) fn apply(
     Ok(Some(format!("§ {} dropped", p.key)))
 }
 
-/// A plan's sections in order, each dated by its newest event.
+/// A plan's sections in order, each dated by its newest event — the machine's local day,
+/// the day the agent writes in its own text (events are stamped UTC).
 pub(super) fn list(c: &Connection, pid: i64) -> Result<Vec<Row>, String> {
     c.prepare(
         "SELECT s.key, s.title, s.body,
-           COALESCE((SELECT MAX(e.at) FROM event e
+           COALESCE((SELECT date(MAX(e.at), 'localtime') FROM event e
                      WHERE e.plan = s.plan AND e.chunk_uid LIKE 'plan:%'
                        AND substr(e.text, 1, length(s.key) + 2) = s.key || ': '), '')
          FROM section s WHERE s.plan = ?1 ORDER BY s.seq",
