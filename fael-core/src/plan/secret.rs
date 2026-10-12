@@ -9,10 +9,11 @@ use rusqlite::functions::FunctionFlags;
 
 /// `table: columns` — the free text a person or agent types. A column outside this list
 /// is a path, a name or a state.
-const TEXT: [(&str, &str); 3] = [
+const TEXT: [(&str, &str); 4] = [
     ("plan", "title"),
     ("chunk", "title, label, brief, wait_text"),
     ("event", "text"),
+    ("section", "title, body"),
 ];
 
 pub(super) fn guard(conn: &Connection) -> Result<(), String> {
@@ -36,6 +37,17 @@ pub(super) fn guard(conn: &Connection) -> Result<(), String> {
     .map_err(err)?;
     let mut sql = String::new();
     for (t, cols) in TEXT {
+        // a build that never creates the table never writes it either
+        let has: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM main.sqlite_master WHERE type = 'table' AND name = ?1",
+                [t],
+                |r| r.get(0),
+            )
+            .map_err(err)?;
+        if !has {
+            continue;
+        }
         let new: Vec<String> = cols.split(", ").map(|c| format!("NEW.{c}")).collect();
         let when = format!("fael_secret({}) IS NOT NULL", new.join(", "));
         // RAISE takes a literal only: the label stays out, the table says where
@@ -90,5 +102,21 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn a_secret_never_lands_in_a_plan_section() {
+        let mut s = Store::open_in_memory().unwrap();
+        s.new_plan("", "p", "P", "dev", NOW).unwrap();
+        let key = format!("ghp_{}", "a".repeat(36));
+        let e = s
+            .conn
+            .execute("UPDATE section SET body = ?1", [format!("token {key}")])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            e.contains("section text looks like a secret") && !e.contains(&key),
+            "{e}"
+        );
     }
 }
