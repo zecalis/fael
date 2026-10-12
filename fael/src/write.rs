@@ -367,7 +367,7 @@ fn git_status_files(root: &Path) -> HashSet<String> {
 /// within distance 2. Only siblings count: a row file one char away may be a
 /// genuinely new file (`src/a.rs` exists, `src/b.rs` is planned work), and
 /// rejecting that is the false block the plan forbids.
-fn sibling_suggest(root: &Path, bad: &str) -> Option<String> {
+pub(crate) fn sibling_suggest(root: &Path, bad: &str) -> Option<String> {
     let dir = bad.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
     let sib = if dir.is_empty() {
         root.to_path_buf()

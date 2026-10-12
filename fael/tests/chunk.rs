@@ -266,3 +266,29 @@ fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
         "{c}"
     );
 }
+
+#[test]
+fn a_scope_naming_nothing_is_warned_and_a_new_file_in_a_real_dir_is_not() {
+    let d = repo();
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    std::fs::write(d.join("src/write.rs"), "").unwrap();
+    let scope = "src/write.rs,src/new.rs,src/wirte.rs,nope/a.rs,docs/";
+    let (ok, out, err) = fael(&d, &["chunk", "add", "T", "--brief", "b", "--scope", scope]);
+    assert!(ok, "{err}");
+    let uid = out.trim();
+    assert!(
+        err.contains(r#"scope "src/wirte.rs" is not on disk — "src/write.rs"?"#),
+        "{err}"
+    );
+    assert!(err.contains(r#"scope "nope/a.rs" names nothing"#), "{err}");
+    for quiet in ["\"src/write.rs\" ", "src/new.rs", "docs/"] {
+        assert!(!err.contains(quiet), "{quiet}: {err}");
+    }
+    let (ok, _, err) = fael(&d, &["chunk", "edit", uid, "--title", "U"]);
+    assert!(ok && !err.contains("warning"), "{err}");
+    let (ok, _, err) = fael(&d, &["chunk", "edit", uid, "--scope", "nope/sub/"]);
+    assert!(
+        ok && err.contains(r#"scope "nope/sub/" names nothing"#),
+        "{err}"
+    );
+}
