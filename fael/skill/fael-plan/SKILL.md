@@ -360,7 +360,9 @@ a done plan.
 4. **Reads left ambiguous** (a bare `§n` the migrate report or the brief can't place): cite the
    section text that matches, or ask — never guess.
 5. After the dev's yes, per folded plan:
-   - each open chunk: `fael chunk move <uid> --plan <target>`
+   - each open chunk: `fael chunk move <uid> --plan <target>` — a label the target already has
+     (done chunks count) refuses the move: rename first (`chunk edit <uid> --label hr1`, a
+     prefix of the old plan), checked for every fold before the first move
    - its sections: one bill on the target adds them under `<old-plan>:<key>` keys (`fael plan
      export <target> --json`, append to `sections`, `apply`), then one bill on the source drops
      them (`{key, drop:true}`) — each bill under its own rev
