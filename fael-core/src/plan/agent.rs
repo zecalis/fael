@@ -20,22 +20,42 @@ fn end(tx: &Transaction, chunk: i64, here: &Here) -> Result<usize, String> {
     end_live(tx, chunk, here.now)
 }
 
+/// A chunk leaves `waiting`: its question, date and options go (01M4NWFS).
+pub(super) fn unwait(tx: &Transaction, chunk: i64) -> Result<(), String> {
+    tx.execute(
+        "UPDATE chunk SET wait_on = NULL, wait_text = NULL, wait_until = NULL,
+           wait_options = NULL WHERE id = ?1",
+        [chunk],
+    )
+    .map(drop)
+    .map_err(err)
+}
+
 /// `done --out`: copy the output for run R, return where it went.
 pub type Copy<'a> = dyn FnMut(&str) -> Result<String, String> + 'a;
 
 impl Store {
-    /// `fael chunk wait --on owner|data "<question>" [--until D]`: the run ends, the question stays.
+    /// `fael chunk wait --on owner|data "<question>" [--until D] [--option A …]`: the run
+    /// ends, the question stays; `options` are the answers the owner picks from (01M4NWFS).
     pub fn wait(
         &mut self,
         uid: &str,
         on: &str,
         text: &str,
         until: Option<&str>,
+        options: &[String],
         here: &Here,
     ) -> Result<(), String> {
         if !matches!(on, "owner" | "data") {
             return Err(format!("rejected: --on {on} — owner or data"));
         }
+        if !options.is_empty() && on != "owner" {
+            return Err("rejected: --option needs --on owner".into());
+        }
+        let options = (!options.is_empty())
+            .then(|| serde_json::to_string(options))
+            .transpose()
+            .map_err(|e| e.to_string())?;
         if until.is_some_and(|u| !is_date(u)) {
             return Err("rejected: --until takes a date YYYY-MM-DD".into());
         }
@@ -44,8 +64,9 @@ impl Store {
         fence(&tx, &r, here)?;
         set(&tx, &r, State::Waiting, "agent", Some(text), here.now)?;
         tx.execute(
-            "UPDATE chunk SET wait_on = ?1, wait_text = ?2, wait_until = ?3 WHERE id = ?4",
-            params![on, text, until, r.id],
+            "UPDATE chunk SET wait_on = ?1, wait_text = ?2, wait_until = ?3, wait_options = ?4
+             WHERE id = ?5",
+            params![on, text, until, options, r.id],
         )
         .map_err(err)?;
         end(&tx, r.id, here)?;

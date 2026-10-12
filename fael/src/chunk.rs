@@ -70,15 +70,17 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             say(uid, "noted for the next start");
         }
         ["wait", uid, text] => {
-            a.only("chunk wait", &["on", "until"])?;
+            // `--run R`: a start in another checkout's worktree (`start --worktree`) answers here
+            a.only("chunk wait", &["on", "until", "option", "run"])?;
             let on = a
                 .one("on")
                 .ok_or("rejected: chunk wait needs --on owner|data")?;
-            s()?.wait(uid, &on, text, a.one("until").as_deref(), &here)?;
+            let (until, options) = (a.one("until"), a.many("option"));
+            s()?.wait(uid, &on, text, until.as_deref(), &options, &here)?;
             say(uid, &format!("waiting on {on}"));
         }
         ["after", uid, other, why] => {
-            a.only("chunk after", &[])?;
+            a.only("chunk after", &["run"])?;
             s()?.after(uid, other, why, &here)?;
             say(uid, &format!("after {other}"));
         }

@@ -70,7 +70,7 @@
           "title": "gate: push policy after 30 sessions", "state": "waiting",
           "size": null, "model_hint": null, "client_hint": null, "scope": [], "due": null, "pin": null,
           "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": { "on": null, "text": "30 sessions", "until": null }, "approval": null, "run": null,
+          "stalled": false, "ended": false, "wait": { "on": null, "text": "30 sessions", "until": null, "options": [] }, "approval": null, "run": null,
           "handoff": null, "issues": [], "owner_actions": ["answer", "park", "drop"]
         },
         {
@@ -88,7 +88,7 @@
           "size": "S", "model_hint": "deepseek", "client_hint": "opencode", "scope": [], "due": "2026-10-14", "pin": null,
           "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
           "stalled": false, "ended": false,
-          "wait": { "on": "owner", "text": "Lead with the hand-off story or the decision story?", "until": null },
+          "wait": { "on": "owner", "text": "Lead with the hand-off story or the decision story?", "until": null, "options": ["The hand-off story", "The decision story"] },
           "approval": null,
           "run": { "id": "4c8e0a2b-6d1f-4e3a-9b75-1f2a3c4d5e6f", "client": "claude", "session": "01234567-89ab-4cde-8f01-23456789abcd", "model": "haiku", "worktree": "/Users/owner/Project/fael/wt-fael-agent-3", "branch": null, "pr": null, "out": null, "started": "2026-10-10T07:00:00Z", "last_seen": "2026-10-10T07:12:00Z", "ended": "2026-10-10T07:13:00Z", "cost": null },
           "handoff": { "at": "2026-10-10T07:13:00Z", "text": "Lead with the hand-off story or the decision story?" }, "issues": [], "owner_actions": ["answer", "park", "drop"]
@@ -99,7 +99,7 @@
           "size": "S", "model_hint": "deepseek", "client_hint": "opencode", "scope": [], "due": null, "pin": null,
           "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
           "stalled": false, "ended": false,
-          "wait": { "on": "data", "text": "Reach settles after 7 days.", "until": "2026-10-18" },
+          "wait": { "on": "data", "text": "Reach settles after 7 days.", "until": "2026-10-18", "options": [] },
           "approval": null, "run": null,
           "handoff": null, "issues": [], "owner_actions": ["answer", "park", "drop"]
         },

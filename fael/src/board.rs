@@ -171,7 +171,7 @@ fn code(projects: &mut Vec<Project>) {
 }
 
 /// `owner/name` of a checkout's origin: `git@github.com:o/n.git`, `https://…/o/n`.
-fn remote(root: &Path) -> Option<String> {
+pub(crate) fn remote(root: &Path) -> Option<String> {
     let url = git(root, &["remote", "get-url", "origin"])?;
     let mut parts = url
         .trim_end_matches('/')

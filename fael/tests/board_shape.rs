@@ -33,6 +33,8 @@ const CHUNK_KEYS: &[&str] = &[
     "issues",
     "owner_actions",
 ];
+/// `options`: the answers `chunk wait --option` offers, `[]` = none (issue 01M4NWFS)
+const WAIT_KEYS: &[&str] = &["on", "text", "until", "options"];
 const PLAN_KEYS: &[&str] = &[
     "app", "name", "title", "area", "kind", "state", "rank", "truth", "source", "spec", "repo",
     "remote", "counts",
@@ -171,8 +173,8 @@ fn board_v1_shape() {
         }
         assert_eq!(k, CHUNK_KEYS, "{uid}");
         assert!(STATES.contains(&c["state"].as_str().unwrap()), "{uid}");
-        if !c["run"].is_null() {
-            assert_eq!(keys(&c["run"]), RUN_KEYS, "{uid}");
+        for (k, want) in [("run", RUN_KEYS), ("wait", WAIT_KEYS)] {
+            assert!(c[k].is_null() || keys(&c[k]) == want, "{uid}: {k}");
         }
         assert!(
             c["ready"] == false || truth_db(&b, c),

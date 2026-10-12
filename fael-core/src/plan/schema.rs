@@ -59,8 +59,12 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// so a fael without the column still inserts rows.
 /// `chunk.reads`: the sections a chunk works from, one `<key>` or `<plan>/<key>` per line
 /// (`chunk add|edit --reads`) — a column like `scope`, since `edge.kind`'s CHECK has no `reads`.
-pub(super) const COLUMNS: &[(&str, &str, &str)] =
-    &[("contract", "reason", "TEXT"), ("chunk", "reads", "TEXT")];
+/// `chunk.wait_options`: a JSON array of the answers `chunk wait --option` offers (01M4NWFS).
+pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
+    ("contract", "reason", "TEXT"),
+    ("chunk", "reads", "TEXT"),
+    ("chunk", "wait_options", "TEXT"),
+];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open
 /// checks, and only one that finds something missing takes the write lock.

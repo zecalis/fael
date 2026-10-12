@@ -84,6 +84,8 @@ pub struct Wait {
     pub on: Option<String>,
     pub text: Option<String>,
     pub until: Option<String>,
+    /// the answers `chunk wait --option` offers, in order; `[]` = a free answer (01M4NWFS)
+    pub options: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -124,6 +126,12 @@ pub struct Board {
     pub chunks: Vec<Chunk>,
 }
 
+/// `chunk.wait_options`, a JSON array; NULL = none.
+fn options(json: Option<String>) -> Vec<String> {
+    json.and_then(|o| serde_json::from_str(&o).ok())
+        .unwrap_or_default()
+}
+
 impl Store {
     /// `today` = `YYYY-MM-DD` (dated data waits), `stale` = the RFC 3339 time 30 min ago:
     /// a live run last seen before it is `stalled` (a warning, never a state change).
@@ -141,7 +149,7 @@ impl Store {
                 "SELECT c.id, c.uid, p.app, p.name, c.label, c.title, c.state, c.size,
                         c.model_hint, c.scope, c.due, c.pin, c.wait_on, c.wait_text,
                         c.wait_until, c.approved_at, c.approved_model, c.approved_client,
-                        p.rank, c.seq, c.client_hint, p.repo
+                        p.rank, c.seq, c.client_hint, p.repo, c.wait_options
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
                  ORDER BY p.rank IS NULL, p.rank, p.app, p.name, c.seq",
@@ -186,6 +194,7 @@ impl Store {
                                     on: r.get(12)?,
                                     text: r.get(13)?,
                                     until: r.get(14)?,
+                                    options: options(r.get(22)?),
                                 })
                             })
                             .transpose()?,

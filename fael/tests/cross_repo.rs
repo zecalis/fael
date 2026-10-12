@@ -1,6 +1,7 @@
 //! A plan whose code is in another checkout (issue 01M4N4CVH): `fael plan repo` names it,
 //! the brief says so, the board lists the checkout as a project and gives the plan its
-//! remote, and `done --pr` takes the PR's URL.
+//! remote, `start --worktree` runs in a worktree of it (issue 01M4NC9GV), and `done --pr`
+//! takes the PR's URL and refuses another repo's (issue 01M4QFJ6V).
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -75,9 +76,50 @@ fn a_plan_in_another_checkout() {
     assert_eq!(p["plans"], serde_json::json!([]));
     assert_eq!(p["worktrees"].as_array().unwrap().len(), 1, "{p}");
 
-    assert!(f(&["chunk", "start", &a]).contains(&format!("code in {}", code.display())));
-    let url = "https://github.com/zecalis/fael-board/pull/7";
-    f(&["chunk", "done", &a, "h", "--pr", url]);
+    let wt = t.join("board-wt").canonicalize().unwrap();
+    let w = wt.to_string_lossy();
+    let both = run(
+        &d,
+        &state,
+        &["chunk", "start", &a, "--worktree", &w, "--no-worktree"],
+    );
+    assert!(!both.status.success(), "--worktree or --no-worktree");
+    let brief = f(&["chunk", "start", &a, "--run", "R1", "--worktree", &w]);
+    let at = format!(
+        "run `fael chunk` from {}, wait/after/done with --run R1",
+        d.display()
+    );
+    assert!(
+        brief.contains(&format!("code in {}", code.display())),
+        "{brief}"
+    );
+    assert!(brief.contains(&at), "{brief}");
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &a, "--json"])).unwrap();
+    assert_eq!(
+        (&c["run"]["worktree"], &c["run"]["branch"]),
+        (&w.as_ref().into(), &"w".into())
+    );
+    let other = run(
+        &d,
+        &state,
+        &[
+            "chunk",
+            "done",
+            &a,
+            "h",
+            "--pr",
+            "zecalis/fael#7",
+            "--run",
+            "R1",
+        ],
+    );
+    let err = String::from_utf8_lossy(&other.stderr);
+    assert!(
+        err.contains("is not this plan's repo (zecalis/fael-board)"),
+        "{err}"
+    );
+    let url = "https://github.com/Zecalis/fael-board/pull/7";
+    f(&["chunk", "done", &a, "h", "--pr", url, "--run", "R1"]);
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &a, "--json"])).unwrap();
     assert_eq!(c["run"]["pr"], 7);
 
