@@ -163,7 +163,8 @@ fn a_split_with_no_gap_renumbers_the_plan() {
 fn approve_keeps_the_state() {
     let mut s = Store::open_in_memory().unwrap();
     let c = add(&mut s, "c", Some("c"));
-    s.approve(&c, Some(("opus", "claude")), NOW).unwrap();
+    s.approve(&c, Some((Some("opus"), Some("claude"))), NOW)
+        .unwrap();
     let q = "SELECT approved_model || ' ' || approved_client || ' ' || approved_at FROM chunk WHERE uid = ?1";
     assert_eq!(get(&s, q, &c).unwrap(), format!("opus claude {NOW}"));
     s.approve(&c, None, NOW).unwrap();
@@ -173,6 +174,21 @@ fn approve_keeps_the_state() {
     s.owner(&c, super::super::Owner::Drop, Some("no"), NOW)
         .unwrap();
     assert!(s.approve(&c, None, NOW).unwrap_err().contains("history"));
+}
+
+#[test]
+fn approve_defaults_to_the_model_hint_and_claude() {
+    let mut s = Store::open_in_memory().unwrap();
+    let c = add(&mut s, "c", Some("c"));
+    let err = s.approve(&c, Some((None, None)), NOW).unwrap_err();
+    assert!(err.contains("no model hint"), "{err}");
+    s.conn
+        .execute("UPDATE chunk SET model_hint = 'haiku' WHERE uid = ?1", [&c])
+        .unwrap();
+    let text = s.approve(&c, Some((None, None)), NOW).unwrap();
+    assert_eq!(text, "approved · model haiku · client claude");
+    let text = s.approve(&c, Some((Some("sonnet"), None)), NOW).unwrap();
+    assert_eq!(text, "approved · model sonnet · client claude");
 }
 
 #[test]

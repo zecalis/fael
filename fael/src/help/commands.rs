@@ -123,14 +123,14 @@ fael chunk after <uid> <other-uid> \"<why>\" [--run R]
 fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
-fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
+fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
     (inbox or a plan from `fael plan new`; add prints
      the new uid, no brief = draft; add and edit warn on a --scope path whose directory is
      missing or a typo of a name beside it; --issue links open ledger issues it fixes (its
      brief prints them; close each once the fix holds, done never does); a --label is unique in its plan and every verb
      takes it for the uid; --reads names the plan sections it works from (another
      plan's as plan/key): its brief prints Goal, Done and those, then an index of the
-     rest (no --reads: Goal, Scope, Done, Constraints); show prints one chunk as the board has it, its hand-off,
+     rest (no --reads: Goal, Scope, Done, Constraints; one still empty is skipped); show prints one chunk as the board has it, its hand-off,
      the brief and notes its next start prints; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
      --force takes it over, and starts one blocked by an after; --no-worktree (a client that writes a file and exits)

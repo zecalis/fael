@@ -99,36 +99,57 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael chunk approve <uid> --model M --client C` / `unapprove` (None): the approved
+    /// `fael chunk approve <uid> [--model M] [--client C]` / `unapprove` (None): the approved
     /// queue may start it with that model and client when a slot frees (SPEC §8); `edit`
-    /// clears it.
+    /// clears it. A missing model takes the chunk's `model_hint`, a missing client is
+    /// `claude`. Returns the event text.
     pub fn approve(
         &mut self,
         uid: &str,
-        with: Option<(&str, &str)>,
+        with: Option<(Option<&str>, Option<&str>)>,
         now: &str,
-    ) -> Result<(), String> {
-        let text = with.map_or("unapproved".into(), |(m, c)| {
-            format!("approved · model {m} · client {c}")
-        });
-        let (m, c) = with.unzip();
-        self.mark(uid, &text, now, |tx, id| {
+    ) -> Result<String, String> {
+        self.mark(uid, now, |tx, id| {
+            let Some((m, c)) = with else {
+                tx.execute(
+                    "UPDATE chunk SET approved_at = NULL, approved_model = NULL,
+                     approved_client = NULL WHERE id = ?1",
+                    [id],
+                )
+                .map_err(err)?;
+                return Ok("unapproved".into());
+            };
+            let hint: Option<String> = tx
+                .query_row("SELECT model_hint FROM chunk WHERE id = ?1", [id], |r| {
+                    r.get(0)
+                })
+                .map_err(err)?;
+            let m = m
+                .map(str::to_owned)
+                .or(hint)
+                .filter(|m| !m.is_empty())
+                .ok_or(format!(
+                    "rejected: chunk {uid} has no model hint — pass --model M"
+                ))?;
+            let c = c.unwrap_or("claude");
             tx.execute(
                 "UPDATE chunk SET approved_at = ?1, approved_model = ?2, approved_client = ?3
                  WHERE id = ?4",
-                params![m.map(|_| now), m, c, id],
+                params![now, m, c, id],
             )
+            .map_err(err)?;
+            Ok(format!("approved · model {m} · client {c}"))
         })
     }
 
-    /// An owner field on a chunk still to run, with its event; the state stays.
+    /// An owner field on a chunk still to run, with its event; the state stays. `f` writes
+    /// the field and returns the event text.
     fn mark(
         &mut self,
         uid: &str,
-        text: &str,
         now: &str,
-        f: impl FnOnce(&rusqlite::Transaction, i64) -> rusqlite::Result<usize>,
-    ) -> Result<(), String> {
+        f: impl FnOnce(&rusqlite::Transaction, i64) -> Result<String, String>,
+    ) -> Result<String, String> {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         if r.state.terminal() {
@@ -137,9 +158,10 @@ impl Store {
                 r.state.as_str()
             ));
         }
-        f(&tx, r.id).map_err(err)?;
-        set(&tx, &r, r.state, "owner", Some(text), now)?;
-        tx.commit().map_err(err)
+        let text = f(&tx, r.id)?;
+        set(&tx, &r, r.state, "owner", Some(&text), now)?;
+        tx.commit().map_err(err)?;
+        Ok(text)
     }
 
     /// `fael plan new <name> "<title>"`: an active plan whose text starts as the four

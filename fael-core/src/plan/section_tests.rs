@@ -217,7 +217,10 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
         .find(|r| r.name == "q")
         .unwrap()
         .id;
-    let sec = json!([{"key": "1", "body": "ship p"}, {"key": "§5", "title": "§5 Risks", "body": "none said"}]);
+    // every base section says something: one left as `plan new` wrote it is never printed
+    let sec = json!([{"key": "1", "body": "ship p"}, {"key": "2", "body": "cli only"},
+        {"key": "3", "body": "tests pass"}, {"key": "4", "body": "400 lines"},
+        {"key": "§5", "title": "§5 Risks", "body": "none said"}]);
     let b = with(&s, p, sec);
     apply(&mut s, &b, LATER).unwrap();
     let sec = json!([{"key": "§1", "title": "§1 Access", "body": "who sees what"}]);
@@ -262,7 +265,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
     for miss in ["gone", "q/nope", "x/1"] {
         assert!(t.contains(&format!("\nsection {miss} not found\n")), "{t}");
     }
-    let day = day(NOW);
+    let day = day(LATER);
     assert!(
         !t.contains("## 2. Scope")
             && t.contains(&format!(

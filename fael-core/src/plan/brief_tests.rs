@@ -114,3 +114,34 @@ fn the_rules_ask_for_the_windows_ci_result_not_the_trigger() {
         "{r}"
     );
 }
+
+#[test]
+fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
+    let mut c = chunk("A");
+    c.sections = vec![
+        sec("1", "1. Goal", "ship it"),
+        sec("2", "2. Scope", "**Do:**\n**Don't:**"),
+        sec("3", "3. Done criteria", "  "),
+        sec("5", "5. Risks", ""),
+    ];
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+    }
+    .text();
+    assert!(t.contains("## 1. Goal"), "{t}");
+    for gone in ["2. Scope", "3. Done", "5. Risks"] {
+        assert!(!t.contains(gone), "{gone} in {t}");
+    }
+    c = chunk("B");
+    c.sections = vec![sec("1", "1. Goal", "")];
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+    }
+    .text();
+    assert!(
+        !t.contains("<!-- plan x -->"),
+        "no plan header over nothing: {t}"
+    );
+}

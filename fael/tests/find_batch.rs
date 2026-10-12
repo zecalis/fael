@@ -84,6 +84,9 @@ fn several_ids_print_every_body_and_a_bad_one_fails_alone() {
     // two words are a text query's job, not an id list's
     let (ok, out, err) = fael(&d, &["find", &a, "not-an-id"]);
     assert!(!ok && out.contains("is not an id"), "{out}{err}");
+    // `--files a b c`: b and c are paths, and the reject says how to pass several
+    let (ok, out, err) = fael(&d, &["find", "--files", "src/a.rs", "src/b.rs", "src/c.rs"]);
+    assert!(!ok && out.contains("--files a,b"), "{out}{err}");
 }
 
 #[test]

@@ -71,8 +71,8 @@ Traps — what a correct lead does:
   mod   clean, last in plan order      cap is 3 lanes (add mul div): mod waits for wave 2
 
 Run:  cd $DIR/repo && claude   then   /fael-lead sim
-Sandbox has no GitHub: tell the lead "at step 7 push to origin, print the PR body, no gh;
-run chunk done without --pr". Lanes then sit in review; to play the merge before wave 2:
-  git push origin origin/plan/sim/w1:main  and  fael chunk accept <uid>  per lane in it
-You play the owner: approve with  fael chunk approve <uid> --model haiku --client claude
+Sandbox has no GitHub: the lead sees it at step 1, pushes the wave branch and runs chunk done
+without --pr, so lanes sit in review. To play the merge before wave 2:
+  git push origin origin/plan/sim/w1:main   then tell the lead "w1 merged" — it accepts the lanes
+You play the owner: answer the wave table with  ok  (or  ok 2 sonnet,  no 3) — the lead approves
 EOF

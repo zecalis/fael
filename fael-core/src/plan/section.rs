@@ -15,6 +15,12 @@ pub(super) const SKELETON: [(&str, &str, &str); 4] = [
     ("4", "4. Constraints", ""),
 ];
 
+/// A section whose body is empty or still its `SKELETON` body.
+pub(super) fn blank(s: &Row) -> bool {
+    let b = s.body.trim();
+    b.is_empty() || SKELETON.iter().any(|(_, _, k)| *k == b)
+}
+
 /// One bill line: a new key adds a section (title needed), a known key edits it, `drop`
 /// drops it. A field left out is left alone.
 #[derive(Debug, Deserialize)]
