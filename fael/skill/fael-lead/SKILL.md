@@ -22,6 +22,7 @@ Parallel lanes cost a contract, a merge and the owner's review — buy them only
 fael board --json --open --plan <plan>     # chunks: scope, after, overlaps, state, approval
 fael board --json                           # every project: running[], worktrees[], shared
 fael find --files <each candidate's scope>  # decisions, open issues, contract:* keys on those files
+fael chunk show <uid>                       # each candidate's brief: the paths it really touches
 ```
 
 Take the plan's `ready` chunks in plan order. A chunk whose `scope` is empty is unknown, never
@@ -33,6 +34,9 @@ Show these with the wave table; each is a proposal the owner okays:
 
 - **Hot file:** a path in the scope of 3+ open chunks, or a `.rs` in a scope already near the
   400-line cap (`wc -l`) → a split chunk that goes first, so the lanes after it stop colliding.
+- **Leaked scope:** a brief that edits or calls a path outside its own `scope` (the board's
+  overlaps only compare scopes, so it never shows) → widen the scope (`fael chunk edit
+  --scope`) and add the `after` it now needs; until the owner okays that, the lane stays out.
 - **Missing order:** two open chunks whose scopes overlap with no `after` between them → the
   `after` (`fael chunk apply` op `after`).
 - **Shared interface:** two lanes that meet at a type, schema, table, CLI or JSON output →
