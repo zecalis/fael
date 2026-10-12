@@ -41,6 +41,12 @@ impl Args {
                 Some((n, v)) => (n.to_string(), Some(v.to_string())),
                 None => (name.to_string(), None),
             };
+            // zsh keeps `P="--plan x"; fael … $P` one word: no flag name has a space
+            if let Some((n, _)) = name.split_once(char::is_whitespace) {
+                return Err(format!(
+                    "rejected: {s:?} is one argument — pass the flag and its value apart: --{n} <value>"
+                ));
+            }
             // `--revisit` takes an optional value: bare on `find` means "any
             // revisit" (`find --revisit`), with a value it narrows (`add` and
             // `find --revisit=<text>`); bare on `add` is rejected there.

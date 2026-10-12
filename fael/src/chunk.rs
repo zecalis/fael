@@ -11,6 +11,27 @@ const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|rep
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
+    verb(a, rest, &r).map_err(|e| row_id(&r, e))
+}
+
+/// `chunk show 01M4P3R3` with a ledger row's id: say it is a row, not "no chunk".
+fn row_id(r: &Repo, e: String) -> String {
+    let Some(key) = e
+        .strip_prefix("rejected: no chunk ")
+        .and_then(|t| t.split(' ').next())
+    else {
+        return e;
+    };
+    match core::resolve_row(&crate::read(r), key) {
+        Ok(row) => format!(
+            "rejected: {key} is a ledger {}, not a chunk — `fael find {key}` reads it, `fael board` lists the chunk uids",
+            row.kind
+        ),
+        Err(_) => e,
+    }
+}
+
+fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
     let now = fael_core::rfc3339(fael_core::now_ms());
     let wt = r.root.to_string_lossy().into_owned();
     let branch = crate::journal::head_branch(&r.root);
@@ -21,11 +42,11 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         now: &now,
         run: run.as_deref(),
     };
-    let s = || Store::open(&db(&r));
+    let s = || Store::open(&db(r));
     let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     match rest.as_slice() {
-        ["show", key] => return crate::chunk_show::show(a, &r, key),
+        ["show", key] => return crate::chunk_show::show(a, r, key),
         ["add", title] => {
             a.only(
                 "chunk add",
@@ -35,7 +56,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             )?;
             let f = Fields {
                 title: Some(title.to_string()),
-                issues: issues(&r, &list(a, "issue"))?,
+                issues: issues(r, &list(a, "issue"))?,
                 ..fields(a)
             };
             let plan = a.one("plan").unwrap_or_else(|| "inbox".into());
@@ -44,7 +65,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             println!("{uid}");
             crate::chunk_scope::warn(&st, &r.root, &uid);
         }
-        ["start", uid] => crate::chunk_run::start(a, &r, uid, &here)?,
+        ["start", uid] => crate::chunk_run::start(a, r, uid, &here)?,
         ["edit", uid] => {
             a.only(
                 "chunk edit",
@@ -78,7 +99,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             s()?.after(uid, other, why, &here)?;
             say(uid, &format!("after {other}"));
         }
-        ["done", uid, handoff] => crate::chunk_run::done(a, &r, uid, handoff, &here)?,
+        ["done", uid, handoff] => crate::chunk_run::done(a, r, uid, handoff, &here)?,
         [verb @ ("answer" | "drop" | "park"), uid, text] => {
             a.only(&format!("chunk {verb}"), &[])?;
             let (cmd, to) = owner(verb);
@@ -94,7 +115,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         ["apply" | "approve" | "unapprove", ..] => queue(a, &rest, &mut s()?, &now)?,
         _ => return Err(format!("rejected: {USAGE}")),
     }
-    crate::board::register(&r);
+    crate::board::register(r);
     Ok(ExitCode::SUCCESS)
 }
 

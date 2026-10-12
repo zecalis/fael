@@ -97,7 +97,12 @@ const TAKES_NO: &[(&str, &[&str], &str)] = &[
         &["to"],
         "the reason is the last word: fael close <id> \"<why>\"",
     ),
+    ("chunk show", &["plan"], CHUNK_UID),
+    ("chunk note", &["plan"], CHUNK_UID),
 ];
+
+const CHUNK_UID: &str =
+    "a uid names one chunk in every plan, drop --plan — `fael plan export <plan>` lists the uids";
 
 fn listed(cmds: &str, cmd: &str) -> bool {
     cmds.split(' ').any(|c| c == cmd)
@@ -150,10 +155,34 @@ pub(crate) fn rewrite(mut argv: Vec<String>) -> Vec<String> {
             None => out.push(s),
         }
     }
+    if cmd == "add" && text.is_some() {
+        headline(&mut out);
+    }
     // the text goes last, where `close <id> "<why>"` reads it
     out.extend(text);
     out.extend(tail);
     out
+}
+
+/// `add note "<headline>" --body "<text>"`: with no `--title`, the one text
+/// before the body flag is its title — the shape a long row needs anyway, and
+/// two texts the parser would only reject.
+fn headline(out: &mut Vec<String>) {
+    if out
+        .iter()
+        .any(|s| s == "--title" || s.starts_with("--title="))
+    {
+        return;
+    }
+    let Ok(a) = crate::Args::parse(out.clone()) else {
+        return;
+    };
+    // ponytail: the last arg equal to it — a flag value spelled the same is the only miss
+    if let [_, _, t] = a.pos.as_slice()
+        && let Some(i) = out.iter().rposition(|s| s == t)
+    {
+        out.insert(i, "--title".into());
+    }
 }
 
 /// MCP `arguments` with guessed property names renamed (`query` → `text`).
@@ -200,7 +229,11 @@ pub(crate) fn reject(argv: &[String], e: String) -> String {
             .iter()
             .find(|(c, fs, _)| *c == name && fs.contains(&flag))
             .map(|(.., t)| format!("{head} — {t}"));
-        return with_usage(name, said.unwrap_or(head.into()), &e);
+        // `chunk show` has no usage line of its own: the pointer still shows
+        return match said {
+            Some(s) => with_usage(name, s.clone(), &s),
+            None => with_usage(name, head.into(), &e),
+        };
     }
     if e.starts_with("rejected: unknown command") {
         let close = crate::help::names()

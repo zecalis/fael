@@ -14,13 +14,18 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         a.only("plan new", &["app", "area"])?;
         return create(a, &r, name, title).map(|()| ExitCode::SUCCESS);
     }
-    let flags: &[&str] = match rest.first().map(String::as_str) {
+    // `plan show <plan>` is what agents type for export
+    let sub = match rest.first().map(String::as_str) {
+        Some("show") => Some("export"),
+        s => s,
+    };
+    let flags: &[&str] = match sub {
         Some("export") => &["json", "since", "section"],
         Some("apply") => &["dry-run"],
         _ => &[],
     };
     a.only("plan", flags)?;
-    match rest.first().map(String::as_str) {
+    match sub {
         Some("export") if rest.len() == 1 && a.has("since") => feed(&r, &a.one("since").unwrap()),
         Some("export") if rest.len() == 2 && a.has("section") => {
             section(&r, &rest[1], &a.one("section").unwrap_or_default())
@@ -30,6 +35,9 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         }
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
+        Some("list") => Err(
+            "rejected: `fael board` lists the plans — `fael plan export <plan>` reads one".into(),
+        ),
         _ => Err(
             "rejected: fael plan new <name> \"<title>\" | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'"
                 .into(),
