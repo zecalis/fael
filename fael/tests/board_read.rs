@@ -112,6 +112,15 @@ fn labels_show_and_the_plan_cut() {
     };
     assert_eq!(cut("inbox")["projects"][0]["chunks"][0]["uid"], a.as_str());
     assert_eq!(cut("nope")["projects"], serde_json::json!([]));
+    // the text form carries the hand-off too: an owner without the board app reads it here
+    assert!(!text.contains("hand-off"), "none before done: {text}");
+    f(&["chunk", "start", &a]);
+    f(&["chunk", "done", &a, "Did: it works.\nWatch: nothing"]);
+    let text = f(&["chunk", "show", "b10"]);
+    assert!(
+        text.contains("\nhand-off ") && text.contains("\n< Did: it works.\n< Watch: nothing\n"),
+        "{text}"
+    );
 }
 
 #[test]

@@ -1,5 +1,5 @@
-//! `fael chunk show <uid|label> [--json]`: one chunk as the board sees it, with the text its
-//! next start prints and the asks it holds in and out.
+//! `fael chunk show <uid|label> [--json]`: one chunk as the board sees it, with its hand-off,
+//! the text its next start prints and the asks it holds in and out.
 
 use crate::plan::db;
 use crate::{Args, Repo};
@@ -44,6 +44,13 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
             "run {} in {wt} since {} · last seen {seen}{flag}",
             run.id, run.started
         );
+    }
+    // the result first: an owner without the board app reads a done chunk here
+    if let Some(h) = &c.handoff {
+        println!("hand-off {}", h.at);
+        for l in h.text.lines() {
+            println!("< {l}");
+        }
     }
     for x in &c.blocked_by {
         println!("after {}", x.what);
