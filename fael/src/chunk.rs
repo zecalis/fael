@@ -11,7 +11,30 @@ const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|rep
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
+    let named;
+    let (a, rest) = match in_plan(a, rest, &r).map_err(|e| row_id(&r, e))? {
+        Some(n) => {
+            named = n;
+            (&named.0, named.1.as_slice())
+        }
+        None => (a, rest),
+    };
     verb(a, rest, &r).map_err(|e| row_id(&r, e))
+}
+
+/// `chunk show b1 --plan p`: on a verb that names a chunk (not `add` or `move`, where
+/// `--plan` is where it goes), the plan picks it — the key becomes its uid, the flag goes.
+fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<String>)>, String> {
+    let (Some(plan), [verb, key, ..]) = (a.one("plan"), rest) else {
+        return Ok(None);
+    };
+    if matches!(verb.as_str(), "add" | "move" | "apply") {
+        return Ok(None);
+    }
+    let uid = Store::open(&db(r))?.uid_in(key, &plan)?;
+    let mut rest = rest.to_vec();
+    rest[1] = uid;
+    Ok(Some((a.without("plan"), rest)))
 }
 
 /// `chunk show 01M4P3R3` with a ledger row's id: say it is a row, not "no chunk".

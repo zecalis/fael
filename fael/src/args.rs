@@ -101,6 +101,16 @@ impl Args {
         }
     }
 
+    /// These args less flag `f` — once `chunk … --plan p` has used it.
+    pub(crate) fn without(&self, f: &str) -> Args {
+        let mut flags = self.flags.clone();
+        flags.remove(f);
+        Args {
+            pos: self.pos.clone(),
+            flags,
+        }
+    }
+
     pub(crate) fn one(&self, f: &str) -> Option<String> {
         self.flags.get(f).and_then(|v| v.last()).cloned()
     }

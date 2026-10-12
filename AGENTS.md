@@ -42,7 +42,7 @@ A new kind gets a fixture in `fael/src/hook/say_contract.rs` (silent when empty,
 
 ```text
 fael kickoff [file]
-fael add decision|issue|note "..." --files <files>
+fael add decision|issue|note "..." --title "<≤15-word headline>" --files <files>
 fael find [text] [--files ...] [--key ...]
 fael close <id> "..."
 ```

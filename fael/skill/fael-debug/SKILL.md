@@ -74,7 +74,7 @@ guard that passes either way guards nothing. Then, once, in the same message as 
 fael close <id> "<cause> → <fix>; tried <ruled-out 1>, <ruled-out 2>; guard `<test path>`"
 
 # none open — file it under a key, then close by that key (no id to copy):
-fael add issue "<symptom, standalone>" --files <files the fix touched> --key <k>
+fael add issue "<symptom, standalone>" --title "<headline>" --files <files the fix touched> --key <k>
 fael close --key <k> "<cause> → <fix>; tried …; guard `<test path>`"
 ```
 

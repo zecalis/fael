@@ -97,12 +97,7 @@ const TAKES_NO: &[(&str, &[&str], &str)] = &[
         &["to"],
         "the reason is the last word: fael close <id> \"<why>\"",
     ),
-    ("chunk show", &["plan"], CHUNK_UID),
-    ("chunk note", &["plan"], CHUNK_UID),
 ];
-
-const CHUNK_UID: &str =
-    "a uid names one chunk in every plan, drop --plan — `fael plan export <plan>` lists the uids";
 
 fn listed(cmds: &str, cmd: &str) -> bool {
     cmds.split(' ').any(|c| c == cmd)
@@ -229,11 +224,7 @@ pub(crate) fn reject(argv: &[String], e: String) -> String {
             .iter()
             .find(|(c, fs, _)| *c == name && fs.contains(&flag))
             .map(|(.., t)| format!("{head} — {t}"));
-        // `chunk show` has no usage line of its own: the pointer still shows
-        return match said {
-            Some(s) => with_usage(name, s.clone(), &s),
-            None => with_usage(name, head.into(), &e),
-        };
+        return with_usage(name, said.unwrap_or(head.into()), &e);
     }
     if e.starts_with("rejected: unknown command") {
         let close = crate::help::names()

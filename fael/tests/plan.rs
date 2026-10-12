@@ -141,8 +141,14 @@ fn the_guessed_plan_and_chunk_calls_answer_or_name_the_real_one() {
     assert!(ok && out == fael(&d, &["plan", "export", "p"]).1, "{err}");
     let (ok, _, err) = fael(&d, &["plan", "list"]);
     assert!(!ok && err.contains("`fael board` lists the plans"), "{err}");
-    let (ok, _, err) = fael(&d, &["chunk", "show", uid, "--plan", "p"]);
-    assert!(!ok && err.contains("drop --plan"), "{err}");
+    // --plan names the plan a label or uid is in, and checks it
+    assert!(fael(&d, &["chunk", "edit", uid, "--label", "l1"]).0);
+    let (ok, out, err) = fael(&d, &["chunk", "show", "l1", "--plan", "p"]);
+    assert!(ok && out.contains(uid), "{err}");
+    assert!(fael(&d, &["chunk", "note", uid, "hi", "--plan", "p"]).0);
+    assert!(fael(&d, &["plan", "new", "q", "Q"]).0);
+    let (ok, _, err) = fael(&d, &["chunk", "show", uid, "--plan", "q"]);
+    assert!(!ok && err.contains("is in plan p, not q"), "{err}");
     let (ok, _, err) = fael(&d, &["chunk", "add", "p2", "--plan p"]);
     assert!(!ok && err.contains("is one argument"), "{err}");
     write(d.join("a.rs"), "x\n");

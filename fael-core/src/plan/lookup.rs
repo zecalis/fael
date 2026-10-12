@@ -53,6 +53,47 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
     }
 }
 
+impl super::Store {
+    /// The uid `key` names inside `plan` (`name` or `app/name`): a label in that plan,
+    /// else what `lookup` finds — refused when that chunk sits in another plan. So
+    /// `--plan` answers a label two plans share, and checks a uid it is given.
+    pub fn uid_in(&self, key: &str, plan: &str) -> Result<String, String> {
+        let tx = self.conn.unchecked_transaction().map_err(err)?;
+        let of = "CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END";
+        let named = format!("(p.name = ?2 OR {of} = ?2)");
+        let here: Option<String> = tx
+            .query_row(
+                &format!(
+                    "SELECT c.uid FROM chunk c JOIN plan p ON p.id = c.plan
+                     WHERE c.label = ?1 AND {named}"
+                ),
+                params![key, plan],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(err)?;
+        if let Some(u) = here {
+            return Ok(u);
+        }
+        let (id, uid, _) = lookup(&tx, key)?.ok_or(format!(
+            "rejected: no chunk {key} in plan {plan} — `fael plan export {plan}` lists its uids"
+        ))?;
+        let (inside, at): (bool, String) = tx
+            .query_row(
+                &format!(
+                    "SELECT {named}, {of} FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1"
+                ),
+                params![id, plan],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(err)?;
+        match inside {
+            true => Ok(uid),
+            false => Err(format!("rejected: chunk {uid} is in plan {at}, not {plan}")),
+        }
+    }
+}
+
 fn hits(tx: &Transaction, cond: &str, key: &str) -> Result<Vec<Hit>, String> {
     let sql = format!("SELECT c.id, c.uid, c.state FROM chunk c WHERE {cond}");
     let mut q = tx.prepare(&sql).map_err(err)?;
