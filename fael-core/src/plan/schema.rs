@@ -24,23 +24,6 @@ pub(super) const TABLES: &[(&str, &str)] = &[
            PRIMARY KEY(chunk, row_id))",
     ),
     (
-        "contract",
-        // an ask between two chunks (PLAN-fael-parallel §2): `returns` is the shape the asker
-        // codes against (the holder's agree may replace it); `state` has no CHECK so a later
-        // state needs no epoch. `reason` (why it was refused) is in COLUMNS, not here, so a db
-        // that an earlier build gave this table without it gains it too
-        "CREATE TABLE IF NOT EXISTS contract(
-       id TEXT PRIMARY KEY,
-       from_chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
-       to_chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
-       want TEXT NOT NULL,
-       returns TEXT NOT NULL,
-       check_cmd TEXT,
-       state TEXT NOT NULL);
-     CREATE INDEX IF NOT EXISTS contract_from ON contract(from_chunk);
-     CREATE INDEX IF NOT EXISTS contract_to ON contract(to_chunk)",
-    ),
-    (
         "section",
         // a plan's text, one row per heading (plan fael-v8): replaces `plan.doc` and the spec
         // file; `key` stable per plan, `seq` order only. Every write is an event (section.rs)
@@ -61,7 +44,6 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// (`chunk add|edit --reads`) — a column like `scope`, since `edge.kind`'s CHECK has no `reads`.
 /// `chunk.wait_options`: a JSON array of the answers `chunk wait --option` offers (01M4NWFS).
 pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
-    ("contract", "reason", "TEXT"),
     ("chunk", "reads", "TEXT"),
     ("chunk", "wait_options", "TEXT"),
 ];

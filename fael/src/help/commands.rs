@@ -124,8 +124,6 @@ fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
 fael chunk after <uid> <other-uid> \"<why>\" [--run R]
 fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--run R]
-fael chunk ask <to> \"<want>\" --returns \"<shape>\" [--check cmd] [--run R] · fael chunk ask withdraw <id>
-fael chunk reply <id> agree [note] [--returns \"<shape>\"] | refuse \"<why>\" [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
@@ -150,14 +148,7 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      another db plan of this repo with its uid, runs, notes and edges — refused while it
      runs, into a parked or done plan, or onto a label the plan has; apply runs every op or none —
      merge and split leave the old chunks replaced and move their after edges to the
-     new ones; pin ranks the queue, lowest first; ask, from the live run of the chunk
-     that needs a change, asks the chunk that holds the file for it with the shape it
-     will code against — its run goes on; --check is printed by show and never run; the
-     holder replies from its own live run, agree (--returns names the shape it will
-     deliver) or refuse, and its answer is final; an ask is refused at once when the holder
-     is not running with a live run, or when it closes a loop of asks and its claim is the
-     younger (the older claim wins); ask withdraw takes back an open ask; show lists
-     a chunk's asks in and out)",
+     new ones; pin ranks the queue, lowest first)",
     ),
     (
         "board",
