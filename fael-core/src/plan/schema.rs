@@ -177,26 +177,28 @@ CREATE INDEX event_plan ON event(plan, id);
 ";
 
 /// Before an epoch step moves `user_version` off `v`: a copy of the db at `v` beside it,
-/// `<db>.v<v>.bak` (an older one is kept: the new copy gets a ulid). The caller holds the
-/// write lock, so the copy goes through a second connection — a WAL reader sees the last
-/// commit, and VACUUM cannot run inside the caller's transaction. Err = refuse the upgrade.
+/// `<db>.v<v>.bak`. Err = refuse the upgrade.
 pub(super) fn backup(db: &Path, v: i32) -> Result<(), String> {
-    let mut to = PathBuf::from(format!("{}.v{v}.bak", db.display()));
+    copy(db, &format!("v{v}"))
+        .map(drop)
+        .map_err(|e| format!("plans.db v{v} → v{VERSION} refused: {e}; nothing changed"))
+}
+
+/// `<db>.<tag>.bak` (an older one is kept: the new copy gets a ulid). The caller may hold
+/// the write lock, so the copy goes through a second connection — a WAL reader sees the
+/// last commit, and VACUUM cannot run inside the caller's transaction.
+pub(super) fn copy(db: &Path, tag: &str) -> Result<PathBuf, String> {
+    let mut to = PathBuf::from(format!("{}.{tag}.bak", db.display()));
     if to.exists() {
-        to = PathBuf::from(format!("{}.v{v}.{}.bak", db.display(), crate::ulid()));
+        to = PathBuf::from(format!("{}.{tag}.{}.bak", db.display(), crate::ulid()));
     }
     Connection::open(db)
         .and_then(|c| {
             c.busy_timeout(Duration::from_secs(10))?;
             c.execute("VACUUM INTO ?1", [to.to_string_lossy()])
         })
-        .map(drop)
-        .map_err(|e| {
-            format!(
-                "plans.db v{v} → v{VERSION} refused: the backup to {} failed ({e}); nothing changed",
-                to.display()
-            )
-        })
+        .map(|_| to.clone())
+        .map_err(|e| format!("the backup to {} failed ({e})", to.display()))
 }
 
 /// v1 (b1) → v2: rename the old tables away, create v2, copy, drop. The caller holds

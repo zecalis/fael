@@ -172,7 +172,7 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
         "plan",
         "read plans into plans.db, print each one's next chunk, export or edit one, cut one over, create or park one",
         "fael plan import | fael plan next | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan>
-     | fael plan new <name> \"<title>\" [--app A] [--area dev|marketing]
+     | fael plan migrate [--dry-run] | fael plan new <name> \"<title>\" [--app A] [--area dev|marketing]
      | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|->
     (import: every PLAN-*.md under the repo's .fapony/ dirs (root, apps/*) — plan/,
      parked/, done/ — into <git-common-dir>/fael/plans.db; a chunk keeps its uid by a
@@ -198,6 +198,13 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      missing from the bill is left alone, and any change to a running or finished chunk
      rejects the bill; an optional \"ops\" array takes the `chunk apply` ops; every row
      shares one event batch; --dry-run prints what it would write and rolls back;
+     migrate: once per repo, each plan with no sections gets its md's text as sections
+     (TL;DR prose = section tldr, Summary) and an md plan that is done or parked moves to the db;
+     each <app>/.fapony/spec/SPEC-<x>.md joins the first open plan its '> **Used by:**'
+     line names, else the first named, else plan <x> (keys '<x>:<key>'), else is listed
+     unattached; an active md plan waits for cutover; prints per plan what it wrote and
+     the files now safe to delete, deletes none; copies the db to
+     <db>.pre-migrate.bak before it commits; --dry-run rolls back;
      cutover: import, then the plan's chunks live in the db
      (`fael chunk …`) and its md's chunk lines become one banner — refused while a
      chunk is a draft, held by (wip …), or waits on an (after …) naming no chunk;
