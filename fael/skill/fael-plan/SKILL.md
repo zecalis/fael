@@ -300,15 +300,16 @@ Trigger: `/fael-plan review [<plan>]`, or the dev asks to tidy, re-cut or order 
 
 ```bash
 fael chunk apply --json - <<'EOF'
-[{"op":"merge","chunks":["<a>","<b>"]},
- {"op":"split","chunk":"<a>","into":[{"title":"…","brief":"…"},{"title":"…","brief":"…"}]},
+[{"op":"merge","chunks":["<a>","<b>"],"title":"…","label":"<new>"},
+ {"op":"split","chunk":"<a>","into":[{"title":"…","label":"<new>","brief":"…"},{"title":"…","brief":"…"}]},
  {"op":"pair","chunks":["<a>","<b>"]},
  {"op":"after","chunk":"<a>","on":"<b>","why":"…"}]
 EOF
 ```
 
 Merge and split replace the old chunks and move their `after` edges to the new ones. Never touch
-a running chunk.
+a running chunk. Give a merge its own title (else the old titles are joined with ` + `). The old
+chunks keep their labels as history, so a new chunk takes a fresh `label`, never an old one's.
 
 The rest are not apply ops:
 

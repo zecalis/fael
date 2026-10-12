@@ -14,11 +14,13 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Op {
-    /// a new `open` chunk where the first one stood: briefs joined, `after` and `scope`
-    /// the union, unless the item says otherwise; the old ones → `replaced`
+    /// a new `open` chunk where the first one stood: titles and briefs joined, `after` and
+    /// `scope` the union, unless the item says otherwise; the old ones → `replaced` and keep
+    /// their labels (history resolves them), so the new one takes a fresh `label`
     Merge {
         chunks: Vec<String>,
         title: Option<String>,
+        label: Option<String>,
         brief: Option<String>,
         size: Option<String>,
         model: Option<String>,
@@ -42,6 +44,7 @@ pub enum Op {
 #[serde(deny_unknown_fields)]
 pub struct Part {
     pub title: String,
+    pub label: Option<String>,
     pub brief: Option<String>,
     pub size: Option<String>,
     pub model: Option<String>,
@@ -132,7 +135,7 @@ fn slots(tx: &Transaction, plan: i64, id: i64, n: i64) -> Result<Vec<i64>, Strin
     Ok((1..=n).map(|k| lo + k * step).collect())
 }
 
-/// A new chunk at `seq`; no brief = `draft`. Returns `(id, uid)`.
+/// A new chunk at `seq`; no brief = `draft`, a label checked as `chunk add`. Returns `(id, uid)`.
 pub(super) fn insert(
     tx: &Transaction,
     plan: i64,
@@ -148,11 +151,15 @@ pub(super) fn insert(
     let brief = f.brief.as_deref().map(str::trim).filter(|b| !b.is_empty());
     let state = brief.map_or(State::Draft, |_| State::Open).as_str();
     super::chunk::size(f)?;
+    let label = f.label.as_deref().filter(|l| !l.is_empty());
+    if let Some(l) = label {
+        super::lookup::label(tx, plan, 0, l)?;
+    }
     let uid = crate::ulid();
     tx.execute(
         "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                           client_hint)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                           client_hint, label)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             uid,
             plan,
@@ -163,7 +170,8 @@ pub(super) fn insert(
             f.size,
             f.model,
             scope(f.scope.as_deref().unwrap_or_default())?,
-            f.client
+            f.client,
+            label
         ],
     )
     .map_err(err)?;
@@ -217,6 +225,7 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
     for (p, seq) in into.into_iter().zip(seqs) {
         let f = Fields {
             title: Some(p.title),
+            label: p.label,
             brief: p.brief,
             size: p.size,
             model: p.model,
@@ -281,6 +290,7 @@ pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String>
         Op::Merge {
             chunks,
             title,
+            label,
             brief,
             size,
             model,
@@ -289,6 +299,7 @@ pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String>
         } => {
             let f = Fields {
                 title,
+                label,
                 brief,
                 size,
                 model,
