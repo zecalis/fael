@@ -3,6 +3,8 @@
 //! old version and the next open retries.
 
 use rusqlite::{Connection, Transaction};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// The breaking epoch: only a rename, drop or retype bumps it, in a chunk of its own run
 /// alone. An addition goes in [`TABLES`] or [`COLUMNS`] instead, so two lanes that each
@@ -160,6 +162,29 @@ CREATE INDEX run_chunk ON run(chunk);
 CREATE INDEX event_chunk ON event(chunk_uid);
 CREATE INDEX event_plan ON event(plan, id);
 ";
+
+/// Before an epoch step moves `user_version` off `v`: a copy of the db at `v` beside it,
+/// `<db>.v<v>.bak` (an older one is kept: the new copy gets a ulid). The caller holds the
+/// write lock, so the copy goes through a second connection — a WAL reader sees the last
+/// commit, and VACUUM cannot run inside the caller's transaction. Err = refuse the upgrade.
+pub(super) fn backup(db: &Path, v: i32) -> Result<(), String> {
+    let mut to = PathBuf::from(format!("{}.v{v}.bak", db.display()));
+    if to.exists() {
+        to = PathBuf::from(format!("{}.v{v}.{}.bak", db.display(), crate::ulid()));
+    }
+    Connection::open(db)
+        .and_then(|c| {
+            c.busy_timeout(Duration::from_secs(10))?;
+            c.execute("VACUUM INTO ?1", [to.to_string_lossy()])
+        })
+        .map(drop)
+        .map_err(|e| {
+            format!(
+                "plans.db v{v} → v{VERSION} refused: the backup to {} failed ({e}); nothing changed",
+                to.display()
+            )
+        })
+}
 
 /// v1 (b1) → v2: rename the old tables away, create v2, copy, drop. The caller holds
 /// `foreign_keys = OFF` (a pragma a transaction cannot change), so no drop cascades.

@@ -5,8 +5,8 @@
 
 use super::md::PlanMd;
 use super::schema::{
-    COLUMNS, SCHEMA, TABLES, VERSION, missing, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6,
-    v6_fill,
+    COLUMNS, SCHEMA, TABLES, VERSION, backup, missing, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5,
+    v5_to_v6, v6_fill,
 };
 use rusqlite::{Connection, TransactionBehavior};
 use std::path::Path;
@@ -131,6 +131,12 @@ impl Store {
             .map_err(err)?;
         if v > VERSION {
             return Err(newer(v));
+        }
+        // an epoch step, not a fresh db or an addition: copy the old one first (no path = in memory)
+        if (1..VERSION).contains(&v)
+            && let Some(db) = tx.path().filter(|p| !p.is_empty())
+        {
+            backup(Path::new(db), v)?;
         }
         type Step = fn(&rusqlite::Transaction) -> Result<(), String>;
         let steps: [Step; 4] = [v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6];
