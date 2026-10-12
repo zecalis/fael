@@ -2,7 +2,7 @@
 //! at the first write of a new month, and a read with no `--since` opens only
 //! the newest archive and the live file.
 
-use super::{fael_at, repo};
+use super::{fael_at, fael_at_env, repo};
 use std::path::{Path, PathBuf};
 
 fn line(ts: &str) -> String {
@@ -50,14 +50,21 @@ fn the_first_write_of_a_new_month_archives_the_live_file_by_its_last_month() {
         .set_modified(march)
         .unwrap();
     let d = repo();
-    // a rejected add is one usage row: the write that finds March behind it
-    let (ok, _, err) = fael_at(&s, &d, &["add", "decision", "x"], "");
+    // a rejected add in an agent session is one usage row (its `call` line):
+    // the write that finds March behind it
+    let (ok, _, err) = fael_at_env(
+        &s,
+        &d,
+        &["add", "decision", "x"],
+        "",
+        &[("FAEL_SESSION", "s")],
+    );
     assert!(!ok && err.contains("rejected"), "{err}");
     let old = std::fs::read_to_string(s.join("usage/2020-03.jsonl")).unwrap();
     assert!(old.contains("2020-03-10"), "{old}");
     let now = std::fs::read_to_string(&live).unwrap();
     assert!(
-        !now.contains("2020-03-10") && now.contains("\"ask\":\"reject\""),
+        !now.contains("2020-03-10") && now.contains("\"outcome\":\"reject\""),
         "{now}"
     );
 }

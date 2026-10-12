@@ -70,9 +70,8 @@ pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
 pub use verdict::{FileVerdict, GATE_MIN_PAIRS};
 
-/// Ask kinds stored under `ask` in `usage.jsonl` — the vocabulary the `asks`
-/// JSON map and the recording side share, so the two cannot drift.
-pub const ASK_REJECT: &str = "reject";
+/// The ask kind stored under `ask` in `usage.jsonl` — the vocabulary the
+/// `asks` JSON map and the recording side share, so the two cannot drift.
 pub const ASK_WARN: &str = "warning";
 
 /// The usage event of a session-start that said nothing (PLAN-fael-say-gate

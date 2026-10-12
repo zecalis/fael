@@ -270,7 +270,7 @@ fn friction(h: &mut String, s: &Stats) {
          <li>Memory written from replies (<code>fael decision: …</code> lines): {} stored · {} rejected</li>\n\
          <li>Rows written outside replies (<code>add</code> over CLI or MCP, synced teammate rows included): {}</li>\n\
          <li>Sessions that edited files: {}, of which {} left no row{gone}</li>\n\
-         <li>Asks: reject ×{} · warning ×{}</li>\n</ul>\n\
+         <li>Rejects (agent calls): {} · shape gate ×{} · warnings ×{}</li>\n</ul>\n\
          <p>fael never blocks a turn, so it adds no round after the agent is done.</p>\n\
          </section>\n",
         c.reply_stored,
@@ -278,7 +278,8 @@ fn friction(h: &mut String, s: &Stats) {
         c.manual_adds,
         c.sessions_with_edits,
         c.sessions_with_edits_no_row,
-        ask(core::stats::ASK_REJECT),
+        s.friction.total.rejects,
+        s.friction.shape_gate,
         ask(core::stats::ASK_WARN),
     );
 }

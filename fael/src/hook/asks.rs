@@ -1,7 +1,7 @@
-//! Ask accounting (PLAN-fael-durable-log chunk 3a): every time fael costs
-//! the agent another round — a `rejected:` write or a warning
-//! line — lands in usage.jsonl with its ask type, so `fael stats` shows
-//! whether self-heal (chunk 3b–e) actually asks less. The read half (transcript
+//! Ask accounting (PLAN-fael-durable-log chunk 3a): every warning line fael
+//! puts in front of the agent lands in usage.jsonl with its stable `code`
+//! (`codes::warning`), never its text. Rejects are not asks here: the `call`
+//! line (`friction`) counts each one once, with its reason. The read half (transcript
 //! tokens, metrics) lives in `askstats`; estimates stay labelled `est`, never
 //! `token`.
 
@@ -11,7 +11,7 @@ use super::state::now_rfc3339;
 use crate::core;
 use std::path::Path;
 
-pub(crate) use crate::core::stats::{ASK_REJECT, ASK_WARN};
+pub(crate) use crate::core::stats::ASK_WARN;
 
 /// Optional half of a usage row: what kind of ask this was (absent on plain
 /// pushes), the session it belongs to (absent outside hooks), the sub-agent
@@ -75,25 +75,6 @@ fn session_meta(session: &str) -> Option<&str> {
     (!session.is_empty()).then_some(session)
 }
 
-/// `add/close/bump/mv/find` in the shell: one choke point for rejects — only
-/// `rejected:` counts (anything else is fael's own failure, not a round the
-/// agent owes), under the command's own event so rejects join its warnings.
-pub(crate) fn record_cli_reject(cmd: &str, e: &str) {
-    if !e.starts_with("rejected:") {
-        return;
-    }
-    let repo = std::env::current_dir()
-        .ok()
-        .and_then(|d| crate::repo_at(&d).ok());
-    record_ask(
-        "cli",
-        ASK_REJECT,
-        cmd,
-        repo.as_ref().map(|r| r.root.as_path()),
-        e,
-    );
-}
-
 /// Every warning line the agent reads is an ask — the caller already printed
 /// them; this counts them next to the rejects. Info lines without the
 /// `warning:` prefix (self-heal's `superseded <id>`) ride the same vec to the
@@ -114,25 +95,10 @@ pub(crate) fn record_asks(
     }
 }
 
-/// One MCP tool result: a reject (always `rejected:`-prefixed — anything else
-/// is fael's own failure) or a warning line the tool sends back (`warning:`-
-/// prefixed; self-heal info lines pass through uncounted, like above).
-pub(crate) fn record_mcp(root: &Path, tool: &str, ask: &str, text: &str) {
-    if ask == ASK_WARN {
-        if !text.starts_with("warning:") {
-            return;
-        }
-    } else if !text.starts_with("rejected:") {
-        return;
-    }
-    record_ask("mcp", ask, tool, Some(root), text);
-}
-
-/// One ask the agent has to answer: a reject or a warning line (a stop-hook
-/// block in usage rows written before that mode was removed). `repo` is `None`
-/// when the call never resolved one (parse errors before routing) — those rows
-/// still count, they just skip the temp-dir filter and the per-repo joins.
-pub(crate) fn record_ask(client: &str, ask: &str, event: &str, repo: Option<&Path>, text: &str) {
+/// One warning line the agent has to answer. `repo` is `None` when the call
+/// never resolved one — those rows still count, they just skip the temp-dir
+/// filter and the per-repo joins.
+fn record_ask(client: &str, ask: &str, event: &str, repo: Option<&Path>, text: &str) {
     append_row(ask_row(client, ask, event, repo, text));
 }
 
@@ -172,10 +138,8 @@ fn ask_row(
         "bytes": text.len(),
         "est_tokens": core::est_tokens(text),
     });
-    // an id that names no row: what the say-gate revert check counts per
-    // session-start, apart from every other reject
-    if text.starts_with(core::NO_ROW_WITH_ID) {
-        v["reason"] = "unknown-id".into();
+    if ask == ASK_WARN {
+        v["code"] = super::codes::warning(text).into();
     }
     v
 }

@@ -5,7 +5,9 @@
 //!
 //! CLI calls count only inside an agent session (a human's typo is no agent
 //! friction); MCP calls always do. `sig` is a hash of the call's arguments —
-//! the free text itself is never stored.
+//! the free text itself is never stored. A reject carries its `reason` from
+//! `codes` (plus the gate's `rules`, or the command an unknown one was `near`),
+//! and a `chunk`/`plan` call its `sub` verb — each from a closed vocabulary.
 
 use super::asks::{UsageMeta, append_row};
 use super::usage::usage_row;
@@ -31,26 +33,31 @@ fn take_empty() -> bool {
 
 /// The commands an agent calls for an answer — a clean call to anything else
 /// (`stats`, `doctor`, `install`) is a human at the keyboard and is not counted.
-const AGENT_CMDS: [&str; 9] = [
-    "add", "find", "close", "kickoff", "bump", "claim", "next", "keys", "mv",
+const AGENT_CMDS: [&str; 12] = [
+    "add", "find", "close", "kickoff", "bump", "claim", "next", "keys", "mv", "chunk", "plan",
+    "board",
 ];
 
-/// Why a reject cost a round, from its message — the vocabulary the plan fixed.
-fn reason(e: &str) -> &'static str {
-    if e.starts_with(crate::batch::GATE_REJECT) {
-        core::stats::SHAPE_GATE
-    } else if e.starts_with("rejected: unknown flag") {
-        "unknown_flag"
-    } else if e.contains(" takes no --") {
-        "flag_not_taken"
-    } else if e.contains("is not an id") || e.contains("ids not shown") {
-        // `find a b` prints each bad id, then rejects with the count — only the count is the Err
-        "bad_id"
-    } else if e.starts_with("rejected: unknown command") || e.starts_with("unknown tool") {
-        "unknown_command"
-    } else {
-        "bad_value"
-    }
+/// The `chunk`/`plan` verb a call used, when it is a real one: `chunk start`
+/// and `chunk add` fail for different reasons, so stats keep them apart.
+fn sub<'a>(cmd: &str, argv: &'a [String]) -> Option<&'a str> {
+    let verbs: &[&str] = match cmd {
+        "chunk" => crate::chunk::VERBS,
+        "plan" => crate::plan::VERBS,
+        _ => return None,
+    };
+    argv.iter()
+        .skip_while(|a| *a != cmd)
+        .nth(1)
+        .map(String::as_str)
+        .filter(|v| verbs.contains(v))
+}
+
+/// The real command an unknown one was a near miss of (`did you mean X?`) —
+/// a name from the command table, never what was typed.
+fn near(e: &str) -> Option<&'static str> {
+    let n = e.split_once("did you mean ")?.1.trim_end_matches('?');
+    crate::help::names().find(|c| *c == n)
 }
 
 /// The command a call was about: the first word that is a real command (so
@@ -69,10 +76,10 @@ fn sig<T: Hash>(x: T) -> String {
     format!("{:x}", h.finish())
 }
 
-enum Outcome {
+enum Outcome<'a> {
     Ok,
     Help,
-    Reject(&'static str),
+    Reject(&'a str),
 }
 
 fn record(
@@ -82,6 +89,7 @@ fn record(
     session: &str,
     (o, empty): (Outcome, bool),
     sig: String,
+    sub: Option<&str>,
 ) {
     let meta = UsageMeta {
         session: (!session.is_empty()).then_some(session),
@@ -97,6 +105,9 @@ fn record(
     );
     row["cmd"] = cmd.into();
     row["sig"] = sig.into();
+    if let Some(s) = sub {
+        row["sub"] = s.into();
+    }
     match o {
         Outcome::Ok => {
             row["outcome"] = "ok".into();
@@ -105,15 +116,22 @@ fn record(
             }
         }
         Outcome::Help => row["outcome"] = "help".into(),
-        Outcome::Reject(r) => {
+        Outcome::Reject(e) => {
+            let r = super::codes::reject(e);
             row["outcome"] = "reject".into();
             row["reason"] = r.into();
+            if r == core::stats::SHAPE_GATE {
+                row["rules"] = super::codes::gate_rules(e).into();
+            }
+            if let Some(n) = near(e) {
+                row["near"] = n.into();
+            }
         }
     }
     append_row(row);
 }
 
-/// The CLI's one choke point, next to `record_cli_reject`: what `run` returned
+/// The CLI's one choke point — the only place a CLI reject is counted: what `run` returned
 /// for this argv. `hook` runs on every tool call and `mcp` is the server — neither
 /// is a call an agent made for an answer.
 pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
@@ -125,7 +143,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
     let outcome = match res {
         Ok(_) if crate::help::is_request(argv) => Outcome::Help,
         Ok(_) if AGENT_CMDS.contains(&cmd) => Outcome::Ok,
-        Err(e) if e.starts_with("rejected:") => Outcome::Reject(reason(e)),
+        Err(e) if e.starts_with("rejected:") => Outcome::Reject(e),
         _ => return,
     };
     let Some(root) = std::env::current_dir()
@@ -146,6 +164,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         &session,
         (outcome, empty),
         sig(argv),
+        sub(cmd, argv),
     );
 }
 
@@ -161,9 +180,7 @@ pub(crate) fn record_mcp_call(
     let empty = take_empty();
     let outcome = match res {
         Ok(_) => Outcome::Ok,
-        Err(e) if e.starts_with("rejected:") || e.starts_with("unknown tool") => {
-            Outcome::Reject(reason(e))
-        }
+        Err(e) if e.starts_with("rejected:") || e.starts_with("unknown tool") => Outcome::Reject(e),
         Err(_) => return,
     };
     let cmd = if AGENT_CMDS.contains(&tool) {
@@ -178,6 +195,7 @@ pub(crate) fn record_mcp_call(
         "",
         (outcome, empty),
         sig(args.to_string()),
+        None,
     );
 }
 
@@ -186,10 +204,22 @@ fn per100(n: usize, calls: usize) -> String {
     format!("{:.1}", n as f64 * 100.0 / calls as f64)
 }
 
+/// `a ×3, b ×1` — most first, so the cause to fix leads.
+pub(super) fn counts(m: &std::collections::BTreeMap<String, usize>) -> String {
+    let mut v: Vec<_> = m.iter().collect();
+    v.sort_by_key(|(k, n)| (std::cmp::Reverse(**n), *k));
+    let v: Vec<String> = v.iter().map(|(r, n)| format!("{r} ×{n}")).collect();
+    v.join(", ")
+}
+
 fn tally_text(t: &core::stats::Tally) -> String {
     let (c, bad) = (t.calls, t.rejects + t.help + t.find_repeat);
+    let why = match t.reasons.is_empty() {
+        true => String::new(),
+        false => format!(" · rejects: {}", counts(&t.reasons)),
+    };
     format!(
-        "{} — reject {} · help {} · find repeat {} · first-call success {}%",
+        "{} — reject {} · help {} · find repeat {} · first-call success {}%{why}",
         per100(bad, c),
         per100(t.rejects, c),
         per100(t.help, c),
@@ -202,10 +232,13 @@ fn tally_text(t: &core::stats::Tally) -> String {
 /// reasons, then each command's own — nothing called and nothing gated = no
 /// lines; gate rejects alone get the line with no rate (none of 0 calls).
 pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
-    let gate = if f.shape_gate == 0 {
-        String::new()
-    } else {
-        format!(" · shape gate ×{} (not friction)", f.shape_gate)
+    let gate = match (f.shape_gate, f.shape_gate_rules.is_empty()) {
+        (0, _) => String::new(),
+        (n, true) => format!(" · shape gate ×{n} (not friction)"),
+        (n, false) => format!(
+            " · shape gate ×{n}: {} (not friction)",
+            counts(&f.shape_gate_rules)
+        ),
     };
     if f.total.calls == 0 {
         return match f.shape_gate {
@@ -213,16 +246,10 @@ pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
             _ => vec![format!("  friction per 100 calls (0 calls): n/a{gate}")],
         };
     }
-    let reasons: Vec<String> = f.reasons.iter().map(|(r, n)| format!("{r} ×{n}")).collect();
     let mut out = vec![format!(
-        "  friction per 100 calls ({} calls): {}{}{gate}",
+        "  friction per 100 calls ({} calls): {}{gate}",
         f.total.calls,
         tally_text(&f.total),
-        if reasons.is_empty() {
-            String::new()
-        } else {
-            format!(" · rejects: {}", reasons.join(", "))
-        }
     )];
     let mut by: Vec<_> = f.by_command.iter().collect();
     by.sort_by_key(|(k, t)| (std::cmp::Reverse(t.calls), *k));
@@ -235,44 +262,11 @@ pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{command, lines, reason};
+    use super::{command, lines, near, sub};
     use crate::core::stats::{Friction, Tally};
 
     fn argv(s: &str) -> Vec<String> {
         s.split(' ').map(String::from).collect()
-    }
-
-    #[test]
-    fn rejects_get_the_plans_reasons() {
-        for (msg, want) in [
-            (
-                "rejected: unknown flag --stale — try 'fael --help'",
-                "unknown_flag",
-            ),
-            (
-                "rejected: bump takes no --title — try 'fael --help'",
-                "flag_not_taken",
-            ),
-            (
-                "rejected: \"-k\" is not an id — copy it from fael find",
-                "bad_id",
-            ),
-            (
-                "rejected: 2 of 2 ids not shown — the rest printed",
-                "bad_id",
-            ),
-            (
-                "rejected: unknown command \"decision\" — try 'fael --help'",
-                "unknown_command",
-            ),
-            ("rejected: --limit 0 shows nothing", "bad_value"),
-            (
-                "rejected: nothing written — text is 131 words with no title (or add --force to file it as is)",
-                "shape_gate",
-            ),
-        ] {
-            assert_eq!(reason(msg), want, "{msg}");
-        }
     }
 
     #[test]
@@ -281,6 +275,22 @@ mod tests {
         assert_eq!(command(&argv("help add")), "add");
         assert_eq!(command(&argv("decision x")), "?");
         assert_eq!(command(&argv("--help")), "?");
+    }
+
+    #[test]
+    fn sub_and_near_keep_to_real_names() {
+        assert_eq!(sub("chunk", &argv("chunk start 01M4AAAA")), Some("start"));
+        assert_eq!(sub("plan", &argv("plan show p")), Some("show"));
+        assert_eq!(sub("chunk", &argv("chunk 01M4AAAA")), None);
+        assert_eq!(sub("find", &argv("find x")), None);
+        let e = "rejected: unknown command \"fnd\" — did you mean find?";
+        assert_eq!(near(e), Some("find"));
+        let usage = crate::chunk::USAGE.split(' ').nth(2).unwrap();
+        assert_eq!(usage, crate::chunk::VERBS.join("|"));
+        assert_eq!(
+            near("rejected: unknown command \"zz\" — try 'fael --help'"),
+            None
+        );
     }
 
     #[test]
@@ -301,17 +311,18 @@ mod tests {
             help: 1,
             find_repeat: 0,
             first_call_ok: 6,
+            reasons: [("unknown_flag".to_string(), 1)].into(),
         };
         let f = Friction {
             total: t.clone(),
-            reasons: [("unknown_flag".to_string(), 1)].into(),
             by_command: [("find".to_string(), t)].into(),
             shape_gate: 2,
+            shape_gate_rules: [("untitled".to_string(), 2)].into(),
         };
         let l = lines(&f);
         assert_eq!(
             l[0],
-            "  friction per 100 calls (8 calls): 25.0 — reject 12.5 · help 12.5 · find repeat 0.0 · first-call success 75% · rejects: unknown_flag ×1 · shape gate ×2 (not friction)"
+            "  friction per 100 calls (8 calls): 25.0 — reject 12.5 · help 12.5 · find repeat 0.0 · first-call success 75% · rejects: unknown_flag ×1 · shape gate ×2: untitled ×2 (not friction)"
         );
         assert!(l[1].starts_with("    find (8 calls): 25.0"), "{l:?}");
     }

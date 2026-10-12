@@ -2,22 +2,15 @@
 //! that call it. Split out of mcp.rs at the 400-line ratchet.
 
 use super::args::{done, need, repo_for, s};
-use crate::hook::{ASK_REJECT, ASK_WARN, record_asks, record_mcp};
+use crate::hook::{ASK_WARN, record_asks};
 use crate::{Repo, core, read};
 use serde_json::Value;
 
 pub(super) fn bump(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    match bump_inner(a, &r) {
-        Err(e) => {
-            record_mcp(&r.root, "mcp-bump", ASK_REJECT, &e);
-            Err(e)
-        }
-        Ok((text, warns)) => {
-            record_asks("mcp", ASK_WARN, "mcp-bump", Some(&r.root), &warns);
-            Ok(text)
-        }
-    }
+    let (text, warns) = bump_inner(a, &r)?;
+    record_asks("mcp", ASK_WARN, "mcp-bump", Some(&r.root), &warns);
+    Ok(text)
 }
 
 fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {

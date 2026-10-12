@@ -6,6 +6,8 @@
 //! the baseline, and re-run unchanged after it: no ask type may rise and
 //! rejects must fall. Post-3d/3e totals, same sequence — reject 4 (R6 ×1, R7
 //! ×3) · warning 1 (R8), against the recorded baseline of reject 5 · warning 1.
+//! Rejects left the ask stream (they are `call` lines, agent sessions only):
+//! each step's exit code pins them now, the stream pins the warnings.
 //! R9 (one stop-block) went with the Stop-block mode.
 
 use super::{fael, fael_env, repo, stats_json};
@@ -54,7 +56,6 @@ fn replay_debt_sequence_files_five_open_notes() {
     }
     assert_eq!(open_notes(&d), 1);
     let v = stats_json(&d);
-    assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
 }
 
@@ -86,7 +87,6 @@ fn replay_supersede_in_text_closes_the_old_one() {
     assert!(err.contains("id in the text"), "{err}");
     assert_eq!(open_notes(&d), 1);
     let v = stats_json(&d);
-    assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
 }
 
@@ -135,7 +135,6 @@ fn replay_key_candidates_are_adopted_or_left_alone() {
         assert!(!follow.contains("\"key\":\""), "{follow}");
     }
     let v = stats_json(&d);
-    assert_eq!(v["asks"]["reject"]["events"], 0, "{v}");
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
 }
 
@@ -203,7 +202,6 @@ fn replay_unknown_supersedes_rescued_from_the_text() {
         "{err}"
     );
     assert_eq!(open_notes(&d), 1);
-    assert_eq!(stats_json(&d)["asks"]["reject"]["events"], 0);
 }
 
 /// R6 — an ambiguous `--supersedes` prefix: rejects today with the
@@ -235,7 +233,6 @@ fn replay_ambiguous_supersedes_rejects() {
         "",
     );
     assert!(!ok && err.contains("rejected: id"), "{err}");
-    assert_eq!(stats_json(&d)["asks"]["reject"]["events"], 1);
 }
 
 /// R7 — plain validation rejects: bad kind, no files, bad key. Self-heal
@@ -256,7 +253,6 @@ fn replay_validation_rejects() {
         "",
     );
     assert!(!ok && err.contains("rejected: key"), "{err}");
-    assert_eq!(stats_json(&d)["asks"]["reject"]["events"], 3);
 }
 
 /// R8 — a long untitled row: rejected before the write (a warning after it
@@ -276,5 +272,4 @@ fn replay_long_untitled_warns_once() {
     assert!(err.contains("no title"), "{err}");
     let v = stats_json(&d);
     assert_eq!(v["asks"]["warning"]["events"], 1, "{v}");
-    assert_eq!(v["asks"]["reject"]["events"], 1, "{v}");
 }

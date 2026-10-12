@@ -258,6 +258,18 @@ fn outcomes_text(o: &core::stats::RowOutcomes) -> String {
         .collect()
 }
 
+/// Warning lines by code, most first — none, no line.
+fn print_warnings(s: &core::stats::Stats) {
+    if let Some(w) = s.asks.get(core::stats::ASK_WARN).filter(|w| w.events > 0) {
+        println!(
+            "  warnings ×{} ({} bytes): {}",
+            w.events,
+            w.bytes,
+            super::friction::counts(&w.codes)
+        );
+    }
+}
+
 pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
     if let Some(line) = value_line(s) {
         println!("{line}");
@@ -319,10 +331,7 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             );
         }
     }
-    let ask = |k: &str| s.asks.get(k).map(|a| (a.events, a.bytes)).unwrap_or((0, 0));
-    let (rn, rb) = ask(core::stats::ASK_REJECT);
-    let (wn, wb) = ask(core::stats::ASK_WARN);
-    println!("  asks: reject ×{rn} ({rb} bytes) · warning ×{wn} ({wb} bytes)");
+    print_warnings(s);
     print_capture(&s.capture);
     if s.retired.pushed > 0 {
         println!(

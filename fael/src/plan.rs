@@ -6,6 +6,11 @@ use fael_core::plan::{Bill, PlanRow, Store};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// The verbs `plan` answers — `show` and `list` only to point at the real one.
+pub(crate) const VERBS: &[&str] = &[
+    "new", "export", "show", "apply", "park", "unpark", "done", "list",
+];
+
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
     if let [new, name, title] = rest

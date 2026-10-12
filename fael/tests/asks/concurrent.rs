@@ -2,7 +2,18 @@
 //! sixteen threads hammer the reject path at once, then every line parses
 //! and the row count matches — one torn line fails the test.
 
-use super::{fael, repo};
+use super::{fael_env, repo};
+
+/// A reject inside an agent session: its `call` line is the row each writer adds.
+fn reject(d: &std::path::Path) -> bool {
+    fael_env(
+        d,
+        &["add", "bogus", "zz", "--files", "src/a.rs"],
+        "",
+        &[("FAEL_SESSION", "s")],
+    )
+    .0
+}
 
 #[test]
 fn parallel_rejects_keep_every_line_parseable() {
@@ -18,8 +29,7 @@ fn parallel_rejects_keep_every_line_parseable() {
             s.spawn(move || {
                 gate.wait();
                 for _ in 0..PER_THREAD {
-                    let (ok, _, _) = fael(&d, &["add", "bogus", "zz", "--files", "src/a.rs"], "");
-                    assert!(!ok);
+                    assert!(!reject(&d));
                 }
             });
         }
@@ -69,8 +79,7 @@ fn parallel_first_writes_of_a_month_archive_once_and_lose_no_row() {
             s.spawn(|| {
                 gate.wait();
                 for _ in 0..PER_THREAD {
-                    let (ok, _, _) = fael(&d, &["add", "bogus", "zz", "--files", "src/a.rs"], "");
-                    assert!(!ok);
+                    assert!(!reject(&d));
                 }
             });
         }

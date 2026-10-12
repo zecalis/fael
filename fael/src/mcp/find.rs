@@ -2,34 +2,26 @@
 //! Split out of mcp.rs at the 400-line ratchet.
 
 use super::args::{files, repo_for, s};
-use crate::hook::{ASK_REJECT, record_mcp};
 use crate::{Repo, aliases, core};
 use serde_json::Value;
 
 pub(super) fn find(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    match find_inner(a, &r) {
-        Err(e) => {
-            record_mcp(&r.root, "mcp-find", ASK_REJECT, &e);
-            Err(e)
-        }
-        Ok((text, shown)) => {
-            // chunk 6e: ids just shown are already in this session's context
-            let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
-            crate::hook::note_seen(&crate::session::hook_session(&r.root), &r.root, &ids);
-            // `id` or `ids: [...]` pulls bodies: the ids shown, never what was typed
-            let id = (s(a, "id").is_some() || a["ids"].is_array()).then(|| shown.join(","));
-            let q = (s(a, "key"), files(a), id);
-            crate::hook::record_found(
-                "mcp",
-                "mcp-find",
-                &r.root,
-                &shown,
-                (q.0.as_deref(), &q.1, q.2.as_deref()),
-            );
-            Ok(text)
-        }
-    }
+    let (text, shown) = find_inner(a, &r)?;
+    // chunk 6e: ids just shown are already in this session's context
+    let ids: Vec<&str> = shown.iter().map(String::as_str).collect();
+    crate::hook::note_seen(&crate::session::hook_session(&r.root), &r.root, &ids);
+    // `id` or `ids: [...]` pulls bodies: the ids shown, never what was typed
+    let id = (s(a, "id").is_some() || a["ids"].is_array()).then(|| shown.join(","));
+    let q = (s(a, "key"), files(a), id);
+    crate::hook::record_found(
+        "mcp",
+        "mcp-find",
+        &r.root,
+        &shown,
+        (q.0.as_deref(), &q.1, q.2.as_deref()),
+    );
+    Ok(text)
 }
 
 fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {

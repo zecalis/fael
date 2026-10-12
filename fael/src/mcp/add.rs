@@ -2,21 +2,15 @@
 //! Split out of mcp.rs at the 400-line ratchet.
 
 use super::args::{done, files, need, repo_for, s, urgent_ask};
-use crate::hook::{ASK_REJECT, record_mcp, record_row_asks};
+use crate::hook::record_row_asks;
 use crate::{Repo, write::AddOpts, write::add_row};
 use serde_json::Value;
 
 pub(super) fn add(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    match add_inner(a, &r) {
-        Err(e) => {
-            record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
-            Err(e)
-        }
-        // warnings are recorded per row where filed (with its id + session);
-        // a preview costs no round — its lines are the answer, not an ask
-        Ok((text, _)) => Ok(text),
-    }
+    // warnings are recorded per row where filed (with its id + session);
+    // a preview costs no round — its lines are the answer, not an ask
+    add_inner(a, &r).map(|(text, _)| text)
 }
 
 fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
@@ -58,7 +52,6 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                     failed += 1;
                     gated += usize::from(e.starts_with(crate::batch::GATE_REJECT));
                     let e = format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "));
-                    record_mcp(&r.root, "mcp-add", ASK_REJECT, &e);
                     out.push(e);
                 }
             }
