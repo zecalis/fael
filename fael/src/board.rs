@@ -388,7 +388,7 @@ fn text(b: &Board) -> String {
 #[path = "board_ledger.rs"]
 mod ledger;
 #[path = "board_git.rs"]
-mod prs;
+pub(crate) mod prs;
 #[path = "board_registry.rs"]
 mod registry;
 use registry::registered;
