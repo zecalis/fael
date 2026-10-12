@@ -17,6 +17,7 @@ pub fn rules(uid: &str) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
+         - you triggered Windows CI (`gh workflow run ci.yml --ref <branch>`)? wait for it (`gh run watch <id> --exit-status`) and write pass, or fail with the failing test, in the done text — never just \"triggered\"\n\
          - the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
          - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read\n\
          - after each step that passes: a WIP commit + `fael chunk note {uid} \"<done; next>\"` — the checkpoint a resume reads\n\
