@@ -265,3 +265,28 @@ fn merge_and_split_name_the_new_chunks_and_old_labels_stay_history() {
     assert_eq!(lbl(&s, parts[0]).as_deref(), Some("x1"));
     assert_eq!(lbl(&s, parts[1]), None);
 }
+
+#[test]
+fn merge_unions_reads_and_split_inherits_them_unless_a_part_names_its_own() {
+    let mut s = Store::open_in_memory().unwrap();
+    let [a, b, c] = ["a", "b", "c"].map(|t| add(&mut s, t, Some(t)));
+    let set = |s: &Store, uid: &str, reads: &str| {
+        s.conn
+            .execute("UPDATE chunk SET reads = ?1 WHERE uid = ?2", [reads, uid])
+            .unwrap();
+    };
+    set(&s, &a, "goal\nx/api");
+    set(&s, &b, "x/api\nmodel");
+    set(&s, &c, "goal");
+    let j = format!(
+        r#"[{{"op":"merge","chunks":["{a}","{b}"]}},
+            {{"op":"split","chunk":"{c}","into":[{{"title":"c1"}},{{"title":"c2","reads":["done"]}}]}}]"#
+    );
+    let out = ops(&mut s, &j).unwrap();
+    let m = out[0].rsplit(' ').next().unwrap().to_string();
+    let reads = "SELECT COALESCE(reads, '-') FROM chunk WHERE uid = ?1";
+    assert_eq!(get(&s, reads, &m).as_deref(), Some("goal\nx/api\nmodel"));
+    let by_title = "SELECT COALESCE(reads, '-') FROM chunk WHERE title = ?1";
+    assert_eq!(get(&s, by_title, "c1").as_deref(), Some("goal"));
+    assert_eq!(get(&s, by_title, "c2").as_deref(), Some("done"));
+}

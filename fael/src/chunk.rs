@@ -33,7 +33,8 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             a.only(
                 "chunk add",
                 &[
-                    "plan", "brief", "size", "model", "client", "scope", "after", "label", "issue",
+                    "plan", "brief", "size", "model", "client", "scope", "reads", "after", "label",
+                    "issue",
                 ],
             )?;
             let f = Fields {
@@ -52,7 +53,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             a.only(
                 "chunk edit",
                 &[
-                    "title", "brief", "size", "model", "client", "scope", "label",
+                    "title", "brief", "size", "model", "client", "scope", "reads", "label",
                 ],
             )?;
             let mut st = s()?;
@@ -223,6 +224,7 @@ fn fields(a: &Args) -> Fields {
         model: a.one("model"),
         client: a.one("client"),
         scope: a.has("scope").then(|| list(a, "scope")),
+        reads: a.has("reads").then(|| list(a, "reads")),
         label: a.one("label"),
         issues: vec![],
     }

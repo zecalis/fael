@@ -6,6 +6,7 @@ use super::State;
 use super::chunk::{Here, end_live, row, set, tx};
 use super::lookup::lookup;
 use super::ready::{Ready, ready_in};
+use super::section::{self, Row as Section};
 use super::store::{Store, err};
 use rusqlite::{OptionalExtension, Transaction, params};
 
@@ -42,8 +43,10 @@ pub struct Brief {
     pub plan_title: String,
     /// the md that keeps Goal, Scope, Done and Constraints after cutover (`""` = none)
     pub source: String,
-    /// the plan's sections as one markdown text (`None` = none yet); read before `source`
-    pub doc: Option<String>,
+    /// the plan's sections in order (none yet = `source` is read instead)
+    pub sections: Vec<Section>,
+    /// `(ref, section)` per `--reads` line, `None` = no such section
+    pub reads: Vec<(String, Option<Section>)>,
     /// the checkout the code lives in when it is not this repo (`fael plan repo`)
     pub repo: Option<String>,
     pub refs: Vec<String>,
@@ -256,18 +259,16 @@ impl Store {
 /// `skip` = how many starts back the answers and notes count from: 1 inside a start (its
 /// own event is the newest), 0 for the start still to come.
 fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
-    let mut b = tx
+    let (mut b, pid, reads) = tx
         .query_row(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope,
                     CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END,
-                    p.title, p.source, COALESCE(p.refs, ''), c.client_hint, p.repo,
-                    (SELECT group_concat('## ' || title || char(10) || body || char(10),
-                                         char(10))
-                       FROM (SELECT title, body FROM section WHERE plan = p.id ORDER BY seq))
+                    p.title, p.source, COALESCE(p.refs, ''), c.client_hint, p.repo, p.id,
+                    COALESCE(c.reads, '')
              FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
             [id],
             |r| {
-                Ok(Brief {
+                let b = Brief {
                     uid: r.get(0)?,
                     label: r.get(1)?,
                     title: r.get(2)?,
@@ -280,7 +281,8 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     plan_title: r.get(8)?,
                     source: r.get(9)?,
                     repo: r.get(12)?,
-                    doc: r.get(13)?,
+                    sections: vec![],
+                    reads: vec![],
                     refs: r
                         .get::<_, String>(10)?
                         .lines()
@@ -291,10 +293,16 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     after: vec![],
                     resume: None,
                     issues: vec![],
-                })
+                };
+                Ok((b, r.get::<_, i64>(13)?, r.get::<_, String>(14)?))
             },
         )
         .map_err(err)?;
+    b.sections = section::list(tx, pid)?;
+    b.reads = reads
+        .lines()
+        .map(|r| Ok((r.to_string(), section::read(tx, pid, r)?)))
+        .collect::<Result<_, String>>()?;
     // answers and notes after the start before this one (this start's own event is the
     // newest; a note on a running chunk is not a start)
     let since = |who: &str| {

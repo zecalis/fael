@@ -51,6 +51,7 @@ struct Line {
     model: Option<String>,
     client: Option<String>,
     scope: Option<Vec<String>>,
+    reads: Option<Vec<String>>,
     /// the full set of chunks it waits on
     after: Option<Vec<String>>,
 }
@@ -138,6 +139,7 @@ fn add_line(tx: &Transaction, pid: i64, l: &Line, now: &str) -> Result<String, S
         model: l.model.clone(),
         client: l.client.clone(),
         scope: l.scope.clone(),
+        reads: l.reads.clone(),
         label: l.label.clone(),
         ..Fields::default()
     };
@@ -171,15 +173,19 @@ fn edit_line(
     now: &str,
 ) -> Result<Option<String>, String> {
     let r = row(tx, uid)?;
-    let (plan, cur): (i64, [String; 7]) = tx
+    let (plan, cur): (i64, [String; 8]) = tx
         .query_row(
             "SELECT plan, title, brief, COALESCE(size, ''), COALESCE(model_hint, ''),
-                    COALESCE(client_hint, ''), COALESCE(scope, ''), COALESCE(label, '')
+                    COALESCE(client_hint, ''), COALESCE(scope, ''), COALESCE(label, ''),
+                    COALESCE(reads, '')
              FROM chunk WHERE id = ?1",
             [r.id],
             |q| {
                 let g = |i| q.get::<_, String>(i);
-                Ok((q.get(0)?, [g(1)?, g(2)?, g(3)?, g(4)?, g(5)?, g(6)?, g(7)?]))
+                Ok((
+                    q.get(0)?,
+                    [g(1)?, g(2)?, g(3)?, g(4)?, g(5)?, g(6)?, g(7)?, g(8)?],
+                ))
             },
         )
         .map_err(err)?;
@@ -193,6 +199,7 @@ fn edit_line(
         model: changed(&l.model, &cur[3]),
         client: changed(&l.client, &cur[4]),
         scope: l.scope.clone().filter(|s| s.join("\n") != cur[5]),
+        reads: l.reads.clone().filter(|s| s.join("\n") != cur[7]),
         label: changed(&l.label, &cur[6]),
         ..Fields::default()
     };
@@ -202,6 +209,7 @@ fn edit_line(
         || f.model.is_some()
         || f.client.is_some()
         || f.scope.is_some()
+        || f.reads.is_some()
         || f.label.is_some();
     let have = waits(tx, r.id)?;
     let want = match &l.after {
