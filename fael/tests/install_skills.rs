@@ -110,6 +110,7 @@ fn retired_skill_links_go_and_real_dirs_stay() {
     let pkg = base.join("bun/node_modules/@zecalis/fapony/skill");
     symlink(pkg.join("review-pony"), skills.join("review-pony")).unwrap();
     symlink(pkg.join("git-ship"), skills.join("git-ship")).unwrap();
+    symlink(pkg.join("plan-with-pony"), skills.join("plan-with-pony")).unwrap();
 
     install(&home);
     assert!(!skills.join("plan-with-marketing").is_symlink());
@@ -118,7 +119,7 @@ fn retired_skill_links_go_and_real_dirs_stay() {
         "fapony's stay without the flag"
     );
     install_with(&home, &["--replace-fapony"]);
-    for gone in ["review-pony", "git-ship"] {
+    for gone in ["review-pony", "git-ship", "plan-with-pony"] {
         assert!(!skills.join(gone).is_symlink(), "{gone}");
     }
     assert!(

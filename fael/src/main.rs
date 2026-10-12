@@ -36,6 +36,7 @@ mod session;
 mod sync;
 mod synonyms;
 mod tune;
+mod unmerged;
 mod write;
 
 use fael_core::{self as core, Config, Log};

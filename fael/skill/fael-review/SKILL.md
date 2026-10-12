@@ -34,6 +34,11 @@ proof that you looked. Start at pass 1.
 
 ## Pass 1 — Scope is a finding
 
+**Find the artifact first when you were handed an issue, not a diff.** An id or key as the arg:
+`fael find <id> --full` (or `--key <k>`) — is it closed, and by what? Then
+`git branch -a --contains <sha>` for a cited commit, `git worktree list` for who holds the
+branch. Review that diff. One another agent holds is read-only for you — review it, never redo it.
+
 Say what the change is for in one sentence, in your own words. If you can't, the artifact is
 underspecified. That is the review. Report it and stop.
 
@@ -61,6 +66,9 @@ The diff is where you enter, not what you review.
 - **Run what can be run.** Reading cannot see a command that exits 0 without doing anything, a
   timeout budget no real suite fits, or a server still serving last week's build. A green result
   you produced outranks a green result you inferred, every time.
+  Another branch's code runs in your own worktree only: note `git rev-parse --abbrev-ref HEAD`
+  and `git rev-parse HEAD` first, `git switch --detach <sha>`, and when done switch back to the
+  branch, or to the sha when it was merged and deleted meanwhile. Never touch another agent's worktree.
 - **For a plan or design doc**, walk the proposed flow against the system that exists — where
   does it touch reality, and what does it assume that isn't true today?
 
@@ -155,8 +163,8 @@ Fixing changes what actually shipped, not what the review found — re-run pass 
 check on the new state before calling it done, but don't re-run the whole review.
 
 Each finding you fix is still recorded in fael, once — what broke and how it was fixed is what
-the next agent on those files needs. Before applying it, `fael add issue "<finding title>"
---files <a,b,…>` (walked paths, comma-joined) and keep the id; after, `fael close <id> "<cause> → <fix>; guard <test>"`
+the next agent on those files needs. Before applying it, `fael add issue --title "<finding, ≤15 words>"
+"<failing input → wrong output>" --files <a,b,…>` (walked paths, comma-joined) and keep the id; after, `fael close <id> "<cause> → <fix>; guard <test>"`
 (the cause and fix, not the finding again); cite `(fael:<id>)` in the commit message. One closed
 row per finding, and the hook's uncited-`fix:` nudge stays quiet. No fael in this session = skip.
 
@@ -169,8 +177,9 @@ findings) record nothing — there is nothing the next session needs to find.
 
 kind is `issue` when a finding survived (something is broken), `decision` when
 the verdict turns on scope alone (rework/reject from pass 1 — the review locks
-a direction). text is the report's verdict line, standalone — what broke or was
-decided, not that a review happened. files are the repo-relative paths actually
+a direction). title is the verdict in ≤15 words — `add` rejects a long text without one
+(`fael add issue --title "<≤15 words>" "<body>" --files a,b`). text is the body, standalone —
+what broke or was decided, not that a review happened. files are the repo-relative paths actually
 walked — required, a row without them is unfindable. No fael in this session
 (no tool, no `fael` on PATH) = skip the record, never install it uninvited.
 If `add` errors, say so in one line and move on — never re-run a review
@@ -197,7 +206,7 @@ The four passes are the rules. These three are what they fail on in practice:
 ```
 1-4.  scope holds; walked the new gate branch; ran the evidence command — it exits 0
       without running the suite (CONFIRMED: `bun test` with no test dir exits 0)
-post. add(kind="issue",
+post. add(kind="issue", title="incremental scan drops cached history",
         text="incremental scan replaces cached history with a delta — cache holds 500, truth 1500",
         files=["cache.ts", "claude-code.ts"])
 ```
