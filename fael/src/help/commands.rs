@@ -138,7 +138,7 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      rest (no --reads: Goal, Scope, Done, Constraints); show prints one chunk as the board has it, its hand-off,
      the brief and notes its next start prints; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
-     --force takes it over; --no-worktree (a client that writes a file and exits)
+     --force takes it over, and starts one blocked by an after; --no-worktree (a client that writes a file and exits)
      takes no worktree slot, and from Claude Code without --run binds its session,
      whose Stop hook keeps the run seen from any cwd; wait, after and done answer only to the worktree of the
      latest run and end it, done also to --run R naming that run; done --pr N lands in done (push pr is the ok), done

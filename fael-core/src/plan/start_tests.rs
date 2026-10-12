@@ -72,6 +72,32 @@ fn a_pair_starts_whole_or_not_at_all() {
 }
 
 #[test]
+fn a_blocked_chunk_starts_only_with_force() {
+    let mut s = Store::open_in_memory().unwrap();
+    let first = add(&mut s, "first", Some("f"));
+    let shipped = add(&mut s, "shipped", Some("s"));
+    s.conn
+        .execute(
+            "INSERT INTO edge(src, dst, kind) SELECT x.id, y.id, 'after'
+             FROM chunk x, chunk y WHERE x.uid = ?1 AND y.uid = ?2",
+            params![shipped, first],
+        )
+        .unwrap();
+    let e = start(&mut s, &shipped, "/w").unwrap_err();
+    assert!(e.contains("is blocked") && e.contains("--force"), "{e}");
+    let o = Start {
+        force: true,
+        ..Start::default()
+    };
+    s.start(&shipped, &o, &here("/w")).unwrap();
+    s.done(&shipped, "landed in #383", Some(383), None, &here("/w"))
+        .unwrap();
+    assert_eq!(state(&s, &shipped), "done");
+    let q = "SELECT text FROM event WHERE chunk_uid = ?1 AND to_state = 'running'";
+    assert!(get(&s, q, &shipped).unwrap().contains(&first));
+}
+
+#[test]
 fn two_starts_of_one_chunk_one_wins() {
     // a race shows on some runs only: 30 rounds make one test run catch it
     for _ in 0..30 {
