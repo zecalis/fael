@@ -28,8 +28,9 @@ pub(super) const SKILLS: [(&str, &str); 6] = [
 /// The names fael's skills replace (decision fael-board:skill-names). A link under one
 /// goes when it points into a fael checkout, or into fapony's package under
 /// `--replace-fapony`; a real dir is someone's own copy and stays.
-const RETIRED: [&str; 4] = [
+const RETIRED: [&str; 5] = [
     "plan-with-marketing",
+    "plan-with-pony",
     "review-pony",
     "debug-pony",
     "git-ship",
