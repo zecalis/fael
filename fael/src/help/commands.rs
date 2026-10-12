@@ -114,11 +114,11 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
-        "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--pr N] [--out path]
-fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--after uid,…] [--issue id,…]
+        "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--pr N] [--out path]
+fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…]
 fael chunk show <uid|label> [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
-fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …]
+fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
 fael chunk move <uid> --plan <p>
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD]
@@ -133,7 +133,9 @@ fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid
      the new uid, no brief = draft; add and edit warn on a --scope path whose directory is
      missing or a typo of a name beside it (the plan repo's checkout); --issue links open ledger issues it fixes (its
      brief prints them; close each once the fix holds, done never does); a --label is unique in its plan and every verb
-     takes it for the uid; show prints one chunk as the board has it, with the brief
+     takes it for the uid; --reads names the plan sections it works from (another
+     plan's as plan/key): its brief prints Goal, Done and those, then an index of the
+     rest (no --reads: Goal, Scope, Done, Constraints); show prints one chunk as the board has it, with the brief
      and notes its next start prints; start claims the chunk and its pair in one step
      and prints the brief, R on its first line — a second start is told who holds it,
      --force takes it over; --no-worktree (a client that writes a file and exits)

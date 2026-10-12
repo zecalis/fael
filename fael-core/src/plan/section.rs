@@ -27,8 +27,9 @@ pub(super) struct Part {
     drop: bool,
 }
 
-/// A section as export reads it; `updated` = the `at` of its newest event.
-pub(super) struct Row {
+/// A section as export and the brief read it; `updated` = the `at` of its newest event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Row {
     pub key: String,
     pub title: String,
     pub body: String,
@@ -209,6 +210,46 @@ pub(super) fn list(c: &Connection, pid: i64) -> Result<Vec<Row>, String> {
     .map_err(err)?
     .collect::<Result<_, _>>()
     .map_err(err)
+}
+
+/// `--reads`: each `<key>` of the chunk's plan or `<plan>/<key>`, one word; one per line.
+/// A key not there yet is fine — the brief says it is not found.
+pub(super) fn reads(refs: &[String]) -> Result<Option<String>, String> {
+    if let Some(r) = refs
+        .iter()
+        .find(|r| r.ends_with('/') || r.chars().any(char::is_whitespace))
+    {
+        return Err(format!(
+            "rejected: reads {r:?} — a section key, or <plan>/<key> for another plan's"
+        ));
+    }
+    Ok((!refs.is_empty()).then(|| refs.join("\n")))
+}
+
+/// The section a read names, from plan `pid` or the plan before its last `/` (`None` = no
+/// such plan or key). Another plan's keeps the whole ref as its key.
+pub(super) fn read(c: &Connection, pid: i64, r: &str) -> Result<Option<Row>, String> {
+    let (other, key) = match r.rsplit_once('/') {
+        Some((plan, key)) => {
+            let id: Option<i64> = c
+                .query_row(
+                    "SELECT id FROM plan WHERE name = ?1 OR (app <> '' AND app || '/' || name = ?1)
+                     ORDER BY app = '' DESC LIMIT 1",
+                    [plan],
+                    |q| q.get(0),
+                )
+                .optional()
+                .map_err(err)?;
+            let Some(id) = id else { return Ok(None) };
+            (id, key)
+        }
+        None => (pid, r),
+    };
+    let row = list(c, other)?.into_iter().find(|s| s.key == key);
+    Ok(row.map(|s| Row {
+        key: if other == pid { s.key } else { r.into() },
+        ..s
+    }))
 }
 
 /// Once, when the `section` table is created: every plan's `plan.doc` cut into sections.

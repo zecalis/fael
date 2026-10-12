@@ -14,8 +14,8 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Op {
-    /// a new `open` chunk where the first one stood: titles and briefs joined, `after` and
-    /// `scope` the union, unless the item says otherwise; the old ones → `replaced` and keep
+    /// a new `open` chunk where the first one stood: titles and briefs joined, `after`,
+    /// `scope` and `reads` the union, unless the item says otherwise; the old ones → `replaced` and keep
     /// their labels (history resolves them), so the new one takes a fresh `label`
     Merge {
         chunks: Vec<String>,
@@ -26,8 +26,10 @@ pub enum Op {
         model: Option<String>,
         client: Option<String>,
         scope: Option<Vec<String>>,
+        reads: Option<Vec<String>>,
     },
-    /// new chunks in its place, each inheriting its `after`; it → `replaced`
+    /// new chunks in its place, each inheriting its `after` and, unless the part names its
+    /// own, its `reads`; it → `replaced`
     Split { chunk: String, into: Vec<Part> },
     /// `chunk start` of one claims them all (SPEC §4)
     Pair { chunks: Vec<String> },
@@ -50,6 +52,7 @@ pub struct Part {
     pub model: Option<String>,
     pub client: Option<String>,
     pub scope: Option<Vec<String>>,
+    pub reads: Option<Vec<String>>,
 }
 
 /// A chunk an op may touch: in a `db` plan, not running, not history.
@@ -59,6 +62,7 @@ pub(super) struct Src {
     pub(super) title: String,
     pub(super) brief: String,
     pub(super) scope: Vec<String>,
+    pub(super) reads: Vec<String>,
 }
 
 fn src(tx: &Transaction, uid: &str) -> Result<Src, String> {
@@ -74,20 +78,21 @@ fn src(tx: &Transaction, uid: &str) -> Result<Src, String> {
             r.state.as_str()
         ));
     }
-    let (plan, title, brief, scope): (i64, String, String, Option<String>) = tx
-        .query_row(
-            "SELECT plan, title, brief, scope FROM chunk WHERE id = ?1",
+    let (plan, title, brief, scope, reads): (i64, String, String, Option<String>, Option<String>) =
+        tx.query_row(
+            "SELECT plan, title, brief, scope, reads FROM chunk WHERE id = ?1",
             [r.id],
-            |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?, q.get(3)?)),
+            |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?, q.get(3)?, q.get(4)?)),
         )
         .map_err(err)?;
-    let scope = scope.iter().flat_map(|s| s.lines()).map(String::from);
+    let lines = |s: Option<String>| s.iter().flat_map(|s| s.lines()).map(String::from).collect();
     Ok(Src {
         row: r,
         plan,
         title,
         brief,
-        scope: scope.collect(),
+        scope: lines(scope),
+        reads: lines(reads),
     })
 }
 
@@ -158,8 +163,8 @@ pub(super) fn insert(
     let uid = crate::ulid();
     tx.execute(
         "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                           client_hint, label)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                           client_hint, label, reads)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             uid,
             plan,
@@ -171,7 +176,8 @@ pub(super) fn insert(
             f.model,
             scope(f.scope.as_deref().unwrap_or_default())?,
             f.client,
-            label
+            label,
+            super::section::reads(f.reads.as_deref().unwrap_or_default())?
         ],
     )
     .map_err(err)?;
@@ -191,16 +197,20 @@ fn merge(tx: &Transaction, uids: &[String], f: Fields, now: &str) -> Result<Stri
         return Err("rejected: merge joins chunks of one plan".into());
     }
     let join = |g: &dyn Fn(&Src) -> &str, sep| old.iter().map(g).collect::<Vec<_>>().join(sep);
-    let mut scope: Vec<String> = Vec::new();
-    for p in old.iter().flat_map(|o| &o.scope) {
-        if !scope.contains(p) {
-            scope.push(p.clone());
+    let union = |g: &dyn Fn(&Src) -> &Vec<String>| {
+        let mut all: Vec<String> = Vec::new();
+        for p in old.iter().flat_map(g) {
+            if !all.contains(p) {
+                all.push(p.clone());
+            }
         }
-    }
+        all
+    };
     let f = Fields {
         title: f.title.or_else(|| Some(join(&|o| &o.title, " + "))),
         brief: f.brief.or_else(|| Some(join(&|o| &o.brief, "\n\n"))),
-        scope: f.scope.or(Some(scope)),
+        scope: f.scope.or_else(|| Some(union(&|o| &o.scope))),
+        reads: f.reads.or_else(|| Some(union(&|o| &o.reads))),
         ..f
     };
     let seq = slots(tx, old[0].plan, old[0].row.id, 1)?[0];
@@ -231,6 +241,7 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
             model: p.model,
             client: p.client,
             scope: p.scope,
+            reads: p.reads.or_else(|| Some(old.reads.clone())),
             ..Fields::default()
         };
         new.push(insert(tx, old.plan, seq, &f, &text, now)?);
@@ -296,6 +307,7 @@ pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String>
             model,
             client,
             scope,
+            reads,
         } => {
             let f = Fields {
                 title,
@@ -305,6 +317,7 @@ pub(super) fn run(tx: &Transaction, op: Op, now: &str) -> Result<String, String>
                 model,
                 client,
                 scope,
+                reads,
                 ..Fields::default()
             };
             merge(tx, &chunks, f, now)

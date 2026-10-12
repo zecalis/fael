@@ -1,7 +1,10 @@
 //! What `fael chunk start` prints — the agent's first message (SPEC §8). The first line
-//! names R; the plan md's Goal, Scope, Done criteria and Constraints are read live by
-//! heading (SPEC §9), and a ref that no longer exists is listed as missing.
+//! names R; then the plan's Goal and Done sections, each section the chunk reads, and an
+//! index of the rest (no reads: Goal, Scope, Done, Constraints) — a plan with no sections
+//! yet reads those from its md by heading. A ref that no longer exists is listed as missing.
 
+use super::export::one;
+use super::section::Row;
 use super::start::{Prev, Started};
 use std::fmt::Write;
 
@@ -17,8 +20,21 @@ pub fn rules(uid: &str) -> String {
          - the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
          - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read\n\
          - after each step that passes: a WIP commit + `fael chunk note {uid} \"<done; next>\"` — the checkpoint a resume reads\n\
+         - a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done\n\
          - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note … --files <f>`\n"
     )
+}
+
+/// A heading a brief carries by default: Goal, Scope, Done, Constraints (any numbering);
+/// `few` = Goal and Done only, for a chunk that names what else it reads.
+fn base(heading: &str, few: bool) -> bool {
+    let h = heading.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ' ');
+    let words: &[&str] = if few {
+        &["Goal", "Done"]
+    } else {
+        &["Goal", "Scope", "Done", "Constraints"]
+    };
+    words.iter().any(|w| h.starts_with(w))
 }
 
 /// The md sections a brief carries: `## Goal`, `## 2. Scope`, `## Done criteria`,
@@ -28,10 +44,7 @@ pub fn sections(md: &str) -> String {
     let mut keep = false;
     for l in md.lines() {
         if let Some(h) = l.strip_prefix("## ") {
-            let h = h.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ' ');
-            keep = ["Goal", "Scope", "Done", "Constraints"]
-                .iter()
-                .any(|w| h.starts_with(w));
+            keep = base(h, false);
         }
         if keep {
             out.push_str(l);
@@ -160,16 +173,63 @@ impl Started {
                 continue;
             }
             seen.push(&c.plan);
-            // the plan's sections once it has any; the md file only until then
-            let (from, text) = match c.doc.as_deref().filter(|d| !d.trim().is_empty()) {
-                Some(d) => ("plan doc", Some(d.to_string())),
-                None => (
-                    c.source.as_str(),
-                    (!c.source.is_empty()).then(|| md(&c.source)).flatten(),
-                ),
-            };
-            if let Some(s) = text.map(|t| sections(&t)).filter(|s| !s.is_empty()) {
-                let _ = write!(o, "\n<!-- {from} -->\n{s}");
+            // what every chunk of this plan in the start reads, once each
+            let mut reads: Vec<&(String, Option<Row>)> = Vec::new();
+            for r in self
+                .chunks
+                .iter()
+                .filter(|d| d.plan == c.plan)
+                .flat_map(|d| &d.reads)
+            {
+                if !reads.iter().any(|x| x.0 == r.0) {
+                    reads.push(r);
+                }
+            }
+            let mut shown: Vec<&str> = Vec::new();
+            if c.sections.is_empty() {
+                // ponytail: md fallback until `fael plan migrate` gives every plan sections
+                let text = (!c.source.is_empty()).then(|| md(&c.source)).flatten();
+                if let Some(s) = text.map(|t| sections(&t)).filter(|s| !s.is_empty()) {
+                    let _ = write!(o, "\n<!-- {} -->\n{s}", c.source);
+                }
+            } else {
+                let _ = writeln!(o, "\n<!-- plan {} -->", c.plan);
+                for s in c
+                    .sections
+                    .iter()
+                    .filter(|s| base(&s.title, !reads.is_empty()))
+                {
+                    let _ = write!(o, "\n{}", one(s));
+                    shown.push(&s.key);
+                }
+            }
+            for (r, s) in &reads {
+                match s {
+                    Some(s) if shown.contains(&s.key.as_str()) => {}
+                    Some(s) => {
+                        let _ = write!(o, "\n{}", one(s));
+                        shown.push(&s.key);
+                    }
+                    None => {
+                        let _ = writeln!(o, "\nsection {r} not found");
+                    }
+                }
+            }
+            let rest: Vec<&Row> = c
+                .sections
+                .iter()
+                .filter(|s| !shown.contains(&s.key.as_str()))
+                .collect();
+            if !rest.is_empty() {
+                let _ = writeln!(
+                    o,
+                    "\nother sections of {0} — read one: `fael plan export {0} --section <key>`",
+                    c.plan
+                );
+                for s in rest {
+                    let day = s.updated.get(..10).unwrap_or(&s.updated);
+                    let _ = writeln!(o, "- {} · {} · {day}", s.key, s.title);
+                }
             }
             if !c.refs.is_empty() {
                 let refs: Vec<String> = c
@@ -191,114 +251,5 @@ impl Started {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::super::start::{Brief, Started};
-    use super::*;
-
-    const DOC: &str = "# PLAN-x\n\n## TL;DR\n- [ ] 1 — one\n\n## 1. Goal\nship it\n\n\
-                       ## 2. Scope\nonly cli\n\n## 3. Done criteria\ntests pass\n\n\
-                       ## 4. Constraints\n400 lines\n\n## 5. Risks\nnone said\n";
-
-    fn chunk(uid: &str) -> Brief {
-        Brief {
-            uid: uid.into(),
-            label: Some("1".into()),
-            title: format!("title {uid}"),
-            brief: format!("brief {uid}"),
-            size: None,
-            model_hint: None,
-            client_hint: None,
-            scope: None,
-            plan: "x".into(),
-            plan_title: "PLAN-x".into(),
-            source: ".fapony/plan/PLAN-x.md".into(),
-            doc: None,
-            repo: None,
-            refs: vec!["SPEC-x.md#block".into(), "gone.rs".into()],
-            said: vec![],
-            notes: vec![],
-            after: vec![],
-            resume: None,
-            issues: vec![],
-        }
-    }
-
-    #[test]
-    fn the_brief_reads_the_plan_md_live_and_marks_missing_refs() {
-        let s = sections(DOC);
-        for keep in [
-            "## 1. Goal\nship it",
-            "## 2. Scope",
-            "## 3. Done criteria",
-            "## 4. Constraints\n400 lines",
-        ] {
-            assert!(s.contains(keep), "{keep} in {s}");
-        }
-        assert!(!s.contains("TL;DR") && !s.contains("Risks"), "{s}");
-        let st = Started {
-            run: "R".into(),
-            chunks: vec![chunk("A"), chunk("B")],
-        };
-        let md = |src: &str| (src == ".fapony/plan/PLAN-x.md").then(|| DOC.to_string());
-        let t = st.text(&md, &|p| p == "SPEC-x.md");
-        assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
-        assert!(t.contains("\n# 1 — title A (A)\n"), "{t}");
-        let mut imported = chunk("C");
-        imported.title = "1 — from the md".into();
-        let one = Started {
-            run: "R".into(),
-            chunks: vec![imported],
-        };
-        assert!(
-            one.text(&|_| None, &|_| true)
-                .contains("\n# 1 — from the md (C)\n")
-        );
-        assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
-        assert_eq!(
-            t.matches("## 1. Goal").count(),
-            1,
-            "plan context once per plan: {t}"
-        );
-        assert!(
-            t.contains("refs: SPEC-x.md#block · gone.rs (missing)"),
-            "{t}"
-        );
-        assert!(t.contains("fael chunk done A"), "{t}");
-        // what the agent leaves for the owner fits one board line
-        assert!(
-            t.contains("first sentence = the outcome") && t.contains("first line <= 100 chars"),
-            "{t}"
-        );
-        let mut noted = chunk("D");
-        noted.notes = vec!["use v2\nnot v1".into()];
-        noted.after = vec![("b3b".into(), "board ships".into())];
-        let t2 = Started {
-            run: "R".into(),
-            chunks: vec![noted],
-        }
-        .text(&|_| None, &|_| true);
-        assert!(
-            t2.contains("\nnotes left for this chunk:\n> use v2\n> not v1\n")
-                && t2.contains("\nb3b, before this, handed off:\n> board ships\n"),
-            "{t2}"
-        );
-        // a set plan.doc wins over the md file
-        let mut own = chunk("E");
-        own.doc = Some("## 1. Goal\nfrom the db\n".into());
-        let t3 = Started {
-            run: "R".into(),
-            chunks: vec![own],
-        }
-        .text(&md, &|_| true);
-        assert!(
-            t3.contains("<!-- plan doc -->\n## 1. Goal\nfrom the db\n") && !t3.contains("ship it"),
-            "{t3}"
-        );
-        // no plan file (inbox, or a moved md): the brief still prints
-        let t = st.text(&|_| None, &|_| true);
-        assert!(
-            !t.contains("Goal") && t.contains("refs: SPEC-x.md#block · gone.rs\n"),
-            "{t}"
-        );
-    }
-}
+#[path = "brief_tests.rs"]
+mod tests;
