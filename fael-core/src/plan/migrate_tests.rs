@@ -124,7 +124,7 @@ fn migrate_moves_md_and_specs_into_sections_once() {
     let tldr = &list(&s.conn, a.id).unwrap()[0];
     assert_eq!(
         (tldr.title.as_str(), tldr.body.as_str()),
-        ("TL;DR", "Why in one line.")
+        ("Summary", "Why in one line.")
     );
     // the done md plan: its sections, the spec by name, truth flipped
     assert_eq!(keys(&s, "d"), ["1", "d:intro", "d:§1"]);

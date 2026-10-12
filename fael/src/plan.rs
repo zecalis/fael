@@ -9,6 +9,9 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+#[path = "plan_migrate.rs"]
+mod migrate;
+
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
     if let [new, name, title] = rest
@@ -19,7 +22,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     }
     let flags: &[&str] = match rest.first().map(String::as_str) {
         Some("export") => &["json", "since", "section"],
-        Some("apply") => &["dry-run"],
+        Some("apply" | "migrate") => &["dry-run"],
         _ => &[],
     };
     a.only("plan", flags)?;
@@ -35,10 +38,11 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         }
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
         Some("cutover") if rest.len() == 2 => cutover(&r, &rest[1]),
+        Some("migrate") if rest.len() == 1 => migrate::run(&r, open(&r)?, a.has("dry-run")),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("repo") if rest.len() == 3 => code_repo(&r, &rest[1], &rest[2]),
         _ => Err(
-            "rejected: fael plan import | fael plan next | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan> | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
+            "rejected: fael plan import | fael plan next | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan cutover <plan> | fael plan migrate [--dry-run] | fael plan new <name> \"<title>\" | fael plan park|unpark|done <plan> | fael plan repo <plan> <path|-> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -235,19 +239,10 @@ pub(crate) fn mirror(r: &Repo, s: &Store) -> Result<(), String> {
     Ok(())
 }
 
-/// `<root>/.fapony`, `<root>/*/.fapony`, `<root>/*/*/.fapony` (monorepo apps); each one's
-/// `plan/`, `parked/`, `done/`. ponytail: two levels, no config — add a `plan_roots` key
-/// when a repo nests apps deeper.
+/// Every `.fapony/` of [`migrate::apps`]; each one's `plan/`, `parked/`, `done/`.
 fn scan(root: &Path) -> Vec<Import> {
-    let mut apps = vec![PathBuf::new()];
-    for d in subdirs(root) {
-        let rel = PathBuf::from(d.file_name().unwrap_or_default());
-        apps.extend(subdirs(&d).map(|e| rel.join(e.file_name().unwrap_or_default())));
-        apps.push(rel);
-    }
-    apps.sort();
     let mut out = Vec::new();
-    for app in apps {
+    for app in migrate::apps(root) {
         let base = root.join(&app).join(".fapony");
         for dir in ["plan", "parked", "done"] {
             let Ok(rd) = std::fs::read_dir(base.join(dir)) else {
@@ -277,20 +272,6 @@ fn scan(root: &Path) -> Vec<Import> {
         }
     }
     out
-}
-
-fn subdirs(d: &Path) -> impl Iterator<Item = PathBuf> {
-    std::fs::read_dir(d)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| {
-            let n = e.file_name();
-            let n = n.to_string_lossy();
-            !n.starts_with('.') && !matches!(n.as_ref(), "node_modules" | "target")
-        })
-        .map(|e| e.path())
-        .filter(|p| p.is_dir())
 }
 
 fn open(r: &Repo) -> Result<Store, String> {

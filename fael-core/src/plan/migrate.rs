@@ -116,43 +116,8 @@ impl Store {
             }
         }
         let plans: Vec<&Plan> = rows.iter().map(|r| &r.0).collect();
-        let (mut attached, mut orphans) = (0, Vec::new());
-        for s in specs {
-            let Some((p, why)) = owner(&plans, s) else {
-                orphans.push(format!(
-                    "{} — names no plan of this repo (used by: {}), and no plan '{}'",
-                    s.path,
-                    or_none(&used_by(&s.text)),
-                    spec_name(&s.path)
-                ));
-                continue;
-            };
-            let g = got.entry(p.key()).or_default();
-            let x = spec_name(&s.path);
-            if held.contains(&p.id) {
-                g.notes.push(format!("{} skipped with the plan", s.path));
-                continue;
-            }
-            let prefix = format!("{x}:");
-            let there: bool = tx
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM section WHERE plan = ?1
-                       AND substr(key, 1, length(?2)) = ?2)",
-                    params![p.id, prefix],
-                    |r| r.get(0),
-                )
-                .map_err(err)?;
-            if there {
-                g.notes
-                    .push(format!("{} skipped — {prefix}* already there", s.path));
-                continue;
-            }
-            let n = write(&tx, p.id, &prefix, &split(&s.text), &now)?;
-            sections += n;
-            attached += 1;
-            g.notes.push(format!("{} ({why}): {n} sections", s.path));
-            g.safe.push(s.path.clone());
-        }
+        let (n, attached, orphans) = attach(&tx, &plans, &held, specs, &mut got, &now)?;
+        sections += n;
         let mut o = String::new();
         for (k, g) in &got {
             let _ = writeln!(o, "{k}: {}", g.notes.join(" · "));
@@ -189,12 +154,63 @@ impl Store {
     }
 }
 
+/// Each spec's sections onto its plan ([`owner`]), keys `<x>:<key>`; a spec whose plan
+/// already has one of them is skipped. Returns (sections, specs attached, unattached).
+fn attach(
+    tx: &Transaction,
+    plans: &[&Plan],
+    held: &[i64],
+    specs: &[Spec],
+    got: &mut BTreeMap<String, Got>,
+    now: &str,
+) -> Result<(usize, usize, Vec<String>), String> {
+    let (mut sections, mut attached, mut orphans) = (0, 0, Vec::new());
+    for s in specs {
+        let Some((p, why)) = owner(plans, s) else {
+            orphans.push(format!(
+                "{} — names no plan of this repo (used by: {}), and no plan '{}'",
+                s.path,
+                or_none(&used_by(&s.text)),
+                spec_name(&s.path)
+            ));
+            continue;
+        };
+        let g = got.entry(p.key()).or_default();
+        let x = spec_name(&s.path);
+        if held.contains(&p.id) {
+            g.notes.push(format!("{} skipped with the plan", s.path));
+            continue;
+        }
+        let prefix = format!("{x}:");
+        let there: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM section WHERE plan = ?1
+                   AND substr(key, 1, length(?2)) = ?2)",
+                params![p.id, prefix],
+                |r| r.get(0),
+            )
+            .map_err(err)?;
+        if there {
+            g.notes
+                .push(format!("{} skipped — {prefix}* already there", s.path));
+            continue;
+        }
+        let n = write(tx, p.id, &prefix, &split(&s.text), now)?;
+        sections += n;
+        attached += 1;
+        g.notes.push(format!("{} ({why}): {n} sections", s.path));
+        g.safe.push(s.path.clone());
+    }
+    Ok((sections, attached, orphans))
+}
+
 /// An md plan's text as sections: what export prints after the chunks (its TL;DR prose
-/// lands before the first heading, so it becomes section `tldr`).
+/// lands before the first heading, so it becomes section `tldr`, titled apart from the
+/// chunk list's `## TL;DR`).
 fn plan_text(md: &str) -> Vec<(String, String, String)> {
     let mut secs = split(&prose(md));
     if let Some(s) = secs.first_mut().filter(|s| s.0 == "intro") {
-        *s = ("tldr".into(), "TL;DR".into(), std::mem::take(&mut s.2));
+        *s = ("tldr".into(), "Summary".into(), std::mem::take(&mut s.2));
     }
     secs
 }
