@@ -42,7 +42,10 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
                 ..fields(a)
             };
             let plan = a.one("plan").unwrap_or_else(|| "inbox".into());
-            println!("{}", s()?.add(&plan, &f, &list(a, "after"), &now)?);
+            let mut st = s()?;
+            let uid = st.add(&plan, &f, &list(a, "after"), &now)?;
+            println!("{uid}");
+            crate::chunk_scope::warn(&st, &r.root, &uid);
         }
         ["start", uid] => crate::chunk_run::start(a, &r, uid, &here)?,
         ["edit", uid] => {
@@ -52,8 +55,12 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
                     "title", "brief", "size", "model", "client", "scope", "label",
                 ],
             )?;
-            s()?.edit(uid, &fields(a), &now)?;
+            let mut st = s()?;
+            st.edit(uid, &fields(a), &now)?;
             say(uid, "edited");
+            if a.has("scope") {
+                crate::chunk_scope::warn(&st, &r.root, uid);
+            }
         }
         ["note", uid, text] => {
             a.only("chunk note", &[])?;

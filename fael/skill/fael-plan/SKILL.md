@@ -98,7 +98,10 @@ That is the entire question phase. Everything else comes out of the draft.
 Once, before drafting:
 
 ```bash
-fael board --json --open          # every open chunk: plan, scope, after, overlaps — one read
+# open chunks whose scope covers or sits under any of the files this plan touches — one read
+fael board --json --open | jq -r --args '.projects[].chunks[]
+  | select(any(.scope[]; . as $s | any($ARGS.positional[]; . as $p | ($p|startswith($s)) or ($s|startswith($p)))))
+  | "\(.uid) \(.plan)/\(.label) \(.state) \(.title)"' <path> <path>…
 fael find --files <paths>         # open issues and decisions on the files the idea touches
 ```
 
@@ -116,12 +119,19 @@ fael find --files <paths>         # open issues and decisions on the files the i
 fael plan new <name> "<title>" [--app <app>] [--area dev|marketing]
 ```
 
-It prints the doc it wrote — `<app>/.fapony/plan/PLAN-<name>.md`, a Goal / Scope / Done criteria
-/ Constraints skeleton — and refuses a name already taken. Fill those four sections now, from the
-Phase 0 harvest + the Phase 1 answer. Every brief prints this doc under it, so it carries what
-every chunk shares; what one chunk needs goes in that chunk's brief. The TL;DR is fael's: leave
-it alone. Detail (API shapes, schemas, edge-case tables) goes in a spec beside it (Phase 4), linked
-from the doc, never pasted in.
+It writes the plan's doc into plans.db — a Goal / Scope / Done criteria / Constraints skeleton,
+no file anywhere — and refuses a name already taken. Fill those four sections now, from the
+Phase 0 harvest + the Phase 1 answer. Write the doc as a plain markdown file in your scratchpad
+and swap it into the plan's bill — `--rawfile` takes long or non-English text without escaping:
+
+```bash
+fael plan export <name> --json > bill.json
+jq --rawfile doc doc.md '.doc = $doc' bill.json > bill2.json
+fael plan apply bill2.json --dry-run && fael plan apply bill2.json
+```
+
+Every brief prints this doc under it, so it carries what every chunk shares; what one chunk
+needs goes in that chunk's brief. Detail (API shapes, schemas, edge-case tables) is Phase 4.
 
 **Label what each line rests on** — the labels are the whole technique (hard rule 1):
 - `(Observed: <command + result | symbol | fael id>)` — evidence attached; none attached = Proposal
@@ -133,12 +143,13 @@ from the doc, never pasted in.
 the dev agrees, or `(Observed: …)` once measured, or leaves with its line when the line is cut.
 Never drop a label while rewriting text around it.
 
-**Four lines every draft carries — the dev corrects them; they are never questions:**
+**Five lines every draft carries — the dev corrects them; they are never questions:**
 
 ```
 Goal  Home: <closest thing that exists + the command that found it> → extend it | new, because <it can't hold X>
 Goal  Why now: <traceable evidence: who/what uses it, how often, measured when> | <damage it prevents> | <hypothesis it makes testable> | "no evidence yet"
 Done  ≥ 1 criterion runs on real input (a customer file, a live route) or is a case that must fail; a vendor contract cites the vendor's doc
+Scope Obsoletes: <code, columns, flags, docs or chunks this plan makes stale + the grep that finds them> → a chunk deletes them | "nothing, checked with <grep>"
 Measurement (only with a measuring chunk, in its brief): command showing the data exists today + its count · when it reaches N — the Nth event (run, PR, sample) at today's rate, a date only when the window is calendar-bound · baseline taken before the change ships · no chunk here touches that data · held fixed: what both arms share when it compares two · diagnose | evaluate · does not show: <the claim this number cannot carry>
 ```
 
@@ -154,6 +165,7 @@ extends or creates. Grade each line before handing the draft back:
 | Home | a real table/route/module/symbol + the command that checked it (grep, `fael find`), or `(Proposal)` when unchecked | `Home: this plan` · "the system already has X" with no source |
 | Why now | traceable evidence, or "no evidence yet" said plainly | "best practice" · "agents will use it" |
 | Done | ≥ 1 criterion on real input or a failing case | "implementation complete" · a grep for text |
+| Obsoletes | each stale thing named with the grep that finds it, and the chunk that deletes it | "cleanup later" · nothing checked |
 | Measurement | data source + counting command + today's count + what it does not show | a KPI nobody knows where to pull from · two arms with nothing held fixed |
 
 Name symbols, not `file:line` — line refs drift first. "There is no X yet" cites the search that
@@ -169,7 +181,7 @@ One `fael chunk add` per chunk, in order; each prints the new uid:
 
 ```bash
 fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
-  --size S|M|L --model <m> --scope <paths> [--after <uid>,…]
+  --size S|M|L --model <m> --scope <paths> [--after <uid>,…] [--issue <id>,…]
 ```
 
 - **brief** — what the agent that starts it needs and cannot get from the doc: what to build, where
@@ -179,16 +191,25 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   **A measuring chunk fixes its verdict before it runs**: the metric, the data or window it reads,
   the pass threshold, and what each outcome leads to ("if up, revert X"). No brief yet = a
   draft: not startable until `fael chunk edit <uid> --brief …`.
-- **scope** — the paths it edits. The board reports two chunks whose scopes overlap; that is
+- **scope** — the paths it edits, each a file or directory that exists (or a new file in a
+  directory that does) — a typo silently weakens every overlap check. The board reports two chunks whose scopes overlap; that is
   what lets a second worktree take a chunk safely.
 - **after** — the uid(s) or label(s) of the chunks it truly waits on. **No `--after` = ready at once, alongside the
   others**: plans.db has no "waits on the line above". Give it only where the order is real.
+  An order on a chunk already on the board goes through `fael chunk apply` op `after`
+  (Review mode, step 3) — `fael chunk after` is the running agent's verb, answered only from the
+  worktree of that chunk's run.
+- **issue** — the open ledger issue ids the chunk fixes; its brief prints them. The agent closes
+  each once the fix holds (`chunk done` never does).
 - **size / model** — a hint for the owner, who picks who runs it: S an hour, M a session, L split
   it unless it can't be.
 - A chunk that cannot start until a person acts or data accrues (a page brief approved, ≥30
   samples logged): add it without `--brief` — a draft, never started — titled with what it
   waits on; `fael chunk edit <uid> --brief …` once that has happened. (`fael chunk wait` is the
   running agent's verb, not the planner's.)
+- A chunk that waits on an event in another repo (an `--after` never crosses dbs): the full brief
+  now, its first line `Start only after <repo>: <event>`, and the title opens with
+  `after <repo>: <event> —`, so the board shows the wait. Never strip the brief to make it a draft.
 - Don't pre-assign chunks to PRs or worktrees — that is judged when the work starts.
 
 **Editing a plan someone is executing right now is a different job from drafting one.** Read
@@ -239,11 +260,11 @@ Everything else ships as-is or as `_TBD_`. Don't chase it.
 
 ## Phase 4 — Spec (optional)
 
-Only if the dev asks, or the doc keeps trying to describe *how*: draft
-`<app>/.fapony/spec/SPEC-<name>.md` — API contract, entity states, edge cases, example
+Only if the dev asks, or the doc keeps trying to describe *how*: add `## ` sections to the plan
+doc after Constraints, one per topic — API contract, entity states, edge cases, example
 input/output, and fail examples that make the boundaries clear. More concrete examples than
-abstract. It opens with `> **Used by:** PLAN-<name>.md`; the plan doc links it, and each brief that
-needs a section names it.
+abstract. Written through the same bill as Phase 2; no spec file. Each brief that needs one names
+its heading.
 
 ## Review mode — the chunks already on the board
 
@@ -251,6 +272,7 @@ Trigger: `/fael-plan review [<plan>]`, or the dev asks to tidy, re-cut or order 
 
 1. **One read:** `fael board --json --open [--plan <plan>]` — titles, briefs' scopes, `after`,
    `overlaps`, state. Don't re-read per chunk.
+   For one set of files, the Phase 1.5 `jq` line instead.
 2. Propose, one line each with why:
    - **merge** — two chunks that edit the same files for one outcome
    - **split** — a chunk with two outcomes, or L that can be cut

@@ -129,7 +129,8 @@ fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk pin <uid> <rank> · fael chunk unpin <uid> · fael chunk approve <uid> --model M --client C · fael chunk unapprove <uid>
     (only a plan whose chunks live in plans.db — inbox, or one cut over; add prints
-     the new uid, no brief = draft; --issue links open ledger issues it fixes (its
+     the new uid, no brief = draft; add and edit warn on a --scope path whose directory is
+     missing or a typo of a name beside it (the plan repo's checkout); --issue links open ledger issues it fixes (its
      brief prints them; close each once the fix holds, done never does); a --label is unique in its plan and every verb
      takes it for the uid; show prints one chunk as the board has it, with the brief
      and notes its next start prints; start claims the chunk and its pair in one step
