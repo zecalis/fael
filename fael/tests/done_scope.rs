@@ -84,7 +84,12 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     let want = "declared scope: l1/\noutside, in inbox/o: o/x.txt\noutside, unowned: stray.txt";
     assert_eq!(block, want);
 
-    // all inside: no block
-    let out = f(&["chunk", "done", &l2, "h", "--run", "R2"]);
+    // the lead merges in the lane's own worktree, now on a wave branch: ending the run there
+    // must not swap its branch for the cwd's before done reads it; all inside: no block
+    let w2 = d.with_file_name("lane2");
+    git(&w2, &["switch", "-q", "-c", "wave2", "wave"]);
+    let out = fael(&w2, &state, &["chunk", "done", &l2, "h", "--run", "R2"]);
     assert!(!out.contains("declared scope"), "{out}");
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &l2, "--json"])).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["l2/b.txt"]));
 }

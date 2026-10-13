@@ -93,12 +93,13 @@ pub(crate) fn done(
         .is_some()
         .then_some(&mut copy as &mut fael_core::plan::Copy<'_>);
     let mut st = Store::open(&db(r))?;
-    st.done(uid, handoff, pr, out, here)?;
     // issue 01M4TFB5: the run's branch, not the cwd's — a lead's done per lane from the wave
-    // branch diffs that lane only
+    // branch diffs that lane only. Read before done: ending the run from its own worktree
+    // stamps the cwd's branch on it, and a lead merges there on the wave branch
     // ponytail: commits on that branch from before chunk start count as the chunk's; the
     // run's start commit would cut them, not recorded
     let branch = st.run_branch(uid, here.run);
+    st.done(uid, handoff, pr, out, here)?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
