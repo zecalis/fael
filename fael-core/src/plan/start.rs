@@ -49,8 +49,9 @@ pub struct Brief {
     pub said: Vec<String>,
     /// `fael chunk note` texts since this chunk last started
     pub notes: Vec<String>,
-    /// `(title, handoff)`: the done / review word of each chunk this one is after
-    pub after: Vec<(String, String)>,
+    /// `(title, handoff, scope)`: the done / review word of each chunk this one is after,
+    /// and the files its done claimed (one path per line, empty when none)
+    pub after: Vec<(String, String, String)>,
     /// the run this start took over or restarted — where the last agent stopped
     pub resume: Option<Prev>,
     /// the ledger issue ids it fixes (`add --issue`); the CLI swaps each for its row's text
@@ -311,7 +312,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
     b.issues = super::issue::of(tx, id)?;
     let mut q = tx
         .prepare(
-            "SELECT c.title, e.text FROM edge g
+            "SELECT c.title, e.text, COALESCE(c.scope, '') FROM edge g
              JOIN chunk c ON c.id = g.dst
              JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid
                                        AND by = 'agent' AND to_state IN ('done', 'review'))
@@ -320,7 +321,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
         )
         .map_err(err)?;
     b.after = q
-        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)?;
