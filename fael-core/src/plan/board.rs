@@ -133,7 +133,8 @@ impl Store {
                 "SELECT c.id, c.uid, p.app, p.name, c.label, c.title, c.state, c.size,
                         c.model_hint, c.scope, c.wait_on, c.wait_text, c.wait_until,
                         c.approved_at, c.approved_model, c.approved_client, c.seq, c.wait_options,
-                        c.ticket_source, c.ticket_ref, c.ticket_kind, c.ticket_reopen
+                        c.ticket_source, c.ticket_ref, c.ticket_kind, c.ticket_reopen,
+                        (SELECT verdict FROM run WHERE chunk = c.id ORDER BY id DESC LIMIT 1)
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
                  ORDER BY p.app, p.name, c.seq",

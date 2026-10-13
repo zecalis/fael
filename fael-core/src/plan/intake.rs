@@ -54,9 +54,12 @@ pub struct Ticket {
     pub kind: String,
     pub reopen: i64,
     pub open: Option<String>,
+    /// `chunk done --verdict` of the latest run; null = none yet
+    pub verdict: Option<String>,
 }
 
-/// The board's `ticket` from the four `chunk.ticket_*` columns starting at `at`.
+/// The board's `ticket` from the four `chunk.ticket_*` columns starting at `at`, then the
+/// latest run's verdict.
 pub(super) fn ticket(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Ticket>> {
     r.get::<_, Option<String>>(at)?
         .map(|source| {
@@ -66,6 +69,7 @@ pub(super) fn ticket(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Ti
                 kind: r.get(at + 2)?,
                 reopen: r.get(at + 3)?,
                 open: None,
+                verdict: r.get(at + 4)?,
             })
         })
         .transpose()
