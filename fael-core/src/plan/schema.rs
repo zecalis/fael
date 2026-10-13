@@ -54,6 +54,8 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// `chunk.touched`: the paths `done` claimed from the branch's diff, one per line; NULL = never
 /// claimed, so a brief never calls a declared scope touched (issue 01M4TPHMR).
 /// `chunk.ticket_*`: the ticket `fael intake` brought in (source, ref, kind, reopen round).
+/// `run.base`: HEAD's sha at `chunk start`, so `done` never claims commits from before it
+/// (issue 01M4TVDGG: a lane stacked on another's branch).
 pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("chunk", "reads", "TEXT"),
     ("chunk", "wait_options", "TEXT"),
@@ -63,6 +65,7 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("chunk", "ticket_kind", "TEXT"),
     ("chunk", "ticket_reopen", "INTEGER"),
     ("run", "verdict", "TEXT"),
+    ("run", "base", "TEXT"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open

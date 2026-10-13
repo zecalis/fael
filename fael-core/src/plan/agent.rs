@@ -219,8 +219,21 @@ impl Store {
             .flatten()
     }
 
+    /// HEAD at `uid`'s first start that recorded one: a restart after a wait keeps the WIP
+    /// commits of the runs before it. None = no run recorded one (older runs, `--no-worktree`).
+    pub fn run_base(&self, uid: &str) -> Option<String> {
+        self.conn
+            .query_row(
+                "SELECT r.base FROM run r JOIN chunk c ON c.id = r.chunk
+                 WHERE c.uid = ?1 AND r.base IS NOT NULL ORDER BY r.id LIMIT 1",
+                [uid],
+                |q| q.get(0),
+            )
+            .ok()
+    }
+
     /// `done`'s diff against `uid`'s declared scope, before `claim` replaces it: the declared
-    /// scope, then each path not under it with the `plan/label` of another unfinished chunk
+    /// scope (its pair's with it), then each path not under it with the `plan/label` of another unfinished chunk
     /// whose scope covers it (board's prefix rule), None = unowned. A `shared` path is
     /// nobody's and left out; no declared scope = nothing to compare, nothing said.
     pub fn outside(
@@ -232,13 +245,25 @@ impl Store {
         let lines = |s: Option<String>| -> Vec<String> {
             s.unwrap_or_default().lines().map(String::from).collect()
         };
-        let declared = lines(
-            self.conn
-                .query_row("SELECT scope FROM chunk WHERE uid = ?1", [uid], |q| {
-                    q.get(0)
-                })
-                .map_err(err)?,
-        );
+        // a pair is one run's work: its partners' scopes are declared too
+        let declared: Vec<String> = self
+            .conn
+            .prepare(
+                "SELECT c.scope FROM chunk c WHERE c.uid = ?1 OR c.id IN (
+                   SELECT e.dst FROM edge e JOIN chunk s ON s.id = e.src
+                   WHERE s.uid = ?1 AND e.kind = 'pair'
+                   UNION SELECT e.src FROM edge e JOIN chunk d ON d.id = e.dst
+                   WHERE d.uid = ?1 AND e.kind = 'pair')
+                 ORDER BY c.seq",
+            )
+            .map_err(err)?
+            .query_map([uid], |q| q.get(0))
+            .map_err(err)?
+            .collect::<Result<Vec<Option<String>>, _>>()
+            .map_err(err)?
+            .into_iter()
+            .flat_map(lines)
+            .collect();
         let others: Vec<(String, Vec<String>)> = self
             .conn
             .prepare(
