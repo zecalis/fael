@@ -43,9 +43,12 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// `chunk.reads`: the sections a chunk works from, one `<key>` or `<plan>/<key>` per line
 /// (`chunk add|edit --reads`) — a column like `scope`, since `edge.kind`'s CHECK has no `reads`.
 /// `chunk.wait_options`: a JSON array of the answers `chunk wait --option` offers (01M4NWFS).
+/// `chunk.touched`: the paths `done` claimed from the branch's diff, one per line; NULL = never
+/// claimed, so a brief never calls a declared scope touched (issue 01M4TPHMR).
 pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("chunk", "reads", "TEXT"),
     ("chunk", "wait_options", "TEXT"),
+    ("chunk", "touched", "TEXT"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open

@@ -168,7 +168,7 @@ impl Store {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         tx.execute(
-            "UPDATE chunk SET scope = ?1 WHERE id = ?2",
+            "UPDATE chunk SET scope = ?1, touched = ?1 WHERE id = ?2",
             params![s, r.id],
         )
         .map_err(err)?;
