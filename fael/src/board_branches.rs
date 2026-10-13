@@ -12,7 +12,7 @@ use std::path::Path;
 #[derive(Serialize)]
 pub(super) struct Branch {
     name: String,
-    /// `local` never pushed · `pushed` a live upstream · `merged` its content is on the base,
+    /// `local` never pushed · `pushed` a live upstream of its own name · `merged` its content is on the base,
     /// or its upstream is gone (a merged PR the remote deleted)
     state: &'static str,
     chunks: Vec<String>,
@@ -70,7 +70,8 @@ fn state(
     if track == "[gone]" || ahead.as_deref() == Some("0") {
         return "merged";
     }
-    if !up.is_empty() {
+    // its own name on a remote: `git branch x origin/main` tracks main, x is not pushed
+    if up.ends_with(&format!("/{b}")) {
         return "pushed";
     }
     // merging it changes nothing: every change is on the base already (a squash merge)
