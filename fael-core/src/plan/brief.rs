@@ -117,12 +117,16 @@ impl Started {
             );
             quote(&mut o, "owner said", &c.said);
             quote(&mut o, "notes left for this chunk", &c.notes);
-            for (who, text) in &c.after {
+            for (who, text, scope) in &c.after {
                 quote(
                     &mut o,
                     &format!("{who}, before this, handed off"),
                     std::slice::from_ref(text),
                 );
+                let files: Vec<&str> = scope.lines().filter(|l| !l.is_empty()).collect();
+                if !files.is_empty() {
+                    let _ = writeln!(o, "files it touched: {}", files.join(", "));
+                }
             }
         }
         self.plan_context(&mut o);
