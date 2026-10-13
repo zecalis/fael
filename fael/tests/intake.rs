@@ -145,7 +145,7 @@ fn tickets_become_one_chunk_each_in_any_plan() {
     assert_eq!(
         r42["ticket"],
         serde_json::json!({"source": "t", "ref": "V-0042", "kind": "report", "reopen": 0,
-                           "open": "https://staff.test/i/V-0042"})
+                           "open": "https://staff.test/i/V-0042", "verdict": null})
     );
     assert_eq!(by_label(&d, "v-0042-r1")[0]["ticket"]["reopen"], 1);
     let b42 = brief(&d, r42["uid"].as_str().unwrap());
