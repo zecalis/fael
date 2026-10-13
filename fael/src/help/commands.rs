@@ -120,7 +120,7 @@ fael chunk move <uid> --plan <p>
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
 fael chunk after <uid> <other-uid> \"<why>\" [--run R]
-fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--run R]
+fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--verdict fix|answer|consider|plan|decline] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
@@ -139,7 +139,8 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      latest run and end it, or to --run R naming that run; wait --on owner --option offers the answers
      the owner picks from; done --pr N lands in done (push pr is the ok) — an owner/repo#N or URL of
      another repo than this one's origin is refused; done without a PR in review until accept; done takes the run's branch's diff against origin/HEAD as the scope
-     and prints each path outside the declared one, unowned or in <plan>/<label>; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
+     and prints each path outside the declared one, unowned or in <plan>/<label>; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; --verdict
+     only on a ticket chunk (fael intake), shown as ticket.verdict on board --json; edit
      never changes the state and clears an approval; move puts a chunk at the end of
      another db plan of this repo with its uid, runs, notes and edges — refused while it
      runs, into a parked or done plan, or onto a label the plan has; apply runs every op or none —

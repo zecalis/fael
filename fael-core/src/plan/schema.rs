@@ -62,6 +62,7 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("chunk", "ticket_ref", "TEXT"),
     ("chunk", "ticket_kind", "TEXT"),
     ("chunk", "ticket_reopen", "INTEGER"),
+    ("run", "verdict", "TEXT"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open

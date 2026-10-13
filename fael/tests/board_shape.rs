@@ -55,7 +55,7 @@ const ROW_KEYS: &[&str] = &[
 ];
 /// `chunk.ticket` (plan fael-intake): only on a chunk `fael intake` brought in; `open` = the
 /// source's staff url with the ref filled, null when the source left `.fael/sources.json`
-const TICKET_KEYS: &[&str] = &["source", "ref", "kind", "reopen", "open"];
+const TICKET_KEYS: &[&str] = &["source", "ref", "kind", "reopen", "open", "verdict"];
 const SIGNALS: &[&str] = &["drifted"];
 const STATES: &[&str] = &[
     "draft", "open", "running", "waiting", "review", "done", "replaced", "dropped", "parked",
