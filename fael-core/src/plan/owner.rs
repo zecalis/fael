@@ -3,7 +3,7 @@
 use super::chunk::{end_live, row, set, tx};
 use super::store::{Store, err};
 use super::{State, allowed, check};
-use rusqlite::params;
+use rusqlite::{Transaction, params};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Owner {
@@ -57,9 +57,50 @@ impl Owner {
     }
 }
 
+/// Owner commands from the board, never fenced: `answer` (waiting or review → open, the
+/// next start's brief prints it), `accept` (review → done), `drop`, `park`, `unpark`. `by`
+/// writes the event: `owner`, or `intake` when the ticket's source closed it.
+pub(super) fn owner_in(
+    tx: &Transaction,
+    uid: &str,
+    cmd: Owner,
+    text: Option<&str>,
+    by: &str,
+    now: &str,
+) -> Result<(), String> {
+    let r = row(tx, uid)?;
+    let to = match cmd {
+        Owner::Answer | Owner::Unpark => State::Open,
+        Owner::Accept => State::Done,
+        Owner::Drop => State::Dropped,
+        Owner::Park => State::Parked,
+    };
+    if !cmd.takes(r.state) {
+        let st = r.state.as_str();
+        return Err(match cmd {
+            Owner::Answer => format!(
+                "rejected: chunk {uid} is {st} — `answer` replies to a waiting chunk or sends a review back"
+            ),
+            Owner::Accept => {
+                format!("rejected: chunk {uid} is {st} — `accept` takes a chunk in review")
+            }
+            Owner::Unpark => format!("rejected: chunk {uid} is {st}, not parked"),
+            // the state table's reject; set() skips it when the state stays (park a parked)
+            Owner::Park | Owner::Drop => {
+                format!("{} ({uid})", check(r.state, to).err().unwrap_or_default())
+            }
+        });
+    }
+    set(tx, &r, to, by, text, now)?;
+    if to == State::Open {
+        super::agent::unwait(tx, r.id)?;
+    }
+    end_live(tx, r.id, now)?;
+    Ok(())
+}
+
 impl Store {
-    /// Owner commands from the board, never fenced: `answer` (waiting or review → open, the
-    /// next start's brief prints it), `accept` (review → done), `drop`, `park`, `unpark`.
+    /// See [`owner_in`]; the owner writes it.
     pub fn owner(
         &mut self,
         uid: &str,
@@ -68,34 +109,7 @@ impl Store {
         now: &str,
     ) -> Result<(), String> {
         let tx = tx(self)?;
-        let r = row(&tx, uid)?;
-        let to = match cmd {
-            Owner::Answer | Owner::Unpark => State::Open,
-            Owner::Accept => State::Done,
-            Owner::Drop => State::Dropped,
-            Owner::Park => State::Parked,
-        };
-        if !cmd.takes(r.state) {
-            let st = r.state.as_str();
-            return Err(match cmd {
-                Owner::Answer => format!(
-                    "rejected: chunk {uid} is {st} — `answer` replies to a waiting chunk or sends a review back"
-                ),
-                Owner::Accept => {
-                    format!("rejected: chunk {uid} is {st} — `accept` takes a chunk in review")
-                }
-                Owner::Unpark => format!("rejected: chunk {uid} is {st}, not parked"),
-                // the state table's reject; set() skips it when the state stays (park a parked)
-                Owner::Park | Owner::Drop => {
-                    format!("{} ({uid})", check(r.state, to).err().unwrap_or_default())
-                }
-            });
-        }
-        set(&tx, &r, to, "owner", text, now)?;
-        if to == State::Open {
-            super::agent::unwait(&tx, r.id)?;
-        }
-        end_live(&tx, r.id, now)?;
+        owner_in(&tx, uid, cmd, text, "owner", now)?;
         tx.commit().map_err(err)
     }
 

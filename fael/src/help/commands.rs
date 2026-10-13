@@ -163,6 +163,19 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      chunk command there adds it back)",
     ),
     (
+        "intake",
+        "bring tickets from the team's other systems in as inbox chunks",
+        "fael intake [<source>]
+    (runs each source's `list` in .fael/sources.json (or the one named) with sh -c — cmd /C
+     on Windows — at the repo root; every JSONL line must carry exactly ref, kind, title,
+     reopen, closed, else nothing is written and the command exits 1 naming the line; a
+     ticket round (source+ref+reopen) gets one chunk in any plan: an open one with none is
+     added to inbox (label lower(ref), -rN when reopened, size S, a brief with its read,
+     open, claim and draft commands), a chunk labelled so with no ticket is adopted, one
+     that has a chunk is left alone; fael runs only `list` and never writes to the
+     source; prints one line per change, then a count; board --json shows chunk.ticket)",
+    ),
+    (
         "plan",
         "create a plan, export or edit its sections and chunks, park or finish it",
         "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]

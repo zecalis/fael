@@ -19,6 +19,7 @@ mod find;
 mod help;
 mod hook;
 mod install;
+mod intake;
 mod journal;
 mod maintain;
 mod mcp;
@@ -108,6 +109,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),
         ("plan", rest) => plan::cmd(&a, rest),
         ("board", []) => board::cmd(&a),
+        ("intake", [] | [_]) => intake::cmd(&a, rest.first()),
         ("chunk", rest) => chunk::cmd(&a, rest),
         ("run", [end, r]) if end == "end" => chunk::run_end(&a, r),
         ("run", [beat, r]) if beat == "beat" => chunk::run_beat(&a, r),

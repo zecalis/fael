@@ -129,7 +129,8 @@
           "stalled": false, "ended": false, "wait": null, "approval": null,
           "run": { "id": "R7", "client": "claude", "session": null, "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "fix/plan-count", "pr": 377, "out": null, "started": "2026-10-10T06:00:00Z", "last_seen": "2026-10-10T06:30:00Z", "ended": "2026-10-10T06:31:00Z", "cost": null },
           "handoff": { "at": "2026-10-10T06:31:00Z", "text": "The plan card count reads the chunk list. PR #377." },
-          "issues": ["01M4NA00000000000000000001"], "owner_actions": []
+          "issues": ["01M4NA00000000000000000001"], "owner_actions": [],
+          "ticket": { "source": "vela-support", "ref": "V-0042", "kind": "report", "reopen": 0, "open": "https://staff.example/staff/incidents/V-0042" }
         }
       ],
       "ledger": {

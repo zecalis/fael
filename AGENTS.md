@@ -16,7 +16,8 @@ guard. Value is work context (`task (key) → decision → evidence → outcome 
 of the right agent, once — never more rows. Rounds and tokens are a cost to keep low, never a promise.
 
 Decision `product:mission` (plan `PLAN-fael-board`): a change ships when it fixes a bug, cuts
-noise, removes code, or serves the plan → chunk → agent → ship loop. The owner's SwiftUI app
+noise, removes code, serves the plan → chunk → agent → ship loop, or brings work in from the
+team's other systems (intake, 01M4TJTW). The owner's SwiftUI app
 reads `fael board --json` and starts an agent only on the owner's click or from a queue
 the owner approved; dev chunks are started by the owner or by a plan's lead agent, after
 the owner approves its wave (decision 01M4QVH4; the lead lives in zecalis/fael-crew, 01M4SQ9B), and the app only shows them;
