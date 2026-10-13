@@ -258,11 +258,25 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
     }
     let sp = PathBuf::from(src);
     let sp = if sp.is_absolute() { sp } else { r.cwd.join(sp) };
+    // a repo root: its journal, where every row lands since #418, plus a frozen
+    // tree log if one is left — never every *.jsonl under the root (fixtures)
+    let journal = sp.join(".git").exists().then(|| crate::journal::root(&sp));
+    let journal = journal
+        .flatten()
+        .map(|j| j.join("log"))
+        .filter(|d| d.is_dir());
+    let (sp, also) = match journal {
+        Some(j) => {
+            let tree = sp.join(".fael/log");
+            (j, tree.is_dir().then_some(tree).into_iter().collect())
+        }
+        None => (sp, vec![]),
+    };
     let rep = core::import(
         &r.fael,
         r.journal.as_deref(),
         &sp,
-        &core::ImportOpts { maps },
+        &core::ImportOpts { maps, also },
     )?;
     for w in &rep.warnings {
         eprintln!("{w}");

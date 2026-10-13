@@ -1,7 +1,7 @@
 //! `fael import` — merge another log in, without dropping a row (SPEC §6).
 //!
-//! The source is a log file, a `.fael/log` dir or a repo root (its
-//! `.fael/log`). Output lands in immutable `log/_import/<ULID>.jsonl`, with a
+//! The source is a log file, a log dir or a repo root (the CLI passes its
+//! journal, plus its `.fael/log` in `Opts::also`). Output lands in immutable `log/_import/<ULID>.jsonl`, with a
 //! `.close.jsonl` companion when closes name no row here: a close folds into
 //! its target's `closed` when the target is in the import. A row with no id
 //! gets `legacy-<sha1 8 hex of the line>`; unknown fields round-trip through
@@ -19,6 +19,9 @@ pub struct Opts {
     /// `(old_prefix, new_prefix)` path rewrites for `files` (moving into a
     /// monorepo subfolder); first match wins, anchors never match.
     pub maps: Vec<(String, String)>,
+    /// More sources read after `src`, each resolved like it (a repo root's
+    /// frozen `.fael/log` beside its journal).
+    pub also: Vec<PathBuf>,
 }
 
 #[derive(Debug, Default)]
@@ -43,7 +46,10 @@ pub fn import(
     opts: &Opts,
 ) -> Result<Report, String> {
     let _guard = lock(fael)?;
-    let files = sources(src)?;
+    let mut files = sources(src)?;
+    for a in &opts.also {
+        files.extend(sources(a)?);
+    }
     let (mut adds, mut closes) = (vec![], vec![]);
     let mut skipped = 0usize;
     let mut warnings = vec![];

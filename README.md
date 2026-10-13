@@ -135,7 +135,7 @@ an old path. That's also why `npx @zecalis/fael install` is refused: npx keeps t
 throwaway cache. Install it globally first.
 
 **3. Work as usual.** Rows land in `.git/fael/` — nothing to commit. To bring in another clone's
-rows: `fael import <path>` (a log file, a `.fael/log` dir or a repo root; importing twice is safe).
+rows: `fael import <path>` (a log file, a log dir or a repo root — its journal plus any `.fael/log`; importing twice is safe).
 
 A `.fael/log/` already committed in a repo stays read as frozen history; new rows never go there.
 

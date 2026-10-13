@@ -77,6 +77,7 @@ fn import_map_rewrites_prefixes_not_anchors() {
         &src,
         &ImportOpts {
             maps: vec![("old/".into(), "new/".into())],
+            ..Default::default()
         },
     )
     .unwrap();

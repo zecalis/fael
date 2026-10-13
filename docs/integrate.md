@@ -75,7 +75,7 @@ publishes no memory and a PR carries no log lines. Every worktree and agent on t
 the same journal. To bring in rows from another clone or machine, copy its log over and import it:
 
 ```bash
-fael import ../other-clone/.git/fael/log   # that clone's journal; importing twice is safe
+fael import ../other-clone               # that clone's journal (+ any .fael/log); importing twice is safe
 fael import old.jsonl --map src/=lib/      # one log file, a path prefix rewritten on the way in
 ```
 
