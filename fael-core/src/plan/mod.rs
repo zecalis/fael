@@ -26,7 +26,7 @@ pub use agent::{Copy, Outside};
 pub use apply::Op;
 pub use bill::Bill;
 pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};
-pub use board_math::overlaps;
+pub use board_math::{overlap, overlaps};
 pub use brief::rules;
 pub use chunk::{Fields, Here};
 pub use export::{export, export_json, export_section, feed};
