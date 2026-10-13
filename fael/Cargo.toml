@@ -6,7 +6,7 @@ rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/zecalis/fael"
 homepage = "https://github.com/zecalis/fael"
-description = "fael CLI — a repo's memory that agents can't skip writing"
+description = "fael CLI — the repo's work ledger, handed to each agent at the file or chunk it works on"
 
 [dependencies]
 fael-core = { path = "../fael-core", default-features = false }
