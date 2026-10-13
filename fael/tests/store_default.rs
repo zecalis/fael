@@ -59,16 +59,13 @@ fn a_fresh_repo_keeps_rows_out_of_the_tree() {
     let (ok, out, err) = fael(&d, &["doctor"]);
     assert!(ok, "{out}{err}");
     assert!(
-        out.contains("[Local]") && out.contains("fael.remote"),
+        out.contains("[Local]") && !out.contains("fael.remote"),
         "{out}"
     );
     assert!(
         !out.contains("[NoLog]") && !out.contains("[Union]"),
         "{out}"
     );
-    git(&d, &["config", "fael.remote", "/nowhere.git"]);
-    let (_, out, _) = fael(&d, &["doctor"]);
-    assert!(!out.contains("fael.remote"), "remote set, no hint: {out}");
 }
 
 /// Decision 01M3YQT4: a tree log no longer makes a repo `tracked` — its rows

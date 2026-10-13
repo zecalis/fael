@@ -215,8 +215,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      another row supersedes or restores it, when the id names a close event
      (use fael restore for those), when it lives in an immutable compact file,
      or when the file has lines `read` would skip — run `fael doctor --fix` first;
-     the next sync keeps it from coming back; copies already in a teammate's
-     journal stay until purged there too)",
+     copies already in another clone stay until purged there too)",
     ),
     (
         "hook",
@@ -289,14 +288,6 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "fael import <path> [--map old/=new/]
     (import rows from a log file, a .fael/log dir or a repo root; a close folds into its
      row; importing twice is safe; --map rewrites a path prefix, repeatable)",
-    ),
-    (
-        "sync",
-        "push and ingest writer journals",
-        "fael sync [--remote url]
-    (push this writer's journal to refs/fael/<repo-id>/<writer> on the remote
-     and ingest every writer's ref back; --remote wins, else git config
-     fael.remote; set it with: git config fael.remote <url>)",
     ),
     (
         "mcp",

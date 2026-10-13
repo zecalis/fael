@@ -68,41 +68,15 @@ the same one. Every worktree of a clone shares one journal, so a row filed in on
 in all of them, and `fael doctor` flags local branches whose PR already merged (`[Merged]`) for
 deletion.
 
-## Private memory repo (public source, private memory)
+## Rows from another clone
 
-A public repo should not publish its team's memory. Keep the source on GitHub and the memory in a
-separate private Git repo: rows go to a ref under `refs/fael/` on **that** remote, never to `origin`.
-Format and push rules: [`sync-format.md`](sync-format.md).
-
-Once per source repo — commit this, it holds no memory, only the switch that keeps rows out of the tree:
+Rows live in the clone's journal (`.git/fael/log/<writer>/`), never in the tree, so a public repo
+publishes no memory and a PR carries no log lines. Every worktree and agent on the machine reads
+the same journal. To bring in rows from another clone or machine, copy its log over and import it:
 
 ```bash
-mkdir -p .fael && echo 'store = "local"' > .fael/config.toml
-git add .fael/config.toml && git commit -m "fael: keep rows out of the tree"
+fael import ../other-clone/.git/fael/log   # that clone's journal; importing twice is safe
+fael import old.jsonl --map src/=lib/      # one log file, a path prefix rewritten on the way in
 ```
 
-Once per machine (`fael.remote` lives in `.git/config` and is never committed; auth is your own Git
-credential; the URL can be any private Git repo, Gitea/Forgejo, or a bare repo on a NAS):
-
-```bash
-git config fael.remote git@github.com:acme/my-project-memory.git   # an empty private repo
-fael sync                       # push your rows, ingest everyone else's
-```
-
-A fresh clone gets the team's memory back with the same two commands — the source carries no
-`.fael/log`, the rows arrive from the private remote into the local journal:
-
-```bash
-git clone git@github.com:acme/my-project.git && cd my-project
-git config fael.remote git@github.com:acme/my-project-memory.git
-fael sync                       # synced: pushed 0, ingested N
-fael find --all
-```
-
-Point `fael.remote` at `origin` on a public repo and `fael sync` warns (the ref is fetchable by
-anyone).
-
-With `fael.remote` set, the Stop hook also runs `fael sync` in the background — once per session for each newest row you have filed, so a Stop with nothing new starts nothing: a dead
-network or a failed login skips it (the last run's output is `auto-sync-<hash>.log`, one per worktree, in fael's per-machine
-state dir) and never holds the turn. Rows filed after a session's last stop ship with the next session's first, or run
-`fael sync` yourself. Turn it off with `[sync] auto = false` in `.fael/config.toml`; there is no daemon.
+Sharing between people, continuously, is the separate fael-sync service, not part of fael.

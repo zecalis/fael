@@ -173,25 +173,3 @@ fn session_start_briefs_the_user_on_issues_said() {
         off["hookSpecificOutput"]["additionalContext"]
     );
 }
-
-/// PLAN-fael-local-first chunk 2: under `local`, a failed sync says rows may
-/// be stuck in this clone once per session — a quiet turn after it says nothing.
-#[test]
-fn a_failed_sync_is_said_once_per_session() {
-    let d = repo();
-    std::fs::write(
-        d.join(".fael/config.toml"),
-        "store = \"local\"\n[sync]\nauto = false\n",
-    )
-    .unwrap();
-    add(&d, &["add", "note", "stuck here", "--files", "src/a.rs"]);
-    let (ok, _, _) = fael(&d, &["sync", "--remote", "/nowhere/fael.git"], "");
-    assert!(!ok, "a missing remote fails");
-    let out = stop(&d).unwrap();
-    let line = out["systemMessage"].as_str().unwrap();
-    assert!(
-        line.contains("\nfael: last sync failed (") && line.contains("may be only in this clone"),
-        "no good sync yet, so no count: {line}"
-    );
-    assert!(stop(&d).is_none(), "said once per session");
-}

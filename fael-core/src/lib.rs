@@ -20,7 +20,6 @@ pub mod plan;
 mod query;
 mod row;
 pub mod stats;
-pub mod sync;
 mod validate;
 
 /// The commit a dev build came from (`abc1234`, `abc1234.dirty`); None on a release.
@@ -45,8 +44,7 @@ pub use id::{
 pub use lang::{Hit, Lang, by_name, fixed_hit, marker_hit, row_language_check};
 pub use log::{
     BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, append, bump_row, close, close_row,
-    decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, read_imported,
-    restore_row,
+    decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, restore_row,
 };
 pub use query::{
     ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, AUTO, Abbrev, BASELINE, Background, Bucket, CUT_BUDGET,

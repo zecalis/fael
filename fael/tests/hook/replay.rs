@@ -61,7 +61,6 @@ fn fixture() -> PathBuf {
     git(&d, &["add", "src"]);
     git(&d, &["commit", "-q", "-m", "init"]);
     std::fs::create_dir_all(d.join(".fael/log/fixture")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "[sync]\nauto = false\n").unwrap();
     let same = format!(r#","fh":{{"src/a.rs":"{}"}}"#, blob(&d, "src/a.rs"));
     let changed = r#","fh":{"src/a.rs":"000000000000"}"#;
     let mut rows = vec![];

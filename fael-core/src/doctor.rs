@@ -127,13 +127,8 @@ pub enum Kind {
     /// dry pass in `doctor`, never in core (core never reads client configs).
     /// Info-only: it is machine state, not the repo's log.
     Wiring,
-    /// rows that have not reached their destination: this writer's rows not
-    /// on the remote after a failed `fael sync`, or a repo that shared by
-    /// commit with no remote set (PLAN-fael-local-first chunk 2);
-    /// judged in the adapter (git, sync state), never in core. Info-only.
-    Late,
     /// a row (open or closed) whose serialised line trips `validate::secret`
-    /// — the ingress checks (add, import, sync ingest) prevent this, so what
+    /// — the ingress checks (add, import) prevent this, so what
     /// lands here predates them or was hand-edited in. Detect-only by design:
     /// never `--fix`ed, the owner rotates the token and then `fael purge`s the
     /// row. Names the label and location, never the token.

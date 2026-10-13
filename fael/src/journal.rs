@@ -180,8 +180,8 @@ fn union(r: &crate::Repo) -> (crate::core::Log, HashSet<String>) {
     (log, only)
 }
 
-/// The union read, untagged and raw (bump events not folded) — sync ships
-/// it; the hooks, the write path and `doctor` go through `crate::read`.
+/// The union read, untagged and raw (bump events not folded); the hooks,
+/// the write path and `doctor` go through `crate::read`.
 pub(crate) fn merged(r: &crate::Repo) -> crate::core::Log {
     union(r).0
 }

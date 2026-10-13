@@ -119,9 +119,6 @@ const REJECTS: &[(&str, &str)] = &[
     ("RFC 3339", "bad_format"),
     ("folder name", "bad_format"),
     ("is gone", "bad_format"),
-    ("ref path", "bad_format"),
-    ("repo_id", "bad_format"),
-    ("format_version", "bad_format"),
     ("is a percent", "bad_format"),
     ("— want", "bad_format"),
     ("shows nothing", "bad_format"),
@@ -147,7 +144,6 @@ const WARNINGS: &[(&str, &str)] = &[
     ("the user's call", "supersedes_user"),
     ("was held @", "claim_taken"),
     ("warning: scope", "chunk_scope"),
-    ("fael.remote is set", "purge_remote"),
     ("warning: commit ", "unmerged"),
     // self-heal wraps another warning; that one's needle wins above
     ("— key ", "key_moved"),

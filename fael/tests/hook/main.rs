@@ -3,7 +3,7 @@
 //!
 //! Thin entry only — the suites sit next to this file:
 //! `autoupdate` (session-start's daily self-update check and its one Notice),
-//! `stop` (turn end: bug lines stashed, never a block), `autosync` (once-per-session `fael sync`), `stop_lang` ([lang] marker/rows packs),
+//! `stop` (turn end: bug lines stashed, never a block), `stop_lang` ([lang] marker/rows packs),
 //! `session` (session-start + edit push), `clients` (codex/claude shapes), `stats` (usage accounting),
 //! `changed_hint` (PLAN-fael-file-hash chunk 2: the edit hint names changed rows),
 //! `shadow` (PLAN-fael-file-hash chunk 3: an edit records no shadow),
@@ -17,7 +17,6 @@
 //! a fix phrase or a `fix:` commit with nothing filed).
 
 mod adopted;
-mod autosync;
 mod autoupdate;
 mod capture;
 mod changed_hint;

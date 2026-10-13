@@ -56,11 +56,6 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
         local_note(&r),
     ));
     let log = crate::read(&r);
-    if let Some(l) = crate::sync::late_line(&r, &log) {
-        let l = l.strip_prefix("fael: ").unwrap_or(&l).to_string();
-        rep.problems
-            .push(core::Problem::info(core::ProblemKind::Late, l));
-    }
     let behind = crate::install::pending();
     if behind > 0 {
         rep.problems.push(core::Problem::info(
@@ -96,20 +91,13 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     })
 }
 
-/// Where a `local` repo's rows live, and — with no `fael.remote` — that
-/// nothing carries them off this clone yet.
+/// Where a `local` repo's rows live.
 fn local_note(r: &crate::Repo) -> String {
     let at = r
         .journal
         .as_deref()
         .map_or_else(|| r.fael.display().to_string(), |j| j.display().to_string());
-    let mut s = format!("rows live in {at}, shared by every worktree of this clone");
-    if crate::git(&r.root, &["config", "fael.remote"]).is_none() {
-        s.push_str(
-            "; nothing copies them off this clone — `git config fael.remote <url>` then `fael sync` to back up or share",
-        );
-    }
-    s
+    format!("rows live in {at}, shared by every worktree of this clone")
 }
 
 /// The adapter half of `doctor --fix`: close the confirmed `[Shipped]` notes,
@@ -276,10 +264,6 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
         &sp,
         &core::ImportOpts { maps },
     )?;
-    // imported rows are older than the late watermark but pushed by this clone
-    if rep.adds > 0 {
-        crate::sync::forget_mark(&r);
-    }
     for w in &rep.warnings {
         eprintln!("{w}");
     }

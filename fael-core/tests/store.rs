@@ -39,12 +39,12 @@ fn journal_lines(dir: &std::path::Path) -> Vec<String> {
 }
 
 #[test]
-fn store_tracked_is_rejected_toward_sync_and_local_still_parses() {
+fn store_tracked_is_rejected_toward_import_and_local_still_parses() {
     assert!(Config::from_toml("").is_ok());
     assert!(Config::from_toml("store = \"local\"").is_ok());
     let e = Config::from_toml("store = \"tracked\"").unwrap_err();
     assert!(
-        e.contains("is gone") && e.contains("fael sync --remote"),
+        e.contains("is gone") && e.contains("fael import <path>") && e.contains("fael-sync"),
         "{e}"
     );
     let e = Config::from_toml("store = \"cloud\"").unwrap_err();
@@ -56,6 +56,8 @@ fn a_retired_plan_dirs_field_still_parses() {
     // PLAN-fael-plan-focus dropped the active plan line; configs written for
     // it keep loading instead of failing every command
     assert!(Config::from_toml("plan_dirs = [\"docs/plans\"]\nstore = \"local\"").is_ok());
+    // decision 01M4SQ9B cut `fael sync`; its `[sync] auto` switch is ignored
+    assert!(Config::from_toml("[sync]\nauto = false\n").is_ok());
 }
 
 #[test]
