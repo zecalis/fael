@@ -68,8 +68,8 @@ fn list(r: &Repo, cmd: &str) -> Result<String, String> {
         .map_err(|e| format!("list: {sh}: {e}"))?;
     match o.status.code() {
         Some(0) => String::from_utf8(o.stdout).map_err(|_| "list: stdout is not UTF-8".into()),
-        // 127: sh found no such command · 9009: cmd's
-        Some(127 | 9009) => Err(format!("list: command not found — {cmd}")),
+        // sh found no such command; cmd /C exits 1 and prints its own "not recognized" line
+        Some(127) => Err(format!("list: command not found — {cmd}")),
         c => Err(format!(
             "list exited {} — nothing written",
             c.map_or("on a signal".into(), |c| c.to_string())

@@ -244,10 +244,13 @@ fn a_failing_list_writes_nothing() {
     let o = run(&d, &["intake"]);
     let err = String::from_utf8_lossy(&o.stderr);
     assert_eq!(o.status.code(), Some(1));
-    assert!(
-        err.contains("list: command not found — no-such-fael-adapter list"),
-        "{err}"
-    );
+    // cmd /C exits 1 with its own "is not recognized" line; sh exits 127
+    let want = if cfg!(windows) {
+        "list exited 1 — nothing written"
+    } else {
+        "list: command not found — no-such-fael-adapter list"
+    };
+    assert!(err.contains(want), "{err}");
     // nothing was ever written: no db, or one with no chunk
     assert!(run(&d, &["board", "--json"]).stdout.is_empty() || chunks(&d).is_empty());
 }
