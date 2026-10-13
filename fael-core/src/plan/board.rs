@@ -148,7 +148,6 @@ impl Store {
                 let state: String = r.get(6)?;
                 let scope: Option<String> = r.get(9)?;
                 let at: Option<String> = r.get(13)?;
-                let src: Option<String> = r.get(18)?;
                 let waiting = state == "waiting";
                 Ok((
                     id,
@@ -193,17 +192,7 @@ impl Store {
                         handoff: None,
                         issues: Vec::new(),
                         owner_actions: Owner::actions(&state),
-                        ticket: src
-                            .map(|source| -> rusqlite::Result<super::Ticket> {
-                                Ok(super::Ticket {
-                                    source,
-                                    what: r.get(19)?,
-                                    kind: r.get(20)?,
-                                    reopen: r.get(21)?,
-                                    open: None,
-                                })
-                            })
-                            .transpose()?,
+                        ticket: super::intake::ticket(r, 18)?,
                         conflicts: None,
                         seq: r.get(16)?,
                         label,

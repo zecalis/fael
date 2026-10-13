@@ -54,6 +54,21 @@ pub struct Ticket {
     pub open: Option<String>,
 }
 
+/// The board's `ticket` from the four `chunk.ticket_*` columns starting at `at`.
+pub(super) fn ticket(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Ticket>> {
+    r.get::<_, Option<String>>(at)?
+        .map(|source| {
+            Ok(Ticket {
+                source,
+                what: r.get(at + 1)?,
+                kind: r.get(at + 2)?,
+                reopen: r.get(at + 3)?,
+                open: None,
+            })
+        })
+        .transpose()
+}
+
 /// `.fael/sources.json`, by name.
 pub fn sources(json: &str) -> Result<Vec<Source>, String> {
     let m: BTreeMap<String, Source> =
