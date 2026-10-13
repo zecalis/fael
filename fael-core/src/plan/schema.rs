@@ -11,8 +11,9 @@ use std::time::Duration;
 /// add something open the shared db both ways (issue 01M4MN60).
 pub(super) const VERSION: i32 = 8;
 
-/// New tables, `(name, sql)`: the sql runs once when the table is missing — its
-/// `CREATE TABLE` and indexes, `IF NOT EXISTS` so a race is harmless.
+/// New tables and indexes, `(name, sql)`: the sql runs once when `name` is missing — its
+/// `CREATE TABLE` or `CREATE … INDEX`, `IF NOT EXISTS` so a race is harmless. An index runs
+/// after [`COLUMNS`], so it may name a column added there.
 pub(super) const TABLES: &[(&str, &str)] = &[
     (
         "chunk_issue",
@@ -36,6 +37,13 @@ pub(super) const TABLES: &[(&str, &str)] = &[
        seq INTEGER NOT NULL,
        UNIQUE(plan, key))",
     ),
+    (
+        "chunk_ticket",
+        // one chunk per ticket round (plan fael-intake, 01M4TKVY): two intakes at once
+        // serialize on the write lock; this makes a duplicate impossible besides
+        "CREATE UNIQUE INDEX IF NOT EXISTS chunk_ticket
+           ON chunk(ticket_source, ticket_ref, ticket_reopen) WHERE ticket_ref IS NOT NULL",
+    ),
 ];
 
 /// New columns, `(table, column, decl)`, added when missing. Nullable or with a DEFAULT,
@@ -45,10 +53,15 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// `chunk.wait_options`: a JSON array of the answers `chunk wait --option` offers (01M4NWFS).
 /// `chunk.touched`: the paths `done` claimed from the branch's diff, one per line; NULL = never
 /// claimed, so a brief never calls a declared scope touched (issue 01M4TPHMR).
+/// `chunk.ticket_*`: the ticket `fael intake` brought in (source, ref, kind, reopen round).
 pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("chunk", "reads", "TEXT"),
     ("chunk", "wait_options", "TEXT"),
     ("chunk", "touched", "TEXT"),
+    ("chunk", "ticket_source", "TEXT"),
+    ("chunk", "ticket_ref", "TEXT"),
+    ("chunk", "ticket_kind", "TEXT"),
+    ("chunk", "ticket_reopen", "INTEGER"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open
@@ -58,16 +71,21 @@ pub(super) fn missing(
     tables: &[(&str, &str)],
     columns: &[(&str, &str, &str)],
 ) -> rusqlite::Result<String> {
-    let mut sql = String::new();
+    let (mut sql, mut index) = (String::new(), String::new());
     for (name, create) in tables {
         let n: i64 = c.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            "SELECT COUNT(*) FROM sqlite_master WHERE name = ?1",
             [name],
             |r| r.get(0),
         )?;
         if n == 0 {
-            sql += create;
-            sql += ";";
+            let to = if create.contains(" INDEX ") {
+                &mut index
+            } else {
+                &mut sql
+            };
+            *to += create;
+            *to += ";";
         }
     }
     for (table, col, decl) in columns {
@@ -80,7 +98,7 @@ pub(super) fn missing(
             sql += &format!("ALTER TABLE {table} ADD COLUMN {col} {decl};");
         }
     }
-    Ok(sql)
+    Ok(sql + &index)
 }
 
 pub(super) const SCHEMA: &str = "

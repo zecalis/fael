@@ -175,6 +175,7 @@ fn project(
     }
     let s = Store::open(&path)?;
     let mut b = s.board(today, stale)?;
+    crate::intake::open_urls(&r.root, &mut b.chunks);
     let base = git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
     let shared = prs::open_prs(&mut b.chunks, &r.root, base.as_deref());
     // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps

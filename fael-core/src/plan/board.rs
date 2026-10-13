@@ -49,6 +49,9 @@ pub struct Chunk {
     pub issues: Vec<String>,
     /// the owner verbs fael takes for this chunk now (`Owner::takes`)
     pub owner_actions: Vec<&'static str>,
+    /// the ticket `fael intake` brought in; absent = none
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ticket: Option<super::Ticket>,
     /// an open PR's branch merged into the base (`git merge-tree`, the CLI fills it): the
     /// conflicted paths, empty = merges clean; absent = not checked or git < 2.38
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -129,7 +132,8 @@ impl Store {
             .prepare(
                 "SELECT c.id, c.uid, p.app, p.name, c.label, c.title, c.state, c.size,
                         c.model_hint, c.scope, c.wait_on, c.wait_text, c.wait_until,
-                        c.approved_at, c.approved_model, c.approved_client, c.seq, c.wait_options
+                        c.approved_at, c.approved_model, c.approved_client, c.seq, c.wait_options,
+                        c.ticket_source, c.ticket_ref, c.ticket_kind, c.ticket_reopen
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
                  ORDER BY p.app, p.name, c.seq",
@@ -144,6 +148,7 @@ impl Store {
                 let state: String = r.get(6)?;
                 let scope: Option<String> = r.get(9)?;
                 let at: Option<String> = r.get(13)?;
+                let src: Option<String> = r.get(18)?;
                 let waiting = state == "waiting";
                 Ok((
                     id,
@@ -188,6 +193,17 @@ impl Store {
                         handoff: None,
                         issues: Vec::new(),
                         owner_actions: Owner::actions(&state),
+                        ticket: src
+                            .map(|source| -> rusqlite::Result<super::Ticket> {
+                                Ok(super::Ticket {
+                                    source,
+                                    what: r.get(19)?,
+                                    kind: r.get(20)?,
+                                    reopen: r.get(21)?,
+                                    open: None,
+                                })
+                            })
+                            .transpose()?,
                         conflicts: None,
                         seq: r.get(16)?,
                         label,
