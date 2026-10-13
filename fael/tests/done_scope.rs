@@ -52,7 +52,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     let tmp = std::env::temp_dir().join(format!("fael-done-scope-{}", fael_core::ulid()));
     let (d, state) = (tmp.join("repo"), tmp.join("state"));
     std::fs::create_dir_all(&d).unwrap();
-    let d = d.canonicalize().unwrap();
+    // no canonicalize: Windows' `\\?\C:\…` breaks `git worktree add`, and no path is compared
     git(&d, &["init", "-q", "-b", "main"]);
     std::fs::write(d.join("README"), "base").unwrap();
     git(&d, &["add", "README"]);
