@@ -62,9 +62,9 @@ git push -q origin main --follow-tags
 
 echo "v$old -> v$new pushed."
 
-# owner's machine: pull every fael worktree onto the new main (alias fael-sync); skipped where `repos` is absent
+# owner's machine: pull every fael worktree onto the new main (alias fael-pull); skipped where `repos` is absent
 # a worktree that can't fast-forward is not a release failure — report it and keep going
-if command -v repos >/dev/null 2>&1; then repos fael sync || echo "release: fael sync had failures (above) — continuing" >&2; fi
+if command -v repos >/dev/null 2>&1; then repos fael pull || echo "release: fael pull had failures (above) — continuing" >&2; fi
 
 # wait for the tag's release.yml (GitHub Release + npm + brew), then move this machine's npm install onto it
 run=
