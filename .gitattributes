@@ -1,5 +1,3 @@
-# append-only memory logs: keep both sides, never hand-resolve
-*.jsonl merge=union
 # golden pages compare byte for byte: no CRLF on a Windows checkout
 fael/tests/golden/** -text
 fael/tests/hook/golden/** -text
