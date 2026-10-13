@@ -4,7 +4,8 @@
 
 use crate::plan::db;
 use crate::{Args, Repo, core};
-use fael_core::plan::{Here, Start, Store};
+use fael_core::plan::{Here, Start, Started, Store, overlap};
+use std::collections::HashSet;
 use std::path::Path;
 
 /// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
@@ -45,7 +46,48 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         }
     }
     print!("{}", st.text());
+    contracts(r, &st);
     Ok(())
+}
+
+/// Each open `contract:*` row whose files overlap a started chunk's scope (the board's
+/// prefix rule), as `id title` + body after the brief; none → no heading. fael never builds
+/// a contract or a scope from brief text.
+fn contracts(r: &Repo, st: &Started) {
+    let scope: Vec<String> = st
+        .chunks
+        .iter()
+        .filter_map(|c| c.scope.as_deref())
+        .flat_map(str::lines)
+        .map(String::from)
+        .collect();
+    if scope.is_empty() {
+        return;
+    }
+    let log = crate::read(r);
+    let hide = core::closed(&log);
+    let hide: HashSet<&str> = hide.union(&core::superseded(&log)).copied().collect();
+    let rows: Vec<_> = log
+        .rows
+        .iter()
+        .filter(|w| w.key.as_deref().is_some_and(|k| k.starts_with("contract:")))
+        .filter(|w| !hide.contains(w.id.as_str()) && overlap(&w.files, &scope))
+        .collect();
+    if rows.is_empty() {
+        return;
+    }
+    println!("\ncontracts:");
+    for w in rows {
+        let title = w
+            .title
+            .as_deref()
+            .map(|t| format!("{t}\n"))
+            .unwrap_or_default();
+        println!(
+            "> {}",
+            format!("{} {title}{}", w.id, w.text).replace('\n', "\n> ")
+        );
+    }
 }
 
 pub(crate) fn done(

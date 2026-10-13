@@ -83,7 +83,10 @@ fn the_brief_prints_the_plan_sections_once() {
     );
     let mut noted = chunk("D");
     noted.notes = vec!["use v2\nnot v1".into()];
-    noted.after = vec![("b3b".into(), "board ships".into())];
+    noted.after = vec![
+        ("b3b".into(), "board ships".into(), "a/x.rs\nb/y.rs".into()),
+        ("b3c".into(), "no files".into(), String::new()),
+    ];
     let t2 = Started {
         run: "R".into(),
         chunks: vec![noted],
@@ -91,7 +94,11 @@ fn the_brief_prints_the_plan_sections_once() {
     .text();
     assert!(
         t2.contains("\nnotes left for this chunk:\n> use v2\n> not v1\n")
-            && t2.contains("\nb3b, before this, handed off:\n> board ships\n"),
+            && t2.contains(
+                "\nb3b, before this, handed off:\n> board ships\nfiles it touched: a/x.rs, b/y.rs\n"
+            )
+            && t2.contains("\nb3c, before this, handed off:\n> no files\n")
+            && t2.matches("files it touched").count() == 1,
         "{t2}"
     );
     // a plan with no sections (inbox): the brief still prints
