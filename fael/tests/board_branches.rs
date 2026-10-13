@@ -74,6 +74,8 @@ fn branches_say_push_state_and_the_chunks_a_stack_holds() {
         "refs/remotes/origin/main",
     ];
     git(&d, &head);
+    // a stack cut from origin/main tracks it: still never pushed
+    git(&d, &["branch", "-q", "-u", "origin/main", "talk"]);
     // a lane's run, landed on a stack no worktree holds
     git(&d, &["switch", "-q", "-c", "lane", "main"]);
     fael(&d, &state, &["chunk", "start", &lane]);
