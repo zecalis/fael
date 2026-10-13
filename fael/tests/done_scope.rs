@@ -3,7 +3,7 @@
 //! touched outside its declared scope: unowned, or in the open chunk whose scope holds it.
 
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
@@ -32,11 +32,18 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(ok, "git {args:?}");
 }
 
-/// A lane in its own worktree on `branch`: start `uid` as run `run`, commit `files`.
-fn lane(d: &Path, state: &Path, uid: &str, branch: &str, run: &str, files: &[&str]) {
+/// A lane in its own worktree on `branch` off `from`: start `uid` as run `run`, commit `files`.
+fn lane(
+    d: &Path,
+    state: &Path,
+    uid: &str,
+    (branch, from): (&str, &str),
+    run: &str,
+    files: &[&str],
+) {
     let w = d.with_file_name(branch);
     let wt = w.to_str().unwrap();
-    git(d, &["worktree", "add", "-q", "-b", branch, wt, "main"]);
+    git(d, &["worktree", "add", "-q", "-b", branch, wt, from]);
     fael(&w, state, &["chunk", "start", uid, "--run", run]);
     for f in files {
         let p = w.join(f);
@@ -47,8 +54,8 @@ fn lane(d: &Path, state: &Path, uid: &str, branch: &str, run: &str, files: &[&st
     git(&w, &["commit", "-qm", branch]);
 }
 
-#[test]
-fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope() {
+/// A repo on `main` with `origin/HEAD` set and `Cargo.lock` shared; returns (repo, state dir).
+fn init() -> (PathBuf, PathBuf) {
     let tmp = std::env::temp_dir().join(format!("fael-done-scope-{}", fael_core::ulid()));
     let (d, state) = (tmp.join("repo"), tmp.join("state"));
     std::fs::create_dir_all(&d).unwrap();
@@ -62,6 +69,12 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     git(&d, &["symbolic-ref", head, "refs/remotes/origin/main"]);
     std::fs::create_dir_all(d.join(".fael")).unwrap();
     std::fs::write(d.join(".fael/shared"), "Cargo.lock\n").unwrap();
+    (d, state)
+}
+
+#[test]
+fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope() {
+    let (d, state) = init();
     let f = |args: &[&str]| fael(&d, &state, args);
     let add = |label: &str, scope: &str| {
         let args = ["--brief", "b", "--label", label, "--scope", scope];
@@ -69,8 +82,8 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     };
     let (l1, l2, _o) = (add("l1", "l1/"), add("l2", "l2/"), add("o", "o/"));
     let l1_files = ["l1/a.txt", "stray.txt", "o/x.txt", "Cargo.lock"];
-    lane(&d, &state, &l1, "lane1", "R1", &l1_files);
-    lane(&d, &state, &l2, "lane2", "R2", &["l2/b.txt"]);
+    lane(&d, &state, &l1, ("lane1", "main"), "R1", &l1_files);
+    lane(&d, &state, &l2, ("lane2", "main"), "R2", &["l2/b.txt"]);
     // the lead's wave branch merges both lanes
     git(&d, &["switch", "-q", "-c", "wave", "main"]);
     git(&d, &["merge", "-q", "--no-edit", "lane1", "lane2"]);
@@ -109,4 +122,50 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     assert!(out.ends_with("outside, unowned: solo.txt"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &s, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["s/a.txt", "solo.txt"]));
+}
+
+#[test]
+fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own_diff() {
+    let (d, state) = init();
+    let f = |args: &[&str]| fael(&d, &state, args);
+    let add = |label: &str, more: &[&str]| {
+        let scope = format!("{label}/");
+        let args = [
+            "chunk", "add", label, "--brief", "b", "--label", label, "--scope", &scope,
+        ];
+        f(&[&args[..], more].concat())
+    };
+    // two small chunks in order: paired, one start claims both (no `--force` past the
+    // after), one worktree, and each done lands under the same run
+    let p1 = add("p1", &[]);
+    let p2 = add("p2", &["--after", &p1]);
+    let pair = format!(r#"[{{"op":"pair","chunks":["{p1}","{p2}"]}}]"#);
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["chunk", "apply", "--json", "-"])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", &state)
+        .env_remove("FAEL_DIR")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::io::Write::write_all(&mut c.stdin.take().unwrap(), pair.as_bytes()).unwrap();
+    assert!(c.wait().unwrap().success());
+    let both = ["p1/a.txt", "p2/b.txt"];
+    lane(&d, &state, &p2, ("lanep", "main"), "RP", &both);
+    // each done of the pair: the partner's files are the pair's, never "outside"
+    for u in [&p1, &p2] {
+        let out = f(&["chunk", "done", u, "h", "--run", "RP"]);
+        assert!(!out.contains("declared scope"), "{out}");
+        let c: Value = serde_json::from_str(&f(&["chunk", "show", u, "--json"])).unwrap();
+        assert_eq!(c["scope"], serde_json::json!(both));
+    }
+
+    // issue 01M4TVDGG: lane b starts on lane a's unmerged branch — done claims b's files only
+    let (a, b) = (add("a", &[]), add("b", &[]));
+    lane(&d, &state, &a, ("lanea", "main"), "RA", &["a/x.txt"]);
+    lane(&d, &state, &b, ("laneb", "lanea"), "RB", &["b/y.txt"]);
+    let out = f(&["chunk", "done", &b, "h", "--run", "RB"]);
+    assert!(!out.contains("declared scope"), "{out}");
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &b, "--json"])).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["b/y.txt"]));
 }

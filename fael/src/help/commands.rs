@@ -131,14 +131,14 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      takes it for the uid; --reads names the plan sections it works from (another
      plan's as plan/key): its brief prints Goal, Done and those, then an index of the
      rest (no --reads: Goal, Scope, Done, Constraints; one still empty is skipped); show prints one chunk as the board has it, its hand-off,
-     the brief and notes its next start prints; start claims the chunk and its pair in one step
+     the brief and notes its next start prints; start claims the chunk and its pair in one step (an after between them is met by plan order)
      and prints the brief, R on its first line — a second start is told who holds it,
      --force takes it over, and starts one blocked by an after; --no-worktree (a client that writes a file and exits)
      takes no worktree slot, and from Claude Code without --run binds its session,
      whose Stop hook keeps the run seen from any cwd; wait, after and done answer only to the worktree of the
      latest run and end it, or to --run R naming that run; wait --on owner --option offers the answers
      the owner picks from; done --pr N lands in done (push pr is the ok) — an owner/repo#N or URL of
-     another repo than this one's origin is refused; done without a PR in review until accept; done takes the run's branch's diff against origin/HEAD as the scope
+     another repo than this one's origin is refused; done without a PR in review until accept; done takes the run's branch's diff against origin/HEAD, since the chunk's first start, as the scope
      and prints each path outside the declared one, unowned or in <plan>/<label>; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; --verdict
      only on a ticket chunk (fael intake), shown as ticket.verdict on board --json; edit
      never changes the state and clears an approval; move puts a chunk at the end of

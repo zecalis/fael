@@ -213,7 +213,9 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   others**: fael.db has no "waits on the line above". Give it only where the order is real.
   An order on a chunk already on the board goes through `fael chunk apply` op `after`
   (Review mode, step 3) — `fael chunk after` is the running agent's verb, answered only from the
-  worktree of that chunk's run.
+  worktree of that chunk's run. Two small chunks in order on one code path also get a `pair`:
+  one start claims both and does them in plan order, so the `after` between them never blocks
+  and nobody starts the second with `--force`.
 - **reads** — the section keys it works from (`<plan>/<key>` for another plan's): its brief
   prints Goal, Done and those, then an index of the rest. None = Goal, Scope, Done, Constraints.
 - **issue** — the open ledger issue ids the chunk fixes; its brief prints them. The agent closes
@@ -246,7 +248,10 @@ First check the draft against this skill — `fael board --plan <name>` shows it
 - every `L` chunk is split, or its brief says why it can't be;
 - two chunks whose scopes overlap are ordered with `--after`, or the brief says why they can run together;
 - every `--scope` path exists (or is a new file in a directory that does), and every path a
-  brief tells the agent to edit sits under its chunk's scope.
+  brief tells the agent to edit sits under its chunk's scope — with the callers of each type,
+  field, fn, flag or column it changes (grep them, tests and the CLI's arg list included);
+- every scoped file the brief grows is checked with `wc -l`: one within ~100 lines of the
+  repo's cap has its folder scoped, not the file.
 
 Then — the part that must not be dropped — invite corrections in chat, in ~8 lines:
 
@@ -316,8 +321,11 @@ Every plan of the repo at once: `review --all` below.
 3. Propose, one line each with why:
    - **merge** — two chunks that edit the same files for one outcome
    - **split** — a chunk with two outcomes, or L that can be cut
-   - **pair** — two chunks that must start and land together
+   - **pair** — two chunks that must start and land together, or two small ones in order on one
+     code path (one run does both; Phase 2, after)
    - **after** — an order the board doesn't know (overlapping scope, one needs the other's output)
+   - **scope** — a path the brief edits, or a caller of what it changes, outside its scope; a
+     scoped file near the line cap (Phase 3 checks)
    - **move** — a chunk whose outcome belongs to another open plan of this repo; it keeps its
      uid, runs, notes and edges
    - **drop** — done already, or replaced by a decision; the evidence is the grep hit, commit or

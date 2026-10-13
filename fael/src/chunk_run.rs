@@ -28,6 +28,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         no_worktree: a.has("no-worktree"),
         force: a.has("force"),
         session: session.clone(),
+        base: crate::git(&r.root, &["rev-parse", "HEAD"]),
     };
     let mut st = Store::open(&db(r))?.start(uid, &o, here)?;
     if let Some(m) = session.as_deref().and_then(crate::chunk::held) {
@@ -138,8 +139,6 @@ pub(crate) fn done(
     // issue 01M4TFB5: the run's branch, not the cwd's — a lead's done per lane from the wave
     // branch diffs that lane only. Read before done: ending the run from its own worktree
     // stamps the cwd's branch on it, and a lead merges there on the wave branch
-    // ponytail: commits on that branch from before chunk start count as the chunk's; the
-    // run's start commit would cut them, not recorded
     // issue 01M4TPHM: a run started on the trunk, then switched, has no branch of its own
     // recorded — the cwd's is the work
     let head = crate::git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
@@ -152,9 +151,10 @@ pub(crate) fn done(
     let range = trunk
         .as_deref()
         .map(|b| format!("{b}...{}", branch.as_deref().unwrap_or("HEAD")));
+    let tip = branch.as_deref().unwrap_or("HEAD");
     let diff: Option<Vec<String>> = range
         .and_then(|g| crate::git(&r.root, &["diff", "--name-only", &g]))
-        .map(|d| d.lines().map(String::from).collect());
+        .map(|d| since(&r.root, st.run_base(uid), tip, d.lines()));
     let shared = fael_core::plan::shared(&r.root).unwrap_or_default();
     let outside = diff.as_ref().and_then(|d| st.outside(uid, d, &shared).ok());
     if let Some(d) = &diff {
@@ -176,6 +176,27 @@ pub(crate) fn done(
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }
     Ok(())
+}
+
+/// Issue 01M4TVDGG: of the trunk diff, only the paths changed since the run's start commit —
+/// a lane stacked on another lane's branch never claims that lane's files, and a rebase onto
+/// the trunk since start never claims the trunk's (the trunk diff cuts them). No base
+/// recorded: the trunk diff as is; nothing since the base: nothing claimed.
+fn since<'a>(
+    dir: &Path,
+    base: Option<String>,
+    tip: &str,
+    diff: impl Iterator<Item = &'a str>,
+) -> Vec<String> {
+    let Some(b) = base else {
+        return diff.map(String::from).collect();
+    };
+    let since =
+        crate::git(dir, &["diff", "--name-only", &format!("{b}...{tip}")]).unwrap_or_default();
+    let since: HashSet<&str> = since.lines().collect();
+    diff.filter(|f| since.contains(f))
+        .map(String::from)
+        .collect()
 }
 
 /// `owner/repo` of `owner/repo#12` or `…/owner/repo/pull/12`; None for `12` or `#12`.

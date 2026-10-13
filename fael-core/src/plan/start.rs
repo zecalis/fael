@@ -26,6 +26,8 @@ pub struct Start {
     /// the calling agent's session (`CLAUDE_CODE_SESSION_ID`) on a start without `--run`:
     /// kept for `--resume` even when `done` ends the run before any Stop
     pub session: Option<String>,
+    /// HEAD's sha in the worktree at start → `run.base`, where `done`'s diff begins
+    pub base: Option<String>,
 }
 
 /// One claimed chunk, with what its brief needs.
@@ -146,7 +148,8 @@ impl Store {
             ));
         }
         let mut claim = Vec::new();
-        for m in members(&tx, first.id)? {
+        let ms = members(&tx, first.id)?;
+        for m in ms.iter().cloned() {
             let r = row(&tx, &m)?;
             let pair = if m == first.uid {
                 String::new()
@@ -177,7 +180,7 @@ impl Store {
             } else {
                 // a chunk whose work shipped before its after was met still needs a run
                 // to reach done: `--force` starts it, and the event says what it skipped
-                let text = match ready_in(&tx, r.id, today)? {
+                let text = match ready_paired(&tx, r.id, today, &ms)? {
                     Ready::Yes => None,
                     Ready::Blocked(u) => {
                         let w: Vec<_> = u.into_iter().map(|u| u.uid.unwrap_or(u.what)).collect();
@@ -206,8 +209,8 @@ impl Store {
         let mut chunks = Vec::new();
         for (r, was) in claim {
             tx.execute(
-                "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     run,
                     r.id,
@@ -216,7 +219,8 @@ impl Store {
                     wt,
                     wt.and(here.branch),
                     here.now,
-                    o.session
+                    o.session,
+                    wt.and(o.base.as_deref())
                 ],
             )
             .map_err(err)?;
@@ -228,6 +232,24 @@ impl Store {
         tx.commit().map_err(err)?;
         Ok(Started { run, chunks })
     }
+}
+
+/// `ready_in`, but an after on a chunk of its own pair is met by plan order: one run does both.
+fn ready_paired(tx: &Transaction, id: i64, today: &str, pair: &[String]) -> Result<Ready, String> {
+    Ok(match ready_in(tx, id, today)? {
+        Ready::Blocked(u) => {
+            let u: Vec<_> = u
+                .into_iter()
+                .filter(|u| !u.uid.as_ref().is_some_and(|x| pair.contains(x)))
+                .collect();
+            if u.is_empty() {
+                Ready::Yes
+            } else {
+                Ready::Blocked(u)
+            }
+        }
+        r => r,
+    })
 }
 
 /// The live start R in a worktree, if any.
