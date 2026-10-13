@@ -165,3 +165,20 @@ fn size_is_s_m_or_l_and_an_edit_clears_the_approval() {
     let q = "SELECT size || ' ' || COALESCE(approved_at, 'unapproved') FROM chunk WHERE uid = ?1";
     assert_eq!(get(&s, q, &c).as_deref(), Some("L unapproved"));
 }
+
+/// Issue 01M4RRD1K: done's diff replaces the declared scope; a path the scope rule refuses
+/// is left out, and no diff keeps what was declared.
+#[test]
+fn claim_takes_the_real_diff_as_scope() {
+    let mut s = Store::open_in_memory().unwrap();
+    let c = add(&mut s, "c", Some("b"));
+    s.conn
+        .execute("UPDATE chunk SET scope = 'x/' WHERE uid = ?1", [&c])
+        .unwrap();
+    let scope = |s: &Store| get(s, "SELECT scope FROM chunk WHERE uid = ?1", &c);
+    s.claim(&c, &[]).unwrap();
+    assert_eq!(scope(&s).as_deref(), Some("x/"));
+    let diff = ["a.rs", "app/[id]/page.tsx", "docs/b.md"].map(String::from);
+    s.claim(&c, &diff).unwrap();
+    assert_eq!(scope(&s).as_deref(), Some("a.rs\ndocs/b.md"));
+}

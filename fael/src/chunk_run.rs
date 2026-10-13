@@ -92,11 +92,19 @@ pub(crate) fn done(
     let out = src
         .is_some()
         .then_some(&mut copy as &mut fael_core::plan::Copy<'_>);
-    Store::open(&db(r))?.done(uid, handoff, pr, out, here)?;
+    let mut st = Store::open(&db(r))?;
+    st.done(uid, handoff, pr, out, here)?;
+    let trunk = base_of(&r.root, here.branch);
+    // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
+    // keeps the declared scope
+    let range = trunk.as_deref().map(|b| format!("{b}...HEAD"));
+    if let Some(diff) = range.and_then(|g| crate::git(&r.root, &["diff", "--name-only", &g])) {
+        let _ = st.claim(uid, &diff.lines().map(String::from).collect::<Vec<_>>());
+    }
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
-    if pr.is_some() {
-        conflict_note(&r.root, here.branch);
+    if let (Some(trunk), Some(_)) = (trunk, pr) {
+        conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }
     Ok(())
 }
@@ -113,16 +121,17 @@ fn pr_repo(pr: &str) -> Option<String> {
     Some(format!("{}/{name}", parts.next()?))
 }
 
-/// Decision 01M4QJPX: a PR whose branch no longer merges into the base (`origin/HEAD`, no
-/// fetch, as board does) is told which files — never refused; a git error says nothing.
-fn conflict_note(dir: &Path, branch: Option<&str>) {
-    let Some(base) = crate::git(dir, &["rev-parse", "--abbrev-ref", "origin/HEAD"]) else {
-        return;
-    };
-    let Some(b) = branch.filter(|b| Some(*b) != base.strip_prefix("origin/")) else {
-        return;
-    };
-    let files = crate::board::prs::merge_tree(dir, &base, "HEAD").unwrap_or_default();
+/// The base (`origin/HEAD`, no fetch, as board does) when `branch` is another branch.
+fn base_of(dir: &Path, branch: Option<&str>) -> Option<String> {
+    let base = crate::git(dir, &["rev-parse", "--abbrev-ref", "origin/HEAD"])?;
+    branch.filter(|b| Some(*b) != base.strip_prefix("origin/"))?;
+    Some(base)
+}
+
+/// Decision 01M4QJPX: a PR whose branch no longer merges into the base is told which
+/// files — never refused; a git error says nothing.
+fn conflict_note(dir: &Path, base: &str, b: &str) {
+    let files = crate::board::prs::merge_tree(dir, base, "HEAD").unwrap_or_default();
     if !files.is_empty() {
         let files = files.join(", ");
         println!("note: {b} conflicts with {base} in {files} — rebase before review");
