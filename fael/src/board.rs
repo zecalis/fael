@@ -37,6 +37,9 @@ struct Project {
     root: String,
     base: Option<String>,
     worktrees: Vec<Worktree>,
+    /// every local branch but the base's, by push state; absent = none
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    branches: Vec<branches::Branch>,
     /// `.fael/shared`: paths nobody's scope claims; absent = none
     #[serde(skip_serializing_if = "Vec::is_empty")]
     shared: Vec<String>,
@@ -139,6 +142,7 @@ impl Project {
             root: root.to_string_lossy().into_owned(),
             base: None,
             worktrees: Vec::new(),
+            branches: Vec::new(),
             shared: Vec::new(),
             plans: Vec::new(),
             chunks: Vec::new(),
@@ -178,6 +182,7 @@ fn project(
     crate::intake::open_urls(&r.root, &mut b.chunks);
     let base = git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
     let shared = prs::open_prs(&mut b.chunks, &r.root, base.as_deref());
+    let branches = branches::branches(&r.root, base.as_deref(), &b.chunks);
     // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
     if open {
         b.chunks.retain(|c| c.state == "open");
@@ -193,6 +198,7 @@ fn project(
     Ok(Some(Project {
         base,
         worktrees,
+        branches,
         shared,
         plans: b.plans,
         chunks: b.chunks,
@@ -369,6 +375,8 @@ fn text(b: &Board) -> String {
     out
 }
 
+#[path = "board_branches.rs"]
+mod branches;
 #[path = "board_ledger.rs"]
 mod ledger;
 #[path = "board_git.rs"]
