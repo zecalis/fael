@@ -44,3 +44,43 @@ fn import_map_moves_a_subtree() {
     let (ok, _, err) = fael(&d, &["import", "old-mem", "--map", "no-equals-here"]);
     assert!(!ok && err.contains("--map"), "{err}");
 }
+
+#[test]
+fn import_a_repo_root_reads_its_journal_and_tree_log_not_fixtures() {
+    let d = repo();
+    let o = d.join("other");
+    let row = |id: &str, text: &str, file: &str| {
+        format!(
+            "{{\"v\":1,\"ts\":\"2026-01-01T00:00:00Z\",\"by\":\"w\",\"id\":\"{id}\",\"kind\":\"note\",\"text\":\"{text}\",\"files\":[\"{file}\"]}}\n"
+        )
+    };
+    for (dir, file, line) in [
+        (
+            ".git/fael/log/w",
+            "2026-01.jsonl",
+            row("j1", "from the journal", "src/j.rs"),
+        ),
+        (
+            ".fael/log",
+            "old.jsonl",
+            row("t1", "from the tree log", "src/t.rs"),
+        ),
+        (
+            "tests/fixtures",
+            "rows.jsonl",
+            row("f1", "a test fixture", "src/f.rs"),
+        ),
+    ] {
+        std::fs::create_dir_all(o.join(dir)).unwrap();
+        std::fs::write(o.join(dir).join(file), line).unwrap();
+    }
+    let (ok, out, err) = fael(&d, &["import", "other"]);
+    assert!(ok, "{err}");
+    assert!(out.contains("imported 2 row(s)"), "{out}");
+    let (_, out, _) = fael(&d, &["find", "--files", "src"]);
+    assert!(
+        out.contains("from the journal") && out.contains("from the tree log"),
+        "{out}"
+    );
+    assert!(!out.contains("a test fixture"), "{out}");
+}

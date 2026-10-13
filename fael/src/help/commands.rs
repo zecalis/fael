@@ -286,7 +286,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "import",
         "import another clone's log",
         "fael import <path> [--map old/=new/]
-    (import rows from a log file, a .fael/log dir or a repo root; a close folds into its
+    (import rows from a log file, a log dir or a repo root (its journal plus any .fael/log); a close folds into its
      row; importing twice is safe; --map rewrites a path prefix, repeatable)",
     ),
     (
