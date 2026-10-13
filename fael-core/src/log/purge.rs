@@ -12,12 +12,10 @@
 //!
 //! The row's own close and bump events go with it (a close without its row
 //! is a `[Phantom]` `doctor` would flag; a bump event would keep the id
-//! syncing after the tombstone). Both stores are rewritten — the tree and
-//! the journal when the clone has one — following `compact` (locks, tmp +
-//! rename, same bytes to every root that held a source line). Copies already
-//! synced to other clones or remotes are out of reach; the CLI keeps the id as
-//! a tombstone so `fael sync` never carries the row back, and warns about the
-//! copies in teammates' journals when `fael.remote` is set.
+//! alive). Both stores are rewritten — the tree and the journal when the
+//! clone has one — following `compact` (locks, tmp + rename, same bytes to
+//! every root that held a source line). Copies already in other clones are
+//! out of reach.
 
 use super::{Log, collect_files, lock, month_of, tmp_rename};
 use crate::{Row, decode_text, resolve, resolve_row};

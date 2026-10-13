@@ -17,8 +17,6 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     super::stop::seen(e);
     prune_sessions(&state_dir().join("sessions"));
     mark_started(&c.session, &c.repo.root);
-    // detached: teammates' rows land before the first read, never awaited
-    super::autosync::start(e);
     // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
     crate::install::auto::start();
     // a compacted context lost the rows pushed into it — tell them again

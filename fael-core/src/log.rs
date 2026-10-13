@@ -55,13 +55,6 @@ pub fn read(fael: &Path) -> Log {
     read_dir(&fael.join("log"))
 }
 
-/// Only what `import` wrote (`<fael>/log/_import/`). Those rows keep their
-/// legacy `by` (`claude`, `legacy`), so no writer id claims them — sync uses
-/// this to know which rows a clone must carry itself.
-pub fn read_imported(fael: &Path) -> Log {
-    read_dir(&fael.join("log/_import"))
-}
-
 fn read_dir(dir: &Path) -> Log {
     let mut log = Log::default();
     for f in &collect_files(dir) {

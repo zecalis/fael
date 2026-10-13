@@ -7,8 +7,8 @@
 //! racing for an issue exactly one wins and the other is told who holds it.
 //! It gates the claim, never the work: `--force` takes an issue over, a hold
 //! whose branch no longer exists is taken over on its own, and nothing here
-//! blocks an edit. Across machines a hold is only as fresh as the last
-//! `fael sync` — there the lock cannot help.
+//! blocks an edit. Another clone never sees the hold — there the lock
+//! cannot help.
 
 use crate::{Repo, core, read};
 use std::path::{Path, PathBuf};

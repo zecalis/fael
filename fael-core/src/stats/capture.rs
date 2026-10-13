@@ -35,7 +35,7 @@ pub struct Capture {
     pub reply_stored: usize,
     pub reply_rejected: usize,
     /// Rows added since the repo's first usage that did not arrive through a
-    /// reply line — by any writer (a teammate's synced row counts too).
+    /// reply line — by any writer (an imported row counts too).
     pub manual_adds: usize,
     /// Sessions (per repo) that edited at least one file.
     pub sessions_with_edits: usize,

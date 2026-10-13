@@ -1,6 +1,6 @@
 //! Id-reference lookups (PLAN-fael-id-refs §2) over the union log (tree +
 //! journal, what `crate::read` returns). No git spawn: every row a clone can
-//! see is in its journal (or synced into it), never only on another branch.
+//! see is in its journal (or imported into it), never only on another branch.
 
 use super::Repo;
 use fael_core::{self as core};

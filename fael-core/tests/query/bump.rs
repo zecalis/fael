@@ -234,8 +234,8 @@ fn bump_rejects_hidden_rows_and_non_issue_urgent() {
 
 #[test]
 fn an_event_ahead_of_its_row_still_folds_and_an_orphan_is_ignored() {
-    // sync can land the event before the row it names, or the row may never
-    // arrive (another writer's ref not fetched yet): fold by id, not by order
+    // an import can land the event before the row it names, or the row may
+    // never arrive: fold by id, not by order
     let row = Row::new("tester-0000", "issue", "hot", vec!["src/a.rs".into()]);
     let mut ev = Row::bumped("tester-0000", &row.id);
     ev.to = Some("ploy".into());

@@ -268,7 +268,7 @@ fn friction(h: &mut String, s: &Stats) {
         h,
         "<section><h2>3. Did fael add friction?</h2>\n<ul>\n\
          <li>Memory written from replies (<code>fael decision: …</code> lines): {} stored · {} rejected</li>\n\
-         <li>Rows written outside replies (<code>add</code> over CLI or MCP, synced teammate rows included): {}</li>\n\
+         <li>Rows written outside replies (<code>add</code> over CLI or MCP, imported rows included): {}</li>\n\
          <li>Sessions that edited files: {}, of which {} left no row{gone}</li>\n\
          <li>Rejects (agent calls): {} · shape gate ×{} · warnings ×{}</li>\n</ul>\n\
          <p>fael never blocks a turn, so it adds no round after the agent is done.</p>\n\

@@ -113,7 +113,7 @@ pub fn bump_row(
 }
 
 /// Lay every bump event onto the row it names, oldest first, so the newest
-/// wins — the view every query reads. Raw readers (sync, compact) skip this:
+/// wins — the view every query reads. Raw readers (compact) skip this:
 /// they carry the events as rows and must never ship a folded row.
 pub fn fold_bumps(mut log: Log) -> Log {
     let mut evs: Vec<Row> = log

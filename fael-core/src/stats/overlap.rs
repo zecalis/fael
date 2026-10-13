@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn a_chain_pairs_neighbours_only_and_log_order_does_not_matter() {
         // s1 -9min- s2 -9min- s3: s1 and s3 are 18 minutes apart, so no pair;
-        // the lines are written out of time order (a merged or synced log)
+        // the lines are written out of time order (a merged or imported log)
         let a = "\"a.rs\"";
         let u = line("2026-10-04T00:18:00.000Z", "edit", "s3", "/w", a)
             + &line("2026-10-04T00:00:00.000Z", "edit", "s1", "/w", a)

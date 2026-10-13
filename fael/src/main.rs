@@ -31,7 +31,6 @@ mod restore;
 mod schema;
 mod selfheal;
 mod session;
-mod sync;
 mod synonyms;
 mod tune;
 mod unmerged;
@@ -126,7 +125,6 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
-        ("sync", []) => sync::sync(&repo()?, &a).map(|()| ExitCode::SUCCESS),
         ("mcp", []) => mcp::serve(a.has("pin")).map(|()| ExitCode::SUCCESS),
         ("install" | "upgrade" | "update", []) => {
             let (client, dry) = (a.one("client"), a.has("dry-run"));
@@ -230,8 +228,8 @@ fn config(path: &Path) -> Result<Config, String> {
     Config::from_toml(&s).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Read the log — tree + journal union, bumps folded (sync reads it raw:
-/// `journal::merged`); skipped lines go to stderr, never fail the command.
+/// Read the log — tree + journal union, bumps folded; skipped lines go to
+/// stderr, never fail the command.
 pub(crate) fn read(r: &Repo) -> Log {
     core::fold_bumps(journal::merged(r))
 }

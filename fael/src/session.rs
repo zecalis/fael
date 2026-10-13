@@ -70,7 +70,7 @@ fn recorded(root: &Path, env: &str) -> Option<String> {
 
 /// The id a row records as its writer session: `hook_session` cut to the
 /// transcript's file stem — the UUID Claude Code puts in `$CLAUDE_CODE_SESSION_ID`,
-/// so no local path ever lands in a row that syncs to the team. `None` outside
+/// so no local path ever lands in a row. `None` outside
 /// any hook session.
 ///
 /// Trust is split (01M47N67): outside the long-lived `fael mcp` server,

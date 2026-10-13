@@ -149,10 +149,10 @@ fn local_shares_rows_across_worktrees_with_no_tree_log() {
 fn tracked_and_unknown_stores_are_rejected() {
     let d = repo("journal-store-bad");
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    // the dropped tracked mode points at sync, the way rows travel now
+    // the dropped tracked mode points at import, the way rows travel now
     std::fs::write(d.join(".fael/config.toml"), "store = \"tracked\"\n").unwrap();
     let (ok, _, err) = fael(&d, &["add", "note", "x", "--files", "doc:x"]);
-    assert!(!ok && err.contains("fael sync --remote"), "{err}");
+    assert!(!ok && err.contains("fael import <path>"), "{err}");
     std::fs::write(d.join(".fael/config.toml"), "store = \"cloud\"\n").unwrap();
     let (ok, _, err) = fael(&d, &["add", "note", "x", "--files", "doc:x"]);
     assert!(!ok && err.contains("want \"local\""), "{err}");
