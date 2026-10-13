@@ -79,7 +79,9 @@ support desk): every channel goes channel → the app (which holds the customer'
 and the send button) → its adapter → fael, so a new channel is work in the app. The app commits
 `.fael/sources.json` naming its adapter's `list`, `read`, `claim`, `draft` and `open`; `fael
 intake` runs only `list` (strict JSONL fields, so no customer text comes in) and writes one
-chunk per ticket round in one transaction: dedup, labels, adoption, the brief. The agent
+chunk per ticket round in one transaction: dedup, labels, adoption, the brief (a reopened round
+prints the round before), and a ticket the source closed drops its open chunk or accepts its
+review one (`by = intake`; a running one waits for the next run). The agent
 prepares (a fix, a draft, a verdict); a person sends from the app. Fael never writes to the
 source. The contract is the plan's `contract` section (`fael plan export fael-intake --section
 contract`).
