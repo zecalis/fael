@@ -36,9 +36,7 @@ fn install_writes_every_shipped_skill() {
     install(&home);
     for name in [
         "fael",
-        "fael-content",
         "fael-debug",
-        "fael-lead",
         "fael-plan",
         "fael-review",
         "fael-sweep",
@@ -64,10 +62,10 @@ fn a_link_into_a_fael_checkout_gives_way_and_a_foreign_link_stays() {
     let skills = home.join(".claude/skills");
     std::fs::create_dir_all(&skills).unwrap();
     // a worktree's skill dir, linked by hand before fael shipped it
-    let checkout = base.join("wt/fael/skill/fael-content");
+    let checkout = base.join("wt/fael/skill/fael-debug");
     std::fs::create_dir_all(&checkout).unwrap();
     std::fs::write(checkout.join("SKILL.md"), "old draft\n").unwrap();
-    symlink(&checkout, skills.join("fael-content")).unwrap();
+    symlink(&checkout, skills.join("fael-debug")).unwrap();
     // someone else's skill under fael's name
     let other = base.join("other/fael");
     std::fs::create_dir_all(&other).unwrap();
@@ -75,8 +73,8 @@ fn a_link_into_a_fael_checkout_gives_way_and_a_foreign_link_stays() {
     symlink(&other, skills.join("fael")).unwrap();
 
     let out = install(&home);
-    let dir = skills.join("fael-content");
-    assert!(!dir.is_symlink() && read(&dir.join("SKILL.md")).contains("name: fael-content"));
+    let dir = skills.join("fael-debug");
+    assert!(!dir.is_symlink() && read(&dir.join("SKILL.md")).contains("name: fael-debug"));
     assert_eq!(
         read(&checkout.join("SKILL.md")),
         "old draft\n",
