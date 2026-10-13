@@ -152,3 +152,21 @@ fn done_keeps_the_branch_the_agent_switched_to() {
     assert_eq!(branch(&a).as_deref(), Some("feat/real"));
     assert_eq!(branch(&b).as_deref(), Some("b"), "started on b");
 }
+
+/// A wave PR's diff sliced per chunk: board carries what `done` claimed, absent before.
+#[test]
+fn touched_is_the_claimed_diff_absent_until_claimed() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", &["src/"], &[]);
+    let touched = |s: &Store| {
+        let bd = s.board("2026-10-11", "2026-10-11T09:00:00Z").unwrap();
+        bd.chunks.into_iter().find(|c| c.uid == a).unwrap().touched
+    };
+    assert_eq!(touched(&s), None, "a declared scope is no file touched");
+    s.claim(&a, &["src/a.rs".into(), "docs/b.md".into()])
+        .unwrap();
+    assert_eq!(
+        touched(&s),
+        Some(vec!["src/a.rs".to_string(), "docs/b.md".to_string()])
+    );
+}
