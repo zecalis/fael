@@ -92,7 +92,7 @@ tests
 CI lint runs clippy with `-D warnings`; bare `cargo clippy` exits 0 on warnings, so a
 local pass without the flag proves nothing. Check each command by its own exit code.
 
-Windows CI runs on `main` only, not on PRs. A PR that touches paths, golden files,
+Windows CI runs on `main` and on wave PRs (head `plan/**`), not on other PRs. A PR that touches paths, golden files,
 process spawning, env vars or time-dependent tests runs it and reports its result before
 review — `gh workflow run ci.yml --ref <branch>` after `push pr`, then
 `gh run watch <id> --exit-status` — and says pass, or fail with the failing test, in the
