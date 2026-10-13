@@ -22,7 +22,7 @@ mod shared;
 mod start;
 mod store;
 
-pub use agent::Copy;
+pub use agent::{Copy, Outside};
 pub use apply::Op;
 pub use bill::Bill;
 pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};

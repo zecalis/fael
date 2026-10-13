@@ -3,7 +3,9 @@
 //! and the Stop hook's stamp on the live run of its own worktree.
 
 use super::State;
+use super::board_math::under;
 use super::chunk::{Here, add_after, end_live, fence, is_date, row, scope, set, tx, uid_id};
+use super::shared::unshared;
 use super::store::{Store, err};
 use rusqlite::{Transaction, params};
 
@@ -30,6 +32,9 @@ pub(super) fn unwait(tx: &Transaction, chunk: i64) -> Result<(), String> {
     .map(drop)
     .map_err(err)
 }
+
+/// `Store::outside`: the declared scope, and each path outside it with the chunk that holds it.
+pub type Outside = (Vec<String>, Vec<(String, Option<String>)>);
 
 /// `done --out`: copy the output for run R, return where it went.
 pub type Copy<'a> = dyn FnMut(&str) -> Result<String, String> + 'a;
@@ -168,6 +173,66 @@ impl Store {
         )
         .map_err(err)?;
         tx.commit().map_err(err)
+    }
+
+    /// The branch `done` diffs (issue 01M4TFB5): run `run`'s (`--run R`), else the chunk's
+    /// latest run's — not the cwd's, so a lead's done per lane from the wave branch claims
+    /// only that lane. None = no run or no branch recorded.
+    pub fn run_branch(&self, uid: &str, run: Option<&str>) -> Option<String> {
+        self.conn
+            .query_row(
+                "SELECT r.branch FROM run r JOIN chunk c ON c.id = r.chunk
+                 WHERE c.uid = ?1 AND (?2 IS NULL OR r.start = ?2) ORDER BY r.id DESC LIMIT 1",
+                params![uid, run],
+                |q| q.get(0),
+            )
+            .ok()
+            .flatten()
+    }
+
+    /// `done`'s diff against `uid`'s declared scope, before `claim` replaces it: the declared
+    /// scope, then each path not under it with the `plan/label` of another unfinished chunk
+    /// whose scope covers it (board's prefix rule), None = unowned. A `shared` path is
+    /// nobody's and left out; no declared scope = nothing to compare, nothing said.
+    pub fn outside(
+        &self,
+        uid: &str,
+        files: &[String],
+        shared: &[String],
+    ) -> Result<Outside, String> {
+        let lines = |s: Option<String>| -> Vec<String> {
+            s.unwrap_or_default().lines().map(String::from).collect()
+        };
+        let declared = lines(
+            self.conn
+                .query_row("SELECT scope FROM chunk WHERE uid = ?1", [uid], |q| {
+                    q.get(0)
+                })
+                .map_err(err)?,
+        );
+        let others: Vec<(String, Vec<String>)> = self
+            .conn
+            .prepare(
+                "SELECT p.name || '/' || COALESCE(c.label, c.uid), c.scope FROM chunk c
+                 JOIN plan p ON p.id = c.plan WHERE c.uid != ?1 AND c.scope IS NOT NULL
+                 AND c.state NOT IN ('done', 'replaced', 'dropped') ORDER BY c.seq",
+            )
+            .map_err(err)?
+            .query_map([uid], |q| Ok((q.get(0)?, q.get(1)?)))
+            .map_err(err)?
+            .map(|r| r.map(|(n, s)| (n, unshared(&lines(Some(s)), shared))))
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        let out = files
+            .iter()
+            .filter(|f| !declared.is_empty() && !declared.iter().any(|d| under(f, d)))
+            .filter(|f| !shared.iter().any(|s| under(f, s)))
+            .map(|f| {
+                let owner = others.iter().find(|(_, sc)| sc.iter().any(|d| under(f, d)));
+                (f.clone(), owner.map(|(n, _)| n.clone()))
+            })
+            .collect();
+        Ok((declared, out))
     }
 
     /// `fael chunk note <uid> "<text>"`: a word for whoever starts the chunk next — from any

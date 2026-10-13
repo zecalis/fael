@@ -42,7 +42,9 @@ struct Project {
     shared: Vec<String>,
     plans: Vec<BoardPlan>,
     chunks: Vec<BoardChunk>,
-    ledger: ledger::Ledger,
+    /// absent in an agent's cut (`--open`, `--plan`): the app reads the whole board
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ledger: Option<ledger::Ledger>,
     /// why this project could not be read; only then present
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
@@ -95,7 +97,8 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
 
 /// One registered repo as the board shows it, `--open` and `--plan` applied; None = not on it.
 fn read(root: &Path, at: &str, stale: &str, a: &Args) -> Option<Project> {
-    let mut p = match project(root, &at[..10], stale, a.has("open")) {
+    let cut = a.has("open") || a.one("plan").is_some();
+    let mut p = match project(root, &at[..10], stale, a.has("open"), cut) {
         Ok(p) => p?,
         // one broken repo never hides the others, and is never silent
         Err(e) => {
@@ -139,7 +142,7 @@ impl Project {
             shared: Vec::new(),
             plans: Vec::new(),
             chunks: Vec::new(),
-            ledger: Default::default(),
+            ledger: None,
             error: None,
         }
     }
@@ -156,7 +159,13 @@ pub(crate) fn remote(root: &Path) -> Option<String> {
     Some(format!("{}/{name}", parts.next()?))
 }
 
-fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<Project>, String> {
+fn project(
+    root: &Path,
+    today: &str,
+    stale: &str,
+    open: bool,
+    cut: bool,
+) -> Result<Option<Project>, String> {
     let Ok(r) = repo_at(root) else {
         return Ok(None);
     };
@@ -186,7 +195,11 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
         shared,
         plans: b.plans,
         chunks: b.chunks,
-        ledger: ledger::read(&r, &s.fixers()?),
+        ledger: if cut {
+            None
+        } else {
+            Some(ledger::read(&r, &s.fixers()?))
+        },
         ..Project::named(root)
     }))
 }
@@ -237,7 +250,10 @@ fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
     let uids =
         |f: Pick| -> Vec<String> { all.iter().filter(|c| f(c)).map(|c| c.uid.clone()).collect() };
     // done chunks whose linked issue is still open (l2): fael never closes it
-    let fixed: Vec<String> = projects.iter().flat_map(|p| p.ledger.open_done()).collect();
+    let fixed: Vec<String> = projects
+        .iter()
+        .flat_map(|p| p.ledger.iter().flat_map(|l| l.open_done()))
+        .collect();
     // SPEC §5 order: the owner's questions, then review, ended runs, inbox drafts
     let kinds: [(&'static str, Pick); 5] = [
         // an md plan's `(wait …)` names no `on`: the owner is the one who can move it

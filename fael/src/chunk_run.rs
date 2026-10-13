@@ -93,16 +93,39 @@ pub(crate) fn done(
         .is_some()
         .then_some(&mut copy as &mut fael_core::plan::Copy<'_>);
     let mut st = Store::open(&db(r))?;
+    // issue 01M4TFB5: the run's branch, not the cwd's — a lead's done per lane from the wave
+    // branch diffs that lane only. Read before done: ending the run from its own worktree
+    // stamps the cwd's branch on it, and a lead merges there on the wave branch
+    // ponytail: commits on that branch from before chunk start count as the chunk's; the
+    // run's start commit would cut them, not recorded
+    let branch = st.run_branch(uid, here.run);
     st.done(uid, handoff, pr, out, here)?;
-    let trunk = base_of(&r.root, here.branch);
+    let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
-    let range = trunk.as_deref().map(|b| format!("{b}...HEAD"));
-    if let Some(diff) = range.and_then(|g| crate::git(&r.root, &["diff", "--name-only", &g])) {
-        let _ = st.claim(uid, &diff.lines().map(String::from).collect::<Vec<_>>());
+    let range = trunk
+        .as_deref()
+        .map(|b| format!("{b}...{}", branch.as_deref().unwrap_or("HEAD")));
+    let diff: Option<Vec<String>> = range
+        .and_then(|g| crate::git(&r.root, &["diff", "--name-only", &g]))
+        .map(|d| d.lines().map(String::from).collect());
+    let shared = fael_core::plan::shared(&r.root).unwrap_or_default();
+    let outside = diff.as_ref().and_then(|d| st.outside(uid, d, &shared).ok());
+    if let Some(d) = &diff {
+        let _ = st.claim(uid, d);
     }
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
+    // h4: a fact, never a refusal — gates, review and CI judge the change
+    if let Some((declared, out)) = outside.filter(|(_, o)| !o.is_empty()) {
+        println!("declared scope: {}", declared.join(", "));
+        for (f, owner) in out {
+            match owner {
+                Some(o) => println!("outside, in {o}: {f}"),
+                None => println!("outside, unowned: {f}"),
+            }
+        }
+    }
     if let (Some(trunk), Some(_)) = (trunk, pr) {
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }
