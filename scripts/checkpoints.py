@@ -114,9 +114,9 @@ def gates():
     yield (n >= 30, "fix-evidence 4", f"closes after cutoff {bar(n, 30)} {new} · then owner checks ≥20% by hand",
            "01M4HX74", new)
 
-    rel = release_of("74b2b4b")
+    rel = release_of("da8b7c6")
     if not rel:
-        yield False, "decision-held 5", "M1 (74b2b4b) in no release yet", "01M4J0SSD", {}
+        yield False, "decision-held 5", "M1 (da8b7c6) in no release yet", "01M4J0SSD", {}
     else:
         d = sum(1 for r in vrows.values() if r.get("kind") == "decision" and ts(r["ts"]) >= rel[1])
         yield (d >= 100, "decision-held 5", f"vela decisions since {rel[0]} {bar(d, 100)} (installed on vela at or after the tag)",
