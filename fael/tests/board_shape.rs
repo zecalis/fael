@@ -168,6 +168,18 @@ fn board_v1_shape() {
             let sh = sh.as_array().unwrap();
             assert!(!sh.is_empty() && sh.iter().all(Value::is_string), "{sh:?}");
         }
+        // decision 01M4V0FY: every local branch but the base's; absent = none, never empty
+        if let Some(br) = p.get("branches") {
+            let br = br.as_array().unwrap();
+            assert!(!br.is_empty(), "{p}");
+            for b in br {
+                assert_eq!(keys(b), ["name", "state", "chunks"], "{b}");
+                assert!(matches!(
+                    b["state"].as_str(),
+                    Some("local" | "pushed" | "merged")
+                ));
+            }
+        }
         for pl in p["plans"].as_array().unwrap() {
             assert_eq!(keys(pl), PLAN_KEYS, "{pl}");
             if matches!(pl["state"].as_str(), Some("done" | "parked")) {

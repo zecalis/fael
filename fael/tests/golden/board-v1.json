@@ -22,6 +22,12 @@
         { "path": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "run": null },
         { "path": "/Users/owner/Project/fael/wt-fael-agent-2", "branch": "feat/plan-schema-v2", "run": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71" }
       ],
+      "branches": [
+        { "name": "feat/board-json-v1", "state": "pushed", "chunks": ["01M4M0BRD000000000000000A3"] },
+        { "name": "feat/plan-schema-v2", "state": "local", "chunks": ["01M4M0BRD000000000000000B1"] },
+        { "name": "plan/fael/stack", "state": "local", "chunks": ["01M4M0BRD000000000000000B1"] },
+        { "name": "talk/old-idea", "state": "merged", "chunks": [] }
+      ],
       "shared": ["AGENTS.md", "docs/architecture.md", "fael/tests/golden/"],
       "plans": [
         { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "state": "active", "truth": "db", "counts": { "open": 2, "review": 1, "running": 1, "waiting": 1 } },

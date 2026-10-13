@@ -95,7 +95,9 @@ fn the_binary_speaks_board_v1() {
     let g = fixture();
     assert_eq!(keys(&v), keys(&g));
     let (p, gp) = (&v["projects"][0], &g["projects"][0]);
-    assert_eq!(keys(p), keys(gp));
+    // `branches` needs an origin, which this repo has none of (tests/board_branches.rs)
+    let gk: Vec<&str> = keys(gp).into_iter().filter(|k| *k != "branches").collect();
+    assert_eq!(keys(p), gk);
     assert_eq!(p["root"], d.to_string_lossy().as_ref());
     assert_eq!(keys(&p["plans"][0]), keys(&gp["plans"][0]));
     assert_eq!(p["plans"][0]["counts"]["open"], 2);
