@@ -49,7 +49,7 @@ pub struct Brief {
     pub said: Vec<String>,
     /// `fael chunk note` texts since this chunk last started
     pub notes: Vec<String>,
-    /// `(title, handoff, scope)`: the done / review word of each chunk this one is after,
+    /// `(title, handoff, touched)`: the done / review word of each chunk this one is after,
     /// and the files its done claimed (one path per line, empty when none)
     pub after: Vec<(String, String, String)>,
     /// the run this start took over or restarted — where the last agent stopped
@@ -312,7 +312,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
     b.issues = super::issue::of(tx, id)?;
     let mut q = tx
         .prepare(
-            "SELECT c.title, e.text, COALESCE(c.scope, '') FROM edge g
+            "SELECT c.title, e.text, COALESCE(c.touched, '') FROM edge g
              JOIN chunk c ON c.id = g.dst
              JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid
                                        AND by = 'agent' AND to_state IN ('done', 'review'))

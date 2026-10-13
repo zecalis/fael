@@ -182,3 +182,30 @@ fn claim_takes_the_real_diff_as_scope() {
     s.claim(&c, &diff).unwrap();
     assert_eq!(scope(&s).as_deref(), Some("a.rs\ndocs/b.md"));
 }
+
+/// Issue 01M4TPHMR: the next brief names an after-chunk's files only once its done claimed
+/// a diff — a declared scope that was never claimed is no file it touched.
+#[test]
+fn only_a_claimed_diff_reaches_the_next_brief_as_files_touched() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("b"));
+    let f = Fields {
+        title: Some("next".into()),
+        brief: Some("b".into()),
+        ..Fields::default()
+    };
+    let b = s.add("inbox", &f, std::slice::from_ref(&a), NOW).unwrap();
+    s.conn
+        .execute("UPDATE chunk SET scope = 'a/' WHERE uid = ?1", [&a])
+        .unwrap();
+    start(&mut s, &a, "/a").unwrap();
+    s.done(&a, "h", Some(1), None, &here("/a")).unwrap();
+    let files = |s: &mut Store| {
+        let st = s.start(&b, &Start::default(), &here("/b")).unwrap();
+        s.run_end(&st.run, None, NOW).unwrap();
+        st.chunks[0].after[0].2.clone()
+    };
+    assert_eq!(files(&mut s), "", "declared a/, never claimed");
+    s.claim(&a, &["z/q.rs".into()]).unwrap();
+    assert_eq!(files(&mut s), "z/q.rs");
+}
