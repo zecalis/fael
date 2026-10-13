@@ -92,4 +92,21 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     assert!(!out.contains("declared scope"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &l2, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["l2/b.txt"]));
+
+    // issue 01M4TPHM: a solo agent starts on the trunk, then branches: the cwd's branch is
+    // the work, not the trunk the run recorded
+    let s = add("s", "s/");
+    git(&d, &["switch", "-q", "main"]);
+    f(&["chunk", "start", &s]);
+    git(&d, &["switch", "-q", "-c", "solo"]);
+    for p in ["s/a.txt", "solo.txt"] {
+        std::fs::create_dir_all(d.join(p).parent().unwrap()).unwrap();
+        std::fs::write(d.join(p), "solo").unwrap();
+        git(&d, &["add", p]);
+    }
+    git(&d, &["commit", "-qm", "solo"]);
+    let out = f(&["chunk", "done", &s, "h"]);
+    assert!(out.ends_with("outside, unowned: solo.txt"), "{out}");
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &s, "--json"])).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["s/a.txt", "solo.txt"]));
 }
