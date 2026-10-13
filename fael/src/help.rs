@@ -32,7 +32,7 @@ pub(crate) fn usage() -> String {
     };
     let (core, rest) = (list(core), list(rest));
     format!(
-        "fael — a repo's memory that agents can't skip writing
+        "fael — the repo's work ledger, handed to each agent at the file or chunk it works on
 
 usage: fael <command> [options]
 
