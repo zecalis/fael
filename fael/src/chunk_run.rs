@@ -140,7 +140,11 @@ pub(crate) fn done(
     // stamps the cwd's branch on it, and a lead merges there on the wave branch
     // ponytail: commits on that branch from before chunk start count as the chunk's; the
     // run's start commit would cut them, not recorded
-    let branch = st.run_branch(uid, here.run);
+    // issue 01M4TPHM: a run started on the trunk, then switched, has no branch of its own
+    // recorded — the cwd's is the work
+    let head = crate::git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+    let on_trunk = |b: &String| head.as_deref().and_then(|h| h.strip_prefix("origin/")) == Some(b);
+    let branch = st.run_branch(uid, here.run).filter(|b| !on_trunk(b));
     st.done(uid, handoff, pr, out, here)?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
