@@ -56,6 +56,10 @@ pub struct Chunk {
     /// conflicted paths, empty = merges clean; absent = not checked or git < 2.38
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conflicts: Option<Vec<String>>,
+    /// the paths `done` claimed from the run's diff (`chunk.touched`); absent = never claimed.
+    /// A wave PR's diff sliced per chunk, and what lanes started together really shared
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touched: Option<Vec<String>>,
     #[serde(skip)]
     pub seq: i64,
 }
@@ -134,7 +138,8 @@ impl Store {
                         c.model_hint, c.scope, c.wait_on, c.wait_text, c.wait_until,
                         c.approved_at, c.approved_model, c.approved_client, c.seq, c.wait_options,
                         c.ticket_source, c.ticket_ref, c.ticket_kind, c.ticket_reopen,
-                        (SELECT verdict FROM run WHERE chunk = c.id ORDER BY id DESC LIMIT 1)
+                        (SELECT verdict FROM run WHERE chunk = c.id ORDER BY id DESC LIMIT 1),
+                        c.touched
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
                  ORDER BY p.app, p.name, c.seq",
@@ -195,6 +200,9 @@ impl Store {
                         owner_actions: Owner::actions(&state),
                         ticket: super::intake::ticket(r, 18)?,
                         conflicts: None,
+                        touched: r
+                            .get::<_, Option<String>>(23)?
+                            .map(|t| t.lines().map(String::from).collect()),
                         seq: r.get(16)?,
                         label,
                         state,

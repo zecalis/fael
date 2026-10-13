@@ -118,9 +118,24 @@ fn fixes_open(b: &Value, uid: &Value) -> bool {
 }
 
 /// A chunk's keys without the optional tail, each checked: `ticket` (an intake chunk), then
-/// `conflicts` (PLAN-fael-parallel merge-check: only on an open PR).
+/// `conflicts` (PLAN-fael-parallel merge-check: only on an open PR), then `touched` (the paths
+/// `done` claimed from the run's diff: only once claimed).
 fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
     let mut k = keys(c);
+    if k.last() == Some(&"touched") {
+        k.pop();
+        assert!(
+            matches!(c["state"].as_str(), Some("review" | "done")),
+            "{uid}"
+        );
+        assert!(
+            c["touched"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(Value::is_string)
+        );
+    }
     if k.last() == Some(&"conflicts") {
         k.pop();
         assert!(

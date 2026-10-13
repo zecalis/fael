@@ -63,7 +63,8 @@
           "stalled": false, "ended": false, "wait": null, "approval": null,
           "run": { "id": "0d9b7f3a-5e21-4a8c-b6f0-2c4e8a1d9f53", "client": "claude", "session": "ab12cd34-5555-4666-8777-888899990000", "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "pr": 341, "out": null, "started": "2026-10-10T08:10:00Z", "last_seen": "2026-10-10T08:40:00Z", "ended": "2026-10-10T08:41:00Z", "cost": 2.17 },
           "handoff": { "at": "2026-10-10T08:41:00Z", "text": "Fixture pinned; board_shape.rs holds the keys. PR #341." }, "issues": [], "owner_actions": ["answer", "accept", "drop"],
-          "conflicts": ["fael/tests/golden/board-v1.json"]
+          "conflicts": ["fael/tests/golden/board-v1.json"],
+          "touched": ["fael/tests/golden/board-v1.json", "fael/tests/board_shape.rs"]
         },
         {
           "uid": "01M4M0BRD000000000000000A4", "app": "", "plan": "fael-board", "label": "g2",

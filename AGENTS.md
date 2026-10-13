@@ -19,8 +19,8 @@ Decision `product:mission` (plan `PLAN-fael-board`): a change ships when it fixe
 noise, removes code, serves the plan → chunk → agent → ship loop, or brings work in from the
 team's other systems (intake, 01M4TJTW). The owner's SwiftUI app
 reads `fael board --json` and starts an agent only on the owner's click or from a queue
-the owner approved; dev chunks are started by the owner or by a plan's lead agent, after
-the owner approves its wave (decision 01M4QVH4; the lead lives in zecalis/fael-crew, 01M4SQ9B), and the app only shows them;
+the owner approved; dev chunks are started by the owner, by the project's lead after the
+owner approves its set, or a lone one from that queue (decision 01M4TYKJ; the lead lives in zecalis/fael-crew, 01M4SQ9B);
 the owner merges every PR; fael itself
 never starts an agent turn or re-prompts on idle,
 adds no daemon, never guesses, never polices the developer's process (worktree, branch, git flow).
