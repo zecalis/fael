@@ -3,8 +3,10 @@
 //! writes one run in one `BEGIN IMMEDIATE` — dedup by source+ref+reopen in every plan,
 //! adoption of a chunk an older sync made, the brief. Fael never writes to the source.
 
+use super::State;
 use super::chunk::{Fields, row, set, tx};
 use super::chunk_add::add_in;
+use super::owner::{Owner, owner_in};
 use super::store::{Store, err};
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
@@ -52,9 +54,12 @@ pub struct Ticket {
     pub kind: String,
     pub reopen: i64,
     pub open: Option<String>,
+    /// `chunk done --verdict` of the latest run; null = none yet
+    pub verdict: Option<String>,
 }
 
-/// The board's `ticket` from the four `chunk.ticket_*` columns starting at `at`.
+/// The board's `ticket` from the four `chunk.ticket_*` columns starting at `at`, then the
+/// latest run's verdict.
 pub(super) fn ticket(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Ticket>> {
     r.get::<_, Option<String>>(at)?
         .map(|source| {
@@ -64,6 +69,7 @@ pub(super) fn ticket(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Ti
                 kind: r.get(at + 2)?,
                 reopen: r.get(at + 3)?,
                 open: None,
+                verdict: r.get(at + 4)?,
             })
         })
         .transpose()
@@ -145,7 +151,8 @@ fn label(t: &Listed) -> String {
 
 /// The brief of a ticket's chunk (the contract's template): fixed keys first, the Done block
 /// for its kind, a Claim line only when the source claims that kind.
-pub fn brief(s: &Source, t: &Listed) -> String {
+/// A reopened round also prints `before`, where the round before stopped.
+pub fn brief(s: &Source, t: &Listed, before: Option<&str>) -> String {
     let fill = |c: &str| c.replace("{ref}", &t.r#ref);
     let r = &t.r#ref;
     let mut b = format!(
@@ -177,6 +184,9 @@ pub fn brief(s: &Source, t: &Listed) -> String {
         "idea" => "Draft what you propose and why, done --verdict consider|plan|decline; never build it unasked".into(),
         _ => "Read it, then: a code fix as a bug (fix + a guard test, push pr, done --pr N --verdict fix), else Draft a reply and done --verdict answer|decline".into(),
     };
+    if let Some(w) = before {
+        b += &format!("Before (r{}): {w}\n", t.reopen.saturating_sub(1));
+    }
     b += &format!(
         "Draft: {} \"…\" — a person sends it from Open\nDone: {done}\nNever send: a person sends every word the user reads.",
         fill(&s.draft)
@@ -193,6 +203,59 @@ fn ticketed(tx: &Transaction, s: &str, t: &Listed) -> Result<Option<String>, Str
     )
     .optional()
     .map_err(err)
+}
+
+/// `<hand-off> · PR <n>` of round `t.reopen - 1` of this ticket (any plan); None = no such
+/// round or nothing it handed over.
+fn before(tx: &Transaction, s: &str, t: &Listed) -> Result<Option<String>, String> {
+    let Some(prev) = t.reopen.checked_sub(1) else {
+        return Ok(None);
+    };
+    let q = |sql: &str| {
+        tx.query_row(sql, params![s, t.r#ref, prev], |r| {
+            r.get::<_, Option<String>>(0)
+        })
+        .optional()
+        .map(Option::flatten)
+        .map_err(err)
+    };
+    let hand = q(
+        "SELECT (SELECT text FROM event WHERE chunk_uid = c.uid AND by = 'agent'
+                          AND to_state != 'running' AND text != '' ORDER BY id DESC LIMIT 1)
+                  FROM chunk c WHERE ticket_source = ?1 AND ticket_ref = ?2 AND ticket_reopen = ?3",
+    )?;
+    let pr = q(
+        "SELECT CAST((SELECT pr FROM run WHERE chunk = c.id AND pr IS NOT NULL
+                             ORDER BY id DESC LIMIT 1) AS TEXT)
+                FROM chunk c WHERE ticket_source = ?1 AND ticket_ref = ?2 AND ticket_reopen = ?3",
+    )?;
+    Ok(match (hand, pr) {
+        (Some(h), Some(n)) => Some(format!("{h} · PR {n}")),
+        (Some(h), None) => Some(h),
+        (None, Some(n)) => Some(format!("PR {n}")),
+        (None, None) => None,
+    })
+}
+
+/// The source closed a ticket that has a chunk: drop it if it has not started, accept it if
+/// it waits in review (the person's send is the acceptance), leave a running one for the next
+/// run, touch nothing else. Every row is `intake`'s.
+fn close(
+    tx: &Transaction,
+    uid: &str,
+    t: &Listed,
+    c: &str,
+    now: &str,
+) -> Result<Option<String>, String> {
+    let text = format!("closed at source: {c}");
+    let (cmd, word) = match row(tx, uid)?.state {
+        State::Open | State::Waiting => (Owner::Drop, "dropped"),
+        State::Review => (Owner::Accept, "accepted"),
+        State::Running => return Ok(Some(format!("skipped {} (running)", t.r#ref))),
+        _ => return Ok(None),
+    };
+    owner_in(tx, uid, cmd, Some(&text), "intake", now)?;
+    Ok(Some(format!("{word} {} → {uid}", t.r#ref)))
 }
 
 fn stamp(tx: &Transaction, uid: &str, s: &str, t: &Listed) -> Result<(), String> {
@@ -245,7 +308,10 @@ impl Store {
         let mut out = Vec::new();
         for (s, list) in runs {
             for t in list {
-                if ticketed(&tx, &s.name, t)?.is_some() {
+                if let Some(uid) = ticketed(&tx, &s.name, t)? {
+                    if let Some(c) = &t.closed {
+                        out.extend(close(&tx, &uid, t, c, now)?);
+                    }
                     continue;
                 }
                 let adopted = adopt(&tx, &s.name, t, now)?;
@@ -258,7 +324,7 @@ impl Store {
                 }
                 let f = Fields {
                     title: Some(t.title.clone()),
-                    brief: Some(brief(s, t)),
+                    brief: Some(brief(s, t, before(&tx, &s.name, t)?.as_deref())),
                     size: Some("S".into()),
                     label: Some(label(t)),
                     ..Fields::default()

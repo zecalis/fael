@@ -97,7 +97,7 @@ pub(crate) fn done(
     handoff: &str,
     here: &Here,
 ) -> Result<(), String> {
-    a.only("chunk done", &["pr", "out", "run"])?;
+    a.only("chunk done", &["pr", "out", "run", "verdict"])?;
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
     let raw = a.one("pr");
     let pr = raw
@@ -145,7 +145,7 @@ pub(crate) fn done(
     let head = crate::git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
     let on_trunk = |b: &String| head.as_deref().and_then(|h| h.strip_prefix("origin/")) == Some(b);
     let branch = st.run_branch(uid, here.run).filter(|b| !on_trunk(b));
-    st.done(uid, handoff, pr, out, here)?;
+    st.done_verdict(uid, handoff, pr, out, a.one("verdict").as_deref(), here)?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
