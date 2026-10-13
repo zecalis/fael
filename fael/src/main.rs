@@ -202,13 +202,9 @@ pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
 }
 
 pub(crate) fn git(dir: &Path, args: &[&str]) -> Option<String> {
-    let o = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .ok()?;
-    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-    (o.status.success() && !s.is_empty()).then_some(s)
+    let (code, out) = board::git_output(dir, args)?;
+    let s = out.trim().to_string();
+    (code == Some(0) && !s.is_empty()).then_some(s)
 }
 
 /// `.fael/config.toml` — missing file = defaults, a broken file = error.

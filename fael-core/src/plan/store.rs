@@ -40,6 +40,14 @@ impl Store {
         Store::init(Connection::open(path).map_err(err)?)
     }
 
+    /// SQLite's `PRAGMA data_version`: moves when another connection commits, so a held
+    /// reader (`fael board --watch`) sees a write without writing or rereading.
+    pub fn data_version(&self) -> Result<i64, String> {
+        self.conn
+            .query_row("PRAGMA data_version", [], |r| r.get(0))
+            .map_err(err)
+    }
+
     pub fn open_in_memory() -> Result<Store, String> {
         Store::init(Connection::open_in_memory().map_err(err)?)
     }

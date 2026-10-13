@@ -46,11 +46,16 @@ struct Item {
 /// Every open row of `r`'s log, by kind; issues in group order. `fixers` = issue id → its
 /// newest linked chunk (`Store::fixers`), found through the issue's older versions too.
 pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
-    let log = crate::read(r);
-    let open = core::find(&log, &core::Filter::default());
-    let drifted = crate::maintain::drift::ids(&log, &r.root);
+    // under --watch, parsed once until the jsonl or the refs move (drift is a `git log`)
+    let parsed = super::watch::ledger(&r.root, || {
+        let log = crate::read(r);
+        let drifted = crate::maintain::drift::ids(&log, &r.root);
+        (log, drifted)
+    });
+    let (log, drifted) = &*parsed;
+    let open = core::find(log, &core::Filter::default());
     // a re-filed issue (`--supersedes`, self-heal) has a new id: walk back to the one linked
-    let pred: HashMap<&str, &str> = core::successors(&log)
+    let pred: HashMap<&str, &str> = core::successors(log)
         .into_iter()
         .map(|(old, new)| (new, old))
         .collect();

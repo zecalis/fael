@@ -8,13 +8,13 @@ use crate::git;
 use fael_core::plan::{BoardChunk, overlaps, shared};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::process::Command;
 
 /// The base (`origin/HEAD`) and its subjects since the first shipped chunk started.
 type Base = Option<(String, String)>;
 
 /// Marks the open PRs and redoes `overlaps` with them and `.fael/shared`; returns that list.
-pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) -> Vec<String> {
+/// `base` is `origin/HEAD`'s branch, read once per project by the caller.
+pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path, base: Option<&str>) -> Vec<String> {
     let shipped = |c: &BoardChunk| {
         c.run
             .as_ref()
@@ -27,6 +27,7 @@ pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) -> Vec<String> {
         .filter(|c| shipped(c).is_some())
         .filter_map(|c| c.run.as_ref().map(|r| r.started.clone()))
         .min();
+    let base_name = base;
     let mut base: Option<Base> = None;
     let mut open = HashSet::new();
     for c in chunks.iter_mut() {
@@ -35,7 +36,7 @@ pub(super) fn open_prs(chunks: &mut [BoardChunk], root: &Path) -> Vec<String> {
             continue;
         }
         let base = base.get_or_insert_with(|| {
-            let b = git(root, &["rev-parse", "--abbrev-ref", "origin/HEAD"])?;
+            let b = base_name?.to_string();
             let log = since
                 .as_ref()
                 .and_then(|s| git(root, &["log", "--format=%s", &format!("--since={s}"), &b]));
@@ -99,16 +100,11 @@ fn merged(log: &str, n: i64) -> bool {
 /// `git merge-tree --write-tree` (git >= 2.38): 0 = clean, 1 with a tree id = the conflicted
 /// paths after it; anything else (old git, no such branch) = unknown.
 pub(crate) fn merge_tree(dir: &Path, base: &str, branch: &str) -> Option<Vec<String>> {
-    let o = Command::new("git")
-        .args(["merge-tree", "--write-tree", "--name-only", "--no-messages"])
-        .args([base, branch])
-        .current_dir(dir)
-        .output()
-        .ok()?;
-    let out = String::from_utf8_lossy(&o.stdout);
+    let args = ["merge-tree", "--write-tree", "--name-only", "--no-messages"];
+    let (code, out) = super::git_output(dir, &[&args[..], &[base, branch]].concat())?;
     let mut lines = out.lines();
     lines.next().filter(|tree| !tree.is_empty())?;
-    match o.status.code()? {
+    match code? {
         0 => Some(Vec::new()),
         1 => Some(
             lines
