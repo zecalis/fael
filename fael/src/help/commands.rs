@@ -148,15 +148,18 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
     (
         "board",
         "every registered repo's plans and chunks: needs you, queue, running, blocked",
-        "fael board [--json] [--open] [--plan p] | fael board --drop <root>
+        "fael board [--json] [--open] [--plan p] | fael board --json --watch | fael board --drop <root>
     (the owner's view, run from anywhere: each repo whose fael.db a `fael plan`
      or `fael chunk` command wrote is listed in ~/.local/state/fael/projects;
      --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
      only open chunks — the planner's one read of scope, after and overlaps; --plan
      keeps one plan's chunks; a path in .fael/shared (one prefix per line) is
      nobody's claim: it never makes an overlap; a repo whose fael.db cannot be read
-     stays listed with its error and the command exits 1; --drop takes a finished repo
-     off the registry until a chunk command there adds it back)",
+     stays listed with its error and the command exits 1; --watch (the app's one
+     read) stays up, rereads each second only the project whose db, ledger jsonl or
+     git refs moved, prints a compact board line at start and on each change, and
+     exits when stdin closes; --drop takes a finished repo off the registry until a
+     chunk command there adds it back)",
     ),
     (
         "plan",

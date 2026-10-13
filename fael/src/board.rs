@@ -1,4 +1,4 @@
-//! `fael board [--json] [--open]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
+//! `fael board [--json] [--open] [--watch]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
 //! plans and chunks, and four lists of uids across them — needs you (§5), the queue (§3),
 //! running, blocked. The app's only read; `"v": 1` is the contract
 //! (`tests/golden/board-v1.json`). Live git: one worktree list and one base per project.
@@ -15,14 +15,14 @@ use std::path::Path;
 use std::process::ExitCode;
 
 #[derive(Serialize)]
-struct Board {
+struct Board<'a> {
     v: u32,
     at: String,
     needs_you: Vec<Need>,
     queue: Vec<String>,
     running: Vec<String>,
     blocked: Vec<String>,
-    projects: Vec<Project>,
+    projects: Vec<&'a Project>,
 }
 
 #[derive(Serialize)]
@@ -57,7 +57,7 @@ struct Worktree {
 }
 
 pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
-    a.only("board", &["json", "open", "plan", "drop"])?;
+    a.only("board", &["json", "open", "plan", "drop", "watch"])?;
     if let Some(root) = a.one("drop") {
         return registry::unregister(&root);
     }
@@ -66,42 +66,57 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
     {
         register(&r);
     }
+    if a.has("watch") {
+        if !a.has("json") {
+            return Err(
+                "rejected: --watch prints board lines for the app: `fael board --json --watch`"
+                    .into(),
+            );
+        }
+        return watch::run(a);
+    }
     let (at, stale) = clock();
-    let mut projects = Vec::new();
-    for root in registered() {
-        match project(&root, &at[..10], &stale, a.has("open")) {
-            Ok(Some(p)) => projects.push(p),
-            Ok(None) => {}
-            // one broken repo never hides the others, and is never silent
-            Err(e) => {
-                eprintln!("fael board: {}: {e}", root.display());
-                projects.push(Project {
-                    error: Some(e),
-                    ..Project::named(&root)
-                });
-            }
-        }
-    }
-    // an agent's cut: one plan's chunks, the projects that have it (and the unreadable);
-    // `name` or `app/name`, the key `plan new` and `plan export` print
-    if let Some(n) = a.one("plan") {
-        let is = |app: &str, name: &str| name == n || format!("{app}/{name}") == n;
-        for p in &mut projects {
-            p.plans.retain(|x| is(&x.app, &x.name));
-            p.chunks.retain(|c| is(&c.app, &c.plan));
-        }
-        projects.retain(|p| !p.plans.is_empty() || p.error.is_some());
-    }
+    let mut projects: Vec<Project> = registered()
+        .iter()
+        .filter_map(|root| read(root, &at, &stale, a))
+        .collect();
     prs::live_branches(&mut projects);
     let broken = projects.iter().any(|p| p.error.is_some());
-    let b = lists(at, projects);
+    let b = lists(at, projects.iter().collect());
     if a.has("json") {
-        let s = serde_json::to_string_pretty(&b).map_err(|e| e.to_string())?;
+        // compact: 0.87 MB where pretty was 1.13 (5 projects); the app parses, nobody reads it
+        let s = serde_json::to_string(&b).map_err(|e| e.to_string())?;
         println!("{s}");
     } else {
         print!("{}", text(&b));
     }
     Ok(ExitCode::from(u8::from(broken)))
+}
+
+/// One registered repo as the board shows it, `--open` and `--plan` applied; None = not on it.
+fn read(root: &Path, at: &str, stale: &str, a: &Args) -> Option<Project> {
+    let mut p = match project(root, &at[..10], stale, a.has("open")) {
+        Ok(p) => p?,
+        // one broken repo never hides the others, and is never silent
+        Err(e) => {
+            eprintln!("fael board: {}: {e}", root.display());
+            Project {
+                error: Some(e),
+                ..Project::named(root)
+            }
+        }
+    };
+    // an agent's cut: one plan's chunks, the projects that have it (and the unreadable);
+    // `name` or `app/name`, the key `plan new` and `plan export` print
+    if let Some(n) = a.one("plan") {
+        let is = |app: &str, name: &str| name == n || format!("{app}/{name}") == n;
+        p.plans.retain(|x| is(&x.app, &x.name));
+        p.chunks.retain(|c| is(&c.app, &c.plan));
+        if p.plans.is_empty() && p.error.is_none() {
+            return None;
+        }
+    }
+    Some(p)
 }
 
 /// Now, and the RFC 3339 time 30 min ago: a live run last seen before it is `stalled`.
@@ -151,7 +166,8 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
     }
     let s = Store::open(&path)?;
     let mut b = s.board(today, stale)?;
-    let shared = prs::open_prs(&mut b.chunks, &r.root);
+    let base = git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+    let shared = prs::open_prs(&mut b.chunks, &r.root, base.as_deref());
     // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
     if open {
         b.chunks.retain(|c| c.state == "open");
@@ -165,7 +181,7 @@ fn project(root: &Path, today: &str, stale: &str, open: bool) -> Result<Option<P
         .collect();
     let worktrees = worktrees(&r.root, r.cfg.plan_worktrees.as_deref(), &live);
     Ok(Some(Project {
-        base: git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]),
+        base,
         worktrees,
         shared,
         plans: b.plans,
@@ -216,7 +232,7 @@ fn worktrees(root: &Path, prefix: Option<&str>, live: &HashMap<&str, &str>) -> V
 type Pick<'a> = &'a dyn Fn(&BoardChunk) -> bool;
 
 /// The four lists, in display order across every project.
-fn lists(at: String, projects: Vec<Project>) -> Board {
+fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
     let all: Vec<&BoardChunk> = projects.iter().flat_map(|p| &p.chunks).collect();
     let uids =
         |f: Pick| -> Vec<String> { all.iter().filter(|c| f(c)).map(|c| c.uid.clone()).collect() };
@@ -342,8 +358,11 @@ mod ledger;
 pub(crate) mod prs;
 #[path = "board_registry.rs"]
 mod registry;
+#[path = "board_watch.rs"]
+mod watch;
 use registry::registered;
 pub(crate) use registry::{in_tmp, register};
+pub(crate) use watch::git_output;
 
 #[cfg(test)]
 #[path = "board_tests.rs"]

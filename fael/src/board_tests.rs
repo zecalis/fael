@@ -46,7 +46,7 @@ fn queue_order_is_unblocks_then_plan_order() {
         chunks,
         ..Project::named(Path::new(""))
     };
-    let b = lists(String::new(), vec![p]);
+    let b = lists(String::new(), vec![&p]);
     // stable: `tie` keeps its place after `first`
     assert_eq!(b.queue, ["frees3", "first", "tie", "frees0"]);
 }

@@ -131,11 +131,8 @@ fn plan_new_keeps_its_sections_in_the_db_and_a_bill_edits_the_plan() {
     let (ok, _, err) = fael(&d, &["plan", "apply", path]);
     assert!(!ok && err.contains("stale rev"), "{err}");
     let (_, board, _) = fael(&d, &["board", "--json"]);
-    let uid = board
-        .split("\"uid\": \"")
-        .nth(1)
-        .and_then(|r| r.split('"').next())
-        .unwrap();
+    let board: serde_json::Value = serde_json::from_str(&board).unwrap();
+    let uid = board["projects"][0]["chunks"][0]["uid"].as_str().unwrap();
     let (ok, out, err) = fael(&d, &["chunk", "start", uid]);
     assert!(
         ok && out.contains("<!-- plan n -->\n\n## 1. Goal (why)\n> section 1 · updated ")
