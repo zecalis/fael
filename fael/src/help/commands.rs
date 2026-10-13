@@ -138,7 +138,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      whose Stop hook keeps the run seen from any cwd; wait, after and done answer only to the worktree of the
      latest run and end it, or to --run R naming that run; wait --on owner --option offers the answers
      the owner picks from; done --pr N lands in done (push pr is the ok) — an owner/repo#N or URL of
-     another repo than this one's origin is refused; done without a PR in review until accept; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
+     another repo than this one's origin is refused; done without a PR in review until accept; done on a branch takes its diff against origin/HEAD as the scope; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval; move puts a chunk at the end of
      another db plan of this repo with its uid, runs, notes and edges — refused while it
      runs, into a parked or done plan, or onto a label the plan has; apply runs every op or none —

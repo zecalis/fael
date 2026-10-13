@@ -119,7 +119,7 @@ fn done_says_which_files_conflict_with_the_base() {
     let f = |args: &[&str]| fael(&d, &state, args);
     let (bad, ok) = (
         f(&["chunk", "add", "bad", "--brief", "b"]),
-        f(&["chunk", "add", "ok", "--brief", "b"]),
+        f(&["chunk", "add", "ok", "--brief", "b", "--scope", "c.txt"]),
     );
     // each branch starts before main moved
     let done = |uid: &str, branch: &str, file: &str| {
@@ -143,4 +143,7 @@ fn done_says_which_files_conflict_with_the_base() {
     );
     let out = done(&ok, "feat/ok", "b.txt");
     assert!(!out.contains("note:"), "{out}");
+    // issue 01M4RRD1K: done claims what the branch touched, not the declared c.txt
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &ok, "--json"])).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["b.txt"]));
 }

@@ -3,7 +3,7 @@
 //! and the Stop hook's stamp on the live run of its own worktree.
 
 use super::State;
-use super::chunk::{Here, add_after, end_live, fence, is_date, row, set, tx, uid_id};
+use super::chunk::{Here, add_after, end_live, fence, is_date, row, scope, set, tx, uid_id};
 use super::store::{Store, err};
 use rusqlite::{Transaction, params};
 
@@ -144,6 +144,29 @@ impl Store {
         )
         .map_err(err)?;
         end(&tx, r.id, here)?;
+        tx.commit().map_err(err)
+    }
+
+    /// `chunk done` (issue 01M4RRD1K): the branch's real diff becomes the chunk's scope, so a
+    /// review or open-PR chunk holds the files it touched, not the ones it declared. No diff
+    /// keeps the declared scope.
+    pub fn claim(&mut self, uid: &str, files: &[String]) -> Result<(), String> {
+        // ponytail: a path the scope rule refuses (`app/[id]/x`) is left out, not widened to its dir
+        let ok: Vec<String> = files
+            .iter()
+            .filter(|f| scope(std::slice::from_ref(f)).is_ok())
+            .cloned()
+            .collect();
+        let Some(s) = scope(&ok)? else {
+            return Ok(());
+        };
+        let tx = tx(self)?;
+        let r = row(&tx, uid)?;
+        tx.execute(
+            "UPDATE chunk SET scope = ?1 WHERE id = ?2",
+            params![s, r.id],
+        )
+        .map_err(err)?;
         tx.commit().map_err(err)
     }
 
