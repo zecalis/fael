@@ -50,7 +50,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     Ok(())
 }
 
-/// h2: each open `contract:*` row whose files overlap a started chunk's scope (the board's
+/// Each open `contract:*` row whose files overlap a started chunk's scope (the board's
 /// prefix rule), as `id title` + body after the brief; none → no heading. fael never builds
 /// a contract or a scope from brief text.
 fn contracts(r: &Repo, st: &Started) {
