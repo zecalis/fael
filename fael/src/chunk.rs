@@ -120,7 +120,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             let mut st = s()?;
             st.edit(uid, &fields(a), &now)?;
             say(uid, "edited");
-            if a.has("scope") {
+            if a.has("scope") || a.has("brief") {
                 crate::chunk_scope::warn(&st, &r.root, uid);
             }
         }

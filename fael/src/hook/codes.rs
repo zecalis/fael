@@ -144,6 +144,7 @@ const WARNINGS: &[(&str, &str)] = &[
     ("the user's call", "supersedes_user"),
     ("was held @", "claim_taken"),
     ("warning: scope", "chunk_scope"),
+    ("warning: brief names", "chunk_brief_path"),
     ("warning: commit ", "unmerged"),
     // self-heal wraps another warning; that one's needle wins above
     ("— key ", "key_moved"),
