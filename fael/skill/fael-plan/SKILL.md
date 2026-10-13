@@ -205,7 +205,10 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   draft: not startable until `fael chunk edit <uid> --brief …`.
 - **scope** — the paths it edits, each a file or directory that exists (or a new file in a
   directory that does) — a typo silently weakens every overlap check. The board reports two chunks whose scopes overlap; that is
-  what lets a second worktree take a chunk safely.
+  what lets a second worktree take a chunk safely. Every path the brief tells the agent to
+  edit is in it, tests and e2e flows too; a symbol the brief names is found with grep, never
+  guessed from a file name. A file the chunk grows past the repo's line cap: scope its
+  folder, so the split has room.
 - **after** — the uid(s) or label(s) of the chunks it truly waits on. **No `--after` = ready at once, alongside the
   others**: fael.db has no "waits on the line above". Give it only where the order is real.
   An order on a chunk already on the board goes through `fael chunk apply` op `after`
@@ -242,7 +245,8 @@ First check the draft against this skill — `fael board --plan <name>` shows it
 
 - every `L` chunk is split, or its brief says why it can't be;
 - two chunks whose scopes overlap are ordered with `--after`, or the brief says why they can run together;
-- every `--scope` path exists (or is a new file in a directory that does).
+- every `--scope` path exists (or is a new file in a directory that does), and every path a
+  brief tells the agent to edit sits under its chunk's scope.
 
 Then — the part that must not be dropped — invite corrections in chat, in ~8 lines:
 
