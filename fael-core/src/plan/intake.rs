@@ -258,6 +258,19 @@ fn close(
     Ok(Some(format!("{word} {} → {uid}", t.r#ref)))
 }
 
+/// The inbox chunk holding this ticket's label: another source's ticket with the same ref, or
+/// one differing only by case. Its chunk then goes unlabelled; the ticket columns still dedup.
+fn held(tx: &Transaction, l: &str) -> Result<Option<String>, String> {
+    tx.query_row(
+        "SELECT c.uid FROM chunk c JOIN plan p ON p.id = c.plan
+         WHERE p.app = '' AND p.name = 'inbox' AND c.label = ?1",
+        [l],
+        |r| r.get(0),
+    )
+    .optional()
+    .map_err(err)
+}
+
 fn stamp(tx: &Transaction, uid: &str, s: &str, t: &Listed) -> Result<(), String> {
     tx.execute(
         "UPDATE chunk SET ticket_source = ?1, ticket_ref = ?2, ticket_kind = ?3, ticket_reopen = ?4
@@ -322,16 +335,20 @@ impl Store {
                 if t.closed.is_some() {
                     continue;
                 }
+                let held = held(&tx, &label(t))?;
                 let f = Fields {
                     title: Some(t.title.clone()),
                     brief: Some(brief(s, t, before(&tx, &s.name, t)?.as_deref())),
                     size: Some("S".into()),
-                    label: Some(label(t)),
+                    label: held.is_none().then(|| label(t)),
                     ..Fields::default()
                 };
                 let (_, uid) = add_in(&tx, "inbox", &f, &[], "intake", now)?;
                 stamp(&tx, &uid, &s.name, t)?;
-                out.push(format!("added {} → {uid}", t.r#ref));
+                out.push(match held {
+                    Some(h) => format!("added {} → {uid} (no label: {h} holds it)", t.r#ref),
+                    None => format!("added {} → {uid}", t.r#ref),
+                });
             }
         }
         tx.commit().map_err(err)?;

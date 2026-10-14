@@ -89,3 +89,31 @@ fn a_close_is_written_by_intake_not_the_owner() {
     assert_eq!(by("v-1"), [w("dropped")]);
     assert_eq!(by("v-2"), [w("done")]);
 }
+
+#[test]
+fn two_sources_sharing_a_ref_add_both_tickets() {
+    let mut s = Store::open_in_memory().unwrap();
+    let b = Source {
+        name: "b".into(),
+        ..src("")
+    };
+    let x2 = Listed {
+        r#ref: "V-2".into(),
+        ..t("bug", 0)
+    };
+    let lower = Listed {
+        r#ref: "v-2".into(),
+        ..t("bug", 0)
+    };
+    let runs = [
+        (src(""), vec![t("bug", 0)]),
+        (b, vec![t("bug", 0), x2, lower]),
+    ];
+    let now = "2026-10-14T00:00:00Z";
+    let out = s.intake(&runs, now).unwrap();
+    assert_eq!(out.len(), 4, "{out:?}");
+    assert!(out[1].contains("(no label: "), "{out:?}");
+    assert!(out[3].contains("(no label: "), "{out:?}");
+    // the next run finds every ticket and adds nothing
+    assert_eq!(s.intake(&runs, now).unwrap(), Vec::<String>::new());
+}
