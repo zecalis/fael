@@ -315,6 +315,8 @@ fn text(b: &Board) -> String {
             .unwrap_or_default();
         let extra = match tag {
             "waiting" => c.wait.as_ref().and_then(|w| w.text.clone()),
+            // a lead's overlap check cannot place it, so its set skips it (01M4WZ4M)
+            "ready" if c.scope.is_empty() => Some("no scope".into()),
             "blocked" => Some(
                 c.blocked_by
                     .iter()

@@ -52,3 +52,16 @@ fn queue_order_is_unblocks_then_plan_order() {
     // stable: `tie` keeps its place after `first`
     assert_eq!(b.queue, ["frees3", "first", "tie", "frees0"]);
 }
+
+#[test]
+fn ready_line_says_no_scope() {
+    let mut scoped = ready("scoped", 0);
+    scoped.scope = vec!["src/a.rs".into()];
+    let p = Project {
+        chunks: vec![scoped, ready("bare", 0)],
+        ..Project::named(Path::new(""))
+    };
+    let t = text(&lists(String::new(), vec![&p]));
+    assert!(t.contains("bare  p   — no scope\n"), "{t}");
+    assert!(t.contains("scoped  p  \n"), "{t}");
+}
