@@ -247,7 +247,8 @@ fn reasons_come_from_the_real_reject_paths() {
         &["bump", "01ABC", "--title", "x"],
         &["add", "note", "x", "--files"],
         &["add"],
-        &["find", "a b", "c"],
+        // words alone are one text query (01M4XKM4); a path among them is still a bad id
+        &["find", "a b", "src/c.rs"],
         &["frobnicate"],
         &["fnd", "x"],
         &["chunk", "start", "zz"],

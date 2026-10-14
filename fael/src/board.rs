@@ -389,8 +389,8 @@ pub(crate) mod prs;
 mod registry;
 #[path = "board_watch.rs"]
 mod watch;
-use registry::registered;
-pub(crate) use registry::{in_tmp, register};
+
+pub(crate) use registry::{in_tmp, main_root, register, registered, scratch};
 pub(crate) use watch::git_output;
 
 #[cfg(test)]

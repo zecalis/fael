@@ -10,7 +10,7 @@ fn registry() -> PathBuf {
     fael_core::stats::state_dir().join("projects")
 }
 
-pub(super) fn registered() -> Vec<PathBuf> {
+pub(crate) fn registered() -> Vec<PathBuf> {
     let text = std::fs::read_to_string(registry()).unwrap_or_default();
     let all: Vec<PathBuf> = text
         .lines()
@@ -28,7 +28,7 @@ pub(super) fn registered() -> Vec<PathBuf> {
 
 /// A repo under the temp dir (an agent's or a test's scratch repo) belongs only on a
 /// registry that is itself under the temp dir — a test's `FAEL_STATE_DIR`.
-fn scratch(root: &Path) -> bool {
+pub(crate) fn scratch(root: &Path) -> bool {
     in_tmp(root) && !in_tmp(&fael_core::stats::state_dir())
 }
 
@@ -45,16 +45,19 @@ pub(crate) fn in_tmp(p: &Path) -> bool {
         .any(|d| p.starts_with(d))
 }
 
-/// Put this repo on the board: called by every command that writes its fael.db.
-pub(crate) fn register(r: &Repo) {
-    // the main checkout, not this worktree: `<main>/.git/fael` is the journal
-    let root = r
-        .journal
+/// The main checkout, not this worktree: `<main>/.git/fael` is the journal.
+pub(crate) fn main_root(r: &Repo) -> &Path {
+    r.journal
         .as_deref()
         .and_then(Path::parent)
         .filter(|g| g.file_name().is_some_and(|n| n == ".git"))
         .and_then(Path::parent)
-        .unwrap_or(&r.root);
+        .unwrap_or(&r.root)
+}
+
+/// Put this repo on the board: called by every command that writes its fael.db.
+pub(crate) fn register(r: &Repo) {
+    let root = main_root(r);
     if scratch(root) || registered().iter().any(|p| p == root) {
         return;
     }

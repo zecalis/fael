@@ -8,6 +8,7 @@ pub(crate) mod many;
 pub(crate) mod mentions;
 mod merged;
 pub(crate) mod misses;
+mod owner;
 
 pub(crate) use kickoff::kickoff;
 
@@ -33,7 +34,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
                 show_one(a, &log, &row, &branch_of)
             }
             super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
-            super::refs::Wide::Missing => Err(reject_missing(&log, t)),
+            super::refs::Wide::Missing => Err(reject_missing(&r, &log, t)),
         };
     }
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
@@ -272,10 +273,13 @@ pub(crate) fn reject_many(tok: &str, rows: &[Row]) -> String {
 }
 
 /// An id-shaped query with no row behind it in the union:
-/// the reject, plus up to 5 rows that only mention the string — a text hit
-/// is not the row existing.
-pub(crate) fn reject_missing(log: &Log, tok: &str) -> String {
+/// the reject, plus where it does live (a chunk, another repo), plus up to 5
+/// rows that only mention the string — a text hit is not the row existing.
+pub(crate) fn reject_missing(r: &super::Repo, log: &Log, tok: &str) -> String {
     let mut m = format!("rejected: no row with id {tok:?} — copy the id from fael find");
+    if let Some(o) = owner::owner(r, tok) {
+        m.push_str(&format!("\n{o}"));
+    }
     let who = mentions::mentioned(log, tok);
     if !who.is_empty() {
         m.push_str(&format!("\nmentioned (not owned) by: {}", who.join(", ")));

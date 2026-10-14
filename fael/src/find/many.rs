@@ -44,7 +44,7 @@ pub(crate) fn pull(
         match refs::resolve_wide(&log, id) {
             Wide::One(row) => found.push(*row),
             Wide::Many(rows) => errors.push(super::reject_many(id, &rows)),
-            Wide::Missing => errors.push(super::reject_missing(&log, id)),
+            Wide::Missing => errors.push(super::reject_missing(r, &log, id)),
         }
     }
     if json {
