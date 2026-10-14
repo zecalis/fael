@@ -78,8 +78,9 @@ pub(crate) fn files_changed(
 
 /// The first file of `edited` that `r` names and that moved since `r` was
 /// written: a stamped file whose blob differs, else the first named one when
-/// there is no verdict (no `fh`, gone, over the push cap) — the edit is all
-/// fael knows. `None` when no named file was edited or each matches its stamp.
+/// there is no verdict (no `fh`, over the push cap) — the edit is all fael
+/// knows. `None` when no named file was edited and is still on disk, or each
+/// matches its stamp.
 pub(crate) fn moved(
     r: &core::Row,
     root: &Path,
@@ -90,7 +91,8 @@ pub(crate) fn moved(
     let named: Vec<String> = r
         .files
         .iter()
-        .filter(|f| edited.contains(f))
+        // a deleted file is `[Gone]`'s, never "now in" it
+        .filter(|f| edited.contains(f) && root.join(f).is_file())
         .cloned()
         .collect();
     named.first()?;

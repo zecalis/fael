@@ -386,12 +386,15 @@ fn held_names_only_open_decisions_and_notes_on_edited_files() {
         ],
         ..Log::default()
     };
-    let (root, al) = (std::env::temp_dir(), crate::core::Aliases::default());
+    let a = seen("a.rs");
+    std::fs::create_dir_all(a.parent().unwrap()).unwrap();
+    std::fs::write(&a, "x").unwrap();
+    let (root, al) = (a.parent().unwrap(), crate::core::Aliases::default());
     let ids = |edited: &[String]| -> Vec<String> {
-        let found = super::held::pairs(&log, &root, &al, "", edited);
+        let found = super::held::pairs(&log, root, &al, "", edited);
         found.iter().map(|(r, _)| r.id.clone()).collect()
     };
     assert_eq!(ids(&["a.rs".into()]), ["01DEC", "01NOTE", "01NEWER"]);
-    assert!(ids(&[]).is_empty());
-    assert!(super::held::text(&log, &[]).is_empty());
+    assert!(ids(&[]).is_empty() && super::held::text(&log, &[]).is_empty());
+    let _ = std::fs::remove_dir_all(root);
 }

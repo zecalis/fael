@@ -148,7 +148,7 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
         out.push_str(&format!(
             "+{} more: fael find --files {}\n",
             rest.len(),
-            more.join(" ")
+            more.join(",")
         ));
     }
     out
