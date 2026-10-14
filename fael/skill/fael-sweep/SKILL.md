@@ -9,9 +9,9 @@ disable-model-invocation: true
 # fael-sweep — every open issue gets a chunk or a question
 
 You read the open issues, judge them against the code, and leave each one on the board in a
-state the owner can act on in one step: a chunk to approve, or a question to answer. You never
-edit code, never approve, never start a fix, never close an issue. The agents the owner sends
-fix; `fael-debug` is how each of them works.
+state the owner can act on in one step: a chunk to approve, or a question to answer. You read
+code and write chunks — that is all. The owner approves and closes; the agents the owner sends
+fix, each with `fael-debug`.
 
 **An issue with a chunk linked is triaged.** That link (`chunk add --issue`) is the only record
 that this skill saw it — so every issue you judge gets one, including the ones that cannot be
@@ -50,7 +50,7 @@ Already fixed in the code? It is still a `drop?`: the owner closes the issue, no
 - **One chunk** for issues with one cause, or whose fix edits the same lines — `--issue a,b`.
   The board's `group` is a hint (shared files), not the verdict: two issues on one file with
   unrelated causes stay two chunks.
-- **scope** = the paths the fix will edit, from the code you read — never guessed from a title.
+- **scope** = the paths the fix will edit, from the code you read.
   It is what lets two agents run side by side; a wrong scope puts two agents on one file.
 - **Parallel** = no `--after`. **Ordered** = scopes overlap, or one fix needs the other's
   output: `--after <uid>` on the later one. A scope that overlaps a chunk already in flight
@@ -74,14 +74,14 @@ Where it goes depends on how you were started:
 - **In chat** (the owner typed `/fael-sweep`): show it, ask **"Tell me what's wrong with it."**,
   apply the corrections, and write only after the owner's yes.
 - **As a chunk** (you ran `fael chunk start` on a sweep chunk, e.g. from the board): nobody is
-  in the chat to answer — don't wait. Write it (step 5); the table is your `chunk done`
+  in the chat to answer, so write it now (step 5); the table is your `chunk done`
   hand-off (step 6). Nothing you write starts before the owner approves it on the board, so
   that approval is the yes.
 
 ## 5. Write
 
 Every brief is English and stands alone: the cause as you found it (symbol, file), what to
-change, what not to touch, how it is checked (the repro or test that fails today), the issue
+change, what to leave alone, how it is checked (the repro or test that fails today), the issue
 ids, and "fix with /fael-debug". Add in plan order so `--after` can name a uid already printed.
 
 **fix:**
@@ -101,8 +101,8 @@ fael chunk wait "$uid" "<question>" --on owner          # drop? and ask owner
 fael chunk wait "$uid" "<what is missing>" --on data [--until YYYY-MM-DD]
 ```
 
-`--run` is one id per start — never reuse one — and it keeps this start off your own
-session, which may hold the sweep chunk's run.
+`--run` takes a fresh id per start, and it keeps this start off your own session, which may
+hold the sweep chunk's run.
 
 The wait text is what the owner reads on the board, so it carries the whole decision:
 the question, 2–3 options each with what it costs, and **your recommendation and why** —
@@ -110,7 +110,7 @@ the question, 2–3 options each with what it costs, and **your recommendation a
 `fael chunk answer <uid> "<choice>"` (back to `open`, the answer printed in its next brief) or
 drops it.
 
-Never `fael chunk approve` — approval is the owner's, and it is what lets the queue start a chunk.
+Leave every chunk unapproved: approval is the owner's, and it is what lets the queue start one.
 
 ## 6. Hand back
 
