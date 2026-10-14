@@ -144,17 +144,13 @@ pub(crate) fn done(
     let head = crate::git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
     let on_trunk = |b: &String| head.as_deref().and_then(|h| h.strip_prefix("origin/")) == Some(b);
     let branch = st.run_branch(uid, here.run).filter(|b| !on_trunk(b));
+    // a run `run end` ended kept its lane's diff then: the lane may be rebased since
+    let kept = st.claimed_at_end(uid, here.run);
     st.done_verdict(uid, handoff, pr, out, a.one("verdict").as_deref(), here)?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
-    let range = trunk
-        .as_deref()
-        .map(|b| format!("{b}...{}", branch.as_deref().unwrap_or("HEAD")));
-    let tip = branch.as_deref().unwrap_or("HEAD");
-    let diff: Option<Vec<String>> = range
-        .and_then(|g| crate::git(&r.root, &["diff", "--name-only", &g]))
-        .map(|d| since(&r.root, st.run_base(uid), tip, d.lines()));
+    let diff = kept.or_else(|| touched(&r.root, &st, uid, branch.as_deref().or(here.branch)));
     let shared = fael_core::plan::shared(&r.root).unwrap_or_default();
     let outside = diff.as_ref().and_then(|d| st.outside(uid, d, &shared).ok());
     if let Some(d) = &diff {
@@ -176,6 +172,20 @@ pub(crate) fn done(
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }
     Ok(())
+}
+
+/// What `uid`'s run on `branch` touched (None = the cwd's HEAD): its trunk diff since the
+/// run's start; None = on the trunk or no `origin/HEAD`.
+pub(crate) fn touched(
+    dir: &Path,
+    st: &Store,
+    uid: &str,
+    branch: Option<&str>,
+) -> Option<Vec<String>> {
+    let trunk = base_of(dir, branch)?;
+    let tip = branch.unwrap_or("HEAD");
+    let d = crate::git(dir, &["diff", "--name-only", &format!("{trunk}...{tip}")])?;
+    Some(since(dir, st.run_base(uid), tip, d.lines()))
 }
 
 /// Issue 01M4TVDGG: of the trunk diff, only the paths changed since the run's start commit —

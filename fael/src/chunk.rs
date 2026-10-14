@@ -212,7 +212,23 @@ pub(crate) fn run_end(a: &Args, run: &str) -> Result<ExitCode, String> {
     let r = repo()?;
     let path = db(&r);
     if path.exists() {
-        Store::open(&path)?.run_end(run, cost, &fael_core::rfc3339(fael_core::now_ms()))?;
+        let mut st = Store::open(&path)?;
+        // a lead ends a lane's run before it rebases the lane on the lanes landed before it:
+        // the lane's own diff is claimed now, and `done` keeps it
+        for (uid, branch, wt) in st.run_rows(run)? {
+            let here = || {
+                crate::git(
+                    std::path::Path::new(&wt?),
+                    &["rev-parse", "--abbrev-ref", "HEAD"],
+                )
+            };
+            let b = branch.or_else(here).filter(|b| b != "HEAD");
+            if let Some(d) = b.and_then(|b| crate::chunk_run::touched(&r.root, &st, &uid, Some(&b)))
+            {
+                let _ = st.claim(&uid, &d);
+            }
+        }
+        st.run_end(run, cost, &fael_core::rfc3339(fael_core::now_ms()))?;
     }
     Ok(ExitCode::SUCCESS)
 }

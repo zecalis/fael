@@ -24,7 +24,7 @@ mod shared;
 mod start;
 mod store;
 
-pub use agent::{Copy, Outside};
+pub use agent::{Copy, Outside, RunRow};
 pub use apply::Op;
 pub use bill::Bill;
 pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};

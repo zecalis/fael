@@ -230,6 +230,10 @@ fn a_linked_worktree_pool_and_the_registry() {
             (wt2.clone(), "w2", &Value::Null),
         ]
     );
+    // `--open` drops the running chunk, never the worktree its live run holds
+    let open: Value =
+        serde_json::from_slice(&run(&tmp, &state, &["board", "--json", "--open"]).stdout).unwrap();
+    assert_eq!(open["projects"][1]["worktrees"][0]["run"], "R1", "{open}");
     // `[plan] worktrees` keeps the agent slots, leaves a topic worktree out
     write(state.join("projects"), &reg);
     write(d.join(".fael/config.toml"), "[plan]\nworktrees = \"wt2\"\n");

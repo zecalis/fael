@@ -183,10 +183,8 @@ fn project(
     let base = git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
     let shared = prs::open_prs(&mut b.chunks, &r.root, base.as_deref());
     let branches = branches::branches(&r.root, base.as_deref(), &b.chunks);
-    // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
-    if open {
-        b.chunks.retain(|c| c.state == "open");
-    }
+    // before `--open` drops the running chunks: their live runs hold worktrees (a lead picks
+    // a free one from this read)
     let live: HashMap<&str, &str> = b
         .chunks
         .iter()
@@ -195,6 +193,10 @@ fn project(
         .filter_map(|r| Some((r.worktree.as_deref()?, r.id.as_str())))
         .collect();
     let worktrees = worktrees(&r.root, r.cfg.plan_worktrees.as_deref(), &live);
+    // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
+    if open {
+        b.chunks.retain(|c| c.state == "open");
+    }
     Ok(Some(Project {
         base,
         worktrees,
