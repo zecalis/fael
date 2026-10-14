@@ -22,6 +22,9 @@ prs=$(gh pr list --state open --base main --json number,author --jq '[.[] | sele
 [ -z "$prs" ] || { echo "release: open PR(s) into main: $prs — merge or close them first" >&2; exit 1; }
 git checkout -q main
 git pull -q --ff-only
+# a release whose push failed leaves its commit + tag here; CI never ran on it and a rerun would skip its version
+ahead=$(git log --oneline origin/main..HEAD)
+[ -z "$ahead" ] || { printf 'release: main has commit(s) not on origin:\n%s\npush them (git push origin main --follow-tags) or drop them first\n' "$ahead" >&2; exit 1; }
 
 # the bump commit itself skips CI (direct push), so the commit under it must already be green
 # — a run still queued or going (a merge made seconds ago) is waited on, not refused
