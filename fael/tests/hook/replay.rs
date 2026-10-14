@@ -229,6 +229,17 @@ fn replay() -> String {
     for (i, s) in script().into_iter().enumerate() {
         let mut body: serde_json::Value = serde_json::from_str(&s.body).unwrap();
         body["cwd"] = serde_json::from_str(&json(&d)).unwrap();
+        // the shell call's own write, just before its hook: its mtime sits in the hook's
+        // 3 s EDIT_WINDOW however slow the run, not the fixture's (issue 01M4QF57)
+        let cmd = body["tool_input"]["command"].as_str().unwrap_or("");
+        if let Some(f) = cmd.strip_prefix("printf x >> ") {
+            use std::io::Write;
+            let mut w = std::fs::OpenOptions::new()
+                .append(true)
+                .open(d.join(f))
+                .unwrap();
+            w.write_all(b"x").unwrap();
+        }
         let (ok, stdout, err) = fael_at(&state, &d, &["hook", s.hook], &body.to_string());
         assert!(ok, "step {i}: {err}");
         let r: serde_json::Value = serde_json::from_str(&stdout).expect(&stdout);
