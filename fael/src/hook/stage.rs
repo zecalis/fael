@@ -3,7 +3,7 @@
 //! read from one small state file beside the log (`cache/push-gate.json`).
 //! The gate only ever cut search pushes, and a search no longer pushes
 //! (decision `say:push-at-edit`), so the Stop evaluator that moved the stage
-//! and filed `policy:push-gate` rows is gone; `tune` still reads the stage.
+//! and filed `policy:push-gate` rows is gone.
 //! State missing, torn, or for another policy version = `shadow`, never a guess.
 // ponytail: a stage change lands in the file while other sessions of the repo
 // may be mid-way — a session can change arm once, at a promotion (canary →
@@ -43,7 +43,7 @@ struct State {
 }
 
 /// `<repo scope>/cache/push-gate.json`: the journal all worktrees of a clone
-/// share, else the folder's own `.fael/` — the same repo identity `tune` uses.
+/// share, else the folder's own `.fael/`.
 fn path(root: &Path) -> PathBuf {
     journal::root(root)
         .unwrap_or_else(|| root.join(".fael"))
@@ -68,14 +68,4 @@ fn stage_of(s: &State) -> Stage {
 /// The stage a push of this worktree runs in.
 pub(crate) fn current(root: &Path) -> Stage {
     stage_of(&load(&path(root)))
-}
-
-/// The stage of a `tune` repo scope (the journal root, or a plain folder).
-pub(crate) fn of_scope(scope: &str) -> Stage {
-    let dir = Path::new(scope);
-    [dir.join("cache"), dir.join(".fael").join("cache")]
-        .iter()
-        .map(|d| d.join(FILE))
-        .find(|f| f.is_file())
-        .map_or(Stage::Shadow, |f| stage_of(&load(&f)))
 }

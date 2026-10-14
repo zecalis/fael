@@ -33,7 +33,6 @@ mod schema;
 mod selfheal;
 mod session;
 mod synonyms;
-mod tune;
 mod unmerged;
 mod write;
 
@@ -122,7 +121,6 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             Ok(ExitCode::SUCCESS)
         }
         ("stats", []) => hook::stats(&a).map(|()| ExitCode::SUCCESS),
-        ("tune", []) => tune::tune(&a).map(|()| ExitCode::SUCCESS),
         ("report", []) => report::report(&a).map(|()| ExitCode::SUCCESS),
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),

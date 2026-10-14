@@ -18,7 +18,7 @@ pub(crate) struct Info {
     pub(crate) files: Vec<String>,
 }
 
-/// `--since` for `stats`, `tune` and `report`: `None` when absent (this and
+/// `--since` for `stats` and `report`: `None` when absent (this and
 /// last month's usage, `usage_files`), `Some(0)` for `all`, an error naming the
 /// accepted forms when unreadable.
 pub(crate) fn since(a: &Args) -> Result<Option<i64>, String> {

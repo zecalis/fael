@@ -54,7 +54,6 @@ mod stop_lang;
 mod stop_risk;
 mod tags;
 mod tied;
-mod tune;
 mod turn;
 mod usage_month;
 mod worktree_push;
