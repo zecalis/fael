@@ -185,25 +185,41 @@ pub(crate) fn touched(
     let trunk = base_of(dir, branch)?;
     let tip = branch.unwrap_or("HEAD");
     let d = crate::git(dir, &["diff", "--name-only", &format!("{trunk}...{tip}")])?;
-    Some(since(dir, st.run_base(uid), tip, d.lines()))
+    Some(since(dir, st.run_base(uid), (&trunk, tip), d.lines()))
 }
 
 /// Issue 01M4TVDGG: of the trunk diff, only the paths changed since the run's start commit —
 /// a lane stacked on another lane's branch never claims that lane's files, and a rebase onto
 /// the trunk since start never claims the trunk's (the trunk diff cuts them). No base
 /// recorded: the trunk diff as is; nothing since the base: nothing claimed.
+/// Issue 01M4W673: a lane rebased with the stack it started on (the trunk moved) has a base
+/// that is no ancestor any more — the stack's copies keep author, date and subject of a commit
+/// behind the base and drop (a patch-id match misses a copy whose context the trunk moved);
+/// the trunk's own commits a rebase brought in are not the lane's either.
 fn since<'a>(
     dir: &Path,
     base: Option<String>,
-    tip: &str,
+    (trunk, tip): (&str, &str),
     diff: impl Iterator<Item = &'a str>,
 ) -> Vec<String> {
     let Some(b) = base else {
         return diff.map(String::from).collect();
     };
-    let since =
-        crate::git(dir, &["diff", "--name-only", &format!("{b}...{tip}")]).unwrap_or_default();
-    let since: HashSet<&str> = since.lines().collect();
+    let (range, not) = (format!("{b}...{tip}"), format!("^{trunk}"));
+    let log = |side: &str, more: &[&str]| {
+        let head = ["log", side, "--format=%x01%ae %at %s"];
+        let args = [&head[..], more, &[&range, &not]].concat();
+        crate::git(dir, &args).unwrap_or_default()
+    };
+    let behind = log("--left-only", &[]);
+    let behind: HashSet<&str> = behind.split('\x01').map(str::trim).collect();
+    let ahead = log("--right-only", &["--name-only"]);
+    let since: HashSet<&str> = ahead
+        .split('\x01')
+        .filter_map(|c| c.split_once('\n'))
+        .filter(|(key, _)| !behind.contains(key.trim()))
+        .flat_map(|(_, files)| files.lines())
+        .collect();
     diff.filter(|f| since.contains(f))
         .map(String::from)
         .collect()

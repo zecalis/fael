@@ -179,4 +179,28 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     assert!(!out.contains("declared scope"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &g, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["f/y.txt"]));
+
+    // issue 01M4W673: lane h starts on a stack whose commit appends to README, then the trunk
+    // edits README's first line and the lead rebases the lane, stack and all: its start commit
+    // is no ancestor any more, and the stack's copy has a new patch (its context moved)
+    let h = add("h", &[]);
+    let readme = |s: &str| std::fs::write(d.join("README"), s).unwrap();
+    readme("1\n2\n3\n");
+    git(&d, &["commit", "-qam", "readme"]);
+    git(&d, &["switch", "-q", "-c", "stack"]);
+    readme("1\n2\n3\nstack\n");
+    git(&d, &["commit", "-qam", "stack"]);
+    git(&d, &["switch", "-q", "main"]);
+    lane(&d, &state, &h, ("laneh", "stack"), "RH", &["h/z.txt"]);
+    readme("one\n2\n3\n");
+    git(&d, &["commit", "-qam", "trunk moves"]);
+    git(&d, &["update-ref", "refs/remotes/origin/main", "main"]);
+    git(&d.with_file_name("laneh"), &["rebase", "-q", "main"]);
+    f(&["chunk", "done", &h, "h", "--run", "RH"]);
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &h, "--json"])).unwrap();
+    assert_eq!(
+        c["scope"],
+        serde_json::json!(["h/z.txt"]),
+        "not the stack's README"
+    );
 }
