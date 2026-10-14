@@ -218,14 +218,27 @@ pub(crate) fn run_end(a: &Args, run: &str) -> Result<ExitCode, String> {
         for (uid, branch, wt) in st.run_rows(run)? {
             let here = || {
                 crate::git(
-                    std::path::Path::new(&wt?),
+                    std::path::Path::new(wt.as_deref()?),
                     &["rev-parse", "--abbrev-ref", "HEAD"],
                 )
             };
-            let b = branch.or_else(here).filter(|b| b != "HEAD");
-            if let Some(d) = b.and_then(|b| crate::chunk_run::touched(&r.root, &st, &uid, Some(&b)))
-            {
-                let _ = st.claim(&uid, &d);
+            let diff = |b: &str| {
+                crate::chunk_run::touched(&r.root, &st, &uid, Some(b)).filter(|d| !d.is_empty())
+            };
+            let b = branch.clone().or_else(here).filter(|b| b != "HEAD");
+            // issue 01M4WZ4H: a worker that switched to a branch of its own left the recorded
+            // one empty — its worktree's branch is the work; said, so a wrong pick shows
+            let moved = || {
+                let h = here().filter(|h| h != "HEAD" && Some(h) != b.as_ref())?;
+                let was = b.as_deref().unwrap_or("-");
+                diff(&h).inspect(|_| println!("run {run}: {uid} claimed {h}, not {was}"))
+            };
+            match b.as_deref().and_then(diff).or_else(moved) {
+                Some(d) => {
+                    let _ = st.claim(&uid, &d);
+                }
+                None if b.is_some() => println!("run {run}: {uid} claimed nothing since its start"),
+                None => {}
             }
         }
         st.run_end(run, cost, &fael_core::rfc3339(fael_core::now_ms()))?;

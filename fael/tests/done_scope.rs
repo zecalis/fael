@@ -180,6 +180,33 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &g, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["f/y.txt"]));
 
+    // issue 01M4WZ4H: lane k's worker switches to a branch of its own and commits there — run
+    // end claims that branch and says so, never an empty claim of the recorded one
+    let k = add("k", &[]);
+    let wk = d.with_file_name("lanek");
+    git(
+        &d,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "lanek",
+            wk.to_str().unwrap(),
+            "main",
+        ],
+    );
+    fael(&wk, &state, &["chunk", "start", &k, "--run", "RK"]);
+    git(&wk, &["switch", "-q", "-c", "lanek-own", "main"]);
+    std::fs::create_dir_all(wk.join("k")).unwrap();
+    std::fs::write(wk.join("k/z.txt"), "k").unwrap();
+    git(&wk, &["add", "k/z.txt"]);
+    git(&wk, &["commit", "-qm", "k"]);
+    let out = f(&["run", "end", "RK"]);
+    assert!(out.contains("claimed lanek-own"), "{out}");
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &k, "--json"])).unwrap();
+    assert_eq!(c["touched"], serde_json::json!(["k/z.txt"]));
+
     // issue 01M4W673: lane h starts on a stack whose commit appends to README, then the trunk
     // edits README's first line and the lead rebases the lane, stack and all: its start commit
     // is no ancestor any more, and the stack's copy has a new patch (its context moved)
