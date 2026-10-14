@@ -3,16 +3,16 @@
 //! and say each row once per session.
 
 use super::asks::{UsageMeta, hook_meta};
-use super::changed::{Ask, Blobs, edit_hint, read_seen, split_said};
+use super::changed::{Ask, Blobs, edit_hint, read_seen};
 use super::check;
-use super::decision::{self, Gate};
+use super::decision;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::state::{
     clear_stash, edited_files, edits_path, lock_seen, peek_stash, read_turn, record_edits,
-    seen_path, swap_touched, touched_path,
+    seen_path,
 };
-use super::usage::record_usage_shadow;
+use super::usage::record_usage;
 use crate::{aliases, core};
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
@@ -207,10 +207,6 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     if edit {
         out.record_in_context(&c, &tiered, &files);
     }
-    // the working set before this push, read under the same lock; no session,
-    // no set — a row's `touch` is then unknown, not 0
-    let touched = (!c.session.is_empty())
-        .then(|| swap_touched(&touched_path(&c.session, &c.agent, &c.repo.root), &files));
     let (told, hinted) = read_seen(out.seen());
     let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     // a told File row still makes its file a hub (issue push:hub-files)
@@ -219,9 +215,6 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         .filter(|(r, t)| out.has(&r.id) && core::bucket(r, *t, &focus) == core::Bucket::File)
         .count();
     tiered.retain(|(r, _)| !out.has(&r.id));
-    // the validation experiment (SPEC-fael-learn-loop §E): a candidate session's
-    // search push loses the rows its gate cuts before `select` fills the cap
-    let gate = Gate::for_push(&c, event, &mut tiered, touched.as_ref());
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
@@ -242,9 +235,8 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         &c.tags,
     );
     // usage counts only what was actually said — ids cut off never reached
-    // any context, so stats must not count them. Same said rows feed the
-    // shadow split on a read (PLAN-fael-file-hash chunk 3: usage-line only).
-    let (shown, shadow) = split_said(&sel, n, edit, &c.repo.root, &al, &mut blobs);
+    // any context, so stats must not count them
+    let shown: Vec<String> = sel.shown.iter().take(n).map(|r| r.id.clone()).collect();
     // ponytail: every edit push with rows names a row once per session
     let said = &sel.shown[..n.min(sel.shown.len())];
     // a retire for a row already in context, or a stashed line, still gets
@@ -263,30 +255,15 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         clear_stash(&c.session, &c.repo.root);
     }
     let mut r = out.reply();
-    // a push the gate left silent is still a decision: its cut rows are what
-    // `tune` measures. Nothing said, so nothing shown either.
-    if r.context().is_some() || !gate.cut.is_empty() {
-        let (context, n, shown) = match r.context() {
-            Some(c) => (c, n, &shown[..]),
-            None => ("", 0, &[][..]),
-        };
-        let decision = decision::record(trigger, &sel, n, &focus, touched.as_ref(), &gate);
+    if let Some(context) = r.context() {
+        let decision = decision::record(trigger, &sel, n, &focus);
         let meta = UsageMeta {
             said: r.said(),
             files: &files,
             decision: Some(&decision),
             ..hook_meta(&c, None, true)
         };
-        record_usage_shadow(
-            &c.client,
-            event,
-            &c.repo.root,
-            context,
-            shown,
-            &meta,
-            // no row said, nothing to split
-            shadow.filter(|_| n > 0),
-        );
+        record_usage(&c.client, event, &c.repo.root, context, &shown, &meta);
     }
     r.notice = super::tally::whisper(&c, said, &files);
     r

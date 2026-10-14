@@ -30,10 +30,13 @@ Every number comes from two inputs, joined as pure functions in
   decision record (PLAN-fael-learn-loop chunk 1; `rows[].outcomes` reads `cut`):
   `trigger` (`read` · `edit` · `shell-edit` · `search` (the client named
   the files, so how it found them is not ours to say) · a search's `reader-arg` / `hitlist` /
-  `glob`), `policy` (`baseline@1`), `feat` (per row said, and the first 20 cut: `tier`, `hub`,
-  `kind`, `age_d`, and `touch` = how many of the row's files this session's working set (the files its earlier pushes were on) already held — absent with no session) and, when rows were cut, `cut` (`[{id, r}]`, at most 20,
+  `glob`), `feat` (per row said, and the first 20 cut: `tier`, `hub`,
+  `kind`, `age_d`) and, when rows were cut, `cut` (`[{id, r}]`, at most 20,
   `r` = `cap` · `hub_peek` · `budget`) with `cut_n` (all of them). A cut row is
-  a system limit, not a policy's verdict. `would_drop` (`{policy, ids}`, chunk 3) names the said rows the shadow policy `touch@1` would have cut — a row with `touch` 0 unless it is an issue or a handoff; recorded only, the agent saw them all. A hook reply also carries `said` — one
+  a system limit, not a policy's verdict. Lines written before 2026-10-14 may also carry
+  `policy`, `arm`, `feat.touch` and `would_drop` (`{policy, ids}`: the said rows the
+  retired shadow policy `touch@1` would have cut, the agent saw them all); `rows[].outcomes`
+  still reads `would_drop` there. A hook reply also carries `said` — one
   `{kind, key?}` per line it said: `row` (row id), `ask` (row id; `*` in
   older lines, the generic clause before every ask named its row), `pointer` (key), `count` (usage before PLAN-fael-say-gate chunk 4 dropped the line — one per count line:
   `<files>|file`, `<files>|dir:<dirs>`, `<files>|key:<key>` or `<files>|keys`),
@@ -163,58 +166,12 @@ summed; the log panels (`memory`, `for_you`,
 worktrees that share one journal count its rows once; `delivered.last` is
 newest-first across repos.
 
-## `fael tune [--json] [--since d]`
-
-Read-only replay (PLAN-fael-learn-loop chunk 4, SPEC §C). `core::stats::tune`
-prints `Tune`: candidate rules that only *cut* are replayed over the search
-pushes already in `usage.jsonl` and set beside `baseline@1`. It names no
-winner, picks no threshold and writes nothing — a human reads the table. `Stats`
-is untouched, so no `STATS_SCHEMA` bump; `Tune` carries its own `outcomes_v`.
-
-- **Unit.** One said search row in one session (the same observation
-  `rows[].outcomes` counts). A row is *replayable* when its push line recorded
-  `feat.touch` and the row is still in the log; the rest are counted in
-  `sizes.rows_said` but not replayed (older lines, no session: unknown, not 0).
-- **Candidates.** `touch@1` calls the pinned `touch_drops` on each row, and its
-  `dropped` must equal `sizes.recorded_would_drop` (what the shadow wrote).
-  `touch-yield@1` drops what `touch@1` would, unless the row was engaged
-  (cited, pulled by the agent itself, or acted on) in ≥10% of earlier sessions,
-  read from the first of (row,file,trigger), (row,file), (row), (class) that has
-  ≥5; with none it keeps the row. History is sessions that had *ended* before
-  the row was said. `decay` = how many earlier sessions per key count
-  (`none`, 20, 50, 100, 200).
-- **Rates** are `{x, n, lo, hi}` — `x/n` with its Wilson 95% interval, `null`
-  bounds when `n` is 0. `exposure` = rows still said / rows said; `retained`
-  = an outcome on rows the candidate keeps / that outcome on all of them;
-  `retrieved_after_cut.rows` = dropped rows the agent pulled itself,
-  `.sessions` = sessions that did (a pull fael induced is never evidence);
-  `missed_push` = dropped rows the agent pulled itself and then cited or acted on.
-- **Coverage** (provisional thresholds from decision `01M45DKB4`: ≥3 days, busiest
-  day ≤50%, busiest session ≤10% of search pushes) and **strata** (repo × client;
-  eligible at ≥10 sessions and ≥100 search pushes) are reported, never tuned.
-- **Validation** (PLAN-fael-learn-loop chunk 5, SPEC §E) appears once push lines
-  carry an `arm` — a repo in `canary` or `ramp` under `auto`, or `push_policy = "touch@1"` pinned in `.fael/config.toml`. Candidate
-  sessions are cut for real (`gate`); holdout sessions run `baseline@1`. The
-  replay tables above leave candidate-arm lines out (their rows are what the gate
-  left). The block prints arm sizes per stratum with the trigger-mix guard (> 10
-  points = `unbalanced`, not compared), exposure (rows said per session), what the
-  gate forfeits (the candidate replayed on holdout rows), `missed_push` over gate
-  cuts, and the sessions that went back for a cut row — then one verdict:
-  `validated`, `not_validated` or `insufficient_data`, with reasons. Sessions that
-  filed a row over one they were never shown (`dup`, written at `add --supersedes`)
-  are held to the same +20% bar as `retrieved_after_cut`. Under `push_policy = auto`
-  the verdict moves the repo's stage (`docs/learn-loop.md`), and `tune` lists each repo's
-  stage; `tune` itself writes nothing.
-- **An upper bound.** The replay holds the session fixed: a row a candidate had
-  dropped would have stayed unseen and could have been said at a later push,
-  which the log cannot show. Read every cost as at most what the data says.
-- **Association** is a rate per feature value (and phi for a yes/no feature):
-  observed, not a cause. The causal test is the holdout (SPEC §E).
-
 ## Changelog
 
 Newest first.
 
+- `3` (2026-10-14): push lines no longer write `policy`, `arm`, `feat.touch` or `would_drop`, and the `dup` outcome line is gone — the retired push gate (`touch@1`, its stages and holdout) wrote them and only `fael tune` read them; `rows[].outcomes` still counts `would_drop` on older lines. Usage lines only, `Stats` is unchanged; no bump.
+- `3` (2026-10-14): `fael tune` removed with the measurement plans it served (decision 01M4V39ZF6, issue 01M4V3JC); it was a separate command, `Stats` is unchanged; no bump.
 - `3` (2026-10-13): `asks.reject` removed — a reject was written twice (an `ask` row with no reason or session, and its `call` row), and the two disagreed; the `call` row is the one count now, agent sessions only. `asks.warning` gained `codes`; `friction` reasons are closed codes (`bad_value` retired), split per command in `by_command[].reasons`, `chunk`/`plan` per verb; `friction` gained `shape_gate_rules`; the CLI counts clean `chunk`, `plan` and `board` calls too, so their reject rate has a denominator. Bump: a field was removed (issues 01M4RPFC, 01M4RPXP).
 - `2` (2026-10-10): `said` gained `held` (PLAN-fael-decision-held chunk 2, the held-by close); new map key only; no bump.
 - `2` (2026-10-09): `friction` gained `shape_gate`; a pre-write gate reject (reason `shape_gate`, was `bad_value`) leaves `calls`, `rejects`, `reasons` and first-call success (decision 01M4FNQ1); no bump.

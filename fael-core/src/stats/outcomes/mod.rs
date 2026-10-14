@@ -17,7 +17,7 @@ use crate::{Log, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-/// Bump when an outcome's definition changes; `tune` reports per version.
+/// Bump when an outcome's definition changes.
 pub const OUTCOMES_V: u32 = 1;
 
 /// Cut reasons that are a policy's decision, not a system limit (SPEC §A).
@@ -50,18 +50,13 @@ pub struct RowOutcomes {
 }
 
 #[derive(Default)]
-struct Obs<'a> {
+struct Obs {
     said: bool,
-    /// The push line that said it — `tune` reads its trigger and features.
-    said_line: Option<&'a serde_json::Value>,
     cut: BTreeSet<String>,
     cut_ms: Option<i64>,
     cited: bool,
     first_said_ms: i64,
     agent_pull: bool,
-    /// When the agent first pulled the row after fael said it.
-    agent_pull_ms: Option<i64>,
-    cited_after_pull: bool,
     induced_pull: bool,
     /// First agent-initiated pull of the row while it was cut and unsaid.
     retrieved_ms: Option<i64>,
@@ -70,9 +65,7 @@ struct Obs<'a> {
 
 #[derive(Default)]
 struct Session<'a> {
-    obs: HashMap<&'a str, Obs<'a>>,
-    /// The session's last usage line: what a later session may learn from.
-    end_ms: i64,
+    obs: HashMap<&'a str, Obs>,
     pointers: HashSet<&'a str>,
     counts: Vec<&'a str>,
     asks: HashSet<&'a str>,
@@ -85,7 +78,7 @@ impl<'a> Session<'a> {
         for id in strs(v, "ids") {
             let o = self.obs.entry(id).or_default();
             if !o.said {
-                (o.said, o.first_said_ms, o.said_line) = (true, ms, Some(v));
+                (o.said, o.first_said_ms) = (true, ms);
             }
         }
         let cuts = v["cut"]
@@ -131,7 +124,6 @@ impl<'a> Session<'a> {
                     o.induced_pull = true;
                 } else {
                     o.agent_pull = true;
-                    o.agent_pull_ms.get_or_insert(p.ms);
                 }
             }
             // a `would_drop` row was said (shadow: the agent saw it), so its pull
@@ -149,30 +141,20 @@ impl<'a> Session<'a> {
         let o = self.obs.entry(id).or_default();
         o.cited |= o.said;
         o.cited_after_retrieval |= o.retrieved_ms.is_some();
-        o.cited_after_pull |= o.agent_pull_ms.is_some();
     }
 }
 
-/// One row in one session — the unit every outcome counts, with the push line
-/// that said it, so `tune` can replay a policy over the same observations.
+/// One row in one session — the unit every outcome counts.
 pub(super) struct Observation<'a> {
-    pub repo: &'a str,
-    pub session: &'a str,
-    pub id: &'a str,
-    pub said_line: Option<&'a serde_json::Value>,
-    pub first_said_ms: i64,
-    /// The session's last usage line: its outcomes are known after this.
-    pub end_ms: i64,
-    pub cut: BTreeSet<String>,
+    id: &'a str,
+    said: bool,
+    cut: BTreeSet<String>,
     pub cited: bool,
-    pub agent_pull: bool,
-    pub induced_pull: bool,
+    agent_pull: bool,
+    induced_pull: bool,
     pub acted: bool,
-    pub retrieved: bool,
-    pub missed_push: bool,
-    /// The agent pulled the row itself after it was said, then cited or acted
-    /// on it — what a policy that had dropped the said row would have cost.
-    pub pulled_then_used: bool,
+    retrieved: bool,
+    missed_push: bool,
 }
 
 /// Every (repo, session, row) fael said or cut, with what followed.
@@ -190,7 +172,6 @@ pub(super) fn observations<'a>(
             continue;
         };
         let st = sessions.entry((repo, s)).or_default();
-        st.end_ms = st.end_ms.max(ms);
         if v["event"] == "in-context" {
             continue;
         } else if v.get("found").is_some() {
@@ -213,7 +194,7 @@ pub(super) fn observations<'a>(
         .map(|(repo, log)| (repo.as_str(), retire_times(log)))
         .collect();
     let mut out = Vec::new();
-    for (&(repo, session), st) in &sessions {
+    for (&(repo, _), st) in &sessions {
         // closed, superseded or bumped in the day from `ms`
         let acted_from = |id: &str, ms: i64| {
             gone.get(repo)
@@ -226,12 +207,8 @@ pub(super) fn observations<'a>(
             }
             let policy = POLICY_CUTS.iter().any(|p| o.cut.contains(*p));
             out.push(Observation {
-                repo,
-                session,
                 id,
-                said_line: o.said_line,
-                first_said_ms: o.first_said_ms,
-                end_ms: st.end_ms,
+                said: o.said,
                 cut: o.cut.clone(),
                 cited: o.cited,
                 agent_pull: o.agent_pull,
@@ -241,9 +218,6 @@ pub(super) fn observations<'a>(
                 missed_push: o
                     .retrieved_ms
                     .is_some_and(|ms| policy && (o.cited_after_retrieval || acted_from(id, ms))),
-                pulled_then_used: o
-                    .agent_pull_ms
-                    .is_some_and(|ms| o.cited_after_pull || acted_from(id, ms)),
             });
         }
     }
@@ -258,7 +232,7 @@ pub(super) fn outcomes(
     let mut out: BTreeMap<String, RowOutcomes> = BTreeMap::new();
     for o in observations(parsed, logs) {
         let r = out.entry(o.id.to_string()).or_default();
-        r.shown += o.said_line.is_some() as usize;
+        r.shown += o.said as usize;
         for why in &o.cut {
             *r.cut.entry(why.clone()).or_default() += 1;
         }

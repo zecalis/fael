@@ -192,7 +192,7 @@ fn json_rows_shape_with_flag() {
             && rows[0]["noise"].is_boolean(),
         "{v}"
     );
-    // outcomes_v 1: the keys a reader of `tune` relies on
+    // outcomes_v 1: the keys a reader of `rows[].outcomes` relies on
     assert_eq!(v["outcomes_v"], 1, "{v}");
     assert_eq!(
         keys(&rows[0]["outcomes"]),

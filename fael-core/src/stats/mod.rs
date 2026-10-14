@@ -30,7 +30,6 @@ mod retire_split;
 mod said;
 #[cfg(test)]
 mod said_tests;
-mod tune;
 mod unused;
 mod value;
 mod verdict;
@@ -61,11 +60,6 @@ pub use repeat::ContextLoop;
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use retire_split::{Arm, RetireSplit};
 pub use said::{ASK_SPLIT, KINDS, KindYield};
-pub use tune::{
-    ArmSize, Assoc, Coverage, DECAYS, DecayPoint, Group, MAX_DAY_SHARE_PCT, MAX_SESSION_SHARE_PCT,
-    MIN_DAYS, PolicyResult, Rate, STRATUM_MIN_PUSHES, STRATUM_MIN_SESSIONS, Section, Sizes, Status,
-    Stratum, Tune, Used, Validation, Verdict, shadow_verdict, tune, wilson,
-};
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
 pub use verdict::{FileVerdict, GATE_MIN_PAIRS};
