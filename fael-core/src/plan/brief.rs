@@ -18,7 +18,8 @@ pub fn rules(uid: &str) -> String {
          - one chunk = one branch = one PR; never merge, the owner does\n\
          - you triggered Windows CI (`gh workflow run ci.yml --ref <branch>`)? wait for it (`gh run watch <id> --exit-status`) and write pass, or fail with the failing test, in the done text — never just \"triggered\"\n\
          - the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
-         - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read\n\
+         - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read; then one clause per option on what it leads to, and end `Recommend: <option> because <evidence>` — you hold the most context now\n\
+         - a wait --on data names what is measured, the command that measures it and the bar that ends the wait\n\
          - after each step that passes: a WIP commit + `fael chunk note {uid} \"<done; next>\"` — the checkpoint a resume reads\n\
          - a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done\n\
          - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note … --files <f>`\n"
