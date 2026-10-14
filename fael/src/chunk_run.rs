@@ -168,6 +168,11 @@ pub(crate) fn done(
             }
         }
     }
+    // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
+    // ready — the agent judges, done never closes or bumps
+    if let Some(d) = &diff {
+        print!("{}", crate::hook::held_text(r, d));
+    }
     if let (Some(trunk), Some(_)) = (trunk, pr) {
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }

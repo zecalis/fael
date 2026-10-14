@@ -231,3 +231,69 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
         "not the stack's README"
     );
 }
+
+/// plan fael-row-retire w2: done names the open decisions and notes on the files the chunk
+/// touched, verdicts ready, at most five then where the rest are; never an issue, never a
+/// row on a file the chunk left alone.
+#[test]
+fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
+    let (d, state) = init();
+    let f = |args: &[&str]| fael(&d, &state, args);
+    let add = |label: &str| f(&["chunk", "add", label, "--brief", "b", "--scope", "w/"]);
+    std::fs::create_dir_all(d.join("w")).unwrap();
+    for p in ["w/a.txt", "w/b.txt"] {
+        std::fs::write(d.join(p), "v1").unwrap();
+    }
+    git(&d, &["add", "w"]);
+    git(&d, &["commit", "-qm", "w"]);
+    let row = |kind: &str, file: &str| {
+        let out = f(&["add", kind, &format!("{kind} on {file}"), "--files", file]);
+        let id = out
+            .split_whitespace()
+            .find(|w| w.starts_with("01"))
+            .unwrap();
+        id.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+            .to_string()
+    };
+    let ids: Vec<String> = (0..6).map(|_| row("decision", "w/a.txt")).collect();
+    let (issue, other) = (row("issue", "w/a.txt"), row("note", "w/b.txt"));
+    // a chunk whose diff touches w/a.txt
+    let (u, v) = (add("u"), add("v"));
+    f(&["chunk", "start", &u]);
+    git(&d, &["switch", "-q", "-c", "touch"]);
+    std::fs::write(d.join("w/a.txt"), "v2").unwrap();
+    git(&d, &["commit", "-qam", "touch"]);
+    let out = f(&["chunk", "done", &u, "h"]);
+    let id = said_id(&out, &ids[0]).unwrap_or_default();
+    for want in [
+        format!("fael bump {id}"),
+        format!("fael close {id} \"now in `w/a.txt`\""),
+        format!("--supersedes {id}"),
+        "+1 more: fael find --files w/a.txt".into(),
+        "chain several in one shell call with &&".into(),
+    ] {
+        assert!(out.contains(&want), "{want}: {out}");
+    }
+    for id in [&ids[5], &issue, &other] {
+        assert!(said_id(&out, id).is_none(), "{id}: {out}");
+    }
+    // a chunk whose diff touches nothing with rows: nothing extra
+    git(&d, &["switch", "-q", "main"]);
+    f(&["chunk", "start", &v]);
+    git(&d, &["switch", "-q", "-c", "quiet"]);
+    std::fs::write(d.join("w/c.txt"), "v1").unwrap();
+    git(&d, &["add", "w/c.txt"]);
+    git(&d, &["commit", "-qm", "quiet"]);
+    assert_eq!(
+        f(&["chunk", "done", &v, "h"]),
+        format!("chunk {v} → review")
+    );
+}
+
+/// The short id `out` names `id` by — fael abbreviates, and no other row's
+/// short id is a prefix of this one's. `None` when `out` never names it.
+fn said_id(out: &str, id: &str) -> Option<String> {
+    out.split(|c: char| !c.is_ascii_alphanumeric())
+        .find(|w| w.len() >= 8 && id.starts_with(w))
+        .map(String::from)
+}
