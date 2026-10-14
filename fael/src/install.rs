@@ -276,8 +276,8 @@ fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {
     skills.dedup();
     for dir in skills {
         skill::retire(c, &dir)?;
-        for (name, body) in skill::SKILLS {
-            skill::skill(c, &dir.join(name).join("SKILL.md"), body)?;
+        for (name, file, body) in skill::SKILLS {
+            skill::skill(c, &dir.join(name).join(file), body)?;
         }
     }
     Ok(())

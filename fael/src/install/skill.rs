@@ -3,21 +3,44 @@
 use super::Ctx;
 use std::path::Path;
 
-/// Every skill fael ships, by its dir name under a client's skills dir (issue 01M4N42X).
+/// Every file of every skill fael ships: (dir name under a client's skills dir, file, body)
+/// (issue 01M4N42X). A file beside SKILL.md is a branch's reference, read on its pointer.
 /// fael-lead and fael-content ship from zecalis/fael-crew (decision 01M4SQ9B).
-pub(super) const SKILLS: [(&str, &str); 5] = [
-    ("fael", include_str!("../../skill/SKILL.md")),
+pub(super) const SKILLS: [(&str, &str, &str); 8] = [
+    ("fael", "SKILL.md", include_str!("../../skill/SKILL.md")),
     (
         "fael-debug",
+        "SKILL.md",
         include_str!("../../skill/fael-debug/SKILL.md"),
     ),
-    ("fael-plan", include_str!("../../skill/fael-plan/SKILL.md")),
+    (
+        "fael-plan",
+        "SKILL.md",
+        include_str!("../../skill/fael-plan/SKILL.md"),
+    ),
+    (
+        "fael-plan",
+        "REVIEW.md",
+        include_str!("../../skill/fael-plan/REVIEW.md"),
+    ),
+    (
+        "fael-plan",
+        "ADOPT.md",
+        include_str!("../../skill/fael-plan/ADOPT.md"),
+    ),
+    (
+        "fael-plan",
+        "SPEC.md",
+        include_str!("../../skill/fael-plan/SPEC.md"),
+    ),
     (
         "fael-review",
+        "SKILL.md",
         include_str!("../../skill/fael-review/SKILL.md"),
     ),
     (
         "fael-sweep",
+        "SKILL.md",
         include_str!("../../skill/fael-sweep/SKILL.md"),
     ),
 ];
