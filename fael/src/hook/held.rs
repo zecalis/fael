@@ -58,13 +58,15 @@ pub(crate) fn pairs<'a>(
     found
 }
 
-/// One line per row with its three verdicts ready to run; a `from: user` row
-/// says to ask the user first; the chain hint once when there are several.
-pub(crate) fn text(rows: &[(&core::Row, String)]) -> String {
+/// One line per row with its three verdicts ready to run (short ids); a
+/// `from: user` row says to ask the user first; the chain hint once when there
+/// are several.
+pub(crate) fn text(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
+    let ab = core::abbrev(log);
     let mut out: String = rows
         .iter()
         .map(|(r, f)| {
-            let (id, user) = (&r.id, user_note(std::iter::once(*r)));
+            let (id, user) = (ab.short(&r.id), user_note(std::iter::once(*r)));
             let title = r.title.as_deref().map(|t| format!(" \"{t}\"")).unwrap_or_default();
             format!(
                 "fael: {} {id}{title} — `{f}` changed since it was written · still true? fael bump {id} · the code holds it? fael close {id} \"now in `{f}`\" · wrong now? re-file with --supersedes {id}{user}\n",
@@ -127,7 +129,7 @@ pub(super) fn line(c: &Ctx) -> Option<Line> {
         kind: Kind::Held {
             ids: live.iter().map(|(r, _)| r.id.clone()).collect(),
         },
-        text: text(&live),
+        text: text(&c.log, &live),
     })
 }
 
@@ -138,7 +140,7 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
     let al = crate::aliases::load(r, &log, true);
     let found = pairs(&log, &r.root, &al, "", files);
     let (head, rest) = found.split_at(found.len().min(DONE_MAX));
-    let mut out = text(head);
+    let mut out = text(&log, head);
     if !rest.is_empty() {
         let mut more: Vec<&str> = rest.iter().map(|(_, f)| f.as_str()).collect();
         more.sort_unstable();

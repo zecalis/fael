@@ -260,7 +260,7 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     std::fs::write(d.join("w/a.txt"), "v2").unwrap();
     git(&d, &["commit", "-qam", "touch"]);
     let out = f(&["chunk", "done", &u, "h"]);
-    let id = &ids[0];
+    let id = said_id(&out, &ids[0]).unwrap_or_default();
     for want in [
         format!("fael bump {id}"),
         format!("fael close {id} \"now in `w/a.txt`\""),
@@ -270,7 +270,9 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     ] {
         assert!(out.contains(&want), "{want}: {out}");
     }
-    assert!(!out.contains(&ids[5]) && !out.contains(&issue) && !out.contains(&other), "{out}");
+    for id in [&ids[5], &issue, &other] {
+        assert!(said_id(&out, id).is_none(), "{id}: {out}");
+    }
     // a chunk whose diff touches nothing with rows: nothing extra
     git(&d, &["switch", "-q", "main"]);
     f(&["chunk", "start", &v]);
@@ -279,4 +281,12 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     git(&d, &["add", "w/c.txt"]);
     git(&d, &["commit", "-qm", "quiet"]);
     assert_eq!(f(&["chunk", "done", &v, "h"]), format!("chunk {v} → review"));
+}
+
+/// The short id `out` names `id` by — fael abbreviates, and no other row's
+/// short id is a prefix of this one's. `None` when `out` never names it.
+fn said_id(out: &str, id: &str) -> Option<String> {
+    out.split(|c: char| !c.is_ascii_alphanumeric())
+        .find(|w| w.len() >= 8 && id.starts_with(w))
+        .map(String::from)
 }

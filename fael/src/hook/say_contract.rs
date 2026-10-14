@@ -393,5 +393,5 @@ fn held_names_only_open_decisions_and_notes_on_edited_files() {
     };
     assert_eq!(ids(&["a.rs".into()]), ["01DEC", "01NOTE", "01NEWER"]);
     assert!(ids(&[]).is_empty());
-    assert!(super::held::text(&[]).is_empty());
+    assert!(super::held::text(&log, &[]).is_empty());
 }

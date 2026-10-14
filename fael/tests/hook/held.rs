@@ -47,6 +47,14 @@ fn add(d: &Path, kind: &str, text: &str, file: &str, session: Option<&str>, more
         .to_string()
 }
 
+/// The short id `out` names `id` by — fael abbreviates, and no other row's
+/// short id is a prefix of this one's. `None` when `out` never names it.
+fn said_id(out: &str, id: &str) -> Option<String> {
+    out.split(|c: char| !c.is_ascii_alphanumeric())
+        .find(|w| w.len() >= 8 && id.starts_with(w))
+        .map(String::from)
+}
+
 fn decide(d: &Path, text: &str, file: &str, session: Option<&str>) -> String {
     add(d, "decision", text, file, session, &[])
 }
@@ -67,6 +75,7 @@ fn the_sessions_decision_on_an_edited_file_is_named_once_after_stop() {
     assert!(!out.contains(HELD), "never at the edit: {out}");
     stop(&d);
     let out = hook(&d, "edit", "src/c.rs");
+    let id = said_id(&out, &id).unwrap_or(id);
     for want in [
         format!("fael bump {id}"),
         format!(r#"fael close {id} \"now in `src/a.rs`\""#),
@@ -98,9 +107,12 @@ fn any_writers_decision_or_note_on_an_edited_changed_file_is_named() {
     stop(&d);
     let out = hook(&d, "edit", "src/c.rs");
     // own row first, then log order; at most three
-    let at = |id: &str| out.find(&format!("fael bump {id}")).unwrap_or(usize::MAX);
+    let at = |id: &str| {
+        let s = said_id(&out, id).unwrap_or_default();
+        out.find(&format!("fael bump {s} ")).unwrap_or(usize::MAX)
+    };
     assert!(at(&own) < at(&other) && at(&other) < at(&none), "{out}");
-    assert!(!out.contains(&user), "cut at three: {out}");
+    assert!(said_id(&out, &user).is_none(), "cut at three: {out}");
     assert!(out.contains("fael: note "), "{out}");
     assert!(out.contains("chain several in one shell call with &&"), "{out}");
 }
