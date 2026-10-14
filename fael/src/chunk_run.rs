@@ -98,7 +98,7 @@ pub(crate) fn done(
     handoff: &str,
     here: &Here,
 ) -> Result<(), String> {
-    a.only("chunk done", &["pr", "out", "run", "verdict"])?;
+    a.only("chunk done", &["pr", "out", "run", "verdict", "review"])?;
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
     let raw = a.one("pr");
     let pr = raw
@@ -146,7 +146,15 @@ pub(crate) fn done(
     let branch = st.run_branch(uid, here.run).filter(|b| !on_trunk(b));
     // a run `run end` ended kept its lane's diff then: the lane may be rebased since
     let kept = st.claimed_at_end(uid, here.run);
-    st.done_verdict(uid, handoff, pr, out, a.one("verdict").as_deref(), here)?;
+    let (verdict, review) = (a.one("verdict"), a.one("review"));
+    st.done_verdict(
+        uid,
+        handoff,
+        pr,
+        out,
+        (verdict.as_deref(), review.as_deref()),
+        here,
+    )?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope

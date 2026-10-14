@@ -15,8 +15,9 @@ use rusqlite::{OptionalExtension, Transaction, params};
 pub struct Start {
     /// R: the launcher passes a fresh one, else fael makes it; a reused R is rejected
     pub run: Option<String>,
+    /// → `run.client`; None = the approval's client, else the chunk's `client_hint`
     pub client: Option<String>,
-    /// what the launcher runs it with → `run.model`
+    /// what the launcher runs it with → `run.model`; None = the approval's, else `model_hint`
     pub model: Option<String>,
     /// a client that writes a file and exits (image gen): the run holds no worktree, so it
     /// takes no slot, and `done --run R` from the launching shell finishes it
@@ -208,9 +209,12 @@ impl Store {
         }
         let mut chunks = Vec::new();
         for (r, was) in claim {
+            // issue 01M4XN3S: no --client/--model = the approval's, else the chunk's hint
             tx.execute(
                 "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                 SELECT ?1, id, COALESCE(?3, approved_client, client_hint),
+                        COALESCE(?4, approved_model, model_hint), ?5, ?6, ?7, ?8, ?9
+                 FROM chunk WHERE id = ?2",
                 params![
                     run,
                     r.id,
