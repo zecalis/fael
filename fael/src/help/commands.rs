@@ -70,9 +70,10 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M] [--groups] [--text query]
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
       why: `closed: <text> (<sha>)`; several ids print every body in one call,
-      a bad id reports alone and the exit is 1; an id-shaped query is
-      never a text search — it rejects when no row owns it, naming the rows
-      that only mention it; --text forces a text search;
+      a bad id reports alone and the exit is 1; several words with no id are
+      one text query; an id-shaped query is never a text search — it rejects
+      when no row owns it, naming the chunk or other repo that owns it and
+      the rows that only mention it; --text forces a text search;
       an id counts as verified only after fael find printed it as - [<id>] —
       never type one from memory;
       --full shows every body — a first page of one or two rows (no --limit)
