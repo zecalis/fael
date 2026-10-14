@@ -1,6 +1,5 @@
 //! PLAN-fael-learn-loop chunk 1: every edit push's usage line is its decision
-//! record — the trigger, the files, the policy `baseline@1`, the features of
-//! each row said or cut, and why a row was cut (`cap` / `hub_peek` /
+//! record — the trigger, the files, the features of each row said or cut, and why a row was cut (`cap` / `hub_peek` /
 //! `budget`). The record is usage-line only: what the agent sees is untouched
 //! (the replay and `push_cap` tests pin that).
 
@@ -48,16 +47,18 @@ fn reasons(l: &Value) -> Vec<&str> {
 }
 
 #[test]
-fn an_edit_push_records_trigger_files_policy_and_row_features() {
+fn an_edit_push_records_trigger_files_and_row_features() {
     let d = repo();
     seed(&d, 1);
     push(&d, "edit", "src/a.rs");
     let l = line(&d, "edit");
     assert_eq!(l["trigger"], "edit", "{l}");
     assert_eq!(l["files"], json!(["src/a.rs"]), "{l}");
-    assert_eq!(l["policy"], "baseline@1", "{l}");
     assert!(l.get("cut").is_none() && l.get("cut_n").is_none(), "{l}");
-    assert_eq!(l["arm"], "all", "no gate configured, no experiment: {l}");
+    // the retired push gate wrote these; nothing reads them any more
+    for k in ["policy", "arm", "would_drop"] {
+        assert!(l.get(k).is_none(), "{k}: {l}");
+    }
     // every said row carries its features
     let ids = l["ids"].as_array().unwrap();
     assert_eq!(ids.len(), 2, "{l}");
@@ -66,6 +67,7 @@ fn an_edit_push_records_trigger_files_policy_and_row_features() {
         assert_eq!(f["tier"], 0, "{l}");
         assert_eq!(f["hub"], false, "{l}");
         assert_eq!(f["age_d"], 0, "{l}");
+        assert!(f.get("touch").is_none(), "{l}");
         assert!(
             ["issue", "decision"].contains(&f["kind"].as_str().unwrap()),
             "{l}"

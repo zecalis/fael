@@ -72,11 +72,9 @@ board shows it and the brief of every chunk `after` it prints it, so it needs no
 A word for a chunk another agent will start goes in `fael chunk note <uid> "<text>"`, printed
 in that chunk's next brief; never `chunk edit` (it clears the owner's approval).
 
-A chunk that waits on events (a draft titled with its gate, or `wait --on data`): `scripts/checkpoints.py` prints every such
-gate's count against its locked bar. Run the chunk only when its line reads `ready`; its
-result goes in the decision that chunk names. Each run that moves a number appends to
-`~/fael-onoff-results/checkpoints.jsonl` (the trend, gold included); don't file a ledger
-row for a count that isn't ready.
+A chunk that waits on events (a draft titled with its gate, or `wait --on data`) runs only
+once the count its brief names meets its locked bar; its result goes in the decision that
+chunk names. Don't file a ledger row for a count that isn't ready.
 
 ## Git
 

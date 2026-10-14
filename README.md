@@ -168,7 +168,7 @@ fael doctor                                              # check the log and the
 - **npm:** [@zecalis/fael](https://www.npmjs.com/package/@zecalis/fael)
 - **Releases & changelog:** [GitHub Releases](https://github.com/zecalis/fael/releases)
 - **Bugs & ideas:** [Issues](https://github.com/zecalis/fael/issues)
-- **Docs:** [architecture](docs/architecture.md) · [log format](docs/format.md) (read/write it without fael) · [integrate another agent](docs/integrate.md) · [learn loop](docs/learn-loop.md) (how push decisions are tested)
+- **Docs:** [architecture](docs/architecture.md) · [log format](docs/format.md) (read/write it without fael) · [integrate another agent](docs/integrate.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## License

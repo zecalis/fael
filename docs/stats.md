@@ -30,10 +30,13 @@ Every number comes from two inputs, joined as pure functions in
   decision record (PLAN-fael-learn-loop chunk 1; `rows[].outcomes` reads `cut`):
   `trigger` (`read` · `edit` · `shell-edit` · `search` (the client named
   the files, so how it found them is not ours to say) · a search's `reader-arg` / `hitlist` /
-  `glob`), `policy` (`baseline@1`), `feat` (per row said, and the first 20 cut: `tier`, `hub`,
-  `kind`, `age_d`, and `touch` = how many of the row's files this session's working set (the files its earlier pushes were on) already held — absent with no session) and, when rows were cut, `cut` (`[{id, r}]`, at most 20,
+  `glob`), `feat` (per row said, and the first 20 cut: `tier`, `hub`,
+  `kind`, `age_d`) and, when rows were cut, `cut` (`[{id, r}]`, at most 20,
   `r` = `cap` · `hub_peek` · `budget`) with `cut_n` (all of them). A cut row is
-  a system limit, not a policy's verdict. `would_drop` (`{policy, ids}`, chunk 3) names the said rows the shadow policy `touch@1` would have cut — a row with `touch` 0 unless it is an issue or a handoff; recorded only, the agent saw them all. A hook reply also carries `said` — one
+  a system limit, not a policy's verdict. Lines written before 2026-10-14 may also carry
+  `policy`, `arm`, `feat.touch` and `would_drop` (`{policy, ids}`: the said rows the
+  retired shadow policy `touch@1` would have cut, the agent saw them all); `rows[].outcomes`
+  still reads `would_drop` there. A hook reply also carries `said` — one
   `{kind, key?}` per line it said: `row` (row id), `ask` (row id; `*` in
   older lines, the generic clause before every ask named its row), `pointer` (key), `count` (usage before PLAN-fael-say-gate chunk 4 dropped the line — one per count line:
   `<files>|file`, `<files>|dir:<dirs>`, `<files>|key:<key>` or `<files>|keys`),
@@ -167,6 +170,7 @@ newest-first across repos.
 
 Newest first.
 
+- `3` (2026-10-14): push lines no longer write `policy`, `arm`, `feat.touch` or `would_drop`, and the `dup` outcome line is gone — the retired push gate (`touch@1`, its stages and holdout) wrote them and only `fael tune` read them; `rows[].outcomes` still counts `would_drop` on older lines. Usage lines only, `Stats` is unchanged; no bump.
 - `3` (2026-10-14): `fael tune` removed with the measurement plans it served (decision 01M4V39ZF6, issue 01M4V3JC); it was a separate command, `Stats` is unchanged; no bump.
 - `3` (2026-10-13): `asks.reject` removed — a reject was written twice (an `ask` row with no reason or session, and its `call` row), and the two disagreed; the `call` row is the one count now, agent sessions only. `asks.warning` gained `codes`; `friction` reasons are closed codes (`bad_value` retired), split per command in `by_command[].reasons`, `chunk`/`plan` per verb; `friction` gained `shape_gate_rules`; the CLI counts clean `chunk`, `plan` and `board` calls too, so their reject rate has a denominator. Bump: a field was removed (issues 01M4RPFC, 01M4RPXP).
 - `2` (2026-10-10): `said` gained `held` (PLAN-fael-decision-held chunk 2, the held-by close); new map key only; no bump.

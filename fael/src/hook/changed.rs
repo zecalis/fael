@@ -21,12 +21,8 @@ pub(crate) const PUSH_MAX_BYTES: u64 = 1024 * 1024;
 pub(crate) const STAMP_MAX_BYTES: u64 = crate::filehash::MAX_BYTES;
 
 /// One blob cache per push, so each file is read once however many rows name
-/// it (hub files carry dozens of rows) and the edit hint and the shadow split
-/// share the reads.
+/// it (hub files carry dozens of rows).
 pub(crate) type Blobs = HashMap<String, Option<String>>;
-
-/// The shadow split: full ids of the `changed` rows and of the `unchanged` rows.
-pub(crate) type Split = (Vec<String>, Vec<String>);
 
 /// A row against the worktree. `Changed` carries the first stamped file (as it
 /// lives now) that differs; `Unknown` is a row with no `fh` or a file that
@@ -36,24 +32,6 @@ enum Verdict {
     Changed(String),
     Same,
     Unknown,
-}
-
-/// The shadow split for a push's usage line (PLAN-fael-file-hash chunk 3):
-/// full ids of the shown rows whose files changed since the row was written,
-/// and full ids of the shown rows whose files all still match. Rows with no
-/// verdict ride in neither list — never guessed as changed. Nothing renders:
-/// the caller records the two lists on the usage line only.
-fn partition(rows: &[&core::Row], root: &Path, al: &core::Aliases, blobs: &mut Blobs) -> Split {
-    let mut changed_ids = vec![];
-    let mut unchanged_ids = vec![];
-    for r in rows {
-        match verdict(r, root, al, blobs, &[], PUSH_MAX_BYTES) {
-            Verdict::Changed(_) => changed_ids.push(r.id.clone()),
-            Verdict::Same => unchanged_ids.push(r.id.clone()),
-            Verdict::Unknown => {}
-        }
-    }
-    (changed_ids, unchanged_ids)
 }
 
 /// Ids of the handoff rows (`key` ending `:handoff`) and issues whose code
@@ -177,23 +155,6 @@ fn blob_at(root: &Path, target: &str, cap: u64) -> Option<String> {
     }
     let mut file = std::fs::File::open(root.join(target)).ok()?;
     core::blob_id_stream(&mut file, cap).ok().flatten()
-}
-
-/// The said rows' ids plus, on a read, their shadow split (PLAN-fael-file-hash
-/// chunk 3): what fit the budget, of which `changed` files moved since the row
-/// was written and `unchanged` still match — rows with no verdict ride
-/// neither. An edit gets no split: the file on disk already holds the edit.
-pub(crate) fn split_said(
-    sel: &core::Selection<'_>,
-    n: usize,
-    edit: bool,
-    root: &Path,
-    al: &core::Aliases,
-    blobs: &mut Blobs,
-) -> (Vec<String>, Option<Split>) {
-    let said: Vec<&core::Row> = sel.shown.iter().take(n).copied().collect();
-    let shown: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    (shown, (!edit).then(|| partition(&said, root, al, blobs)))
 }
 
 /// What an edit push knows about the session: the files it edited (`files`,

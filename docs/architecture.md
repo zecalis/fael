@@ -223,9 +223,6 @@ kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
 store = "local"               # the only value (journal only, the default); "tracked" is rejected — fael import <path> copies rows in
-# push_policy unset = auto: the repo's own stages (shadow → canary → ramp, rolled back on evidence; docs/learn-loop.md). A set value is a pin that always wins:
-push_policy = "touch@1"       # "touch@1" = the validation experiment: search pushes of candidate sessions lose the rows it cuts (usage `cut: gate`); "baseline@1" opts out
-push_holdout = 20             # percent of sessions (by hash of the session id) that keep baseline@1 while touch@1 is pinned
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800

@@ -17,7 +17,6 @@ mod keyhint;
 mod lookup;
 mod matching;
 mod md;
-mod policy;
 mod push;
 mod refs;
 mod render;
@@ -29,9 +28,9 @@ mod stale;
 pub use chunks::{PLAN_KICKOFF_ROWS, handoff_first};
 pub use explain::{EXPAND_MAX, expands, json_note, nearest, why_empty};
 pub use focus::{
-    Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_GATE, CUT_HUB_PEEK, Focus, Hidden,
-    PUSH_BACKGROUND, PUSH_HUB_PEEK, PUSH_HUB_ROWS, Prior, PushPolicy, Selection, bucket, on_work,
-    select, select_with,
+    Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_HUB_PEEK, Focus, Hidden, PUSH_BACKGROUND,
+    PUSH_HUB_PEEK, PUSH_HUB_ROWS, Prior, PushPolicy, Selection, bucket, on_work, select,
+    select_with,
 };
 pub use groups::{groups, render_groups};
 pub use keyhint::key_hints;
@@ -41,10 +40,6 @@ pub use lookup::{
 };
 pub use matching::glob;
 pub use md::{MdRef, phantom_md_refs};
-pub use policy::{
-    ARM_ALL, ARM_CANDIDATE, ARM_HOLDOUT, AUTO, BASELINE, GATES, PolicyDef, Stage, TOUCH, arm_for,
-    arm_in, arm_of, next_stage, touch_drops,
-};
 pub use push::{push, push_tiered};
 pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};
 pub use render::{

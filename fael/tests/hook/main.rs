@@ -30,7 +30,6 @@ mod experience;
 mod fix_net;
 mod focus;
 mod from_user;
-mod gate;
 mod handoff;
 mod held;
 mod incident;

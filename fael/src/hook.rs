@@ -45,7 +45,6 @@ mod say_budget;
 mod say_contract;
 mod search;
 mod session;
-mod stage;
 mod state;
 mod stats_text;
 mod stop;
