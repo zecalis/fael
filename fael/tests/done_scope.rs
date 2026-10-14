@@ -248,8 +248,12 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     git(&d, &["commit", "-qm", "w"]);
     let row = |kind: &str, file: &str| {
         let out = f(&["add", kind, &format!("{kind} on {file}"), "--files", file]);
-        let id = out.split_whitespace().find(|w| w.starts_with("01")).unwrap();
-        id.trim_matches(|c: char| !c.is_ascii_alphanumeric()).to_string()
+        let id = out
+            .split_whitespace()
+            .find(|w| w.starts_with("01"))
+            .unwrap();
+        id.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+            .to_string()
     };
     let ids: Vec<String> = (0..6).map(|_| row("decision", "w/a.txt")).collect();
     let (issue, other) = (row("issue", "w/a.txt"), row("note", "w/b.txt"));
@@ -280,7 +284,10 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     std::fs::write(d.join("w/c.txt"), "v1").unwrap();
     git(&d, &["add", "w/c.txt"]);
     git(&d, &["commit", "-qm", "quiet"]);
-    assert_eq!(f(&["chunk", "done", &v, "h"]), format!("chunk {v} → review"));
+    assert_eq!(
+        f(&["chunk", "done", &v, "h"]),
+        format!("chunk {v} → review")
+    );
 }
 
 /// The short id `out` names `id` by — fael abbreviates, and no other row's

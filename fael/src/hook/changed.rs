@@ -87,7 +87,12 @@ pub(crate) fn moved(
     edited: &[String],
     blobs: &mut Blobs,
 ) -> Option<String> {
-    let named: Vec<String> = r.files.iter().filter(|f| edited.contains(f)).cloned().collect();
+    let named: Vec<String> = r
+        .files
+        .iter()
+        .filter(|f| edited.contains(f))
+        .cloned()
+        .collect();
     named.first()?;
     match verdict(r, root, al, blobs, &named, PUSH_MAX_BYTES) {
         Verdict::Changed(f) => Some(f),

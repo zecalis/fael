@@ -91,8 +91,9 @@ fn start_prints_the_contracts_on_its_scope_and_done_says_what_left_it() {
     git(&d, &["commit", "-qm", "lane"]);
     let out = f(&["chunk", "done", &a, "h", "--run", "R"]);
     let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
-    let want = "declared scope: a/\noutside, in inbox/b: b/y.rs\noutside, unowned: c/new.rs";
-    assert_eq!(block, want);
+    let want = "declared scope: a/\noutside, in inbox/b: b/y.rs\noutside, unowned: c/new.rs\n";
+    // the held lines over the touched files follow (plan fael-row-retire w2)
+    assert!(block.starts_with(want), "{block}");
 
     // a chunk whose scope holds no contract prints no heading
     let c = chunk("c", "c/");

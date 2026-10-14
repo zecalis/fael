@@ -34,7 +34,14 @@ fn stop(d: &Path) {
 }
 
 /// File a `kind` row; `session` stamps it as that session's, `more` adds flags.
-fn add(d: &Path, kind: &str, text: &str, file: &str, session: Option<&str>, more: &[&str]) -> String {
+fn add(
+    d: &Path,
+    kind: &str,
+    text: &str,
+    file: &str,
+    session: Option<&str>,
+    more: &[&str],
+) -> String {
     let envs: Vec<(&str, &str)> = session.map(|s| ("FAEL_SESSION", s)).into_iter().collect();
     let args = [&["add", kind, text, "--files", file][..], more].concat();
     let (ok, out, err) = fael_env(d, &args, "", &envs);
@@ -100,7 +107,14 @@ fn the_sessions_decision_on_an_edited_file_is_named_once_after_stop() {
 fn any_writers_decision_or_note_on_an_edited_changed_file_is_named() {
     let d = repo();
     let other = decide(&d, "written by another session", "src/a.rs", Some("other"));
-    let none = add(&d, "note", "written outside any session", "src/a.rs", None, &[]);
+    let none = add(
+        &d,
+        "note",
+        "written outside any session",
+        "src/a.rs",
+        None,
+        &[],
+    );
     let user = decide(&d, "the user said so", "src/a.rs", Some("other"));
     let own = decide(&d, "this session's own", "src/a.rs", Some(S));
     edit(&d, "src/a.rs");
@@ -114,14 +128,24 @@ fn any_writers_decision_or_note_on_an_edited_changed_file_is_named() {
     assert!(at(&own) < at(&other) && at(&other) < at(&none), "{out}");
     assert!(said_id(&out, &user).is_none(), "cut at three: {out}");
     assert!(out.contains("fael: note "), "{out}");
-    assert!(out.contains("chain several in one shell call with &&"), "{out}");
+    assert!(
+        out.contains("chain several in one shell call with &&"),
+        "{out}"
+    );
 }
 
 #[test]
 fn a_from_user_row_says_ask_the_user() {
     let d = repo();
     decide(&d, "x", "src/a.rs", None);
-    add(&d, "decision", "the user said so", "src/a.rs", None, &["--from", "user"]);
+    add(
+        &d,
+        "decision",
+        "the user said so",
+        "src/a.rs",
+        None,
+        &["--from", "user"],
+    );
     edit(&d, "src/a.rs");
     stop(&d);
     let out = hook(&d, "edit", "src/c.rs");
@@ -131,7 +155,14 @@ fn a_from_user_row_says_ask_the_user() {
 #[test]
 fn an_issue_an_unedited_or_unchanged_file_is_silent() {
     let d = repo();
-    add(&d, "issue", "issues have the edit ask", "src/a.rs", Some(S), &[]);
+    add(
+        &d,
+        "issue",
+        "issues have the edit ask",
+        "src/a.rs",
+        Some(S),
+        &[],
+    );
     decide(&d, "on a file not edited", "src/b.rs", Some(S));
     edit(&d, "src/a.rs");
     // written after the edit: the file matches its stamp
