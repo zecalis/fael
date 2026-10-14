@@ -143,9 +143,11 @@ pub fn fold_bumps(mut log: Log) -> Log {
 
 /// The moved fields from `ev` onto `row`: the snapshot ones (`to`, `urgent`,
 /// `revisit`, `held`, `fh` — absent clears) and the write stamp (`ts`, plus
-/// `sha`/`branch` when the bump had them), so a bump still reads as the
-/// check it is to drift and the fh verdict. `id`, `by` and `session` stay
-/// the row's own: who wrote it does not change.
+/// `sha` when the bump had one), so a bump still reads as the check it is to
+/// drift and the fh verdict. `id`, `by`, `session` and `branch` stay the
+/// row's own: who wrote it, and on which branch, does not change — a bump
+/// from a feature branch must not tie a standing note to that branch's merge
+/// (`[Shipped kept]`, 01M4X8HQ).
 fn apply(row: &mut Row, ev: &Row) {
     row.to = ev.to.clone();
     row.urgent = ev.urgent;
@@ -157,9 +159,7 @@ fn apply(row: &mut Row, ev: &Row) {
             None => row.extra.remove(k),
         };
     }
-    for k in ["sha", "branch"] {
-        if let Some(v) = ev.extra.get(k) {
-            row.extra.insert(k.into(), v.clone());
-        }
+    if let Some(v) = ev.extra.get("sha") {
+        row.extra.insert("sha".into(), v.clone());
     }
 }

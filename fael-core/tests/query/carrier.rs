@@ -59,3 +59,23 @@ fn push_skips_a_keyed_carrier() {
     let rows: Vec<&Row> = pushed.iter().map(|(r, _)| *r).collect();
     assert_eq!(ids(&rows), ["21"]);
 }
+
+/// 01M4X8HQ: a bump event folds its `sha` onto the row but never its branch —
+/// a sweep bumping a standing note from a feature branch must not tie the note
+/// to that branch's merge (`[Shipped kept]`).
+#[test]
+fn a_folded_bump_keeps_the_rows_branch() {
+    let mut note = row("C0000000000000000000000021", "note", &["src/a.rs"], None);
+    note.extra.insert("branch".into(), "main".into());
+    let mut ev = Row::bumped("me", &note.id);
+    ev.id = "C0000000000000000000000022".into();
+    ev.extra.insert("branch".into(), "feat/sweep".into());
+    ev.extra.insert("sha".into(), "abc1234".into());
+    let l = fold_bumps(Log {
+        rows: vec![note, ev],
+        ..Log::default()
+    });
+    let folded = find(&l, &Filter::default());
+    assert_eq!(folded[0].branch(), Some("main"));
+    assert_eq!(folded[0].extra["sha"], "abc1234");
+}
