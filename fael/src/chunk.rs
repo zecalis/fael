@@ -235,7 +235,12 @@ pub(crate) fn run_end(a: &Args, run: &str) -> Result<ExitCode, String> {
             };
             match b.as_deref().and_then(diff).or_else(moved) {
                 Some(d) => {
+                    // said now, at the lane's end, not first at done after it landed
+                    let out = crate::chunk_run::outside_text(&r, &st, &uid, &d);
                     let _ = st.claim(&uid, &d);
+                    if !out.is_empty() {
+                        print!("run {run}: {uid} {out}");
+                    }
                 }
                 None if b.is_some() => println!("run {run}: {uid} claimed nothing since its start"),
                 None => {}

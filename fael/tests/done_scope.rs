@@ -88,14 +88,30 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     git(&d, &["switch", "-q", "-c", "wave", "main"]);
     git(&d, &["merge", "-q", "--no-edit", "lane1", "lane2"]);
 
+    // l1/a.txt is inside, Cargo.lock is shared: nobody's, never said
+    let want = "declared scope: l1/\noutside, in inbox/o: o/x.txt\noutside, unowned: stray.txt";
+    // the lead's run end at the lane's exit says it first, before the lane lands
+    let out = f(&["run", "end", "R1"]);
+    assert_eq!(out, format!("run R1: {l1} {want}"));
     let out = f(&["chunk", "done", &l1, "h", "--run", "R1"]);
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &l1, "--json"])).unwrap();
     let scope = serde_json::json!(["Cargo.lock", "l1/a.txt", "o/x.txt", "stray.txt"]);
     assert_eq!(c["scope"], scope, "lane1's diff, not the wave's l2/b.txt");
-    // l1/a.txt is inside, Cargo.lock is shared: nobody's, never said
+    // run end's claim is the scope now: said once, done after it is silent
+    assert_eq!(out.lines().count(), 1, "{out}");
+    // a run nobody ended: done says it
+    let l3 = add("l3", "l3/");
+    lane(
+        &d,
+        &state,
+        &l3,
+        ("lane3", "main"),
+        "R3",
+        &["l3/a.txt", "stray3.txt"],
+    );
+    let out = f(&["chunk", "done", &l3, "h", "--run", "R3"]);
     let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
-    let want = "declared scope: l1/\noutside, in inbox/o: o/x.txt\noutside, unowned: stray.txt";
-    assert_eq!(block, want);
+    assert_eq!(block, "declared scope: l3/\noutside, unowned: stray3.txt");
 
     // the lead merges in the lane's own worktree, now on a wave branch: ending the run there
     // must not swap its branch for the cwd's before done reads it; all inside: no block
@@ -173,7 +189,11 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     let (e, g) = (add("e", &[]), add("f", &[]));
     lane(&d, &state, &e, ("lanee", "main"), "RE", &["e/x.txt"]);
     lane(&d, &state, &g, ("lanef", "main"), "RF", &["f/y.txt"]);
-    f(&["run", "end", "RF"]);
+    assert_eq!(
+        f(&["run", "end", "RF"]),
+        "",
+        "all inside: run end says nothing"
+    );
     git(&d.with_file_name("lanef"), &["rebase", "-q", "lanee"]);
     let out = f(&["chunk", "done", &g, "h", "--run", "RF"]);
     assert!(!out.contains("declared scope"), "{out}");

@@ -151,23 +151,13 @@ pub(crate) fn done(
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
     let diff = kept.or_else(|| touched(&r.root, &st, uid, branch.as_deref().or(here.branch)));
-    let shared = fael_core::plan::shared(&r.root).unwrap_or_default();
-    let outside = diff.as_ref().and_then(|d| st.outside(uid, d, &shared).ok());
+    let outside = diff.as_ref().map(|d| outside_text(r, &st, uid, d));
     if let Some(d) = &diff {
         let _ = st.claim(uid, d);
     }
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
-    // h4: a fact, never a refusal — gates, review and CI judge the change
-    if let Some((declared, out)) = outside.filter(|(_, o)| !o.is_empty()) {
-        println!("declared scope: {}", declared.join(", "));
-        for (f, owner) in out {
-            match owner {
-                Some(o) => println!("outside, in {o}: {f}"),
-                None => println!("outside, unowned: {f}"),
-            }
-        }
-    }
+    print!("{}", outside.unwrap_or_default());
     // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
     // ready — the agent judges, done never closes or bumps
     if let Some(d) = &diff {
@@ -191,6 +181,27 @@ pub(crate) fn touched(
     let tip = branch.unwrap_or("HEAD");
     let d = crate::git(dir, &["diff", "--name-only", &format!("{trunk}...{tip}")])?;
     Some(since(dir, st.run_base(uid), (&trunk, tip), d.lines()))
+}
+
+/// h4: each path of `diff` outside `uid`'s declared scope, unowned or in the open chunk that
+/// holds it — a fact, never a refusal; empty when all is inside. `done` and `run end` say it.
+pub(crate) fn outside_text(r: &Repo, st: &Store, uid: &str, diff: &[String]) -> String {
+    let shared = fael_core::plan::shared(&r.root).unwrap_or_default();
+    let Some((declared, out)) = st
+        .outside(uid, diff, &shared)
+        .ok()
+        .filter(|(_, o)| !o.is_empty())
+    else {
+        return String::new();
+    };
+    let mut s = format!("declared scope: {}\n", declared.join(", "));
+    for (f, owner) in out {
+        match owner {
+            Some(o) => s += &format!("outside, in {o}: {f}\n"),
+            None => s += &format!("outside, unowned: {f}\n"),
+        }
+    }
+    s
 }
 
 /// Issue 01M4TVDGG: of the trunk diff, only the paths changed since the run's start commit —
