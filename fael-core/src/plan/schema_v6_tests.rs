@@ -31,9 +31,14 @@ fn v6_drops_the_md_era_and_keeps_every_row() {
         ["id", "app", "name", "title", "area", "state"]
     );
     let chunk = columns(&s, "chunk");
-    for gone in ["due", "pin", "client_hint"] {
+    for gone in ["due", "pin"] {
         assert!(!chunk.contains(&gone.to_string()), "{chunk:?}");
     }
+    // the epoch dropped v6's client_hint; COLUMNS adds it back empty (issue 01M4XM98)
+    assert_eq!(
+        rows(&s, "SELECT uid FROM chunk WHERE client_hint IS NOT NULL"),
+        Vec::<String>::new()
+    );
     for kept in ["reads", "wait_options", "approved_client", "scope"] {
         assert!(chunk.contains(&kept.to_string()), "{chunk:?}");
     }

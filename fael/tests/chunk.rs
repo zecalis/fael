@@ -224,6 +224,24 @@ fn apply_reads_stdin_and_the_board_sees_the_approval() {
     );
 }
 
+/// Issue 01M4XM98: the planner's client rides on the chunk, and approve falls back to it.
+#[test]
+fn a_client_hint_is_what_approve_takes_without_client() {
+    let d = repo();
+    let add = ["chunk", "add", "Ui", "--brief", "b", "--model", "haiku"];
+    let (ok, out, err) = fael(&d, &[&add[..], &["--client", "opencode"]].concat());
+    assert!(ok, "{err}");
+    let u = out.trim().to_string();
+    let (_, json, _) = fael(&d, &["board", "--json"]);
+    assert!(json.contains(r#""client_hint":"opencode""#), "{json}");
+    let (ok, out, _) = fael(&d, &["chunk", "approve", &u]);
+    assert!(ok && out.contains("model haiku · client opencode"), "{out}");
+    // an empty --client clears the hint
+    assert!(fael(&d, &["chunk", "edit", &u, "--client", ""]).0);
+    let (ok, out, _) = fael(&d, &["chunk", "approve", &u]);
+    assert!(ok && out.contains("model haiku · client claude"), "{out}");
+}
+
 #[test]
 fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
     let d = repo();

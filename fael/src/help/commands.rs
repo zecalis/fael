@@ -112,10 +112,10 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
         "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--option A] [--pr N] [--out path]
-fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…]
+fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…]
 fael chunk show <uid|label> [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
-fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--scope …] [--reads …]
+fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
 fael chunk move <uid> --plan <p>
 fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
