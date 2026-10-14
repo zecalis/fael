@@ -168,4 +168,15 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     assert!(!out.contains("declared scope"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &b, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["b/y.txt"]));
+
+    // a lead ends lane f's run, then rebases it onto lane e landed before it: done keeps f's own
+    let (e, g) = (add("e", &[]), add("f", &[]));
+    lane(&d, &state, &e, ("lanee", "main"), "RE", &["e/x.txt"]);
+    lane(&d, &state, &g, ("lanef", "main"), "RF", &["f/y.txt"]);
+    f(&["run", "end", "RF"]);
+    git(&d.with_file_name("lanef"), &["rebase", "-q", "lanee"]);
+    let out = f(&["chunk", "done", &g, "h", "--run", "RF"]);
+    assert!(!out.contains("declared scope"), "{out}");
+    let c: Value = serde_json::from_str(&f(&["chunk", "show", &g, "--json"])).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["f/y.txt"]));
 }

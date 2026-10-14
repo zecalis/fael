@@ -209,7 +209,9 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "end one chunk start, or mark it seen",
         "fael run end R [--cost USD] | fael run beat R
     (ends every live run row of start R — the launcher's cleanup after the agent
-     exits; never another start, never a chunk's state; none left exits 0; beat:
+     exits; never another start, never a chunk's state; none left exits 0; claims
+     each row's branch diff as done would, and done keeps it (a lead rebases the
+     lane after); beat:
      start R's live rows are seen now — the launcher calls it while a headless client
      runs, so a long run never reads stalled)
   --cost USD   what the client reported the run cost (claude's total_cost_usd), a

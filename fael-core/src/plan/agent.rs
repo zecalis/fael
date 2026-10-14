@@ -41,6 +41,8 @@ pub type Outside = (Vec<String>, Vec<(String, Option<String>)>);
 
 /// `done --out`: copy the output for run R, return where it went.
 pub type Copy<'a> = dyn FnMut(&str) -> Result<String, String> + 'a;
+/// A live run row: chunk uid, the branch and worktree it recorded.
+pub type RunRow = (String, Option<String>, Option<String>);
 
 impl Store {
     /// `fael chunk wait --on owner|data "<question>" [--until D] [--option A …]`: the run
@@ -217,6 +219,37 @@ impl Store {
             )
             .ok()
             .flatten()
+    }
+
+    /// Start `run`'s live rows (a pair is one start): uid, branch, worktree.
+    pub fn run_rows(&self, run: &str) -> Result<Vec<RunRow>, String> {
+        let mut q = self
+            .conn
+            .prepare(
+                "SELECT c.uid, r.branch, r.worktree FROM run r JOIN chunk c ON c.id = r.chunk
+                 WHERE r.start = ?1 AND r.ended IS NULL",
+            )
+            .map_err(err)?;
+        q.query_map([run], |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?)))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)
+    }
+
+    /// `chunk.touched` when the run `done` finishes had ended before it: `run end` claimed
+    /// the lane's own diff then, before a lead rebased it onto the lanes landed before it.
+    pub fn claimed_at_end(&self, uid: &str, run: Option<&str>) -> Option<Vec<String>> {
+        let (ended, touched): (Option<String>, Option<String>) = self
+            .conn
+            .query_row(
+                "SELECT r.ended, c.touched FROM run r JOIN chunk c ON c.id = r.chunk
+                 WHERE c.uid = ?1 AND (?2 IS NULL OR r.start = ?2) ORDER BY r.id DESC LIMIT 1",
+                params![uid, run],
+                |q| Ok((q.get(0)?, q.get(1)?)),
+            )
+            .ok()?;
+        ended?;
+        Some(touched?.lines().map(String::from).collect())
     }
 
     /// HEAD at `uid`'s first start that recorded one: a restart after a wait keeps the WIP
