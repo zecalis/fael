@@ -114,6 +114,18 @@ Free fael is one machine, many agents and worktrees: this binary has no transpor
 cut `fael sync`). Sharing between people is the separate fael-sync product, which carries this same
 row format, never a second one; `fael import <path>` is the manual fallback.
 
+Where a work habit lives (decision 01M4X4DZ) — deleting crew must leave each chunk's quality
+unchanged, only slower:
+
+| Layer | Lives in | Holds |
+|---|---|---|
+| contract | `rules()` in `fael-core/src/plan/brief.rs`, printed by every `fael chunk start` | habits every chunk needs, any area or client: checkpoint, ask the owner, hand-off, a fresh-session check against Done before done |
+| bar | the plan's Done and Constraints sections, printed in every brief | what "good" means for this plan: dev gates and criteria, marketing VOICE.md and source rules |
+| judgment skills | fael-plan, fael-review, fael-content | how to cut, check, plan posts |
+| orchestration | fael-lead in zecalis/fael-crew | only running chunks in parallel without collisions |
+
+No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Constraints.
+
 ## 2. Storage
 
 ```
