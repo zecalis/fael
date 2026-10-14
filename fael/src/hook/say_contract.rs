@@ -66,7 +66,7 @@ pub(super) fn all() -> Vec<Line> {
             Kind::Held {
                 ids: vec!["01HELD".into()],
             },
-            "fael: decision 01HELD was written this session and `a.rs` edited — if the code holds it now: fael close 01HELD \"now in `a.rs`\"\n",
+            "fael: decision 01HELD — `a.rs` changed since it was written · still true? fael bump 01HELD · the code holds it? fael close 01HELD \"now in `a.rs`\" · wrong now? re-file with --supersedes 01HELD\n",
         ),
     ]
 }
@@ -354,4 +354,44 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "held"
         ]
     );
+}
+
+/// The Held selection (plan fael-row-retire w1): open decisions and notes, any
+/// writer, on an edited file — never an issue, a closed or superseded row, or
+/// a row whose file was not edited; nothing edited is silent.
+#[test]
+fn held_names_only_open_decisions_and_notes_on_edited_files() {
+    use crate::core::{Log, Row};
+    let row = |id: &str, kind: &str, file: &str| Row {
+        id: id.into(),
+        kind: kind.into(),
+        files: vec![file.into()],
+        ..Row::default()
+    };
+    let mut closed = row("01CLOSED", "decision", "a.rs");
+    closed.extra.insert("closed".into(), true.into());
+    let newer = Row {
+        supersedes: Some("01OLD".into()),
+        ..row("01NEWER", "decision", "a.rs")
+    };
+    let log = Log {
+        rows: vec![
+            row("01DEC", "decision", "a.rs"),
+            row("01NOTE", "note", "a.rs"),
+            row("01ISSUE", "issue", "a.rs"),
+            row("01OLD", "decision", "a.rs"),
+            newer,
+            closed,
+            row("01OTHER", "decision", "b.rs"),
+        ],
+        ..Log::default()
+    };
+    let (root, al) = (std::env::temp_dir(), crate::core::Aliases::default());
+    let ids = |edited: &[String]| -> Vec<String> {
+        let found = super::held::pairs(&log, &root, &al, "", edited);
+        found.iter().map(|(r, _)| r.id.clone()).collect()
+    };
+    assert_eq!(ids(&["a.rs".into()]), ["01DEC", "01NOTE", "01NEWER"]);
+    assert!(ids(&[]).is_empty());
+    assert!(super::held::text(&[]).is_empty());
 }

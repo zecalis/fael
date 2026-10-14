@@ -76,6 +76,26 @@ pub(crate) fn files_changed(
         .collect()
 }
 
+/// The first file of `edited` that `r` names and that moved since `r` was
+/// written: a stamped file whose blob differs, else the first named one when
+/// there is no verdict (no `fh`, gone, over the push cap) — the edit is all
+/// fael knows. `None` when no named file was edited or each matches its stamp.
+pub(crate) fn moved(
+    r: &core::Row,
+    root: &Path,
+    al: &core::Aliases,
+    edited: &[String],
+    blobs: &mut Blobs,
+) -> Option<String> {
+    let named: Vec<String> = r.files.iter().filter(|f| edited.contains(f)).cloned().collect();
+    named.first()?;
+    match verdict(r, root, al, blobs, &named, PUSH_MAX_BYTES) {
+        Verdict::Changed(f) => Some(f),
+        Verdict::Same => None,
+        Verdict::Unknown => named.into_iter().next(),
+    }
+}
+
 /// `only` narrows the row to the stamped files that live at one of these
 /// paths now (an edit's files); empty reads every stamped file. A row with no
 /// stamp among them is unknown. `cap` bounds one hashed file: the push path
@@ -308,7 +328,7 @@ fn close_hint(log: &core::Log, issues: &[&core::Row]) -> String {
 
 /// The user's call is theirs to change: an ask over a `from: user` row tells
 /// the agent to ask before it re-files or closes it.
-fn user_note<'a>(mut rows: impl Iterator<Item = &'a core::Row>) -> &'static str {
+pub(crate) fn user_note<'a>(mut rows: impl Iterator<Item = &'a core::Row>) -> &'static str {
     match rows.any(core::Row::from_user) {
         true => " · the row is the user's call: ask them before you re-file or close it",
         false => "",
