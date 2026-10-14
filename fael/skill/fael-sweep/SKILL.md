@@ -1,6 +1,6 @@
 ---
 name: fael-sweep
-description: Triage every open ledger issue into chunks on the board — group the ones with one cause or one set of files, order the ones whose files overlap, and turn every issue that cannot be fixed yet into a waiting chunk with the question, the options and a recommendation, so the owner decides on the board. Reads code, never fixes it. Run by /fael-sweep only.
+description: Triage every open ledger issue into chunks on the board — group the ones with one cause or one set of files, order the ones whose files overlap, and turn every issue that cannot be fixed yet into a waiting chunk with the question, the options and a recommendation, so the owner decides on the board. Then settles every drifted decision and note one file at a time — close, bump, supersede, or ask the owner. Reads code, never fixes it. Run by /fael-sweep only.
 disable-model-invocation: true
 ---
 
@@ -29,7 +29,7 @@ Skip an issue whose `held` names a branch: someone claimed it. `chunks[]` with s
 `running`, `waiting` or `blocked` are the work already in flight — their `scope` is what a new
 chunk must not collide with.
 
-Nothing untriaged → say so in one line and stop.
+Nothing untriaged → say so in one line and go to the drifted pass (step 7).
 
 ## 2. Judge each issue against the code
 
@@ -117,8 +117,69 @@ Leave every chunk unapproved: approval is the owner's, and it is what lets the q
 Three lines: how many chunks to approve (parallel / ordered), how many questions waiting on the
 owner, how many on data. Then `fael board` — that is where the owner acts.
 
-As a chunk, those lines and the table are the hand-off: `fael chunk done <uid> "<lines +
-table>"` (no PR — it lands in review, where the owner reads it and accepts).
+Then the drifted pass (step 7). As a chunk, those lines, the table and the drifted report are
+the hand-off: `fael chunk done <uid> "<lines + table + report>"` (no PR — it lands in review,
+where the owner reads it and accepts).
+
+## 7. Drifted pass — decisions and notes, one file at a time
+
+A decision or note whose files took 10+ commits since it was written is `drifted`: the code
+moved on, so the row may now restate it, contradict it, or still hold. Settle each one here.
+Same rule as above: you read code and write ledger rows — never code, never a delete
+(no `fael purge`).
+
+**Input.** From the same `fael board --json`: `ledger.decisions[]` and `ledger.notes[]` whose
+`signals` contain `drifted` (or the ids under `fael doctor` [Drifted]). None → one line, stop.
+
+**Group by file.** A row lands under one file — of its files that are paths (skip `plan:`
+anchors), the one with the most commits since the row was written:
+
+```bash
+git rev-list --count --since=<row at> HEAD -- <file>
+```
+
+Ties go to the first listed. One file, one group, however many rows.
+
+**One sub-agent per file** (haiku is enough), files in parallel. It gets only:
+
+- that file's rows: `fael find <id>` for each body;
+- what changed since each row: `git log --since=<oldest row at> -p -- <file>`, trimmed to the
+  hunks that touch what the rows name; the log too long to read → the file at HEAD instead.
+
+Never the whole ledger, never other files' rows. It returns one verdict per row:
+
+| Verdict | When | Command |
+|---|---|---|
+| **close** | the code holds it now — the row restates it | `fael close <id> "now in <file>: <symbol or line>"` |
+| **bump** | still true, and the code alone would not tell a new agent | `fael bump <id>` |
+| **supersede** | wrong now; one passage changes | `fael add <kind> --supersedes <id> --replace "<old passage>" --with "<new>"` (no text: it keeps the row's text, title, files, key) |
+| | wrong now; most of it changes | `fael add <kind> "<new text>" --title "<t>" --files <same files> [--key <same key>] --supersedes <id>` |
+| **ask** | unsure — the owner decides | none |
+
+A row written `from: user` (`fael find <id> --json` shows `"from":"user"`) is always **ask**:
+the user said it; only the user retires it.
+
+The sub-agent judges; you run the commands. Before you do, open the place each **close** cites:
+a test string, a comment or a fixture is not the code holding it — that row is a bump.
+
+**Run per file**, the group's commands chained with `&&` in one shell call, so one failure
+stops that file and the rest of the group stays for a rerun:
+
+```bash
+fael close 01M4… "now in fael/src/hook/push.rs: row_lines()" && fael bump 01M4… && \
+  fael add decision --supersedes 01M4… --replace "<old passage>" --with "<new>"
+```
+
+**Report** — three lines, then the asks:
+
+```
+drifted: 14 files read · 32 rows judged
+close 18 · bump 7 · supersede 3 · ask 4
+ask: 01M4… (from:user) — <question in one line> · 01M4… — <what the code does vs what the row says>
+```
+
+In chat, put each ask to the owner; as a chunk, they go in the `chunk done` hand-off with the
+table. `fael doctor` [Drifted] after the pass shows only the asks.
 
 ## After a sweep
 
