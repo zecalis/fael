@@ -97,7 +97,8 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             a.only(
                 "chunk add",
                 &[
-                    "plan", "brief", "size", "model", "scope", "reads", "after", "label", "issue",
+                    "plan", "brief", "size", "model", "client", "scope", "reads", "after", "label",
+                    "issue",
                 ],
             )?;
             let f = Fields {
@@ -115,7 +116,9 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
         ["edit", uid] => {
             a.only(
                 "chunk edit",
-                &["title", "brief", "size", "model", "scope", "reads", "label"],
+                &[
+                    "title", "brief", "size", "model", "client", "scope", "reads", "label",
+                ],
             )?;
             let mut st = s()?;
             st.edit(uid, &fields(a), &now)?;
@@ -299,6 +302,7 @@ fn fields(a: &Args) -> Fields {
         brief: a.one("brief"),
         size: a.one("size"),
         model: a.one("model"),
+        client: a.one("client"),
         scope: a.has("scope").then(|| list(a, "scope")),
         reads: a.has("reads").then(|| list(a, "reads")),
         label: a.one("label"),

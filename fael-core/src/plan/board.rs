@@ -33,6 +33,9 @@ pub struct Chunk {
     pub state: String,
     pub size: Option<String>,
     pub model_hint: Option<String>,
+    /// `chunk add|edit --client`; absent = none, `approve` then picks claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_hint: Option<String>,
     pub scope: Vec<String>,
     pub ready: bool,
     pub blocked_by: Vec<Blocker>,
@@ -139,7 +142,7 @@ impl Store {
                         c.approved_at, c.approved_model, c.approved_client, c.seq, c.wait_options,
                         c.ticket_source, c.ticket_ref, c.ticket_kind, c.ticket_reopen,
                         (SELECT verdict FROM run WHERE chunk = c.id ORDER BY id DESC LIMIT 1),
-                        c.touched
+                        c.touched, c.client_hint
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
                  ORDER BY p.app, p.name, c.seq",
@@ -163,6 +166,7 @@ impl Store {
                         title: clean(&title, label.as_deref()),
                         size: r.get(7)?,
                         model_hint: r.get(8)?,
+                        client_hint: r.get(24)?,
                         scope: scope
                             .iter()
                             .flat_map(|s| s.lines())

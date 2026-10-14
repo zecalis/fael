@@ -24,6 +24,8 @@ pub struct Fields {
     pub brief: Option<String>,
     pub size: Option<String>,
     pub model: Option<String>,
+    /// the client the planner picked (`chunk.client_hint`); `approve` falls back to it
+    pub client: Option<String>,
     /// repo-relative path prefixes (SPEC §2 overlaps), stored one per line
     pub scope: Option<Vec<String>>,
     /// the sections it works from, `<key>` or `<plan>/<key>`: its brief prints those
@@ -238,6 +240,7 @@ pub(super) fn edit_in(
         ("brief", f.brief.as_deref().map(str::trim)),
         ("size", f.size.as_deref()),
         ("model_hint", f.model.as_deref()),
+        ("client_hint", f.client.as_deref()),
         ("scope", scope.as_ref().map(|s| s.as_deref().unwrap_or(""))),
         ("reads", reads.as_ref().map(|s| s.as_deref().unwrap_or(""))),
         ("label", f.label.as_deref()),

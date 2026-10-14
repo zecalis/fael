@@ -57,9 +57,9 @@ pub(super) fn add_in(
     let uid = crate::ulid();
     tx.execute(
         "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
-                           label, reads)
+                           label, reads, client_hint)
          VALUES (?1, ?2, (SELECT COALESCE(MAX(seq), 0) + 1024 FROM chunk WHERE plan = ?2),
-                 ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                 ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             uid,
             pid,
@@ -70,7 +70,8 @@ pub(super) fn add_in(
             f.model,
             scope,
             f.label,
-            reads
+            reads,
+            f.client
         ],
     )
     .map_err(err)?;

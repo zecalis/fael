@@ -115,8 +115,8 @@ impl Store {
 
     /// `fael chunk approve <uid> [--model M] [--client C]` / `unapprove` (None): the approved
     /// queue may start it with that model and client when a slot frees (SPEC §8); `edit`
-    /// clears it. A missing model takes the chunk's `model_hint`, a missing client is
-    /// `claude`. Returns the event text.
+    /// clears it. A missing model takes the chunk's `model_hint`, a missing client its
+    /// `client_hint`, else `claude`. Returns the event text.
     pub fn approve(
         &mut self,
         uid: &str,
@@ -133,10 +133,12 @@ impl Store {
                 .map_err(err)?;
                 return Ok("unapproved".into());
             };
-            let hint: Option<String> = tx
-                .query_row("SELECT model_hint FROM chunk WHERE id = ?1", [id], |r| {
-                    r.get(0)
-                })
+            let (hint, client): (Option<String>, Option<String>) = tx
+                .query_row(
+                    "SELECT model_hint, client_hint FROM chunk WHERE id = ?1",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
                 .map_err(err)?;
             let m = m
                 .map(str::to_owned)
@@ -145,7 +147,7 @@ impl Store {
                 .ok_or(format!(
                     "rejected: chunk {uid} has no model hint — pass --model M"
                 ))?;
-            let c = c.unwrap_or("claude");
+            let c = c.or(client.as_deref()).unwrap_or("claude");
             tx.execute(
                 "UPDATE chunk SET approved_at = ?1, approved_model = ?2, approved_client = ?3
                  WHERE id = ?4",

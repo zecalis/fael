@@ -12,6 +12,7 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         state: "open".into(),
         size: None,
         model_hint: None,
+        client_hint: None,
         scope: Vec::new(),
         ready: true,
         blocked_by: Vec::new(),
