@@ -78,7 +78,9 @@ fn an_id_from_another_repo_names_that_repo() {
     let (here, there) = (repo(), repo());
     add(&here, "a row of this repo");
     let id = add(&there, "a row of the other repo");
-    // usage names the other repo, as any fael call in it would
+    // usage names the other repo, as any fael call in it would; outside an agent
+    // session no call wrote usage yet, so the state dir may not exist
+    std::fs::create_dir_all(here.join("state")).unwrap();
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
