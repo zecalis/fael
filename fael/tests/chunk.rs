@@ -242,6 +242,34 @@ fn a_client_hint_is_what_approve_takes_without_client() {
     assert!(ok && out.contains("model haiku · client claude"), "{out}");
 }
 
+/// Issue 01M4XN3S: a start without flags runs with the approval's model and client, and
+/// done keeps the review's outcome on that run.
+#[test]
+fn a_bare_start_takes_the_approval_and_done_keeps_the_review() {
+    let d = repo();
+    let (_, out, _) = fael(&d, &["chunk", "add", "Ui", "--brief", "b"]);
+    let u = out.trim().to_string();
+    let approve = [
+        "chunk", "approve", &u, "--model", "oc/m", "--client", "opencode",
+    ];
+    assert!(fael(&d, &approve).0);
+    assert!(fael(&d, &["chunk", "start", &u, "--run", "R1"]).0);
+    let (ok, _, err) = fael(&d, &["chunk", "done", &u, "h", "--review", "meh"]);
+    assert!(
+        !ok && err.contains("--review is clean|fixed|failed"),
+        "{err}"
+    );
+    assert!(fael(&d, &["chunk", "done", &u, "h", "--review", "fixed"]).0);
+    let (_, json, _) = fael(&d, &["board", "--json"]);
+    let b: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let run = &b["projects"][0]["chunks"][0]["run"];
+    assert_eq!(
+        (&run["client"], &run["model"], &run["review"]),
+        (&"opencode".into(), &"oc/m".into(), &"fixed".into()),
+        "{run}"
+    );
+}
+
 #[test]
 fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
     let d = repo();

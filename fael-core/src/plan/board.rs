@@ -106,6 +106,9 @@ pub struct Run {
     pub ended: Option<String>,
     /// USD, as the client reported it to `fael run end R --cost`
     pub cost: Option<f64>,
+    /// `chunk done --review clean|fixed|failed`; absent = none given
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review: Option<String>,
 }
 
 /// The agent's last word on the chunk: its `done` / `wait` / `after` text.
@@ -301,7 +304,7 @@ impl Store {
             .conn
             .prepare(
                 "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
-                        started, last_seen, ended, cost
+                        started, last_seen, ended, cost, review
                  FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)",
             )
             .map_err(err)?;
@@ -321,6 +324,7 @@ impl Store {
                     last_seen: r.get(10)?,
                     ended: r.get(11)?,
                     cost: r.get(12)?,
+                    review: r.get(13)?,
                 },
             ))
         })

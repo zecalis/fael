@@ -11,6 +11,9 @@ use rusqlite::{Transaction, params};
 
 /// `chunk done --verdict` words (plan fael-intake, contract §done --verdict).
 const VERDICTS: &[&str] = &["fix", "answer", "consider", "plan", "decline"];
+/// `chunk done --review` words: the review found nothing, fixed what it found, or left a
+/// finding it could not fix (issue 01M4XN3S).
+const REVIEWS: &[&str] = &["clean", "fixed", "failed"];
 
 /// Ends the live run; from the run's own worktree it keeps the branch the agent is on now
 /// (it may have switched since start), so board and the app's Talk name the real one.
@@ -131,22 +134,26 @@ impl Store {
         out: Option<&mut Copy<'_>>,
         here: &Here,
     ) -> Result<(), String> {
-        self.done_verdict(uid, handoff, pr, out, None, here)
+        self.done_verdict(uid, handoff, pr, out, (None, None), here)
     }
 
     /// `done` with `--verdict` (plan fael-intake): only a ticket chunk takes one, kept on its
-    /// run for the board's `ticket.verdict`.
+    /// run for the board's `ticket.verdict`. `--review` is the fresh review's outcome, any
+    /// chunk's, kept as `run.review` (issue 01M4XN3S).
     pub fn done_verdict(
         &mut self,
         uid: &str,
         handoff: &str,
         pr: Option<i64>,
         out: Option<&mut Copy<'_>>,
-        verdict: Option<&str>,
+        (verdict, review): (Option<&str>, Option<&str>),
         here: &Here,
     ) -> Result<(), String> {
         if verdict.is_some_and(|v| !VERDICTS.contains(&v)) {
             return Err(format!("rejected: --verdict is {}", VERDICTS.join("|")));
+        }
+        if review.is_some_and(|v| !REVIEWS.contains(&v)) {
+            return Err(format!("rejected: --review is {}", REVIEWS.join("|")));
         }
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
@@ -175,8 +182,8 @@ impl Store {
         let out = out.map(|f| f(&start)).transpose()?;
         tx.execute(
             "UPDATE run SET pr = COALESCE(?1, pr), out = COALESCE(?2, out),
-               verdict = COALESCE(?3, verdict) WHERE id = ?4",
-            params![pr, out, verdict, run],
+               verdict = COALESCE(?3, verdict), review = COALESCE(?4, review) WHERE id = ?5",
+            params![pr, out, verdict, review, run],
         )
         .map_err(err)?;
         end(&tx, r.id, here)?;

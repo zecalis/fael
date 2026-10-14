@@ -56,6 +56,8 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// `chunk.ticket_*`: the ticket `fael intake` brought in (source, ref, kind, reopen round).
 /// `run.base`: HEAD's sha at `chunk start`, so `done` never claims commits from before it
 /// (issue 01M4TVDGG: a lane stacked on another's branch).
+/// `run.review`: the fresh review's outcome on the run's work, `chunk done --review
+/// clean|fixed|failed` — apart from `verdict`, which is intake triage (issue 01M4XN3S).
 /// `chunk.client_hint`: the client the planner picked (`chunk add|edit --client`), which
 /// `approve` falls back to; epoch v8 dropped an unwired one (issue 01M4XM98).
 pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
@@ -68,6 +70,7 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("chunk", "ticket_kind", "TEXT"),
     ("chunk", "ticket_reopen", "INTEGER"),
     ("run", "verdict", "TEXT"),
+    ("run", "review", "TEXT"),
     ("run", "base", "TEXT"),
 ];
 
