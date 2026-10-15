@@ -10,6 +10,8 @@
 // V2 loader validates `{ id, setup }` on its own, and a V1 runtime cannot
 // resolve that specifier.
 import { spawnSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const FAEL = __FAEL__;
 
@@ -58,6 +60,17 @@ const paths = (tool, input) =>
   tool === "patch" || tool === "apply_patch"
     ? patch_files(input?.patchText)
     : [input?.path ?? input?.filePath].filter(Boolean);
+
+// Where the V2 user line goes: one out-of-band file per OpenCode session,
+// `$TMPDIR/fael-notice-<sessionID>.log` (id sanitized for a filename), one
+// notice per line, verbatim. A server plugin has no toast — measured on
+// OpenCode 2.0.29: the plugin ctx carries no `tui`/`notify`, and `event` is
+// subscribe-only — and every model-writing hook (context, tool result, prompt
+// admission) is forbidden to the notice bytes, so the file is the channel.
+// Tail it to watch receipts live; a TUI companion that toasts it needs a
+// separate `./tui` entrypoint plus install wiring, tracked as follow-up.
+const notice_path = (id) =>
+  `${tmpdir()}/fael-notice-${String(id).replace(/[^A-Za-z0-9_-]/g, "_")}.log`;
 
 // `session.status` replaced `session.idle`; both say the turn ended.
 const idle = (event) =>
@@ -215,6 +228,15 @@ export default {
     // event stream carries every session: only one we have already served here
     const ours = (id) => typeof id === "string" && starts.has(id);
 
+    // the V2 user line (Reply.notice) goes to the out-of-band notice file,
+    // never into the agent's context; without a notice there is nothing to
+    // file. Never throws: integration cannot break the agent.
+    const say = (id, r) => {
+      try {
+        if (id && r.notice) appendFileSync(notice_path(id), `${r.notice}\n`);
+      } catch {}
+    };
+
     // system is rebuilt per model request: fetch the brief once, push it every
     // request. Only the agent loop runs this hook, so it is not registered for
     // compaction — that event re-arms the brief instead (below). The gate is
@@ -224,7 +246,9 @@ export default {
       const id = event.sessionID;
       if (!id) return;
       if (!briefs.has(id)) {
-        briefs.set(id, hook("session-start", { cwd: directory, session: await start(id) }).context ?? "");
+        const r = hook("session-start", { cwd: directory, session: await start(id) });
+        say(id, r);
+        briefs.set(id, r.context ?? "");
       }
       const brief = briefs.get(id);
       if (brief) event.system.push({ type: "text", text: brief });
@@ -276,6 +300,7 @@ export default {
           tool_response: event.status === "completed" ? (event.result ?? {}) : (event.error ?? {}),
         });
         append(event, r.context);
+        say(event.sessionID, r);
         return;
       }
       const name = event.tool === "read" ? "read" : EDIT.has(event.tool) ? "edit" : null;
@@ -283,12 +308,13 @@ export default {
       if (!name || files.length === 0) return;
       const r = hook(name, { cwd: directory, session, files });
       append(event, r.context);
+      say(event.sessionID, r);
     });
 
     // OpenCode has no Stop hook: on idle the last message goes to fael, which
     // files its `fael <kind>:` lines and never answers with a prompt — one
-    // would start a turn the user cannot cancel with Esc. V2 has no toast
-    // surface for a server plugin, so the user line (Reply.notice) is dropped.
+    // would start a turn the user cannot cancel with Esc. The turn's receipt
+    // (Reply.notice) goes to the notice file, never into model content.
     const controller = new AbortController();
     void (async () => {
       for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
@@ -311,7 +337,7 @@ export default {
           text = asked.flatMap(texts).join("\n");
           reply = texts(asked[asked.length - 1]).join("\n");
         } catch {}
-        hook("stop", { cwd: directory, session: await start(id), text, reply });
+        say(id, hook("stop", { cwd: directory, session: await start(id), text, reply }));
       }
     })().catch(() => {});
     return () => controller.abort();
