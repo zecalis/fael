@@ -107,6 +107,15 @@ fn install_all_three_idempotent_and_leaves_what_is_not_fael_alone() {
         p.contains("const FAEL = \"") && !p.contains(r"\\?\") && !p.contains("__FAEL__"),
         "{p}"
     );
+    // OpenCode 1 calls the named export, OpenCode 2 loads `{ id, setup }`; a
+    // file carrying only one of the two breaks the other client (silently for
+    // 2: its loader drops a plugin with no default `setup`).
+    assert!(
+        p.contains("export const Fael")
+            && p.contains("id: \"fael\"")
+            && p.contains("async setup(ctx)"),
+        "plugin is not both the OpenCode 1 and 2 shape: {p}"
+    );
     assert!(read(&home.join(".claude/skills/fael/SKILL.md")).contains("fael add issue"));
     assert!(home.join(".agents/skills/fael/SKILL.md").is_file());
 
