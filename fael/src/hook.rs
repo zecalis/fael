@@ -8,7 +8,7 @@
 //! Thin entry only — the events live in `hook/`:
 //! `protocol` (neutral Event + shared ctx), `say` (the one door to the agent's
 //! context: Reply, Outbox, Kind and its noise policy), `claude` (client adapters),
-//! `stop` (turn-end work/bug rule), `cited` (the `cited` outcome: a said id typed into a tool input or reply), `session` (session-start kickoff),
+//! `stop` (turn-end work/bug rule), `cited` (the `cited` outcome: a said id typed into a tool input or reply), `session` (session-start kickoff), `named` (open issues a commit on the branch names, at session start),
 //! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `prompt` (the open-key pointer on a user prompt), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
 //! `tally` (the user channel's per-session ledger: reminders, receipt),
@@ -33,6 +33,7 @@ mod friction;
 mod held;
 mod in_context;
 mod markers;
+mod named;
 mod prompt;
 mod protocol;
 mod push;

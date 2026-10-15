@@ -106,11 +106,18 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // the rows, then each warning — the report rule rides the skill's
     // description (always loaded), the id rule that and the reject of an id
     // that does not exist (PLAN-fael-say-gate chunk 2)
-    let mut out = Outbox::open(None);
+    // the seen list, so a commit push later this session never repeats a named id
+    let seen = seen_path(&c.session, &c.agent, &c.repo.root);
+    let mut out = Outbox::open(
+        (!c.session.is_empty())
+            .then(|| super::state::lock_seen(&seen))
+            .flatten(),
+    );
     out.say(Line {
         kind: Kind::Brief,
         text: body,
     });
+    super::named::say(&mut out, &c.repo.root, &c.log, &all);
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
     }
