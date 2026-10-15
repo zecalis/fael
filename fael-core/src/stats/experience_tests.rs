@@ -97,12 +97,8 @@ fn fixes_checks_repeats_and_recall() {
     twice.extend(commits);
     let logs = HashMap::from([("/w/r".to_string(), log)]);
     let e = experience(&p, &logs, &HashMap::from([("/w/r".to_string(), twice)]));
-    // closes before the label contract: `label` is `label_tests.rs`'s
     assert_eq!(
-        Experience {
-            label: Default::default(),
-            ..e
-        },
+        e,
         Experience {
             fixed: 3,             // A sha · B (#N) · C commit
             fixed_from_review: 1, // B
@@ -111,7 +107,6 @@ fn fixes_checks_repeats_and_recall() {
             edits_after_close_with_check: 1, // s2 on a.rs, not d.rs
             fix_commits: 4,
             fix_commits_linked: 3,
-            ..Experience::default()
         }
     );
 }
@@ -164,12 +159,8 @@ fn folded_closes_sha_edges_and_worktrees() {
         ("/w/q".to_string(), commits()),
     ]);
     let e = experience(&p, &logs, &all);
-    // closes before the label contract: `label` is `label_tests.rs`'s
     assert_eq!(
-        Experience {
-            label: Default::default(),
-            ..e
-        },
+        e,
         Experience {
             fixed: 1,             // H, from the folded close
             closed_with_check: 1, // H

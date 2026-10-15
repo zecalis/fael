@@ -134,7 +134,8 @@ meaning:
   close is not carried. An older close keeps its rule: a sha or `(#N)` named, the sha found
   on main by ancestry, its subject, or the id. A found reference proves the link, not the fix.
 
-`fael stats` counts the form, never the worth: `experience.label` (`docs/stats.md`).
+`fael stats` no longer counts the form (the `experience.label` measure went in stats schema 5);
+`close_shape()` stays as the table below, run by its tests.
 
 | Close text | core | guard |
 |---|---|---|

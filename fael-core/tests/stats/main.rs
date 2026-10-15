@@ -46,7 +46,7 @@ fn capture_and_experience_shapes_are_frozen() {
     );
     assert_eq!(
         v["experience"],
-        serde_json::json!({"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0, "label": {"close_core": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "guard": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "key_reuse": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "find_hit": {"state": "unmeasurable", "num": 0, "den": 0, "since": null}, "gone_repos": 0}}),
+        serde_json::json!({"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0}),
         "{v}"
     );
 }
@@ -78,9 +78,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "est_tokens",
             "events",
             "experience",
-            "file_verdict",
             "friction",
-            "incidents",
             "non_english_rows",
             "outcomes_v",
             "retired",
@@ -94,7 +92,7 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    assert_eq!(v["schema"], 4, "{v}");
+    assert_eq!(v["schema"], 5, "{v}");
     // every kind listed, zeros included
     assert_eq!(
         keys(&v["said"]).join(" "),
@@ -164,12 +162,6 @@ fn json_shape_retired_value_and_verdict_are_frozen() {
     assert_eq!(keys(&v["value"]), value_keys, "{v}");
     assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
     assert!(v["value"]["by_event"].is_object(), "{v}");
-    // BASE_ROWS predate the shadow keys: nothing measured, all zero
-    assert_eq!(
-        v["file_verdict"],
-        serde_json::json!({"changed": 0, "unchanged": 0, "no_verdict": 0, "no_fh": 0, "retire": {"changed": {"pairs": 0, "retired": 0}, "unchanged": {"pairs": 0, "retired": 0}}}),
-        "{v}"
-    );
 }
 
 #[test]
