@@ -58,9 +58,12 @@ hooks know no UserPromptSubmit), so the pointer-line hint is Claude-only there �
   looks for "found a bug", "inconsistent", "might break", and similar; leave it out and fael reads `session` as a Claude transcript.
 - `agent` — only when the event fires inside a sub-agent: any id that is stable for that sub-agent. A
   sub-agent is its own context window, so `read`/`edit` keep a separate said-once list per `agent`
-  (it gets the rows its parent was already told), and a `stop` with `agent` only files that `reply`'s
-  lines — it never blocks. Leave it out on the session's own thread. A client whose sub-agents already
-  have their own `session` needs nothing here.
+  (it gets the rows its parent was already told), and a `stop` with `agent` only notes that `reply`'s
+  cited ids — it never blocks, stashes no bug line, sends no receipt. Leave it out on the session's
+  own thread. A client whose sub-agents already have their own `session` needs nothing here, except
+  OpenCode: its sub-agents are child sessions (`parentID` names the parent), so the child keeps its
+  own `session` string — its own said-once list, shared with its brief and pushes — and sends `agent`
+  = the serving root session only on `stop`.
 - `source` — on `session-start`, send `"compact"` right after the client compacted its context: the
   pushed rows are gone from it, so fael starts the said-once list over.
 - `client` — a name for `fael stats`.
