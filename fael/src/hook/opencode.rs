@@ -24,6 +24,73 @@ pub(crate) const SEARCH: [&str; 4] = ["grep", "glob", "shell", "bash"];
 #[allow(dead_code)]
 pub(crate) const SHELL: [&str; 2] = ["shell", "bash"];
 
+/// Stop text/reply extraction, mirroring `opencode.js` `stop_texts` (kept in
+/// step, never imported: the JS runs in the plugin, this is its executable
+/// spec). V1 assistant messages carry `parts[]`, V2 `content[]`; both keep
+/// `type == "text"` parts only, `text` is every assistant message joined with
+/// `\n`, `reply` the last assistant message only. Anything missing, empty or
+/// non-string is `""` — idle never answers with a prompt, and stop fails
+/// open on shapes it does not know. Spec mirror, exercised by the tests:
+/// the plugin's JS runs the live copy.
+#[allow(dead_code)]
+fn stop_texts(messages: &Value, v1: bool) -> (String, String) {
+    let is_assistant = |m: &Value| {
+        if v1 {
+            m.get("info")
+                .and_then(|i| i.get("role"))
+                .and_then(Value::as_str)
+                == Some("assistant")
+        } else {
+            m.get("type").and_then(Value::as_str) == Some("assistant")
+        }
+    };
+    let parts = |m: &Value| {
+        m.get(if v1 { "parts" } else { "content" })
+            .and_then(Value::as_array)
+            .map(|ps| {
+                ps.iter()
+                    .filter(|p| p.get("type").and_then(Value::as_str) == Some("text"))
+                    .map(|p| {
+                        p.get("text")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned()
+                    })
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default()
+    };
+    let asked: Vec<&Value> = messages
+        .as_array()
+        .map(|ms| ms.iter().filter(|m| is_assistant(m)).collect())
+        .unwrap_or_default();
+    // flatMap, as the JS: one empty assistant adds no segment
+    let text = asked
+        .iter()
+        .flat_map(|m| parts(m))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let reply = asked
+        .last()
+        .map(|m| parts(m).join("\n"))
+        .unwrap_or_default();
+    (text, reply)
+}
+
+/// V1 idle payloads (`client.session.messages` → `data`), as `v1_stop` reads
+/// them: the assistant messages' `parts[].text`.
+#[allow(dead_code)]
+pub(crate) fn v1_stop(data: &Value) -> (String, String) {
+    stop_texts(data, true)
+}
+
+/// V2 idle payloads (`ctx.session.context`), as `v2_stop` reads them: the
+/// assistant messages' `content[].text`.
+#[allow(dead_code)]
+pub(crate) fn v2_stop(messages: &Value) -> (String, String) {
+    stop_texts(messages, false)
+}
+
 /// The event `opencode.js` `tool.execute.after` would spawn for `tool` —
 /// `read`, `edit`, `search`, or none (it returns early). Names match
 /// case-insensitively, the server convention (`search.rs`).
@@ -203,5 +270,79 @@ mod tests {
         assert_eq!(n.text.as_deref(), Some("is there credit ledger code yet?"));
         assert_eq!(n.session.as_deref(), Some("2026-01-02T00:00:00Z"));
         assert!(n.files.is_empty());
+    }
+
+    /// Two turns: `text` carries both, `reply` only the last — the split
+    /// `stop.rs` needs (whole turn for the bug rule, last message for cited).
+    #[test]
+    fn stop_splits_text_and_reply() {
+        let v1 = json!([
+            {"info": {"role": "assistant"}, "parts": [{"type": "text", "text": "first turn"}]},
+            {"info": {"role": "user"}, "parts": [{"type": "text", "text": "go on"}]},
+            {"info": {"role": "assistant"}, "parts": [{"type": "text", "text": "fael issue: login loops"}]},
+        ]);
+        assert_eq!(
+            v1_stop(&v1),
+            (
+                "first turn\nfael issue: login loops".into(),
+                "fael issue: login loops".into()
+            )
+        );
+        let v2 = json!([
+            {"type": "assistant", "content": [{"type": "text", "text": "first turn"}]},
+            {"type": "user", "content": [{"type": "text", "text": "go on"}]},
+            {"type": "assistant", "content": [{"type": "text", "text": "fael issue: login loops"}]},
+        ]);
+        assert_eq!(
+            v2_stop(&v2),
+            (
+                "first turn\nfael issue: login loops".into(),
+                "fael issue: login loops".into()
+            )
+        );
+    }
+
+    #[test]
+    fn stop_ignores_non_text_parts_and_empty_shapes() {
+        // tool and reasoning parts never reach stop; non-assistants neither
+        let v2 = json!([
+            {"type": "assistant", "content": [
+                {"type": "reasoning", "text": "hmm"},
+                {"type": "text", "text": "wired the adapter"},
+                {"type": "tool", "text": "read"},
+            ]},
+        ]);
+        assert_eq!(
+            v2_stop(&v2),
+            ("wired the adapter".into(), "wired the adapter".into())
+        );
+        // empty, missing and misshapen payloads idle silently: ("", "")
+        for (name, msgs) in [
+            ("empty array", json!([])),
+            (
+                "no assistants",
+                json!([{"type": "user", "content": [{"type": "text", "text": "hi"}]}]),
+            ),
+            ("missing content", json!([{"type": "assistant"}])),
+            (
+                "missing text",
+                json!([{"type": "assistant", "content": [{"type": "text"}]}]),
+            ),
+            (
+                "non-string text",
+                json!([{"type": "assistant", "content": [{"type": "text", "text": 7}]}]),
+            ),
+            ("not an array", json!({"type": "assistant"})),
+            ("null", json!(null)),
+        ] {
+            assert_eq!(v2_stop(&msgs), (String::new(), String::new()), "{name}");
+        }
+        for (name, data) in [
+            ("empty array", json!([])),
+            ("missing parts", json!([{"info": {"role": "assistant"}}])),
+            ("null", json!(null)),
+        ] {
+            assert_eq!(v1_stop(&data), (String::new(), String::new()), "{name}");
+        }
     }
 }

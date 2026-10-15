@@ -61,16 +61,55 @@ const paths = (tool, input) =>
     ? patch_files(input?.patchText)
     : [input?.path ?? input?.filePath].filter(Boolean);
 
-// Where the V2 user line goes: one out-of-band file per OpenCode session,
-// `$TMPDIR/fael-notice-<sessionID>.log` (id sanitized for a filename), one
-// notice per line, verbatim. A server plugin has no toast — measured on
-// OpenCode 2.0.29: the plugin ctx carries no `tui`/`notify`, and `event` is
-// subscribe-only — and every model-writing hook (context, tool result, prompt
-// admission) is forbidden to the notice bytes, so the file is the channel.
-// Tail it to watch receipts live; a TUI companion that toasts it needs a
-// separate `./tui` entrypoint plus install wiring, tracked as follow-up.
 const notice_path = (id) =>
   `${tmpdir()}/fael-notice-${String(id).replace(/[^A-Za-z0-9_-]/g, "_")}.log`;
+
+// Assistant text for the idle reader, kept in step with hook/opencode.rs
+// v1_stop/v2_stop: V1 messages carry parts[], V2 content[]; text is every
+// assistant text joined, reply the last assistant message only; anything
+// missing or non-string is "" — idle never answers with a prompt.
+const texts_of = (m, key) =>
+  ((m?.[key] ?? []).filter((p) => p?.type === "text").map((p) => (typeof p.text === "string" ? p.text : "")));
+const stop_texts = (messages, v1) => {
+  const asked = (messages ?? []).filter((x) => (v1 ? x?.info?.role === "assistant" : x?.type === "assistant"));
+  const key = v1 ? "parts" : "content";
+  const text = asked.flatMap((x) => texts_of(x, key)).join("\n");
+  const last = asked[asked.length - 1];
+  return { text, reply: last ? texts_of(last, key).join("\n") : "" };
+};
+
+// A sub-agent is a child session: parentID names its parent, root sessions
+// carry none (measured: `session export` info lists no parentID on roots;
+// the server binary indexes `parent_id` and documents "a parentID creates a
+// linked child session at its parent's location"). The child keeps its own
+// session string — its own seen list — and sends agent=<root> on stop only,
+// so hook/stop.rs takes the subagent branch (cited ids, no bug-rule stash
+// orphaned under the short-lived child key, no per-turn receipt). Tool
+// results and the brief stay agent-less, so the push, the seen list and the
+// prompt pointer keep one key.
+const parent_of = (s) =>
+  s?.parentID ?? s?.parentId ?? s?.parent_id ?? s?.info?.parentID ?? s?.data?.parentID ?? null;
+// of a served session resolves to its root; a foreign session resolves to
+// null once, then stays cached
+const root_of = async (id, starts, parents, get) => {
+  let cur = id;
+  for (let i = 0; i < 5 && cur; i++) {
+    let p = parents.get(cur);
+    if (p === undefined) {
+      try {
+        p = parent_of(await get(cur));
+      } catch {
+        p = null;
+      }
+      parents.set(cur, p ?? null);
+    }
+    if (p == null) return starts.has(cur) ? cur : null;
+    cur = p;
+  }
+  return null;
+};
+
+// `session.status` replaced `session.idle`; both say the turn ended.
 
 // `session.status` replaced `session.idle`; both say the turn ended.
 const idle = (event) =>
@@ -98,14 +137,18 @@ export const Fael = async ({ client, directory }) => {
   // session start as RFC 3339 — the `session` string stop needs, and the same
   // string edit sends so both key one edit list
   const starts = new Map();
+  const parents = new Map();
   const start = async (id) => {
     if (!starts.has(id)) {
       let t = Date.now();
+      let p = null;
       try {
         const s = await client.session.get({ path: { id } });
         t = s.data?.time?.created ?? t;
+        p = parent_of(s.data) ?? null;
       } catch {}
       starts.set(id, new Date(t).toISOString());
+      parents.set(id, p);
     }
     return starts.get(id);
   };
@@ -168,33 +211,37 @@ export const Fael = async ({ client, directory }) => {
     },
 
     // OpenCode has no Stop hook: on idle the last message goes to fael, which
-    // files its `fael <kind>:` lines and never answers with a prompt — one
-    // would start a turn the user cannot cancel with Esc.
+    // files its cited ids and never answers with a prompt — one would start
+    // a turn the user cannot cancel with Esc. A child session (sub-agent)
+    // sends agent=<root>, so stop takes the subagent branch; a session no
+    // ancestor of which this instance served is foreign — skip it.
     event: async ({ event }) => {
       const id = event.properties?.sessionID;
-      if (!id) return;
+      if (typeof id !== "string") return;
       // compaction dropped the pushed rows from context: `source: "compact"`
       // makes fael forget what it said there, so the next read tells them again
       if (event.type === "session.compacted") {
+        const root = await root_of(id, starts, parents, (x) => client.session.get({ path: { id: x } }));
+        if (!root) return;
         const e = { cwd: directory, session: await start(id), source: "compact" };
         briefs.set(id, hook("session-start", e).context ?? "");
         return;
       }
       if (event.type !== "session.idle") return;
+      const root = await root_of(id, starts, parents, (x) => client.session.get({ path: { id: x } }));
+      if (!root) return;
       let text = "";
       let reply = "";
       try {
         const m = await client.session.messages({ path: { id } });
-        const asked = (m.data ?? []).filter((x) => x.info?.role === "assistant");
-        const texts = (x) => (x?.parts ?? []).filter((p) => p.type === "text").map((p) => p.text);
-        text = asked.flatMap(texts).join("\n");
-        reply = texts(asked[asked.length - 1]).join("\n");
+        ({ text, reply } = stop_texts(m.data, true));
       } catch {}
       const r = hook("stop", {
         cwd: directory,
         session: await start(id),
         text,
         reply,
+        ...(root !== id ? { agent: root } : {}),
       });
       say(r);
     },
@@ -212,21 +259,23 @@ export default {
     // session start as RFC 3339 — the `session` string read/edit/search/stop
     // need, and the same string edit sends so both key one edit list
     const starts = new Map();
+    const parents = new Map();
     const start = async (id) => {
       if (!starts.has(id)) {
         let t = Date.now();
+        let p = null;
         try {
-          const created = epoch((await ctx.session.get({ sessionID: id }))?.time?.created);
+          const s = await ctx.session.get({ sessionID: id });
+          const created = epoch(s?.time?.created);
           if (created) t = created;
+          p = parent_of(s) ?? null;
         } catch {}
         starts.set(id, new Date(t).toISOString());
+        parents.set(id, p);
       }
       return starts.get(id);
     };
     const briefs = new Map();
-    // one plugin instance answers for its own location, but the server-wide
-    // event stream carries every session: only one we have already served here
-    const ours = (id) => typeof id === "string" && starts.has(id);
 
     // the V2 user line (Reply.notice) goes to the out-of-band notice file,
     // never into the agent's context; without a notice there is nothing to
@@ -312,14 +361,23 @@ export default {
     });
 
     // OpenCode has no Stop hook: on idle the last message goes to fael, which
-    // files its `fael <kind>:` lines and never answers with a prompt — one
-    // would start a turn the user cannot cancel with Esc. The turn's receipt
-    // (Reply.notice) goes to the notice file, never into model content.
+    // files its cited ids and never answers with a prompt — one would start
+    // a turn the user cannot cancel with Esc. The turn's receipt
+    // (Reply.notice) goes to the notice file, never into model content. A child
+    // session (sub-agent) sends agent=<root>, so stop takes the subagent
+    // branch; the server-wide stream carries every session, so one no
+    // ancestor of which was served here is foreign — skip it.
     const controller = new AbortController();
     void (async () => {
       for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
         const id = event?.data?.sessionID;
-        if (!ours(id)) continue;
+        if (typeof id !== "string") continue;
+        if (!idle(event) && event.type !== "session.compacted") continue;
+        // the tool hook may never have seen this child itself: resolve the
+        // serving root through the cached parent chain (one fetch per unknown
+        // id at most) — hot paths above never fetch
+        const root = await root_of(id, starts, parents, (x) => ctx.session.get({ sessionID: x }));
+        if (!root) continue;
         // compaction dropped the pushed rows from context: `source: "compact"`
         // makes fael forget what it said there, so the next read tells them again
         if (event.type === "session.compacted") {
@@ -327,17 +385,18 @@ export default {
           briefs.set(id, hook("session-start", e).context ?? "");
           continue;
         }
-        if (!idle(event)) continue;
         let text = "";
         let reply = "";
         try {
-          const m = await ctx.session.context({ sessionID: id });
-          const asked = (m ?? []).filter((x) => x?.type === "assistant");
-          const texts = (x) => (x?.content ?? []).filter((p) => p?.type === "text").map((p) => p.text);
-          text = asked.flatMap(texts).join("\n");
-          reply = texts(asked[asked.length - 1]).join("\n");
+          ({ text, reply } = stop_texts(await ctx.session.context({ sessionID: id }), false));
         } catch {}
-        say(id, hook("stop", { cwd: directory, session: await start(id), text, reply }));
+        say(id, hook("stop", {
+          cwd: directory,
+          session: await start(id),
+          text,
+          reply,
+          ...(root !== id ? { agent: root } : {}),
+        }));
       }
     })().catch(() => {});
     return () => controller.abort();
