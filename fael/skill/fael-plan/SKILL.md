@@ -204,7 +204,8 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   others**: fael.db has no "waits on the line above". Give it only where the order is real.
   An order on a chunk already on the board goes through `fael chunk apply` op `after`
   ([`REVIEW.md`](REVIEW.md), step 4) — `fael chunk after` is the running agent's verb, answered only from the
-  worktree of that chunk's run. Two small chunks in order on one code path also get a `pair`:
+  worktree of that chunk's run. An order that is no longer real comes off with
+  `fael chunk unafter <uid> <other> "<why>"` (the approval stays). Two small chunks in order on one code path also get a `pair`:
   one start claims both and does them in plan order, so the `after` between them never blocks
   and nobody starts the second with `--force`.
 - **reads** — the section keys it works from (`<plan>/<key>` for another plan's): its brief

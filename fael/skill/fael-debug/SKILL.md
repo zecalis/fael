@@ -94,6 +94,12 @@ if the two ever differ.
   "found it" after the disproof ran and the ledger agrees.
 - **Fael reads, you judge.** A past row is a lead, never a verdict — verify it against the repro
   like any other breadcrumb.
+- **Measure, then hand off the big fix.** This session ends at a cause backed by numbers. A fix
+  of more than a few edits (several files, a refactor, its own PR) goes to a new session: file
+  the issue with the measurements, the cause, what was ruled out and the fix, then start the
+  fix from that row. Every turn rereads the whole context, so fixing at the end of a long
+  debug pays for every run before it (vela e2e, 2026-10-15: one session, 1,201 turns, the
+  tokens of six workers).
 - **Report in lines.** Repro, cause, fix, guard, the fael id. The ledger lives in the record,
   not in a closing essay.
 

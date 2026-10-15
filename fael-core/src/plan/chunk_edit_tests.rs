@@ -1,4 +1,5 @@
-//! `chunk edit --scope` alone that widens keeps the owner's approval (owner, 2026-10-15).
+//! `chunk edit --scope` alone that widens keeps the owner's approval (owner, 2026-10-15),
+//! and so does `chunk unafter`.
 
 use super::super::{Fields, Store};
 use super::tests::{NOW, add, get};
@@ -61,4 +62,33 @@ fn a_scope_that_drops_a_path_or_comes_with_another_field_clears_it() {
     };
     s.edit(&both, &f, NOW).unwrap();
     assert!(!kept(&s, &both));
+}
+
+#[test]
+fn unafter_drops_the_edge_and_keeps_the_approval() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("brief"));
+    let f = Fields {
+        title: Some("b".into()),
+        brief: Some("brief".into()),
+        ..Fields::default()
+    };
+    let b = s.add("inbox", &f, std::slice::from_ref(&a), NOW).unwrap();
+    s.conn
+        .execute(
+            "UPDATE chunk SET approved_at = ?1, approved_model = 'opus' WHERE uid = ?2",
+            params![NOW, b],
+        )
+        .unwrap();
+    s.unafter(&b, &a, "a shipped another way", NOW).unwrap();
+    assert!(kept(&s, &b));
+    let edges: i64 = s
+        .conn
+        .query_row("SELECT COUNT(*) FROM edge WHERE kind = 'after'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(edges, 0);
+    let e = s.unafter(&b, &a, "again", NOW).unwrap_err();
+    assert!(e.contains("does not wait on"), "{e}");
 }

@@ -17,6 +17,7 @@ pub(crate) const VERBS: &[&str] = &[
     "note",
     "wait",
     "after",
+    "unafter",
     "ask",
     "reply",
     "answer",
@@ -29,7 +30,7 @@ pub(crate) const VERBS: &[&str] = &[
     "approve",
     "unapprove",
 ];
-pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
+pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
@@ -151,6 +152,11 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             a.only("chunk after", &["run"])?;
             s()?.after(uid, other, why, &here)?;
             say(uid, &format!("after {other}"));
+        }
+        ["unafter", uid, other, why] => {
+            a.only("chunk unafter", &[])?;
+            s()?.unafter(uid, other, why, &now)?;
+            say(uid, &format!("no longer after {other}"));
         }
         ["done", uid, handoff] => crate::chunk_run::done(a, r, uid, handoff, &here)?,
         [verb @ ("answer" | "drop" | "park"), uid, text] => {

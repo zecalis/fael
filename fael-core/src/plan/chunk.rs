@@ -308,6 +308,36 @@ impl Store {
         edit_in(&tx, uid, f, now)?;
         tx.commit().map_err(err)
     }
+
+    /// `fael chunk unafter`: `uid` stops waiting on `other` — the planner's undo of an
+    /// `after` without a bill (vela, 2026-10-15). The approval stays, as a bill's after
+    /// change keeps it: the work the owner approved did not change.
+    pub fn unafter(&mut self, uid: &str, other: &str, why: &str, now: &str) -> Result<(), String> {
+        let tx = tx(self)?;
+        let r = row(&tx, uid)?;
+        if r.state.terminal() {
+            return Err(format!(
+                "rejected: chunk {uid} is {} — it waits on nothing",
+                r.state.as_str()
+            ));
+        }
+        let pid: i64 = tx
+            .query_row("SELECT plan FROM chunk WHERE id = ?1", [r.id], |q| q.get(0))
+            .map_err(err)?;
+        let dst = uid_id(&tx, pid, other)?;
+        let n = tx
+            .execute(
+                "DELETE FROM edge WHERE src = ?1 AND dst = ?2 AND kind = 'after'",
+                params![r.id, dst],
+            )
+            .map_err(err)?;
+        if n == 0 {
+            return Err(format!("rejected: chunk {uid} does not wait on {other}"));
+        }
+        let text = format!("no longer after {other}: {why}");
+        set(&tx, &r, r.state, "owner", Some(&text), now)?;
+        tx.commit().map_err(err)
+    }
 }
 
 pub(super) fn is_date(d: &str) -> bool {
