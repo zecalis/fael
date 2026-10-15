@@ -38,10 +38,7 @@ pub(crate) fn cmd(a: &Args, only: Option<&String>) -> Result<ExitCode, String> {
     for l in &lines {
         println!("{l}");
     }
-    let changed = lines
-        .iter()
-        .filter(|l| !l.starts_with("not ") && !l.starts_with("skipped "))
-        .count();
+    let changed = lines.iter().filter(|l| !l.starts_with("skipped ")).count();
     println!("{changed} change(s) from {n} ticket(s)");
     Ok(ExitCode::SUCCESS)
 }
