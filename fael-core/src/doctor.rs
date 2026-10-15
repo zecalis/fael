@@ -122,8 +122,8 @@ pub enum Kind {
     /// Info-only, shown only when at least one label lands.
     Precision,
     /// client wiring (hooks, plugin, skill) behind this binary — `fael install`
-    /// would still change something, so a hook that shipped later (sub-agent
-    /// reply capture) stays off until `fael upgrade`; judged by the install
+    /// would still change something, so a hook that shipped later (the sub-agent
+    /// stop) stays off until `fael upgrade`; judged by the install
     /// dry pass in `doctor`, never in core (core never reads client configs).
     /// Info-only: it is machine state, not the repo's log.
     Wiring,

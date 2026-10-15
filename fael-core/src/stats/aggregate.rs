@@ -41,7 +41,7 @@ pub struct AskCount {
 /// Schema of the `Stats` JSON shape below. Bump it only when a field is
 /// removed, renamed, retyped or redefined — adding a field never bumps
 /// (readers skip unknown keys), it just gets a `docs/stats.md` changelog line.
-pub const STATS_SCHEMA: u32 = 3;
+pub const STATS_SCHEMA: u32 = 4;
 
 /// Bytes the agent pays every session before saying anything — measured by
 /// the caller (CLI), never estimated here.

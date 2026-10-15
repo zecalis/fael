@@ -8,8 +8,8 @@ use crate::{Log, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-/// `retired.at_touch` and `capture.reply_stored` join the line from their
-/// own blocks — not copied here, so `--json` carries each number once.
+/// `retired.at_touch` joins the line from its
+/// own block — not copied here, so `--json` carries each number once.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Value {
     /// Distinct (session, row) pairs: a decision or issue an earlier push of

@@ -74,7 +74,6 @@ fael mem for src/b.rs (1 of 16):
 - [01K00000000000000000B] issue b leaks a handle
 fael: done with one? fael close 01K00000000000000000B "<why>"
 fael note: this session mentioned a possible problem ("out of sync") — file an issue if it holds up: fael add issue "<what is at risk>" --files src/b.rs
-fael: 1 `fael <kind>:` line(s) in your last reply were not filed — fael issue: line has no [files: a,b] at its end. Fix the line, or file it with `fael add`.
 fael: decision 01K00000000000000000HUB000 — `src/hub.rs` changed since it was written · still true? fael bump 01K00000000000000000HUB000 · the code holds it? fael close 01K00000000000000000HUB000 "now in `src/hub.rs`" · wrong now? re-file with --supersedes 01K00000000000000000HUB000
 fael: note 01K00000000000000000HUB002 — `src/hub.rs` changed since it was written · still true? fael bump 01K00000000000000000HUB002 · the code holds it? fael close 01K00000000000000000HUB002 "now in `src/hub.rs`" · wrong now? re-file with --supersedes 01K00000000000000000HUB002
 fael: decision 01K00000000000000000HUB003 — `src/hub.rs` changed since it was written · still true? fael bump 01K00000000000000000HUB003 · the code holds it? fael close 01K00000000000000000HUB003 "now in `src/hub.rs`" · wrong now? re-file with --supersedes 01K00000000000000000HUB003
@@ -93,5 +92,5 @@ fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
 ## 31 read {"session":"s2","files":["src/c.rs"]}
 ## 32 prompt {"text":"fix the auth login flow"}
 ## usage
-15 lines · ~1073 tokens
-session-start prompt edit in-context edit in-context edit in-context edit capture session-start shell-edit outcome search session-start
+14 lines · ~1032 tokens
+session-start prompt edit in-context edit in-context edit in-context edit session-start shell-edit outcome search session-start

@@ -1,7 +1,5 @@
-//! Capture metrics (PLAN-fael-dev-adoption chunk 1): how much memory arrives
-//! through the reply's `fael <kind>:` lines against the manual `add`, what
-//! the Stop hook still costs in rounds, and how many sessions edited files
-//! without leaving a row. Pure: kept usage rows and loaded logs in, numbers
+//! Capture metrics (PLAN-fael-dev-adoption chunk 1): how many rows were added
+//! and how many sessions edited files without leaving a row. Pure: kept usage rows and loaded logs in, numbers
 //! out. Estimates stay estimates — a session's "no row" is a signal for a
 //! human to look at, not a verdict.
 
@@ -30,12 +28,8 @@ pub struct Silent {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Capture {
-    /// Capture lines the Stop hook saw in replies (stored + rejected).
-    pub reply_lines: usize,
-    pub reply_stored: usize,
-    pub reply_rejected: usize,
-    /// Rows added since the repo's first usage that did not arrive through a
-    /// reply line — by any writer (an imported row counts too).
+    /// Rows added since the repo's first usage, by any writer (an imported
+    /// row counts too).
     pub manual_adds: usize,
     /// Sessions (per repo) that edited at least one file.
     pub sessions_with_edits: usize,
@@ -55,22 +49,10 @@ pub struct Capture {
 }
 
 pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
-    let (mut stored, mut rejected) = (0usize, 0usize);
-    let mut stored_ids: HashSet<&str> = HashSet::new();
     // (repo, session) → (first event, last event, edited?, edit branch)
     type Span<'a> = (i64, i64, bool, Option<&'a str>);
     let mut sessions: HashMap<(&str, &str), Span> = HashMap::new();
     for v in &parsed.kept {
-        if v["event"] == "capture" {
-            match v["capture"].as_str() {
-                Some("stored") => {
-                    stored += 1;
-                    stored_ids.extend(v["row"].as_str());
-                }
-                Some("rejected") => rejected += 1,
-                _ => {}
-            }
-        }
         let (Some(repo), Some(session), Some(ms)) = (
             v["repo"].as_str(),
             v["session"].as_str().filter(|s| !s.is_empty()),
@@ -94,7 +76,6 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         for r in logs.get(repo).into_iter().flat_map(|l| &l.rows) {
             if !r.kind.is_empty()
                 && ts_ms(&r.ts).is_some_and(|t| t >= *first)
-                && !stored_ids.contains(r.id.as_str())
                 && seen.insert(r.id.as_str())
             {
                 manual += 1;
@@ -119,9 +100,6 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
     no_row.sort_by_key(|(k, s)| (std::cmp::Reverse(s.1), *k));
     let at = |ms: i64| rfc3339(ms.max(0) as u64);
     Capture {
-        reply_lines: stored + rejected,
-        reply_stored: stored,
-        reply_rejected: rejected,
         manual_adds: manual,
         sessions_with_edits: edited.len(),
         sessions_with_edits_no_row: no_row.len(),
@@ -190,11 +168,9 @@ mod tests {
     }
 
     #[test]
-    fn counts_reply_manual_and_silent_sessions() {
+    fn counts_adds_and_silent_sessions() {
         let p = parsed(&[
             r#"{"ts":"2026-09-30T00:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","session":"s1","ids":[]}"#,
-            r#"{"ts":"2026-09-30T00:01:00.000Z","repo":"/w/r","client":"claude","event":"capture","capture":"stored","row":"R1","session":"s1"}"#,
-            r#"{"ts":"2026-09-30T00:01:00.000Z","repo":"/w/r","client":"claude","event":"capture","capture":"rejected","session":"s1"}"#,
             r#"{"ts":"2026-09-30T01:00:00.000Z","repo":"/w/r","client":"claude","event":"edit","session":"s2","ids":[]}"#,
             r#"{"ts":"2026-09-30T02:00:00.000Z","repo":"/w/r","client":"claude","event":"read","session":"s3","ids":[]}"#,
             // two worktrees, one journal: s4's window holds only s5's row
@@ -216,8 +192,8 @@ mod tests {
         };
         let log = Log {
             rows: vec![
-                s1("R1", "2026-09-30T00:01:00.000Z", "note"), // via reply
-                s1("M1", "2026-09-30T00:00:20.000Z", "decision"), // manual
+                s1("R1", "2026-09-30T00:01:00.000Z", "note"),
+                s1("M1", "2026-09-30T00:00:20.000Z", "decision"),
                 // neither session nor branch: nobody's, so s2 stays silent
                 row("N1", "2026-09-30T01:00:30.000Z", "note"),
                 row("C1", "2026-09-30T00:00:25.000Z", ""), // a close: not an add
@@ -231,10 +207,7 @@ mod tests {
         assert_eq!(
             c,
             Capture {
-                reply_lines: 2,
-                reply_stored: 1,
-                reply_rejected: 1,
-                manual_adds: 4,
+                manual_adds: 5,
                 sessions_with_edits: 5,
                 sessions_with_edits_no_row: 2, // s2: no row near it · s4: only feat/b's
                 sessions_with_edits_gone: 1,   // s6

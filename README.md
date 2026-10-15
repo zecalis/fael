@@ -77,7 +77,7 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 | "Why is it like this?" — ask again, guess again | The reason sits next to the file, from the agent that made the call |
 | Agent notices a bug mid-task, then forgets it | It's filed on the spot, and shown to whoever touches that file next |
 | Two agents in parallel worktrees hit the same problem | The first files it; the second gets it when it opens the file — the same hour, before any commit (`fael stats` → `across agents` counts how often) |
-| A sub-agent finds something and its summary drops it | Its `fael issue: …` line is filed when it stops (Claude Code), and the parent gets it on that file |
+| A sub-agent finds something and its summary drops it | It files the row with `fael add` itself, and the parent gets it on that file |
 | Work is handed over in chat and lost between sessions | A hand-off note, an assigned issue or a claim sits in the ledger — the assignee sees it at session start |
 | Two agents pick the same issue | `fael claim <id>`: the second sees `(held @<branch>)` and picks another |
 | Knowledge stays in one chat's history | It's in the clone — every agent and worktree on the machine gets it |

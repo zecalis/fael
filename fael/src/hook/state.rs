@@ -121,12 +121,6 @@ pub(crate) fn risk_path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.risk"))
 }
 
-/// A capture-reject hint stashed by stop for the next push — shown once, deleted.
-pub(crate) fn hint_path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
-    state_dir().join("sessions").join(format!("{key}.hint"))
-}
-
 /// A fix phrase stashed by stop for the next push (PLAN-fael-experience-loop
 /// chunk 5a) — shown once, deleted.
 pub(crate) fn fixed_path(session: &str, root: &Path) -> PathBuf {
@@ -181,21 +175,21 @@ pub(crate) fn prune_sessions(dir: &Path) {
     }
 }
 
-/// The stashed risk note, capture-reject hint and fix phrase, if any — left
+/// The stashed risk note and fix phrase, if any — left
 /// on disk until `clear_stash`, so a push that had no budget for them leaves
 /// them for the next.
-pub(crate) fn peek_stash(session: &str, root: &Path) -> [Option<String>; 3] {
+pub(crate) fn peek_stash(session: &str, root: &Path) -> [Option<String>; 2] {
     let peek = |path: &Path| {
         let s = std::fs::read_to_string(path).ok()?;
         let s = s.trim().to_string();
         (!s.is_empty()).then_some(s)
     };
-    [risk_path, hint_path, fixed_path].map(|p| peek(&p(session, root)))
+    [risk_path, fixed_path].map(|p| peek(&p(session, root)))
 }
 
 /// Delete the stashes — once their line was said, never before.
 pub(crate) fn clear_stash(session: &str, root: &Path) {
-    for p in [risk_path, hint_path, fixed_path] {
+    for p in [risk_path, fixed_path] {
         let _ = std::fs::remove_file(p(session, root));
     }
 }

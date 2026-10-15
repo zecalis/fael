@@ -48,6 +48,34 @@ pub(super) fn read_tail(path: &Path) -> Option<String> {
     }
 }
 
+/// The last assistant message of a Claude transcript: the text after the
+/// latest user-role line (a tool result is one too, so text written before a
+/// tool call never counts). Nothing flushed yet = `None`, never an older line.
+pub(super) fn transcript_reply(path: &Path) -> Option<String> {
+    let mut reply: Vec<String> = vec![];
+    for line in read_tail(path)?.split('\n') {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if v["isSidechain"] == true {
+            continue;
+        }
+        match v["message"]["role"].as_str() {
+            Some("user") => reply.clear(),
+            Some("assistant") => reply.extend(
+                v["message"]["content"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|b| b["type"] == "text")
+                    .filter_map(|b| b["text"].as_str().map(String::from)),
+            ),
+            _ => {}
+        }
+    }
+    (!reply.is_empty()).then(|| reply.join("\n"))
+}
+
 /// Scan assistant text in a Claude transcript tail for a `hit` (a bug marker,
 /// a fix phrase) — only
 /// lines after the latest user prompt (a plan written an hour ago must not
@@ -119,4 +147,46 @@ pub(crate) fn signal_from_transcript(
         }
     }
     (None, turn_ms)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transcript_reply_is_the_text_after_the_last_user_line() {
+        let d = std::env::temp_dir().join(format!("fael-reply-{}", core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let t = d.join("t.jsonl");
+        let line = |role: &str, text: &str| {
+            serde_json::json!({"message": {"role": role, "content": [{"type": "text", "text": text}]}}).to_string()
+        };
+        let body = [
+            line("assistant", "old"),
+            line("user", "tool result"),
+            line("assistant", "mid-turn"),
+            line("user", "tool result"),
+            line("assistant", "final"),
+        ]
+        .join("\n");
+        std::fs::write(&t, body).unwrap();
+        assert_eq!(transcript_reply(&t).unwrap(), "final");
+        // a user line last = the final message is not flushed yet
+        std::fs::write(&t, [line("assistant", "x"), line("user", "y")].join("\n")).unwrap();
+        assert_eq!(transcript_reply(&t), None);
+    }
+
+    #[test]
+    fn a_long_transcript_still_yields_its_last_message() {
+        let d = std::env::temp_dir().join(format!("fael-reply-big-{}", core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let t = d.join("t.jsonl");
+        let filler = serde_json::json!({"message": {"role": "user", "content": "x".repeat(1000)}});
+        let last = serde_json::json!({"message": {"role": "assistant", "content": [
+            {"type": "text", "text": "at the end"}]}});
+        let mut body = format!("{filler}\n").repeat(11_000); // ~11 MB
+        body.push_str(&last.to_string());
+        std::fs::write(&t, body).unwrap();
+        assert_eq!(transcript_reply(&t).unwrap(), "at the end");
+    }
 }

@@ -33,8 +33,8 @@ fn fixed_line(phrase: &str, files: &[String]) -> String {
     )
 }
 
-/// The lines stop stashed for this push — the Weak risk mention and the
-/// capture-reject hint (one notice), and the fix line, whether or not rows
+/// The lines stop stashed for this push — the Weak risk mention (a notice)
+/// and the fix line, whether or not rows
 /// join them. Only looked at: `push` clears them once they were said, so a
 /// push with no budget left leaves them for the next. Stop stashed them for
 /// the session's own thread — a sub-agent's push leaves them there.
@@ -42,11 +42,8 @@ fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
     if c.session.is_empty() || !c.agent.is_empty() {
         return vec![];
     }
-    let [risk, hint, fixed] = peek_stash(&c.session, &c.repo.root);
-    let risk = risk.map(|m| risk_line(&m, files));
-    let hint = hint.map(|h| format!("fael: {h}"));
-    let notice: Vec<String> = risk.into_iter().chain(hint).collect();
-    let notice = (!notice.is_empty()).then(|| Line::notice(format!("{}\n", notice.join("\n"))));
+    let [risk, fixed] = peek_stash(&c.session, &c.repo.root);
+    let notice = risk.map(|m| Line::notice(format!("{}\n", risk_line(&m, files))));
     // the fix is in what the session edited, not in the file this push is on
     let fixed = fixed.map(|p| {
         let edited = edited_files(&c.session, &c.repo.root, 3);

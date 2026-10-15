@@ -1,9 +1,7 @@
-//! The stop event. It files the reply's `fael <kind>:` lines (`capture`),
-//! and stashes a fix or bug announcement with no issue or close after it for
+//! The stop event. It notes the ids the reply cites (`cited`), and stashes a fix or bug announcement with no issue or close after it for
 //! the next push to show once. It never blocks: fael never starts an agent turn.
 
-use super::capture;
-use super::markers::{has_bug_marker, has_fix_phrase, signal_from_transcript};
+use super::markers::{has_bug_marker, has_fix_phrase, signal_from_transcript, transcript_reply};
 use super::protocol::{Event, Reply, ctx};
 use super::state::{file_birth_ms, fixed_path, risk_path, seen_path};
 use crate::core;
@@ -81,7 +79,7 @@ fn receipt(e: &Event) -> Option<String> {
     super::tally::take_receipt(&c.session, &c.repo.root, &c.log)
 }
 
-/// A sub-agent's stop only files its own reply's lines: the bug rule
+/// A sub-agent's stop only notes the ids its own reply cites: the bug rule
 /// belongs to the session's stop. No
 /// transcript fallback — `session` is the parent's transcript, never this
 /// agent's reply.
@@ -90,7 +88,6 @@ fn subagent_stop(e: &Event) -> Reply {
         && adopted(&c)
     {
         super::cited::note_reply(&c, reply);
-        capture::collect(&c, reply);
     }
     Reply::default()
 }
@@ -101,26 +98,19 @@ fn adopted(c: &super::protocol::Ctx) -> bool {
     crate::journal::home(&c.repo).is_some()
 }
 
-/// File the reply's capture lines; a fix or bug announcement with no issue
+/// Note the reply's cited ids; a fix or bug announcement with no issue
 /// or close since is stashed for the next push — the fix phrase first, its
 /// line asks for the whole cause → fix. Never blocks — fael never starts a turn.
 fn decide(e: &Event) -> Reply {
     let no = Reply::default();
-    // before the reply's lines are filed: an issue they write clears the
-    // reply's marker, which counts as said at this stop
     let stop_ms = core::now_ms() as i64;
-    let Some(mut c) = ctx(e) else { return no };
+    let Some(c) = ctx(e) else { return no };
     // no log in the tree or the journal = fael never adopted here — skip the
     // transcript read
     if !adopted(&c) {
         return no;
     }
-    // the reply's lines are filed first, so an issue they write clears the
-    // bug signal below
-    if collect_reply(e, &c).stored > 0 {
-        (c.log, c.tags) = crate::journal::read(&c.repo);
-    }
-    // after the reply's lines: a decision it files is this session's too
+    note_reply(e, &c);
     super::held::stash(&c);
     // session start: an RFC 3339 time, or a transcript file's birthtime, at
     // ms precision — whole seconds race with rows filed just before it
@@ -144,19 +134,15 @@ fn decide(e: &Event) -> Reply {
     no
 }
 
-/// File the last message's capture lines. The message comes from the client
+/// Note the ids the last message cites. The message comes from the client
 /// (`reply`), else from the Claude transcript's tail; neither = nothing to do.
-fn collect_reply(e: &Event, c: &super::protocol::Ctx) -> capture::Filed {
+fn note_reply(e: &Event, c: &super::protocol::Ctx) {
     let from_file = || {
         let t = Path::new(e.session.as_deref()?);
-        t.is_file().then(|| capture::transcript_reply(t)).flatten()
+        t.is_file().then(|| transcript_reply(t)).flatten()
     };
-    match e.reply.clone().or_else(from_file) {
-        Some(reply) => {
-            super::cited::note_reply(c, &reply);
-            capture::collect(c, &reply)
-        }
-        None => capture::Filed::default(),
+    if let Some(reply) = e.reply.clone().or_else(from_file) {
+        super::cited::note_reply(c, &reply);
     }
 }
 

@@ -15,7 +15,6 @@ fn value_line(s: &core::stats::Stats) -> Option<String> {
         ("issues closed", v.issues_closed),
         ("handoffs picked up", v.handoffs_picked_up),
         ("retired at touch", s.retired.at_touch),
-        ("filed from replies", s.capture.reply_stored),
     ]
     .iter()
     .filter(|(_, n)| *n > 0)
@@ -211,7 +210,7 @@ fn print_unused(rows: &[core::stats::UnusedRow]) {
 }
 
 fn print_capture(c: &core::stats::Capture) {
-    if c.reply_lines + c.manual_adds + c.sessions_with_edits == 0 {
+    if c.manual_adds + c.sessions_with_edits == 0 {
         return;
     }
     let gone = match c.sessions_with_edits_gone {
@@ -219,13 +218,8 @@ fn print_capture(c: &core::stats::Capture) {
         n => format!(" ({n} in removed worktrees, not judged)"),
     };
     println!(
-        "  capture: reply ×{} ({} stored, {} rejected) · manual adds ×{} · {} of {} edited session(s) left no row{gone}",
-        c.reply_lines,
-        c.reply_stored,
-        c.reply_rejected,
-        c.manual_adds,
-        c.sessions_with_edits_no_row,
-        c.sessions_with_edits
+        "  capture: adds ×{} · {} of {} edited session(s) left no row{gone}",
+        c.manual_adds, c.sessions_with_edits_no_row, c.sessions_with_edits
     );
 }
 
