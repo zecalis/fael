@@ -4,7 +4,7 @@
 //! Thin entry only — the suites sit next to this file:
 //! `autoupdate` (session-start's daily self-update check and its one Notice),
 //! `stop` (turn end: bug lines stashed, never a block), `stop_lang` ([lang] marker/rows packs),
-//! `session` (session-start + edit push), `clients` (codex/claude shapes), `stats` (usage accounting),
+//! `session` (session-start + edit push), `clients` (codex/claude shapes), `opencode` (OpenCode V1/V2 shapes + neutral parity), `stats` (usage accounting),
 //! `changed_hint` (PLAN-fael-file-hash chunk 2: the edit hint names changed rows),
 //! `shadow` (PLAN-fael-file-hash chunk 3: an edit records no shadow),
 //! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
@@ -33,6 +33,7 @@ mod handoff;
 mod held;
 mod named;
 mod notify;
+mod opencode;
 mod outcomes;
 mod overlap;
 mod precision;

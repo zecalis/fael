@@ -12,6 +12,8 @@ use std::process::Command;
 const SNAPSHOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/hook/golden/replay.txt");
 /// The main session: an RFC 3339 time, so stop reads it as the session start.
 const S: &str = "2025-12-01T00:00:00Z";
+/// The OpenCode session below: its own start, so its blocks never touch S.
+const OS: &str = "2026-01-02T00:00:00Z";
 const BLOB_A: &str = "// a v1\n";
 
 /// One fixture row, written straight into the log so ids and times are fixed.
@@ -216,6 +218,50 @@ fn script() -> Vec<Step> {
         step("session-start", json!({"session": "s2"})),
         step("read", json!({"session": "s2", "files": ["src/c.rs"]})),
         step("prompt", json!({"text": "fix the auth login flow"})),
+    ]
+    .into_iter()
+    .chain(opencode_steps())
+    .collect()
+}
+
+/// oc-isolate: the same shapes through the OpenCode adapter (`client:
+/// "opencode"` as the plugin sends it) — V1 `bash` and V2 `shell` tool
+/// calls, files as sent, stop text/reply strings. Every reply is what
+/// neutral says; chained last so no block above moves.
+fn opencode_steps() -> Vec<Step> {
+    use serde_json::json;
+    vec![
+        step(
+            "session-start",
+            json!({"session": OS, "client": "opencode"}),
+        ),
+        step(
+            "read",
+            json!({"session": OS, "client": "opencode", "files": ["src/c.rs"]}),
+        ),
+        step(
+            "edit",
+            json!({"session": OS, "client": "opencode", "files": ["src/c.rs"]}),
+        ),
+        step(
+            "search",
+            json!({"session": OS, "client": "opencode", "tool": "shell",
+                   "tool_input": {"command": "true"}, "tool_response": {}}),
+        ),
+        step(
+            "search",
+            json!({"session": OS, "client": "opencode", "tool": "bash",
+                   "tool_input": {"command": "true"}, "tool_response": {}}),
+        ),
+        step(
+            "stop",
+            json!({"session": OS, "client": "opencode",
+                   "text": "wired the adapter", "reply": "wired the adapter"}),
+        ),
+        step(
+            "prompt",
+            json!({"session": OS, "client": "opencode", "text": "check the adapter wiring"}),
+        ),
     ]
 }
 

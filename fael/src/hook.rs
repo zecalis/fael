@@ -8,6 +8,8 @@
 //! Thin entry only — the events live in `hook/`:
 //! `protocol` (neutral Event + shared ctx), `say` (the one door to the agent's
 //! context: Reply, Outbox, Kind and its noise policy), `claude` (client adapters),
+//! `opencode` (OpenCode normalization over neutral: the plugin speaks neutral,
+//! the adapter shapes V1-vs-V2 payloads before the same arms run),
 //! `stop` (turn-end work/bug rule), `cited` (the `cited` outcome: a said id typed into a tool input or reply), `session` (session-start kickoff), `named` (open issues a commit on the branch names, at session start),
 //! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `prompt` (the open-key pointer on a user prompt), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
@@ -34,6 +36,7 @@ mod held;
 mod in_context;
 mod markers;
 mod named;
+mod opencode;
 mod prompt;
 mod protocol;
 mod push;
