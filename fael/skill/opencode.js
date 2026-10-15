@@ -230,6 +230,22 @@ export default {
       if (brief) event.system.push({ type: "text", text: brief });
     });
 
+    // Prompt admission: fire `fael hook prompt` with the user's text so the
+    // open-key pointer line works here too. Runs once per admission, never
+    // before every model call — and it only edits the admitted text, never
+    // starts a turn of its own (no session.prompt/generate call). The
+    // once-per-session rule lives server-side in `prompt.rs`; a repeated
+    // admission (retry, concurrent submit) gets an empty reply and appends
+    // nothing. V1 has no equivalent: its `chat.message` payload is
+    // unverified against a V1 runtime, so V1 stays without the hint.
+    await ctx.session.hook("prompt", async (event) => {
+      const id = event.sessionID;
+      const text = event.prompt?.text;
+      if (!id || !text) return;
+      const r = hook("prompt", { cwd: directory, session: await start(id), text });
+      if (r.context) event.prompt.text += `\n\n${r.context}`;
+    });
+
     // V2's shell event carries no session id (command/cwd/timeout/shell/env),
     // so hand `fael add` the session of the shell tool call being run: the tool
     // hook saw it a moment earlier. Only while exactly one session runs a shell
