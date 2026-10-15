@@ -52,7 +52,11 @@ pub(crate) fn commit_cites(log: &crate::core::Log, input: &Value) -> Vec<String>
     if !is_commit(cmd) {
         return vec![];
     }
-    let text = haystack(input);
+    named_open(log, &haystack(input))
+}
+
+/// The open issues `text` names, by the `commit_cites` rule.
+pub(crate) fn named_open(log: &crate::core::Log, text: &str) -> Vec<String> {
     let hide: std::collections::HashSet<&str> = crate::core::closed(log)
         .union(&crate::core::superseded(log))
         .copied()
