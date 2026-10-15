@@ -195,7 +195,10 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
 - **scope** — the paths it edits, each a file or directory that exists (or a new file in a
   directory that does) — a typo silently weakens every overlap check. The board reports two chunks whose scopes overlap; that is
   what lets a second worktree take a chunk safely. Every path the brief tells the agent to
-  edit is in it, tests and e2e flows too; a symbol the brief names is found with grep. A file
+  edit is in it, tests and e2e flows too; a symbol the brief names is found with grep. Walk
+  down what the change needs, not just its callers: a page's query, the api route, the core
+  and domain code under it, the seed when it adds fixtures, the filter of a list it links to,
+  a new error code's message (lead misses `lead:miss:leak`, three sets in a row). A file
   the chunk grows past the repo's line cap: scope its folder, so the split has room.
 - **after** — the uid(s) or label(s) of the chunks it truly waits on. **No `--after` = ready at once, alongside the
   others**: fael.db has no "waits on the line above". Give it only where the order is real.
@@ -223,7 +226,7 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
 `fael board --json --open --plan <name>` first: a chunk `running` is under someone.
 
 - `fael chunk edit` clears an owner's approval and the queue stops starting the chunk: say so
-  whenever you edit an approved one. A word for a chunk not yet run goes in
+  whenever you edit an approved one. A `--scope` alone that keeps every old path keeps it. A word for a chunk not yet run goes in
   `fael chunk note <uid> "<text>"`, printed in its next brief.
 - A doc line you add is an instruction to every running agent, not a note. Park new scope in its
   own chunk or plan instead, and tell the dev what moved so they can decide whether the running

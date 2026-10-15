@@ -244,3 +244,16 @@ fn a_text_flag_next_to_a_text_is_named() {
     let raw = argv("add --body y");
     assert_eq!(text_twice(&raw, &rewrite(raw.clone()), wrong.into()), wrong);
 }
+
+/// `--files a.rs b.rs` names the word the comma list left behind; a text after
+/// one path is not a list and is left as it came.
+#[test]
+fn a_list_flag_split_by_a_space_is_named() {
+    let wrong = "rejected: wrong arguments for \"add\" — try 'fael add --help'";
+    let raw = argv("add issue x --files a/b.rs c/d.rs");
+    let got = list_spread(&raw, wrong.into());
+    assert!(got.starts_with(wrong), "{got}");
+    assert!(got.ends_with("--files a/b.rs,c/d.rs"), "{got}");
+    let raw = argv("add note --files a.rs x y");
+    assert_eq!(list_spread(&raw, wrong.into()), wrong);
+}

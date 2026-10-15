@@ -240,7 +240,29 @@ pub(crate) fn reject(argv: &[String], e: String) -> String {
 /// What a failed run says: a text flag clash (`text_twice`), else `reject`.
 /// `raw` is the agent's argv, `argv` the rewritten one.
 pub(crate) fn explain(raw: &[String], argv: &[String], e: String) -> String {
-    reject(argv, text_twice(raw, argv, e))
+    reject(argv, list_spread(raw, text_twice(raw, argv, e)))
+}
+
+/// `--files a.rs b.rs`: the second path became a positional and the parser said
+/// only "wrong arguments". Name the word a list flag left behind.
+fn list_spread(raw: &[String], e: String) -> String {
+    if !e.starts_with("rejected: wrong arguments") {
+        return e;
+    }
+    let pathy =
+        |w: &str| !w.starts_with('-') && !w.contains(char::is_whitespace) && w.contains(['/', '.']);
+    match raw
+        .windows(3)
+        .find(|w| matches!(w[0].as_str(), "--files" | "--scope") && pathy(&w[1]) && pathy(&w[2]))
+    {
+        Some(w) => format!(
+            "{e}\n{f} takes one comma list: `{b}` came as its own word — {f} {a},{b}",
+            f = w[0],
+            a = w[1],
+            b = w[2]
+        ),
+        None => e,
+    }
 }
 
 /// `add note "x" --body "y"`: `rewrite` moved the flag into the text slot, so
