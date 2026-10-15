@@ -85,9 +85,14 @@ pub(crate) fn prompt(e: &Event) -> Reply {
 }
 
 /// Blocks the harness puts in a prompt that the user never typed (01M4F5K3):
-/// a background agent's finish notice, a reminder. Their words ("usage",
-/// "background") named keys nobody asked about.
-const HARNESS: [&str; 2] = ["task-notification", "system-reminder"];
+/// a background agent's finish notice, a reminder, another session's message
+/// (40 pointers from 2026-10-11 to 15, 2 pulled). Their words ("usage",
+/// "background", a lead's brief) named keys nobody asked about.
+const HARNESS: [&str; 3] = [
+    "task-notification",
+    "system-reminder",
+    "cross-session-message",
+];
 
 /// The prompt as the user wrote it: harness blocks cut whole, and the markup
 /// left (`<pasted_content id=…>`, whose "content" named a key) cut to a space —
@@ -160,6 +165,12 @@ mod tests {
         let note = "<task-notification>Agent finished, <usage>9</usage> background</task-notification> fix credit";
         assert_eq!(
             typed(note).split_whitespace().collect::<Vec<_>>(),
+            ["fix", "credit"]
+        );
+        let msg =
+            "<cross-session-message from=\"lead\">run chunk g1</cross-session-message> fix credit";
+        assert_eq!(
+            typed(msg).split_whitespace().collect::<Vec<_>>(),
             ["fix", "credit"]
         );
         // a block never closed runs to the end
