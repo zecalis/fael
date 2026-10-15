@@ -291,10 +291,9 @@ fn mv_records_alias_for_anchors_git_cannot_see() {
     let (ok, out, err) = fael(&d, &["find", "--all"], "");
     assert!(ok, "{err}");
     assert!(!out.contains("doc:pricing → doc:pricing-2027"), "{out}");
-    // recording the same move twice is rejected, not appended
-    let (ok, _, err) = fael(&d, &["mv", "doc:pricing", "doc:pricing-2027"], "");
-    assert!(!ok, "duplicate mv should fail");
-    assert!(err.contains("already recorded"), "{err}");
+    // recording the same move twice appends nothing and succeeds: it is what the caller wants
+    let (ok, out, err) = fael(&d, &["mv", "doc:pricing", "doc:pricing-2027"], "");
+    assert!(ok && out.contains("already recorded"), "{out} {err}");
     // moving a path onto itself is rejected too
     let (ok, _, _) = fael(&d, &["mv", "doc:pricing", "doc:pricing"], "");
     assert!(!ok);

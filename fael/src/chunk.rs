@@ -60,7 +60,8 @@ fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<Stri
     Ok(Some((a.without("plan"), rest)))
 }
 
-/// `chunk show 01M4P3R3` with a ledger row's id: say it is a row, not "no chunk".
+/// `chunk show 01M4P3R3` with a ledger row's id: say it is a row, not "no chunk"; with
+/// another repo's chunk: say which repo (one lead hunted four repos for a uid, 2026-10-14).
 fn row_id(r: &Repo, e: String) -> String {
     let Some(key) = e
         .strip_prefix("rejected: no chunk ")
@@ -73,7 +74,10 @@ fn row_id(r: &Repo, e: String) -> String {
             "rejected: {key} is a ledger {}, not a chunk — `fael find {key}` reads it, `fael board` lists the chunk uids",
             row.kind
         ),
-        Err(_) => e,
+        Err(_) => match crate::find::owner::owner(r, key) {
+            Some(o) => format!("{e}\n{o}"),
+            None => e,
+        },
     }
 }
 

@@ -8,7 +8,7 @@ pub(crate) mod many;
 pub(crate) mod mentions;
 mod merged;
 pub(crate) mod misses;
-mod owner;
+pub(crate) mod owner;
 
 pub(crate) use kickoff::kickoff;
 
