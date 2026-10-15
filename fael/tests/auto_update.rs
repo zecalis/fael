@@ -201,8 +201,9 @@ fn session_start_does_not_wait_for_the_update_and_the_next_one_says_it() {
     let base = world(
         &["v99.0.0"],
         r#"{"checked_at":0,"seen_at":0,"to":"99.0.0"}"#,
-        // 10s against a 5s bar: a loaded CI runner took 2.67s for a 2s bar
-        "sleep 10",
+        // brew holds until the test drops `go` (capped at 30s so a failed test leaks
+        // nothing): the first session start can only pass the 5s bar by not waiting
+        r#"i=0; while [ ! -e "$(dirname "$0")/../go" ] && [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done"#,
         "99.0.0",
     );
     let repo = base.join("repo");
@@ -240,6 +241,7 @@ fn session_start_does_not_wait_for_the_update_and_the_next_one_says_it() {
         "waited {:?} for the update",
         t.elapsed()
     );
+    std::fs::write(base.join("go"), "").unwrap();
 
     let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
     let json = || std::fs::read_to_string(base.join("state/update.json")).unwrap_or_default();
