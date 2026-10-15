@@ -16,6 +16,7 @@ pub fn rules(uid: &str) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
+         - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
          - you triggered Windows CI (`gh workflow run ci.yml --ref <branch>`)? wait for it (`gh run watch <id> --exit-status`) and write pass, or fail with the failing test, in the done text — never just \"triggered\"\n\
          - the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
          - before done: a fresh session (a subagent, not you) checks your output — the diff, or the `--out` file — against this brief's Done and Scope, a Done criterion left undone is a major; fix what it finds and put its verdict in the done text (size S: check it yourself against Done)\n\
