@@ -24,6 +24,14 @@ Reply  {"block": false, "context"?: str, "notice"?: str}
 | the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | add `context` to that turn — one pointer line when a prompt word equals the head of an open key (`credit` in `vela:credit-ledger`), each key once per session |
 | the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text` | nothing to do: fael files the reply's `fael <kind>:` lines and never blocks (`block` is always `false`, kept for old integrations) |
 
+OpenCode 2 replaced its plugin API, so the one file carries two implementations:
+OpenCode 1 calls the named `Fael` export, OpenCode 2 loads the default
+`{ id, setup }` definition and registers each event on the domain that owns the
+operation. Two OpenCode 2 limits: a server plugin has no toast, so the user line
+(`notice`) is dropped there; and its shell hook carries no session id, so
+`FAEL_SESSION` comes from the shell tool call that is running — it stays unset
+while more than one session runs a shell at the same time.
+
 `fael install` wires every event above on **Claude Code**. **Codex has no prompt hook** (its
 hooks know no UserPromptSubmit), so the pointer-line hint is Claude-only there — deliberate
 (its Stop/session-start/search/edit hooks are wired). A custom client can still call
