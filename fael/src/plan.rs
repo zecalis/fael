@@ -6,7 +6,7 @@ use fael_core::plan::{Bill, PlanRow, Store};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-/// The verbs `plan` answers — `show` and `list` only to point at the real one.
+/// The verbs `plan` answers — `show` is `export` by another name.
 pub(crate) const VERBS: &[&str] = &[
     "new", "export", "show", "apply", "park", "unpark", "done", "list",
 ];
@@ -40,11 +40,9 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         }
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
-        Some("list") => Err(
-            "rejected: `fael board` lists the plans — `fael plan export <plan>` reads one".into(),
-        ),
+        Some("list") if rest.len() == 1 => list(&r),
         _ => Err(
-            "rejected: fael plan new <name> \"<title>\" | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'"
+            "rejected: fael plan new <name> \"<title>\" | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -177,6 +175,15 @@ fn named(s: &Store, want: Option<&str>) -> Result<Vec<PlanRow>, String> {
 
 fn one(s: &Store, want: &str) -> Result<PlanRow, String> {
     named(s, Some(want)).map(|mut v| v.remove(0))
+}
+
+/// `plan list`: one line per plan in this repo's fael.db — what `export` takes, its state,
+/// its title. Agents typed it 7 of 7 times into a reject (2026-10-13..15).
+fn list(r: &Repo) -> Result<(), String> {
+    for p in open(r)?.plans()? {
+        println!("{} · {} · {}", key(&p), p.state, p.title);
+    }
+    Ok(())
 }
 
 /// Every plan, or the one `want` names (`name` or `app/name`), to stdout; `--json` is the

@@ -1,4 +1,4 @@
-//! `find` misses that are not misses (issue 01M4XKM4): words passed as separate
+//! `find` and `chunk show` misses that are not misses (issue 01M4XKM4): words passed as separate
 //! args are one text query, and an id with no row here names where it lives —
 //! a chunk in this repo, or a row in another repo on this machine.
 
@@ -95,4 +95,25 @@ fn an_id_from_another_repo_names_that_repo() {
     // a token no repo owns stays a plain miss
     let (_, out, err) = fael(&here, &["find", "01M4ZZZZZZZZ"]);
     assert!(!format!("{out}{err}").contains(" is a "), "{out}{err}");
+}
+
+/// `chunk show` with another repo's uid names that repo (one lead tried four repos, 2026-10-14).
+#[test]
+fn chunk_show_names_the_repo_that_owns_the_uid() {
+    let (here, there) = (repo(), repo());
+    add(&here, "a row of this repo");
+    let (ok, uid, err) = fael(&there, &["chunk", "add", "Post", "--brief", "Write it"]);
+    assert!(ok, "{err}");
+    let uid = uid.trim();
+    std::fs::create_dir_all(here.join("state")).unwrap();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(here.join("state/usage.jsonl"))
+        .unwrap();
+    writeln!(f, "{}", serde_json::json!({"event": "call", "repo": there})).unwrap();
+    let (ok, _, err) = fael(&here, &["chunk", "show", uid]);
+    assert!(!ok && err.contains(&format!("no chunk {uid}")), "{err}");
+    let want = format!("{uid} is a chunk in {}", there.display());
+    assert!(err.contains(&want), "{err}");
 }

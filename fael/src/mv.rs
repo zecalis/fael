@@ -16,10 +16,10 @@ pub(crate) fn mv(a: &Args, old: &str, new: &str) -> Result<(), String> {
         ));
     }
     let log = read(&r);
+    // already what the caller wants (a git rename session start picked up): say so, exit 0
     if core::Aliases::from_log(&log).forward(from).contains(to) {
-        return Err(format!(
-            "rejected: {from} → {to} is already recorded — `fael find --files {to}` shows the rows"
-        ));
+        println!("{from} → {to} is already recorded — nothing to do");
+        return Ok(());
     }
     let (row, _, warns) =
         core::mv_row(&r.fael, r.journal.as_deref(), &r.cfg, &stamp(&r), from, to)?;
