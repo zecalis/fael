@@ -359,15 +359,19 @@ impl Store {
     }
 
     /// The Stop hook (SPEC §7): the live run of its own worktree gets `last_seen`, and
-    /// `session` when empty. A run naming another session is left alone; an ended run is
-    /// never written.
+    /// `session` when empty — never an RFC 3339 hook session (opencode's start time),
+    /// which `opencode --session` rejects, wanting `ses_…` (01M4ZZQ7). Ended: never.
     pub fn seen(&mut self, worktree: &str, session: &str, now: &str) -> Result<usize, String> {
+        let set = if crate::ts_ms(session).is_some() {
+            "last_seen = ?3"
+        } else {
+            "session = COALESCE(session, ?2), last_seen = ?3"
+        };
+        let sql = format!(
+            "UPDATE run SET {set} WHERE worktree = ?1 AND ended IS NULL AND (session IS NULL OR session = ?2)"
+        );
         self.conn
-            .execute(
-                "UPDATE run SET session = COALESCE(session, ?2), last_seen = ?3
-                 WHERE worktree = ?1 AND ended IS NULL AND (session IS NULL OR session = ?2)",
-                params![worktree, session, now],
-            )
+            .execute(&sql, params![worktree, session, now])
             .map_err(err)
     }
 
