@@ -191,7 +191,9 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   where it lives, who writes it and who reads it — or the agent designs it alone, by exploring.
   **A measuring chunk fixes its verdict before it runs**: the metric, the data or window it reads,
   the pass threshold, and what each outcome leads to ("if up, revert X"). No brief yet = a
-  draft: not startable until `fael chunk edit <uid> --brief …`.
+  draft: not startable until `fael chunk edit <uid> --brief …`. **A brief that still asks a
+  question** ("ask first which …") is a draft too: answer it in the plan before the owner
+  approves — the answer can change the shape of what the chunk builds.
 - **scope** — the paths it edits, each a file or directory that exists (or a new file in a
   directory that does) — a typo silently weakens every overlap check. The board reports two chunks whose scopes overlap; that is
   what lets a second worktree take a chunk safely. Every path the brief tells the agent to
@@ -207,13 +209,18 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   worktree of that chunk's run. An order that is no longer real comes off with
   `fael chunk unafter <uid> <other> "<why>"` (the approval stays). Two small chunks in order on one code path also get a `pair`:
   one start claims both and does them in plan order, so the `after` between them never blocks
-  and nobody starts the second with `--force`.
+  and nobody starts the second with `--force`. A card, link or button that leads to a page or
+  flow another chunk builds goes in that chunk, or waits on it with `--after` — never leave the
+  agent to pick a stand-in target.
 - **reads** — the section keys it works from (`<plan>/<key>` for another plan's): its brief
   prints Goal, Done and those, then an index of the rest. None = Goal, Scope, Done, Constraints.
 - **issue** — the open ledger issue ids the chunk fixes; its brief prints them. The agent closes
   each once the fix holds (`chunk done` never does).
 - **size / model** — a hint for the owner, who picks who runs it: S an hour, M a session, L split
-  it unless it can't be.
+  it unless it can't be. Cut by outcome, not by layer: each line of Done is its own chunk (a
+  page's read half and its write half), each one through every layer it needs. "Backend and UI
+  together" is a reason to cut vertically, never to keep two outcomes in one chunk; a can't-split
+  reason names the file both halves must edit.
 - A chunk that cannot start until a person acts or data accrues (a page brief approved, ≥30
   samples logged): add it without `--brief` — a draft, never started — titled with what it
   waits on; `fael chunk edit <uid> --brief …` once that has happened. (`fael chunk wait` is the
@@ -237,7 +244,8 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
 
 First check the draft against this skill — `fael board --plan <name>` shows it all:
 
-- every `L` chunk is split, or its brief says why it can't be;
+- every `L` chunk is split, or its brief names the file both halves must edit; no chunk carries
+  two lines of Done, a question, or a link to a page another open chunk builds;
 - two chunks whose scopes overlap are ordered with `--after`, or the brief says why they can run together;
 - every `--scope` path exists (or is a new file in a directory that does), and every path a
   brief tells the agent to edit sits under its chunk's scope — with the callers of each type,
