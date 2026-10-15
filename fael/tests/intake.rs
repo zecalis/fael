@@ -1,6 +1,6 @@
 //! `fael intake` (plan fael-intake i1) through the real binary with a fixture adapter whose
-//! `list` prints a JSONL file: one chunk per ticket round in any plan, adoption of a chunk an
-//! older sync made, the brief per kind, and every failing list writes nothing.
+//! `list` prints a JSONL file: one chunk per ticket round in any plan, a plain chunk with the
+//! ticket's label left alone, the brief per kind, and every failing list writes nothing.
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -93,26 +93,6 @@ fn brief(d: &Path, uid: &str) -> String {
 fn tickets_become_one_chunk_each_in_any_plan() {
     let d = repo();
     fael(&d, &["plan", "new", "support", "Support"]);
-    // made by an older sync before intake ran, then moved out of inbox
-    let old = fael(
-        &d,
-        &["chunk", "add", "old", "--brief", "b", "--label", "v-0050"],
-    );
-    let old = old
-        .split_whitespace()
-        .find(|w| w.len() == 26)
-        .unwrap()
-        .to_string();
-    fael(&d, &["chunk", "move", &old, "--plan", "support"]);
-    let twin = fael(
-        &d,
-        &["chunk", "add", "twin", "--brief", "b", "--label", "v-0050"],
-    );
-    let twin = twin
-        .split_whitespace()
-        .find(|w| w.len() == 26)
-        .unwrap()
-        .to_string();
     let (a, b, c) = (
         line("V-0042", "report", 0, None),
         line("V-0043", "question", 0, None),
@@ -126,11 +106,6 @@ fn tickets_become_one_chunk_each_in_any_plan() {
     list(&d, &[&a, &b, &c, &e, &gone, &r1]);
     let out = fael(&d, &["intake"]);
     assert!(out.contains("added V-0042 → "), "{out}");
-    assert!(out.contains(&format!("adopted V-0050 → {old}")), "{out}");
-    assert!(
-        out.contains(&format!("not adopted {twin} (V-0050)")),
-        "{out}"
-    );
     assert!(
         !out.contains("V-0051"),
         "a ticket closed before it came in: {out}"
@@ -169,13 +144,6 @@ fn tickets_become_one_chunk_each_in_any_plan() {
         !f.contains("Claim:"),
         "feedback is not in the claim object: {f}"
     );
-    let adopted: Vec<Value> = by_label(&d, "v-0050");
-    let old_c = adopted.iter().find(|c| c["uid"] == old.as_str()).unwrap();
-    assert_eq!(
-        [&old_c["plan"], &old_c["ticket"]["ref"]],
-        ["support", "V-0050"]
-    );
-    assert!(adopted.iter().find(|c| c["uid"] == twin.as_str()).unwrap()["ticket"].is_null());
 
     // a rerun adds nothing, and a chunk moved out of inbox is not made again
     fael(
@@ -193,6 +161,44 @@ fn tickets_become_one_chunk_each_in_any_plan() {
     assert_eq!(by_label(&d, "v-0042").len(), 1);
     let bad = run(&d, &["intake", "nope"]);
     assert!(!bad.status.success());
+}
+
+/// Issue 01M4Z4WK: a plain chunk that carries a ticket's label — in inbox or moved out — is
+/// never taken over, so the source closing that ticket never drops it.
+#[test]
+fn a_plain_chunk_with_a_tickets_label_is_left_alone() {
+    let d = repo();
+    fael(&d, &["plan", "new", "support", "Support"]);
+    let add = |title: &str| {
+        let o = fael(
+            &d,
+            &["chunk", "add", title, "--brief", "b", "--label", "v-0050"],
+        );
+        o.split_whitespace()
+            .find(|w| w.len() == 26)
+            .unwrap()
+            .to_string()
+    };
+    let moved = add("moved");
+    fael(&d, &["chunk", "move", &moved, "--plan", "support"]);
+    let inbox = add("inbox");
+    list(&d, &[&line("V-0050", "bug", 0, None)]);
+    let out = fael(&d, &["intake"]);
+    assert!(
+        out.contains(&format!("(no label: {inbox} holds it)")),
+        "{out}"
+    );
+    list(&d, &[&line("V-0050", "bug", 0, Some("closed"))]);
+    let out = fael(&d, &["intake"]);
+    assert!(out.contains("dropped V-0050 → "), "{out}");
+    for uid in [&moved, &inbox] {
+        let c = chunks(&d)
+            .into_iter()
+            .find(|c| c["uid"] == uid.as_str())
+            .unwrap();
+        assert_eq!(c["state"], "open", "{uid}");
+        assert!(c["ticket"].is_null(), "{uid}");
+    }
 }
 
 #[test]

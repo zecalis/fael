@@ -1,10 +1,10 @@
 //! `fael intake` (plan fael-intake, decision 01M4TKVY): tickets an app's adapter lists become
 //! inbox chunks. The CLI runs `list`; this parses `.fael/sources.json` and the JSONL, and
-//! writes one run in one `BEGIN IMMEDIATE` — dedup by source+ref+reopen in every plan,
-//! adoption of a chunk an older sync made, the brief. Fael never writes to the source.
+//! writes one run in one `BEGIN IMMEDIATE` — dedup by source+ref+reopen in every plan, the
+//! brief. Fael never writes to the source.
 
 use super::State;
-use super::chunk::{Fields, row, set, tx};
+use super::chunk::{Fields, row, tx};
 use super::chunk_add::add_in;
 use super::owner::{Owner, owner_in};
 use super::store::{Store, err};
@@ -281,34 +281,6 @@ fn stamp(tx: &Transaction, uid: &str, s: &str, t: &Listed) -> Result<(), String>
     .map_err(err)
 }
 
-/// A chunk an older sync made (label `lower(ref)[-rN]`, no ticket, any plan): the oldest not
-/// dropped or replaced takes the ticket, the rest are named. Empty = none.
-fn adopt(tx: &Transaction, s: &str, t: &Listed, now: &str) -> Result<Vec<String>, String> {
-    let uids: Vec<String> = tx
-        .prepare(
-            "SELECT uid FROM chunk WHERE label = ?1 AND ticket_ref IS NULL
-             ORDER BY state IN ('dropped', 'replaced'), id",
-        )
-        .map_err(err)?
-        .query_map([label(t)], |r| r.get(0))
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)?;
-    let Some((first, rest)) = uids.split_first() else {
-        return Ok(Vec::new());
-    };
-    stamp(tx, first, s, t)?;
-    let r = row(tx, first)?;
-    let text = format!("adopted ticket {} ({s})", t.r#ref);
-    set(tx, &r, r.state, "intake", Some(&text), now)?;
-    let mut out = vec![format!("adopted {} → {first}", t.r#ref)];
-    out.extend(
-        rest.iter()
-            .map(|u| format!("not adopted {u} ({})", t.r#ref)),
-    );
-    Ok(out)
-}
-
 impl Store {
     /// One intake run over every source's checked list, in one `BEGIN IMMEDIATE`: a second run
     /// waits on the write lock and finds what this one wrote. Returns one line per change.
@@ -325,11 +297,6 @@ impl Store {
                     if let Some(c) = &t.closed {
                         out.extend(close(&tx, &uid, t, c, now)?);
                     }
-                    continue;
-                }
-                let adopted = adopt(&tx, &s.name, t, now)?;
-                if !adopted.is_empty() {
-                    out.extend(adopted);
                     continue;
                 }
                 if t.closed.is_some() {
