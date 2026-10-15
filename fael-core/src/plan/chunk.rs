@@ -129,7 +129,7 @@ pub(super) fn fence(tx: &Transaction, r: &Row, here: &Here) -> Result<(), String
         (Some(_), _) => Ok(()),
         _ if r.state != State::Running => Ok(()),
         (None, Some(w)) if w != here.worktree => Err(format!(
-            "rejected: chunk {} was taken over by run {start} ({who}) in {w} — this session no longer holds it",
+            "rejected: chunk {} was taken over by run {start} ({who}) in {w} — this session no longer holds it; if it is yours (moved worktree), pass --run {start}",
             r.uid
         )),
         _ => Ok(()),
