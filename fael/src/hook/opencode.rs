@@ -86,6 +86,14 @@ pub(crate) fn paths(tool: &str, input: &Value) -> Vec<String> {
 /// the touched files when a read/edit names its tool call but no files —
 /// the plugin always sends files today, so this fires only on inputs it
 /// never produces, and every such reply stays what neutral says.
+///
+/// `prompt` passes straight through: the V2 `prompt` admission hook hands
+/// the JS the user's text (`event.prompt.text`), the JS forwards it as
+/// `text`, and `prompt.rs` matches it — the adapter never sees the raw
+/// admission shape, so there is nothing to extract here. (V1's
+/// `chat.message` is deliberately unwired: its payload shape is unverified
+/// against a V1 runtime, this machine runs V2, and V1 never fired prompt —
+/// no regression. Revisit only with a V1 host in hand.)
 pub(crate) fn normalize(event: &str, e: &Event) -> Event {
     let mut out = e.clone();
     out.client = Some("opencode".into());
@@ -180,5 +188,20 @@ mod tests {
         e.tool_input = json!({"path": "src/other.rs"});
         let n = normalize("edit", &e);
         assert_eq!(n.files, ["src/sent.rs"]);
+    }
+
+    #[test]
+    fn normalize_passes_prompt_text_through() {
+        // the V2 prompt admission hook's text, as the JS forwards it: the
+        // adapter stamps the client and touches nothing else, so `prompt.rs`
+        // matches exactly what the user typed
+        let mut e = event();
+        e.session = Some("2026-01-02T00:00:00Z".into());
+        e.text = Some("is there credit ledger code yet?".into());
+        let n = normalize("prompt", &e);
+        assert_eq!(n.client.as_deref(), Some("opencode"));
+        assert_eq!(n.text.as_deref(), Some("is there credit ledger code yet?"));
+        assert_eq!(n.session.as_deref(), Some("2026-01-02T00:00:00Z"));
+        assert!(n.files.is_empty());
     }
 }
