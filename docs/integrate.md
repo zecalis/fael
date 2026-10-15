@@ -27,8 +27,13 @@ Reply  {"block": false, "context"?: str, "notice"?: str}
 OpenCode 2 replaced its plugin API, so the one file carries two implementations:
 OpenCode 1 calls the named `Fael` export, OpenCode 2 loads the default
 `{ id, setup }` definition and registers each event on the domain that owns the
-operation. Two OpenCode 2 limits: a server plugin has no toast, so the user line
-(`notice`) is dropped there; and its shell hook carries no session id, so
+operation. Two OpenCode 2 limits: a server plugin has no toast (measured on
+2.0.29 — the plugin ctx carries no `tui`/`notify`, and `event` is
+subscribe-only; toasts live in CLI plugins behind a separate `./tui`
+entrypoint), so the user line (`notice`) goes to an out-of-band per-session
+file, `$TMPDIR/fael-notice-<sessionID>.log`, one line per beat, never into
+model content — tail it to watch receipts live; and its shell hook carries no
+session id, so
 `FAEL_SESSION` comes from the shell tool call that is running — it stays unset
 while more than one session runs a shell at the same time.
 

@@ -73,6 +73,70 @@ fn routed_tool_never_overrides_sent_files() {
     assert!(!got.contains("src/other.rs"), "{got}");
 }
 
+/// oc-notice: the user line rides beside the agent's context for OpenCode
+/// too. The server offers `notice` on the same beats (brief, reminder,
+/// receipt); the plugin routes it per version (V1 toast, V2 notice file) and
+/// it never lands inside `context` — proven here by the byte-compare with
+/// the channel off.
+#[test]
+fn opencode_notice_beside_context_never_inside() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "decision",
+            "keep the cache",
+            "--files",
+            "src/a.rs",
+            "--key",
+            "cache:keep",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let edit = |s: &str| {
+        let body = serde_json::json!({"cwd": d, "client": "opencode", "session": s,
+            "files": ["src/a.rs"]})
+        .to_string();
+        let (ok, out, err) = fael(&d, &["hook", "edit"], &body);
+        assert!(ok, "{err} {out}");
+        serde_json::from_str::<serde_json::Value>(&out).unwrap()
+    };
+    let on = edit(S);
+    let notice = on["notice"].as_str().expect("whisper names the decision");
+    assert!(notice.contains("cache:keep"), "{on}");
+    let ctx = on["context"].as_str().unwrap();
+    assert!(
+        !ctx.contains(notice),
+        "notice leaked into model context: {on}"
+    );
+    std::fs::write(d.join(".fael/config.toml"), "[notify]\nuser = false\n").unwrap();
+    // a fresh session: the seen list would hide the row otherwise
+    let off = edit("2026-01-03T00:00:00Z");
+    assert!(off["notice"].is_null(), "{off}");
+    assert_eq!(
+        on["context"], off["context"],
+        "the agent's context changed with the user channel"
+    );
+}
+
+/// oc-notice: `prompt` never carries a user line (its reply is the pointer
+/// only), so the V2 plugin routes notices from session-start, tool and idle
+/// hooks — never from prompt admission.
+#[test]
+fn opencode_prompt_carries_no_notice() {
+    let d = repo();
+    let body = serde_json::json!({"cwd": d, "client": "opencode", "session": S,
+        "text": "is there credit ledger code yet?"})
+    .to_string();
+    let (ok, out, err) = fael(&d, &["hook", "prompt"], &body);
+    assert!(ok, "{err} {out}");
+    let reply: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(reply["notice"].is_null(), "{out}");
+}
+
 #[test]
 fn adapter_matches_neutral_byte_for_byte() {
     use serde_json::json;
