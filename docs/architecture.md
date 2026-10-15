@@ -251,7 +251,7 @@ row_bytes = 10240             # hard cap, never above 10 KiB
 [notify]
 user = true                   # one line per beat for the user only (Claude systemMessage, OpenCode toast); false = off
 [hint]
-stop = []                     # prompt words the key hint never matches, case-insensitive; copy the word from the hint's `via "<word>"` when it is a generic head (e.g. ["workspace"]). A key typed whole still hints
+stop = []                     # prompt words the key hint never matches, case-insensitive; copy the word from the hint's `via "<word>"` when it is a generic head (e.g. ["workspace"]). fael's own `chunk`, `line`, `worktree`, `docs` are always stopped. A key typed whole still hints
 [plan]
 worktrees = "wt-fael-agent-"  # board pool: only linked worktrees whose path or dir name starts with it; unset = every linked worktree
 [lang]

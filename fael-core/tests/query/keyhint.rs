@@ -208,6 +208,27 @@ fn stop_word_never_names_a_head() {
     assert_eq!(keys("see vela:workspace-icons"), ["vela:workspace-icons"]);
 }
 
+/// hint:fael-words: fael's own workflow words are stopped in every repo, with
+/// no `[hint] stop`; a key typed whole still hints.
+#[test]
+fn fael_workflow_words_never_name_a_head() {
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000062", "fael-board:chunk-uid"),
+            k("A0000000000000000000000063", "fael-board:chunk-ops"),
+            k("A0000000000000000000000064", "vela:docs-site"),
+        ],
+        ..Log::default()
+    };
+    assert!(keys_of(&l, "start the next Chunk").is_empty());
+    assert!(keys_of(&l, "update the docs site").is_empty());
+    assert_eq!(
+        keys_of(&l, "see fael-board:chunk-uid"),
+        ["fael-board:chunk-uid"]
+    );
+}
+
 /// The vela report: a lone key's head is a common word more often than its
 /// topic — "public" named public-api, "rule" named rule-loop on prompts about
 /// neither. A lone key needs a second segment (a 3-char one counts there); a

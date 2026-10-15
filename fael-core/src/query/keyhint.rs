@@ -8,6 +8,12 @@ use crate::Log;
 /// topic — and the most keys one hint line lists.
 const HINT_MAX_KEYS: usize = 3;
 
+/// fael's own workflow words, stopped in every repo like `[hint] stop`: lead
+/// and worker briefs carry them on every prompt, so they name the process,
+/// never the topic. 2026-10-11..15: chunk 17/122 pointers pulled, line 8/60,
+/// worktree 0/20, docs 0/16, against 23% for all (decision hint:fael-words).
+const FAEL_WORDS: [&str; 4] = ["chunk", "line", "worktree", "docs"];
+
 /// Open keys a user prompt names (01M3WCK7N), ranked by match strength first
 /// (01M3XKB7E): a key named whole in the prompt (`plan:x-y:handoff`, word
 /// boundary respected) comes first; otherwise the key still only counts
@@ -28,8 +34,8 @@ const HINT_MAX_KEYS: usize = 3;
 /// every prompt saying "vela", `plan:fael-*` on every "fael" (01M42FPP) — the
 /// app's name is the area, never the topic. `stop` (`[hint] stop`, 01M42GFH)
 /// is the repo's own list of such words — a generic head like "workspace" —
-/// excluded the same way, ASCII case-insensitive; a key named whole still
-/// hints.
+/// excluded the same way, ASCII case-insensitive, and so is `FAEL_WORDS`;
+/// a key named whole still hints.
 /// A head alone names a key only when the key has no other nameable segment
 /// or the head is a family (two or more open keys share it); a lone key with
 /// more segments needs a second one named (3-char words count there).
@@ -53,7 +59,11 @@ pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<S
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|w| w.len() >= 3 && !w.bytes().all(|b| b.is_ascii_digit()))
         .map(str::to_ascii_lowercase)
-        .filter(|w| !areas.contains(w) && !stop.iter().any(|s| s.eq_ignore_ascii_case(w)))
+        .filter(|w| {
+            !areas.contains(w)
+                && !FAEL_WORDS.contains(&w.as_str())
+                && !stop.iter().any(|s| s.eq_ignore_ascii_case(w))
+        })
         .collect();
     // nested fns, not closures: a returning closure would need lifetimes spelled out
     fn segs(key: &str) -> Vec<String> {
