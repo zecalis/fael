@@ -79,6 +79,13 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
         Ok(e) => e,
         Err(_) => return fail_open(event, None),
     };
+    // OpenCode speaks neutral: shape its event in the adapter, then run the
+    // same arms — anything the adapter leaves alone replies byte-identical.
+    let e = if e.client.as_deref() == Some("opencode") {
+        super::opencode::normalize(event, &e)
+    } else {
+        e
+    };
     if matches!(event, "read" | "edit" | "search") {
         super::cited::note_tool(&e, &e.tool_input);
     }
