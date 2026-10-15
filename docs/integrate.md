@@ -33,9 +33,11 @@ subscribe-only; toasts live in CLI plugins behind a separate `./tui`
 entrypoint), so the user line (`notice`) goes to an out-of-band per-session
 file, `$TMPDIR/fael-notice-<sessionID>.log`, one line per beat, never into
 model content — tail it to watch receipts live; and its shell hook carries no
-session id, so
-`FAEL_SESSION` comes from the shell tool call that is running — it stays unset
-while more than one session runs a shell at the same time.
+session id, so `FAEL_SESSION` comes from matching the shell's command against
+recent shell tool calls — exact command (plus cwd when known), consumed once.
+Zero or several matches leave it unset: identical concurrent commands warn each
+candidate's notice file, and `fael add` without `--files` there needs a single
+active session or explicit `--files`.
 
 `fael install` wires every event above on **Claude Code**. **Codex has no prompt hook** (its
 hooks know no UserPromptSubmit), so the pointer-line hint is Claude-only there — deliberate

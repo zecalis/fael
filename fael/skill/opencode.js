@@ -320,19 +320,49 @@ export default {
     });
 
     // V2's shell event carries no session id (command/cwd/timeout/shell/env),
-    // so hand `fael add` the session of the shell tool call being run: the tool
-    // hook saw it a moment earlier. Only while exactly one session runs a shell
-    // — a guess would tag another session's row.
-    const shells = new Map();
+    // but the tool hook that caused it does: `execute.before` fires with the
+    // tool input (measured in the 2.0.29 binary: `{tool, sessionID, id,
+    // input}`), so queue each shell tool call keyed by its command and match
+    // the shell against the queue. Exactly one match sets FAEL_SESSION and is
+    // consumed once; zero or several matches leave it unset — a guess would
+    // tag another session's row. Several matches (identical concurrent
+    // commands) also warn each candidate's notice file, so `fael add`
+    // without `--files` there fails toward "files is required", never toward
+    // the wrong session.
+    const shells = [];
+    const SHELL_WINDOW_MS = 30000;
+    const prune_shells = (now) => {
+      for (let i = shells.length - 1; i >= 0; i--) {
+        if (now - shells[i].at > SHELL_WINDOW_MS) shells.splice(i, 1);
+      }
+    };
     await ctx.tool.hook("execute.before", (event) => {
-      if (SHELL.has(event.tool)) shells.set(event.sessionID, Date.now());
+      if (!SHELL.has(event.tool)) return;
+      const command = event.input?.command;
+      if (typeof command !== "string" || !command) return;
+      shells.push({ session: event.sessionID, command, cwd: event.input?.cwd, at: Date.now() });
     });
     await ctx.shell.hook("create.before", async (event) => {
-      const now = Date.now();
-      for (const [id, at] of shells) if (now - at > 5000) shells.delete(id);
-      if (shells.size !== 1) return;
+      prune_shells(Date.now());
+      const hit = shells.filter(
+        (s) =>
+          s.command === event.command &&
+          (s.cwd == null || event.cwd == null || s.cwd === event.cwd),
+      );
+      for (const h of hit) shells.splice(shells.indexOf(h), 1);
+      if (hit.length !== 1) {
+        if (hit.length > 1) {
+          for (const h of hit) {
+            say(h.session, {
+              notice:
+                "fael: concurrent identical shell commands — FAEL_SESSION unset for this shell; pass --files to `fael add`",
+            });
+          }
+        }
+        return;
+      }
       try {
-        event.env.FAEL_SESSION = await start([...shells.keys()][0]);
+        event.env.FAEL_SESSION = await start(hit[0].session);
       } catch {}
     });
 
