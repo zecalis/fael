@@ -5,7 +5,6 @@
 use super::capture::{Capture, capture};
 use super::experience::{Commits, Experience, experience};
 use super::friction::{Friction, friction};
-use super::incident::{Incidents, incidents};
 use super::metrics::{added_since, ask_totals, non_english_share};
 use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
 use super::parse::Parsed;
@@ -13,7 +12,6 @@ use super::retire::{Retired, retired};
 use super::said::{KindYield, yields};
 use super::unused::{UnusedRow, unused};
 use super::value::{Value, value};
-use super::verdict::{FileVerdict, file_verdict};
 use crate::{Config, Log, closed, rfc3339, superseded};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -41,7 +39,7 @@ pub struct AskCount {
 /// Schema of the `Stats` JSON shape below. Bump it only when a field is
 /// removed, renamed, retyped or redefined — adding a field never bumps
 /// (readers skip unknown keys), it just gets a `docs/stats.md` changelog line.
-pub const STATS_SCHEMA: u32 = 4;
+pub const STATS_SCHEMA: u32 = 5;
 
 /// Bytes the agent pays every session before saying anything — measured by
 /// the caller (CLI), never estimated here.
@@ -115,11 +113,6 @@ pub struct Stats {
     /// Yield per line kind: what hooks said, and what the same session acted
     /// on after (`said.rs`) — an upper bound, read only to cut.
     pub said: BTreeMap<String, KindYield>,
-    /// Rows a human keyed `incident:<kind>`, per week (`incident.rs`).
-    pub incidents: Incidents,
-    /// Rows a push showed, by file-hash verdict: changed, unchanged, none
-    /// (`verdict.rs`) — what push could not say, never a saving.
-    pub file_verdict: FileVerdict,
     /// Rejects, helps and repeat finds per agent call, and first-call
     /// success (`friction.rs`) — what an agent paid to get its answer.
     pub friction: Friction,
@@ -188,8 +181,6 @@ pub fn aggregate(
         value,
         unused_rows: unused(parsed, logs),
         said: yields(parsed, logs),
-        incidents: incidents(parsed, logs),
-        file_verdict: file_verdict(parsed, logs),
         friction: friction(parsed),
         context_loop: super::repeat::context_loop(parsed, logs),
         experience: experience(parsed, logs, commits),

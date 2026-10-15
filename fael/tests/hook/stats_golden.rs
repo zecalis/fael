@@ -84,7 +84,7 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         v,
         serde_json::json!({
-            "schema": 4, "outcomes_v": 1,
+            "schema": 5, "outcomes_v": 1,
             "events": 3, "bytes": 60, "est_tokens": 15, "skipped_temp": 0,
             "by_event": {"read": {"events": 2, "est_tokens": 8}, "edit": {"events": 1, "est_tokens": 7}},
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
@@ -96,11 +96,9 @@ fn stats_json_matches_golden_values() {
             "capture": {"manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "edit_session_issues": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
             "context_loop": {"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0},
-            "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0, "label": {"close_core": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "guard": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "key_reuse": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "find_hit": {"state": "unmeasurable", "num": 0, "den": 0, "since": null}, "gone_repos": 0}},
+            "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0},
             "unused_rows": [],
-            "incidents": {},
             "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "shape_gate": 0, "shape_gate_rules": {}},
-            "file_verdict": {"changed": 0, "unchanged": 0, "no_verdict": 0, "no_fh": 0, "retire": {"changed": {"pairs": 0, "retired": 0}, "unchanged": {"pairs": 0, "retired": 0}}},
             "said": said,
             "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}},
         }),

@@ -16,23 +16,17 @@ mod experience;
 #[cfg(test)]
 mod experience_tests;
 mod friction;
-mod incident;
-mod label;
-#[cfg(test)]
-mod label_tests;
 mod metrics;
 mod outcomes;
 mod overlap;
 mod parse;
 mod repeat;
 mod retire;
-mod retire_split;
 mod said;
 #[cfg(test)]
 mod said_tests;
 mod unused;
 mod value;
-mod verdict;
 
 pub use aggregate::{
     AskCount, Constants, Count, NonEnglish, Rounds, RowStatus, STATS_SCHEMA, Stats, TopRow,
@@ -50,19 +44,15 @@ pub use experience::{
     close_shape, fael_cites, new_close, pr_cites, resolve,
 };
 pub use friction::{FIRST_CALL_WINDOW, Friction, SHAPE_GATE, Tally};
-pub use incident::{INCIDENT_KEY, Incidents};
-pub use label::{LABEL_SINCE, Label, Measure, State};
 pub use metrics::ASK_ORDER;
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, since, since_arg};
 pub use repeat::ContextLoop;
 pub use retire::{RETIRE_WINDOW_MS, Retired};
-pub use retire_split::{Arm, RetireSplit};
 pub use said::{ASK_SPLIT, KINDS, KindYield};
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
-pub use verdict::{FileVerdict, GATE_MIN_PAIRS};
 
 /// The ask kind stored under `ask` in `usage.jsonl` — the vocabulary the
 /// `asks` JSON map and the recording side share, so the two cannot drift.

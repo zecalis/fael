@@ -31,7 +31,6 @@ mod focus;
 mod from_user;
 mod handoff;
 mod held;
-mod incident;
 mod named;
 mod notify;
 mod outcomes;
