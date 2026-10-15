@@ -211,7 +211,9 @@ pub(super) fn add_after(tx: &Transaction, src: i64, dst: i64) -> Result<(), Stri
 
 /// `fael chunk edit`: fields, and the state only to open a draft that gains a brief
 /// (issue 01M4KJQE: an inbox draft has a way out). Any change clears the approval
-/// (SPEC §8), so the queue never starts work the owner did not approve as it now reads.
+/// (SPEC §8), so the queue never starts work the owner did not approve as it now reads —
+/// but a `--scope` alone that keeps every old path covered: the owner approved the work and
+/// its model, and a wider scope only lets the overlap check see more (owner, 2026-10-15).
 pub(super) fn edit_in(
     tx: &Transaction,
     uid: &str,
@@ -234,6 +236,11 @@ pub(super) fn edit_in(
             .map_err(err)?;
         label(tx, plan, r.id, l)?;
     }
+    let old: Option<String> = tx
+        .query_row("SELECT scope FROM chunk WHERE id = ?1", [r.id], |q| {
+            q.get(0)
+        })
+        .map_err(err)?;
     let mut what = Vec::new();
     for (col, v) in [
         ("title", f.title.as_deref().map(str::trim)),
@@ -263,13 +270,23 @@ pub(super) fn edit_in(
                 .into(),
         );
     }
-    let n = tx
-        .execute(
+    let new = scope.flatten().unwrap_or_default();
+    let widened = what == ["scope"]
+        && old
+            .as_deref()
+            .unwrap_or("")
+            .lines()
+            .all(|p| new.lines().any(|q| super::board_math::under(p, q)));
+    let n = if widened {
+        0
+    } else {
+        tx.execute(
             "UPDATE chunk SET approved_at = NULL, approved_model = NULL, approved_client = NULL
              WHERE id = ?1 AND approved_at IS NOT NULL",
             [r.id],
         )
-        .map_err(err)?;
+        .map_err(err)?
+    };
     let mut text = format!("edited {}", what.join(", "));
     if n > 0 {
         text.push_str(" · approval cleared");
@@ -308,3 +325,7 @@ pub(super) fn is_date(d: &str) -> bool {
 #[cfg(test)]
 #[path = "chunk_tests.rs"]
 pub(super) mod tests;
+
+#[cfg(test)]
+#[path = "chunk_edit_tests.rs"]
+mod edit_tests;
