@@ -16,14 +16,16 @@ no cwd) and `fael` (CLI, MCP server, hooks, install).
 ### Fast test loop
 
 `cargo test` runs one test binary at a time. [nextest](https://nexte.st) runs them all in
-parallel, one process per test — about 3 s for the whole workspace instead of 15 s:
+parallel, one process per test. The suite is ~1100 tests that spawn the real binary and git, so
+it is bound by CPU, not by any one test — about 30 s for the whole workspace on 12 cores, slower
+when other worktrees build or test at the same time:
 
 ```bash
 cargo install cargo-nextest --locked
 cargo nextest run --workspace
 ```
 
-While iterating, run only the suite or test you are touching (under a second):
+While iterating, run only the suite or test you are touching (a few seconds):
 
 ```bash
 cargo nextest run -p fael --test write            # one suite
