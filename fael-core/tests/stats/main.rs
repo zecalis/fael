@@ -38,9 +38,6 @@ fn capture_and_experience_shapes_are_frozen() {
             "edit_session_issues",
             "manual_adds",
             "no_row_sessions",
-            "reply_lines",
-            "reply_rejected",
-            "reply_stored",
             "sessions_with_edits",
             "sessions_with_edits_gone",
             "sessions_with_edits_no_row",
@@ -97,7 +94,7 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    assert_eq!(v["schema"], 3, "{v}");
+    assert_eq!(v["schema"], 4, "{v}");
     // every kind listed, zeros included
     assert_eq!(
         keys(&v["said"]).join(" "),

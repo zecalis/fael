@@ -80,7 +80,6 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             urgent: urgent_ask(a)?,
             supersedes: s(a, "supersedes"),
             force: a["force"].as_bool().unwrap_or(false),
-            gate: true,
         },
     )?;
     record_row_asks("mcp", "mcp-add", &r.root, &row, &warns);

@@ -84,7 +84,7 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         v,
         serde_json::json!({
-            "schema": 3, "outcomes_v": 1,
+            "schema": 4, "outcomes_v": 1,
             "events": 3, "bytes": 60, "est_tokens": 15, "skipped_temp": 0,
             "by_event": {"read": {"events": 2, "est_tokens": 8}, "edit": {"events": 1, "est_tokens": 7}},
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
@@ -93,7 +93,7 @@ fn stats_json_matches_golden_values() {
             "constants": {"skill_bytes": 3275, "skill_est": 824, "mcp_schema_bytes": 3124, "mcp_schema_est": 784},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
-            "capture": {"reply_lines": 0, "reply_stored": 0, "reply_rejected": 0, "manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "edit_session_issues": 0, "no_row_sessions": []},
+            "capture": {"manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "edit_session_issues": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
             "context_loop": {"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0},
             "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0, "label": {"close_core": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "guard": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "key_reuse": {"state": "unmeasurable", "num": 0, "den": 0, "since": "2026-10-09T03:58:54.270Z"}, "find_hit": {"state": "unmeasurable", "num": 0, "den": 0, "since": null}, "gone_repos": 0}},

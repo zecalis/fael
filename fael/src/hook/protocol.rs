@@ -38,14 +38,14 @@ pub(crate) struct Event {
     /// falls back to reading `session` as a Claude-format transcript.
     #[serde(default)]
     pub(crate) text: Option<String>,
-    /// stop: the last assistant message only — the capture collector reads
-    /// its `fael <kind>:` lines. Without it fael reads the last message of a
+    /// stop: the last assistant message only — `cited` reads the ids it
+    /// names. Without it fael reads the last message of a
     /// Claude-format transcript in `session`.
     #[serde(default)]
     pub(crate) reply: Option<String>,
     /// read/edit/stop: the sub-agent the event fired inside, when the client
     /// names one. A sub-agent is its own context window: it keeps its own
-    /// seen list, and its stop only files its reply's capture lines.
+    /// seen list, and its stop only notes the ids its reply cites.
     #[serde(default)]
     pub(crate) agent: Option<String>,
     /// session-start: `"compact"` when the client just compacted its context —
