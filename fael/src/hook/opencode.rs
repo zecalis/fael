@@ -18,9 +18,10 @@ use serde_json::Value;
 pub(crate) const EDIT: [&str; 4] = ["edit", "write", "patch", "apply_patch"];
 /// Tools that read like a shell read, as `opencode.js` `SEARCH`.
 pub(crate) const SEARCH: [&str; 4] = ["grep", "glob", "shell", "bash"];
-/// The shell tools only, as `opencode.js` `SHELL` — the shells-map the
-/// `oc-shell` chunk resolves server-side reads from; kept here so the three
-/// sets stay in step. Unused until then.
+/// The shell tools only, as `opencode.js` `SHELL` — the command-keyed queue
+/// the V2 `create.before` hook matches shell creations against (exact command,
+/// consumed once; ambiguous matches leave `FAEL_SESSION` unset). Read only by
+/// the JS queue; kept here so the three sets stay in step.
 #[allow(dead_code)]
 pub(crate) const SHELL: [&str; 2] = ["shell", "bash"];
 
