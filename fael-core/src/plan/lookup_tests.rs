@@ -183,3 +183,13 @@ fn a_unique_uid_prefix_of_8_names_the_chunk_for_every_verb() {
     assert!(s.show("01AAAAA").unwrap_err().contains("too short"));
     assert!(s.show("01ZZZZZZZZ").unwrap_err().contains("no chunk"));
 }
+
+#[test]
+fn stop_hook_keeps_a_timestamp_out_of_run_session() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    s.start(&a, &Start::default(), &here("/w")).unwrap();
+    assert_eq!(s.seen("/w", "2026-10-15T13:20:10.319Z", NOW).unwrap(), 1);
+    let session = "SELECT r.session FROM run r JOIN chunk c ON c.id = r.chunk WHERE c.uid = ?1";
+    assert_eq!(get(&s, session, &a), None);
+}
