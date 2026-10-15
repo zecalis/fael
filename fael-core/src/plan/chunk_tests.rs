@@ -125,6 +125,10 @@ fn run_end_forced_takeover_and_fencing() {
         e.contains(&format!("taken over by run {r3} (codex) in /c")),
         "{e}"
     );
+    assert!(
+        e.contains(&format!("pass --run {r3}")),
+        "the reject names the flag: {e}"
+    );
     assert!(s.done(&c, "h", Some(1), None, &here("/b")).is_err());
     // the old shell's cleanup never ends the new start
     assert_eq!(s.run_end(&r2, None, NOW).unwrap(), 0);
