@@ -133,6 +133,20 @@ impl Args {
             .collect()
     }
 
+    /// Clone with space-separated `--files` extras appended (see
+    /// `find::extra`): `find --files a b` reads like `find --files a,b`.
+    pub(crate) fn with_extra_files(&self, extra: &[String]) -> Args {
+        let mut flags = self.flags.clone();
+        flags
+            .entry("files".to_string())
+            .or_default()
+            .extend(extra.iter().cloned());
+        Args {
+            pos: self.pos.clone(),
+            flags,
+        }
+    }
+
     /// `--revisit` on `add`/`bump` always needs a value — bare `--revisit` only
     /// filters on `find`. Shared by the CLI entry and `bump` so the two never
     /// drift apart.

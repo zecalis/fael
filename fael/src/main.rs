@@ -101,17 +101,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
         ("claim", [id]) => claim(&a, id).map(|()| ExitCode::SUCCESS),
         ("next", []) => next(&a).map(|()| ExitCode::SUCCESS),
-        ("find", [] | [_]) => find::find(&a, rest.first()).map(|()| ExitCode::SUCCESS),
-        // `find lead worker worktree`: words, no id among them — one text query, not
-        // three rejected ids (01M4XKM4)
-        ("find", words)
-            if words
-                .iter()
-                .all(|w| !w.contains('/') && !core::looks_like_id(w)) =>
-        {
-            find::find(&a, Some(&words.join(" "))).map(|()| ExitCode::SUCCESS)
-        }
-        ("find", ids) => find::many::find_many(&a, ids).map(|()| ExitCode::SUCCESS),
+        ("find", _) => find::extra::dispatch(&a, rest),
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),

@@ -2,6 +2,7 @@
 //! Moved out of main.rs (file-size ratchet) — no logic of its own beyond the
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
+pub(crate) mod extra;
 pub(crate) mod issue;
 mod kickoff;
 pub(crate) mod many;
