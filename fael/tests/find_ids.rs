@@ -263,3 +263,54 @@ fn fake_id_in_a_title_is_named_as_a_mention() {
         "{err}"
     );
 }
+
+/// `find --files a b` (space-separated paths) reads like `--files a,b`.
+#[test]
+fn space_separated_files_match_comma_joined() {
+    let d = repo();
+    add(&d, "a.rs", "spread row on a");
+    add(&d, "b.rs", "spread row on b");
+    let (ok, comma, err) = fael(&d, &["find", "--files", "src/a.rs,src/b.rs"]);
+    assert!(ok, "{err}");
+    let (ok, space, err) = fael(&d, &["find", "--files", "src/a.rs", "src/b.rs"]);
+    assert!(ok, "{err}");
+    assert_eq!(space, comma, "{space:?} vs {comma:?}");
+    assert!(
+        space.contains("spread row on a") && space.contains("spread row on b"),
+        "{space}"
+    );
+}
+
+/// `find --files a doc:x`: the anchor joins the files list, no `/` needed.
+#[test]
+fn space_separated_anchor_joins_files() {
+    let d = repo();
+    add(&d, "a.rs", "anchor row on a");
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "anchor row on pricing",
+            "--files",
+            "doc:pricing",
+        ],
+    );
+    assert!(ok, "{err}");
+    let (ok, out, err) = fael(&d, &["find", "--files", "src/a.rs", "doc:pricing"]);
+    assert!(ok, "{err}");
+    assert!(
+        out.contains("anchor row on a") && out.contains("anchor row on pricing"),
+        "{out}"
+    );
+}
+
+/// `find --files a <id>`: an id-shaped token still pulls the id.
+#[test]
+fn id_after_files_still_pulls() {
+    let d = repo();
+    let id = add(&d, "a.rs", "pulled row with a body");
+    let (ok, out, err) = fael(&d, &["find", "--files", "src/a.rs", &id]);
+    assert!(ok, "{err}{out}");
+    assert!(out.contains("pulled row with a body"), "{out}");
+}

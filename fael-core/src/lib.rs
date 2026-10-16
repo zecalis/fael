@@ -81,7 +81,7 @@ pub fn is_glob(f: &str) -> bool {
 /// with a letter, before the first `:` and before any `/`. Two chars minimum so `C:` stays a drive.
 /// Returns the ref — opaque to fael (`/` in it is not a path separator); it must be non-empty.
 // ponytail: a root-level file named like `notes:v2.md` reads as an anchor — rare, rename the file
-pub(crate) fn anchor(f: &str) -> Option<&str> {
+pub fn anchor(f: &str) -> Option<&str> {
     f.split_once(':')
         .filter(|(s, _)| {
             s.len() >= 2
