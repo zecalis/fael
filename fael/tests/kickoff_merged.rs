@@ -104,6 +104,57 @@ fn kickoff_marks_squash_merged_branch_and_not_an_empty_one() {
 }
 
 #[test]
+fn kickoff_marks_origin_only_branch_as_merged() {
+    let d = repo();
+    git(&d, &["switch", "-qc", "feat/origin-only"]);
+    fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "uncommitted on feat/origin-only",
+            "--files",
+            "plan:demo",
+        ],
+    );
+    std::fs::write(d.join("a.txt"), "a\n").unwrap();
+    git(&d, &["add", "a.txt"]);
+    git(&d, &["commit", "-qm", "work"]);
+    git(&d, &["switch", "-q", "main"]);
+    git(&d, &["merge", "-q", "--squash", "feat/origin-only"]);
+    git(&d, &["commit", "-qm", "squash feat/origin-only"]);
+
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    assert!(
+        line(&out, "uncommitted on").ends_with("@feat/origin-only (merged)"),
+        "{out}"
+    );
+
+    // the local branch is gone but our fetch of it is still live: the
+    // spawn-free gate must let it through to `rev-parse origin/<b>`, or the
+    // mark is lost.
+    let tip = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "feat/origin-only"])
+            .current_dir(&d)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    git(&d, &["branch", "-D", "feat/origin-only"]);
+    let origin_ref = d.join(".git/refs/remotes/origin/feat/origin-only");
+    std::fs::create_dir_all(origin_ref.parent().unwrap()).unwrap();
+    std::fs::write(&origin_ref, &tip).unwrap();
+
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    assert!(
+        line(&out, "uncommitted on").ends_with("@feat/origin-only (merged)"),
+        "{out}"
+    );
+}
+
+#[test]
 fn find_reads_an_anchor_like_kickoff() {
     let d = repo();
     fael(

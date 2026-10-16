@@ -15,18 +15,64 @@ use std::process::{Command, Stdio};
 /// Mark the tags of the rows about to be shown; branches of rows off the
 /// page are never asked about.
 pub fn mark(root: &Path, mut branch_of: BranchMap, rows: &[&Row]) -> BranchMap {
+    let common = crate::journal::root(root).and_then(|j| j.parent().map(Path::to_path_buf));
+    // Spawn-free dead-branch gate: no live ref under the common dir means no
+    // git spawn can prove anything — `is_merged` would fail both `rev-parse`
+    // probes and return false. Display-only (decision 01M4HVYM), so skipping
+    // keeps rendered bytes identical. Reftable stores no loose/packed refs,
+    // so the gate stays off there and git decides.
+    let gate = common.filter(|c| !c.join("reftable").exists());
+    let packed = gate
+        .as_ref()
+        .and_then(|c| std::fs::read_to_string(c.join("packed-refs")).ok())
+        .map(|s| {
+            s.lines()
+                .filter_map(|l| l.split_once(' '))
+                .map(|(_, name)| name.to_string())
+                .collect::<std::collections::HashSet<String>>()
+        });
     let mut merged: HashMap<String, bool> = HashMap::new();
     for row in rows {
         if let Some(b) = branch_of.get_mut(&row.id) {
-            let m = *merged
-                .entry(b.clone())
-                .or_insert_with(|| is_merged(root, b));
+            let m = *merged.entry(b.clone()).or_insert_with(|| {
+                if gate
+                    .as_ref()
+                    .is_some_and(|c| !ref_alive(c, packed.as_ref(), b))
+                {
+                    return false;
+                }
+                is_merged(root, b)
+            });
             if m {
                 b.push_str(" (merged)");
             }
         }
     }
     branch_of
+}
+
+/// A live ref under the common dir — loose or packed — for the local branch
+/// or our fetch of it (`origin/<b>`). Both sides: a branch deleted locally
+/// but alive on `origin/` still proves its tip via `rev-parse`, so it must
+/// reach `is_merged` or lose its `(merged)` mark. Anything suspicious falls
+/// open (alive) so git decides and bytes stay identical.
+fn ref_alive(common: &Path, packed: Option<&std::collections::HashSet<String>>, b: &str) -> bool {
+    if b.is_empty() || b.starts_with('/') || b.contains("..") || b.contains('\0') {
+        return true;
+    }
+    if common.join("refs/heads").join(b).is_file() {
+        return true;
+    }
+    if common.join("refs/remotes/origin").join(b).is_file() {
+        return true;
+    }
+    let Some(set) = packed else {
+        return false;
+    };
+    // packed-refs without loose files: `set` holds refnames (`^peeled` lines
+    // have no space so `split_once` drops them; the `# pack-refs` header never
+    // matches a want).
+    set.contains(&format!("refs/heads/{b}")) || set.contains(&format!("refs/remotes/origin/{b}"))
 }
 
 /// Sibling label to `(merged)` for handoff and issue rows whose code files moved since
