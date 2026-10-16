@@ -8,7 +8,7 @@
 //! generator is not worth a dependency.
 //!
 //! Scope notes, read before "fixing" a failure by changing behaviour:
-//! - invariant 1 covers the automatic classes only (Identity, Heuristic).
+//! - invariant 1 covers the automatic class only (Identity).
 //!   Explicit is the caller's own intent — text naming a row, like a
 //!   `--supersedes` flag passing through core — and may close any open row
 //!   the caller names.
@@ -180,7 +180,7 @@ fn target_row<'a>(log: &'a core::Log, id: &str) -> &'a core::Row {
     log.rows.iter().find(|r| r.id == id).unwrap()
 }
 
-/// First, the automatic classes never close another writer's row. (Explicit is
+/// First, the automatic class never closes another writer's row. (Explicit is
 /// the caller's own intent and is exempt — see the module doc.)
 #[test]
 fn automatic_acts_close_only_my_own_rows() {
@@ -188,32 +188,9 @@ fn automatic_acts_close_only_my_own_rows() {
     for n in 0..CASES {
         let (log, st, row) = gen_case(&mut g, n);
         let open = open_rows(&log);
-        match eff(&decide(&log, &open, &st, &row, None)) {
-            Verdict::KeyAct { target, .. } | Verdict::FilesAct { target } => {
-                let by = &target_row(&log, target).by;
-                assert_eq!(by, "me", "seed {SEED:#x} case {n}: closed {target} of {by}");
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Sixth, shared files prove relatedness, not replacement: a files act never
-/// hides a keyed row, and a keyed new row is never the cause of one. A key
-/// names a topic; the files guess only fires where no topic exists to lose.
-#[test]
-fn files_never_hide_a_keyed_topic() {
-    let mut g = Lcg(SEED + 5);
-    for n in 0..CASES {
-        let (log, st, row) = gen_case(&mut g, n);
-        let open = open_rows(&log);
-        if let Verdict::FilesAct { target } = eff(&decide(&log, &open, &st, &row, None)) {
-            let old = &target_row(&log, target).key;
-            assert!(
-                old.is_none() && row.key.is_none(),
-                "seed {SEED:#x} case {n}: files hid {target} ({old:?}) for key {:?}",
-                row.key
-            );
+        if let Verdict::KeyAct { target, .. } = eff(&decide(&log, &open, &st, &row, None)) {
+            let by = &target_row(&log, target).by;
+            assert_eq!(by, "me", "seed {SEED:#x} case {n}: closed {target} of {by}");
         }
     }
 }

@@ -1,14 +1,14 @@
 {
-  "name": "two keyless notes on shared files still supersede — no topic to lose",
+  "name": "two keyless notes on shared files no longer act — related, not a replacement",
   "seed": [
     {"kind": "note", "text": "first pass", "files": ["src/a.rs"]}
   ],
   "add": {"kind": "note", "text": "second pass", "files": ["src/a.rs"]},
   "expect": {
-    "supersedes_seed": 0,
+    "supersedes_seed": null,
     "warning_lines": 0,
-    "info_contains": ["superseded"],
+    "info_contains": ["kept all"],
     "usage_warnings": 0,
-    "decision_source": "heuristic:files"
+    "decision_source": null
   }
 }

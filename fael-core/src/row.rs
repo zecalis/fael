@@ -58,8 +58,9 @@ pub struct Row {
     pub supersedes: Option<String>,
     /// Which self-heal rule filed this row's `supersedes`
     /// (PLAN-fael-selfheal-verdict chunk 3): `explicit:text`, `identity:key`,
-    /// `heuristic:files`, each with `:cross-key` when the key moved, or
+    /// each with `:cross-key` when the key moved, or
     /// `caller:flag` for a resolving `--supersedes` that passed through.
+    /// `heuristic:files` is a legacy label only, carried by old rows.
     /// Absent reads as `unknown` — rows filed before chunk 3 are never
     /// backfilled, and readers must not error on its absence. Top-level like
     /// `to`, same compat: old readers keep it in `extra`, no `v` bump.

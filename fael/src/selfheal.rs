@@ -1,14 +1,16 @@
 //! Self-heal on `add` (PLAN-fael-durable-log chunks 3b–e; reshaped by
-//! PLAN-fael-selfheal-verdict chunk 1): fael answers from the log before it
-//! asks the agent. (b) a repeated note on the same writer + branch + files
-//! supersedes the open one itself; (c) a caller-supplied key is the stronger
+//! PLAN-fael-selfheal-verdict chunk 1, heuristic act removed by
+//! PLAN-fael-sharpen chunk heur-off): fael answers from the log before it
+//! asks the agent. (c) a caller-supplied key is the stronger
 //! identity — the single open row with the same kind + key + writer supersedes
 //! too, except an `issue`, which is a finding rather than a topic: a key may
 //! hold several, so an issue only replaces the same finding re-filed (same
 //! words, a shared file); (d) a `Supersedes <id>` the flag left off sets it,
 //! and a flag that resolves to nothing is rescued by the text when the text
 //! names exactly one open row; (e) the one key these files already carry
-//! becomes the row's key. The Stop-hook debt pattern (a row every turn,
+//! becomes the row's key. A repeated note on the same files files the row and
+//! names what stays open — shared files prove relatedness, never replacement.
+//! The Stop-hook debt pattern (a row every turn,
 //! nothing closing the old one) can no longer pile up, and a row filed where
 //! a topic already lives carries that topic's identity. CLI and MCP share
 //! `write::add_row`, so both behave the same.
@@ -24,9 +26,8 @@
 //!
 //! Proof or link: a row is hidden only on proof that the new one replaces it —
 //! a text naming it, a flag, or the same kind + key from the same writer.
-//! Shared files prove two notes related, not the same, so the files guess acts
-//! only where no topic exists to lose (both notes keyless); a key on either
-//! side, or any other overlap, files the row and names what stays open. A
+//! Shared files prove two notes related, not the same, so a repeat on the
+//! same files files the row and names what stays open. A
 //! silent hide costs the next reader a todo; a kept note costs one `close`.
 //!
 //! Chunk 3 (ActWarn + provenance): an act whose target's key differs from the
@@ -36,12 +37,14 @@
 //! `warning:` line, which the existing gate counts as an ask on CLI/MCP/batch;
 //! `info` keeps the info line; `off` acts silently. Same-key acts stay info.
 //! Every act stamps `decision_source` (`explicit:text`, `identity:key`,
-//! `heuristic:files`, each with `:cross-key` when the key moved, `caller:flag`
+//! each with `:cross-key` when the key moved, `caller:flag`
 //! for a resolving flag) so restore can trace an edge back to its cause; older
-//! rows read as `unknown` and are never backfilled.
+//! rows read as `unknown` and are never backfilled. `heuristic:files` is a
+//! legacy label only: no new row mints it, but old rows carrying it still
+//! restore and doctor still counts them.
 //!
 //! Thin entry only — observation lives in `evidence` (Evidence, Candidate),
-//! the Explicit > Identity > Heuristic policy table in `decide` (Eligibility,
+//! the Explicit > Identity policy table in `decide` (Eligibility,
 //! Verdict), the byte-identical renderer in `render` (Heal). Chunk 2's five
 //! invariants live as generated unit tests in `property`. Public paths never
 //! change — callers keep `crate::selfheal::{evaluate, auto_key}`: `evaluate`

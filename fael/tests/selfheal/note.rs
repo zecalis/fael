@@ -1,4 +1,4 @@
-//! Chunk 3b: repeated notes self-supersede; ambiguity files and lists, never asks.
+//! Chunk 3b: repeated notes file beside each other; ambiguity files and lists, never asks.
 
 use super::{fael, names, open_notes, repo, usage};
 
@@ -7,7 +7,7 @@ fn add(d: &std::path::Path, text: &str, files: &str) -> (bool, String, String) {
 }
 
 #[test]
-fn second_overlapping_note_supersedes_first() {
+fn second_overlapping_note_files_beside_first() {
     let d = repo();
     let (ok, _, err) = add(&d, "first pass", "src/a.rs");
     assert!(ok, "{err}");
@@ -15,19 +15,23 @@ fn second_overlapping_note_supersedes_first() {
     assert_eq!(first.len(), 1);
     let (ok, _, err) = add(&d, "second pass", "src/a.rs,src/b.rs");
     assert!(ok, "{err}");
-    // the choice is reported, not asked: one info line, no ask counted
-    assert!(names(&err, "superseded ", &first[0]), "{err}");
+    // shared files prove relatedness, not replacement: file the row and name
+    // what stays open — one info line, no ask counted
+    assert!(!err.contains("superseded"), "{err}");
+    assert!(err.contains("kept all"), "{err}");
+    assert!(names(&err, "open notes ", &first[0]), "{err}");
     let open = open_notes(&d);
-    assert_eq!(open.len(), 1);
-    assert_ne!(open[0], first[0]);
+    assert_eq!(open.len(), 2);
+    assert!(open.contains(&first[0]));
     let (ok, out, err) = fael(&d, &["find", "--json", "--all"], "");
     assert!(ok, "{err}");
     let yours = out
         .lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .find(|v| v["id"].as_str() == Some(open[0].as_str()))
+        .find(|v| v["id"].as_str() == Some(open[1].as_str()))
         .unwrap();
-    assert_eq!(yours["supersedes"].as_str(), Some(first[0].as_str()));
+    assert!(yours["supersedes"].is_null(), "{yours}");
+    assert!(yours["decision_source"].is_null(), "{yours}");
     assert!(usage(&d).is_empty(), "self-heal info is no ask");
 }
 
@@ -97,7 +101,7 @@ fn disjoint_files_and_other_kinds_stay_untouched() {
     let (ok, _, err) = add(&d, "about b", "src/b.rs");
     assert!(ok, "{err}");
     assert!(!err.contains("superseded"), "{err}");
-    // (b) is notes-only: decisions never auto-supersede by files
+    // the files hold is notes-only: decisions never auto-supersede by files
     let (ok, _, err) = fael(
         &d,
         &[

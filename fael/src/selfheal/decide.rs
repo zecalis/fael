@@ -1,10 +1,14 @@
-//! Decision: the Explicit > Identity > Heuristic policy table over Evidence
-//! (chunk 2 of PLAN-fael-selfheal-verdict).
+//! Decision: the Explicit > Identity policy table over Evidence
+//! (chunk 2 of PLAN-fael-selfheal-verdict; heuristic act removed by
+//! PLAN-fael-sharpen chunk heur-off — shared files prove relatedness, never
+//! replacement, so no files guess acts).
 //!
 //! Every open row is classified, per class, as Eligible (the class may act
 //! on it), Ineligible (seen, never acted on) or Blocks (found its identity
 //! but cannot act, so no lower class may pick instead). The first class in
 //! table order with an eligible candidate decides — one acts, several hold.
+//! A keyless repeat on the same files files the row and names what stays
+//! open through the files hold below, never hiding.
 
 use super::burst::burst;
 use super::evidence::{
@@ -38,10 +42,9 @@ pub(crate) enum Verdict {
     /// (c) the key's row was filed in the same burst — file both and name it:
     /// parallel adds share a key without replacing each other.
     KeyBurst { target: String },
-    /// (b) the one open note of mine on this branch overlapping these files, and neither it nor the new row has a key — no topic to lose.
-    FilesAct { target: String },
-    /// (b) several overlap, or one with a key on either side: file the row,
-    /// name them all — shared files are related, not proof of a replacement.
+    /// The files hold: one or more open notes of mine on this branch
+    /// overlapping these files — file the row, name them all. Shared files
+    /// are related, not proof of a replacement, so this never acts.
     FilesMany { targets: Vec<String> },
     /// (chunk 3) a cross-key act: the target's key differs from the new row's.
     /// Only an explicit act reaches across keys; `[selfheal] cross_key` picks
@@ -66,8 +69,8 @@ pub(crate) struct Evaluated {
 }
 
 /// The single Verdict source (chunk 2 of PLAN-fael-selfheal-restore): settle
-/// the Verdict without writing anything — Explicit, then Identity, then
-/// Heuristic. The write path acts on exactly this.
+/// the Verdict without writing anything — Explicit, then Identity, then the
+/// files hold, then Noop. The write path acts on exactly this.
 pub(crate) fn evaluate(
     log: &core::Log,
     st: &core::Stamp,
@@ -135,15 +138,15 @@ pub(crate) fn decide(
     // The policy table, highest class first: the first class that claims any
     // candidate decides. A class that found its identity but cannot act
     // reports "kept open" instead of yielding to a lower class (Blocks) —
-    // that is why a caller-given key is never overridden by a files guess.
+    // that is why a caller-given key is never overridden by a files overlap.
     if let Some(v) = explicit(&cands, row) {
         return wrap_cross(&cands, v);
     }
     if let Some(v) = identity(&cands, st, row) {
         return wrap_cross(&cands, v);
     }
-    if let Some(v) = heuristic(&cands, row) {
-        return wrap_cross(&cands, v);
+    if let Some(v) = files_hold(&cands, row) {
+        return v;
     }
     Verdict::Noop
 }
@@ -175,7 +178,6 @@ fn wrap_cross(cands: &[Candidate], v: Verdict) -> Verdict {
     let target = match &v {
         Verdict::TextAct { target, .. }
         | Verdict::KeyAct { target, .. }
-        | Verdict::FilesAct { target }
         | Verdict::FlagRescued { target } => target,
         _ => return v,
     };
@@ -204,7 +206,9 @@ fn source_of(v: &Verdict) -> Option<String> {
         Verdict::FlagPassthrough => Some("caller:flag".into()),
         Verdict::FlagRescued { .. } | Verdict::TextAct { .. } => Some("explicit:text".into()),
         Verdict::KeyAct { .. } => Some("identity:key".into()),
-        Verdict::FilesAct { .. } => Some("heuristic:files".into()),
+        // No arm mints "heuristic:files": it is a legacy label only, kept
+        // readable so old rows still restore and doctor still counts them
+        // (fael-core/src/doctor/precision.rs, untouched).
         Verdict::CrossKey { inner, .. } => source_of(inner).map(|s| format!("{s}:cross-key")),
         _ => None,
     }
@@ -235,8 +239,8 @@ fn explicit_standing(c: &Candidate) -> Option<Standing> {
 
 /// Identity: the caller's key plus the row's kind, the topic's identity. A
 /// same-key row of another writer, or an issue that is a different finding,
-/// Blocks: the caller said what this is about, so no heuristic may pick a
-/// substitute. Auto-key (e) never reaches here: it runs after `heal`, so a
+/// Blocks: the caller said what this is about, so no files overlap may act
+/// as a substitute. Auto-key (e) never reaches here: it runs after `heal`, so a
 /// key the caller did not write can't close a row.
 fn identity_standing(c: &Candidate, st: &core::Stamp, row: &core::Row) -> Option<Standing> {
     if row.key.is_none() || c.evidence.key != KeyRel::Same || c.evidence.kind != Rel::Same {
@@ -251,16 +255,19 @@ fn identity_standing(c: &Candidate, st: &core::Stamp, row: &core::Row) -> Option
     Some(Standing::Eligible)
 }
 
-/// Heuristic: an open note of mine on this branch overlapping these files —
-/// related, which is all `heuristic` may act on (it decides what to do with it).
-/// No Blocks here — a guess never outranks an identity, it only fires when
-/// neither higher class claimed anything.
-fn heuristic_standing(c: &Candidate) -> Option<Standing> {
-    (c.evidence.kind == Rel::Same
-        && c.evidence.writer == Rel::Same
-        && c.evidence.branch == Rel::Same
-        && c.evidence.files.shared > 0)
-        .then_some(Standing::Eligible)
+/// The files hold, notes only: any open note of mine on this branch
+/// overlapping these files is related — file the row and name them all.
+/// This never acts: shared files prove relatedness, not replacement
+/// (PLAN-fael-sharpen chunk heur-off). It fires only when neither higher
+/// class claimed anything.
+fn files_hold(cands: &[Candidate], row: &core::Row) -> Option<Verdict> {
+    if row.kind != "note" {
+        return None;
+    }
+    match files_match(cands).as_slice() {
+        [] => None,
+        many => Some(Verdict::FilesMany { targets: ids(many) }),
+    }
 }
 
 /// Explicit resolves first: exactly one named row acts (notes also list what
@@ -335,23 +342,6 @@ fn finding_blocked(c: &Candidate, st: &core::Stamp, row: &core::Row) -> bool {
     )
 }
 
-/// Heuristic resolves last, notes only: only the one pair with no topic on
-/// either side — both keyless — acts. A key on either side, a lone overlap
-/// or several are kept and named, never picked. It fires only when neither
-/// higher class claimed anything.
-fn heuristic(cands: &[Candidate], row: &core::Row) -> Option<Verdict> {
-    if row.kind != "note" {
-        return None;
-    }
-    match files_match(cands).as_slice() {
-        [] => None,
-        [one] if one.evidence.key == KeyRel::Neither => Some(Verdict::FilesAct {
-            target: one.row.id.clone(),
-        }),
-        many => Some(Verdict::FilesMany { targets: ids(many) }),
-    }
-}
-
 /// Candidates the text names after a "supersede*" word.
 fn named<'b>(cands: &'b [Candidate]) -> Vec<&'b Candidate<'b>> {
     cands
@@ -375,11 +365,16 @@ fn also_if_note(cands: &[Candidate], row: &core::Row, target: &str) -> Vec<Strin
 }
 
 /// Open notes, same writer + branch, overlapping files — chunk 3b, read off
-/// Evidence instead of re-asking the rows: exactly the Heuristic class.
+/// Evidence instead of re-asking the rows.
 fn files_match<'b>(cands: &'b [Candidate]) -> Vec<&'b Candidate<'b>> {
     cands
         .iter()
-        .filter(|c| heuristic_standing(c) == Some(Standing::Eligible))
+        .filter(|c| {
+            c.evidence.kind == Rel::Same
+                && c.evidence.writer == Rel::Same
+                && c.evidence.branch == Rel::Same
+                && c.evidence.files.shared > 0
+        })
         .collect()
 }
 

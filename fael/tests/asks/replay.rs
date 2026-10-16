@@ -32,8 +32,9 @@ fn open_notes(d: &std::path::Path) -> usize {
 }
 
 /// R1 — the 5-note debt, verbatim shape: same writer + branch, overlapping
-/// files, one add per turn. Since 3b, adds 2–5 supersede the open note
-/// themselves (`superseded` on stderr, no ask); before 3b all five stayed open.
+/// files, one add per turn. Since PLAN-fael-sharpen chunk heur-off, adds 2–5
+/// file beside the open notes and name what stays open (`kept all` on
+/// stderr, no ask); before it, adds 2–5 superseded the open note themselves.
 #[test]
 fn replay_debt_sequence_files_five_open_notes() {
     let d = replay_repo();
@@ -51,10 +52,11 @@ fn replay_debt_sequence_files_five_open_notes() {
         );
         assert!(ok, "add {i}: {err}");
         if i > 1 {
-            assert!(err.contains("superseded"), "add {i}: {err}");
+            assert!(!err.contains("superseded"), "add {i}: {err}");
+            assert!(err.contains("kept all"), "add {i}: {err}");
         }
     }
-    assert_eq!(open_notes(&d), 1);
+    assert_eq!(open_notes(&d), 5);
     let v = stats_json(&d);
     assert_eq!(v["asks"]["warning"]["events"], 0, "{v}");
 }

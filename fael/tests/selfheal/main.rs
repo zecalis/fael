@@ -1,5 +1,5 @@
 //! Chunk 3b–e (PLAN-fael-durable-log): a repeated note on the same writer +
-//! branch + files supersedes the open one itself, a caller-supplied key
+//! branch + files files beside the open one and names it, a caller-supplied key
 //! supersedes the single open row with the same kind + key, the text sets or
 //! rescues `--supersedes`, and the one key these files already carry is
 //! reused — several matches file the row and list what was kept, never
