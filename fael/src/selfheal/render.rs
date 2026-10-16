@@ -21,7 +21,7 @@ pub(crate) struct Heal {
 pub(crate) fn render(
     v: &Verdict,
     row: &core::Row,
-    st: &core::Stamp,
+    _st: &core::Stamp,
     w: &core::Abbrev,
     flag: Option<&str>,
     cross: core::CrossKey,
@@ -87,23 +87,12 @@ pub(crate) fn render(
             row.kind,
             short(target)
         )),
-        Verdict::FilesAct { target } => Heal {
-            supersedes: Some(target.clone()),
-            source: None,
-            notes: vec![match &st.branch {
-                Some(b) => format!(
-                    "superseded {} (open note, same branch {b}, same files)",
-                    short(target)
-                ),
-                None => format!("superseded {} (open note, same files)", short(target)),
-            }],
-        },
         Verdict::FilesMany { targets } => kept(format!(
             "open notes {} overlap these files — kept all; pass --supersedes <id> to replace one",
             id_list(targets, w)
         )),
         Verdict::CrossKey { inner, old, new } => {
-            expose(render(inner, row, st, w, flag, cross), old, new, cross)
+            expose(render(inner, row, _st, w, flag, cross), old, new, cross)
         }
         Verdict::Noop => Heal {
             supersedes: None,
@@ -128,7 +117,6 @@ impl Verdict {
             Verdict::KeyOtherWriter { .. } => "KeyOtherWriter",
             Verdict::KeyMany { .. } => "KeyMany",
             Verdict::KeyBurst { .. } => "KeyBurst",
-            Verdict::FilesAct { .. } => "FilesAct",
             Verdict::FilesMany { .. } => "FilesMany",
             Verdict::CrossKey { inner, .. } => inner.name(),
             Verdict::Noop => "Noop",
@@ -141,7 +129,6 @@ impl Verdict {
             Verdict::FlagRescued { target }
             | Verdict::TextAct { target, .. }
             | Verdict::KeyAct { target, .. }
-            | Verdict::FilesAct { target }
             | Verdict::KeyOtherWriter { target } => Some(target),
             Verdict::CrossKey { inner, .. } => inner.target(),
             _ => None,

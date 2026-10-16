@@ -118,8 +118,8 @@ fn field(d: &Path, id: &str, k: &str) -> String {
         .to_string()
 }
 
-/// Dry run predicts the heal, writes nothing; the real add then supersedes
-/// exactly the previewed row with the previewed provenance.
+/// Dry run predicts the heal, writes nothing; the real add then files
+/// beside the previewed row with no supersede and no provenance.
 #[test]
 fn dry_run_predicts_heal_and_writes_nothing() {
     let d = repo();
@@ -135,20 +135,16 @@ fn dry_run_predicts_heal_and_writes_nothing() {
     );
     assert!(ok, "{err}");
     let line = out.lines().next().unwrap_or_default();
-    assert!(
-        line.starts_with("dry-run FilesAct (heuristic:files) → "),
-        "{line}"
-    );
-    let target = line.rsplit(' ').next().unwrap().to_string();
-    assert!(err.contains("(open note, same branch"), "{err}");
+    assert_eq!(line, "dry-run FilesMany (none)", "{line}");
+    assert!(err.contains("kept all"), "{err}");
     assert_eq!(log_bytes(&d), before, "a dry run writes nothing");
 
     let (ok, out, err) = fael(&d, &["add", "note", "second", "--files", "src/a.rs"], "");
     assert!(ok, "{err}");
-    assert!(err.contains("(open note, same branch"), "{err}");
+    assert!(err.contains("kept all"), "{err}");
     let filed: Vec<&str> = out.lines().next().unwrap_or_default().split(' ').collect();
-    assert_eq!(field(&d, filed[0], "supersedes"), target);
-    assert_eq!(field(&d, filed[0], "decision_source"), "heuristic:files");
+    assert_eq!(field(&d, filed[0], "supersedes"), "");
+    assert_eq!(field(&d, filed[0], "decision_source"), "");
 }
 
 /// Fresh files hold no open row: the verdict is Noop, still without writing.
@@ -207,17 +203,16 @@ fn dry_run_json_shape() {
     );
     assert!(ok);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(v["verdict"], "FilesAct");
-    assert_eq!(v["source"], "heuristic:files");
-    assert_eq!(v["target"], v["supersedes"]);
-    assert_eq!(v["evidence"]["kind"], "Same");
-    assert_eq!(v["evidence"]["named"], "No");
-    assert!(v["evidence"]["files"].as_u64().unwrap() >= 1);
+    assert_eq!(v["verdict"], "FilesMany");
+    assert!(v["source"].is_null());
+    assert!(v["target"].is_null());
+    assert!(v["supersedes"].is_null());
+    assert!(v["evidence"].is_null());
     assert!(!v["notes"].as_array().unwrap().is_empty());
 }
 
-/// MCP `dry_run` previews without writing; the real MCP add then acts on the
-/// previewed target. Batch + preview is rejected on both surfaces.
+/// MCP `dry_run` previews without writing; the real MCP add then files
+/// beside the previewed row. Batch + preview is rejected on both surfaces.
 #[test]
 fn mcp_dry_run_previews_without_writing() {
     let d = repo();
@@ -236,9 +231,9 @@ fn mcp_dry_run_previews_without_writing() {
     );
     assert!(!is_err, "{text}");
     let v: serde_json::Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(v["verdict"], "FilesAct");
-    assert_eq!(v["source"], "heuristic:files");
-    let target = v["target"].as_str().unwrap().to_string();
+    assert_eq!(v["verdict"], "FilesMany");
+    assert!(v["source"].is_null());
+    assert!(v["target"].is_null());
     assert_eq!(log_bytes(&d), before, "a dry run writes nothing");
 
     let (is_err, text) = mcp(
@@ -248,7 +243,7 @@ fn mcp_dry_run_previews_without_writing() {
     );
     assert!(!is_err, "{text}");
     let filed = text.lines().next().unwrap().split(' ').nth(1).unwrap();
-    assert_eq!(field(&d, filed, "supersedes"), target);
+    assert_eq!(field(&d, filed, "supersedes"), "");
 
     let (is_err, text) = mcp(
         &d,
