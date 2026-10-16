@@ -26,6 +26,8 @@ pub struct PlanRow {
     pub title: String,
     pub area: String,
     pub state: String,
+    /// the umbrella plan's name; `None` = top level
+    pub parent: Option<String>,
 }
 
 pub(super) fn err(e: rusqlite::Error) -> String {
@@ -145,7 +147,9 @@ impl Store {
     pub fn plans(&self) -> Result<Vec<PlanRow>, String> {
         let mut q = self
             .conn
-            .prepare("SELECT id, app, name, title, area, state FROM plan ORDER BY app, name")
+            .prepare(
+                "SELECT id, app, name, title, area, state, parent FROM plan ORDER BY app, name",
+            )
             .map_err(err)?;
         q.query_map([], |r| {
             Ok(PlanRow {
@@ -155,6 +159,7 @@ impl Store {
                 title: r.get(3)?,
                 area: r.get(4)?,
                 state: r.get(5)?,
+                parent: r.get(6)?,
             })
         })
         .map_err(err)?

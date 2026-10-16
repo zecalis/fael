@@ -41,10 +41,14 @@ pub fn export(s: &Store, plan: i64) -> Result<String, String> {
     } else {
         format!("{app}/{name}")
     };
-    let _ = writeln!(
+    let _ = write!(
         o,
         "---\n\n# {title}\n\n> fael plan export — {key} · {state}"
     );
+    if let Some(p) = parent_of(&s.conn, plan)? {
+        let _ = write!(o, " · parent {p}");
+    }
+    o.push('\n');
     o.push_str("\n## TL;DR\n");
     chunks(s, plan, &mut o)?;
     for r in &section::list(&s.conn, plan)? {
@@ -143,6 +147,14 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
     Ok(())
 }
 
+/// The umbrella plan's name; `None` = top level.
+fn parent_of(c: &Connection, plan: i64) -> Result<Option<String>, String> {
+    c.query_row("SELECT parent FROM plan WHERE id = ?1", [plan], |r| {
+        r.get(0)
+    })
+    .map_err(err)
+}
+
 /// A plan's rev: the newest `event` row that belongs to it (0 = none yet). Every write to
 /// the plan or one of its chunks adds one, so a bill read at rev N is stale once it moves.
 pub(super) fn rev(c: &Connection, plan: i64) -> Result<i64, String> {
@@ -166,6 +178,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
             cols,
         )
         .map_err(err)?;
+    let parent = parent_of(&tx, plan)?;
     let key = if app.is_empty() {
         name
     } else {
@@ -201,7 +214,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
         .collect();
     Ok(json!({
         "v": 1, "plan": key, "rev": rev(&tx, plan)?, "title": title, "area": area,
-        "state": state, "sections": sections, "chunks": chunks,
+        "parent": parent, "state": state, "sections": sections, "chunks": chunks,
     }))
 }
 

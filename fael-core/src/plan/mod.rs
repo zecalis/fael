@@ -16,6 +16,7 @@ mod issue;
 mod lookup;
 mod r#move;
 mod owner;
+mod parent;
 mod ready;
 mod schema;
 mod secret;

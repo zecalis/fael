@@ -28,7 +28,7 @@ fn v6_drops_the_md_era_and_keeps_every_row() {
     assert_eq!(version(&path), 8);
     assert_eq!(
         columns(&s, "plan"),
-        ["id", "app", "name", "title", "area", "state"]
+        ["id", "app", "name", "title", "area", "state", "parent"]
     );
     let chunk = columns(&s, "chunk");
     for gone in ["due", "pin"] {

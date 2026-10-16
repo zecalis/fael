@@ -181,13 +181,15 @@ impl Store {
     }
 
     /// `fael plan new <name> "<title>"`: an active plan whose text starts as the four
-    /// skeleton sections every brief reads. A taken `app/name` is refused.
+    /// skeleton sections every brief reads, under `parent` when given (`plan::parent`). A taken
+    /// `app/name` is refused.
     pub fn new_plan(
         &mut self,
         app: &str,
         name: &str,
         title: &str,
         area: &str,
+        parent: Option<&str>,
         now: &str,
     ) -> Result<(), String> {
         let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
@@ -213,6 +215,9 @@ impl Store {
             ));
         }
         let pid = tx.last_insert_rowid();
+        if let Some(p) = parent {
+            super::parent::set(&tx, pid, app, name, p)?;
+        }
         tx.execute(
             "INSERT INTO event(chunk_uid, at, by, to_state, plan)
              VALUES (?1, ?2, 'owner', 'active', ?3)",

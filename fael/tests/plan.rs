@@ -159,6 +159,12 @@ fn the_guessed_plan_and_chunk_calls_answer_or_name_the_real_one() {
         ok && out.starts_with("p · ") && out.contains(" · P"),
         "{out} {err}"
     );
+    // a child plan ends its line with its parent; a top-level one does not
+    assert!(fael(&d, &["plan", "new", "kid", "Kid", "--parent", "p"]).0);
+    let (_, out, _) = fael(&d, &["plan", "list"]);
+    let line = |n: &str| out.lines().find(|l| l.starts_with(n)).unwrap().to_string();
+    assert!(line("kid · ").ends_with("Kid · parent p"), "{out}");
+    assert!(!line("p · ").contains("parent"), "{out}");
     // --plan names the plan a label or uid is in, and checks it
     assert!(fael(&d, &["chunk", "edit", uid, "--label", "l1"]).0);
     let (ok, out, err) = fael(&d, &["chunk", "show", "l1", "--plan", "p"]);

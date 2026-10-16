@@ -380,3 +380,17 @@ fn the_ledger_rides_the_board_and_reads_like_nothing() {
     assert_eq!(l["decisions"][0]["key"], "c:size");
     assert_eq!(l["notes"][0]["signals"], serde_json::json!([]));
 }
+
+#[test]
+fn a_child_plan_names_its_parent_on_the_board() {
+    let tmp = std::env::temp_dir().join(format!("fael-board-{}", fael_core::ulid()));
+    let (d, state) = (repo(&tmp), tmp.join("state"));
+    let f = |args: &[&str]| fael(&d, &state, args);
+    f(&["plan", "new", "umbrella", "Umbrella"]);
+    f(&["plan", "new", "page-a", "Page A", "--parent", "umbrella"]);
+    let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
+    let plans = v["projects"][0]["plans"].as_array().unwrap();
+    let get = |n: &str| plans.iter().find(|p| p["name"] == n).unwrap();
+    assert_eq!(get("page-a")["parent"], "umbrella");
+    assert!(get("umbrella").get("parent").is_none(), "{plans:?}");
+}

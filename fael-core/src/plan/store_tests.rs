@@ -1,4 +1,5 @@
 use super::*;
+use crate::plan::schema::{COLUMNS, TABLES};
 
 #[test]
 fn a_newer_epoch_is_refused() {
@@ -24,14 +25,18 @@ fn builds_with_different_additions_share_one_db_both_ways() {
     let dir = std::env::temp_dir().join(format!("fael-plans-{}", crate::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("fael.db");
-    const T: &[(&str, &str)] = &[(
+    // the other lane's build adds `ask` and `run.beat` on top of the additions every build has
+    let mut t = TABLES.to_vec();
+    t.push((
         "ask",
         "CREATE TABLE IF NOT EXISTS ask(id INTEGER PRIMARY KEY)",
-    )];
-    const C: &[(&str, &str, &str)] = &[("run", "beat", "TEXT")];
+    ));
+    let mut c = COLUMNS.to_vec();
+    c.push(("run", "beat", "TEXT"));
+    let (extra_t, extra_c): (Adds, Cols) = (Box::leak(t.into()), Box::leak(c.into()));
     let open = |t, c| Store::init_with(Connection::open(&path).unwrap(), t, c);
     // the other lane's build opens first: it adds its table and column, no version bump
-    let s = open(T, C).unwrap();
+    let s = open(extra_t, extra_c).unwrap();
     s.conn
         .execute("INSERT INTO ask(id) VALUES (1)", [])
         .unwrap();
@@ -42,30 +47,36 @@ fn builds_with_different_additions_share_one_db_both_ways() {
             .unwrap()
     };
     // this build lacks both and still reads and writes
-    let s = open(&[], &[]).unwrap();
+    let s = open(TABLES, COLUMNS).unwrap();
     assert_eq!(user_version(&s), VERSION);
     s.conn
         .execute(
-            "INSERT INTO plan(app, name, title, state) VALUES ('', 't', 'T', 'active')",
+            "INSERT INTO plan(app, name, title, state) VALUES ('', 't', 'extra_t', 'active')",
             [],
         )
         .unwrap();
     assert_eq!(s.plans().unwrap().len(), 1);
     drop(s);
     // and the other way: reopened by the build that has them, nothing lost or re-added
-    let s = open(T, C).unwrap();
+    let s = open(extra_t, extra_c).unwrap();
     let n: i64 = s
         .conn
         .query_row("SELECT COUNT(*) FROM ask", [], |r| r.get(0))
         .unwrap();
     assert_eq!(n, 1);
-    assert_eq!(super::super::schema::missing(&s.conn, T, C).unwrap(), "");
+    assert_eq!(
+        super::super::schema::missing(&s.conn, extra_t, extra_c).unwrap(),
+        ""
+    );
     drop(s);
     // a db at this epoch made without them gains them on the next open by a build with them
     let other = dir.join("other.db");
-    drop(Store::init_with(Connection::open(&other).unwrap(), &[], &[]).unwrap());
-    let s = Store::init_with(Connection::open(&other).unwrap(), T, C).unwrap();
-    assert_eq!(super::super::schema::missing(&s.conn, T, C).unwrap(), "");
+    drop(Store::init_with(Connection::open(&other).unwrap(), TABLES, COLUMNS).unwrap());
+    let s = Store::init_with(Connection::open(&other).unwrap(), extra_t, extra_c).unwrap();
+    assert_eq!(
+        super::super::schema::missing(&s.conn, extra_t, extra_c).unwrap(),
+        ""
+    );
     assert_eq!(user_version(&s), VERSION);
     let _ = std::fs::remove_dir_all(dir);
 }

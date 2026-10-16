@@ -5,7 +5,7 @@ use super::super::chunk::tests::{NOW, add, get, start, state};
 use super::super::{Fields, Owner, Store};
 
 fn plan(s: &mut Store, name: &str) -> i64 {
-    s.new_plan("", name, name, "dev", NOW).unwrap();
+    s.new_plan("", name, name, "dev", None, NOW).unwrap();
     s.plans()
         .unwrap()
         .into_iter()

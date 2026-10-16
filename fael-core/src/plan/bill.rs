@@ -24,6 +24,8 @@ pub struct Bill {
     rev: i64,
     title: Option<String>,
     area: Option<String>,
+    /// the umbrella plan's name (same app, one level); `""` clears it
+    parent: Option<String>,
     /// read back, never set: `fael plan park|unpark|done` moves it
     state: Option<String>,
     /// by key: one left out is left alone
@@ -91,6 +93,15 @@ fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<Stri
         )
         .map_err(err)?;
         what.push(col);
+    }
+    if let Some(v) = &b.parent {
+        let old: Option<String> = tx
+            .query_row("SELECT parent FROM plan WHERE id = ?1", [pid], |r| r.get(0))
+            .map_err(err)?;
+        if v != old.as_deref().unwrap_or_default() {
+            super::parent::set(tx, pid, &app, &name, v)?;
+            what.push("parent");
+        }
     }
     if what.is_empty() {
         return Ok(None);

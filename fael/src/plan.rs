@@ -16,7 +16,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     if let [new, name, title] = rest
         && new == "new"
     {
-        a.only("plan new", &["app", "area"])?;
+        a.only("plan new", &["app", "area", "parent"])?;
         return create(a, &r, name, title).map(|()| ExitCode::SUCCESS);
     }
     // `plan show <plan>` is what agents type for export
@@ -42,7 +42,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("list") if rest.len() == 1 => list(&r),
         _ => Err(
-            "rejected: fael plan new <name> \"<title>\" | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'"
+            "rejected: fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'"
                 .into(),
         ),
     }
@@ -63,7 +63,7 @@ fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     let now = fael_core::rfc3339(fael_core::now_ms());
     in_repo(r)?;
     let mut s = Store::open(&db(r))?;
-    s.new_plan(&app, name, title, &area, &now)?;
+    s.new_plan(&app, name, title, &area, a.one("parent").as_deref(), &now)?;
     let key = if app.is_empty() {
         name.to_string()
     } else {
@@ -181,7 +181,12 @@ fn one(s: &Store, want: &str) -> Result<PlanRow, String> {
 /// its title. Agents typed it 7 of 7 times into a reject (2026-10-13..15).
 fn list(r: &Repo) -> Result<(), String> {
     for p in open(r)?.plans()? {
-        println!("{} · {} · {}", key(&p), p.state, p.title);
+        let up = p
+            .parent
+            .as_ref()
+            .map(|u| format!(" · parent {u}"))
+            .unwrap_or_default();
+        println!("{} · {} · {}{up}", key(&p), p.state, p.title);
     }
     Ok(())
 }

@@ -54,7 +54,7 @@ fn since_head_is_empty_and_an_edit_after_returns_that_chunk_whole() {
 #[test]
 fn the_feed_carries_every_section_of_a_plan_it_touched() {
     let mut s = Store::open_in_memory().unwrap();
-    s.new_plan("", "p", "P", "dev", NOW).unwrap();
+    s.new_plan("", "p", "P", "dev", None, NOW).unwrap();
     let all = feed(&s, 0).unwrap();
     let keys: Vec<&str> = all["sections"]
         .as_array()

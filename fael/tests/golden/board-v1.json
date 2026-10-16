@@ -32,6 +32,7 @@
       "plans": [
         { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "state": "active", "truth": "db", "counts": { "open": 2, "review": 1, "running": 1, "waiting": 1 } },
         { "app": "", "name": "launch-posts", "title": "October launch posts", "area": "marketing", "state": "active", "truth": "db", "counts": { "open": 1, "review": 1, "waiting": 2 } },
+        { "app": "", "name": "launch-teasers", "title": "Teaser posts under the October launch", "area": "marketing", "state": "active", "truth": "db", "parent": "launch-posts", "counts": { "done": 2 } },
         { "app": "", "name": "inbox", "title": "Inbox", "area": "dev", "state": "active", "truth": "db", "counts": { "done": 1, "draft": 1 } },
         { "app": "", "name": "fael-v0", "title": "a repo memory agents cannot skip writing", "area": "dev", "state": "done", "truth": "db", "counts": { "done": 12 } }
       ],
