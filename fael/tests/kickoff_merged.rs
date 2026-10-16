@@ -2,6 +2,7 @@
 //! HEAD — squash merges included — and never for a branch that has no
 //! commits of its own. `find plan:x` reads the anchor like `kickoff plan:x`.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -101,6 +102,123 @@ fn kickoff_marks_squash_merged_branch_and_not_an_empty_one() {
     );
     // the tag is kickoff's: find stays free of git spawns
     assert!(!fael(&d, &["find", "plan:demo"]).contains("(merged)"));
+}
+
+#[test]
+fn kickoff_keeps_the_mark_when_a_tag_shares_the_dead_branchs_name() {
+    let d = repo();
+    git(&d, &["switch", "-qc", "feat/tag"]);
+    fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "tag shadows the branch",
+            "--files",
+            "plan:demo",
+        ],
+    );
+    std::fs::write(d.join("a.txt"), "a\n").unwrap();
+    git(&d, &["add", "a.txt"]);
+    git(&d, &["commit", "-qm", "work"]);
+    let tip = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "feat/tag"])
+            .current_dir(&d)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    git(&d, &["switch", "-q", "main"]);
+    git(&d, &["merge", "-q", "--squash", "feat/tag"]);
+    git(&d, &["commit", "-qm", "squash feat/tag"]);
+    git(&d, &["branch", "-D", "feat/tag"]);
+    // the branch is gone, but a tag of the same name resolves the same tip
+    // through `rev-parse <b>`: the gate must not read that as dead
+    git(&d, &["tag", "feat/tag", tip.trim()]);
+
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    assert!(
+        line(&out, "tag shadows").ends_with("@feat/tag (merged)"),
+        "{out}"
+    );
+}
+
+#[test]
+fn kickoff_keeps_the_mark_when_the_branch_name_is_a_pseudo_ref() {
+    // git allows a branch named after a pseudo-ref, and `$GIT_DIR/FETCH_HEAD`
+    // outlives it: `rev-parse FETCH_HEAD` still proves the tip.
+    let d = repo();
+    git(&d, &["switch", "-qc", "FETCH_HEAD"]);
+    fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "on a pseudo-ref name",
+            "--files",
+            "plan:demo",
+        ],
+    );
+    std::fs::write(d.join("a.txt"), "a\n").unwrap();
+    git(&d, &["add", "a.txt"]);
+    git(&d, &["commit", "-qm", "work"]);
+    git(&d, &["fetch", "-q", ".", "refs/heads/FETCH_HEAD"]);
+    git(&d, &["switch", "-q", "main"]);
+    git(&d, &["merge", "-q", "--squash", "FETCH_HEAD"]);
+    git(&d, &["commit", "-qm", "squash FETCH_HEAD"]);
+    git(&d, &["branch", "-D", "FETCH_HEAD"]);
+
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    assert!(
+        line(&out, "pseudo-ref name").ends_with("@FETCH_HEAD (merged)"),
+        "{out}"
+    );
+}
+
+#[test]
+fn kickoff_reads_the_packed_table_past_a_non_utf8_refname() {
+    let d = repo();
+    git(&d, &["switch", "-qc", "feat/packed"]);
+    fael(&d, &["add", "note", "packed only", "--files", "plan:demo"]);
+    std::fs::write(d.join("a.txt"), "a\n").unwrap();
+    git(&d, &["add", "a.txt"]);
+    git(&d, &["commit", "-qm", "work"]);
+    let tip = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "feat/packed"])
+            .current_dir(&d)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    git(&d, &["switch", "-q", "main"]);
+    git(&d, &["merge", "-q", "--squash", "feat/packed"]);
+    git(&d, &["commit", "-qm", "squash feat/packed"]);
+    git(&d, &["branch", "-D", "feat/packed"]);
+    // a tag of the same name keeps the tip resolvable, and packing it leaves
+    // the packed table as the only place that can prove it
+    git(&d, &["tag", "feat/packed", tip.trim()]);
+    git(&d, &["pack-refs", "--all", "--prune"]);
+    assert!(
+        !d.join(".git/refs/tags/feat/packed").exists(),
+        "tag still loose"
+    );
+    // one refname with a raw non-UTF-8 byte must not blind the other lines
+    let mut packed = std::fs::OpenOptions::new()
+        .append(true)
+        .open(d.join(".git/packed-refs"))
+        .unwrap();
+    packed.write_all(tip.trim().as_bytes()).unwrap();
+    packed.write_all(b" refs/heads/bad-\xff\n").unwrap();
+
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    assert!(
+        line(&out, "packed only").ends_with("@feat/packed (merged)"),
+        "{out}"
+    );
 }
 
 #[test]
