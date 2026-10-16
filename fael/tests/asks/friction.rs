@@ -264,7 +264,7 @@ fn reasons_come_from_the_real_reject_paths() {
         f["reasons"],
         serde_json::json!({
             // `-k` is a flag now, not an id
-            "unknown_flag": 2, "bad_id": 1, "flag_not_taken": 1, "missing_value": 1,
+            "unknown_flag": 2, "id_partial": 1, "flag_not_taken": 1, "missing_value": 1,
             "usage": 1, "unknown_command": 2, start_reason.as_str(): 1
         }),
         "{f}"

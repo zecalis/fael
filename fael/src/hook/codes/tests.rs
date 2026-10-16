@@ -14,15 +14,23 @@ fn rejects_read_as_their_family() {
         ),
         (
             "rejected: \"-k\" is not an id — copy it from fael find",
-            "bad_id",
+            "id_not_shaped",
+        ),
+        (
+            "rejected: \"a\" is a path, not an id — several --files go comma-joined: --files a,b",
+            "id_is_path",
         ),
         (
             "rejected: 2 of 2 ids not shown — the rest printed",
-            "bad_id",
+            "id_partial",
         ),
         (
             "rejected: no row with id \"01ZZ\" — copy the id from fael find",
-            "bad_id",
+            "id_missing",
+        ),
+        (
+            "rejected: id \"ab\" matches 2 rows (\"01AA\", \"01AB\") — use more characters",
+            "id_ambiguous",
         ),
         (
             "rejected: unknown command \"decision\" — try 'fael --help'",
@@ -34,7 +42,27 @@ fn rejects_read_as_their_family() {
         ),
         (
             "rejected: no chunk b9 in plan p — `fael plan export p` lists its uids",
-            "no_chunk",
+            "chunk_missing",
+        ),
+        (
+            "rejected: chunk 01M4AAAA is not on the board",
+            "chunk_missing",
+        ),
+        (
+            "rejected: uid prefix b9 is too short — use 8+ chars of the uid",
+            "chunk_prefix",
+        ),
+        (
+            "rejected: label foo names more than one chunk — use the uid",
+            "chunk_ambiguous",
+        ),
+        (
+            "rejected: chunk 01M4AAAA is in plan p, not q",
+            "chunk_other_plan",
+        ),
+        (
+            "rejected: chunk 01M4AAAA is in another plan",
+            "chunk_other_plan",
         ),
         (
             "rejected: chunk 01M4AAAA is done — history, not edited",
