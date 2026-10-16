@@ -36,6 +36,9 @@ pub struct Chunk {
     pub state: String,
     pub size: Option<String>,
     pub model_hint: Option<String>,
+    /// the one model the launcher runs (`opencode run --model`): the latest run's,
+    /// else the approval's, else the hint; null = none named one
+    pub model: Option<String>,
     /// `chunk add|edit --client`; absent = none, `approve` then picks claude
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_hint: Option<String>,
@@ -172,6 +175,7 @@ impl Store {
                         title: clean(&title, label.as_deref()),
                         size: r.get(7)?,
                         model_hint: r.get(8)?,
+                        model: None, // derive() resolves run → approval → hint
                         client_hint: r.get(24)?,
                         scope: scope
                             .iter()
@@ -239,6 +243,13 @@ impl Store {
 
     /// ready / blocked_by (the one `ready_in`), ended, stalled.
     fn derive(&self, id: i64, c: &mut Chunk, today: &str, stale: &str) -> Result<(), String> {
+        // the launcher runs one model: the latest run's, else the approval's, else the hint
+        c.model = c
+            .run
+            .as_ref()
+            .and_then(|r| r.model.clone())
+            .or_else(|| c.approval.as_ref().and_then(|a| a.model.clone()))
+            .or_else(|| c.model_hint.clone());
         if matches!(c.state.as_str(), "open" | "waiting") {
             match ready_in(&self.conn, id, today)? {
                 Ready::Yes => c.ready = true,
