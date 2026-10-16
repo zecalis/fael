@@ -62,7 +62,37 @@ fn ready_line_says_no_scope() {
         chunks: vec![scoped, ready("bare", 0)],
         ..Project::named(Path::new(""))
     };
-    let t = text(&lists(String::new(), vec![&p]));
+    let t = text::text(&lists(String::new(), vec![&p]), false);
     assert!(t.contains("bare  p   — no scope\n"), "{t}");
     assert!(t.contains("scoped  p  \n"), "{t}");
+}
+
+#[test]
+fn blocked_folds_to_plan_counts_unless_plan_cut() {
+    let blocked = |uid: &str, plan: &str| {
+        let mut c = ready(uid, 0);
+        c.ready = false;
+        c.plan = plan.into();
+        c.blocked_by = vec![fael_core::plan::Blocker {
+            uid: None,
+            what: "x".into(),
+        }];
+        c
+    };
+    let p = Project {
+        chunks: vec![blocked("u1", "a"), blocked("u2", "b"), blocked("u3", "b")],
+        ..Project::named(Path::new(""))
+    };
+    let b = lists(String::new(), vec![&p]);
+    let t = text::text(&b, false);
+    assert!(
+        t.contains("blocked  3 — b 2 · a 1 — `fael board --plan <p>`"),
+        "{t}"
+    );
+    assert!(!t.contains("u1"), "{t}");
+    let t = text::text(&b, true);
+    assert!(
+        t.contains("u1") && t.contains("u2") && t.contains("u3"),
+        "{t}"
+    );
 }
