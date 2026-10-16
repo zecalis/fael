@@ -38,6 +38,12 @@ Carry them silently — the reader wants what you found, not proof that you look
 `git branch -a --contains <sha>` for a cited commit, `git worktree list` for who holds the
 branch. Review that diff. One another agent holds is read-only for you — review it, never redo it.
 
+**Read the diff in slices, never whole** — every output is re-read on each later turn:
+
+1. `git diff --stat <base>...HEAD` and `--name-status` first. The map, always.
+2. Pick files by the scope and effort; open each with `git diff <base>...HEAD -- <file>`, one or a few at a time. Skip generated files (`bun.lock`, migration snapshots, `.shots/`).
+3. Never `git diff <base>...HEAD` without a path, nor a path list whose output passes ~8k chars — split the call.
+
 **Handed a spec too** (a chunk uid — `fael chunk show <uid>` — a plan section, a ticket)? Every
 done criterion in it is a claim pass 2 verifies against the diff; one the diff leaves undone is a
 finding (major), however clean the code is.
@@ -60,7 +66,7 @@ Mandatory even on small changes. Skip only if the user says "don't question scop
 
 ## Pass 2 — Claims are not facts
 
-The diff is where you enter, not what you review.
+The diff is where you enter, not what you review (slices, per Pass 1).
 
 - **Walk the path end-to-end**: entry point → call sites → branches taken → state mutated → exit
   or side effect. Read the *unchanged* code on both sides. A diff is correct in isolation far
