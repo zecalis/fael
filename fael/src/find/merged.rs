@@ -24,9 +24,13 @@ pub fn mark(root: &Path, mut branch_of: BranchMap, rows: &[&Row]) -> BranchMap {
     let gate = common.filter(|c| !c.join("reftable").exists());
     let packed = gate
         .as_ref()
-        .and_then(|c| std::fs::read_to_string(c.join("packed-refs")).ok())
-        .map(|s| {
-            s.lines()
+        .and_then(|c| std::fs::read(c.join("packed-refs")).ok())
+        .map(|bytes| {
+            // bytes, not a String: one refname with a non-UTF-8 byte would
+            // otherwise blind the whole table and read every packed-only ref
+            // as dead (git resolves such a name; lossy keeps the other lines).
+            let text = String::from_utf8_lossy(&bytes);
+            text.lines()
                 .filter_map(|l| l.split_once(' '))
                 .map(|(_, name)| name.to_string())
                 .collect::<std::collections::HashSet<String>>()
@@ -51,28 +55,26 @@ pub fn mark(root: &Path, mut branch_of: BranchMap, rows: &[&Row]) -> BranchMap {
     branch_of
 }
 
-/// A live ref under the common dir — loose or packed — for the local branch
-/// or our fetch of it (`origin/<b>`). Both sides: a branch deleted locally
-/// but alive on `origin/` still proves its tip via `rev-parse`, so it must
-/// reach `is_merged` or lose its `(merged)` mark. Anything suspicious falls
-/// open (alive) so git decides and bytes stay identical.
+/// A live ref under the common dir — loose or packed — in any place
+/// `git rev-parse` resolves either probe `is_merged` makes, `<b>` and
+/// `origin/<b>`: gitrevisions' order is `$GIT_DIR/<p>`, `refs/<p>`,
+/// `refs/tags/<p>`, `refs/heads/<p>`, `refs/remotes/<p>`,
+/// `refs/remotes/<p>/HEAD`. A name in any of them proves the tip, so missing
+/// one loses a real `(merged)` mark — a tag sharing the deleted branch's name
+/// (fael:01M52HNB) and a branch named after a pseudo-ref such as FETCH_HEAD
+/// (fael:01M52J4N) each did. Pseudo-refs never reach `packed-refs`; a
+/// suspicious name falls open (alive) so git decides and bytes stay identical.
 fn ref_alive(common: &Path, packed: Option<&std::collections::HashSet<String>>, b: &str) -> bool {
     if b.is_empty() || b.starts_with('/') || b.contains("..") || b.contains('\0') {
         return true;
     }
-    if common.join("refs/heads").join(b).is_file() {
-        return true;
-    }
-    if common.join("refs/remotes/origin").join(b).is_file() {
-        return true;
-    }
-    let Some(set) = packed else {
-        return false;
-    };
-    // packed-refs without loose files: `set` holds refnames (`^peeled` lines
-    // have no space so `split_once` drops them; the `# pack-refs` header never
-    // matches a want).
-    set.contains(&format!("refs/heads/{b}")) || set.contains(&format!("refs/remotes/origin/{b}"))
+    let live = |w: &str| common.join(w).is_file() || packed.is_some_and(|set| set.contains(w));
+    [b, &format!("origin/{b}")].iter().any(|p| {
+        ["", "refs/", "refs/tags/", "refs/heads/", "refs/remotes/"]
+            .iter()
+            .any(|ns| live(&format!("{ns}{p}")))
+            || live(&format!("refs/remotes/{p}/HEAD"))
+    })
 }
 
 /// Sibling label to `(merged)` for handoff and issue rows whose code files moved since
