@@ -86,7 +86,7 @@ impl Started {
                 "\n# {label}{} ({})\nplan {} — {}",
                 c.title, c.uid, c.plan, c.plan_title
             );
-            let fields: Vec<String> = [("size", &c.size), ("model", &c.model_hint)]
+            let fields: Vec<String> = [("size", &c.size), ("model", &c.model)]
                 .iter()
                 .filter_map(|(k, v)| v.as_ref().map(|v| format!("{k} {v}")))
                 .chain(

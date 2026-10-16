@@ -20,7 +20,7 @@ fn chunk(uid: &str) -> Brief {
         title: format!("title {uid}"),
         brief: format!("brief {uid}"),
         size: None,
-        model_hint: None,
+        model: None,
         scope: None,
         plan: "x".into(),
         plan_title: "x".into(),

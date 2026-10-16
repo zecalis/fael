@@ -15,6 +15,7 @@ const CHUNK_KEYS: &[&str] = &[
     "state",
     "size",
     "model_hint",
+    "model",
     "scope",
     "ready",
     "blocked_by",

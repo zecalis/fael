@@ -39,7 +39,8 @@ pub struct Brief {
     pub title: String,
     pub brief: String,
     pub size: Option<String>,
-    pub model_hint: Option<String>,
+    /// the model this start runs: the run row's, else the approval's, else the hint
+    pub model: Option<String>,
     pub scope: Option<String>,
     /// `app/name` or `name`
     pub plan: String,
@@ -229,7 +230,7 @@ impl Store {
             )
             .map_err(err)?;
             unwait(&tx, r.id)?;
-            let mut b = brief(&tx, r.id, 1)?;
+            let mut b = brief(&tx, r.id, 1, Some(&run))?;
             b.resume = was;
             chunks.push(b);
         }
@@ -275,13 +276,14 @@ impl Store {
         let (id, _, state, ..) = lookup(&tx, key)?.ok_or(format!(
             "rejected: no chunk {key} — `fael board` lists every uid"
         ))?;
-        brief(&tx, id, u32::from(state == "running"))
+        brief(&tx, id, u32::from(state == "running"), None)
     }
 }
 
 /// `skip` = how many starts back the answers and notes count from: 1 inside a start (its
-/// own event is the newest), 0 for the start still to come.
-fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
+/// own event is the newest), 0 for the start still to come. `start` = this start's R:
+/// the brief names the model it runs; None = the next start's (latest run, approval, hint).
+fn brief(tx: &Transaction, id: i64, skip: u32, start: Option<&str>) -> Result<Brief, String> {
     let (mut b, pid, reads) = tx
         .query_row(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope,
@@ -296,7 +298,7 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
                     title: r.get(2)?,
                     brief: r.get(3)?,
                     size: r.get(4)?,
-                    model_hint: r.get(5)?,
+                    model: r.get(5)?,
                     scope: r.get(6)?,
                     plan: r.get(7)?,
                     plan_title: r.get(8)?,
@@ -312,6 +314,26 @@ fn brief(tx: &Transaction, id: i64, skip: u32) -> Result<Brief, String> {
             },
         )
         .map_err(err)?;
+    // the model the agent runs: this start's run row, else the latest run's, the
+    // approval's, the hint — a `--model` override or approval never prints stale
+    b.model = match start {
+        Some(r) => tx
+            .query_row(
+                "SELECT model FROM run WHERE start = ?1 AND chunk = ?2",
+                rusqlite::params![r, id],
+                |row| row.get(0),
+            )
+            .map_err(err)?,
+        None => tx
+            .query_row(
+                "SELECT COALESCE((SELECT model FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1),
+                                approved_model, model_hint)
+                 FROM chunk WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .map_err(err)?,
+    };
     b.sections = section::list(tx, pid)?;
     b.reads = reads
         .lines()
