@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn a_secret_never_lands_in_a_plan_section() {
         let mut s = Store::open_in_memory().unwrap();
-        s.new_plan("", "p", "P", "dev", NOW).unwrap();
+        s.new_plan("", "p", "P", "dev", None, NOW).unwrap();
         let key = format!("ghp_{}", "a".repeat(36));
         let e = s
             .conn

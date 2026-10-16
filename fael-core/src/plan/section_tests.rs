@@ -18,7 +18,7 @@ fn day(at: &str) -> String {
 
 fn plan() -> (Store, i64) {
     let mut s = Store::open_in_memory().unwrap();
-    s.new_plan("", "p", "P", "dev", NOW).unwrap();
+    s.new_plan("", "p", "P", "dev", None, NOW).unwrap();
     let id = s.plans().unwrap()[0].id;
     (s, id)
 }
@@ -209,7 +209,7 @@ only cli
 fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest() {
     use super::super::{Fields, Started};
     let (mut s, p) = plan();
-    s.new_plan("", "q", "Q", "dev", NOW).unwrap();
+    s.new_plan("", "q", "Q", "dev", None, NOW).unwrap();
     let q = s
         .plans()
         .unwrap()

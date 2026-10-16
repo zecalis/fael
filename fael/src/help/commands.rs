@@ -180,16 +180,19 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
     (
         "plan",
         "create a plan, export or edit its sections and chunks, park or finish it",
-        "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] | fael plan list | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
+        "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
      | fael plan park|unpark|done <plan>
     (a plan is sections and chunks in <git-common-dir>/fael/fael.db, no file;
      new: a plan whose chunks live in the db from the start (`fael chunk add --plan`),
      its text four skeleton sections (1 Goal, 2 Scope, 3 Done criteria, 4 Constraints);
-     list: one line per plan — the name export takes, its state, its title;
+     --parent <plan> nests it under an umbrella plan of the same app, one level (board
+     --json plans[].parent; the bill header's parent sets it, \"\" clears it);
+     list: one line per plan — the name export takes, its state, its title, and · parent P
+     when it is nested;
      export: every plan, or the one named (name or app/name), as markdown to stdout — uid,
      state and fields under each chunk, then the plan's sections in order, each under its
      heading with its key and the day it last changed; export <plan> --section <key>: that one section; export <plan>
-     --json: the plan as one bill (\"v\": 1) — rev, title, area, state, its
+     --json: the plan as one bill (\"v\": 1) — rev, title, area, parent, state, its
      sections ({key, title, body}) and a line per planned chunk (uid, label, title, brief,
      size, model, scope, reads, after); export --since <event-id>: the change feed
      for backup and fael-sync (\"v\": 1) — db_id, head (the next --since), the events

@@ -70,7 +70,7 @@ impl Args {
                 | "offset" | "text" | "edge" | "out" | "replace" | "with" | "plan" | "brief"
                 | "size" | "model" | "scope" | "after" | "run" | "on" | "until" | "pr" | "cost"
                 | "app" | "area" | "label" | "returns" | "check" | "issue" | "drop" | "section"
-                | "reads" | "option" | "worktree" | "verdict" | "review" => {
+                | "reads" | "option" | "worktree" | "verdict" | "review" | "parent" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("rejected: --{name} needs a value"))?;

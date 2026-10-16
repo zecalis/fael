@@ -19,6 +19,9 @@ pub struct Plan {
     /// always `db` (every plan's chunks live in the db): the app's board JSON v1 gates
     /// `chunk add --plan` on it
     pub truth: &'static str,
+    /// the umbrella plan of the same app (`plan new --parent`, one level); absent = top level
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
     /// state → chunks in it; an archived (done/parked) plan lists only this
     pub counts: BTreeMap<String, usize>,
 }
@@ -277,7 +280,7 @@ impl Store {
         let mut q = self
             .conn
             .prepare(
-                "SELECT id, app, name, title, area, state
+                "SELECT id, app, name, title, area, state, parent
                  FROM plan ORDER BY state IN ('done', 'parked'), app, name",
             )
             .map_err(err)?;
@@ -291,6 +294,7 @@ impl Store {
                 name,
                 area: r.get(4)?,
                 state: r.get(5)?,
+                parent: r.get(6)?,
                 truth: "db",
             })
         })

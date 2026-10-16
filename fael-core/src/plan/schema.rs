@@ -60,7 +60,9 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// clean|fixed|failed` — apart from `verdict`, which is intake triage (issue 01M4XN3S).
 /// `chunk.client_hint`: the client the planner picked (`chunk add|edit --client`), which
 /// `approve` falls back to; epoch v8 dropped an unwired one (issue 01M4XM98).
+/// `plan.parent`: the name of the umbrella plan of the same app, one level (issue 01M51KW0).
 pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
+    ("plan", "parent", "TEXT"),
     ("chunk", "client_hint", "TEXT"),
     ("chunk", "reads", "TEXT"),
     ("chunk", "wait_options", "TEXT"),

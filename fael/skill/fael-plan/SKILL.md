@@ -109,7 +109,7 @@ fael find --files <paths>         # open issues and decisions on the files the i
 ### The plan
 
 ```bash
-fael plan new <name> "<title>" [--app <app>] [--area dev|marketing]
+fael plan new <name> "<title>" [--app <app>] [--area dev|marketing] [--parent <plan>]
 ```
 
 It writes the plan's doc into fael.db — four skeleton sections, keys `1` Goal, `2` Scope, `3` Done

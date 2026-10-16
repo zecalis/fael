@@ -32,7 +32,9 @@ const CHUNK_KEYS: &[&str] = &[
 ];
 /// `options`: the answers `chunk wait --option` offers, `[]` = none (issue 01M4NWFS)
 const WAIT_KEYS: &[&str] = &["on", "text", "until", "options"];
-/// `truth` is always `db` (epoch v8): the app gates `chunk add --plan` on it
+/// `truth` is always `db` (epoch v8): the app gates `chunk add --plan` on it. `parent`
+/// (issue 01M51KW0) is the one optional key: an umbrella plan of the same app, one level,
+/// absent = top level.
 const PLAN_KEYS: &[&str] = &["app", "name", "title", "area", "state", "truth", "counts"];
 const RUN_KEYS: &[&str] = &[
     "id",
@@ -157,6 +159,24 @@ fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
     k
 }
 
+/// A plan carries `PLAN_KEYS` and, when nested, a `parent` that is a top-level plan of its app.
+fn plan_shape(project: &Value, pl: &Value) {
+    let mut k = keys(pl);
+    k.retain(|k| *k != "parent");
+    assert_eq!(k, PLAN_KEYS, "{pl}");
+    if let Some(par) = pl.get("parent") {
+        let up = project["plans"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|q| q["app"] == pl["app"] && q["name"] == *par);
+        assert!(
+            up.is_some_and(|q| q.get("parent").is_none()),
+            "a parent is a top-level plan of the same app: {pl}"
+        );
+    }
+}
+
 #[test]
 fn board_v1_shape() {
     let b = board();
@@ -181,7 +201,7 @@ fn board_v1_shape() {
             }
         }
         for pl in p["plans"].as_array().unwrap() {
-            assert_eq!(keys(pl), PLAN_KEYS, "{pl}");
+            plan_shape(p, pl);
             if matches!(pl["state"].as_str(), Some("done" | "parked")) {
                 assert!(
                     !p["chunks"]
