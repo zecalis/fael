@@ -28,7 +28,7 @@ mod store;
 pub use agent::{Copy, Outside, RunRow};
 pub use apply::Op;
 pub use bill::Bill;
-pub use board::{Board, Chunk as BoardChunk, Plan as BoardPlan};
+pub use board::{Blocker, Board, Chunk as BoardChunk, Plan as BoardPlan};
 pub use board_math::{overlap, overlaps};
 pub use brief::rules;
 pub use chunk::{Fields, Here};
