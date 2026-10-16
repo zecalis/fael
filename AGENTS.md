@@ -78,22 +78,16 @@ chunk names. Don't file a ledger row for a count that isn't ready.
 
 ## Git
 
-Follow the repo-wide Git workflow. Validate before `push pr`:
-
-```text
-cargo fmt --all --check
-RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked
-RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc --no-default-features
-scripts/file-size.sh
-tests
-```
-
-CI lint runs clippy with `-D warnings`; bare `cargo clippy` exits 0 on warnings, so a
-local pass without the flag proves nothing. Check each command by its own exit code.
+Follow the repo-wide Git workflow. `push pr` is `git fetch && git rebase origin/main` →
+`/fael-review` → `git ship` → report the PR number. `git ship` runs the clean, merged-PR and
+rebase checks, then `scripts/gate.sh` (fmt, clippy with `-D warnings` on host and Windows
+target, `file-size.sh`, tests — one ✓/✗ line each, output only for a failing step), pushes
+and opens or edits the PR. Repo rules for it live in `.fael/worktree.json` (`gate`,
+`ship.regen`). Run `scripts/gate.sh` alone to validate without shipping.
 
 Windows CI runs on `main` and on wave PRs (head `plan/**`), not on other PRs. A PR that touches paths, golden files,
 process spawning, env vars or time-dependent tests runs it and reports its result before
-review — `gh workflow run ci.yml --ref <branch>` after `push pr`, then
+review — `gh workflow run ci.yml --ref <branch>` after `git ship`, then
 `gh run watch <id> --exit-status` — and says pass, or fail with the failing test, in the
 PR body and the chunk's done text.
 

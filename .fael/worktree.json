@@ -1,0 +1,1 @@
+{"gate": "scripts/gate.sh", "ship": {"regen": {"Cargo.lock": "cargo metadata --format-version 1 >/dev/null"}}}
