@@ -28,6 +28,7 @@ pub(crate) fn pull(
     let log = base;
     let mut found: Vec<core::Row> = vec![];
     let mut errors = vec![];
+    let mut chunks = String::new();
     for id in ids {
         if id.contains('/') {
             errors.push(format!(
@@ -44,7 +45,10 @@ pub(crate) fn pull(
         match refs::resolve_wide(&log, id) {
             Wide::One(row) => found.push(*row),
             Wide::Many(rows) => errors.push(super::reject_many(id, &rows)),
-            Wide::Missing => errors.push(super::reject_missing(r, &log, id)),
+            Wide::Missing => match super::owner::chunk_here(r, id) {
+                Some(c) => chunks.push_str(&c),
+                None => errors.push(super::reject_missing(r, &log, id)),
+            },
         }
     }
     if json {
@@ -66,7 +70,7 @@ pub(crate) fn pull(
     let text = journal::tag(
         core::render_full_page(&log, &rows, r.cfg.find_tokens, cut),
         &tags,
-    );
+    ) + &chunks;
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown = found.iter().take(n).map(|r| r.id.clone()).collect();
     Pulled {

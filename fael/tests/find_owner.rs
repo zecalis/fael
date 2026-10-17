@@ -59,18 +59,21 @@ fn words_as_separate_args_are_one_text_query() {
 }
 
 #[test]
-fn a_chunk_uid_names_the_chunk() {
+fn a_chunk_uid_shows_the_chunk() {
     let d = repo();
     let (ok, uid, err) = fael(&d, &["chunk", "add", "Post", "--brief", "Write it"]);
     assert!(ok, "{err}");
     let uid = uid.trim();
-    let (ok, out, err) = fael(&d, &["find", uid]);
-    assert!(!ok, "{out}");
-    let all = format!("{out}{err}");
-    assert!(
-        all.contains(&format!("{uid} is a chunk here — `fael chunk show {uid}`")),
-        "{all}"
-    );
+    let row = add(&d, "a row beside the chunk");
+    // alone, and in a batch beside a row: the brief prints, no reject
+    for args in [vec!["find", uid], vec!["find", uid, &row]] {
+        let (ok, out, err) = fael(&d, &args);
+        assert!(ok, "{out}{err}");
+        assert!(
+            out.contains(&format!("# Post ({uid})")) && out.contains("Write it"),
+            "{out}"
+        );
+    }
 }
 
 #[test]

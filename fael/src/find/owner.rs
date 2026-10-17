@@ -39,10 +39,27 @@ pub(crate) fn owner(r: &Repo, tok: &str) -> Option<String> {
 }
 
 fn is_chunk(r: &Repo, tok: &str) -> bool {
+    store(r).is_some_and(|s| s.is_chunk(tok))
+}
+
+fn store(r: &Repo) -> Option<core::plan::Store> {
     Some(crate::plan::db(r))
         .filter(|p| p.exists())
         .and_then(|p| core::plan::Store::open(&p).ok())
-        .is_some_and(|s| s.is_chunk(tok))
+}
+
+/// A chunk uid of this repo passed to find: its brief, as MCP `chunk show` prints it. The
+/// "is a chunk here" hint alone still cost agents a round (opencode, 2026-10-17).
+pub(crate) fn chunk_here(r: &Repo, tok: &str) -> Option<String> {
+    store(r)?.show(tok).ok().map(|b| brief(&b))
+}
+
+/// The chunk-show text: title, uid, plan, brief.
+pub(crate) fn brief(b: &core::plan::Brief) -> String {
+    format!(
+        "# {} ({})\nplan {} — {}\n\n{}\n",
+        b.title, b.uid, b.plan, b.plan_title, b.brief
+    )
 }
 
 /// The board's repos, then every distinct `"repo"` in usage — scratch repos and paths that
