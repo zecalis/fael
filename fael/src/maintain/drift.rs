@@ -92,15 +92,21 @@ fn parse(out: &str) -> Vec<(i64, Vec<&str>)> {
 }
 
 /// Commits at or after the row's birth second that touch one of its real
-/// files (a directory entry covers what sits under it). ponytail: paths are
-/// matched as written — a renamed file counts from its new name on only.
+/// files (a directory entry covers what sits under it). A row that names code
+/// counts its code only: docs like `docs/architecture.md` move with nearly
+/// every PR and would drift every decision filed against them. ponytail: paths
+/// are matched as written — a renamed file counts from its new name on only.
 fn moved(r: &core::Row, birth_ms: i64, commits: &[(i64, Vec<&str>)]) -> usize {
-    let files: Vec<&str> = r
+    let mut files: Vec<&str> = r
         .files
         .iter()
         .filter(|f| !crate::hook::is_anchor(f))
         .map(|f| f.trim_end_matches('/'))
         .collect();
+    let is_doc = |f: &&str| f.ends_with(".md");
+    if files.iter().any(|f| !is_doc(f)) {
+        files.retain(|f| !is_doc(f));
+    }
     let hits = |p: &str| {
         files
             .iter()
@@ -118,5 +124,22 @@ fn headline(r: &core::Row) -> String {
     match t.char_indices().nth(60) {
         Some((i, _)) => format!("{}…", &t[..i]),
         None => t.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn docs_count_only_when_the_row_names_no_code() {
+        let row = |files: &[&str]| core::Row {
+            files: files.iter().map(|f| f.to_string()).collect(),
+            ..Default::default()
+        };
+        let commits = vec![(1, vec!["docs/a.md"]), (1, vec!["src/x.rs"])];
+        assert_eq!(moved(&row(&["docs/a.md", "src/x.rs"]), 0, &commits), 1);
+        assert_eq!(moved(&row(&["docs/a.md"]), 0, &commits), 1);
+        assert_eq!(moved(&row(&["docs/", "src/x.rs"]), 0, &commits), 2);
     }
 }

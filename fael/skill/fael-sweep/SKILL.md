@@ -33,7 +33,11 @@ Nothing untriaged → say so in one line and go to the drifted pass (step 7).
 
 ## 2. Judge each issue against the code
 
-Per issue: `fael find <id>` for the body, then open the files and symbols it names. Decide
+**Commits first.** Per issue, before any file: `git log origin/main --oneline --grep=<id>`.
+A fix commit that names the id → `drop?` (already fixed), that commit as the evidence; don't
+open the code.
+
+Per issue left: `fael find <id>` for the body, then open the files and symbols it names. Decide
 from what the code does now, not from the title:
 
 | Verdict | When |
@@ -123,7 +127,8 @@ where the owner reads it and accepts).
 
 ## 7. Drifted pass — decisions and notes, one file at a time
 
-A decision or note whose files took 10+ commits since it was written is `drifted`: the code
+A decision or note whose files took 10+ commits since it was written is `drifted` (`.md`
+files count only for a row that names no code): the code
 moved on, so the row may now restate it, contradict it, or still hold. Settle each one here.
 Same rule as above: you read code and write ledger rows — never code, never a delete
 (no `fael purge`).
@@ -140,9 +145,14 @@ git rev-list --count --since=<row at> HEAD -- <file>
 
 Ties go to the first listed. One file, one group, however many rows.
 
-**One sub-agent per file** (haiku is enough), files in parallel. It gets only:
+A row written `from: user` (`fael find <id> --json` shows `"from":"user"`) is always **ask**:
+the user said it; only the user retires it. Take it out before anything is judged.
 
-- that file's rows: `fael find <id>` for each body;
+**Who judges.** A sub-agent costs its start-up, not its reads, so spend one only on a file
+with 3+ rows. Files with fewer rows you judge yourself, or pack all of them into one
+sub-agent. Never one sub-agent per one-row file. A sub-agent (haiku is enough) gets only:
+
+- its files' rows: `fael find <id>` for each body;
 - what changed since each row: `git log --since=<oldest row at> -p -- <file>`, trimmed to the
   hunks that touch what the rows name; the log too long to read → the file at HEAD instead.
 
@@ -155,9 +165,6 @@ Never the whole ledger, never other files' rows. It returns one verdict per row:
 | **supersede** | wrong now; one passage changes | `fael add <kind> --supersedes <id> --replace "<old passage>" --with "<new>"` (no text: it keeps the row's text, title, files, key) |
 | | wrong now; most of it changes | `fael add <kind> "<new text>" --title "<t>" --files <same files> [--key <same key>] --supersedes <id>` |
 | **ask** | unsure — the owner decides | none |
-
-A row written `from: user` (`fael find <id> --json` shows `"from":"user"`) is always **ask**:
-the user said it; only the user retires it.
 
 The sub-agent judges; you run the commands. Before you do, open the place each **close** cites:
 a test string, a comment or a fixture is not the code holding it — that row is a bump.
