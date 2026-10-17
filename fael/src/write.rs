@@ -13,6 +13,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 pub(crate) mod arity;
+mod cap;
 mod from;
 mod paths;
 mod recall;
@@ -60,7 +61,7 @@ pub(crate) fn prepare(
     } = opts;
     let mut files = core::normalize_files(files_arg, &r.cwd, &r.root)?;
     let mut warns = root_relative(r, files_arg, &mut files);
-    let log = crate::read(r);
+    let mut log = crate::read(r);
     if files.is_empty() {
         files = crate::session::derive(&r.root, &log);
         // a long session's edits would push the row at every one of them:
@@ -140,6 +141,7 @@ pub(crate) fn prepare(
     if !force {
         // reject before the write, never warn after it: nobody went back
         core::add_gate(&row, &log, &r.cfg, evaluated.heal.supersedes.as_deref())?;
+        cap::check(r, &mut log, &row, evaluated.heal.supersedes.as_deref())?;
     }
     let out = Pending {
         row,

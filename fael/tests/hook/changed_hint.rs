@@ -24,7 +24,7 @@ fn edit(d: &Path, session: &str, file: &str) -> String {
 
 /// The full id `add` just filed (its stdout starts with it).
 fn add(d: &Path, kind: &str, text: &str, files: &str) -> String {
-    let (ok, out, err) = fael(d, &["add", kind, text, "--files", files], "");
+    let (ok, out, err) = fael(d, &["add", kind, text, "--files", files, "--force"], "");
     assert!(ok, "{err}");
     out.split_whitespace().next().unwrap().to_string()
 }

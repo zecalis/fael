@@ -156,7 +156,11 @@ fn a_pull_after_a_cap_cut_is_the_agents_own() {
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     for i in 0..7 {
         let t = format!("decision {i}");
-        let (ok, _, err) = fael(&d, &["add", "decision", &t, "--files", "src/a.rs"], "");
+        let (ok, _, err) = fael(
+            &d,
+            &["add", "decision", &t, "--files", "src/a.rs", "--force"],
+            "",
+        );
         assert!(ok, "{err}");
     }
     call(&d, "edit", "s1", r#""files":["src/a.rs"]"#);
