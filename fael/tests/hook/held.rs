@@ -149,7 +149,7 @@ fn a_from_user_row_says_ask_the_user() {
     edit(&d, "src/a.rs");
     stop(&d);
     let out = hook(&d, "edit", "src/c.rs");
-    assert_eq!(out.matches("ask them before").count(), 1, "{out}");
+    assert_eq!(out.matches("ask them only before").count(), 1, "{out}");
 }
 
 #[test]

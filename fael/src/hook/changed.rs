@@ -334,10 +334,13 @@ fn close_hint(log: &core::Log, issues: &[&core::Row]) -> String {
 }
 
 /// The user's call is theirs to change: an ask over a `from: user` row tells
-/// the agent to ask before it re-files or closes it.
+/// the agent to ask before it re-files or closes it. A bump keeps the text,
+/// so the agent that checked it still holds bumps it without asking.
 pub(crate) fn user_note<'a>(mut rows: impl Iterator<Item = &'a core::Row>) -> &'static str {
     match rows.any(core::Row::from_user) {
-        true => " · the row is the user's call: ask them before you re-file or close it",
+        true => {
+            " · the row is the user's call: still true → bump it yourself, ask them only before you re-file or close it"
+        }
         false => "",
     }
 }
