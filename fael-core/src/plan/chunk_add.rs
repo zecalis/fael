@@ -31,6 +31,13 @@ pub(super) fn add_in(
             [],
         )
         .map_err(err)?;
+        // a done/parked inbox hides every chunk from the board; heal it
+        tx.execute(
+            "UPDATE plan SET state = 'active'
+             WHERE app = '' AND name = 'inbox' AND state IN ('done', 'parked')",
+            [],
+        )
+        .map_err(err)?;
     }
     let pid: i64 = tx
         .query_row(

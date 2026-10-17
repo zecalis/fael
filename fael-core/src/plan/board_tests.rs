@@ -170,3 +170,34 @@ fn touched_is_the_claimed_diff_absent_until_claimed() {
         Some(vec!["src/a.rs".to_string(), "docs/b.md".to_string()])
     );
 }
+
+/// `plan done|park inbox` would hide every inbox chunk from the board: refused.
+#[test]
+fn inbox_plan_cannot_leave_active() {
+    let mut s = Store::open_in_memory().unwrap();
+    scoped(&mut s, "a", &[], &[]);
+    let id: i64 = s
+        .conn
+        .query_row("SELECT id FROM plan WHERE name = 'inbox'", [], |r| r.get(0))
+        .unwrap();
+    for to in ["done", "parked"] {
+        let e = s.plan_state(id, to, NOW).unwrap_err();
+        assert!(e.starts_with("rejected: inbox"), "{e}");
+    }
+}
+
+/// A done inbox (data from before the refusal) heals on the next add.
+#[test]
+fn add_heals_a_done_inbox() {
+    let mut s = Store::open_in_memory().unwrap();
+    scoped(&mut s, "a", &[], &[]);
+    s.conn
+        .execute("UPDATE plan SET state = 'done' WHERE name = 'inbox'", [])
+        .unwrap();
+    let b = scoped(&mut s, "b", &[], &[]);
+    let bd = s.board("2026-10-11", "2026-10-11T09:00:00Z").unwrap();
+    assert!(
+        bd.chunks.iter().any(|c| c.uid == b),
+        "inbox back on the board"
+    );
+}
