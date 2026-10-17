@@ -244,6 +244,11 @@ impl Store {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .map_err(err)?;
+        if app.is_empty() && name == "inbox" {
+            return Err(
+                "rejected: plan inbox stays active — it holds every unplanned chunk".into(),
+            );
+        }
         let from_ok = match to {
             "active" => state == "parked",
             "parked" => matches!(state.as_str(), "active" | "blocked"),
