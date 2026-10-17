@@ -19,7 +19,8 @@ use fael_core::{self as core, Filter, Log, Row};
 pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     let r = super::repo()?;
     // the union read tags journal-only rows with their stamped branch
-    let (log, branch_of) = super::journal::read(&r);
+    let (mut log, branch_of) = super::journal::read(&r);
+    super::hook::mark_dormant(&r, &mut log);
     // an id-shaped query is an id lookup, never text — unless `--text`
     // forces a text search (the escape hatch for the old fallback)
     let forced = a.one("text");

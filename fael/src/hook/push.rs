@@ -3,7 +3,7 @@
 //! and say each row once per session.
 
 use super::asks::{UsageMeta, hook_meta};
-use super::changed::{Ask, Blobs, edit_hint, read_seen};
+use super::changed::{self, Ask, Blobs, edit_hint, read_seen};
 use super::check;
 use super::decision;
 use super::protocol::{Event, ctx};
@@ -192,6 +192,13 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     // is not this edit's to close) taken before the seen filter: a Read before
     // the Edit already said the row, yet the edit still offers its retire.
     let t0: Vec<(&core::Row, usize)> = if edit { tiered.clone() } else { vec![] };
+    // decision 01M5528X: a dormant row is never pushed — t0 above keeps the one
+    // ask an edit earns. ponytail: hashes each candidate's files, short-circuits
+    // on the first match; cache per repo if the 5 ms push ceiling says so
+    let mut blobs = Blobs::new();
+    tiered.retain(|(r, _)| {
+        !changed::dormant(r, &c.repo.root, &al, &mut blobs, changed::PUSH_MAX_BYTES)
+    });
     // a row already pushed into this context window is still there — say it
     // once. The lock spans read → append, so a batch of parallel reads queues
     // up behind the first instead of each pushing the same row.
@@ -224,7 +231,6 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let sel = hub_select(tiered, said, &focus, &policy, &mut out, &files);
     let notes = stashed(&c, &files);
     let has_notes = !notes.is_empty();
-    let mut blobs = Blobs::new();
     let (body, n, bodies) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
         &sel,

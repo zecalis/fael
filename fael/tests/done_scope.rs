@@ -277,8 +277,11 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
         id.trim_matches(|c: char| !c.is_ascii_alphanumeric())
             .to_string()
     };
-    let ids: Vec<String> = (0..6).map(|_| row("decision", "w/a.txt")).collect();
+    // on two files, so touching one leaves them live; the one-file row goes
+    // dormant and is left out (decision 01M5528X)
+    let ids: Vec<String> = (0..6).map(|_| row("decision", "w/a.txt,w/b.txt")).collect();
     let (issue, other) = (row("issue", "w/a.txt"), row("note", "w/b.txt"));
+    let asleep = row("decision", "w/a.txt");
     // a chunk whose diff touches w/a.txt
     let (u, v) = (add("u"), add("v"));
     f(&["chunk", "start", &u]);
@@ -296,7 +299,7 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     ] {
         assert!(out.contains(&want), "{want}: {out}");
     }
-    for id in [&ids[5], &issue, &other] {
+    for id in [&ids[5], &issue, &other, &asleep] {
         assert!(said_id(&out, id).is_none(), "{id}: {out}");
     }
     // a chunk whose diff touches nothing with rows: nothing extra

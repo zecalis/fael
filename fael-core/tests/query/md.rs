@@ -31,6 +31,7 @@ fn log() -> Log {
             ..Row::default()
         }],
         warnings: vec![],
+        dormant: Default::default(),
     }
 }
 

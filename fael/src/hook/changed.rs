@@ -103,6 +103,54 @@ pub(crate) fn moved(
     }
 }
 
+/// Dormant (decision 01M5528X): the row has an `fh` map and every file in it
+/// is on disk (through renames) and differs from its stamp. One file that still
+/// matches, or one with no verdict (gone, unreadable, over `cap`, a rename
+/// cycle), keeps the row live — all, not any: unknown is never changed, and a
+/// file the row is still true of may be the one that matches. A bare bump
+/// restamps `fh`, so "no bump since" needs no event scan. An open issue is a
+/// to-do, not a claim the code can outgrow — it keeps the edit ask and the
+/// `(changed)` label instead — and a claimed row (`held`) is someone's work in
+/// progress: neither is ever dormant.
+pub(crate) fn dormant(
+    r: &core::Row,
+    root: &Path,
+    al: &core::Aliases,
+    blobs: &mut Blobs,
+    cap: u64,
+) -> bool {
+    let Some(fh) = r.file_hashes().filter(|fh| !fh.is_empty()) else {
+        return false;
+    };
+    r.kind != "issue"
+        && r.held().is_none()
+        && fh.iter().all(|(f, v)| {
+            let (Some(want), Some(target)) = (v.as_str(), resolve(al, root, f)) else {
+                return false;
+            };
+            file_verdict(want, &target, root, blobs, cap) == Some(true)
+        })
+}
+
+/// Fill `log.dormant` for a pull (`find`, `kickoff`, session start, chunk
+/// start): every open row checked at the stamp-side cap, one blob cache.
+pub(crate) fn mark_dormant(r: &crate::Repo, log: &mut core::Log) {
+    let al = crate::aliases::load(r, log, false);
+    let hide: HashSet<&str> = core::closed(log)
+        .union(&core::superseded(log))
+        .copied()
+        .collect();
+    let mut blobs = Blobs::new();
+    let ids: HashSet<String> = log
+        .rows
+        .iter()
+        .filter(|w| !hide.contains(w.id.as_str()))
+        .filter(|w| dormant(w, &r.root, &al, &mut blobs, STAMP_MAX_BYTES))
+        .map(|w| w.id.clone())
+        .collect();
+    log.dormant = ids;
+}
+
 /// `only` narrows the row to the stamped files that live at one of these
 /// paths now (an edit's files); empty reads every stamped file. A row with no
 /// stamp among them is unknown. `cap` bounds one hashed file: the push path

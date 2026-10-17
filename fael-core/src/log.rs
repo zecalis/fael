@@ -48,6 +48,10 @@ pub struct Log {
     pub closes: Vec<Row>,
     /// `file:line: what` for every line that was skipped — never fatal.
     pub warnings: Vec<String>,
+    /// Ids of dormant rows (decision 01M5528X): derived from the disk by the
+    /// adapter on a pull (`find`, `kickoff`, session start), never stored and
+    /// never read from a file. Empty = nothing marked — every other read.
+    pub dormant: HashSet<String>,
 }
 
 /// Read every log file under `<fael>/log/`. Missing dir = empty log. Never errors.

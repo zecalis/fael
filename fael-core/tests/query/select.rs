@@ -374,6 +374,7 @@ fn kickoff_keeps_rows_whose_files_were_renamed() {
         rows: vec![row("A0000000000000000000000010", "note", &["a.rs"], None)],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let al = Aliases::from_pairs(vec![("a.rs".to_string(), "b.rs".to_string())]);
     assert!(

@@ -211,13 +211,15 @@ pub fn page(rows: Vec<&Row>, limit: Option<usize>, offset: usize) -> (Vec<&Row>,
     (page, total)
 }
 
-/// Rows matching `f`, ranked most actionable first. Closed and superseded
-/// rows are hidden unless `f.all`.
+/// Rows matching `f`, ranked most actionable first. Closed, superseded and
+/// dormant (`log.dormant`) rows are hidden unless `f.all`.
 pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
     let hide: HashSet<&str> = if f.all {
         HashSet::new()
     } else {
-        closed(log).union(&superseded(log)).copied().collect()
+        let mut h: HashSet<&str> = closed(log).union(&superseded(log)).copied().collect();
+        h.extend(log.dormant.iter().map(String::as_str));
+        h
     };
     let text = f.text.as_ref().map(|t| t.to_lowercase());
     let revisit = f.revisit.as_ref().map(|q| q.to_lowercase());

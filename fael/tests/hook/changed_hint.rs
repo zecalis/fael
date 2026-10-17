@@ -147,7 +147,9 @@ fn a_decision_earns_no_edit_ask() {
     strip_fh(&d, "predates hashes");
     std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     let out = edit(&d, "s1", "src/a.rs");
-    assert!(out.contains("retry uses backoff here"), "{out}");
+    // the changed decision is dormant (decision 01M5528X): not pushed at all
+    assert!(!out.contains("retry uses backoff here"), "{out}");
+    assert!(out.contains("predates hashes"), "{out}");
     for banned in ["changed since", "does the code now say", "fael close"] {
         assert!(!out.contains(banned), "{banned} in:\n{out}");
     }
@@ -234,10 +236,12 @@ fn a_hub_of_decisions_earns_no_ask() {
             "src/a.rs",
         );
     }
-    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
-    let out = edit(&d, "s1", "src/a.rs");
+    let out = edit(&d, "s0", "src/a.rs");
     assert!(out.contains("3 of 14"), "{out}");
     assert!(named(&out).is_empty(), "{out}");
+    // every one changed unjudged: all dormant, the push says nothing
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    assert_eq!(edit_or_silent(&d, "s1", "src/a.rs"), "");
 }
 
 /// A path renamed away and then recreated is read as itself, not through the
@@ -360,4 +364,23 @@ fn file_over_the_push_cap_is_unknown_not_changed() {
     let out = edit(&d, "s1", "src/big.rs");
     assert!(!out.contains("changed since"), "{out}");
     assert_close_names(&out, &id);
+}
+
+/// Decision 01M5528X, every file or none: a row goes dormant only when each
+/// stamped file is on disk and differs. A gone file has no verdict, so a row
+/// whose other file changed stays live (unknown is never changed).
+#[test]
+fn a_row_with_a_gone_file_never_goes_dormant() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
+    std::fs::write(d.join("src/g.rs"), "// g\n").unwrap();
+    add(&d, "decision", "pair holds", "src/a.rs,src/g.rs");
+    add(&d, "decision", "lone holds", "src/a.rs");
+    std::fs::remove_file(d.join("src/g.rs")).unwrap();
+    std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
+    let out = edit(&d, "s1", "src/a.rs");
+    assert!(
+        out.contains("pair holds") && !out.contains("lone holds"),
+        "{out}"
+    );
 }

@@ -207,6 +207,8 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
             " (closed)"
         } else if restored.contains(r.id.as_str()) {
             " (restored)"
+        } else if log.dormant.contains(&r.id) {
+            " (dormant)"
         } else {
             ""
         };
