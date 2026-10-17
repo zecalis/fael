@@ -55,7 +55,21 @@ pub(crate) fn prompt(e: &Event) -> Reply {
     }
     let list: Vec<String> = new
         .iter()
-        .map(|(k, words)| format!("{} ({}, via \"{}\")", k.key, k.count, words.join(" ")))
+        .map(|(k, words)| {
+            // explicit (`#key` / whole key typed) vs a head-word hit from plan
+            // prose: the latter is a weak pointer — judge before the lookup.
+            let conf = if core::names_key(&typed(text), &k.key) {
+                "explicit"
+            } else {
+                "weak head-only"
+            };
+            format!(
+                "{} ({}, via \"{}\", {conf})",
+                k.key,
+                k.count,
+                words.join(" ")
+            )
+        })
         .collect();
     out.say(Line {
         kind: Kind::Pointer {

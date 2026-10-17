@@ -219,7 +219,7 @@ fn opencode_prompt_points_at_named_key_once() {
     let (ok, out, _) = ask(S, "is there credit ledger code yet?");
     // neutral prints the Reply JSON-escaped, like the claude test's shape
     assert!(
-        ok && out.contains("vela:credit-ledger (1, via \\\"credit ledger\\\")"),
+        ok && out.contains("vela:credit-ledger (1, via \\\"credit ledger\\\", weak head-only)"),
         "{out}"
     );
     // pointer only — the row itself never rides the prompt

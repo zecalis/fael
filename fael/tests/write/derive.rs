@@ -62,7 +62,7 @@ fn mcp_add_without_files_derives_too() {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("mcp")
         .env("FAEL_STATE_DIR", d.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .current_dir(&d)

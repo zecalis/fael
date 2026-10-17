@@ -64,7 +64,7 @@ fn reject_mcp_counts_once_as_a_call() {
         .arg("mcp")
         .env("FAEL_STATE_DIR", d.join("state"))
         .env_remove("FAEL_SESSION")
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_THREAD_ID")
         .current_dir(&d)
         .stdin(Stdio::piped())

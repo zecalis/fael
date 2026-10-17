@@ -105,7 +105,7 @@ fn fael_at_env(
     // (an OpenCode/Codex shell exports FAEL_SESSION/CODEX_THREAD_ID) —
     // tests that file inside a session say so in `envs`
     c.env_remove("FAEL_SESSION")
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_BURST_MS");
     for (k, v) in envs {

@@ -50,7 +50,7 @@ fn fael_as(
     c.env_remove("CODEX_THREAD_ID");
     match session {
         Some(s) => c.env("CLAUDE_CODE_SESSION_ID", s),
-        None => c.env_remove("CLAUDE_CODE_SESSION_ID"),
+        None => c.env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID"),
     };
     if !stdin.is_empty() {
         c.stdin(Stdio::piped());

@@ -13,7 +13,7 @@ fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
     c.args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", root.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID");
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID");
     if !stdin.is_empty() {
         c.stdin(Stdio::piped());
     }

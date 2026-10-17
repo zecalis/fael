@@ -37,7 +37,7 @@ fn fael_env(
     c.args(args).current_dir(dir);
     state_env(&mut c, dir);
     c.env_remove("FAEL_SESSION");
-    c.env_remove("CLAUDE_CODE_SESSION_ID");
+    c.env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID");
     c.env_remove("CODEX_THREAD_ID");
     c.env_remove("FAEL_BURST_MS");
     for (k, v) in envs {

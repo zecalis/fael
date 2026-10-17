@@ -5,8 +5,9 @@
 use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
+use super::holder::{busy, holder, holder_detail, members, ready_paired};
 use super::lookup::lookup;
-use super::ready::{Ready, ready_in};
+use super::ready::Ready;
 use super::section::{self, Row as Section};
 use super::store::{Store, err};
 use rusqlite::{OptionalExtension, Transaction, params};
@@ -80,22 +81,6 @@ pub struct Started {
     pub chunks: Vec<Brief>,
 }
 
-/// The chunk and every chunk a `pair` edge joins to it, in plan order.
-fn members(tx: &Transaction, id: i64) -> Result<Vec<String>, String> {
-    let mut q = tx
-        .prepare(
-            "SELECT c.uid FROM chunk c WHERE c.id = ?1 OR c.id IN (
-               SELECT dst FROM edge WHERE src = ?1 AND kind = 'pair'
-               UNION SELECT src FROM edge WHERE dst = ?1 AND kind = 'pair')
-             ORDER BY c.plan, c.seq",
-        )
-        .map_err(err)?;
-    q.query_map([id], |r| r.get(0))
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)
-}
-
 fn prev(tx: &Transaction, id: i64) -> Result<Option<Prev>, String> {
     tx.query_row(
         "SELECT start, client, session, worktree, branch, started, last_seen
@@ -117,17 +102,65 @@ fn prev(tx: &Transaction, id: i64) -> Result<Option<Prev>, String> {
     .map_err(err)
 }
 
-/// Who holds a running chunk now: its live run, if any.
-fn holder(tx: &Transaction, id: i64) -> Result<Option<String>, String> {
-    tx.query_row(
-        "SELECT start || ' (' || COALESCE(client, 'agent') || ') in ' || COALESCE(worktree, '?')
-                || COALESCE(' on ' || branch, '') || ' since ' || started
-         FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
-        [id],
-        |r| r.get(0),
-    )
-    .optional()
-    .map_err(err)
+/// A reused R is rejected: one R per start.
+fn check_fresh(tx: &Transaction, run: &str) -> Result<(), String> {
+    let reused: bool = tx
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM run WHERE start = ?1)",
+            [run],
+            |r| r.get(0),
+        )
+        .map_err(err)?;
+    if reused {
+        return Err(format!(
+            "rejected: run {run} was already used — one R per start"
+        ));
+    }
+    Ok(())
+}
+
+/// A retry from the session holding the chunk: the live brief again, not a
+/// takeover. `None` = another session holds it (or none does) — the caller
+/// runs the usual held/blocked checks.
+fn reuse_live(
+    tx: &Transaction,
+    first: &super::chunk::Row,
+    ms: &[String],
+    session: Option<&str>,
+) -> Result<Option<Started>, String> {
+    let Some(session) = session else { return Ok(None) };
+    if first.state != State::Running {
+        return Ok(None);
+    }
+    let Some((live, held)) = holder_detail(tx, first.id)? else {
+        return Ok(None);
+    };
+    if held.as_deref() != Some(session) {
+        return Ok(None);
+    }
+    let same = ms.iter().all(|m| {
+        row(tx, m).is_ok_and(|r| {
+            r.state != State::Running
+                || tx
+                    .query_row(
+                        "SELECT start FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
+                        [r.id],
+                        |q| q.get::<_, String>(0),
+                    )
+                    .is_ok_and(|s| s == live)
+        })
+    });
+    if !same {
+        return Ok(None);
+    }
+    let mut chunks = Vec::new();
+    for m in ms {
+        let r = row(tx, m)?;
+        let mut b = brief(tx, r.id, 1, Some(&live))?;
+        b.resume = prev(tx, r.id)?;
+        chunks.push(b);
+    }
+    Ok(Some(Started { run: live, chunks }))
 }
 
 impl Store {
@@ -137,20 +170,16 @@ impl Store {
         let wt = (!o.no_worktree).then_some(here.worktree);
         let tx = tx(self)?;
         let first = row(&tx, uid)?;
-        let reused: bool = tx
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM run WHERE start = ?1)",
-                [&run],
-                |r| r.get(0),
-            )
-            .map_err(err)?;
-        if reused {
-            return Err(format!(
-                "rejected: run {run} was already used — one R per start"
-            ));
-        }
+        check_fresh(&tx, &run)?;
         let mut claim = Vec::new();
         let ms = members(&tx, first.id)?;
+        // a retry from the session that already holds it is success, not a
+        // takeover: the brief header names the live R, so re-running start in
+        // the same session must print that brief, never demand `--force`.
+        if let Some(reused) = reuse_live(&tx, &first, &ms, o.session.as_deref())? {
+            tx.commit().map_err(err)?;
+            return Ok(reused);
+        }
         for m in ms.iter().cloned() {
             let r = row(&tx, &m)?;
             let pair = if m == first.uid {
@@ -237,35 +266,6 @@ impl Store {
         tx.commit().map_err(err)?;
         Ok(Started { run, chunks })
     }
-}
-
-/// `ready_in`, but an after on a chunk of its own pair is met by plan order: one run does both.
-fn ready_paired(tx: &Transaction, id: i64, today: &str, pair: &[String]) -> Result<Ready, String> {
-    Ok(match ready_in(tx, id, today)? {
-        Ready::Blocked(u) => {
-            let u: Vec<_> = u
-                .into_iter()
-                .filter(|u| !u.uid.as_ref().is_some_and(|x| pair.contains(x)))
-                .collect();
-            if u.is_empty() {
-                Ready::Yes
-            } else {
-                Ready::Blocked(u)
-            }
-        }
-        r => r,
-    })
-}
-
-/// The live start R in a worktree, if any.
-fn busy(tx: &Transaction, worktree: &str) -> Result<Option<String>, String> {
-    tx.query_row(
-        "SELECT start FROM run WHERE worktree = ?1 AND ended IS NULL LIMIT 1",
-        [worktree],
-        |r| r.get(0),
-    )
-    .optional()
-    .map_err(err)
 }
 
 impl Store {

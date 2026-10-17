@@ -58,7 +58,7 @@ fn render_names_the_shared_files() {
         out.starts_with("## group 1 · 2 rows · shared: src/b.rs\n"),
         "{out}"
     );
-    assert!(out.contains("## group 2 · shares no file\n"), "{out}");
+    assert!(!out.contains("shares no file"), "{out}");
     assert_eq!(
         out.lines().filter(|l| l.starts_with("- [")).count(),
         3,

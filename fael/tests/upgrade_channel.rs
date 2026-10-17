@@ -28,7 +28,7 @@ fn upgrade_dry_run_names_the_channel_and_runs_nothing() {
             "FAEL_STATE_DIR",
             std::env::temp_dir().join(format!("fael-test-state-{}", std::process::id())),
         )
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_SESSION")
         .args(["upgrade", "--dry-run"])
         .env("HOME", &home)
@@ -83,7 +83,7 @@ fn upgrade_via_fake_brew(
             "FAEL_STATE_DIR",
             std::env::temp_dir().join(format!("fael-test-state-{}", std::process::id())),
         )
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_SESSION")
         .args(["upgrade", "--yes"])
         .args(args)

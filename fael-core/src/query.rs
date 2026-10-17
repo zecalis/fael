@@ -33,7 +33,7 @@ pub use focus::{
     select_with,
 };
 pub use groups::{groups, render_groups};
-pub use keyhint::key_hints;
+pub use keyhint::{key_hints, names_key};
 pub use lookup::{
     KeyUse, NO_ROW_WITH_ID, chunk_stem, fat_reasons, keys, levenshtein, query, resolve,
     resolve_row, warnings,

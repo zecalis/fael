@@ -172,7 +172,7 @@ fn outside_a_session_a_row_has_no_session() {
         .args(["add", "note", "first", "--files", "src/a.rs"])
         .current_dir(&d)
         .env("FAEL_STATE_DIR", d.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .output()

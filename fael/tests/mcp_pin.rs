@@ -17,7 +17,7 @@ fn serve(dir: &Path, reqs: &[serde_json::Value]) -> Vec<serde_json::Value> {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .args(["mcp", "--pin"])
         .env("FAEL_STATE_DIR", dir.join("../state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -47,7 +47,7 @@ fn pinned_server_never_leaves_its_workspace() {
     let (mine, other) = (workspace(&base, "mine"), workspace(&base, "other"));
     let ok = Command::new(env!("CARGO_BIN_EXE_fael"))
         .env("FAEL_STATE_DIR", base.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
         .args(["add", "note", "secret of other", "--files", "doc:x"])
         .current_dir(&other)
         .status()

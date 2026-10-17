@@ -23,7 +23,7 @@ fn prompt_points_at_named_key_once() {
         ok && out.contains("UserPromptSubmit")
             // 01M3XKB7G: the line names the word that fired, so a misfire is
             // judgeable from the line and from the usage journal
-            && out.contains("vela:credit-ledger (1, via \\\"credit ledger\\\")"),
+            && out.contains("vela:credit-ledger (1, via \\\"credit ledger\\\", weak head-only)"),
         "{out}"
     );
     // pointer only — the row itself never rides the prompt
