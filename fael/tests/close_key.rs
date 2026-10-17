@@ -164,3 +164,16 @@ fn mcp_close_with_key_behaves_the_same() {
     let (err, text) = mcp_close(&d, serde_json::json!({"key": "k", "id": "x", "text": "w"}));
     assert!(err && text.contains("not both"), "{text}");
 }
+
+#[test]
+fn close_names_the_row_it_closed() {
+    let d = repo();
+    add(&d, "issue", "leaky pipe in the sink", "plan:x:leak");
+    let (ok, out, err) = fael(&d, &["close", "--key", "plan:x:leak", "fixed"]);
+    assert!(ok, "{err}");
+    let line = out.lines().find(|l| l.starts_with("closed ")).expect(&out);
+    assert!(
+        line.starts_with("closed issue ") && line.contains(" · "),
+        "{line}"
+    );
+}

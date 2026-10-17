@@ -138,6 +138,24 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
     }
 }
 
+/// `closed issue 01M5076R · <title>` — which row a close row (`reference`) shut,
+/// so nobody runs `fael find` to check. None when the target can't be read back.
+pub(crate) fn closed_line(r: &crate::Repo, close: &Row) -> Option<String> {
+    let log = crate::read(r);
+    let t = core::resolve_row(&log, close.reference.as_deref()?).ok()?;
+    let title = t.title.clone().unwrap_or_else(|| {
+        t.text
+            .lines()
+            .next()
+            .unwrap_or("")
+            .chars()
+            .take(80)
+            .collect()
+    });
+    let short: String = t.id.chars().take(8).collect();
+    Some(format!("closed {} {short} · {title}", t.kind))
+}
+
 /// Batch close — `fael close a b "why"` closes each id with the same reason;
 /// a bad id reports alone while the rest save (never all-or-nothing, like
 /// batch add above). A single id keeps the old behaviour byte for byte: the
@@ -152,6 +170,9 @@ pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<
                 warns.iter().for_each(|w| eprintln!("{w}"));
                 record_asks("cli", ASK_WARN, "close", Some(&r.root), &warns);
                 written(a, &r, &row, &path);
+                if !a.has("json") {
+                    closed_line(&r, &row).iter().for_each(|l| println!("{l}"));
+                }
             }
             Err(e) => {
                 failed += 1;

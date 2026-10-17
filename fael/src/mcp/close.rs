@@ -2,6 +2,7 @@
 //! out of mcp.rs at the 400-line ratchet.
 
 use super::args::{done, need, repo_for};
+use crate::batch::closed_line;
 use crate::close_key::{BOTH, open_row_on};
 use crate::hook::{ASK_WARN, record_asks};
 use crate::write::close_row;
@@ -42,6 +43,7 @@ pub(super) fn close(a: &Value) -> Result<String, String> {
             Ok((row, _, warns)) => {
                 record_asks("mcp", ASK_WARN, "mcp-close", Some(&r.root), &warns);
                 out.push(done(&row.id, &warns));
+                out.extend(closed_line(&r, &row));
             }
         }
     }
