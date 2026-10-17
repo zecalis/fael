@@ -269,7 +269,14 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     git(&d, &["add", "w"]);
     git(&d, &["commit", "-qm", "w"]);
     let row = |kind: &str, file: &str| {
-        let out = f(&["add", kind, &format!("{kind} on {file}"), "--files", file]);
+        let out = f(&[
+            "add",
+            kind,
+            &format!("{kind} on {file}"),
+            "--files",
+            file,
+            "--force",
+        ]);
         let id = out
             .split_whitespace()
             .find(|w| w.starts_with("01"))

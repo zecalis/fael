@@ -9,7 +9,7 @@ use std::path::Path;
 
 fn add(d: &Path, kind: &str, text: &str, file: &str) {
     std::fs::write(d.join(file), "// x\n").unwrap();
-    let (ok, _, err) = fael(d, &["add", kind, text, "--files", file], "");
+    let (ok, _, err) = fael(d, &["add", kind, text, "--files", file, "--force"], "");
     assert!(ok, "{err}");
 }
 

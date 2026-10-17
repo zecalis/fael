@@ -185,6 +185,8 @@ No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Con
 
 State is derived from the log and the disk on a pull, never stored: **live** (open), **held** (open, some stamped file changed but not all — the Held line asks once), **dormant**, **retired** (closed or superseded). A row is *dormant* when it has a non-empty `fh` map and **every** stamped file is on disk (through renames) and differs from its stamp. All, not any: a file that still matches, is gone, unreadable or over the cap keeps the row live — unknown is never changed, fael never guesses. A bare `fael bump` restamps `fh`, so "no bump since" needs no event scan and a bump revives. Issues and claimed rows (`held @branch`) are never dormant. Dormant rows are never pushed (edit push, held line, chunk start contracts, chunk done list), never in session start or kickoff, hidden from plain `find` (the empty hint names the count) and shown `(dormant)` under `find --all`.
 
+**Cap** (decision 01M5528X): `add decision` (CLI and MCP) rejects before the write when a real file in `--files` already holds 3 live decisions — open, not dormant, excluding the row this add supersedes. The reject lists those 3 with ready `--supersedes <id>` and `fael close <id>` commands; `--force` files it as is, like the other shape gates. Anchors are not capped.
+
 ## 3. API
 
 ### Integration modes

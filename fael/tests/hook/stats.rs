@@ -60,6 +60,7 @@ fn push_usage_counts_only_rendered_rows() {
                 &format!("choice {i}"),
                 "--files",
                 "src/a.rs",
+                "--force",
             ],
             "",
         );

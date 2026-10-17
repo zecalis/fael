@@ -39,6 +39,7 @@ fn shared_keys_outside_focus_are_not_counted() {
                     &format!("{kind} {i} about topic number {i}"),
                     "--files",
                     &f,
+                    "--force",
                     "--key",
                     &format!("topic:t{i}"),
                 ],

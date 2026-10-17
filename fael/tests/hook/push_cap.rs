@@ -24,6 +24,7 @@ fn seed(d: &Path, n: usize) {
                 &format!("decision {i}"),
                 "--files",
                 "src/a.rs",
+                "--force",
             ],
             "",
         );
