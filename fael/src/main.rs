@@ -54,7 +54,7 @@ fn main() -> ExitCode {
         argv = joined;
         res = run(argv.clone());
     }
-    let res = res.map_err(|e| synonyms::explain(&raw, &argv, e));
+    let res = res.map_err(|e| write::arity::explain(&argv, synonyms::explain(&raw, &argv, e)));
     hook::record_cli(&argv, &res);
     match res {
         Ok(code) => code,

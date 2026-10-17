@@ -12,6 +12,7 @@ use paths::root_relative;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+pub(crate) mod arity;
 mod from;
 mod paths;
 mod recall;
