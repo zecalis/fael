@@ -152,3 +152,13 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
         "no plan header over nothing: {t}"
     );
 }
+
+#[test]
+fn the_rules_tell_a_git_ship_agent_to_leave_the_handoff_as_a_finished_note() {
+    let r = rules("U1");
+    assert!(
+        r.contains("`fael chunk note U1 \"finished: <handoff>\"`"),
+        "{r}"
+    );
+    assert!(r.contains("`Fael-Chunk: U1`"), "{r}");
+}
