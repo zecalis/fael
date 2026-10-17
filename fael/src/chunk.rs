@@ -36,7 +36,10 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let r = repo()?;
     crate::plan::in_repo(&r)?;
     let named;
-    let (a, rest) = match in_plan(a, rest, &r).map_err(|e| row_id(&r, e))? {
+    let (a, rest) = match crate::chunk_show::natural(a, rest, &r)
+        .and_then(|n| n.map_or_else(|| in_plan(a, rest, &r), |n| Ok(Some(n))))
+        .map_err(|e| row_id(&r, e))?
+    {
         Some(n) => {
             named = n;
             (&named.0, named.1.as_slice())
