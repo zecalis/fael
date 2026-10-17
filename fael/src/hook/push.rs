@@ -196,8 +196,11 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     // ask an edit earns. ponytail: hashes each candidate's files, short-circuits
     // on the first match; cache per repo if the 5 ms push ceiling says so
     let mut blobs = Blobs::new();
+    // retired notes (chunk done) likewise; the merged-branch proof spawns git, so not here
+    let retired = super::retired::ids(&c.repo, &c.log, false);
     tiered.retain(|(r, _)| {
-        !changed::dormant(r, &c.repo.root, &al, &mut blobs, changed::PUSH_MAX_BYTES)
+        !retired.contains(&r.id)
+            && !changed::dormant(r, &c.repo.root, &al, &mut blobs, changed::PUSH_MAX_BYTES)
     });
     // a row already pushed into this context window is still there — say it
     // once. The lock spans read → append, so a batch of parallel reads queues

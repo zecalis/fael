@@ -16,6 +16,7 @@ mod experience;
 #[cfg(test)]
 mod experience_tests;
 mod friction;
+mod lifecycle;
 mod metrics;
 mod outcomes;
 mod overlap;
@@ -44,6 +45,7 @@ pub use experience::{
     close_shape, fael_cites, new_close, pr_cites, resolve,
 };
 pub use friction::{FIRST_CALL_WINDOW, Friction, SHAPE_GATE, Tally};
+pub use lifecycle::{Lifecycle, States, lifecycle};
 pub use metrics::ASK_ORDER;
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};

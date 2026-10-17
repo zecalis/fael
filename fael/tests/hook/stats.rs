@@ -339,7 +339,10 @@ fn edit_after_the_row_was_said_counts_in_context_at_edit() {
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(ok && v["value"]["in_context_at_edit"] == 1, "{out}");
     let (ok, out, _) = fael(&d, &["stats"], "");
-    let first = out.lines().next().unwrap_or("");
+    let first = out
+        .lines()
+        .find(|l| l.starts_with("fael since "))
+        .unwrap_or("");
     assert!(
         ok && first.starts_with("fael since ") && first.ends_with(": in context at edit ×1"),
         "{out}"

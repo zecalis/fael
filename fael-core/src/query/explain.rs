@@ -115,10 +115,15 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
         // and that closed rows are out of sight unless --all
         [one] => {
             let what = one.rsplit_once(" ×").map_or(one.as_str(), |(p, _)| p);
-            let hidden = match (f.all, log.dormant.len()) {
-                (true, _) => String::new(),
-                (false, 0) => " (open rows only; --all adds closed)".into(),
-                (false, n) => format!(" (open rows only; --all adds closed and {n} dormant)"),
+            let (gone, spent) = (log.dormant.len() - log.retired.len(), log.retired.len());
+            let hidden = match (f.all, gone, spent) {
+                (true, ..) => String::new(),
+                (false, 0, 0) => " (open rows only; --all adds closed)".into(),
+                (false, n, 0) => format!(" (open rows only; --all adds closed and {n} dormant)"),
+                (false, 0, m) => format!(" (open rows only; --all adds closed and {m} retired)"),
+                (false, n, m) => {
+                    format!(" (open rows only; --all adds closed, {n} dormant and {m} retired)")
+                }
             };
             format!("no rows match {what}{hidden}")
         }
@@ -155,9 +160,14 @@ pub fn nearest<'a>(log: &'a Log, f: &Filter) -> Option<(String, Vec<&'a Row>)> {
         if !closed.is_empty() {
             let asleep = closed
                 .iter()
-                .filter(|r| log.dormant.contains(&r.id))
+                .filter(|r| log.dormant.contains(&r.id) && !log.retired.contains(&r.id))
                 .count();
+            let spent = closed.iter().any(|r| log.retired.contains(&r.id));
             let label = match asleep {
+                0 if spent => format!(
+                    "no open row matches — {} closed, superseded or retired:",
+                    closed.len()
+                ),
                 0 => format!(
                     "no open row matches — {} closed or superseded:",
                     closed.len()

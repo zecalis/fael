@@ -105,7 +105,7 @@ pub fn mark_changed(
 
 // ponytail: one patch-id pass over base..HEAD per branch on the page; cache
 // by merge base if kickoff ever shows many branches from one old base
-fn is_merged(root: &Path, b: &str) -> bool {
+pub(crate) fn is_merged(root: &Path, b: &str) -> bool {
     // the local branch, else our fetch of it; a deleted branch proves nothing
     let Some(tip) = ["", "origin/"].iter().find_map(|p| {
         git(

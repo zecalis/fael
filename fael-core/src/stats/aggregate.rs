@@ -122,6 +122,9 @@ pub struct Stats {
     /// Fixes, checks and capture recall (`experience.rs`,
     /// PLAN-fael-experience-loop chunk 4).
     pub experience: Experience,
+    /// This repo's rows by state per kind (`lifecycle.rs`): empty from `aggregate`,
+    /// which never sees the disk — the adapter fills it for the repo it runs in.
+    pub lifecycle: super::Lifecycle,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -184,6 +187,7 @@ pub fn aggregate(
         friction: friction(parsed),
         context_loop: super::repeat::context_loop(parsed, logs),
         experience: experience(parsed, logs, commits),
+        lifecycle: Default::default(),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }

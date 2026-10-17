@@ -249,6 +249,7 @@ fn print_warnings(s: &core::stats::Stats) {
 }
 
 pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
+    super::lifecycle::print(&s.lifecycle);
     if let Some(line) = value_line(s) {
         println!("{line}");
     }

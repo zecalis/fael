@@ -190,7 +190,11 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         .filter_map(|repo| Some((repo.clone(), commits(repo, *u.parsed.first_seen.get(repo)?))))
         .collect();
     let constants = asks::constants().into();
-    core::stats::aggregate(&u.parsed, &u.logs, &commits, cfg, constants, rows)
+    let mut s = core::stats::aggregate(&u.parsed, &u.logs, &commits, cfg, constants, rows);
+    if let Ok(r) = crate::repo() {
+        s.lifecycle = super::lifecycle::of(&r);
+    }
+    s
 }
 
 /// The default branch's commits since the repo's first usage (H5 capture
