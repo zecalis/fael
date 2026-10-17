@@ -175,6 +175,8 @@ fn outside_a_session_a_row_has_no_session() {
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("FAEL_SESSION")
         .env_remove("CODEX_THREAD_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap();
     assert!(o.status.success());

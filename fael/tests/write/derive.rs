@@ -65,6 +65,8 @@ fn mcp_add_without_files_derives_too() {
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("FAEL_SESSION")
         .env_remove("CODEX_THREAD_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .current_dir(&d)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

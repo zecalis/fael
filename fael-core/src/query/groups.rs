@@ -66,11 +66,14 @@ fn shared<'a>(g: &[&'a Row]) -> Vec<&'a str> {
 
 /// Every group under one header line, each row as `render` prints it. No
 /// token budget: a group cut in half would answer the question wrong.
+/// A lone row carries no header: "shares no file" says what the group is
+/// not, never what it is.
 pub fn render_groups(log: &Log, rows: &[&Row]) -> String {
     let mut out = String::new();
     for (i, g) in groups(rows).iter().enumerate() {
         if g.len() == 1 {
-            out.push_str(&format!("## group {} · shares no file\n", i + 1));
+            out.push_str(&super::render(log, g, usize::MAX));
+            continue;
         } else {
             out.push_str(&format!(
                 "## group {} · {} rows · shared: {}\n",

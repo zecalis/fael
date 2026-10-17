@@ -320,7 +320,8 @@ impl Store {
         let out = files
             .iter()
             .filter(|f| !declared.is_empty() && !declared.iter().any(|d| under(f, d)))
-            .filter(|f| !shared.iter().any(|s| under(f, s)))
+            // a doc sync is mandatory (chunk rules), never a scope leak
+            .filter(|f| !shared.iter().any(|s| under(f, s)) && !f.starts_with("docs/"))
             .map(|f| {
                 let owner = others.iter().find(|(_, sc)| sc.iter().any(|d| under(f, d)));
                 (f.clone(), owner.map(|(n, _)| n.clone()))

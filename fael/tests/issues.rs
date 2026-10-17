@@ -70,14 +70,13 @@ fn waiting_issues_list_after_ready_ones() {
         out.starts_with("## group 1 · 2 rows · shared: src/a.rs\n"),
         "{out}"
     );
-    assert!(out.contains("## group 2 · shares no file"), "{out}");
-    let g1 = out.split("## group 2").next().unwrap();
+    assert!(!out.contains("shares no file"), "{out}");
+    let g1 = out.split("scope bug").next().unwrap();
     assert!(
         g1.contains("ocr gated (waiting: vendor fixes 5xx)"),
         "{out}"
     );
-    let g2 = out.split("## group 2").nth(1).unwrap();
-    assert!(g2.contains("scope bug"), "{out}");
+    assert!(out.contains("scope bug"), "{out}");
     // the grouping answer rides the list itself now — no tip left to learn a flag from
     assert!(
         !out.contains("fix together") && !out.contains("--groups"),
@@ -209,9 +208,9 @@ fn groups_by_shared_files() {
         out.starts_with("## group 1 · 2 rows · shared: src/b.rs\n"),
         "{out}"
     );
-    let g2 = out.split("## group 2").nth(1).unwrap();
+    assert!(!out.contains("shares no file"), "{out}");
     assert!(
-        g2.contains("auth typo") && !g2.contains("scope leak"),
+        out.contains("auth typo") && out.contains("scope leak"),
         "{out}"
     );
     let (ok, _, err) = fael(&d, &["find", "--kind", "issue", "--groups", "--limit", "2"]);

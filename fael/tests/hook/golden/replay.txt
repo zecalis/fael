@@ -4,7 +4,7 @@ fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
 
 ## 1 prompt {"session":"2025-12-01T00:00:00Z","text":"fix the auth login flow"}
 context:
-fael: the prompt names open key(s) auth:login (1, via "login") — fael find --key <key> (MCP: find key=<key>) before assuming there is no prior work
+fael: the prompt names open key(s) auth:login (1, via "login", weak head-only) — fael find --key <key> (MCP: find key=<key>) before assuming there is no prior work
 ## 2 prompt {"session":"2025-12-01T00:00:00Z","text":"fix the auth login flow"}
 ## 3 read {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 ## 4 read {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
@@ -107,5 +107,5 @@ bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-16 lines · ~1098 tokens
+16 lines · ~1102 tokens
 session-start prompt edit in-context edit in-context edit in-context edit session-start shell-edit outcome search session-start session-start edit

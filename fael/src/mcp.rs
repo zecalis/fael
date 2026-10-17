@@ -10,6 +10,7 @@
 mod add;
 mod args;
 mod bump;
+mod chunk;
 mod close;
 mod find;
 
@@ -120,7 +121,10 @@ fn call(p: &Value) -> Value {
         "add" => add::add(args),
         "close" => close::close(args),
         "bump" => bump::bump(args),
-        n => Err(format!("unknown tool {n} — fael has find, add, close")),
+        "chunk" => chunk::chunk(args),
+        n => Err(format!(
+            "unknown tool {n} — fael has find, add, close, chunk"
+        )),
     };
     let root = args::repo_for(args).ok().map(|r| r.root);
     crate::hook::record_mcp_call(name, args, root.as_deref(), &res);

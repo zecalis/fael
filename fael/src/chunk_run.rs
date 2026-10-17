@@ -18,9 +18,13 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     // reaches a Stop that could stamp it (issue 01M4NXDQ). Not a launcher (`--run R`): it
     // may sit in another agent's session, and the started agent's SessionStart stamps it
     // ponytail: Claude Code's session env only; another client's when it has one
-    let session = std::env::var("CLAUDE_CODE_SESSION_ID")
-        .ok()
-        .filter(|s| !s.is_empty() && a.one("run").is_none());
+    // `FAEL_SESSION` first (the OpenCode shell.env hook sets it per command, fresher
+    // than an inherited client var — session.rs `env_session` order).
+    let session = ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"]
+        .iter()
+        .filter_map(|k| std::env::var(k).ok())
+        .map(|s| s.trim().to_string())
+        .find(|s| !s.is_empty() && a.one("run").is_none());
     let o = Start {
         run: a.one("run"),
         client: a.one("client"),
@@ -48,6 +52,13 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     }
     print!("{}", st.text());
     contracts(r, &st);
+    // the declared scope may name a re-export while the work lives elsewhere
+    // (th.ts spreads start.ts): warn now, not only at done's outside report.
+    if let Ok(s) = Store::open(&db(r)) {
+        for c in &st.chunks {
+            crate::chunk_scope::warn(&s, &r.root, &c.uid);
+        }
+    }
     Ok(())
 }
 

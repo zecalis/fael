@@ -34,6 +34,8 @@ fn call(dir: &Path, tool: &str, args: serde_json::Value) -> (bool, String) {
         .arg("mcp")
         .env("FAEL_STATE_DIR", dir.join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

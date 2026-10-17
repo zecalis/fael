@@ -25,6 +25,8 @@ fn fael(d: &Path, args: &[&str]) -> String {
         )
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("FAEL_SESSION")
         .args(args)
         .current_dir(d)
         .output()
@@ -289,6 +291,8 @@ fn find_reads_an_anchor_like_kickoff() {
             std::env::temp_dir().join(format!("fael-test-state-{}", std::process::id())),
         )
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_SESSION")
         .args(["find", "plan:other"])
         .current_dir(&d)

@@ -14,6 +14,8 @@ fn run(bin: &str, dir: &Path, args: &[&str]) -> (bool, String) {
         )
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("FAEL_SESSION")
         .args(args)
         .current_dir(dir)
         .output()

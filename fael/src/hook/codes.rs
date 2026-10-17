@@ -15,6 +15,7 @@ const REJECTS: &[(&str, &str)] = &[
     ("nothing written", core::stats::SHAPE_GATE),
     ("unknown command", "unknown_command"),
     ("unknown tool", "unknown_command"),
+    ("unknown chunk verb", "unknown_command"),
     ("unknown flag", "unknown_flag"),
     (" takes no -", "flag_not_taken"),
     ("is one argument", "flag_joined"),

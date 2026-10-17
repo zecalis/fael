@@ -13,6 +13,8 @@ fn run(dir: &Path, state: &Path, args: &[&str]) -> Output {
         .env("FAEL_STATE_DIR", state)
         .env_remove("FAEL_DIR")
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap()
 }
@@ -163,6 +165,8 @@ fn a_bound_session_is_seen_by_its_stop_hook_in_another_repo() {
         .current_dir(&d)
         .env("FAEL_STATE_DIR", &state)
         .env("CLAUDE_CODE_SESSION_ID", "sess-1")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap();
     ok(start);

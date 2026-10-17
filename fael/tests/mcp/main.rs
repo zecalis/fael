@@ -58,6 +58,8 @@ fn mcp_tool_env(
         // hook-session ids never inherit from the test runner's own shell
         .env_remove("FAEL_SESSION")
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_THREAD_ID")
         .current_dir(dir)
         .stdin(Stdio::piped())

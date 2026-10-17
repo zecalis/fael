@@ -18,7 +18,10 @@ const FAMILY_MIN: usize = 3;
 /// and worker briefs carry them on every prompt, so they name the process,
 /// never the topic. 2026-10-11..15: chunk 17/122 pointers pulled, line 8/60,
 /// worktree 0/20, docs 0/16, against 23% for all (decision hint:fael-words).
-const FAEL_WORDS: [&str; 4] = ["chunk", "line", "worktree", "docs"];
+/// `handoff` (every plan names one) and `owner` (a role, not a topic:
+/// `vela:owner-key:test` fired on any prompt saying "owner") join them —
+/// a key typed whole still hints.
+const FAEL_WORDS: [&str; 6] = ["chunk", "line", "worktree", "docs", "handoff", "owner"];
 
 /// Open keys a user prompt names (01M3WCK7N), ranked by match strength first
 /// (01M3XKB7E): a key named whole in the prompt (`plan:x-y:handoff`, word
@@ -128,7 +131,8 @@ pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<S
 /// Does the prompt name the key whole: the exact key text at a word boundary
 /// (a neighbour char that is not alphanumeric), case-insensitive. Substring
 /// inside a longer word never counts (`hooks.json` does not name `hook`).
-fn names_key(prompt: &str, key: &str) -> bool {
+/// Pub for the prompt line's confidence tag (explicit vs head-only).
+pub fn names_key(prompt: &str, key: &str) -> bool {
     let lc = key.to_ascii_lowercase();
     let p = prompt.to_ascii_lowercase();
     let mut at = 0;

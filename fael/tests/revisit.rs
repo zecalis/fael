@@ -16,7 +16,9 @@ fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
     c.args(args).current_dir(dir);
     state_env(&mut c, dir);
-    c.env_remove("CLAUDE_CODE_SESSION_ID");
+    c.env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID");
     let o = c
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -13,6 +13,8 @@ fn core_schema_hides_but_hidden_properties_still_run() {
             .arg("mcp")
             .env("FAEL_STATE_DIR", wt.join("../state"))
             .env_remove("CLAUDE_CODE_SESSION_ID")
+            .env_remove("FAEL_SESSION")
+            .env_remove("CODEX_THREAD_ID")
             .current_dir(&wt)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -61,13 +63,14 @@ fn core_schema_hides_but_hidden_properties_still_run() {
         "\"groups\"",
         "\"urgent_before\"",
         "\"dry_run\"",
-        "\"force\"",
     ] {
         assert!(!listed.contains(hidden), "{hidden} leaks: {listed}");
     }
     for core in ["\"limit\"", "\"offset\"", "\"text\"", "\"supersedes\""] {
         assert!(listed.contains(core), "{core} missing: {listed}");
     }
+    // the chunk workflow (show|start|note|done|wait|after) rides one tool
+    assert!(listed.contains("\"chunk\""), "chunk missing: {listed}");
     // ... but every hidden property still answers
     for (i, want_err) in [(1, false), (2, false), (3, false)] {
         assert_eq!(out[i]["result"]["isError"], want_err, "{}", out[i]);

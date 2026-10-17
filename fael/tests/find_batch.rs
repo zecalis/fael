@@ -16,6 +16,8 @@ fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
         .current_dir(dir)
         .env("FAEL_STATE_DIR", root(dir).join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap();
     let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
@@ -215,6 +217,8 @@ fn mcp_find_ids_pulls_several_bodies_and_explains_an_empty_search() {
         .arg("mcp")
         .env("FAEL_STATE_DIR", root(&d).join("state"))
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .current_dir(&d)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

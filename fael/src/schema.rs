@@ -64,6 +64,19 @@ pub(crate) fn tools() -> Value {
                 "text": str_(&format!("why; a fixed bug: {}", fael_core::stats::CLOSE_TEMPLATE)),
             }},
         },
+        {
+            "name": "chunk",
+            "description": "Chunk: show|start|note|done|wait|after.",
+            "inputSchema": {"type": "object", "required": ["verb", "uid"], "properties": {
+                "verb": str_("show|start|note|done|wait|after"),
+                "uid": str_("chunk uid"),
+                "text": str_("note|handoff|why"),
+                "other": str_("waits on"),
+                "on": str_("owner|data"),
+                "run": str_("run R"),
+                "force": {"type": "boolean", "description": "take over"},
+            }},
+        },
     ]);
     // pinned: one workspace, so no `cwd` to route by
     if !crate::mcp::pinned() {
@@ -92,6 +105,11 @@ mod tests {
     /// until chunk 3 measures whether it earns it — if not, those lines come
     /// out and the ceiling goes back.
     ///
+    /// Raised to 7100 (measured ~7014, 2026-10-17) when the `chunk`
+    /// tool (show|start|note|done|wait|after) joined MCP: one workflow
+    /// otherwise needs two screens (CLI + MCP). One tool with a `verb`
+    /// keeps it to ~600 B, once per session.
+    ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
     /// content growing. The ceiling guards content, so measure canonical LF.
@@ -116,12 +134,12 @@ mod tests {
     fn constants_stay_small() {
         let total = SKILL.replace("\r\n", "\n").len() + super::schema_json().len();
         assert!(
-            total <= 6400,
-            "constants {total} B exceed the 6400 B ceiling — trim, don't grow"
+            total <= 7100,
+            "constants {total} B exceed the 7100 B ceiling — trim, don't grow"
         );
         assert!(
-            total * 100 <= BASELINE * 85,
-            "constants {total} B kept less than 15% off the {BASELINE} B baseline"
+            total * 100 <= BASELINE * 91,
+            "constants {total} B kept less than 9% off the {BASELINE} B baseline"
         );
     }
 
@@ -171,5 +189,9 @@ mod tests {
             ])
         );
         assert_eq!(props("close"), set(&["id", "ids", "key", "text"]));
+        assert_eq!(
+            props("chunk"),
+            set(&["verb", "uid", "text", "other", "on", "run", "force"])
+        );
     }
 }
