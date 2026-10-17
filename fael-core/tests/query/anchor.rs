@@ -22,6 +22,7 @@ fn kickoff_matches_plan_anchor() {
         closes: vec![],
         warnings: vec![],
         dormant: Default::default(),
+        retired: Default::default(),
     };
     // the PLAN path widens to its `plan:<name>` anchor; the other plan stays out
     let f = Filter {
@@ -66,6 +67,7 @@ fn kickoff_matches_plan_anchor() {
         closes: vec![],
         warnings: vec![],
         dormant: Default::default(),
+        retired: Default::default(),
     };
     let h = Filter {
         files: vec!["HANDOFF-req.md".into()],

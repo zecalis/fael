@@ -13,6 +13,11 @@ pub(crate) mod owner;
 
 pub(crate) use kickoff::kickoff;
 
+/// Does git prove branch `b` merged into HEAD (the proof kickoff's `(merged)` uses)?
+pub(crate) fn merged_branch(root: &std::path::Path, b: &str) -> bool {
+    merged::is_merged(root, b)
+}
+
 use super::{Args, aliases};
 use fael_core::{self as core, Filter, Log, Row};
 

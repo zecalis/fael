@@ -46,7 +46,8 @@ const CONSTANTS: &str =
 #[test]
 fn stats_text_matches_golden() {
     let state = golden_state();
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"));
+    // not under the repo: the lifecycle panel reads the repo `fael stats` runs in
+    let dir = &std::env::temp_dir();
     let (ok, out, err) = fael_at(&state, dir, &["stats"], "");
     assert!(ok, "{err}");
     assert_eq!(
@@ -61,7 +62,8 @@ fn stats_text_matches_golden() {
 #[test]
 fn stats_rows_matches_golden() {
     let state = golden_state();
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"));
+    // not under the repo: the lifecycle panel reads the repo `fael stats` runs in
+    let dir = &std::env::temp_dir();
     let (ok, out, err) = fael_at(&state, dir, &["stats", "--rows"], "");
     assert!(ok, "{err}");
     assert_eq!(
@@ -77,7 +79,8 @@ fn stats_rows_matches_golden() {
 fn stats_json_matches_golden_values() {
     // Maps (by_event/by_client) iterate a HashMap — compare values, not bytes.
     let state = golden_state();
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"));
+    // not under the repo: the lifecycle panel reads the repo `fael stats` runs in
+    let dir = &std::env::temp_dir();
     let (ok, out, err) = fael_at(&state, dir, &["stats", "--json"], "");
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
@@ -95,6 +98,7 @@ fn stats_json_matches_golden_values() {
             "constants": {"skill_bytes": 3275, "skill_est": 824, "mcp_schema_bytes": 3739, "mcp_schema_est": 937},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
+            "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},
             "capture": {"manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "edit_session_issues": 0, "no_row_sessions": []},
             "retired": {"pushed": 2, "at_touch": 0},
             "context_loop": {"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0},

@@ -1,6 +1,7 @@
 //! `kickoff` marks a branch tag ` (merged)` once that branch's work is in
 //! HEAD — squash merges included — and never for a branch that has no
-//! commits of its own. `find plan:x` reads the anchor like `kickoff plan:x`.
+//! commits of its own. The rows are issues: a note on a merged branch is retired
+//! and out of kickoff (decision 01M5528X, `row_retire.rs`). `find plan:x` reads the anchor like `kickoff plan:x`.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -60,7 +61,7 @@ fn kickoff_marks_squash_merged_branch_and_not_an_empty_one() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "uncommitted on feat/x",
             "--files",
             "plan:demo",
@@ -75,7 +76,7 @@ fn kickoff_marks_squash_merged_branch_and_not_an_empty_one() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "cut but never committed",
             "--files",
             "plan:demo",
@@ -114,7 +115,7 @@ fn kickoff_keeps_the_mark_when_a_tag_shares_the_dead_branchs_name() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "tag shadows the branch",
             "--files",
             "plan:demo",
@@ -157,7 +158,7 @@ fn kickoff_keeps_the_mark_when_the_branch_name_is_a_pseudo_ref() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "on a pseudo-ref name",
             "--files",
             "plan:demo",
@@ -183,7 +184,7 @@ fn kickoff_keeps_the_mark_when_the_branch_name_is_a_pseudo_ref() {
 fn kickoff_reads_the_packed_table_past_a_non_utf8_refname() {
     let d = repo();
     git(&d, &["switch", "-qc", "feat/packed"]);
-    fael(&d, &["add", "note", "packed only", "--files", "plan:demo"]);
+    fael(&d, &["add", "issue", "packed only", "--files", "plan:demo"]);
     std::fs::write(d.join("a.txt"), "a\n").unwrap();
     git(&d, &["add", "a.txt"]);
     git(&d, &["commit", "-qm", "work"]);
@@ -231,7 +232,7 @@ fn kickoff_marks_origin_only_branch_as_merged() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "uncommitted on feat/origin-only",
             "--files",
             "plan:demo",
@@ -310,7 +311,7 @@ fn find_reads_a_key_like_find_key() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "m2 done, m2b is left",
             "--files",
             "a.rs",
@@ -327,7 +328,7 @@ fn find_reads_a_key_like_find_key() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "usage log is append-only",
             "--files",
             "a.rs",
@@ -339,7 +340,7 @@ fn find_reads_a_key_like_find_key() {
         &d,
         &[
             "add",
-            "note",
+            "issue",
             "usage rows carry a session",
             "--files",
             "b.rs",

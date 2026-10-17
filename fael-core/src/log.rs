@@ -52,6 +52,11 @@ pub struct Log {
     /// adapter on a pull (`find`, `kickoff`, session start), never stored and
     /// never read from a file. Empty = nothing marked — every other read.
     pub dormant: HashSet<String>,
+    /// Ids of retired notes (decision 01M5528X): a note tied to a chunk or a branch whose
+    /// chunk `fael chunk done` ended or whose branch git proves merged. Derived by the
+    /// adapter on a pull like `dormant`, and also in `dormant` (hidden the same way);
+    /// this set only names the reason. Never stored.
+    pub retired: HashSet<String>,
 }
 
 /// Read every log file under `<fael>/log/`. Missing dir = empty log. Never errors.

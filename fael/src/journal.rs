@@ -51,6 +51,11 @@ pub(crate) fn head_branch(repo_root: &Path) -> Option<String> {
 /// never packed), else `main` or `master` (whichever `git init` made) — no spawn.
 pub(crate) fn work_branch(repo_root: &Path) -> Option<String> {
     let head = head_branch(repo_root)?;
+    (!is_trunk(repo_root, &head)).then_some(head)
+}
+
+/// Is `b` the repo's default branch (see `work_branch`)? No spawn.
+pub(crate) fn is_trunk(repo_root: &Path, b: &str) -> bool {
     let trunk = root(repo_root)
         .and_then(|j| std::fs::read_to_string(j.parent()?.join("refs/remotes/origin/HEAD")).ok())
         .and_then(|s| {
@@ -58,11 +63,10 @@ pub(crate) fn work_branch(repo_root: &Path) -> Option<String> {
                 .strip_prefix("ref: refs/remotes/origin/")
                 .map(String::from)
         });
-    let default = match trunk {
-        Some(t) => head == t,
-        None => head == "main" || head == "master",
-    };
-    (!default).then_some(head)
+    match trunk {
+        Some(t) => b == t,
+        None => b == "main" || b == "master",
+    }
 }
 
 /// HEAD's full sha, read off `<gitdir>/HEAD` and the ref it names (a loose

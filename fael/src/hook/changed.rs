@@ -148,7 +148,10 @@ pub(crate) fn mark_dormant(r: &crate::Repo, log: &mut core::Log) {
         .filter(|w| dormant(w, &r.root, &al, &mut blobs, STAMP_MAX_BYTES))
         .map(|w| w.id.clone())
         .collect();
-    log.dormant = ids;
+    // retired notes (chunk done, branch merged) are off the live path like dormant ones
+    let retired = super::retired::ids(r, log, true);
+    log.dormant = ids.union(&retired).cloned().collect();
+    log.retired = retired;
 }
 
 /// `only` narrows the row to the stamped files that live at one of these
@@ -192,7 +195,7 @@ fn verdict(
 /// Where `f` lives now: through L1 renames, else itself — a path that exists
 /// again after being renamed away (a split) is read as itself. `None` when the
 /// renames cycle, so there is no single answer — unknown, never changed.
-fn resolve(al: &core::Aliases, root: &Path, f: &str) -> Option<String> {
+pub(super) fn resolve(al: &core::Aliases, root: &Path, f: &str) -> Option<String> {
     match al.current(f) {
         Some(t) if !root.join(f).is_file() => Some(t),
         Some(_) => Some(f.to_string()),
@@ -203,7 +206,7 @@ fn resolve(al: &core::Aliases, root: &Path, f: &str) -> Option<String> {
 
 /// One stamped file against disk: `None` when it is gone, a directory,
 /// unreadable, or over `cap` — never guessed as changed.
-fn file_verdict(
+pub(super) fn file_verdict(
     want: &str,
     target: &str,
     root: &Path,

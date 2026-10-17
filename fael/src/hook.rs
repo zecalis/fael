@@ -34,11 +34,13 @@ mod focus;
 mod friction;
 mod held;
 mod in_context;
+mod lifecycle;
 mod markers;
 mod opencode;
 mod prompt;
 mod protocol;
 mod push;
+mod retired;
 mod review;
 mod say;
 #[cfg(test)]

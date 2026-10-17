@@ -32,6 +32,7 @@ fn log() -> Log {
         }],
         warnings: vec![],
         dormant: Default::default(),
+        retired: Default::default(),
     }
 }
 
