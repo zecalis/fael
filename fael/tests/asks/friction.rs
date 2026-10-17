@@ -18,7 +18,9 @@ fn call_in(d: &Path, session: Option<&str>, args: &[&str], stdin: &str) -> (bool
     c.args(args)
         .current_dir(d)
         .env("FAEL_STATE_DIR", root.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_SESSION");
     if let Some(s) = session {
@@ -165,7 +167,9 @@ fn mcp(d: &Path, calls: &[(&str, serde_json::Value)]) {
         .arg("mcp")
         .env("FAEL_STATE_DIR", d.join("state"))
         .env_remove("FAEL_SESSION")
-        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_THREAD_ID")
         .current_dir(d)
         .stdin(Stdio::piped())

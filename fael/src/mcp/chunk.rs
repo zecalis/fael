@@ -69,7 +69,8 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
             if text.is_empty() {
                 return Err("rejected: text is required for chunk after — why".into());
             }
-            let other = s(a, "other").ok_or("rejected: other is required for chunk after — the chunk waited on")?;
+            let other = s(a, "other")
+                .ok_or("rejected: other is required for chunk after — the chunk waited on")?;
             st.after(&uid, &other, &text, &here)?;
             Ok(format!("chunk {uid} → after {other}"))
         }

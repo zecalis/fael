@@ -10,7 +10,9 @@ fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))
         .env_remove("FAEL_DIR")
-        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap();
     let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();

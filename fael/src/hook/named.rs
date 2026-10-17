@@ -8,7 +8,9 @@ use std::path::Path;
 /// Repo-relative prefix: a file is under a scope dir, or the same path.
 fn under(a: &str, b: &str) -> bool {
     let (a, b) = (a.trim_end_matches('/'), b.trim_end_matches('/'));
-    a == b || a.strip_prefix(b).is_some_and(|r| r.starts_with('/')) || b.strip_prefix(a).is_some_and(|r| r.starts_with('/'))
+    a == b
+        || a.strip_prefix(b).is_some_and(|r| r.starts_with('/'))
+        || b.strip_prefix(a).is_some_and(|r| r.starts_with('/'))
 }
 
 /// At most this many named issues get a line — the rest are one count.
@@ -79,8 +81,7 @@ fn line(root: &Path, log: &core::Log, all: &[&core::Row]) -> Option<(Vec<String>
                 let touches = range.is_none()
                     || log.rows.iter().find(|r| r.id == id).is_some_and(|r| {
                         r.files.is_empty()
-                            || r
-                                .files
+                            || r.files
                                 .iter()
                                 .any(|f| branch_files.iter().any(|b| under(f, b) || under(b, f)))
                     });

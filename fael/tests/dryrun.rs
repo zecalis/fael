@@ -41,7 +41,9 @@ fn fael(dir: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
     c.args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID");
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID");
     if !stdin.is_empty() {
         c.stdin(Stdio::piped());
     }
@@ -86,7 +88,9 @@ fn mcp(d: &Path, tool: &str, args: serde_json::Value) -> (bool, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("mcp")
         .env("FAEL_STATE_DIR", d.join("state"))
-        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .current_dir(d)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -277,7 +281,9 @@ fn fael_dir_isolates_the_log() {
         .current_dir(&d)
         .env("FAEL_STATE_DIR", d.join("state"))
         .env("FAEL_DIR", &scratch)
-        .env_remove("CLAUDE_CODE_SESSION_ID").env_remove("FAEL_SESSION").env_remove("CODEX_THREAD_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
         .status()
         .unwrap()
         .success();

@@ -128,7 +128,9 @@ fn reuse_live(
     ms: &[String],
     session: Option<&str>,
 ) -> Result<Option<Started>, String> {
-    let Some(session) = session else { return Ok(None) };
+    let Some(session) = session else {
+        return Ok(None);
+    };
     if first.state != State::Running {
         return Ok(None);
     }
