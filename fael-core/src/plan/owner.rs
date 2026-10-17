@@ -245,7 +245,9 @@ impl Store {
             )
             .map_err(err)?;
         if app.is_empty() && name == "inbox" {
-            return Err("rejected: inbox stays active — it holds every unplanned chunk".into());
+            return Err(
+                "rejected: plan inbox stays active — it holds every unplanned chunk".into(),
+            );
         }
         let from_ok = match to {
             "active" => state == "parked",

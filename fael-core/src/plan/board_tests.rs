@@ -182,7 +182,7 @@ fn inbox_plan_cannot_leave_active() {
         .unwrap();
     for to in ["done", "parked"] {
         let e = s.plan_state(id, to, NOW).unwrap_err();
-        assert!(e.starts_with("rejected: inbox"), "{e}");
+        assert!(e.starts_with("rejected: plan inbox"), "{e}");
     }
 }
 
