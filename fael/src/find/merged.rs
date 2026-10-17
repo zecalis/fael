@@ -8,7 +8,7 @@
 
 use crate::journal::BranchMap;
 use fael_core::Row;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -132,6 +132,61 @@ pub(crate) fn is_merged(root: &Path, b: &str) -> bool {
         &["log", "-p", "--no-merges", &format!("{base}..HEAD")],
     )
     .contains(&want)
+}
+
+/// Branches git proves merged into HEAD, in three spawns however many branches
+/// the repo holds: `for-each-ref --merged` (the ancestor check) minus HEAD's
+/// first-parent line (a branch that never left the commit it was cut from has
+/// no own commits — not "merged", the `is_merged` rule, batched). A name under
+/// `origin/` counts for its short form only when no local branch of that name
+/// exists, like `is_merged`'s probe order (local first, else the fetch): a
+/// fetched tip merged long ago must not retire a note whose local branch moved
+/// on (fael:01M555VZ).
+/// Empty when git fails or nothing is merged: unproven, never merged — every
+/// caller falls back to `is_merged`, so the squash-merge proof still works.
+pub(crate) fn merged_names(root: &Path) -> HashSet<String> {
+    let locals: HashSet<String> = git(
+        root,
+        &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    )
+    .map(|s| s.lines().map(str::to_string).collect())
+    .unwrap_or_default();
+    let refs = git(
+        root,
+        &[
+            "for-each-ref",
+            "--merged",
+            "HEAD",
+            "--format=%(objectname) %(refname:short)",
+            "refs/heads",
+            "refs/remotes/origin",
+        ],
+    )
+    .unwrap_or_default();
+    let mut tips: Vec<(String, String, bool)> = vec![];
+    for line in refs.lines() {
+        let Some((tip, name)) = line.split_once(' ') else {
+            continue;
+        };
+        let (short, remote) = match name.strip_prefix("origin/") {
+            Some(s) => (s, true),
+            None => (name, false),
+        };
+        if short.is_empty() || short == "HEAD" {
+            continue;
+        }
+        tips.push((tip.to_string(), short.to_string(), remote));
+    }
+    if tips.is_empty() {
+        return HashSet::new();
+    }
+    let main = git(root, &["rev-list", "--first-parent", "HEAD"]).unwrap_or_default();
+    let main: HashSet<&str> = main.lines().collect();
+    tips.into_iter()
+        .filter(|(tip, _, _)| !main.contains(tip.as_str()))
+        .filter(|(_, name, remote)| !remote || !locals.contains(name))
+        .map(|(_, name, _)| name)
+        .collect()
 }
 
 /// Trimmed stdout of a git command that exited 0.

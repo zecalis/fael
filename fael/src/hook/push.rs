@@ -194,7 +194,10 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let t0: Vec<(&core::Row, usize)> = if edit { tiered.clone() } else { vec![] };
     // decision 01M5528X: a dormant row is never pushed — t0 above keeps the one
     // ask an edit earns. ponytail: hashes each candidate's files, short-circuits
-    // on the first match; cache per repo if the 5 ms push ceiling says so
+    // on the first match; cache per repo if the 5 ms push ceiling says so.
+    // Files over PUSH_MAX_BYTES have no verdict here while the pull side reads
+    // up to the stamp cap, so a row the pull side calls dormant can still show
+    // on push — the safe side (one extra row, never a wrong hide), and rare.
     let mut blobs = Blobs::new();
     // retired notes (chunk done) likewise; the merged-branch proof spawns git, so not here
     let retired = super::retired::ids(&c.repo, &c.log, false);

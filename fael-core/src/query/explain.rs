@@ -115,7 +115,10 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
         // and that closed rows are out of sight unless --all
         [one] => {
             let what = one.rsplit_once(" ×").map_or(one.as_str(), |(p, _)| p);
-            let (gone, spent) = (log.dormant.len() - log.retired.len(), log.retired.len());
+            let (gone, spent) = (
+                log.dormant.len().saturating_sub(log.retired.len()),
+                log.retired.len(),
+            );
             let hidden = match (f.all, gone, spent) {
                 (true, ..) => String::new(),
                 (false, 0, 0) => " (open rows only; --all adds closed)".into(),

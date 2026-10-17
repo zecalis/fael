@@ -106,6 +106,72 @@ fn a_note_retires_when_its_branch_is_merged_and_not_before() {
 }
 
 #[test]
+fn notes_retire_when_their_branches_merge_regularly() {
+    let (d, s) = repo();
+    let f = |a: &[&str]| fael(&d, &s, None, a);
+    for (branch, text, file) in [
+        ("feat/a", "note on feat/a", "a.txt"),
+        ("feat/b", "note on feat/b", "b.txt"),
+    ] {
+        git(&d, &["switch", "-qc", branch]);
+        f(&["add", "note", text, "--files", "plan:demo"]);
+        std::fs::write(d.join(file), "work\n").unwrap();
+        git(&d, &["add", file]);
+        git(&d, &["commit", "-qm", "work"]);
+    }
+    git(&d, &["switch", "-q", "main"]);
+    assert!(f(&["find", "note on feat"]).contains("note on feat/a"));
+    git(&d, &["merge", "-q", "--no-ff", "feat/a"]);
+    git(&d, &["merge", "-q", "--no-ff", "feat/b"]);
+    assert!(f(&["find", "note on feat"]).starts_with("no open row matches"));
+    let all = f(&["find", "note on feat", "--all"]);
+    assert!(all.contains("(retired)"), "{all}");
+}
+
+#[test]
+fn a_note_on_a_branch_with_no_commits_stays() {
+    let (d, s) = repo();
+    let f = |a: &[&str]| fael(&d, &s, None, a);
+    // cut from main, nothing committed: the tip sits on HEAD's first-parent
+    // line, so there is no merged work to prove — unproven, stays live
+    git(&d, &["switch", "-qc", "feat/empty"]);
+    f(&["add", "note", "just branched", "--files", "plan:demo"]);
+    git(&d, &["switch", "-q", "main"]);
+    assert!(f(&["find", "just branched"]).contains("just branched"));
+}
+
+#[test]
+fn a_note_stays_when_only_its_remote_is_merged() {
+    // 01M555VZ: origin/feat/a merged, local feat/a moved on — the batch must
+    // follow is_merged's order (local first) and leave the note live.
+    let (d, s) = repo();
+    let f = |a: &[&str]| fael(&d, &s, None, a);
+    git(&d, &["switch", "-qc", "feat/a"]);
+    f(&["add", "note", "remote only merged", "--files", "plan:demo"]);
+    std::fs::write(d.join("a.txt"), "work\n").unwrap();
+    git(&d, &["add", "a.txt"]);
+    git(&d, &["commit", "-qm", "work"]);
+    let tip = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    let tip = String::from_utf8_lossy(&tip.stdout).trim().to_string();
+    git(&d, &["switch", "-q", "main"]);
+    git(&d, &["merge", "-q", "--no-ff", "feat/a"]);
+    git(&d, &["update-ref", "refs/remotes/origin/feat/a", &tip]);
+    git(&d, &["switch", "-q", "feat/a"]);
+    std::fs::write(d.join("a.txt"), "work\nmore\n").unwrap();
+    git(&d, &["add", "a.txt"]);
+    git(&d, &["commit", "-qm", "more"]);
+    git(&d, &["switch", "-q", "main"]);
+    assert!(
+        f(&["find", "remote only merged"]).contains("remote only merged"),
+        "local feat/a has unmerged commits"
+    );
+}
+
+#[test]
 fn stats_counts_rows_by_state_per_kind() {
     let (d, s) = repo();
     let f = |a: &[&str]| fael(&d, &s, None, a);

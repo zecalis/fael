@@ -20,14 +20,22 @@ pub(crate) fn check(
         return Ok(());
     }
     crate::hook::mark_dormant(r, log);
+    // the same file under its old and new path counts once: both canonicalize
+    // through renames (`fael mv` rows, git log -M). Folders and globs are not
+    // folded in — they are not the same file.
+    let al = crate::aliases::load(r, log, false);
+    let canon = |f: &String| al.current(f).unwrap_or_else(|| f.clone());
     let open = core::find(log, &core::Filter::default());
     let ab = core::abbrev(log);
     let mut lines = vec![];
     for f in row.files.iter().filter(|f| !crate::hook::is_anchor(f)) {
+        let want = canon(f);
         let live: Vec<&&core::Row> = open
             .iter()
             .filter(|o| {
-                o.kind == "decision" && o.files.contains(f) && Some(o.id.as_str()) != superseding
+                o.kind == "decision"
+                    && o.files.iter().any(|of| canon(of) == want)
+                    && Some(o.id.as_str()) != superseding
             })
             .collect();
         if live.len() < MAX_LIVE {

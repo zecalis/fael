@@ -73,3 +73,28 @@ fn dormant_rows_do_not_count() {
     let (ok, out) = add(&d, "four four", &[]);
     assert!(ok, "{out}");
 }
+
+#[test]
+fn a_rename_counts_both_names_together() {
+    let d = repo();
+    std::fs::write(d.join("src/b.rs"), "v1\n").unwrap();
+    for t in ["one one", "two two", "three three"] {
+        assert!(add(&d, t, &[]).0);
+    }
+    // the same file under its new path: the 3 rows filed before the move count
+    let (mv_ok, mv_out) = fael(&d, &["mv", "src/a.rs", "src/b.rs"]);
+    assert!(mv_ok, "{mv_out}");
+    let (ok, out) = fael(
+        &d,
+        &[
+            "add",
+            "decision",
+            "moved over",
+            "--files",
+            "src/b.rs",
+            "--key",
+            "cap:moved-over",
+        ],
+    );
+    assert!(!ok && out.contains("3 live decisions"), "{out}");
+}
