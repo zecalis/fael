@@ -35,7 +35,6 @@ mod friction;
 mod held;
 mod in_context;
 mod markers;
-mod named;
 mod opencode;
 mod prompt;
 mod protocol;

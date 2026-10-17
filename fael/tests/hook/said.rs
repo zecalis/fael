@@ -100,10 +100,10 @@ fn add(d: &Path, args: &[&str]) {
     assert!(ok, "{err}");
 }
 
-/// A prompt pointer is earned by an MCP find on its key; the MCP pull line
-/// carries the session and the query, and an id lookup records the shown id.
+/// The MCP pull line carries the session and the query, and an id lookup
+/// records the shown id.
 #[test]
-fn a_pointer_earns_on_an_mcp_find_by_its_key() {
+fn an_mcp_find_records_its_session_and_query() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let key = "vela:credit-ledger";
@@ -119,13 +119,6 @@ fn a_pointer_earns_on_an_mcp_find_by_its_key() {
             key,
         ],
     );
-    let input = format!(
-        r#"{{"cwd":{},"session_id":"s1","prompt":"is there credit ledger code yet?"}}"#,
-        json(&d)
-    );
-    let (ok, out, _) = fael(&d, &["hook", "prompt", "--client", "claude"], &input);
-    assert!(ok && out.contains(key), "{out}");
-    assert_eq!(yield_of(&d, "pointer"), (1, 0));
     let call = |args: serde_json::Value| {
         let rpc = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
             "params": {"name": "find", "arguments": args}});
@@ -152,7 +145,6 @@ fn a_pointer_earns_on_an_mcp_find_by_its_key() {
         ),
         "{pull}"
     );
-    assert_eq!(yield_of(&d, "pointer"), (1, 1));
     // an id lookup: q.id is the row shown, never the typed text
     let id = pull["found"][0].as_str().unwrap().to_string();
     let pull = call(serde_json::json!({"id": &id[..10]}));

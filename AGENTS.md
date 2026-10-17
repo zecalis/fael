@@ -42,7 +42,6 @@ A new kind gets a fixture in `fael/src/hook/say_contract.rs` (silent when empty,
 **Log as you work. Do not wait to be asked.** Use Fael MCP when available, else the CLI:
 
 ```text
-fael kickoff [file]
 fael add decision|issue|note "..." --title "<≤15-word headline>" --files <files>
 fael find [text] [--files ...] [--key ...]
 fael close <id> "..."

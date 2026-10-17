@@ -131,10 +131,10 @@ fn codex_and_notify_off_print_no_user_line() {
 }
 
 #[test]
-fn session_start_briefs_the_user_on_issues_said() {
+fn session_start_briefs_the_user_on_rows_said() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    // a work branch: the default branch ties no issue to the session
+    // a work branch: the default branch ties no hand-off to the session
     let sw = std::process::Command::new("git")
         .args(["switch", "-q", "-c", "feat/login"])
         .current_dir(&d)
@@ -149,20 +149,20 @@ fn session_start_briefs_the_user_on_issues_said() {
         &d,
         &[
             "add",
-            "issue",
+            "note",
             "login loops",
             "--files",
             "src/a.rs",
             "--key",
-            "auth:loop",
+            "auth:handoff",
         ],
         "",
     );
     assert!(ok, "{err}");
-    // filed on this branch: tied, so said in full, so the user hears it
+    // a hand-off filed on this branch: said, so the user hears it
     let on = start("s1");
     assert_eq!(
-        on["systemMessage"], "fael: briefed agent — 1 open issue (#auth:loop)",
+        on["systemMessage"], "fael: briefed agent — 1 row (#auth:handoff)",
         "{on}"
     );
     std::fs::write(d.join(".fael/config.toml"), "[notify]\nuser = false\n").unwrap();

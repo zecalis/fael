@@ -42,9 +42,7 @@ fn session_start_lists_an_issue_routed_to_the_agent_client() {
     let oc = fael(&d, &["hook", "session-start"], &neutral).1;
     let cl = fael(&d, &["hook", "session-start", "--client", "claude"], &input).1;
     assert!(oc.contains("review the key order (to: opencode)"), "{oc}");
-    assert!(oc.contains("1 to you"), "{oc}");
     assert!(!cl.contains("review the key order"), "{cl}");
-    assert!(!cl.contains("to you"), "{cl}");
 }
 
 #[test]

@@ -190,45 +190,27 @@ fn adapter_matches_neutral_byte_for_byte() {
 }
 
 /// oc-prompt: the shape the V2 `prompt` admission hook forwards — the user's
-/// text, nothing else — gets the one pointer line for an open key head, once
-/// per session, and stays silent otherwise. The JS never matches keys; this
-/// is the server side it relies on.
+/// text, nothing else — says nothing, even when it names an open key.
 #[test]
-fn opencode_prompt_points_at_named_key_once() {
+fn opencode_prompt_says_nothing() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "decision",
-            "append-only",
-            "--files",
-            "src/a.rs",
-            "--key",
-            "vela:credit-ledger",
-        ],
-        "",
-    );
+    let add = [
+        "add",
+        "decision",
+        "append-only",
+        "--files",
+        "src/a.rs",
+        "--key",
+        "vela:credit-ledger",
+    ];
+    let (ok, _, err) = fael(&d, &add, "");
     assert!(ok, "{err}");
-    let ask = |s: &str, p: &str| {
-        let body = serde_json::json!({"cwd": d, "client": "opencode", "session": s, "text": p})
+    let body =
+        serde_json::json!({"cwd": d, "client": "opencode", "session": S, "text": "credit ledger?"})
             .to_string();
-        fael(&d, &["hook", "prompt"], &body)
-    };
-    let (ok, out, _) = ask(S, "is there credit ledger code yet?");
-    // neutral prints the Reply JSON-escaped, like the claude test's shape
-    assert!(
-        ok && out.contains("vela:credit-ledger (1, via \\\"credit ledger\\\", weak head-only)"),
-        "{out}"
-    );
-    // pointer only — the row itself never rides the prompt
-    assert!(!out.contains("append-only"), "{out}");
-    // once per session (neutral prints {"block":false}, never empty)
-    let (ok, out, _) = ask(S, "credit ledger again");
-    assert!(ok && !out.contains("context"), "{out}");
-    // no head named = silent, no turn started by us (Reply has no prompt)
-    let (ok, out, _) = ask("s2", "how does auth work?");
+    let (ok, out, _) = fael(&d, &["hook", "prompt"], &body);
+    // neutral prints {"block":false}, never empty
     assert!(ok && !out.contains("context"), "{out}");
 }
 

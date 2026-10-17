@@ -35,8 +35,8 @@ fn hook_rows_carry_their_branch_tag() {
 }
 
 /// The session brief tags a journal-only row too, not only the edit push
-/// (01M3HTE10): an urgent issue from a deleted branch still lists with
-/// `@branch`.
+/// (01M3HTE10): an issue `to` the reader from a deleted branch still lists
+/// with `@branch`.
 #[test]
 fn session_brief_tags_a_journal_only_row() {
     let d = repo();
@@ -53,7 +53,8 @@ fn session_brief_tags_a_journal_only_row() {
             "urgent from another branch",
             "--files",
             "src/a.rs",
-            "--urgent",
+            "--to",
+            "hook-test",
         ],
         "",
     );

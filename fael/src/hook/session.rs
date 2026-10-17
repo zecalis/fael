@@ -1,5 +1,7 @@
-//! The session-start event: kickoff rows for the repo, and the one-line
-//! warning when `.fael/log` is gitignored by mistake.
+//! The session-start event (decision 01M5528X): hand-offs and the rows
+//! assigned to the reader, nothing else — no count line, no due revisits, no
+//! decisions. Nothing for the reader = nothing said. Plus the one-line
+//! warning when the client wiring is behind.
 
 use super::asks::{UsageMeta, hook_meta};
 use super::focus;
@@ -19,94 +21,36 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     mark_started(&c.session, &c.repo.root);
     // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
     crate::install::auto::start();
-    // a compacted context lost the rows pushed into it — tell them again
-    if e.source.as_deref() == Some("compact") && !c.session.is_empty() {
+    // a compacted or cleared context lost the rows pushed into it — tell them again
+    if matches!(e.source.as_deref(), Some("compact" | "clear")) && !c.session.is_empty() {
         let _ = std::fs::remove_file(seen_path(&c.session, "", &c.repo.root));
     }
     let branch = start_branch(&c.session, &c.repo.root);
     // once per session: pick up renames committed since the last session, so
-    // the read/edit push (which never spawns git) resolves them — and kickoff
-    // keeps rows whose files were merely renamed
-    let al = aliases::load(&c.repo, &c.log, true);
-    // PLAN-fael-direction chunk 3: issues `to` this reader are the reader's
-    // job, and urgent issues with no `to` belong to nobody — both list in
-    // full above the count line; the count covers every open issue. `to` and
-    // `urgent` never change push or find. Reader identity needs git, which
-    // session-start already spawns (aliases refresh above, check-ignore
-    // below); read/edit never compute it (SPEC fail examples).
+    // the read/edit push (which never spawns git) resolves them
+    aliases::load(&c.repo, &c.log, true);
+    // reader identity needs git, which session-start already spawns; read/edit
+    // never compute it (SPEC fail examples)
     let reader = crate::writer(&c.repo);
-    // one pass over the open rows: the Focus keys the branch rows carry, and
-    // the to-do's issues — `find` hides closed and superseded either way
     let all: Vec<&core::Row> = core::find(&c.log, &core::Filter::default());
     let f = core::Focus::from_rows(branch.as_deref(), &all);
     focus::write(&c.session, &c.repo.root, &f);
-    let work = core::on_work(&f, &all, &c.repo.cfg.anchor_prefixes);
-    let open: Vec<&core::Row> = all.iter().copied().filter(|r| r.kind == "issue").collect();
-    let t = todo(open, &reader, e.client.as_deref(), &work);
-    let decisions: Vec<_> = if c.repo.cfg.session_decisions == 0 {
-        vec![]
-    } else {
-        core::kickoff(
-            &c.log,
-            &core::Filter {
-                kind: Some("decision".into()),
-                ..core::Filter::default()
-            },
-            &c.repo.root,
-            &al,
-            &c.repo.cfg.anchor_prefixes,
-        )
-        .into_iter()
-        .take(c.repo.cfg.session_decisions)
-        .collect()
-    };
-    // chunk 5 wakes due revisits in CLI kickoff, but agents walk through
-    // this door instead — due rows list here too, kickoff-ranked, minus ids
-    // the to-do and decisions already show. Chunk 3 promises the to-do in
-    // full under one shared budget, so it renders first: a flood of due
-    // rows can cut the decisions, never the reader's own issues.
-    let due: Vec<&core::Row> = {
-        let (due, _) = core::with_due(&c.log, vec![], &c.repo.root, &al);
-        let shown: std::collections::HashSet<&str> = t
-            .listed
-            .iter()
-            .chain(decisions.iter())
-            .map(|r| r.id.as_str())
-            .collect();
-        let due: Vec<&core::Row> = due
-            .into_iter()
-            .filter(|r| !shown.contains(r.id.as_str()))
-            .collect();
-        core::ranked(due, None, |_| 0, core::freshness(&c.repo.root, &al))
-    };
-    // one render, one budget: to-do first, then due, then decisions, a single cut line
-    let shown: Vec<&core::Row> = t
-        .listed
-        .iter()
-        .chain(due.iter())
-        .chain(decisions.iter())
-        .copied()
-        .collect();
+    let shown = start_rows(&all, &f, &reader, e.client.as_deref());
     let mut body = crate::journal::tag(
         core::render(&c.log, &shown, c.repo.cfg.kickoff_tokens),
         &c.tags,
     );
-    if let Some(line) = count_line(&t) {
-        body.push_str(&line);
-    }
-    if let Some(line) = gone_line(&c.repo, &c.log, &all, &reader) {
-        body.push_str(&line);
-    }
-    let adopted = crate::journal::home(&c.repo).is_some();
     // like the read/edit push: usage counts only the ids render actually
     // said — rows the budget cut off never reached any context
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let said = &shown[..n.min(shown.len())];
-    let ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    // the rows, then each warning — the report rule rides the skill's
-    // description (always loaded), the id rule that and the reject of an id
-    // that does not exist (PLAN-fael-say-gate chunk 2)
-    // the seen list, so a commit push later this session never repeats a named id
+    let mut ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
+    let mut keys: Vec<String> = ids.iter().map(|i| format!("~start:{i}")).collect();
+    if let Some((uid, line)) = chunk_line(&c.repo) {
+        keys.push(format!("~start:chunk:{uid}"));
+        body.push_str(&line);
+    }
+    let adopted = crate::journal::home(&c.repo).is_some();
     let seen = seen_path(&c.session, &c.agent, &c.repo.root);
     let mut out = Outbox::open(
         (!c.session.is_empty())
@@ -114,10 +58,9 @@ pub(crate) fn session_start(e: &Event) -> Reply {
             .flatten(),
     );
     out.say(Line {
-        kind: Kind::Brief,
+        kind: Kind::Brief { keys },
         text: body,
     });
-    super::named::say(&mut out, &c.repo.root, &c.log, &all);
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
     }
@@ -128,7 +71,10 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // that event out of every injection total
     let (event, context) = match r.context() {
         Some(t) => ("session-start", t),
-        None => (core::stats::SILENT_START, ""),
+        None => {
+            ids.clear();
+            (core::stats::SILENT_START, "")
+        }
     };
     let meta = UsageMeta {
         said: r.said(),
@@ -142,16 +88,68 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     r
 }
 
+/// The rows session start hands over, ranked: open hand-offs (`:handoff`
+/// key) of this branch's work — filed on the start branch or carrying a
+/// Focus key — then open rows `to` this reader. `client` is the agent's own
+/// name (`opencode`, `codex`, `claude`): a row `--to opencode` reaches every
+/// OpenCode session in the repo, whoever runs it.
+fn start_rows<'a>(
+    all: &[&'a core::Row],
+    f: &core::Focus,
+    reader: &str,
+    client: Option<&str>,
+) -> Vec<&'a core::Row> {
+    let handoff = |r: &core::Row| {
+        let key = r.key.as_deref().filter(|k| k.ends_with(":handoff"));
+        key.is_some_and(|k| f.keys.contains(k))
+            || (key.is_some() && r.branch().is_some() && r.branch() == f.branch.as_deref())
+    };
+    let mine = |r: &core::Row| {
+        r.to_who().is_some_and(|t| {
+            core::to_matches(t, reader) || client.is_some_and(|c| t.eq_ignore_ascii_case(c))
+        })
+    };
+    let rank = |rows: Vec<&'a core::Row>| core::ranked(rows, Some(reader), |_| 0, core::fresh_ts);
+    let mut out = rank(all.iter().copied().filter(|r| handoff(r)).collect());
+    out.extend(rank(
+        all.iter()
+            .copied()
+            .filter(|r| !handoff(r) && mine(r))
+            .collect(),
+    ));
+    out
+}
+
+/// The live chunk run this worktree holds (`fael chunk start` here, maybe in
+/// another session): its uid and the line that points at its brief. No
+/// fael.db, no run = `None`.
+fn chunk_line(repo: &crate::Repo) -> Option<(String, String)> {
+    let db = crate::plan::db(repo);
+    if !db.exists() {
+        return None;
+    }
+    let held = fael_core::plan::Store::open(&db)
+        .ok()?
+        .held(&repo.root.to_string_lossy())
+        .ok()?;
+    let (uid, title, _) = held.into_iter().next()?;
+    Some((
+        uid.clone(),
+        format!(
+            "fael: this worktree runs chunk {uid} \"{title}\" — its brief and hand-offs: fael chunk show {uid}\n"
+        ),
+    ))
+}
+
 /// PLAN-fael-visible-secretary chunk 4: the brief's line for the user — the
-/// open issues the agent was just handed in full, up to two named by key
-/// (else id) so each is a `fael find` away. No issue said = no line.
+/// rows the agent was just handed, up to two named by key (else id) so each
+/// is a `fael find` away. No row said = no line.
 fn brief_line(c: &super::protocol::Ctx, said: &[&core::Row]) -> Option<String> {
-    let issues: Vec<&core::Row> = said.iter().copied().filter(|r| r.kind == "issue").collect();
-    if !c.repo.cfg.notify_user || issues.is_empty() {
+    if !c.repo.cfg.notify_user || said.is_empty() {
         return None;
     }
     let ab = core::abbrev(&c.log);
-    let named: Vec<String> = issues
+    let named: Vec<String> = said
         .iter()
         .take(2)
         .map(|r| match &r.key {
@@ -159,11 +157,11 @@ fn brief_line(c: &super::protocol::Ctx, said: &[&core::Row]) -> Option<String> {
             None => ab.short(&r.id).to_string(),
         })
         .collect();
-    let more = if issues.len() > 2 { " …" } else { "" };
+    let more = if said.len() > 2 { " …" } else { "" };
     Some(format!(
-        "fael: briefed agent — {} open {} ({}{more})",
-        issues.len(),
-        if issues.len() == 1 { "issue" } else { "issues" },
+        "fael: briefed agent — {} {} ({}{more})",
+        said.len(),
+        if said.len() == 1 { "row" } else { "rows" },
         named.join(", ")
     ))
 }
@@ -213,128 +211,4 @@ fn start_branch(session: &str, root: &Path) -> Option<String> {
         return None;
     }
     crate::journal::work_branch(root)
-}
-
-/// Open issues grouped for session start: mine (`to` = reader, the reader's
-/// job), hot (urgent with no `to` — nobody owns them, so everyone sees them
-/// in full) and work (tied to this branch, `core::on_work` — a count the
-/// agent skims past hid the one issue on its plan). All list in full,
-/// ranked; everything else counts only.
-struct Todo<'a> {
-    listed: Vec<&'a core::Row>,
-    to_you: usize,
-    to_you_urgent: usize,
-    hot: usize,
-    work: usize,
-    total: usize,
-}
-
-/// `client` is the agent's own name (`opencode`, `codex`, `claude`): an issue
-/// `--to opencode` reaches every OpenCode session in the repo, whoever runs it.
-fn todo<'a>(
-    open: Vec<&'a core::Row>,
-    reader: &str,
-    client: Option<&str>,
-    work: &[&core::Row],
-) -> Todo<'a> {
-    let total = open.len();
-    let mut mine = vec![];
-    let mut unowned = vec![];
-    let mut tied = vec![];
-    let mut to_you_urgent = 0;
-    for r in open {
-        match r.to_who() {
-            Some(t)
-                if core::to_matches(t, reader)
-                    || client.is_some_and(|c| t.eq_ignore_ascii_case(c)) =>
-            {
-                to_you_urgent += usize::from(r.urgent_value().is_some());
-                mine.push(r);
-            }
-            None if r.urgent_value().is_some() => unowned.push(r),
-            _ if work.iter().any(|w| w.id == r.id) => tied.push(r),
-            _ => {}
-        }
-    }
-    let (to_you, hot, work) = (mine.len(), unowned.len(), tied.len());
-    let listed = core::ranked(
-        mine.into_iter().chain(unowned).chain(tied).collect(),
-        Some(reader),
-        |_| 0,
-        core::fresh_ts,
-    );
-    Todo {
-        listed,
-        to_you,
-        to_you_urgent,
-        hot,
-        work,
-        total,
-    }
-}
-
-/// The one-line count summary, generated from the log, not prose. Zero open
-/// issues = no line (chunk 1); zero segments are skipped, the total always
-/// shows: `fael: 2 to you (1 urgent) · 1 urgent unassigned · 7 open — …`.
-/// Kept short: it rides every session start, and the file-touch push of
-/// each counted issue is the agent's to notice, not this line's to explain.
-fn count_line(t: &Todo) -> Option<String> {
-    if t.total == 0 {
-        return None;
-    }
-    let mut parts = vec![];
-    if t.to_you > 0 {
-        parts.push(match t.to_you_urgent {
-            0 => format!("{} to you", t.to_you),
-            u => format!("{} to you ({u} urgent)", t.to_you),
-        });
-    }
-    if t.hot > 0 {
-        parts.push(format!("{} urgent unassigned", t.hot));
-    }
-    if t.work > 0 {
-        parts.push(format!("{} tied to this branch", t.work));
-    }
-    parts.push(format!(
-        "{} open {}",
-        t.total,
-        if t.total == 1 { "issue" } else { "issues" }
-    ));
-    Some(format!(
-        "fael: {} — fael find --kind issue (MCP find kind=issue)\n",
-        parts.join(" · ")
-    ))
-}
-
-/// Open issues this reader holds whose branch is gone from the clone — the
-/// work merged (or was dropped) and nobody closed the issue with its answer.
-/// Says what is true, never "merged": a deleted branch is all fael sees. A
-/// file read per hold, no git spawn; no journal = no claims = no line.
-// ponytail: a squash-merged branch kept locally still counts as alive, and a
-// hold made under the same name on another machine reads as gone here —
-// add an ancestry check (a git spawn) only if the miss shows up in use.
-fn gone_line(
-    repo: &crate::Repo,
-    log: &core::Log,
-    open: &[&core::Row],
-    reader: &str,
-) -> Option<String> {
-    let common = repo.journal.as_deref().and_then(Path::parent)?;
-    let gone: Vec<(&core::Row, &str)> = open
-        .iter()
-        .filter(|r| r.kind == "issue" && r.by == reader)
-        .filter_map(|r| r.held().map(|h| (*r, h)))
-        .filter(|(_, h)| !crate::journal::branch_alive(common, h))
-        .collect();
-    let (first, branch) = gone.first()?;
-    let ab = core::abbrev(log);
-    let id = ab.short(&first.id);
-    let more = match gone.len() {
-        1 => String::new(),
-        n => format!(" +{} more", n - 1),
-    };
-    Some(format!(
-        "fael: {id} held @{branch}{more} — branch gone, issue still open: \
-         fael close {id} \"<what shipped, where>\" (MCP close), or fael claim {id} --force\n"
-    ))
 }
