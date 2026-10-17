@@ -63,3 +63,37 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
     }
     Ok(ExitCode::SUCCESS)
 }
+
+/// The forms an agent types for `chunk show` that name a plan and a label: `p/label`,
+/// `p:label`, `p label`, `--uid X`. Each becomes `show <uid>` through `uid_in` (the plan
+/// checks the label) or rejects naming the retype; anything else passes untouched.
+pub(crate) fn natural(
+    a: &Args,
+    rest: &[String],
+    r: &Repo,
+) -> Result<Option<(Args, Vec<String>)>, String> {
+    let words: Vec<&str> = rest.iter().map(String::as_str).collect();
+    let (key, plan_label) = match (words.as_slice(), a.one("uid")) {
+        (["show"], Some(u)) => (u, None),
+        (["show", _], Some(_)) | (["show", _, _], Some(_)) => {
+            return Err(
+                "rejected: chunk show takes a uid or label, not both --uid and a name — \
+                        retype `fael chunk show <uid>`"
+                    .into(),
+            );
+        }
+        (["show", k], None) if !a.has("plan") => match k.rsplit_once(['/', ':']) {
+            Some((p, l)) if !p.is_empty() && !l.is_empty() => (String::new(), Some((p, l))),
+            _ => return Ok(None),
+        },
+        (["show", p, l], None) if !a.has("plan") => (String::new(), Some((*p, *l))),
+        _ => return Ok(None),
+    };
+    let uid = match plan_label {
+        None => key,
+        Some((p, l)) => Store::open(&db(r))?.uid_in(l, p).map_err(|e| {
+            format!("{e}\nretype `fael chunk show --plan {p} {l}` with a plan and label from `fael board`")
+        })?,
+    };
+    Ok(Some((a.without("uid"), vec!["show".into(), uid])))
+}
