@@ -245,15 +245,24 @@ fn a_text_flag_next_to_a_text_is_named() {
     assert_eq!(text_twice(&raw, &rewrite(raw.clone()), wrong.into()), wrong);
 }
 
-/// `--files a.rs b.rs` names the word the comma list left behind; a text after
-/// one path is not a list and is left as it came.
+/// `--files a.rs b.rs c.md` joins into one comma list up to the next flag or
+/// word that is not a path; an argv with no spread list is `None`.
 #[test]
-fn a_list_flag_split_by_a_space_is_named() {
-    let wrong = "rejected: wrong arguments for \"add\" — try 'fael add --help'";
-    let raw = argv("add issue x --files a/b.rs c/d.rs");
-    let got = list_spread(&raw, wrong.into());
-    assert!(got.starts_with(wrong), "{got}");
-    assert!(got.ends_with("--files a/b.rs,c/d.rs"), "{got}");
-    let raw = argv("add note --files a.rs x y");
-    assert_eq!(list_spread(&raw, wrong.into()), wrong);
+fn a_list_flag_split_by_a_space_is_joined() {
+    let got = join_lists(&argv(
+        "add issue x --files a/b.rs c/d.rs AGENTS.md --key k:t",
+    ));
+    assert_eq!(
+        got,
+        Some(argv(
+            "add issue x --files a/b.rs,c/d.rs,AGENTS.md --key k:t"
+        ))
+    );
+    let got = join_lists(&argv("add note --files a.rs b.rs x"));
+    assert_eq!(got, Some(argv("add note --files a.rs,b.rs x")));
+    let got = join_lists(&argv("chunk edit u --scope a/ b/c.rs"));
+    assert_eq!(got, Some(argv("chunk edit u --scope a/,b/c.rs")));
+    // one path, a text after it, a path that is not after a list flag
+    assert_eq!(join_lists(&argv("add note --files a.rs x y")), None);
+    assert_eq!(join_lists(&argv("add note a.rs b.rs")), None);
 }

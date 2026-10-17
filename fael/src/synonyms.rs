@@ -240,29 +240,36 @@ pub(crate) fn reject(argv: &[String], e: String) -> String {
 /// What a failed run says: a text flag clash (`text_twice`), else `reject`.
 /// `raw` is the agent's argv, `argv` the rewritten one.
 pub(crate) fn explain(raw: &[String], argv: &[String], e: String) -> String {
-    reject(argv, list_spread(raw, text_twice(raw, argv, e)))
+    reject(argv, text_twice(raw, argv, e))
 }
 
-/// `--files a.rs b.rs`: the second path became a positional and the parser said
-/// only "wrong arguments". Name the word a list flag left behind.
-fn list_spread(raw: &[String], e: String) -> String {
-    if !e.starts_with("rejected: wrong arguments") {
-        return e;
-    }
+/// `--files a.rs b.rs`: the paths after the first became positionals and the
+/// parser said "wrong arguments" — the most common add reject (23 of 23 seen
+/// 2026-10-14..17). The argv with each path-shaped word after a list flag's
+/// value joined into its comma list; `None` when there is none. Called only
+/// on that arity reject, so an argv that already runs never changes meaning.
+pub(crate) fn join_lists(argv: &[String]) -> Option<Vec<String>> {
     let pathy =
         |w: &str| !w.starts_with('-') && !w.contains(char::is_whitespace) && w.contains(['/', '.']);
-    match raw
-        .windows(3)
-        .find(|w| matches!(w[0].as_str(), "--files" | "--scope") && pathy(&w[1]) && pathy(&w[2]))
-    {
-        Some(w) => format!(
-            "{e}\n{f} takes one comma list: `{b}` came as its own word — {f} {a},{b}",
-            f = w[0],
-            a = w[1],
-            b = w[2]
-        ),
-        None => e,
+    let (mut out, mut joined, mut list) = (Vec::<String>::new(), false, false);
+    for w in argv {
+        // `list`: the word before this one is a list flag's value (or a word joined into it)
+        if list
+            && pathy(w)
+            && let Some(last) = out.last_mut()
+            && pathy(last)
+        {
+            last.push(',');
+            last.push_str(w);
+            joined = true;
+            continue;
+        }
+        list = out
+            .last()
+            .is_some_and(|f| matches!(f.as_str(), "--files" | "--scope"));
+        out.push(w.clone());
     }
+    joined.then_some(out)
 }
 
 /// `add note "x" --body "y"`: `rewrite` moved the flag into the text slot, so

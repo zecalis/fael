@@ -9,7 +9,7 @@
 const CORE: &[(&str, &str)] = &[
     (
         "add",
-        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user] [--revisit date|text] [--urgent] [--supersedes id [--replace old --with new]] [--json]
+        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user] [--revisit date|text] [--urgent] [--supersedes id [--replace old --with new, no <text>]] [--json]
     (write rows in English; file each in the same message as your next tool call, never alone;
      no --files = the files this session edited, as the edit hook recorded;
      --title = the ≤15-word headline lists show, the body is pulled by id — give one to any

@@ -8,7 +8,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "add",
         "write a row",
-        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user] [--revisit date|text] [--urgent|--urgent-before id] [--supersedes id [--replace old --with new]] [--force] [--dry-run] [--json]
+        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user] [--revisit date|text] [--urgent|--urgent-before id] [--supersedes id [--replace old --with new, no <text>]] [--force] [--dry-run] [--json]
     (write rows in English; file each in the same message as your next tool call, never alone;
      no --files = the files this session edited, as the edit hook recorded;
      --title = the ≤15-word headline lists show, the body is pulled by id — give one to any

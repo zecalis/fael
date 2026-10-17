@@ -44,8 +44,17 @@ fn main() -> ExitCode {
     #[cfg(unix)]
     reset_sigpipe();
     let raw: Vec<String> = std::env::args().skip(1).collect();
-    let argv = synonyms::rewrite(raw.clone());
-    let res = run(argv.clone()).map_err(|e| synonyms::explain(&raw, &argv, e));
+    let mut argv = synonyms::rewrite(raw.clone());
+    let mut res = run(argv.clone());
+    // the arity reject runs nothing: retry once with `--files a b` as `--files a,b`
+    if let Err(e) = &res
+        && e.starts_with("rejected: wrong arguments")
+        && let Some(joined) = synonyms::join_lists(&argv)
+    {
+        argv = joined;
+        res = run(argv.clone());
+    }
+    let res = res.map_err(|e| synonyms::explain(&raw, &argv, e));
     hook::record_cli(&argv, &res);
     match res {
         Ok(code) => code,
