@@ -36,8 +36,11 @@ pub(crate) fn explain(argv: &[String], e: String) -> String {
     let files = a
         .one("files")
         .map_or(String::new(), |f| format!(" --files {f}"));
+    let title = a
+        .one("title")
+        .map_or("<≤15-word headline>".to_string(), String::from);
     format!(
-        "rejected: wrong arguments for \"add\" — {why}; retype: fael add {kind} \"{text}\" --title \"<≤15-word headline>\"{files}"
+        "rejected: wrong arguments for \"add\" — {why}; retype: fael add {kind} \"{text}\" --title \"{title}\"{files}"
     )
 }
 
