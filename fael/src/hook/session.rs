@@ -57,8 +57,13 @@ pub(crate) fn session_start(e: &Event) -> Reply {
             .then(|| super::state::lock_seen(&seen))
             .flatten(),
     );
+    let brief = Kind::Brief { keys };
+    // a brief already said this context (a resume) names no ids, even when a notice is said
+    if !out.fresh(&brief) {
+        ids.clear();
+    }
     out.say(Line {
-        kind: Kind::Brief { keys },
+        kind: brief,
         text: body,
     });
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
