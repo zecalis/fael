@@ -107,19 +107,50 @@ pub fn mark_changed(
 // by merge base if kickoff ever shows many branches from one old base
 pub(crate) fn is_merged(root: &Path, b: &str) -> bool {
     // the local branch, else our fetch of it; a deleted branch proves nothing
-    let Some(tip) = ["", "origin/"].iter().find_map(|p| {
+    match live_tip(root, b) {
+        Some(tip) => merged_tip(root, &tip, true),
+        None => false,
+    }
+}
+
+/// `is_merged` for a note whose branch ref may be gone: the live ref wins; else the
+/// tip sha the row was stamped with, if its commit is still in the object store —
+/// proved by patch-id only (the stamped tip may predate later commits on the branch,
+/// so "is an ancestor of HEAD" would prove too much). No ref, no sha = unproven.
+pub(crate) fn is_merged_at(root: &Path, b: &str, sha: Option<&str>) -> bool {
+    if let Some(tip) = live_tip(root, b) {
+        return merged_tip(root, &tip, true);
+    }
+    let Some(sha) = sha.filter(|s| !s.is_empty() && s.bytes().all(|c| c.is_ascii_hexdigit()))
+    else {
+        return false;
+    };
+    git(
+        root,
+        &["rev-parse", "--verify", "-q", &format!("{sha}^{{commit}}")],
+    )
+    .is_some_and(|tip| merged_tip(root, &tip, false))
+}
+
+fn live_tip(root: &Path, b: &str) -> Option<String> {
+    ["", "origin/"].iter().find_map(|p| {
         git(
             root,
             &["rev-parse", "--verify", "-q", &format!("{p}{b}^{{commit}}")],
         )
-    }) else {
-        return false;
-    };
-    if git(root, &["merge-base", "--is-ancestor", &tip, "HEAD"]).is_some() {
+    })
+}
+
+fn merged_tip(root: &Path, tip: &str, ancestor_proves: bool) -> bool {
+    let tip = tip.to_string();
+    if ancestor_proves && git(root, &["merge-base", "--is-ancestor", &tip, "HEAD"]).is_some() {
         // on HEAD's first-parent line = the branch never left the commit it
         // was cut from (no own commits) — that is not "merged"
         return git(root, &["rev-list", "--first-parent", "HEAD"])
             .is_some_and(|l| !l.lines().any(|c| c == tip));
+    }
+    if git(root, &["merge-base", "--is-ancestor", &tip, "HEAD"]).is_some() {
+        return false;
     }
     let Some(base) = git(root, &["merge-base", "HEAD", &tip]) else {
         return false;

@@ -107,6 +107,11 @@ impl Row {
         self.extra.get("branch").and_then(|v| v.as_str())
     }
 
+    /// Short sha of HEAD when the row was written (`extra.sha`), stamped by tools.
+    pub fn sha(&self) -> Option<&str> {
+        self.extra.get("sha").and_then(|v| v.as_str())
+    }
+
     /// The branch working on this issue: `extra.held`, set by `fael claim`.
     /// Informational only — nothing refuses a second claim, it warns.
     pub fn held(&self) -> Option<&str> {
