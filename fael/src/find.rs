@@ -13,9 +13,10 @@ pub(crate) mod owner;
 
 pub(crate) use kickoff::kickoff;
 
-/// Does git prove branch `b` merged into HEAD (the proof kickoff's `(merged)` uses)?
-pub(crate) fn merged_branch(root: &std::path::Path, b: &str) -> bool {
-    merged::is_merged(root, b)
+/// Does git prove branch `b` merged into HEAD? A deleted branch is proved by the row's
+/// stamped tip sha, by patch-id only.
+pub(crate) fn merged_branch_at(root: &std::path::Path, b: &str, sha: Option<&str>) -> bool {
+    merged::is_merged_at(root, b, sha)
 }
 
 /// Every branch git proves merged into HEAD, in three spawns total — the batch

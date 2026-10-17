@@ -171,6 +171,93 @@ fn a_note_stays_when_only_its_remote_is_merged() {
     );
 }
 
+/// A branch with one commit, a note filed on it at its tip, then back to main.
+fn noted_branch(d: &Path, s: &Path, text: &str) {
+    git(d, &["switch", "-qc", "feat/gone"]);
+    std::fs::write(d.join("a.txt"), "a\n").unwrap();
+    git(d, &["add", "a.txt"]);
+    git(d, &["commit", "-qm", "work"]);
+    fael(d, s, None, &["add", "note", text, "--files", "plan:demo"]);
+    git(d, &["switch", "-q", "main"]);
+}
+
+#[test]
+fn a_note_retires_when_its_squash_merged_branch_is_deleted() {
+    let (d, s) = repo();
+    noted_branch(&d, &s, "gone after squash");
+    git(&d, &["merge", "-q", "--squash", "feat/gone"]);
+    git(&d, &["commit", "-qm", "squash"]);
+    git(&d, &["branch", "-qD", "feat/gone"]);
+    let out = fael(&d, &s, None, &["find", "gone after squash"]);
+    assert!(out.starts_with("no open row matches"), "{out}");
+}
+
+#[test]
+fn a_note_stays_when_its_branch_is_deleted_unmerged() {
+    let (d, s) = repo();
+    noted_branch(&d, &s, "gone unmerged");
+    git(&d, &["branch", "-qD", "feat/gone"]);
+    assert!(fael(&d, &s, None, &["find", "gone unmerged"]).contains("gone unmerged"));
+}
+
+#[test]
+fn a_row_with_no_stamped_tip_stays_when_its_branch_is_deleted() {
+    let (d, s) = repo();
+    noted_branch(&d, &s, "gone no tip");
+    git(&d, &["merge", "-q", "--squash", "feat/gone"]);
+    git(&d, &["commit", "-qm", "squash"]);
+    git(&d, &["branch", "-qD", "feat/gone"]);
+    // an old row: drop its `sha` stamp from the log
+    let mut cutn = 0;
+    for e in [d.join(".fael"), d.join(".git"), s.clone()]
+        .iter()
+        .flat_map(|p| walk(p))
+    {
+        if let Ok(t) = std::fs::read_to_string(&e) {
+            let cut = regex_free_cut(&t);
+            if cut != t {
+                std::fs::write(&e, cut).unwrap();
+                cutn += 1;
+            }
+        }
+    }
+    assert!(cutn > 0, "no sha stamp found to strip");
+    assert!(fael(&d, &s, None, &["find", "gone no tip"]).contains("gone no tip"));
+}
+
+fn walk(p: &Path) -> Vec<PathBuf> {
+    let mut v = vec![];
+    for e in std::fs::read_dir(p).into_iter().flatten().flatten() {
+        let q = e.path();
+        if q.is_dir() {
+            v.extend(walk(&q));
+        } else {
+            v.push(q);
+        }
+    }
+    v
+}
+
+/// Remove every `"sha":"<hex>",` / `,"sha":"<hex>"` pair from jsonl text.
+fn regex_free_cut(t: &str) -> String {
+    let mut out = String::new();
+    let mut rest = t;
+    while let Some(i) = rest.find("\"sha\":\"") {
+        let (head, tail) = rest.split_at(i);
+        let end = tail[7..].find('"').map_or(tail.len(), |j| 7 + j + 1);
+        let head = head.strip_suffix(',').unwrap_or(head);
+        out.push_str(head);
+        let tail = &tail[end..];
+        rest = if head.len() == rest[..i].len() {
+            tail.strip_prefix(',').unwrap_or(tail)
+        } else {
+            tail
+        };
+    }
+    out.push_str(rest);
+    out
+}
+
 #[test]
 fn stats_counts_rows_by_state_per_kind() {
     let (d, s) = repo();

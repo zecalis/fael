@@ -45,7 +45,7 @@ pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
         .copied()
         .collect();
     let head = crate::journal::head_branch(&r.root);
-    let mut proved: HashMap<&str, bool> = HashMap::new();
+    let mut proved: HashMap<(&str, Option<&str>), bool> = HashMap::new();
     // one `for-each-ref --merged` per pull, not one proof per branch; lazily
     // built by the first merge candidate, so a pull with none spawns nothing
     let mut merged: Option<HashSet<String>> = None;
@@ -73,13 +73,14 @@ pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
                         Some(b) != head.as_deref() && !crate::journal::is_trunk(&r.root, b)
                     })
                     && tied.is_some_and(|b| {
-                        *proved.entry(b).or_insert_with(|| {
+                        *proved.entry((b, w.sha())).or_insert_with(|| {
                             let set = merged
                                 .get_or_insert_with(|| crate::find::merged_names(&r.root));
                             // the batch proves regular merges; a squash merge
                             // is no ancestor, so it still takes the per-branch
                             // patch-id proof (empty batch = that path as before)
-                            set.contains(b) || crate::find::merged_branch(&r.root, b)
+                            set.contains(b)
+                                || crate::find::merged_branch_at(&r.root, b, w.sha())
                         })
                     })
         })
