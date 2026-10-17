@@ -3,6 +3,7 @@
 //! tiny std-only time helpers the hook path uses instead of chrono.
 
 use crate::core;
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -113,6 +114,35 @@ pub(crate) fn lock_seen(p: &Path) -> Option<File> {
         .ok()?;
     let _ = f.lock();
     Some(f)
+}
+
+/// The retired ids a pull proved (merged branches included), one per line under a
+/// `<head sha> <rows> <branch>` header (the checked-out branch is never "merged work", so it keys too). A cache, not row state: the push reads it only
+/// while both keys still match and ignores it otherwise; it is never in the log.
+fn retired_path(root: &Path) -> PathBuf {
+    let key = session_key(&root.to_string_lossy());
+    state_dir().join("retired").join(format!("{key}.txt"))
+}
+
+/// Fails open: unwritable = the push falls back to its no-git result.
+pub(crate) fn write_retired(root: &Path, key: &str, ids: &HashSet<String>) {
+    let p = retired_path(root);
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let body: String = ids.iter().map(|i| format!("{i}\n")).collect();
+    // temp + rename: a push never reads a half-written file
+    let tmp = p.with_extension("tmp");
+    if std::fs::write(&tmp, format!("{key}\n{body}")).is_ok() {
+        let _ = std::fs::rename(tmp, p);
+    }
+}
+
+/// The cached ids when the file's header is `key`.
+pub(crate) fn read_retired(root: &Path, key: &str) -> Option<HashSet<String>> {
+    let s = std::fs::read_to_string(retired_path(root)).ok()?;
+    let (k, ids) = s.split_once('\n')?;
+    (k == key).then(|| ids.lines().map(String::from).collect())
 }
 
 /// A Weak risk line stashed by stop for the next push — shown once, deleted.
