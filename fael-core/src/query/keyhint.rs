@@ -8,6 +8,12 @@ use crate::Log;
 /// topic — and the most keys one hint line lists.
 const HINT_MAX_KEYS: usize = 3;
 
+/// Open keys sharing a head before the head alone names the family (`credit`
+/// over credit-*). Two is a coincidence, not a topic: "read" pulled
+/// vela:read-away + read-page, "ledger" pulled fael-board:ledger-signals +
+/// ledger-view on prompts about neither (issue 01M543R9, decision hint:family-3).
+const FAMILY_MIN: usize = 3;
+
 /// fael's own workflow words, stopped in every repo like `[hint] stop`: lead
 /// and worker briefs carry them on every prompt, so they name the process,
 /// never the topic. 2026-10-11..15: chunk 17/122 pointers pulled, line 8/60,
@@ -37,7 +43,7 @@ const FAEL_WORDS: [&str; 4] = ["chunk", "line", "worktree", "docs"];
 /// excluded the same way, ASCII case-insensitive, and so is `FAEL_WORDS`;
 /// a key named whole still hints.
 /// A head alone names a key only when the key has no other nameable segment
-/// or the head is a family (two or more open keys share it); a lone key with
+/// or the head is a family (`FAMILY_MIN` or more open keys share it); a lone key with
 /// more segments needs a second one named (3-char words count there).
 /// Open = some row on the key is neither closed nor superseded. At most
 /// `HINT_MAX_KEYS`, best match first, most used first as the tie-break.
@@ -82,11 +88,13 @@ pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<S
     let mut hit: Vec<(KeyUse, Vec<String>, bool)> = vec![];
     for k in &keys {
         let s = segs(&k.key);
-        let named: Vec<String> = s
+        // distinct segments: `done-is-done` named by "done done" is one word
+        let mut named: Vec<String> = s
             .iter()
             .filter(|seg| words.contains(*seg))
             .cloned()
             .collect();
+        named.dedup();
         // the key typed whole (`plan:x-y:handoff`) counts by itself — the
         // agent named it in full, no head rule should stand in the way
         let whole = names_key(prompt, &k.key);
@@ -99,7 +107,7 @@ pub fn key_hints(log: &Log, prompt: &str, stop: &[String]) -> Vec<(KeyUse, Vec<S
         // (vela: "public" → public-api, "rule" → rule-loop): it needs a
         // second segment named too
         let nameable = s.iter().filter(|g| !g.bytes().all(|b| b.is_ascii_digit()));
-        let lone = family.get(&s[0]).is_some_and(|n| *n < 2) && nameable.count() > 1;
+        let lone = family.get(&s[0]).is_some_and(|n| *n < FAMILY_MIN) && nameable.count() > 1;
         if !whole && (!head_named || lone && named.len() < 2) {
             continue;
         }
