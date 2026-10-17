@@ -201,6 +201,10 @@ No `v` bump — the degrade is intended, in two layers. Readers at or after the 
 
 No `v` bump, the same degrade as restore: readers at or after the carrier rule skip the event and show the row as last written (old routing, old `fh`); older readers list the event's text as information.
 
+## Row state
+
+Derived, never written. A reader that checks files may call an open decision or note *dormant* when its `fh` map is non-empty and every stamped file exists and hashes differently now; a bare bump (new `fh`) revives it. Missing, unreadable or unstamped files mean unknown, so the row stays live. Readers without disk access ignore this.
+
 ## Versioning
 
 `v` is per row, not per repo — one log holds rows of every version, written by old and new CLIs side by side.

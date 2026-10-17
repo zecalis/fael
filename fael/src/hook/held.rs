@@ -136,9 +136,13 @@ pub(super) fn line(c: &Ctx) -> Option<Line> {
 /// `fael chunk done`: the held text over the files the chunk touched, at most
 /// `DONE_MAX` rows, then where the rest are. Empty when none.
 pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
-    let log = crate::read(r);
+    let mut log = crate::read(r);
+    super::changed::mark_dormant(r, &mut log);
     let al = crate::aliases::load(r, &log, true);
-    let found = pairs(&log, &r.root, &al, "", files);
+    // decision 01M5528X: the Held line at Stop is the one ask over a changed
+    // row; this list leaves the dormant ones out
+    let mut found = pairs(&log, &r.root, &al, "", files);
+    found.retain(|(w, _)| !log.dormant.contains(&w.id));
     let (head, rest) = found.split_at(found.len().min(DONE_MAX));
     let mut out = text(&log, head);
     if !rest.is_empty() {

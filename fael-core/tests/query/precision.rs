@@ -47,6 +47,7 @@ fn log_of(rows: Vec<Row>) -> Log {
         rows,
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     }
 }
 

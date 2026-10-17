@@ -21,6 +21,7 @@ fn two_stores(id: &str) -> (std::path::PathBuf, std::path::PathBuf, Log) {
         rows: vec![row(id, "note", &["a.rs"])],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     (fael, journal, log)
 }
@@ -53,6 +54,7 @@ fn purge_by_prefix_takes_close_events_with_it() {
         rows: vec![row("01M3QA00000000000000000002", "note", &["a.rs"])],
         closes: vec![c],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let out = purge_row(&fael, Some(&journal), &log, "01M3QA00000000000000000002").unwrap();
     assert_eq!(out.rows, 2);
@@ -74,6 +76,7 @@ fn purge_takes_bump_events_with_it() {
         rows: vec![row("01M3QA00000000000000000006", "note", &["a.rs"]), ev],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let out = purge_row(&fael, Some(&journal), &log, "01M3QA00000000000000000006").unwrap();
     assert_eq!(out.rows, 3, "the row in both stores plus its bump event");
@@ -94,6 +97,7 @@ fn purge_refuses_live_edges() {
         rows: vec![row("01M3QA00000000000000000004", "note", &["a.rs"]), b],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let e = purge_row(&fael, Some(&journal), &log, "01M3QA00000000000000000004").unwrap_err();
     assert!(
@@ -115,6 +119,7 @@ fn purge_refuses_close_event_id() {
         rows: vec![row("01M3QA00000000000000000006", "note", &["a.rs"])],
         closes: vec![c],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let e = purge_row(&fael, Some(&journal), &log, "01M3QA00000000000000000007").unwrap_err();
     assert!(e.contains("restore"), "points at fael restore: {e}");
@@ -132,6 +137,7 @@ fn purge_refuses_immutable_compact_files() {
         rows: vec![row("01M3QA00000000000000000008", "note", &["a.rs"])],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let e = purge_row(&fael, None, &log, "01M3QA00000000000000000008").unwrap_err();
     assert!(e.contains("immutable"), "{e}");
@@ -148,6 +154,7 @@ fn purge_refuses_broken_lines() {
         rows: vec![row("01M3QA00000000000000000009", "note", &["a.rs"])],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let e = purge_row(&fael, Some(&journal), &log, "01M3QA00000000000000000009").unwrap_err();
     assert!(e.contains("doctor --fix"), "{e}");
@@ -170,6 +177,7 @@ fn purge_rejects_unknown_and_ambiguous_ids() {
         ],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let e = purge_row(&fael, Some(&journal), &log2, "01M3QA00").unwrap_err();
     assert!(e.contains("matches 2 rows"), "{e}");
@@ -193,6 +201,7 @@ fn purge_keeps_neighbours_byte_identical() {
         ],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     purge_row(&fael, Some(&journal), &log, "01M3QA0000000000000000000C").unwrap();
     for store in [&fael, &journal] {

@@ -91,6 +91,7 @@ fn log() -> Log {
         ],
         closes: vec![Row::close("t-0000", "A0000000000000000000000010", "fixed")],
         warnings: vec![],
+        dormant: Default::default(),
     }
 }
 

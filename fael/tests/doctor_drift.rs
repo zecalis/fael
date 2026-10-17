@@ -82,7 +82,8 @@ fn doctor_lists_rows_whose_files_moved_on() {
     );
     // checked and still true: a bare bump restarts the count on the same id
     // (past the last commit's second — drift counts commits at or after it)
-    let (_, out) = fael(&d, &["find", "a holds", "--json"]);
+    // its one file changed unjudged: dormant (decision 01M5528X), found by --all
+    let (_, out) = fael(&d, &["find", "a holds", "--json", "--all"]);
     let row: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
     let id = row["id"].as_str().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(1100));

@@ -25,7 +25,8 @@ pub(super) fn find(a: &Value) -> Result<String, String> {
 }
 
 fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
-    let (log, branch_of) = crate::journal::read(r);
+    let (mut log, branch_of) = crate::journal::read(r);
+    crate::hook::mark_dormant(r, &mut log);
     if let Some(ids) = a["ids"].as_array() {
         return ids_call(ids, r, log, branch_of);
     }

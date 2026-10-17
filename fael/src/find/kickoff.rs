@@ -8,7 +8,8 @@ use fael_core::{self as core, Filter};
 pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let r = crate::repo()?;
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
-    let (log, branch_of) = crate::journal::read(&r);
+    let (mut log, branch_of) = crate::journal::read(&r);
+    crate::hook::mark_dormant(&r, &mut log);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = a.paging()?;
     // a plan anchor (`PLAN-x.md` → `plan:x`): without --limit the page is

@@ -30,6 +30,7 @@ fn log() -> Log {
             ..Row::default()
         }],
         warnings: vec![],
+        dormant: Default::default(),
     }
 }
 
@@ -111,6 +112,7 @@ fn ref_state_row_wins_over_a_close_row_collision() {
             ..Row::default()
         }],
         warnings: vec![],
+        dormant: Default::default(),
     };
     assert!(matches!(
         ref_state(&log, "01DDDD00"),

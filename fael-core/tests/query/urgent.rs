@@ -24,6 +24,7 @@ fn queue() -> Log {
         ],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     }
 }
 
@@ -108,6 +109,7 @@ fn open_log(rows: Vec<Row>) -> Log {
         rows,
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     }
 }
 

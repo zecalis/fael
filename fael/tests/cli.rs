@@ -170,6 +170,19 @@ fn add_find_close_round_trip() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     std::fs::write(d.join("src/old.rs"), "changed").unwrap();
     fael(&d, &["add", "issue", "open bug", "--files", "src/live.rs"]);
+    // decision 01M5528X: its one file changed unjudged — dormant, out of
+    // kickoff and plain find, marked under --all; a bare bump revives it
+    let (_, out, _) = fael(&d, &["kickoff"]);
+    assert!(!out.contains("about old.rs"), "{out}");
+    let (_, out, _) = fael(&d, &["find", "about old.rs"]);
+    assert!(
+        out.contains("1 dormant") && out.contains("(dormant)"),
+        "{out}"
+    );
+    let (_, out, _) = fael(&d, &["find", "about old.rs", "--all"]);
+    let id = out.split(['[', ']']).nth(1).unwrap().to_string();
+    assert!(out.contains("(dormant)"), "{out}");
+    assert!(fael(&d, &["bump", &id]).0);
     let (_, out, _) = fael(&d, &["kickoff"]);
     let at = |t: &str| out.find(t).unwrap_or_else(|| panic!("{t} missing: {out}"));
     assert!(

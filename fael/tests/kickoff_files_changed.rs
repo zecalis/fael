@@ -54,7 +54,11 @@ fn line<'a>(out: &'a str, needle: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no {needle:?} in:\n{out}"))
 }
 
+/// Each handoff also names `keep.rs`, never touched: a row whose every file
+/// changed is dormant and out of kickoff (decision 01M5528X), so the label
+/// is for a row that still has one file it holds on.
 fn handoff(d: &Path, text: &str, files: &str) {
+    std::fs::write(d.join("keep.rs"), "keep\n").unwrap();
     fael(
         d,
         &[
@@ -62,7 +66,7 @@ fn handoff(d: &Path, text: &str, files: &str) {
             "note",
             text,
             "--files",
-            files,
+            &format!("{files},keep.rs"),
             "--key",
             "plan:demo:handoff",
         ],
@@ -80,6 +84,10 @@ fn kickoff_marks_handoff_when_code_moved() {
     let l = line(&out, "handoff before the fix");
     assert!(l.ends_with("(files changed since)"), "{out}");
     assert!(!l.contains("@("), "bare suffix, never `@(...)`: {out}");
+    // every file changed: dormant, out of kickoff
+    std::fs::write(d.join("keep.rs"), "moved\n").unwrap();
+    let out = fael(&d, &["kickoff", "plan:demo"]);
+    assert!(!out.contains("handoff before the fix"), "{out}");
 }
 
 #[test]
@@ -115,6 +123,7 @@ fn kickoff_ignores_the_plan_file_itself() {
 fn kickoff_leaves_non_handoff_rows_unmarked() {
     let d = repo();
     std::fs::write(d.join("a.rs"), "v1\n").unwrap();
+    std::fs::write(d.join("b.rs"), "v1\n").unwrap();
     fael(
         &d,
         &[
@@ -122,7 +131,7 @@ fn kickoff_leaves_non_handoff_rows_unmarked() {
             "decision",
             "retry uses backoff",
             "--files",
-            "plan:demo,a.rs",
+            "plan:demo,a.rs,b.rs",
         ],
     );
     std::fs::write(d.join("a.rs"), "v2\n").unwrap();

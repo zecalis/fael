@@ -14,7 +14,9 @@ use std::path::Path;
 
 pub(crate) fn session_start(e: &Event) -> Reply {
     let no = Reply::default;
-    let Some(c) = ctx(e) else { return no() };
+    let Some(mut c) = ctx(e) else { return no() };
+    // decision 01M5528X: a dormant row is never in the session brief
+    crate::hook::mark_dormant(&c.repo, &mut c.log);
     // a run killed mid-turn never reaches Stop: its session is kept from the first turn
     super::stop::seen(e);
     prune_sessions(&state_dir().join("sessions"));

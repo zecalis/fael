@@ -115,10 +115,10 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
         // and that closed rows are out of sight unless --all
         [one] => {
             let what = one.rsplit_once(" ×").map_or(one.as_str(), |(p, _)| p);
-            let hidden = if f.all {
-                ""
-            } else {
-                " (open rows only; --all adds closed)"
+            let hidden = match (f.all, log.dormant.len()) {
+                (true, _) => String::new(),
+                (false, 0) => " (open rows only; --all adds closed)".into(),
+                (false, n) => format!(" (open rows only; --all adds closed and {n} dormant)"),
             };
             format!("no rows match {what}{hidden}")
         }
@@ -153,10 +153,20 @@ pub fn nearest<'a>(log: &'a Log, f: &Filter) -> Option<(String, Vec<&'a Row>)> {
             },
         );
         if !closed.is_empty() {
-            let label = format!(
-                "no open row matches — {} closed or superseded:",
-                closed.len()
-            );
+            let asleep = closed
+                .iter()
+                .filter(|r| log.dormant.contains(&r.id))
+                .count();
+            let label = match asleep {
+                0 => format!(
+                    "no open row matches — {} closed or superseded:",
+                    closed.len()
+                ),
+                n => format!(
+                    "no open row matches — {} closed, superseded or dormant ({n} dormant: its files changed since, a bare `fael bump <id>` revives one):",
+                    closed.len()
+                ),
+            };
             return Some((label, top(closed)));
         }
     }

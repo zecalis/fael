@@ -196,6 +196,7 @@ fn panels_join_usage_with_the_log() {
         rows: vec![i1, i2, i3, d1, n1],
         closes: vec![close_old],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let logs: HashMap<String, Log> = [("/r".to_string(), log)].into_iter().collect();
     // one push of I1 (title + file resolve)
@@ -242,6 +243,7 @@ fn log_only_repo_still_shows() {
         rows: vec![row("D9", "decision", "2026-09-29T08:00:00Z", "me-1")],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let logs: HashMap<String, Log> = [("/l".to_string(), log)].into_iter().collect();
     let v = day(&parsed_of(""), &logs, None, now, 0);
@@ -262,11 +264,13 @@ fn worktrees_sharing_a_journal_count_once() {
         ],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let other = Log {
         rows: vec![row("I2", "issue", "2026-09-29T10:00:00Z", "me-1")],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let logs: HashMap<String, Log> = [
         ("/wt-1".to_string(), shared.clone()),

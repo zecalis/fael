@@ -245,6 +245,7 @@ fn an_event_ahead_of_its_row_still_folds_and_an_orphan_is_ignored() {
         rows: vec![ev, orphan, row.clone()],
         closes: vec![],
         warnings: vec![],
+        dormant: Default::default(),
     };
     let l = fold_bumps(log);
     let listed = find(&l, &Filter::default());
