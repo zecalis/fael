@@ -18,6 +18,12 @@ pub(crate) fn merged_branch(root: &std::path::Path, b: &str) -> bool {
     merged::is_merged(root, b)
 }
 
+/// Every branch git proves merged into HEAD, in three spawns total — the batch
+/// read for callers that check many branches per pull (`hook::retired`).
+pub(crate) fn merged_names(root: &std::path::Path) -> std::collections::HashSet<String> {
+    merged::merged_names(root)
+}
+
 use super::{Args, aliases};
 use fael_core::{self as core, Filter, Log, Row};
 

@@ -36,7 +36,9 @@ fn chunk_done(row: &core::Row, ends: &[EndedRun]) -> bool {
 }
 
 /// Ids of the retired notes among the open rows. `git` adds the merged-branch proof
-/// (`find::merged`, a spawn): the push path passes false — it owns no spawn.
+/// (`find::merged`, batched to three spawns per pull however many branches the
+/// repo holds, with the per-branch squash proof as fallback): the push path
+/// passes false — it owns no spawn.
 pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
     let hide: HashSet<&str> = core::closed(log)
         .union(&core::superseded(log))
@@ -44,6 +46,9 @@ pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
         .collect();
     let head = crate::journal::head_branch(&r.root);
     let mut proved: HashMap<&str, bool> = HashMap::new();
+    // one `for-each-ref --merged` per pull, not one proof per branch; lazily
+    // built by the first merge candidate, so a pull with none spawns nothing
+    let mut merged: Option<HashSet<String>> = None;
     let db = crate::plan::db(r);
     let ends = if db.exists() {
         core::plan::Store::open(&db)
@@ -67,7 +72,16 @@ pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
                     && tied.is_some_and(|b| {
                         Some(b) != head.as_deref() && !crate::journal::is_trunk(&r.root, b)
                     })
-                    && tied.is_some_and(|b| *proved.entry(b).or_insert_with(|| crate::find::merged_branch(&r.root, b)))
+                    && tied.is_some_and(|b| {
+                        *proved.entry(b).or_insert_with(|| {
+                            let set = merged
+                                .get_or_insert_with(|| crate::find::merged_names(&r.root));
+                            // the batch proves regular merges; a squash merge
+                            // is no ancestor, so it still takes the per-branch
+                            // patch-id proof (empty batch = that path as before)
+                            set.contains(b) || crate::find::merged_branch(&r.root, b)
+                        })
+                    })
         })
         .map(|w| w.id.clone())
         .collect()
