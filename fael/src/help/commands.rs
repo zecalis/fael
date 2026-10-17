@@ -42,9 +42,10 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     ),
     (
         "bump",
-        "same text/files, new to/urgent/revisit",
+        "still true after its files changed (restamps), or new to/urgent/revisit",
         "fael bump <id> [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent]
-    (same id, text and files — one bump event; text and files never change through bump)",
+    (same id, text and files — one bump event; text and files never change through bump)
+    a bare bump is the 'still true' verdict on a row whose files changed: restamps it from disk",
     ),
     (
         "claim",

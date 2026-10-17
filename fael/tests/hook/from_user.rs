@@ -36,7 +36,10 @@ fn the_edit_ask_names_the_users_call() {
     }
     let a = edit(&d, "u1", "src/a.rs");
     assert!(a.contains("was written (from user)"), "{a}");
-    assert!(a.contains("the user's call: ask them before"), "{a}");
+    assert!(
+        a.contains("the user's call: still true → bump it yourself, ask them only before"),
+        "{a}"
+    );
     let b = edit(&d, "u2", "src/b.rs");
     assert!(b.contains("changed since") && !b.contains("user"), "{b}");
 }
