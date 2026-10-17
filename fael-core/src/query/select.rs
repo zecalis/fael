@@ -1,5 +1,5 @@
 use super::Filter;
-use super::matching::{all_words, file_match, glob, is_md, lenient};
+use super::matching::{all_words, file_match, is_md, key_match, lenient};
 use crate::{Aliases, Log, Row, anchor, is_alias_row, is_carrier_row, resolve_row, to_matches};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -245,7 +245,7 @@ pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
                 && f.since.as_ref().is_none_or(|s| r.ts.as_str() >= s.as_str())
                 && f.key
                     .as_ref()
-                    .is_none_or(|g| r.key.as_deref().is_some_and(|k| glob(g, k)))
+                    .is_none_or(|g| r.key.as_deref().is_some_and(|k| key_match(g, k)))
                 && text.as_ref().is_none_or(|t| all_words(t, r))
                 // `--revisit`: any revisit, or a substring of it
                 && revisit.as_ref().is_none_or(|q| {

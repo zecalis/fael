@@ -79,6 +79,17 @@ pub(super) fn file_match(q: &str, f: &str) -> bool {
     zone(q, f)
 }
 
+/// The `--key` filter: a glob as is; a bare key also matches its `k:*` children.
+pub(super) fn key_match(pattern: &str, key: &str) -> bool {
+    if pattern.contains(['*', '?', '[']) {
+        return glob(pattern, key);
+    }
+    key == pattern
+        || key
+            .strip_prefix(pattern)
+            .is_some_and(|r| r.starts_with(':'))
+}
+
 /// Redis `KEYS` glob: `*` any run (including `:` and `/`), `?` one char, `[abc]` `[a-z]` `[^a]`, `\x` literal.
 /// Memoises failed `(pattern, text)` positions, so it is O(|p|·|s|) — the
 /// pattern is user input and `**********x` must not hang `find`.

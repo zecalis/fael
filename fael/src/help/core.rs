@@ -50,7 +50,7 @@ const CORE: &[(&str, &str)] = &[
       one that matched nothing shows;
       --kind issue lists issues ready to work first, (waiting: …) ones last;
       text finds rows holding every word, in any order; on a busy file add
-      one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*';
+      one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*' (a bare key also matches its k:* children);
       a cut list prints the exact next call — rerun it with the new --offset)",
     ),
 ];

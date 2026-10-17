@@ -86,7 +86,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
       --groups groups every match by shared files — what to fix in one PR
       (*.md and anchors never link);
       text finds rows holding every word, in any order; on a busy file add
-      one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*';
+      one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*' (a bare key also matches its k:* children);
      a cut list prints the exact next call — rerun it with the new --offset)",
     ),
     (

@@ -295,3 +295,29 @@ fn generic_word_alone_stays_quiet() {
         ["fael-board:done-is-done"]
     );
 }
+
+#[test]
+fn find_key_bare_matches_children_not_siblings() {
+    let rows = ["fael-board", "fael-board:a", "fael-boardx"]
+        .iter()
+        .enumerate()
+        .map(|(i, k)| {
+            row(
+                &format!("A00000000000000000000000{}", 20 + i),
+                "note",
+                &["x"],
+                Some(k),
+            )
+        })
+        .collect();
+    let l = Log {
+        rows,
+        ..Log::default()
+    };
+    let key = |k: &str| Filter {
+        key: Some(k.into()),
+        ..Filter::default()
+    };
+    assert_eq!(find(&l, &key("fael-board")).len(), 2);
+    assert_eq!(find(&l, &key("fael-board*")).len(), 3);
+}
