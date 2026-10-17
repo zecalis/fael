@@ -285,8 +285,8 @@ impl Store {
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .map_err(err)?
         {
-            let (plan, state, n): (i64, String, usize) = row.map_err(err)?;
-            counts.entry(plan).or_default().insert(state, n);
+            let (plan, state, n): (i64, String, i64) = row.map_err(err)?;
+            counts.entry(plan).or_default().insert(state, n as usize);
         }
         let mut q = self
             .conn
