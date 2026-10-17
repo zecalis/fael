@@ -19,6 +19,7 @@ fn ledger() -> Log {
             k("A0000000000000000000000010", "vela:credit-ledger"),
             k("A0000000000000000000000011", "vela:credit-ledger"),
             k("A0000000000000000000000012", "vela:credit-layer"),
+            k("A0000000000000000000000017", "vela:credit-notes"),
             k("A0000000000000000000000013", "vela:auth-token"),
             k("A0000000000000000000000014", "vela:billing-run"),
             k("A0000000000000000000000015", "vela:plan-3"),
@@ -35,7 +36,11 @@ fn exact_segment_points_most_used_first() {
     // Thai around the word still splits it out; case does not matter
     assert_eq!(
         keys_of(&l, "ยังไม่มีโค้ด Credit เลยใช่ไหม"),
-        ["vela:credit-ledger", "vela:credit-layer"]
+        [
+            "vela:credit-ledger",
+            "vela:credit-layer",
+            "vela:credit-notes"
+        ]
     );
     let h = key_hints(&l, "credit", &[]);
     assert_eq!(h[0].0.count, 2);
@@ -243,6 +248,7 @@ fn lone_key_needs_a_second_segment() {
             k("A0000000000000000000000071", "vela:rule-loop"),
             k("A0000000000000000000000072", "vela:credit-ledger"),
             k("A0000000000000000000000073", "vela:credit-layer"),
+            k("A0000000000000000000000075", "vela:credit-notes"),
             k("A0000000000000000000000074", "fael:store"),
         ],
         ..Log::default()
@@ -254,7 +260,38 @@ fn lone_key_needs_a_second_segment() {
     assert!(keys_of(&l, "api").is_empty());
     assert_eq!(
         keys_of(&l, "credit"),
-        ["vela:credit-layer", "vela:credit-ledger"]
+        [
+            "vela:credit-layer",
+            "vela:credit-ledger",
+            "vela:credit-notes"
+        ]
     );
     assert_eq!(keys_of(&l, "store"), ["fael:store"]);
+}
+
+/// Issue 01M543R9: one generic word named two unrelated keys. A head shared by
+/// only two keys is a coincidence ("read" -> read-away/read-page, "ledger" ->
+/// ledger-signals/ledger-view), and "done done" is one word, not two segments
+/// of done-is-done. Naming a second distinct segment or the whole key still hints.
+#[test]
+fn generic_word_alone_stays_quiet() {
+    let k = |id: &str, key: &str| row(id, "decision", &["src/a.rs"], Some(key));
+    let l = Log {
+        rows: vec![
+            k("A0000000000000000000000080", "vela:read-away"),
+            k("A0000000000000000000000081", "vela:read-page"),
+            k("A0000000000000000000000082", "fael-board:ledger-signals"),
+            k("A0000000000000000000000083", "fael-board:ledger-view"),
+            k("A0000000000000000000000084", "fael-board:done-is-done"),
+        ],
+        ..Log::default()
+    };
+    assert!(keys_of(&l, "read the bug report").is_empty());
+    assert!(keys_of(&l, "ledger done done").is_empty());
+    assert_eq!(keys_of(&l, "the read away flow"), ["vela:read-away"]);
+    assert_eq!(keys_of(&l, "ledger view"), ["fael-board:ledger-view"]);
+    assert_eq!(
+        keys_of(&l, "see fael-board:done-is-done"),
+        ["fael-board:done-is-done"]
+    );
 }
