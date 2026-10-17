@@ -27,10 +27,7 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
     match verb.as_str() {
         "show" => {
             let b = st.show(&uid)?;
-            Ok(format!(
-                "# {} ({})\nplan {} — {}\n\n{}",
-                b.title, b.uid, b.plan, b.plan_title, b.brief
-            ))
+            Ok(crate::find::owner::brief(&b).trim_end().to_string())
         }
         "note" => {
             if text.is_empty() {

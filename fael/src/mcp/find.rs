@@ -45,7 +45,9 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                 Ok((with_mentioned(&log, row.as_ref(), text), vec![shown]))
             }
             crate::refs::Wide::Many(rows) => Err(crate::find::reject_many(&id, &rows)),
-            crate::refs::Wide::Missing => Err(crate::find::reject_missing(r, &log, &id)),
+            crate::refs::Wide::Missing => crate::find::owner::chunk_here(r, &id)
+                .map(|c| (c, vec![]))
+                .ok_or_else(|| crate::find::reject_missing(r, &log, &id)),
         };
     }
     // a non-id-shaped `id` keeps the old prefix shortcut: an exact id or
