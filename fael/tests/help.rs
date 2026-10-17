@@ -75,6 +75,19 @@ fn per_command_help_and_short_errors() {
         assert!(!err.contains("unknown command"), "{args:?} {err}");
         assert!(err.contains("wrong arguments"), "{args:?} {err}");
     }
+    // `--files a b` (a space, not a comma) files the row with both paths
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", "spread", "--files", "src/a.rs", "src/b.rs"],
+    );
+    assert!(ok, "{err}");
+    let (_, out, _) = fael(&d, &["find", "spread", "--json"]);
+    assert!(
+        out.contains("src/a.rs") && out.contains("src/b.rs"),
+        "{out}"
+    );
     // after `--`, "-h" is the row's text, not a help request
     let (ok, out, err) = fael(&d, &["add", "note", "--files", "src/a.rs", "--", "-h"]);
     assert!(ok && !out.contains("fael add <kind>"), "{out} {err}");
