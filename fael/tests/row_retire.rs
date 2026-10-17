@@ -307,3 +307,71 @@ fn stats_counts_rows_by_state_per_kind() {
     assert_eq!(l["issue"]["retired"], 1, "{l}");
     assert!(f(&["stats"]).starts_with("rows (this repo):\n  decision: live 1 · held 1"));
 }
+
+/// `fael hook edit` on `a.txt` as session `session`: what the push says.
+fn edit_push(d: &Path, s: &Path, session: &str) -> String {
+    use std::io::Write as _;
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["hook", "edit"])
+        .current_dir(d)
+        .env("FAEL_STATE_DIR", s)
+        .env_remove("FAEL_DIR")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let e = serde_json::json!({"cwd": d, "session": session, "files": ["a.txt"]});
+    c.stdin
+        .take()
+        .unwrap()
+        .write_all(e.to_string().as_bytes())
+        .unwrap();
+    let o = c.wait_with_output().unwrap();
+    assert!(o.status.success());
+    String::from_utf8_lossy(&o.stdout).into_owned()
+}
+
+/// A note on `a.txt` filed on feat/x, whose branch is then merged into main.
+fn merged_note(d: &Path, s: &Path) {
+    git(d, &["switch", "-qc", "feat/x"]);
+    std::fs::write(d.join("a.txt"), "a\n").unwrap();
+    git(d, &["add", "a.txt"]);
+    git(d, &["commit", "-qm", "work"]);
+    fael(
+        d,
+        s,
+        None,
+        &["add", "note", "merged work note", "--files", "a.txt"],
+    );
+    git(d, &["switch", "-q", "main"]);
+    git(d, &["merge", "-q", "--no-ff", "feat/x"]);
+}
+
+#[test]
+fn the_edit_push_hides_a_note_a_pull_proved_merged() {
+    let (d, s) = repo();
+    merged_note(&d, &s);
+    // no pull yet: the push owns no git, so the merged note still rides it
+    assert!(edit_push(&d, &s, "s1").contains("merged work note"));
+    fael(&d, &s, None, &["find", "anything"]);
+    assert!(!edit_push(&d, &s, "s2").contains("merged work note"));
+}
+
+#[test]
+fn the_edit_push_ignores_the_cache_once_head_moved() {
+    let (d, s) = repo();
+    merged_note(&d, &s);
+    fael(&d, &s, None, &["find", "anything"]);
+    git(&d, &["commit", "-q", "--allow-empty", "-m", "later"]);
+    assert!(edit_push(&d, &s, "s1").contains("merged work note"));
+}
+
+#[test]
+fn the_edit_push_ignores_the_cache_once_the_branch_changed() {
+    let (d, s) = repo();
+    merged_note(&d, &s);
+    fael(&d, &s, None, &["find", "anything"]);
+    // same sha, other branch: the note's own branch is "being worked on", not merged work
+    git(&d, &["switch", "-q", "feat/x"]);
+    assert!(edit_push(&d, &s, "s1").contains("merged work note"));
+}

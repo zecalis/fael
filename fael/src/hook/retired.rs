@@ -37,9 +37,26 @@ fn chunk_done(row: &core::Row, ends: &[EndedRun]) -> bool {
 
 /// Ids of the retired notes among the open rows. `git` adds the merged-branch proof
 /// (`find::merged`, batched to three spawns per pull however many branches the
-/// repo holds, with the per-branch squash proof as fallback): the push path
-/// passes false — it owns no spawn.
+/// repo holds, with the per-branch squash proof as fallback) and writes what it
+/// proved to the state cache. The push path passes false — it owns no spawn — and
+/// adds the cached set only while HEAD, its branch and the row count are the pull's.
 pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
+    let key = crate::journal::head_sha(&r.root).map(|h| {
+        let b = crate::journal::head_branch(&r.root).unwrap_or_default();
+        format!("{h} {} {b}", log.rows.len())
+    });
+    let mut out = derive(r, log, git);
+    if let Some(k) = key {
+        if git {
+            super::state::write_retired(&r.root, &k, &out);
+        } else if let Some(c) = super::state::read_retired(&r.root, &k) {
+            out.extend(c);
+        }
+    }
+    out
+}
+
+fn derive(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
     let hide: HashSet<&str> = core::closed(log)
         .union(&core::superseded(log))
         .copied()
