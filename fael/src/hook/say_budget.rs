@@ -18,8 +18,8 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 4, 2, 8]); // row, bodies, hint, notice
-    let keep = cost(&pick(&[0, 4]));
+    let lines = pick(&[0, 3, 2, 7]); // row, bodies, hint, notice
+    let keep = cost(&pick(&[0, 3]));
     let run = |budget: usize| {
         let p = seen("s.seen");
         let mut out = Outbox::open(lock_seen(&p));
@@ -62,7 +62,7 @@ fn over_the_budget_the_cut_order_is_notice_check_then_ask() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 2, 7, 8]); // row, hint, check, notice
+    let lines = pick(&[0, 2, 6, 7]); // row, hint, check, notice
     let said_at = |budget: usize| {
         let p = seen("s.seen");
         let mut out = Outbox::open(lock_seen(&p));
@@ -78,7 +78,7 @@ fn over_the_budget_the_cut_order_is_notice_check_then_ask() {
     let kept = |slots: &[usize]| cost(&pick(slots));
     // each budget keeps one line more than the one below it
     let at = |slots: &[usize]| has(&said_at(kept(slots)).0);
-    assert_eq!(at(&[0, 2, 7]), [false, true, true]);
+    assert_eq!(at(&[0, 2, 6]), [false, true, true]);
     let (said, keys) = said_at(kept(&[0, 2]));
     assert_eq!(has(&said), [false, false, true], "{said}");
     // the cut line kept its key for a later push

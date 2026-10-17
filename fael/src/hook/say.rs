@@ -6,8 +6,8 @@
 //!
 //! The session's seen list (per session + sub-agent + worktree, gone on
 //! compact) holds a row id per row said, `~<id>` per edit-hint ask (`~*`, the old generic clause, in older lists) and
-//! `@<id>` per in-context mark and `^<id>` per cited id (`cited`). The prompt's pointer list is its own file of
-//! bare keys. No session = no file: every line is said, nothing remembered.
+//! `@<id>` per in-context mark and `^<id>` per cited id (`cited`), `~start:<id>` per row session start said.
+//! No session = no file: every line is said, nothing remembered.
 
 use crate::core;
 use serde::Serialize;
@@ -68,15 +68,14 @@ impl Reply {
 pub(crate) enum Kind {
     /// The rows of a read/edit/search push (the body under `fael mem for …`).
     Row { ids: Vec<String> },
-    /// The session-start rows: said once per new or compacted context, never
-    /// spent — the next read of a briefed file may push its rows again.
-    Brief,
+    /// The session-start hand-offs and assigned rows: said once per new,
+    /// compacted or cleared context. Its keys are `~start:<id>`, never the row
+    /// id — the next read of a briefed file may push its rows again.
+    Brief { keys: Vec<String> },
     /// The edit hint: re-check open issues already in context, each named.
     /// Free of the per-turn limit: it names only open issues on the edited
     /// file (a vela edit's issue went unasked behind another ask in the turn).
     Ask { ids: Vec<String> },
-    /// The prompt hint: open keys the prompt names.
-    Pointer { keys: Vec<String> },
     /// `bodies: fael find <id> …` under a push whose rows have bodies.
     Bodies,
     /// A `git commit` that named open issues (PLAN-fael-agent-ergonomics
@@ -107,8 +106,7 @@ pub(crate) enum Kind {
 pub(crate) enum Once {
     /// Its keys are spent in the seen list; a line whose keys are all spent is dropped.
     Key,
-    /// Its event fires once: session start re-briefs only a new or compacted
-    /// context, a stashed notice is taken off disk when said.
+    /// Its event fires once: a stashed notice is taken off disk when said.
     Event,
 }
 
@@ -131,13 +129,13 @@ pub(crate) fn policy(k: &Kind) -> Policy {
     let (once, command, per_turn) = match k {
         Kind::Row { .. } => (Once::Key, None, false),
         Kind::Ask { .. } => (Once::Key, Some("fael close"), false),
-        Kind::Pointer { .. } => (Once::Key, Some("fael find --key"), false),
         Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
         Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
         Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
         Kind::Fixed | Kind::FixCommit | Kind::Held { .. } => (Once::Key, Some("fael close"), false),
-        Kind::Brief | Kind::Notice => (Once::Event, None, false),
+        Kind::Brief { .. } => (Once::Key, None, false),
+        Kind::Notice => (Once::Event, None, false),
     };
     Policy {
         once,
@@ -156,7 +154,6 @@ impl Kind {
         match self {
             Kind::Row { ids } => ids.clone(),
             Kind::Ask { ids, .. } => ids.iter().map(|i| format!("~{i}")).collect(),
-            Kind::Pointer { keys } => keys.clone(),
             Kind::Bodies => vec!["~bodies".into()],
             Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
             Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
@@ -164,7 +161,8 @@ impl Kind {
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Held { .. } => vec![super::held::KEY.into()],
-            Kind::Brief | Kind::Notice => vec![],
+            Kind::Brief { keys } => keys.clone(),
+            Kind::Notice => vec![],
         }
     }
 }
@@ -183,9 +181,8 @@ impl Kind {
     fn said(&self) -> Vec<Said> {
         let (kind, keys) = match self {
             Kind::Row { ids } => ("row", ids.clone()),
-            Kind::Brief => ("brief", vec![]),
+            Kind::Brief { .. } => ("brief", vec![]),
             Kind::Ask { ids, .. } => ("ask", ids.clone()),
-            Kind::Pointer { keys } => ("pointer", keys.clone()),
             Kind::Bodies => ("bodies", vec![]),
             Kind::Cited { ids } => ("cited", ids.clone()),
             Kind::Finding { file, .. } => ("finding", vec![file.clone()]),

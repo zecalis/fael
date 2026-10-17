@@ -1,10 +1,5 @@
 ## 0 session-start {"session":"2025-12-01T00:00:00Z"}
-context:
-fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
-
 ## 1 prompt {"session":"2025-12-01T00:00:00Z","text":"fix the auth login flow"}
-context:
-fael: the prompt names open key(s) auth:login (1, via "login", weak head-only) — fael find --key <key> (MCP: find key=<key>) before assuming there is no prior work
 ## 2 prompt {"session":"2025-12-01T00:00:00Z","text":"fix the auth login flow"}
 ## 3 read {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 ## 4 read {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
@@ -59,9 +54,6 @@ fael: this turn — reminded 11 (01K00000000000000000AAA002, 01K0000000000000000
 ## 17 read {"session":"2025-12-01T00:00:00Z","files":["src/nothing.rs"]}
 ## 18 read {"session":"2025-12-01T00:00:00Z","files":["src/nothing.rs"]}
 ## 19 session-start {"session":"2025-12-01T00:00:00Z","source":"compact"}
-context:
-fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
-
 ## 20 read {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 ## 21 read {"session":"2025-12-01T00:00:00Z","agent":"sub1","files":["src/hub.rs"]}
 ## 22 read {"session":"2025-12-01T00:00:00Z","agent":"sub1","files":["src/hub.rs"]}
@@ -86,15 +78,9 @@ fael: 01K00000000000000000B cited in a commit — `(fael:01K00000000000000000B)`
 ## 28 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001 again'"}}
 ## 29 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'note 01K00000000000000000AAA001'"}}
 ## 30 session-start {"session":"s2"}
-context:
-fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
-
 ## 31 read {"session":"s2","files":["src/c.rs"]}
 ## 32 prompt {"text":"fix the auth login flow"}
 ## 33 session-start {"session":"2026-01-02T00:00:00Z","client":"opencode"}
-context:
-fael: 5 open issues — fael find --kind issue (MCP find kind=issue)
-
 ## 34 read {"session":"2026-01-02T00:00:00Z","client":"opencode","files":["src/c.rs"]}
 ## 35 edit {"session":"2026-01-02T00:00:00Z","client":"opencode","files":["src/c.rs"]}
 context:
@@ -107,5 +93,5 @@ bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-16 lines · ~1102 tokens
-session-start prompt edit in-context edit in-context edit in-context edit session-start shell-edit outcome search session-start session-start edit
+15 lines · ~988 tokens
+silent-start edit in-context edit in-context edit in-context edit silent-start shell-edit outcome search silent-start silent-start edit

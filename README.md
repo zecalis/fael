@@ -73,7 +73,7 @@ Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small bina
 
 | Without fael | With fael |
 |---|---|
-| Each session starts from zero | Session opens with what the last one left: open bugs, recent decisions |
+| Each session starts from zero | Session opens with what was handed to it: the hand-off and the work assigned to you |
 | "Why is it like this?" — ask again, guess again | The reason sits next to the file, from the agent that made the call |
 | Agent notices a bug mid-task, then forgets it | It's filed on the spot, and shown to whoever touches that file next |
 | Two agents in parallel worktrees hit the same problem | The first files it; the second gets it when it opens the file — the same hour, before any commit (`fael stats` → `across agents` counts how often) |

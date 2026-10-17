@@ -22,18 +22,18 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael mem for a.rs:\n- [01ROW] decision x\n",
         ),
-        line(Kind::Brief, "- [01BRIEF] issue y\n"),
+        // session start: hand-offs and assigned rows, once per session
+        line(
+            Kind::Brief {
+                keys: vec!["~start:01BRIEF".into()],
+            },
+            "- [01BRIEF] note y #plan:x:handoff\n",
+        ),
         line(
             Kind::Ask {
                 ids: vec!["01ASK".into()],
             },
             "fael: done with one? fael close 01ASK \"<why>\"\n",
-        ),
-        line(
-            Kind::Pointer {
-                keys: vec!["auth:login".into()],
-            },
-            "fael: the prompt names open key(s) auth:login — fael find --key <key>",
         ),
         line(Kind::Bodies, "bodies: fael find <id> (MCP: find id=<id>)\n"),
         line(
@@ -74,17 +74,16 @@ pub(super) fn all() -> Vec<Line> {
 pub(super) fn slot(k: &Kind) -> usize {
     match k {
         Kind::Row { .. } => 0,
-        Kind::Brief => 1,
+        Kind::Brief { .. } => 1,
         Kind::Ask { .. } => 2,
-        Kind::Pointer { .. } => 3,
-        Kind::Bodies => 4,
-        Kind::Cited { .. } => 5,
-        Kind::Finding { .. } => 6,
-        Kind::Check { .. } => 7,
-        Kind::Notice => 8,
-        Kind::Fixed => 9,
-        Kind::FixCommit => 10,
-        Kind::Held { .. } => 11,
+        Kind::Bodies => 3,
+        Kind::Cited { .. } => 4,
+        Kind::Finding { .. } => 5,
+        Kind::Check { .. } => 6,
+        Kind::Notice => 7,
+        Kind::Fixed => 8,
+        Kind::FixCommit => 9,
+        Kind::Held { .. } => 10,
     }
 }
 
@@ -128,7 +127,7 @@ fn a_key_once_kind_is_not_said_twice_in_a_session() {
         let again = said(lock_seen(&p), l.clone());
         match policy(&l.kind).once {
             Once::Key => assert_eq!(again, None, "{:?} said twice", l.kind),
-            // its event fires once (session start, a stash taken off disk);
+            // its event fires once (a stash taken off disk);
             // it spends no key another kind could be silenced by
             Once::Event => assert_eq!(std::fs::read_to_string(&p).unwrap(), ""),
         }
@@ -343,7 +342,6 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "row",
             "brief",
             "ask",
-            "pointer",
             "bodies",
             "cited",
             "finding",

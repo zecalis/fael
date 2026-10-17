@@ -85,8 +85,8 @@ const stop_texts = (messages, v1) => {
 // session string — its own seen list — and sends agent=<root> on stop only,
 // so hook/stop.rs takes the subagent branch (cited ids, no bug-rule stash
 // orphaned under the short-lived child key, no per-turn receipt). Tool
-// results and the brief stay agent-less, so the push, the seen list and the
-// prompt pointer keep one key.
+// results and the brief stay agent-less, so the push and the seen list keep
+// one key.
 const parent_of = (s) =>
   s?.parentID ?? s?.parentId ?? s?.parent_id ?? s?.info?.parentID ?? s?.data?.parentID ?? null;
 // of a served session resolves to its root; a foreign session resolves to
@@ -303,14 +303,11 @@ export default {
       if (brief) event.system.push({ type: "text", text: brief });
     });
 
-    // Prompt admission: fire `fael hook prompt` with the user's text so the
-    // open-key pointer line works here too. Runs once per admission, never
-    // before every model call — and it only edits the admitted text, never
-    // starts a turn of its own (no session.prompt/generate call). The
-    // once-per-session rule lives server-side in `prompt.rs`; a repeated
-    // admission (retry, concurrent submit) gets an empty reply and appends
-    // nothing. V1 has no equivalent: its `chat.message` payload is
-    // unverified against a V1 runtime, so V1 stays without the hint.
+    // Prompt admission: fire `fael hook prompt` so the user turn is marked
+    // (the edit ask speaks once per turn); it replies empty today. Runs once
+    // per admission, never before every model call, and never starts a turn
+    // of its own (no session.prompt/generate call). V1 has no equivalent: its
+    // `chat.message` payload is unverified against a V1 runtime.
     await ctx.session.hook("prompt", async (event) => {
       const id = event.sessionID;
       const text = event.prompt?.text;

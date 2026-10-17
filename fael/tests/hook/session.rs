@@ -1,6 +1,6 @@
-//! Session-start kickoff and the edit push (each row once per session).
+//! Session start (hand-offs and assigned rows) and the edit push (each row once per session).
 
-use super::{fael, json, repo};
+use super::{fael, git, json, repo};
 
 #[test]
 fn session_start_and_edit_push() {
@@ -23,12 +23,8 @@ fn session_start_and_edit_push() {
     assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{}}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    // chunk 1: no row dump — one count line, the issue pushes on file touch
-    assert!(
-        ok && out.contains("SessionStart") && out.contains("1 open issue — fael find --kind issue"),
-        "{out}"
-    );
-    assert!(!out.contains("login loops"), "{out}");
+    // nothing handed to the reader: silence, the issue pushes on file touch
+    assert!(ok && out.is_empty(), "{out}");
     // the explicit-arg path keeps today's kickoff: the row is still there
     let (ok, out, _) = fael(&d, &["kickoff", "src/a.rs"], "");
     assert!(ok && out.contains("login loops"), "{out}");
@@ -70,275 +66,77 @@ fn session_start_and_edit_push() {
 
     // every injection is accounted, per machine
     let (ok, out, _) = fael(&d, &["stats"], "");
-    assert!(ok && out.contains("4 injections"), "{out}");
+    assert!(ok && out.contains("3 injections"), "{out}");
     let (ok, out, _) = fael(&d, &["stats", "--json"], "");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(
-        ok && v["events"] == 4 && v["by_event"]["edit"]["events"] == 3,
+        ok && v["events"] == 3 && v["by_event"]["edit"]["events"] == 3,
         "{out}"
     );
 }
 
+/// Decision 01M5528X: session start says hand-offs of this branch's work and
+/// rows `to` the reader — no count line, no urgent unassigned, no decisions —
+/// once per context: a resume says nothing, a compact says it again.
 #[test]
-fn session_start_decisions_opt_in() {
+fn session_start_says_handoffs_and_assigned_only() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    // zero open issues + default config = no count line
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "decision",
-            "use kickoff order",
-            "--files",
-            "src/a.rs",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok && !out.contains("open issue"), "{out}");
-    assert!(!out.contains("use kickoff order"), "{out}");
-    // opt in: the freshest decision lists above the count line
-    std::fs::write(
-        d.join(".fael/config.toml"),
-        "[budget]\nsession_decisions = 1\n",
-    )
-    .unwrap();
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok && out.contains("use kickoff order"), "{out}");
-    assert!(!out.contains("open issue"), "{out}");
-    // an open issue adds the count line below the decision
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "issue", "login loops", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok && out.contains("use kickoff order"), "{out}");
-    assert!(
-        out.contains("1 open issue — fael find --kind issue"),
-        "{out}"
-    );
-    assert!(!out.contains("login loops"), "{out}");
-}
-
-#[test]
-fn session_start_wakes_due_revisits() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
-    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    let add = |text: &str, extra: &[&str]| {
-        let mut args = vec!["add", "note", text, "--files", "src/a.rs"];
-        args.extend(extra);
-        let (ok, _, err) = fael(&d, &args, "");
+    let add = |args: &[&str]| {
+        let (ok, _, err) = fael(&d, args, "");
         assert!(ok, "{err}");
     };
-    add("sleeping row", &["--revisit", "2000-01"]);
-    // another file: same-files repeats self-supersede now (chunk 3b), and
-    // this fixture needs two open rows, not one replacing the other
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "note",
-            "future row",
-            "--files",
-            "src/b.rs",
-            "--revisit",
-            "2999-01",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    // due but all files gone: buried, like kickoff buries it (separate
-    // call — the helper pins --files src/a.rs, and repeated --files merge)
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "note",
-            "buried row",
-            "--files",
-            "src/gone.rs",
-            "--revisit",
-            "2000-01",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "issue", "background noise", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok, "{out}");
-    // due lists in full; the future date stays asleep, the gone row stays buried
-    assert!(out.contains("sleeping row"), "{out}");
-    assert!(!out.contains("future row"), "{out}");
-    assert!(!out.contains("buried row"), "{out}");
-    // like kickoff: due above everything, here above the count line
-    let (due, count) = (
-        out.find("sleeping row").unwrap(),
-        out.find("1 open issue").unwrap(),
-    );
-    assert!(due < count, "{out}");
-}
-
-#[test]
-fn session_start_todo_survives_a_flood_of_due() {
-    let d = repo();
-    for f in ["src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"] {
-        std::fs::write(d.join(f), format!("// {f}\n")).unwrap();
-    }
-    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    // monthly revisits all come due at once — more rows than any budget fits.
-    // one file each: same-files repeats self-supersede now (chunk 3b), and
-    // this fixture needs four open rows, not one replacing the rest
-    for (n, f) in ["one", "two", "three", "four"]
-        .iter()
-        .zip(["src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"])
-    {
-        let (ok, _, err) = fael(
-            &d,
-            &[
-                "add",
-                "note",
-                &format!("due {n}"),
-                "--files",
-                f,
-                "--revisit",
-                "2000-01",
-            ],
-            "",
-        );
-        assert!(ok, "{err}");
-    }
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "issue",
-            "my urgent thing",
-            "--files",
-            "src/a.rs",
-            "--to",
-            "hook-test",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    // a budget that fits the to-do but never the flood with it
-    std::fs::write(
-        d.join(".fael/config.toml"),
-        "[budget]\nkickoff_tokens = 30\n",
-    )
-    .unwrap();
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok, "{out}");
-    // the cut line proves the budget bound — and the to-you issue made it
-    assert!(out.contains("over the 30-token budget"), "{out}");
-    assert!(out.contains("my urgent thing (to: hook-test)"), "{out}");
-}
-
-#[test]
-fn session_start_lists_to_me_above_the_count() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    // the test repo's writer is Hook Test (hook-test-…): mixed case routes to it
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "issue",
-            "answer me",
-            "--files",
-            "src/a.rs",
-            "--to",
-            "Hook-Test",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "add",
-            "issue",
-            "answer them",
-            "--files",
-            "src/a.rs",
-            "--to",
-            "someone",
-        ],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, _, err) = fael(
-        &d,
-        &["add", "issue", "answer anyone", "--files", "src/a.rs"],
-        "",
-    );
-    assert!(ok, "{err}");
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok, "{out}");
-    // mine in full with the suffix, above a count that covers every open issue
-    assert!(out.contains("answer me (to: hook-test)"), "{out}");
-    assert!(!out.contains("answer them"), "{out}");
-    assert!(!out.contains("answer anyone"), "{out}");
-    assert!(
-        out.contains("1 to you · 3 open issues — fael find --kind issue"),
-        "{out}"
-    );
-    let (mine, count) = (
-        out.find("answer me").unwrap(),
-        out.find("3 open issues").unwrap(),
-    );
-    assert!(mine < count, "{out}");
-}
-
-#[test]
-fn session_start_lists_mine_then_hot_urgent() {
-    let d = repo();
-    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
-    let input = format!(r#"{{"cwd":{}}}"#, json(&d));
-    // the test repo's writer is Hook Test (hook-test-…): mixed case routes to it
-    let add = |text: &str, extra: &[&str]| {
+    let issue = |text: &str, extra: &[&str]| {
         let mut args = vec!["add", "issue", text, "--files", "src/a.rs"];
         args.extend(extra);
-        let (ok, _, err) = fael(&d, &args, "");
-        assert!(ok, "{err}");
+        add(&args);
     };
-    add("mine plain", &["--to", "hook-test"]);
-    add("hot unowned", &["--urgent"]);
-    add("theirs urgent", &["--to", "someone", "--urgent"]);
-    add("theirs plain", &["--to", "someone"]);
-    add("anyone plain", &[]);
-    let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok, "{out}");
-    // mine (even plain) and hot urgent list in full; routed and plain rest count only
-    assert!(out.contains("mine plain (to: hook-test)"), "{out}");
-    assert!(out.contains("hot unowned (urgent 1)"), "{out}");
-    assert!(!out.contains("theirs urgent"), "{out}");
-    assert!(!out.contains("theirs plain"), "{out}");
-    assert!(!out.contains("anyone plain"), "{out}");
-    assert!(
-        out.contains("1 to you · 1 urgent unassigned · 5 open issues — fael find --kind issue"),
-        "{out}"
-    );
-    // routing first, then urgency: mine above hot above the count line
-    let (mine, hot, count) = (
-        out.find("mine plain").unwrap(),
-        out.find("hot unowned").unwrap(),
-        out.find("5 open issues").unwrap(),
-    );
-    assert!(mine < hot && hot < count, "{out}");
+    // the test repo's writer is Hook Test (hook-test-…): mixed case routes to it
+    issue("answer me", &["--to", "Hook-Test"]);
+    issue("answer them", &["--to", "someone"]);
+    issue("hot unowned", &["--urgent"]);
+    add(&["add", "decision", "keep it lean", "--files", "src/a.rs"]);
+    let handoff = |text: &str, plan: &str| {
+        let key = format!("plan:{plan}:handoff");
+        add(&[
+            "add",
+            "note",
+            text,
+            "--files",
+            &format!("plan:{plan}"),
+            "--key",
+            &key,
+        ]);
+    };
+    // filed on the default branch: no session's work, never said
+    handoff("trunk handoff", "old");
+    git(&d, &["switch", "-q", "-c", "feat/x"]);
+    handoff("chunk handoff", "demo");
+    let start = |source: &str| {
+        let input = format!(
+            r#"{{"cwd":{},"session_id":"s1","source":"{source}"}}"#,
+            json(&d)
+        );
+        let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+        assert!(ok, "{out}");
+        out
+    };
+    let out = start("startup");
+    assert!(out.contains("answer me (to: hook-test)"), "{out}");
+    assert!(out.contains("chunk handoff"), "{out}");
+    for gone in [
+        "answer them",
+        "hot unowned",
+        "keep it lean",
+        "trunk handoff",
+        "open issue",
+    ] {
+        assert!(!out.contains(gone), "{gone} in:\n{out}");
+    }
+    // hand-offs first, then the reader's own rows
+    assert!(out.find("chunk handoff") < out.find("answer me"), "{out}");
+    assert!(start("resume").is_empty());
+    assert!(start("compact").contains("answer me"));
 }
 
 /// PLAN-fael-id-refs chunk-4 (ids:integrity): an id is verified only after
@@ -358,7 +156,7 @@ fn id_rule_rides_the_reject_not_the_session_start() {
     assert!(ok, "{err}");
     let input = format!(r#"{{"cwd":{}}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
-    assert!(ok && out.contains("1 open issue"), "{out}");
+    assert!(ok, "{out}");
     for rule in ["never type an id from memory", "saw something broken"] {
         assert!(!out.contains(rule), "{rule} in:\n{out}");
     }
