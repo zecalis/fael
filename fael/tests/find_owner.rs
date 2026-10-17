@@ -74,6 +74,12 @@ fn a_chunk_uid_shows_the_chunk() {
             "{out}"
         );
     }
+    // --json stays machine-shaped: the chunk is a reject, not markdown
+    let (ok, out, err) = fael(&d, &["find", uid, "--json"]);
+    assert!(
+        !ok && format!("{out}{err}").contains("is a chunk here"),
+        "{out}{err}"
+    );
 }
 
 #[test]

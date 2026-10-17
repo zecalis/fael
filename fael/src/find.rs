@@ -35,13 +35,16 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
                 show_one(a, &log, &row, &branch_of)
             }
             super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
-            super::refs::Wide::Missing => match owner::chunk_here(&r, t) {
-                Some(c) => {
-                    print!("{c}");
-                    Ok(())
+            // --json is the machine shape: a chunk there stays the reject
+            super::refs::Wide::Missing => {
+                match (!a.has("json")).then(|| owner::chunk_here(&r, t)).flatten() {
+                    Some(c) => {
+                        print!("{c}");
+                        Ok(())
+                    }
+                    None => Err(reject_missing(&r, &log, t)),
                 }
-                None => Err(reject_missing(&r, &log, t)),
-            },
+            }
         };
     }
     // `fael find <id>` pulls the body: an exact id or unique prefix wins over
