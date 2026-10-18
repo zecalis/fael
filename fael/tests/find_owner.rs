@@ -122,7 +122,10 @@ fn chunk_show_names_the_repo_that_owns_the_uid() {
         .unwrap();
     writeln!(f, "{}", serde_json::json!({"event": "call", "repo": there})).unwrap();
     let (ok, _, err) = fael(&here, &["chunk", "show", uid]);
-    assert!(!ok && err.contains(&format!("no chunk {uid}")), "{err}");
-    let want = format!("{uid} is a chunk in {}", there.display());
-    assert!(err.contains(&want), "{err}");
+    let want = format!(
+        "rejected: chunk {uid} lives in {} — cd {} && fael chunk show {uid}",
+        there.display(),
+        there.display(),
+    );
+    assert!(!ok && err.contains(&want), "{err}");
 }

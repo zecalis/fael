@@ -64,7 +64,7 @@ pub(crate) fn brief(b: &core::plan::Brief) -> String {
 
 /// The board's repos, then every distinct `"repo"` in usage — scratch repos and paths that
 /// are gone left out.
-fn repos() -> Vec<PathBuf> {
+pub(crate) fn repos() -> Vec<PathBuf> {
     let usage = crate::hook::usage_files::read(None);
     let mut seen = HashSet::new();
     let named = usage.lines().filter_map(|l| {

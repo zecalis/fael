@@ -178,6 +178,23 @@ impl Store {
             )
             .unwrap_or(false)
     }
+
+    /// Where a chunk the board does not list sits: `(chunk_state, plan, plan_state)`
+    /// for its uid — a dropped chunk, or a chunk whose plan is parked or done.
+    pub fn chunk_place(&self, uid: &str) -> Result<Option<(String, String, String)>, String> {
+        self.conn
+            .query_row(
+                "SELECT c.state, CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END, p.state
+                 FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.uid = ?1",
+                [uid],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .map(Some)
+            .or_else(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                e => Err(super::store::err(e)),
+            })
+    }
 }
 
 /// `<dir>/fael.db`, the clone's db. Epoch v8 named it for the product: a `plans.db` there

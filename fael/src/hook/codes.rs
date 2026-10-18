@@ -38,6 +38,7 @@ const REJECTS: &[(&str, &str)] = &[
     ("lists its roots", "no_root"),
     ("no chunk", "chunk_missing"),
     ("is not on the board", "chunk_missing"),
+    ("lives in", "chunk_missing"),
     ("uid prefix", "chunk_prefix"),
     ("more than one chunk", "chunk_ambiguous"),
     ("is in another plan", "chunk_other_plan"),
