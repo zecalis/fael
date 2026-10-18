@@ -7,6 +7,7 @@
 
 mod commands;
 mod core;
+mod verb;
 
 #[cfg(test)]
 mod tests;
@@ -110,6 +111,9 @@ pub(crate) fn is_request(argv: &[String]) -> bool {
 /// command's core section (`help` itself is skipped, so `help find` finds
 /// `find`). With `--all` anywhere before `--`, the full section instead.
 pub(crate) fn for_argv(argv: &[String]) -> String {
+    if let Some(text) = verb::for_argv(argv) {
+        return text;
+    }
     let all = argv.iter().take_while(|x| *x != "--").any(|x| x == "--all");
     let section = argv
         .iter()
