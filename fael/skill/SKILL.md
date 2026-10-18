@@ -8,7 +8,7 @@ description: This repo's memory of what git and code do not say — why a choice
 # fael — the repo's memory
 
 Rows in English — title, key, body; `quote` foreign terms; the dev reads them through you, in their language.
-Add each in the same message as your next tool call or final edit — never a turn of its own.
+Add each in the same message as your next tool call or final edit — never a turn of its own; batch rows in one `rows` call, not one per row.
 Rows about a file come back when you touch it. One the code now says or contradicts misleads:
 close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage of it:
 `--replace "<old>" --with "<new>"`), in that same message.
@@ -30,8 +30,7 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
 Each row is read months later with no chat: one or two standalone sentences, one topic (a `;`/`·` list is rejected),
-with a ≤15-word `--title` (required past 60 words/400 chars).
-`--files` names the paths or an anchor (`doc:pricing`) `fael find` showed — never
-invent one; left out, it is this session's edited files.
+with a ≤15-word `--title` (count first: required past 60 words/400 chars).
+`--files` names the paths or anchor `fael find` showed — never invent one; default: this session's edited files.
 Type an id only once this session's `fael find` or `add` printed it — never from memory;
 the listed prefix works.
