@@ -36,7 +36,7 @@ fn repo() -> PathBuf {
 
 fn hinted(d: &Path) -> String {
     let (ok, out, err) = fael(
-        &d,
+        d,
         &["chunk", "add", "T", "--brief", "b", "--model", "haiku"],
     );
     assert!(ok, "{err}");
