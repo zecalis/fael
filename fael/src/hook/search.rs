@@ -106,7 +106,8 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, _response: &Value)
 }
 
 /// The fix commit line; `files` = what the session edited, else a
-/// placeholder — `fael add` rejects a row with no `--files`.
+/// placeholder — `fael add` rejects a row with no `--files`. One sentence:
+/// the CLI form, then the MCP equivalent once (close by key needs no id).
 fn fix_commit(files: &[String]) -> String {
     let files = if files.is_empty() {
         "<files the fix touched>".to_string()
@@ -114,18 +115,33 @@ fn fix_commit(files: &[String]) -> String {
         files.join(",")
     };
     format!(
-        "fael: this `fix:` commit names no fael row and this session closed none — keep what broke for the next agent: fael add issue \"<what broke>\" --files {files} --key <area:topic>, cite `(fael:<id>)` in a commit on this branch (a squash keeps it), then fael close --key <area:topic> \"{}\"\n",
+        "fael: this `fix:` commit names no fael row — keep it: `fael add issue \"<what broke>\" --files {files} --key <area:topic>` then `fael close --key <area:topic> \"{}\"` (MCP: add {{kind,text,files,key}} then close {{key,text}}).\n",
         fael_core::stats::CLOSE_TEMPLATE
     )
 }
 
+/// True when this worktree holds a live chunk run (`fael chunk start` here):
+/// the same cheap SQLite read session start uses (`Store::held`), no git
+/// spawn, no board read. No fael.db, no run = false.
+fn holds_chunk(repo: &crate::Repo) -> bool {
+    let db = crate::plan::db(repo);
+    if !db.exists() {
+        return false;
+    }
+    fael_core::plan::Store::open(&db)
+        .ok()
+        .and_then(|s| s.held(&repo.root.to_string_lossy()).ok())
+        .is_some_and(|held| !held.is_empty())
+}
+
 /// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):
 /// one line per cited id with its ready `fael close`, each id once per
-/// session. A `fix:` commit naming no row in a session that closed none
-/// (PLAN-fael-experience-loop chunk 5b): the add + close that keeps it, once
-/// per session. Nothing to say = silence. Each line is its kind through the
-/// `Outbox` like every other push line, with a usage row so `fael stats`
-/// reads its yield.
+/// session. A `fix:` commit naming no row in a session that closed none,
+/// in a worktree holding a live chunk run (h1: the low-yield line —
+/// fixcommit acted 28/168 — stays silent otherwise): the add + close that
+/// keeps it, once per session. Nothing to say = silence. Each line is its
+/// kind through the `Outbox` like every other push line, with a usage row
+/// so `fael stats` reads its yield.
 fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
     let no = Reply::default;
     if !SHELLS.contains(&tool.to_ascii_lowercase().as_str()) {
@@ -168,6 +184,7 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
     });
     if super::cited::fix_uncited(&c.log, input)
         && !super::tally::closed_any(&c.session, &c.repo.root)
+        && holds_chunk(&c.repo)
     {
         out.say(super::say::Line {
             kind: super::say::Kind::FixCommit,
@@ -183,4 +200,43 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
         super::usage::record_usage(&c.client, "search", &c.repo.root, context, &fresh, &meta);
     }
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fix_commit_is_one_line_with_cli_and_mcp_forms() {
+        let line = fix_commit(&["src/a.rs".into()]);
+        assert_eq!(line.matches('\n').count(), 1, "one line: {line}");
+        for must in [
+            "fael add issue",
+            "fael close",
+            "--files src/a.rs",
+            "--key <area:topic>",
+            "MCP: add {kind,text,files,key}",
+            "close {key,text}",
+        ] {
+            assert!(line.contains(must), "{must} in: {line}");
+        }
+        assert!(
+            fix_commit(&[]).contains("--files <files the fix touched>"),
+            "placeholder, never a rejecting add"
+        );
+    }
+
+    #[test]
+    fn no_db_holds_no_chunk() {
+        let root = std::env::temp_dir().join(format!("fael-fixcommit-{}", crate::core::ulid()));
+        let repo = crate::Repo {
+            root: root.clone(),
+            cwd: root.clone(),
+            fael: root.join(".fael"),
+            cfg: crate::core::Config::default(),
+            journal: None,
+        };
+        assert!(!holds_chunk(&repo));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
