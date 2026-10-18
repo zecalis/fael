@@ -18,6 +18,8 @@ enum To {
 }
 use To::{Flag, Id, Text};
 
+pub(crate) mod chunk_list;
+
 /// (commands, guessed flag, real thing). `*` in the README of the plan: every
 /// guess marked there was seen in an agent transcript.
 const FLAGS: &[(&str, &str, To)] = &[
@@ -207,6 +209,10 @@ pub(crate) fn mcp(tool: &str, args: &Value) -> Value {
 /// "try 'fael --help'". Deterministic and never runs a guess: near enough to
 /// help is near enough to do the wrong thing.
 pub(crate) fn reject(argv: &[String], e: String) -> String {
+    // `fael chunk list|ls`: the verb that never was one — answer with the reads
+    if let Some(m) = chunk_list::retype(argv, &e) {
+        return m;
+    }
     let cmd = argv.first().map_or("", String::as_str);
     let tail = " — try 'fael --help'";
     if let Some(flag) = e.strip_prefix("rejected: unknown flag ") {

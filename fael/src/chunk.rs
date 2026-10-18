@@ -49,25 +49,29 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     verb(a, rest, &r).map_err(|e| row_id(&r, e))
 }
 
-/// `chunk show b1 --plan p`: on a verb that names a chunk (not `add` or `move`, where
-/// `--plan` is where it goes), the plan picks it — the key becomes its uid, the flag goes.
+/// `chunk show b1 --plan p`: on a verb that names chunks (not `add` or `move`, where
+/// `--plan` is where they go), the plan picks them — each key becomes its uid, the flag
+/// goes. Every key resolves, so several labels ride one `--plan`.
 fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<String>)>, String> {
-    let (Some(plan), [verb, key, ..]) = (a.one("plan"), rest) else {
+    let (Some(plan), [verb, ..]) = (a.one("plan"), rest) else {
         return Ok(None);
     };
-    if matches!(verb.as_str(), "add" | "move" | "apply") {
+    if matches!(verb.as_str(), "add" | "move" | "apply") || rest.len() < 2 {
         return Ok(None);
     }
-    let uid = Store::open(&db(r))?.uid_in(key, &plan)?;
-    let mut rest = rest.to_vec();
-    rest[1] = uid;
-    Ok(Some((a.without("plan"), rest)))
+    let st = Store::open(&db(r))?;
+    let mut mapped = vec![verb.clone()];
+    for key in &rest[1..] {
+        mapped.push(st.uid_in(key, &plan)?);
+    }
+    Ok(Some((a.without("plan"), mapped)))
 }
 
 /// `chunk show 01M4P3R3` with a ledger row's id: say it is a row, not "no chunk"; with
 /// another repo's chunk uid (or 8+-char prefix): name the repo that holds it.
-/// Labels never resolve across repos — they are per plan.
-fn row_id(r: &Repo, e: String) -> String {
+/// Labels never resolve across repos — they are per plan. `pub(crate)` for the
+/// multi-uid loop, which words each uid's failure as a lone call would be.
+pub(crate) fn row_id(r: &Repo, e: String) -> String {
     let Some(key) = e
         .strip_prefix("rejected: no chunk ")
         .and_then(|t| t.split(' ').next())
@@ -101,7 +105,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
     let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     match rest.as_slice() {
-        ["show", key] => return crate::chunk_show::show(a, r, key),
+        ["show", ..] => return crate::chunk_verbs::show(a, r, &rest[1..]),
         ["add", title] => {
             a.only(
                 "chunk add",
@@ -169,22 +173,26 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             s()?.owner(uid, cmd, Some(text), &now)?;
             say(uid, to);
         }
-        [verb @ ("accept" | "unpark"), uid] => {
+        ["accept", ..] => crate::chunk_verbs::accept(a, r, &rest[1..], &now)?,
+        [verb @ "unpark", uid] => {
             a.only(&format!("chunk {verb}"), &[])?;
             let (cmd, to) = owner(verb);
             s()?.owner(uid, cmd, None, &now)?;
             say(uid, to);
         }
-        ["apply" | "approve" | "unapprove", ..] => queue(a, &rest, &mut s()?, &now)?,
+        ["approve", ..] => crate::chunk_verbs::approve(a, r, &rest[1..], &now)?,
+        ["unapprove", ..] => crate::chunk_verbs::unapprove(a, r, &rest[1..], &now)?,
+        ["apply", ..] => queue(a, &rest, &mut s()?, &now)?,
         _ => return Err(format!("rejected: {USAGE}")),
     }
     crate::board::register(r);
     Ok(ExitCode::SUCCESS)
 }
 
-/// The planner's batch and the owner's queue mark: `apply`, `approve` and its undo.
+/// The planner's batch: `apply` reads merge/split/pair/after ops off stdin. The owner's
+/// queue mark (`approve`, `unapprove`, `accept`) lives in `chunk_verbs`, which takes
+/// several uids; this keeps only the stdin batch.
 fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String> {
-    let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
     match rest {
         ["apply", "-"] if a.has("json") => {
             a.only("chunk apply", &["json"])?;
@@ -197,18 +205,6 @@ fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String
             for line in s.apply(ops, now)? {
                 println!("{line}");
             }
-        }
-        ["approve", uid] => {
-            a.only("chunk approve", &["model", "client"])?;
-            let (m, c) = (a.one("model"), a.one("client"));
-            say(
-                uid,
-                &s.approve(uid, Some((m.as_deref(), c.as_deref())), now)?,
-            );
-        }
-        ["unapprove", uid] => {
-            a.only("chunk unapprove", &[])?;
-            say(uid, &s.approve(uid, None, now)?);
         }
         _ => return Err(format!("rejected: {USAGE}")),
     }

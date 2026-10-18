@@ -111,7 +111,14 @@ pub(crate) fn natural(
             Some((p, l)) if !p.is_empty() && !l.is_empty() => (String::new(), Some((p, l))),
             _ => return Ok(None),
         },
-        (["show", p, l], None) if !a.has("plan") => (String::new(), Some((*p, *l))),
+        (["show", p, l], None) if !a.has("plan") => {
+            // two uids for the multi loop, not a plan and a label: `show <u1> <u2>`
+            // would otherwise read as plan `u1` holding label `u2`
+            if crate::core::looks_like_id(p) || crate::core::looks_like_id(l) {
+                return Ok(None);
+            }
+            (String::new(), Some((*p, *l)))
+        }
         _ => return Ok(None),
     };
     let uid = match plan_label {
