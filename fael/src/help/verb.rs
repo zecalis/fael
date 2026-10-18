@@ -5,9 +5,10 @@
 
 /// `fael chunk approve --help` (or `fael help chunk approve`): the verb's
 /// help, or None when this argv is not a verb help (unknown verb falls back
-/// to the full command section in `help::for_argv`).
+/// to the full command section in `help::for_argv`). `--all` before `--` is
+/// never verb help: it asks for the full section, so it returns None too.
 pub(crate) fn for_argv(argv: &[String]) -> Option<String> {
-    if !super::is_request(argv) {
+    if !super::is_request(argv) || argv.iter().take_while(|x| *x != "--").any(|x| x == "--all") {
         return None;
     }
     let words: Vec<&str> = argv
