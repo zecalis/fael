@@ -350,6 +350,30 @@ fn fael_claude(d: &Path, s: &Path, uuid: &str, args: &[&str]) -> String {
     String::from_utf8_lossy(&o.stdout).trim().to_string()
 }
 
+/// Brief item 4: a superseder stamps shown for the row it retires, too.
+#[test]
+fn a_superseder_stamps_shown() {
+    let (d, s) = repo();
+    let old = hold(&d, &s, "S1");
+    let out = fael(
+        &d,
+        &s,
+        Some("S1"),
+        &[
+            "add",
+            "decision",
+            "newer rule",
+            "--files",
+            "src/a.rs",
+            "--supersedes",
+            &old,
+        ],
+    );
+    let row = close_row(&d, &old);
+    assert_eq!(row["id"], out.split_whitespace().next().unwrap(), "{row}");
+    assert_eq!(row["shown"], serde_json::json!(["held"]), "{row}");
+}
+
 /// f3: the push speaks a Claude transcript path while the CLI speaks its stem
 /// — the shown key must bridge the two, or nothing is stamped on the client
 /// where most rows are filed.
