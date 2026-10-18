@@ -180,8 +180,13 @@ fn approve_keeps_the_state() {
 fn approve_defaults_to_the_model_hint_and_claude() {
     let mut s = Store::open_in_memory().unwrap();
     let c = add(&mut s, "c", Some("c"));
-    let err = s.approve(&c, Some((None, None)), NOW).unwrap_err();
-    assert!(err.contains("no model hint"), "{err}");
+    let text = s.approve(&c, Some((None, None)), NOW).unwrap();
+    assert_eq!(
+        text,
+        "approved · model small (default — pass --model M to change) · client claude"
+    );
+    let q = "SELECT approved_model FROM chunk WHERE uid = ?1";
+    assert_eq!(get(&s, q, &c).as_deref(), Some("small"));
     s.conn
         .execute("UPDATE chunk SET model_hint = 'haiku' WHERE uid = ?1", [&c])
         .unwrap();
