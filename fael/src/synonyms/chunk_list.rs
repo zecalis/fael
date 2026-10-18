@@ -17,5 +17,7 @@ pub(crate) fn retype(argv: &[String], e: &str) -> Option<String> {
     if !e.contains("try 'fael chunk --help'") {
         return None;
     }
-    Some(format!("rejected: fael chunk {verb} — fael board --plan <plan> lists a plan's chunks · fael plan export <plan> their briefs"))
+    Some(format!(
+        "rejected: fael chunk {verb} — fael board --plan <plan> lists a plan's chunks · fael plan export <plan> their briefs"
+    ))
 }

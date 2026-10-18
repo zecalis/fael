@@ -64,8 +64,9 @@ fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<Stri
     // only these verbs take several uids; the rest name one chunk plus text
     // (`note <uid> <text>`), so only their first key resolves
     if matches!(verb.as_str(), "show" | "approve" | "unapprove" | "accept") {
-        for i in 1..mapped.len() {
-            mapped[i] = st.uid_in(&mapped[i].clone(), &plan)?;
+        for k in mapped.iter_mut().skip(1) {
+            let uid = st.uid_in(k, &plan)?;
+            *k = uid;
         }
     } else {
         mapped[1] = st.uid_in(&mapped[1].clone(), &plan)?;
