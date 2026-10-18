@@ -175,7 +175,6 @@ pub(super) fn line(c: &Ctx) -> Option<Line> {
         return None;
     }
     let ids: Vec<String> = live.iter().map(|(r, _)| r.id.clone()).collect();
-    record_shown(&c.session, &c.repo.root, "held", &ids);
     Some(Line {
         kind: Kind::Held { ids },
         text: text(&c.log, &live),

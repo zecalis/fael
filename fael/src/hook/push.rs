@@ -264,6 +264,12 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         clear_stash(&c.session, &c.repo.root);
     }
     let mut r = out.reply();
+    // r1: stamp the shown file only for the held ids the push actually said —
+    // a line a budget cut dropped was never shown
+    let held = r.held_ids();
+    if !held.is_empty() {
+        super::held::record_shown(&c.session, &c.repo.root, "held", &held);
+    }
     if let Some(context) = r.context() {
         let decision = decision::record(trigger, &sel, n, &focus);
         let meta = UsageMeta {
