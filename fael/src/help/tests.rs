@@ -171,3 +171,14 @@ fn unknown_verb_falls_back_to_full() {
         super::for_argv(&argv("chunk --help")),
     );
 }
+
+/// `--all` means the full section, even with a verb present: verb help must
+/// not swallow it.
+#[test]
+fn all_flag_beats_verb_help() {
+    let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+    let full = super::for_argv(&argv("chunk --help"));
+    for args in ["chunk approve --help --all", "help chunk approve --all"] {
+        assert_eq!(super::for_argv(&argv(args)), full, "{args}");
+    }
+}

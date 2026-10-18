@@ -9,6 +9,9 @@ use crate::core;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+mod mark;
+pub(crate) use mark::{mark_dormant, mark_dormant_with};
+
 /// Files bigger than this are never hashed on the push path (the stamp side
 /// covers up to 16 MiB — 01M42CGE). A file over this cap has no verdict here,
 /// even when stamped: hashing it would break the 5 ms push ceiling. `doctor`
@@ -130,28 +133,6 @@ pub(crate) fn dormant(
             };
             file_verdict(want, &target, root, blobs, cap) == Some(true)
         })
-}
-
-/// Fill `log.dormant` for a pull (`find`, `kickoff`, session start, chunk
-/// start): every open row checked at the stamp-side cap, one blob cache.
-pub(crate) fn mark_dormant(r: &crate::Repo, log: &mut core::Log) {
-    let al = crate::aliases::load(r, log, false);
-    let hide: HashSet<&str> = core::closed(log)
-        .union(&core::superseded(log))
-        .copied()
-        .collect();
-    let mut blobs = Blobs::new();
-    let ids: HashSet<String> = log
-        .rows
-        .iter()
-        .filter(|w| !hide.contains(w.id.as_str()))
-        .filter(|w| dormant(w, &r.root, &al, &mut blobs, STAMP_MAX_BYTES))
-        .map(|w| w.id.clone())
-        .collect();
-    // retired notes (chunk done, branch merged) are off the live path like dormant ones
-    let retired = super::retired::ids(r, log, true);
-    log.dormant = ids.union(&retired).cloned().collect();
-    log.retired = retired;
 }
 
 /// `only` narrows the row to the stamped files that live at one of these

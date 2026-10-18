@@ -277,3 +277,87 @@ fn a_row_named_by_add_is_not_named_again_by_the_next_held_line() {
     let out = hook(&d, "edit", "src/c.rs");
     assert!(said_id(&out, &id).is_none(), "{out}");
 }
+
+/// c2 fix: a row add names on one file must not silence the Held line for a
+/// different changed row the add never named (it stamps shown, never ~held).
+#[test]
+fn add_naming_one_held_row_keeps_the_rest_on_the_held_line() {
+    let d = repo();
+    std::fs::write(d.join("src/d.rs"), "fn d() {}\n").unwrap();
+    let named = add_files(
+        &d,
+        "decision",
+        "two-file rule",
+        &["src/a.rs", "src/b.rs"],
+        Some("other"),
+    );
+    let other = decide(&d, "on its own file", "src/d.rs", Some("other"));
+    // a.rs leaves the two-file row live; d.rs is the second row's changed file
+    edit(&d, "src/a.rs");
+    edit(&d, "src/d.rs");
+    let (ok, out, err) = add_raw(&d, "decision", "new rule", &["src/a.rs"], Some(S), &[]);
+    assert!(ok, "{err}");
+    assert!(said_id(&out, &named).is_some(), "add names the pair: {out}");
+    stop(&d);
+    let out = hook(&d, "edit", "src/c.rs");
+    assert!(said_id(&out, &named).is_none(), "shown by add: {out}");
+    assert!(
+        said_id(&out, &other).is_some(),
+        "the row add never named stays on the Held line: {out}"
+    );
+}
+
+/// c2 fix: `fael add --json` keeps stdout one JSON row per line — the held
+/// text is a warning on stderr, never mixed into the JSONL stream.
+#[test]
+fn add_json_keeps_the_held_text_off_stdout() {
+    let d = repo();
+    let id = add_files(
+        &d,
+        "decision",
+        "two-file rule",
+        &["src/a.rs", "src/b.rs"],
+        Some("other"),
+    );
+    edit(&d, "src/a.rs");
+    let (ok, out, err) = fael_env(
+        &d,
+        &["add", "--json", "note", "json row", "--files", "src/a.rs"],
+        "",
+        &[("FAEL_SESSION", S)],
+    );
+    assert!(ok, "{err}");
+    assert!(
+        !out.is_empty() && out.lines().all(|l| l.starts_with('{')),
+        "stdout is JSONL only: {out}"
+    );
+    assert!(
+        said_id(&err, &id).is_some(),
+        "held row named on stderr: {err}"
+    );
+}
+
+/// c2 fix: the batch `--json -` stream stays JSONL too.
+#[test]
+fn add_json_batch_keeps_the_held_text_off_stdout() {
+    let d = repo();
+    let id = add_files(
+        &d,
+        "decision",
+        "two-file rule",
+        &["src/a.rs", "src/b.rs"],
+        Some("other"),
+    );
+    edit(&d, "src/a.rs");
+    let stdin = r#"[{"kind":"note","text":"batch row","files":["src/a.rs"]}]"#;
+    let (ok, out, err) = fael_env(&d, &["add", "--json", "-"], stdin, &[("FAEL_SESSION", S)]);
+    assert!(ok, "{err}");
+    assert!(
+        !out.is_empty() && out.lines().all(|l| l.starts_with('{')),
+        "stdout is JSONL only: {out}"
+    );
+    assert!(
+        said_id(&err, &id).is_some(),
+        "held row named on stderr: {err}"
+    );
+}

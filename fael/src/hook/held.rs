@@ -134,7 +134,9 @@ pub(crate) fn text(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
 }
 
 /// At stop: stash the session's held candidates, unless the session was
-/// already told. A sub-agent's stop never reaches here.
+/// already told. A sub-agent's stop never reaches here. A row this session
+/// already showed (an `add`, `chunk done` or `chunk start` listed it) is
+/// left out, so the Held line names only the rows still unshown.
 pub(super) fn stash(c: &Ctx) {
     if c.session.is_empty() {
         return;
@@ -149,6 +151,9 @@ pub(super) fn stash(c: &Ctx) {
     }
     let al = crate::aliases::load(&c.repo, &c.log, false);
     let mut found = pairs(&c.log, &c.repo.root, &al, &c.session, &edited);
+    // c2: add no longer spends ~held — it stamps shown instead, so the Held
+    // line keeps the rows add never named and drops only the ones it did
+    found.retain(|(r, _)| shown_for(&c.session, &c.repo.root, &r.id).is_empty());
     found.truncate(MAX);
     let p = path(&c.session, &c.repo.root);
     if found.is_empty()
@@ -259,18 +264,15 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
 ///
 /// Command output, not a hook line (no Outbox kind): the caller prints the
 /// returned text after the add result. Each named row is stamped shown
-/// `add`, so a later close/bump of it carries `shown: ["add", …]`; `~held`
-/// is spent in the seen list, so the Stop Held line does not repeat a row
-/// add already named. A row already shown this session (held, done or an
-/// earlier add) is not named again.
+/// `add`, so a later close/bump of it carries `shown: ["add", …]`, and
+/// `held::stash` skips a row this session already showed — the Stop Held
+/// line names only the rest, never a row add already named. A row already
+/// shown this session (held, done, start or an earlier add) is not named
+/// again.
 pub(crate) fn add_text(r: &crate::Repo, files: &[String], exclude: &str) -> String {
     let mut log = crate::read(r);
-    // cached aliases only, then the dormant fill over them: the write path
-    // never builds the rename cache (a hook edit builds it on first use) —
-    // building here would freeze pre-rename state the edit trusts instead
-    // of rebuilding (aliases rename tests)
     let al = crate::aliases::cached(r, &log).unwrap_or_default();
-    mark_dormant_cached(r, &mut log, &al);
+    super::changed::mark_dormant_with(r, &mut log, &al);
     let mut found = select(&log, &r.root, &al, files, exclude);
     // once per session per row: a row this session was already shown is done
     if let Some(s) = crate::session::writer_session(&r.root) {
@@ -286,7 +288,6 @@ pub(crate) fn add_text(r: &crate::Repo, files: &[String], exclude: &str) -> Stri
     if let Some(s) = crate::session::writer_session(&r.root) {
         record_shown(&s, &r.root, "add", &ids);
     }
-    spend_held(r);
     out
 }
 
@@ -321,43 +322,4 @@ fn more_line(rest: &[(&core::Row, String)]) -> String {
         rest.len(),
         more.join(",")
     )
-}
-
-/// `changed::mark_dormant` over caller-supplied aliases: `add` passes
-/// `aliases::cached`, so the write path fills dormant/retired without ever
-/// building the rename cache (see `add_text`).
-fn mark_dormant_cached(r: &crate::Repo, log: &mut core::Log, al: &core::Aliases) {
-    use std::collections::HashSet;
-    let hide: HashSet<&str> = core::closed(log)
-        .union(&core::superseded(log))
-        .copied()
-        .collect();
-    let mut blobs = super::changed::Blobs::new();
-    let ids: HashSet<String> = log
-        .rows
-        .iter()
-        .filter(|w| !hide.contains(w.id.as_str()))
-        .filter(|w| {
-            super::changed::dormant(w, &r.root, al, &mut blobs, super::changed::STAMP_MAX_BYTES)
-        })
-        .map(|w| w.id.clone())
-        .collect();
-    // retired notes (chunk done, branch merged) are off the live path like dormant ones
-    let retired = super::retired::ids(r, log, true);
-    log.dormant = ids.union(&retired).cloned().collect();
-    log.retired = retired;
-}
-
-/// Spend the session's one held ask: the next push's Held line (whose key is
-/// `~held`) is dropped, so a row add already named is not named again.
-fn spend_held(r: &crate::Repo) {
-    use std::io::Write;
-    let session = crate::session::hook_session(&r.root);
-    if session.is_empty() {
-        return;
-    }
-    let p = super::state::seen_path(&session, "", &r.root);
-    if let Some(mut f) = super::state::lock_seen(&p) {
-        let _ = f.write_all(format!("{KEY}\n").as_bytes());
-    }
 }
