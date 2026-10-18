@@ -8,6 +8,7 @@
 //! `Stats` shape), `day` (plus the `DayView` shape), `state_dir` (the one
 //! edge that reads the environment).
 
+mod acted;
 mod aggregate;
 mod capture;
 mod cross;
@@ -29,6 +30,7 @@ mod said_tests;
 mod unused;
 mod value;
 
+pub use acted::ActedCounts;
 pub use aggregate::{
     AskCount, Constants, Count, NonEnglish, Rounds, RowStatus, STATS_SCHEMA, Stats, TopRow,
     aggregate,

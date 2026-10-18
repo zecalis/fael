@@ -22,6 +22,7 @@
 //! An upper bound: the agent may have done it anyway — use it only to cut.
 //! Pure: kept usage rows and loaded logs in.
 
+use super::acted::{ActedCounts, count as acted_count};
 use super::capture::mine;
 use super::parse::Parsed;
 use super::retire::{RETIRE_WINDOW_MS, retire_times};
@@ -35,6 +36,12 @@ pub struct KindYield {
     pub said: usize,
     /// Of those, acted on later in the same session.
     pub earned: usize,
+    /// Stamped retires in the window (r2, `held` only): per `shown` source
+    /// (`held`, `done`, later `add`/`start`) the retire events whose row
+    /// names that source, split close / supersede / bump. Empty on every
+    /// other kind — and on `held` when nothing stamped yet.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub acted: BTreeMap<String, ActedCounts>,
 }
 
 /// A pull's query, from its `found` line.
@@ -238,6 +245,14 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 tally(&mut out, ASK_SPLIT[usize::from(!hub)], earned);
             }
         }
+    }
+    // r2: stamped retires ride on `held`, beside the unchanged `earned`
+    // rule above — rows before r1 have no stamp and never count here.
+    let acted = acted_count(logs, &parsed.first_seen);
+    if !acted.is_empty()
+        && let Some(held) = out.get_mut("held")
+    {
+        held.acted = acted;
     }
     out
 }

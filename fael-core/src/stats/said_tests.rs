@@ -80,3 +80,74 @@ fn a_count_line_earns_on_the_call_it_printed() {
     let keys = |p: &Pull| counted("src/a.rs|keys", p);
     assert!(keys(&pull(&[], Some("any:key"))), "`+N more under 3 keys`");
 }
+
+/// r2: `held.acted` counts stamped retire events in the window, per `shown`
+/// source split close / supersede / bump. One entry per stamped event, not
+/// per row — the fix for 01M57RES on the new count; the old `earned` rule
+/// (earliest event within a day) is unchanged.
+fn held_yields(usage: &str, rows_body: &str, closes_body: &str) -> super::said::KindYield {
+    let (bumps, rest): (Vec<_>, Vec<_>) =
+        rows(rows_body).into_iter().partition(|r| r.bumps.is_some());
+    let mut log = Log {
+        rows: rest,
+        ..Log::default()
+    };
+    log.rows.extend(bumps);
+    log.closes = rows(closes_body);
+    let p = super::parse::parse(
+        usage,
+        Path::new("/w/state/usage.jsonl"),
+        &[PathBuf::from("/tmp")],
+    );
+    yields(&p, &HashMap::from([("/w/r".to_string(), log)]))["held"].clone()
+}
+
+fn held_usage() -> String {
+    "{\"ts\":\"2026-09-26T00:05:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",\"event\":\"edit\",\"ids\":[\"H\"],\"said\":[{\"kind\":\"held\",\"key\":\"H\"}]}\n".to_string()
+}
+
+#[test]
+fn held_acted_counts_a_stamped_close_once() {
+    let rows_body = "{\"v\":1,\"id\":\"H\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"]}\n";
+    let closes_body = "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:06:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"done\",\"files\":[],\"ref\":\"H\",\"shown\":[\"held\"]}\n";
+    let y = held_yields(&held_usage(), rows_body, closes_body);
+    let a = y.acted.get("held").expect("held source");
+    assert_eq!((a.close, a.supersede, a.bump), (1, 0, 0));
+    assert_eq!((y.said, y.earned), (1, 1), "old earned rule unchanged");
+}
+
+#[test]
+fn held_acted_ignores_an_unstamped_bump() {
+    let rows_body = "{\"v\":1,\"id\":\"H\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"]}\n{\"v\":1,\"id\":\"B1\",\"ts\":\"2026-09-26T00:06:00Z\",\"by\":\"w\",\"text\":\"H bumped\",\"bumps\":\"H\"}\n";
+    let y = held_yields(&held_usage(), rows_body, "");
+    assert!(
+        y.acted.is_empty(),
+        "no stamp = nowhere in acted: {:?}",
+        y.acted
+    );
+    assert_eq!(y.earned, 1, "old earned still counts the unstamped bump");
+}
+
+#[test]
+fn held_acted_counts_a_stamped_bump_and_close_both() {
+    let rows_body = "{\"v\":1,\"id\":\"H\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"]}\n{\"v\":1,\"id\":\"B1\",\"ts\":\"2026-09-26T00:06:00Z\",\"by\":\"w\",\"text\":\"H bumped\",\"bumps\":\"H\",\"shown\":[\"held\"]}\n";
+    let closes_body = "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:07:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"done\",\"files\":[],\"ref\":\"H\",\"shown\":[\"held\"]}\n";
+    let y = held_yields(&held_usage(), rows_body, closes_body);
+    let a = y.acted.get("held").expect("held source");
+    assert_eq!((a.close, a.bump), (1, 1), "every stamped event counts");
+    assert_eq!(y.earned, 1, "earned still counts the row once");
+}
+
+#[test]
+fn held_acted_splits_supersede_and_other_sources() {
+    let rows_body = "{\"v\":1,\"id\":\"H\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"]}\n{\"v\":1,\"id\":\"S\",\"ts\":\"2026-09-26T00:06:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"],\"supersedes\":\"H\",\"shown\":[\"held\"]}\n{\"v\":1,\"id\":\"D\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"]}\n";
+    let closes_body = "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:06:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"done\",\"files\":[],\"ref\":\"D\",\"shown\":[\"done\"]}\n{\"v\":1,\"id\":\"Cold\",\"ts\":\"2026-09-26T00:04:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"old\",\"files\":[],\"ref\":\"H\",\"shown\":[\"held\"]}\n";
+    let y = held_yields(&held_usage(), rows_body, closes_body);
+    assert_eq!(y.acted.get("held").map(|a| a.supersede), Some(1));
+    assert_eq!(y.acted.get("done").map(|a| a.close), Some(1));
+    assert_eq!(
+        y.acted.get("held").map(|a| a.close),
+        Some(0),
+        "pre-window close never counts"
+    );
+}
