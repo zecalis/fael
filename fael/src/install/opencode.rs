@@ -64,6 +64,20 @@ pub(crate) fn opencode(c: &Ctx) -> Result<(), String> {
             );
         }
     }
+    // the retired pony skills' commands point at skills that are gone (fael:01M5549A)
+    // ponytail: by name only — a command file carries no fael marker to check
+    for name in ["plan-with-pony.md", "review-pony.md"] {
+        let cmd = dir.join("command").join(name);
+        if !cmd.is_file() {
+            continue;
+        }
+        if !c.dry {
+            std::fs::remove_file(&cmd).map_err(|e| format!("{}: {e}", cmd.display()))?;
+        }
+        c.changed.set(c.changed.get() + 1);
+        let verb = if c.dry { "would remove" } else { "removed" };
+        out!(c, "  {verb} the retired opencode command {}", cmd.display());
+    }
     Ok(())
 }
 
