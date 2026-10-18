@@ -4,7 +4,8 @@
 //! code holds now, or be wrong. Stop stashes those ids; the next push names
 //! them once per session with the three verdicts ready to run. The agent
 //! judges — fael only names the pair it saw, and an unjudged row stays active.
-//! `fael chunk done` prints the same over the files the chunk touched (w2).
+//! `fael chunk done` prints the same over the files the chunk touched (w2);
+//! `fael chunk start` over the files under the chunk's scope (c3).
 
 use super::changed::{Blobs, moved, own_row, user_note};
 use super::protocol::Ctx;
@@ -202,6 +203,51 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
     {
         let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
         record_shown(&s, &r.root, "done", &ids);
+    }
+    out
+}
+
+/// `fael chunk start` (plan fael-row-retire c3): the same held text over the
+/// files under the chunk's declared scope — the one moment every dev chunk
+/// passes. `scope` holds the declared scope lines (dirs or files); a row
+/// counts when one of its files sits under the scope on a `/` boundary.
+/// Same selection and wording as `done_text` (`select` + `text` + `more_line`),
+/// at most `DONE_MAX` rows, then where the rest are. Silent when none. Never
+/// blocks start, never closes anything.
+pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
+    use std::collections::HashSet;
+    if scope.is_empty() {
+        return String::new();
+    }
+    let mut log = crate::read(r);
+    super::changed::mark_dormant(r, &mut log);
+    let al = crate::aliases::load(r, &log, true);
+    // the scope names dirs (`w/`) while a row names files (`w/a.rs`): the
+    // edited set is the row files under the scope, so `pairs` (exact match)
+    // sees the same rows `overlap` would.
+    let mut seen = HashSet::new();
+    let mut edited: Vec<String> = vec![];
+    for row in &log.rows {
+        for f in &row.files {
+            if fael_core::plan::overlap(std::slice::from_ref(f), scope) && seen.insert(f.clone()) {
+                edited.push(f.clone());
+            }
+        }
+    }
+    if edited.is_empty() {
+        return String::new();
+    }
+    let found = select(&log, &r.root, &al, &edited, "");
+    let (head, rest) = found.split_at(found.len().min(DONE_MAX));
+    let mut out = text(&log, head);
+    out.push_str(&more_line(rest));
+    // r1: stamp what this output showed under `start`, so a later retire of
+    // one of these rows carries `shown: ["start", …]` — head only, fail open.
+    if !head.is_empty()
+        && let Some(s) = crate::session::writer_session(&r.root)
+    {
+        let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
+        record_shown(&s, &r.root, "start", &ids);
     }
     out
 }

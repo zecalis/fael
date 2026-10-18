@@ -58,7 +58,10 @@ pub(crate) mod usage_files;
 
 pub(crate) use asks::{ASK_WARN, record_asks, record_row_asks};
 pub(crate) use friction::{note_empty, record_cli, record_mcp_call};
-pub(crate) use held::{add_text as held_add_text, done_text as held_text, shown_for as held_shown};
+pub(crate) use held::{
+    add_text as held_add_text, done_text as held_text, shown_for as held_shown,
+    start_text as held_start,
+};
 pub(crate) use protocol::cmd;
 pub(crate) use usage::{aggregate, load, record_found, stats};
 

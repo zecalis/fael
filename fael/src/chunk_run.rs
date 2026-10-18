@@ -52,6 +52,18 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     }
     print!("{}", st.text());
     contracts(r, &st);
+    // plan fael-row-retire c3: open decisions and notes on files under the
+    // chunk's scope, verdicts ready — the agent judges, start never blocks
+    {
+        let scope: Vec<String> = st
+            .chunks
+            .iter()
+            .filter_map(|c| c.scope.as_deref())
+            .flat_map(str::lines)
+            .map(String::from)
+            .collect();
+        print!("{}", crate::hook::held_start(r, &scope));
+    }
     // the declared scope may name a re-export while the work lives elsewhere
     // (th.ts spreads start.ts): warn now, not only at done's outside report.
     if let Ok(s) = Store::open(&db(r)) {
