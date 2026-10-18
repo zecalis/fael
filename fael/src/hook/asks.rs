@@ -33,8 +33,18 @@ pub(crate) struct UsageMeta<'a> {
 }
 
 /// Append one usage row, fail-open like the rest of this module: accounting
-/// must never fail the command it rode along with.
+/// must never fail the command it rode along with. A run inside a scratch
+/// repo (a smoke test or benchmark without `FAEL_STATE_DIR`) never lands in
+/// the machine's usage: it is not real work, and its `repo` only bloats
+/// stats and the find owner index (issue 01M56WGH).
 pub(crate) fn append_row(row: serde_json::Value) {
+    if row
+        .get("repo")
+        .and_then(|r| r.as_str())
+        .is_some_and(|r| !r.is_empty() && crate::board::scratch(Path::new(r)))
+    {
+        return;
+    }
     super::usage_files::rotate();
     let path = super::usage_files::live();
     if let Some(parent) = path.parent()

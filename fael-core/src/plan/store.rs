@@ -3,9 +3,10 @@
 //! breaking epoch, an older db upgrades on open (release gate: no manual step) and every
 //! open adds the tables and columns it lacks.
 
+use super::backup::backup;
 use super::schema::{
-    COLUMNS, SCHEMA, TABLES, VERSION, backup, missing, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5,
-    v5_to_v6, v6_fill, v6_to_v8,
+    COLUMNS, SCHEMA, TABLES, VERSION, missing, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6,
+    v6_fill, v6_to_v8,
 };
 use rusqlite::{Connection, TransactionBehavior};
 use std::path::{Path, PathBuf};

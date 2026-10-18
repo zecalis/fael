@@ -20,6 +20,10 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // a run killed mid-turn never reaches Stop: its session is kept from the first turn
     super::stop::seen(e);
     prune_sessions(&state_dir().join("sessions"));
+    prune_sessions(&state_dir().join("held"));
+    // one line, every start, fail-open: the Stop-block mode was removed
+    // 2026-10-03 and its dir is garbage (issue 01M56WGH)
+    let _ = std::fs::remove_dir_all(state_dir().join("stop-block"));
     mark_started(&c.session, &c.repo.root);
     // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
     crate::install::auto::start();

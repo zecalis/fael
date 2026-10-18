@@ -39,7 +39,12 @@ fn a_read_with_no_since_opens_only_the_newest_archive_and_the_live_file() {
 
 #[test]
 fn the_first_write_of_a_new_month_archives_the_live_file_by_its_last_month() {
-    let s = state_dir("usage-rotate");
+    let d = repo();
+    // the state lives beside the repo under temp, like every other harness:
+    // a temp repo with an outside state dir is scratch, and scratch runs
+    // never write usage (issue 01M56WGH)
+    let s = d.join("state");
+    std::fs::create_dir_all(s.join("usage")).unwrap();
     let live = s.join("usage.jsonl");
     std::fs::write(&live, line("2020-03-10T00:00:00Z")).unwrap();
     let march = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_583_020_800 + 86_400);
