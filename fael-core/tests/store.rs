@@ -9,6 +9,8 @@ fn stamp() -> Stamp {
         by: "tester-0000".into(),
         branch: Some("feat/x".into()),
         sha: None,
+        session: None,
+        shown: None,
     }
 }
 

@@ -109,12 +109,14 @@ fn take(
         )),
         None => {}
     }
+    let mut stamped = stamp.clone();
+    crate::session::tag_stamp(&r.root, &old.id, &mut stamped);
     let (row, path, mut more) = core::bump_row(
         &r.fael,
         r.journal.as_deref(),
         log,
         &r.cfg,
-        stamp,
+        &stamped,
         id,
         core::BumpOpts {
             to: None,

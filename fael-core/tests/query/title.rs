@@ -157,6 +157,8 @@ fn bump_keeps_the_title() {
             by: "tester-0000".into(),
             branch: None,
             sha: None,
+            session: None,
+            shown: None,
         },
     );
     let mut r = Row::new("tester-0000", "issue", "hot body", vec!["src/a.rs".into()]);
