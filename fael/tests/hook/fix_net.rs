@@ -101,11 +101,22 @@ fn commit(d: &Path, msg: &str) -> String {
     out
 }
 
+/// Hold a live chunk run in this worktree, so the fix-commit line may speak (h1).
+fn hold(d: &Path) -> String {
+    let (ok, out, err) = fael(d, &["chunk", "add", "T", "--brief", "b"], "");
+    assert!(ok, "{err}");
+    let uid = out.trim().to_string();
+    let (ok, _, err) = fael(d, &["chunk", "start", &uid, "--run", "R1"], "");
+    assert!(ok, "{err}");
+    uid
+}
+
 const FIX: &str = "commit names no fael row";
 
 #[test]
 fn a_fix_commit_naming_no_row_is_said_once_per_session() {
     let d = super::repo();
+    hold(&d);
     assert!(!commit(&d, "feat: retry cap").contains(FIX), "not a fix");
     assert!(!commit(&d, "prefix: retry cap").contains(FIX));
     let out = commit(&d, "fix(hook): cap retries at 3");
@@ -113,8 +124,9 @@ fn a_fix_commit_naming_no_row_is_said_once_per_session() {
     assert!(
         out.contains(FIX)
             && out.contains("--files <files the fix touched>")
-            && out.contains("cite `(fael:<id>)`")
-            && out.contains("fael close --key"),
+            && out.contains("fael close --key")
+            && out.contains("MCP: add {kind,text,files,key}")
+            && !out.contains("cite `(fael:<id>)`"),
         "{out}"
     );
     assert!(
@@ -126,6 +138,7 @@ fn a_fix_commit_naming_no_row_is_said_once_per_session() {
 #[test]
 fn a_fix_commit_naming_a_row_or_after_a_close_is_silent() {
     let d = super::repo();
+    hold(&d);
     let (ok, out, err) = fael(
         &d,
         &[
@@ -184,6 +197,7 @@ fn yield_of(d: &Path, kind: &str) -> (u64, u64) {
 #[test]
 fn a_heredoc_fix_commit_is_said_and_earned_by_an_issue_after() {
     let d = super::repo();
+    hold(&d);
     assert!(!claude_commit(&d, "feat: cap").contains(FIX));
     assert!(claude_commit(&d, "fix(hook): cap retries").contains(FIX));
     assert_eq!(yield_of(&d, "fixcommit"), (1, 0));
@@ -204,6 +218,7 @@ fn a_heredoc_fix_commit_is_said_and_earned_by_an_issue_after() {
 #[test]
 fn a_close_under_the_session_uuid_silences_the_commit_line() {
     let d = super::repo();
+    hold(&d);
     let (ok, _, err) = fael(
         &d,
         &[
@@ -287,6 +302,7 @@ fn the_fix_line_wins_a_turn_and_the_bug_line_comes_back_after() {
 #[test]
 fn the_fix_lines_name_the_files_the_session_edited() {
     let d = super::repo();
+    hold(&d);
     let (ok, _, err) = fael(
         &d,
         &["add", "decision", "old choice", "--files", "src/a.rs"],

@@ -26,6 +26,7 @@ mod compact;
 mod day;
 mod decision;
 mod experience;
+mod fix_commit;
 mod fix_net;
 mod focus;
 mod from_user;
