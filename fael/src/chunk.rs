@@ -49,28 +49,24 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     verb(a, rest, &r).map_err(|e| row_id(&r, e))
 }
 
-/// `chunk show b1 --plan p`: on a verb that names chunks (not `add` or `move`, where
-/// `--plan` is where they go), the plan picks them — each key becomes its uid, the flag
-/// goes. Every key resolves, so several labels ride one `--plan`.
+/// `chunk note b1 --plan p`: on a verb that names one chunk and its text (not
+/// `add`/`move`/`apply`, where `--plan` is where it goes), the plan picks the
+/// key — it becomes its uid, the flag goes. The verbs that take several keys
+/// (`show`, `approve`, `unapprove`, `accept`) keep `--plan` and resolve each key
+/// in `chunk_verbs`, so one bad key never stops the rest.
 fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<String>)>, String> {
-    let (Some(plan), [verb, ..]) = (a.one("plan"), rest) else {
+    let (Some(plan), [verb, key, ..]) = (a.one("plan"), rest) else {
         return Ok(None);
     };
-    if matches!(verb.as_str(), "add" | "move" | "apply") || rest.len() < 2 {
+    if matches!(
+        verb.as_str(),
+        "add" | "move" | "apply" | "show" | "approve" | "unapprove" | "accept"
+    ) {
         return Ok(None);
     }
-    let st = Store::open(&db(r))?;
+    let uid = Store::open(&db(r))?.uid_in(key, &plan)?;
     let mut mapped = rest.to_vec();
-    // only these verbs take several uids; the rest name one chunk plus text
-    // (`note <uid> <text>`), so only their first key resolves
-    if matches!(verb.as_str(), "show" | "approve" | "unapprove" | "accept") {
-        for k in mapped.iter_mut().skip(1) {
-            let uid = st.uid_in(k, &plan)?;
-            *k = uid;
-        }
-    } else {
-        mapped[1] = st.uid_in(&mapped[1].clone(), &plan)?;
-    }
+    mapped[1] = uid;
     Ok(Some((a.without("plan"), mapped)))
 }
 

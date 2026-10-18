@@ -43,6 +43,24 @@ fn hinted(d: &Path) -> String {
     out.trim().to_string()
 }
 
+fn plan(d: &Path, name: &str) {
+    let (ok, _, err) = fael(d, &["plan", "new", name, "P"]);
+    assert!(ok, "{err}");
+}
+
+/// A hinted chunk with `label` in `plan`, its uid.
+fn labeled(d: &Path, plan: &str, label: &str) -> String {
+    let (ok, out, err) = fael(
+        d,
+        &[
+            "chunk", "add", "T", "--plan", plan, "--label", label, "--brief", "b", "--model",
+            "haiku",
+        ],
+    );
+    assert!(ok, "{err}");
+    out.trim().to_string()
+}
+
 /// Three hinted chunks in one call: all approved, one result line each.
 #[test]
 fn approve_several_uids_approves_each_in_order() {
@@ -99,6 +117,49 @@ fn unapprove_and_show_take_several_uids() {
     let (ok, out, err) = fael(&d, &["chunk", "show", &a, &b]);
     assert!(ok, "{err}");
     assert!(out.contains(&a) && out.contains(&b), "{out}");
+}
+
+/// `--plan` resolves each key on its own: one bad label rejects alone, the rest land.
+#[test]
+fn a_bad_plan_label_rejects_alone_while_the_rest_land() {
+    let d = repo();
+    plan(&d, "p");
+    let (a, c) = (labeled(&d, "p", "a"), labeled(&d, "p", "c"));
+    let (ok, out, err) = fael(&d, &["chunk", "approve", "--plan", "p", "a", "nope", "c"]);
+    assert!(!ok, "a failed key exits non-zero");
+    assert!(out.contains(&format!("chunk {a} → approved")), "{out}");
+    assert!(out.contains(&format!("chunk {c} → approved")), "{out}");
+    assert!(out.contains("no chunk nope"), "{out}");
+    assert!(err.contains("1 of 3 chunks rejected"), "{err}");
+}
+
+/// `--plan` never widens: a uid in another plan is refused, the rest still run.
+#[test]
+fn a_key_in_another_plan_rejects_alone() {
+    let d = repo();
+    plan(&d, "p");
+    plan(&d, "q");
+    let (a, c) = (labeled(&d, "p", "a"), labeled(&d, "p", "c"));
+    let q = labeled(&d, "q", "z");
+    let (ok, out, err) = fael(&d, &["chunk", "approve", "--plan", "p", "a", &q, "c"]);
+    assert!(!ok, "a failed key exits non-zero");
+    assert!(out.contains(&format!("chunk {a} → approved")), "{out}");
+    assert!(out.contains(&format!("chunk {c} → approved")), "{out}");
+    assert!(out.contains("is in plan q, not p"), "{out}");
+    assert!(err.contains("1 of 3 chunks rejected"), "{err}");
+}
+
+/// `show --plan` takes several labels too: a bad one is its own line, the rest show.
+#[test]
+fn show_takes_several_labels_with_a_plan() {
+    let d = repo();
+    plan(&d, "p");
+    let (a, b) = (labeled(&d, "p", "a"), labeled(&d, "p", "b"));
+    let (ok, out, err) = fael(&d, &["chunk", "show", "--plan", "p", "a", "nope", "b"]);
+    assert!(!ok, "a failed key exits non-zero");
+    assert!(out.contains(&a) && out.contains(&b), "{out}");
+    assert!(out.contains("no chunk nope"), "{out}");
+    assert!(err.contains("1 of 3 chunks rejected"), "{err}");
 }
 
 /// `list` is no verb: the board lists a plan's chunks, the export their briefs.
