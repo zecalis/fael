@@ -171,7 +171,7 @@ No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Con
   journal-only rows tag `@<branch>`.
 - A `.fael/log` already in the tree stays read (the union above) as frozen
   history and nothing appends to it, so no memory file is ever left to commit
-  (decision 01M46FBQB). `store = "tracked"` (which wrote the tree too) is gone:
+  (decision 01M4V3A02W). `store = "tracked"` (which wrote the tree too) is gone:
   a config that sets it is rejected with a pointer to `fael import <path>` and fael-sync;
   `store = "local"` still parses and changes nothing. The journal keeps
   the alias cache too (`<git-common-dir>/fael/cache`): the tree never grows a `.fael/`.
