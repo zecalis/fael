@@ -86,6 +86,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         revisit: a
             .has("revisit")
             .then(|| a.one("revisit").unwrap_or_default()),
+        recall: core::parse_recall(a.one("recall").as_deref())?,
         all: a.has("all"),
         limit,
         offset,
@@ -359,7 +360,7 @@ impl Args {
             if let Some(t) = self.one("text") {
                 s.push_str(&format!(" --text {}", quoted(&t)));
             }
-            for f in ["key", "kind", "since", "by", "to"] {
+            for f in ["key", "kind", "since", "by", "to", "recall"] {
                 if let Some(v) = self.one(f) {
                     s.push_str(&format!(" --{f} {}", quoted(&v)));
                 }

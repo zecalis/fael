@@ -87,6 +87,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         by: s(a, "by"),
         to: s(a, "to").map(|t| t.trim().to_lowercase()),
         revisit,
+        recall: core::parse_recall(s(a, "recall").as_deref())?,
         all: a["all"].as_bool().unwrap_or(false),
         limit: match a["limit"].as_u64() {
             Some(0) => {

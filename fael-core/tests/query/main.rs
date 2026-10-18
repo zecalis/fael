@@ -32,6 +32,7 @@ mod shape;
 mod stale;
 mod title;
 mod urgent;
+mod wide;
 
 use fael_core::*;
 
