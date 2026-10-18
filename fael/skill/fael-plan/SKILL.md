@@ -182,7 +182,7 @@ One `fael chunk add` per chunk, in order; each prints the new uid:
 
 ```bash
 fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
-  --size S|M|L --model <m> --scope <paths> [--reads <key>,<plan>/<key>] [--after <label|uid>,…] [--issue <id>,…]
+  --size S|M|L --model small|large --scope <paths> [--reads <key>,<plan>/<key>] [--after <label|uid>,…] [--issue <id>,…]
 ```
 
 - **brief** — what the agent that starts it needs and cannot get from the doc: what to build, where
@@ -216,7 +216,21 @@ fael chunk add "<title>" --plan <name> --label <l> --brief "<brief>" \
   prints Goal, Done and those, then an index of the rest. None = Goal, Scope, Done, Constraints.
 - **issue** — the open ledger issue ids the chunk fixes; its brief prints them. The agent closes
   each once the fix holds (`chunk done` never does).
-- **size / model** — a hint for the owner, who picks who runs it: S an hour, M a session, L split
+- **model** — a tier, `large` or `small`, never a model name: the owner runs Claude Code,
+  Codex and OpenCode, and picks the concrete model at `fael chunk approve <uid> --model <m>`
+  or `chunk start --model <m>`. **Default `small`.** `large` only when the chunk hits one of
+  these, named in a brief line `Model large: <trigger> — <where>`:
+  - writes money, balances or stock — a total that must move with another in one transaction;
+  - changes who may do what — auth, permission, unlock or approval rules;
+  - one rule read at many call sites, where a missed one is wrong silently (name the sites);
+  - a migration or rewrite of stored data that cannot be re-run;
+  - no pattern in the code to copy — a new design the agent must judge.
+  A UI over a server-side rule, a read-only check with a sibling to copy, a test or doc chunk
+  stays `small`. A `small` chunk on a risky path (it touches a trigger above, but the owner wants
+  it cheap) needs two things: a Done line with an exact-value test ("balance is `1070.00`",
+  not "balance is correct"), and a review chunk — `--model large --size S --after <it>`, brief
+  `Run /fael-review high --fix on <its label>'s PR`.
+- **size** — a hint for the owner: S an hour, M a session, L split
   it unless it can't be. Cut by outcome, not by layer: each line of Done is its own chunk (a
   page's read half and its write half), each one through every layer it needs. "Backend and UI
   together" is a reason to cut vertically, never to keep two outcomes in one chunk; a can't-split

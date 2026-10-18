@@ -75,7 +75,7 @@ fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
         "fill them: fael plan export {key} --json > bill.json, edit \"sections\", fael plan apply bill.json"
     );
     println!(
-        "add chunks: fael chunk add \"<title>\" --plan {key} --brief \"…\" --size S|M|L --model M --scope <paths>"
+        "add chunks: fael chunk add \"<title>\" --plan {key} --brief \"…\" --size S|M|L --model small|large --scope <paths>"
     );
     Ok(())
 }
