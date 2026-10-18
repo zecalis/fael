@@ -193,6 +193,23 @@ fn install_points_hooks_past_the_npm_wrapper() {
     assert!(s.contains(&want), "{want}\n{s}");
 }
 
+/// The retired pony skills' opencode commands go; any other command file stays (fael:01M5549A).
+#[test]
+fn install_removes_stale_opencode_pony_commands() {
+    let home = std::env::temp_dir().join(format!("fael-ocpony-{}", fael_core::ulid()));
+    let cmd = home.join(".config/opencode/command");
+    std::fs::create_dir_all(&cmd).unwrap();
+    for n in ["plan-with-pony.md", "review-pony.md", "mine.md"] {
+        std::fs::write(cmd.join(n), "x").unwrap();
+    }
+    let out = install(&home, &["--client", "opencode"]);
+    assert!(out.contains("retired opencode command"), "{out}");
+    assert!(!cmd.join("plan-with-pony.md").exists());
+    assert!(!cmd.join("review-pony.md").exists());
+    assert!(cmd.join("mine.md").exists());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 /// An npm scope move (@inonix -> @zecalis) leaves every MCP entry on a deleted
 /// binary: a fael path is repointed, anything else is left alone.
 #[test]
