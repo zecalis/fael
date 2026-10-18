@@ -65,7 +65,8 @@ fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<Stri
 }
 
 /// `chunk show 01M4P3R3` with a ledger row's id: say it is a row, not "no chunk"; with
-/// another repo's chunk: say which repo (one lead hunted four repos for a uid, 2026-10-14).
+/// another repo's chunk uid (or 8+-char prefix): name the repo that holds it.
+/// Labels never resolve across repos — they are per plan.
 fn row_id(r: &Repo, e: String) -> String {
     let Some(key) = e
         .strip_prefix("rejected: no chunk ")
@@ -78,8 +79,8 @@ fn row_id(r: &Repo, e: String) -> String {
             "rejected: {key} is a ledger {}, not a chunk — `fael find {key}` reads it, `fael board` lists the chunk uids",
             row.kind
         ),
-        Err(_) => match crate::find::owner::owner(r, key) {
-            Some(o) => format!("{e}\n{o}"),
+        Err(_) => match crate::chunk_elsewhere::elsewhere(r, key) {
+            Some(at) => crate::chunk_elsewhere::message(key, &at),
             None => e,
         },
     }

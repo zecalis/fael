@@ -18,7 +18,7 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
         .chunks
         .into_iter()
         .find(|c| c.uid == b.uid)
-        .ok_or(format!("rejected: chunk {} is not on the board", b.uid))?;
+        .ok_or_else(|| missing(&s, &b.uid))?;
     if a.has("json") {
         let mut v = serde_json::to_value(&c).map_err(|e| e.to_string())?;
         v["brief"] = b.brief.into();
@@ -62,6 +62,31 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// A chunk the board does not list: say why — its plan is parked or done (the
+/// board only lists active plans), or the chunk itself is dropped — with the
+/// retype that reads it. The `is not on the board` needle keeps its
+/// `chunk_missing` code.
+fn missing(s: &Store, uid: &str) -> String {
+    match s.chunk_place(uid) {
+        Ok(Some((state, plan, _))) if state == "dropped" => format!(
+            "rejected: chunk {uid} is not on the board — it is dropped — \
+            `fael plan export {plan}` lists its uid"
+        ),
+        Ok(Some((_, plan, plan_state))) if matches!(plan_state.as_str(), "parked" | "done") => {
+            let unpark = if plan_state == "parked" {
+                format!("`fael plan unpark {plan}` first, or ")
+            } else {
+                String::new()
+            };
+            format!(
+                "rejected: chunk {uid} is not on the board — its plan {plan} is {plan_state} — \
+                {unpark}`fael plan export {plan}` lists its uids"
+            )
+        }
+        _ => format!("rejected: chunk {uid} is not on the board"),
+    }
 }
 
 /// The forms an agent types for `chunk show` that name a plan and a label: `p/label`,
