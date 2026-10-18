@@ -42,16 +42,39 @@ fn add(
     session: Option<&str>,
     more: &[&str],
 ) -> String {
-    let envs: Vec<(&str, &str)> = session.map(|s| ("FAEL_SESSION", s)).into_iter().collect();
-    let args = [&["add", kind, text, "--files", file][..], more].concat();
-    let (ok, out, err) = fael_env(d, &args, "", &envs);
+    let (ok, out, err) = add_raw(d, kind, text, &[file], session, more);
     assert!(ok, "{err}");
-    let id = out
-        .split_whitespace()
+    out.split_whitespace()
         .find(|w| w.starts_with("01"))
-        .unwrap();
-    id.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+        .unwrap()
+        .trim_matches(|c: char| !c.is_ascii_alphanumeric())
         .to_string()
+}
+
+/// File a row on several files (comma-joined, like the CLI takes them).
+fn add_files(d: &Path, kind: &str, text: &str, files: &[&str], session: Option<&str>) -> String {
+    let (ok, out, err) = add_raw(d, kind, text, files, session, &[]);
+    assert!(ok, "{err}");
+    out.split_whitespace()
+        .find(|w| w.starts_with("01"))
+        .unwrap()
+        .trim_matches(|c: char| !c.is_ascii_alphanumeric())
+        .to_string()
+}
+
+/// File a row, keeping stdout and stderr apart (c2 prints held rows on stdout).
+fn add_raw(
+    d: &Path,
+    kind: &str,
+    text: &str,
+    files: &[&str],
+    session: Option<&str>,
+    more: &[&str],
+) -> (bool, String, String) {
+    let envs: Vec<(&str, &str)> = session.map(|s| ("FAEL_SESSION", s)).into_iter().collect();
+    let joined = files.join(",");
+    let args = [&["add", kind, text, "--files", &joined][..], more].concat();
+    fael_env(d, &args, "", &envs)
 }
 
 /// The short id `out` names `id` by — fael abbreviates, and no other row's
@@ -196,4 +219,61 @@ fn a_decision_closed_or_superseded_in_the_session_is_not_named() {
     assert!(ok, "{err}");
     let out = hook(&d, "edit", "src/c.rs");
     assert!(!out.contains(HELD), "{out}");
+}
+
+/// c2: add on a file with a held decision prints its id with the three
+/// verdicts ready. Two files, so editing one leaves the row live — a
+/// one-file row goes dormant and is left out, like chunk done's (w2).
+#[test]
+fn add_on_a_file_with_a_held_decision_names_it_with_verdicts() {
+    let d = repo();
+    let id = add_files(
+        &d,
+        "decision",
+        "two-file rule",
+        &["src/a.rs", "src/b.rs"],
+        Some("other"),
+    );
+    edit(&d, "src/a.rs");
+    let (ok, out, err) = add_raw(&d, "decision", "new rule", &["src/a.rs"], Some(S), &[]);
+    assert!(ok, "{err}");
+    let short = said_id(&out, &id).unwrap_or_default();
+    assert!(!short.is_empty(), "held id named: {out}");
+    for want in [
+        format!("fael bump {short}"),
+        format!(r#"fael close {short} "now in `src/a.rs`""#),
+        format!("--supersedes {short}"),
+    ] {
+        assert!(out.contains(&want), "{want}: {out}");
+    }
+}
+
+/// c2: add on a clean file prints nothing extra.
+#[test]
+fn add_on_a_clean_file_prints_nothing_extra() {
+    let d = repo();
+    let (ok, out, err) = add_raw(&d, "decision", "fresh rule", &["src/a.rs"], Some(S), &[]);
+    assert!(ok, "{err}");
+    assert!(!out.contains(HELD), "{out}");
+    assert!(!out.contains("fael bump"), "{out}");
+}
+
+/// c2: a row add named is not named again by the next Held line.
+#[test]
+fn a_row_named_by_add_is_not_named_again_by_the_next_held_line() {
+    let d = repo();
+    let id = add_files(
+        &d,
+        "decision",
+        "two-file rule",
+        &["src/a.rs", "src/b.rs"],
+        Some("other"),
+    );
+    edit(&d, "src/a.rs");
+    let (ok, out, err) = add_raw(&d, "decision", "new rule", &["src/a.rs"], Some(S), &[]);
+    assert!(ok, "{err}");
+    assert!(said_id(&out, &id).is_some(), "{out}");
+    stop(&d);
+    let out = hook(&d, "edit", "src/c.rs");
+    assert!(said_id(&out, &id).is_none(), "{out}");
 }

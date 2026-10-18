@@ -19,6 +19,20 @@ use crate::{Repo, core};
 use cache::{read_cache, write_cache};
 use git::{git_blobs, git_renames, uncommitted_pairs};
 
+/// Cached aliases without building: `None` when no cache file exists.
+/// The write path (`fael add`) uses this — building the cache on `add`
+/// would freeze pre-rename state that a later hook edit trusts instead of
+/// rebuilding (the aliases rename tests). `fael mv` rows merge from the log
+/// like `load`; the steady-path dead-settling is skipped (it spawns git and
+/// rewrites the cache).
+pub fn cached(r: &Repo, log: &core::Log) -> Option<core::Aliases> {
+    let home = crate::journal::home(r)?;
+    let c = read_cache(home)?;
+    let mut al = core::Aliases::from_pairs(c.renames.clone());
+    al.merge(&core::Aliases::from_log(log));
+    Some(al)
+}
+
 /// Aliases for `push` / `find --files` / `kickoff`. `refresh` runs git;
 /// without it this is one small file read and no spawn.
 pub fn load(r: &Repo, log: &core::Log, refresh: bool) -> core::Aliases {
