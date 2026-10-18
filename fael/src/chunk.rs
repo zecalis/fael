@@ -60,9 +60,15 @@ fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<Stri
         return Ok(None);
     }
     let st = Store::open(&db(r))?;
-    let mut mapped = vec![verb.clone()];
-    for key in &rest[1..] {
-        mapped.push(st.uid_in(key, &plan)?);
+    let mut mapped = rest.to_vec();
+    // only these verbs take several uids; the rest name one chunk plus text
+    // (`note <uid> <text>`), so only their first key resolves
+    if matches!(verb.as_str(), "show" | "approve" | "unapprove" | "accept") {
+        for i in 1..mapped.len() {
+            mapped[i] = st.uid_in(&mapped[i].clone(), &plan)?;
+        }
+    } else {
+        mapped[1] = st.uid_in(&mapped[1].clone(), &plan)?;
     }
     Ok(Some((a.without("plan"), mapped)))
 }
