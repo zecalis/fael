@@ -24,6 +24,7 @@ mod revisit;
 mod select;
 mod shape;
 mod stale;
+mod wide;
 
 pub use chunks::{PLAN_KICKOFF_ROWS, handoff_first};
 pub use explain::{EXPAND_MAX, expands, json_note, nearest, why_empty};
@@ -52,6 +53,7 @@ pub use select::{
 };
 pub use shape::add_gate;
 pub use stale::{backtick_paths, code_spans, fix_close, stale_close_refs, stale_refs};
+pub use wide::parse_recall;
 
 /// What `find` narrows by. Every field is optional; `files` holds normalised refs.
 #[derive(Debug, Default, Clone)]
@@ -73,6 +75,9 @@ pub struct Filter {
     /// only rows carrying `--revisit`: `Some("")` = any of them, `Some(q)` =
     /// a case-insensitive substring (`find --revisit[=text]`)
     pub revisit: Option<String>,
+    /// opt-in wider recall: `Some("wide")` unions the exact hits, rows
+    /// sharing a key with one, and the text match off any file
+    pub recall: Option<String>,
     /// show closed and superseded rows too
     pub all: bool,
     /// Postgres-style paging, applied after ranking before render

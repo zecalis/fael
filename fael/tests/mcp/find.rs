@@ -145,3 +145,56 @@ fn find_id_shapes_match_cli() {
     let (is_err, body) = find(serde_json::json!({"text": fake}));
     assert!(!is_err && body.contains("for context"), "{body}");
 }
+
+/// f1: MCP `find {"recall": "wide"}` unions the exact file hits, the rows
+/// sharing a key with one, and the text match off any file — in that order,
+/// never the unrelated row; without it only today's exact hit.
+#[test]
+fn find_recall_wide_unions_key_sharing_and_unfiled_text() {
+    let (_, wt) = main_and_worktree();
+    for f in ["src/x.rs", "src/y.rs", "src/z.rs", "src/w.rs"] {
+        std::fs::write(wt.join(f), "// x\n").unwrap();
+    }
+    let added = mcp_tool(
+        &wt,
+        "add",
+        &[
+            serde_json::json!({"kind": "note", "text": "sunset deploy on x", "files": ["src/x.rs"], "key": "k"}),
+            serde_json::json!({"kind": "note", "text": "unrelated bookkeeping", "files": ["src/y.rs"], "key": "k"}),
+            serde_json::json!({"kind": "note", "text": "sunset deploy on z", "files": ["src/z.rs"]}),
+            serde_json::json!({"kind": "note", "text": "unrelated other", "files": ["src/w.rs"]}),
+        ],
+    );
+    assert!(
+        added.iter().all(|v| v["result"]["isError"] == false),
+        "{added:?}"
+    );
+    let find = |args: serde_json::Value| {
+        let r = mcp_tool(&wt, "find", &[args]);
+        assert_eq!(r[0]["result"]["isError"], false, "{r:?}");
+        r[0]["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    // default: only today's exact hit
+    let narrow = find(serde_json::json!({"files": ["src/x.rs"], "text": "sunset deploy"}));
+    assert!(narrow.contains("sunset deploy on x"), "{narrow}");
+    assert!(
+        !narrow.contains("bookkeeping")
+            && !narrow.contains("sunset deploy on z")
+            && !narrow.contains("unrelated other"),
+        "{narrow}"
+    );
+    // wide: exact, key-sharing, unfiled text — in that order, never D
+    let wide =
+        find(serde_json::json!({"files": ["src/x.rs"], "text": "sunset deploy", "recall": "wide"}));
+    let (a, b, c) = (
+        wide.find("sunset deploy on x"),
+        wide.find("unrelated bookkeeping"),
+        wide.find("sunset deploy on z"),
+    );
+    assert!(a.is_some() && b.is_some() && c.is_some(), "{wide}");
+    assert!(a.unwrap() < b.unwrap() && b.unwrap() < c.unwrap(), "{wide}");
+    assert!(!wide.contains("unrelated other"), "{wide}");
+}

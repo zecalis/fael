@@ -33,7 +33,7 @@ const CORE: &[(&str, &str)] = &[
     ),
     (
         "find",
-        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--full] [--all] [--limit N] [--offset M] [--text query]
+        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--full] [--all] [--limit N] [--offset M] [--text query] [--recall wide]
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
       why: `closed: <text> (<sha>)`; several ids print every body in one call,
       a bad id reports alone and the exit is 1; several words with no id are

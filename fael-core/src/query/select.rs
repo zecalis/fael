@@ -211,9 +211,19 @@ pub fn page(rows: Vec<&Row>, limit: Option<usize>, offset: usize) -> (Vec<&Row>,
     (page, total)
 }
 
+/// Rows matching `f`, ranked most actionable first. With `recall: "wide"`
+/// the union in `wide` (exact hits, key-sharing rows, unfiled text hits);
+/// otherwise byte-identical to before.
+pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
+    if super::wide::is_wide(&f.recall) {
+        return super::wide::find(log, f);
+    }
+    find_narrow(log, f)
+}
+
 /// Rows matching `f`, ranked most actionable first. Closed, superseded and
 /// dormant (`log.dormant`) rows are hidden unless `f.all`.
-pub fn find<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
+pub(crate) fn find_narrow<'a>(log: &'a Log, f: &Filter) -> Vec<&'a Row> {
     let hide: HashSet<&str> = if f.all {
         HashSet::new()
     } else {
