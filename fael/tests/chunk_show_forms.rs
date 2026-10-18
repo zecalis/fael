@@ -141,6 +141,10 @@ fn show_elsewhere_names_the_repo_that_holds_the_uid() {
     let (ok, _, err) = fael_in(&a, &state, &["chunk", "show", prefix]);
     assert!(!ok, "show {prefix} from A passed: {err}");
     assert!(err.contains(&broot), "{err}");
+    assert!(
+        err.contains(&format!("a chunk starting with {prefix} lives in")),
+        "{err}"
+    );
 
     // a label never resolves across repos
     let (ok, _, err) = fael_in(&a, &state, &["chunk", "show", "b1"]);
