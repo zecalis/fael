@@ -8,6 +8,8 @@
 //! the free text itself is never stored. A reject carries its `reason` from
 //! `codes` (plus the gate's `rules`, or the command an unknown one was `near`),
 //! and a `chunk`/`plan` call its `sub` verb — each from a closed vocabulary.
+//! A reject or help also carries the call's `shape` (`verb`, flag names,
+//! positional count — never a value); an `ok` row carries none of those.
 
 use super::asks::{UsageMeta, append_row};
 use super::usage::usage_row;
@@ -40,7 +42,8 @@ const AGENT_CMDS: [&str; 12] = [
 
 /// The `chunk`/`plan` verb a call used, when it is a real one: `chunk start`
 /// and `chunk add` fail for different reasons, so stats keep them apart.
-fn sub<'a>(cmd: &str, argv: &'a [String]) -> Option<&'a str> {
+/// `shape` reuses it for the call row's `verb` — the one closed vocabulary.
+pub(crate) fn sub<'a>(cmd: &str, argv: &'a [String]) -> Option<&'a str> {
     let verbs: &[&str] = match cmd {
         "chunk" => crate::chunk::VERBS,
         "plan" => crate::plan::VERBS,
@@ -89,7 +92,7 @@ fn record(
     session: &str,
     (o, empty): (Outcome, bool),
     sig: String,
-    sub: Option<&str>,
+    argv: Option<&[String]>,
 ) {
     let meta = UsageMeta {
         session: (!session.is_empty()).then_some(session),
@@ -105,7 +108,7 @@ fn record(
     );
     row["cmd"] = cmd.into();
     row["sig"] = sig.into();
-    if let Some(s) = sub {
+    if let Some(s) = argv.and_then(|a| sub(cmd, a)) {
         row["sub"] = s.into();
     }
     match o {
@@ -115,11 +118,19 @@ fn record(
                 row["empty"] = true.into();
             }
         }
-        Outcome::Help => row["outcome"] = "help".into(),
+        Outcome::Help => {
+            row["outcome"] = "help".into();
+            if let Some(a) = argv {
+                super::shape::apply(cmd, a, &mut row);
+            }
+        }
         Outcome::Reject(e) => {
             let r = super::codes::reject(e);
             row["outcome"] = "reject".into();
             row["reason"] = r.into();
+            if let Some(a) = argv {
+                super::shape::apply(cmd, a, &mut row);
+            }
             if r == core::stats::SHAPE_GATE {
                 row["rules"] = super::codes::gate_rules(e).into();
             }
@@ -164,7 +175,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         &session,
         (outcome, empty),
         sig(argv),
-        sub(cmd, argv),
+        Some(argv),
     );
 }
 
