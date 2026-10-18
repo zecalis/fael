@@ -128,3 +128,46 @@ fn all_flag_shows_the_full_section() {
         }
     }
 }
+
+/// verb-help: `fael chunk approve --help` names only approve in <=6 lines.
+#[test]
+fn verb_help_shows_only_that_verb() {
+    let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+    let out = super::for_argv(&argv("chunk approve --help"));
+    assert!(out.lines().count() <= 6, "got:\n{out}");
+    assert!(out.contains("approve"), "got:\n{out}");
+    assert!(out.contains("eg:"), "got:\n{out}");
+    assert!(
+        out.lines().last().unwrap_or_default() == "all verbs: fael chunk --help",
+        "got:\n{out}"
+    );
+    // the shared-line neighbour stays out: approve help is not unapprove help
+    assert!(
+        !super::for_argv(&argv("chunk approve --help"))
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .contains("unapprove"),
+        "got:\n{out}"
+    );
+}
+
+/// `fael chunk --help` is unchanged by verb help.
+#[test]
+fn command_help_is_unchanged() {
+    let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+    let out = super::for_argv(&argv("chunk --help"));
+    assert!(!out.contains("all verbs:"), "got:\n{out}");
+    assert!(out.contains("fael chunk add"), "got:\n{out}");
+    assert!(out.contains("fael chunk approve"), "got:\n{out}");
+}
+
+/// An unknown verb falls back to the full command section.
+#[test]
+fn unknown_verb_falls_back_to_full() {
+    let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+    assert_eq!(
+        super::for_argv(&argv("chunk frobnicate --help")),
+        super::for_argv(&argv("chunk --help")),
+    );
+}
