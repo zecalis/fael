@@ -330,6 +330,9 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_row_asks("cli", "add", &r.root, &row, &warns);
     batch::written(a, &r, &row, &path);
+    // c2: open held rows on the new row's files, verdicts ready — command
+    // output after the add result, never a hook line; itself excluded
+    print!("{}", hook::held_add_text(&r, &row.files, &row.id));
     Ok(())
 }
 

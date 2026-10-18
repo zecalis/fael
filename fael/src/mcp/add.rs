@@ -46,6 +46,11 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                     out.extend(crate::batch::launch_line(&row));
                     // like a single add: each row's info/warning lines sit under its id
                     out.extend(w.iter().cloned());
+                    // c2: held rows on this row's files, verdicts ready
+                    let held = crate::hook::held_add_text(r, &row.files, &row.id);
+                    if !held.is_empty() {
+                        out.extend(held.lines().map(String::from));
+                    }
                     warns.extend(w);
                 }
                 Err(e) => {
@@ -92,6 +97,12 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     for l in routed.iter().flatten().chain(&warns) {
         text.push('\n');
         text.push_str(l);
+    }
+    // c2: held rows on the new row's files, verdicts ready
+    let held = crate::hook::held_add_text(r, &row.files, &row.id);
+    if !held.is_empty() {
+        text.push('\n');
+        text.push_str(held.trim_end());
     }
     Ok((text, warns))
 }

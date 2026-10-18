@@ -24,6 +24,9 @@ const MAX: usize = 3;
 /// `chunk done` names more: its diff is the whole chunk, not one session's turn.
 const DONE_MAX: usize = 5;
 
+/// `fael add` names fewer: the row's own files, not the chunk's diff.
+const ADD_MAX: usize = 3;
+
 /// The ids stop stashed for the next push, one `<id>\t<path>` line each.
 fn path(session: &str, root: &Path) -> PathBuf {
     let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
@@ -187,22 +190,10 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
     let mut log = crate::read(r);
     super::changed::mark_dormant(r, &mut log);
     let al = crate::aliases::load(r, &log, true);
-    // decision 01M5528X: the Held line at Stop is the one ask over a changed
-    // row; this list leaves the dormant ones out
-    let mut found = pairs(&log, &r.root, &al, "", files);
-    found.retain(|(w, _)| !log.dormant.contains(&w.id));
+    let found = select(&log, &r.root, &al, files, "");
     let (head, rest) = found.split_at(found.len().min(DONE_MAX));
     let mut out = text(&log, head);
-    if !rest.is_empty() {
-        let mut more: Vec<&str> = rest.iter().map(|(_, f)| f.as_str()).collect();
-        more.sort_unstable();
-        more.dedup();
-        out.push_str(&format!(
-            "+{} more: fael find --files {}\n",
-            rest.len(),
-            more.join(",")
-        ));
-    }
+    out.push_str(&more_line(rest));
     // r1: stamp what this output showed, so a later retire names it — the
     // head only, never the `+N more` tail. The writer session is the caller's
     // (fail open: none outside one).
@@ -213,4 +204,114 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
         record_shown(&s, &r.root, "done", &ids);
     }
     out
+}
+
+/// `fael add` (CLI and MCP): the held text over the files the new row was
+/// filed on, at most `ADD_MAX` rows, then where the rest are — the same
+/// selection `done_text` uses, never a second one. Empty when none. The new
+/// row itself is excluded: add never asks about what it just wrote.
+///
+/// Command output, not a hook line (no Outbox kind): the caller prints the
+/// returned text after the add result. Each named row is stamped shown
+/// `add`, so a later close/bump of it carries `shown: ["add", …]`; `~held`
+/// is spent in the seen list, so the Stop Held line does not repeat a row
+/// add already named. A row already shown this session (held, done or an
+/// earlier add) is not named again.
+pub(crate) fn add_text(r: &crate::Repo, files: &[String], exclude: &str) -> String {
+    let mut log = crate::read(r);
+    // cached aliases only, then the dormant fill over them: the write path
+    // never builds the rename cache (a hook edit builds it on first use) —
+    // building here would freeze pre-rename state the edit trusts instead
+    // of rebuilding (aliases rename tests)
+    let al = crate::aliases::cached(r, &log).unwrap_or_default();
+    mark_dormant_cached(r, &mut log, &al);
+    let mut found = select(&log, &r.root, &al, files, exclude);
+    // once per session per row: a row this session was already shown is done
+    if let Some(s) = crate::session::writer_session(&r.root) {
+        found.retain(|(w, _)| shown_for(&s, &r.root, &w.id).is_empty());
+    }
+    let (head, rest) = found.split_at(found.len().min(ADD_MAX));
+    if head.is_empty() {
+        return String::new();
+    }
+    let mut out = text(&log, head);
+    out.push_str(&more_line(rest));
+    let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
+    if let Some(s) = crate::session::writer_session(&r.root) {
+        record_shown(&s, &r.root, "add", &ids);
+    }
+    spend_held(r);
+    out
+}
+
+/// The open decisions/notes `done_text` and `add_text` share: any writer's,
+/// on a file of `files`, whose stamped blob differs from disk, live only
+/// (dormant rows stay out), minus `exclude` (add's own new row). Issues stay
+/// out — they have the edit ask.
+fn select<'a>(
+    log: &'a core::Log,
+    root: &Path,
+    al: &core::Aliases,
+    files: &[String],
+    exclude: &str,
+) -> Vec<(&'a core::Row, String)> {
+    let mut found = pairs(log, root, al, "", files);
+    // decision 01M5528X: the Held line at Stop is the one ask over a changed
+    // row; this list leaves the dormant ones out
+    found.retain(|(w, _)| !log.dormant.contains(&w.id) && w.id != exclude);
+    found
+}
+
+/// `+N more: fael find --files …` over the unshown tail, or empty.
+fn more_line(rest: &[(&core::Row, String)]) -> String {
+    if rest.is_empty() {
+        return String::new();
+    }
+    let mut more: Vec<&str> = rest.iter().map(|(_, f)| f.as_str()).collect();
+    more.sort_unstable();
+    more.dedup();
+    format!(
+        "+{} more: fael find --files {}\n",
+        rest.len(),
+        more.join(",")
+    )
+}
+
+/// `changed::mark_dormant` over caller-supplied aliases: `add` passes
+/// `aliases::cached`, so the write path fills dormant/retired without ever
+/// building the rename cache (see `add_text`).
+fn mark_dormant_cached(r: &crate::Repo, log: &mut core::Log, al: &core::Aliases) {
+    use std::collections::HashSet;
+    let hide: HashSet<&str> = core::closed(log)
+        .union(&core::superseded(log))
+        .copied()
+        .collect();
+    let mut blobs = super::changed::Blobs::new();
+    let ids: HashSet<String> = log
+        .rows
+        .iter()
+        .filter(|w| !hide.contains(w.id.as_str()))
+        .filter(|w| {
+            super::changed::dormant(w, &r.root, al, &mut blobs, super::changed::STAMP_MAX_BYTES)
+        })
+        .map(|w| w.id.clone())
+        .collect();
+    // retired notes (chunk done, branch merged) are off the live path like dormant ones
+    let retired = super::retired::ids(r, log, true);
+    log.dormant = ids.union(&retired).cloned().collect();
+    log.retired = retired;
+}
+
+/// Spend the session's one held ask: the next push's Held line (whose key is
+/// `~held`) is dropped, so a row add already named is not named again.
+fn spend_held(r: &crate::Repo) {
+    use std::io::Write;
+    let session = crate::session::hook_session(&r.root);
+    if session.is_empty() {
+        return;
+    }
+    let p = super::state::seen_path(&session, "", &r.root);
+    if let Some(mut f) = super::state::lock_seen(&p) {
+        let _ = f.write_all(format!("{KEY}\n").as_bytes());
+    }
 }

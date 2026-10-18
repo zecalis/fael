@@ -122,6 +122,8 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
                 record_row_asks("cli", "add", &r.root, &row, &warns);
                 // batch rides `--json`: one JSON row per line, like single add
                 println!("{}", row.to_line());
+                // c2: like single add — held rows on this row's files after it
+                print!("{}", crate::hook::held_add_text(&r, &row.files, &row.id));
             }
             Err(e) => {
                 failed += 1;
