@@ -13,6 +13,7 @@ mod chunk_elsewhere;
 mod chunk_run;
 mod chunk_scope;
 mod chunk_show;
+mod chunk_verbs;
 mod claim;
 mod close_key;
 mod filehash;
