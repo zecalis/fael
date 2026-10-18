@@ -33,10 +33,18 @@ pub(crate) fn elsewhere(r: &Repo, tok: &str) -> Option<PathBuf> {
     None
 }
 
-/// `rejected: chunk <uid> lives in <root> — cd <root> && fael chunk show <uid>`.
+/// A full uid names one chunk (uids are fixed-length ULIDs, so the lookup is
+/// exact); a shorter prefix can open chunks in several repos, so the line says
+/// what it established and no more. Keeps the `lives in` needle the
+/// `chunk_missing` hook code matches on.
 pub(crate) fn message(tok: &str, root: &Path) -> String {
+    let what = if tok.len() == 26 {
+        format!("chunk {tok}")
+    } else {
+        format!("a chunk starting with {tok}")
+    };
     format!(
-        "rejected: chunk {tok} lives in {} — cd {} && fael chunk show {tok}",
+        "rejected: {what} lives in {} — cd {} && fael chunk show {tok}",
         root.display(),
         root.display(),
     )
