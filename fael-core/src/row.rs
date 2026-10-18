@@ -294,6 +294,13 @@ pub struct Stamp {
     pub by: String,
     pub branch: Option<String>,
     pub sha: Option<String>,
+    /// The writer session (`extra.session`), from the hook session when one
+    /// saw this worktree — absent outside one. Set by the adapter, not core.
+    pub session: Option<String>,
+    /// Where the retired row was shown (`extra.shown`): the sorted unique
+    /// sources (`held`, `done`, later `add`/`start`) whose line named the
+    /// target in this session. Absent when none — never an empty list.
+    pub shown: Option<Vec<String>>,
 }
 
 impl Stamp {
@@ -303,6 +310,15 @@ impl Stamp {
         }
         if let Some(s) = &self.sha {
             row.extra.insert("sha".into(), s.clone().into());
+        }
+        if let Some(s) = &self.session {
+            row.extra.insert("session".into(), s.clone().into());
+        }
+        if let Some(shown) = &self.shown
+            && !shown.is_empty()
+        {
+            let v: Vec<serde_json::Value> = shown.iter().map(|s| s.clone().into()).collect();
+            row.extra.insert("shown".into(), v.into());
         }
     }
 }

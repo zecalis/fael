@@ -173,6 +173,11 @@ pub fn close_row(
         }
         let mut row = Row::close(&stamp.by, &r, why);
         stamp.apply(&mut row);
+        // the `shown` stamp names the requested row's target, not this one: an
+        // older version closed by the chain was never itself shown (r1)
+        if r != target.id {
+            row.extra.remove("shown");
+        }
         paths.push(write_both(fael, journal, |d| close(d, &row, cfg))?);
         last = Some(row);
     }

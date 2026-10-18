@@ -37,12 +37,13 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         || s(a, "revisit").is_some()
         || !matches!(urgent, core::UrgentChange::Keep);
     let (fh, note) = crate::filehash::for_bump(&r.root, &log, &id, routing)?;
+    let stamp = crate::session::retire_stamp(r, &log, &id);
     let (row, _, mut warns) = core::bump_row(
         &r.fael,
         r.journal.as_deref(),
         &log,
         &r.cfg,
-        &crate::stamp(r),
+        &stamp,
         &id,
         core::BumpOpts {
             to: s(a, "to"),

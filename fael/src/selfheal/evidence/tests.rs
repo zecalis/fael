@@ -17,6 +17,8 @@ fn stamp() -> core::Stamp {
         by: "me".to_string(),
         branch: Some("main".to_string()),
         sha: None,
+        session: None,
+        shown: None,
     }
 }
 

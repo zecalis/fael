@@ -79,7 +79,7 @@ fn recorded(root: &Path, env: &str) -> Option<String> {
 /// an id no hook event ever recorded (an edit, or session-start in this
 /// worktree) stamps nothing. The MCP server's env is inherited at spawn,
 /// never per call — so there *every* id must be recorded by an edit.
-fn writer_session(root: &Path) -> Option<String> {
+pub(crate) fn writer_session(root: &Path) -> Option<String> {
     let env = env_session();
     if env.is_empty() {
         return None;
@@ -102,10 +102,67 @@ fn writer_session(root: &Path) -> Option<String> {
 }
 
 /// Record the writer session on a row about to be filed (no-op outside a session).
+/// A retire — a close (`ref`), a bump (`bumps`), a superseder (`supersedes`)
+/// — also stamps where it was shown (`extra.shown`): the sorted unique
+/// sources from this session's shown file that named the target. Absent when
+/// none. Fail open on any IO error, never blocks a write.
 pub(crate) fn tag_writer(root: &Path, row: &mut core::Row) {
     let session = writer_session(root);
     row.extra
-        .extend(session.map(|s| ("session".into(), s.into())));
+        .extend(session.clone().map(|s| ("session".into(), s.into())));
+    let target = row
+        .reference
+        .as_deref()
+        .or(row.bumps.as_deref())
+        .or(row.supersedes.as_deref());
+    if let (Some(s), Some(t)) = (session.as_deref(), target) {
+        let shown = crate::hook::held_shown(s, root, t);
+        if !shown.is_empty() {
+            row.extra.insert(
+                "shown".into(),
+                shown.into_iter().map(serde_json::Value::from).collect(),
+            );
+        }
+    }
+}
+
+/// Fill a `Stamp` for a retire of `target`: the writer session and its shown
+/// sources for that id. No session = no stamp; no sources = session only.
+/// Fail open, never blocks.
+pub(crate) fn tag_stamp(root: &Path, target: &str, stamp: &mut core::Stamp) {
+    let Some(s) = writer_session(root) else {
+        return;
+    };
+    stamp.session = Some(s.clone());
+    let shown = crate::hook::held_shown(&s, root, target);
+    stamp.shown = (!shown.is_empty()).then_some(shown);
+}
+
+/// A retire `Stamp` for `id`: the base git stamp plus the writer session and
+/// its shown sources. Unresolvable id = base stamp as is, fail open.
+pub(crate) fn retire_stamp(r: &crate::Repo, log: &core::Log, id: &str) -> core::Stamp {
+    let mut stamp = crate::stamp(r);
+    if let Ok(full) = core::resolve_row(log, id) {
+        tag_stamp(&r.root, &full.id, &mut stamp);
+    }
+    stamp
+}
+
+/// Stamp a superseder filed now: resolve its target, set it, tag writer +
+/// shown. No-op when none — the first `tag_writer` in `prepare` ran before
+/// heal knew the target.
+pub(crate) fn tag_superseder(
+    root: &Path,
+    log: &core::Log,
+    row: &mut core::Row,
+    supersedes: Option<&str>,
+) {
+    if let Some(s) = supersedes
+        && let Ok(full) = core::resolve_row(log, s)
+    {
+        row.supersedes = Some(full.id.clone());
+        tag_writer(root, row);
+    }
 }
 
 /// A session stays usable for deriving files while its edit file was written

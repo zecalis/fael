@@ -30,6 +30,55 @@ fn path(session: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.held"))
 }
 
+/// Per-session file of where each retired row was shown: one
+/// `<source>\t<id>` line each (`held`, `done`, later `add`/`start`). Keyed
+/// like `path` but through `session_id`, so a transcript path and its stem
+/// meet — the push speaks the former, `writer_session` the latter. Fail open
+/// everywhere: an unreadable file is no sources, an unwritable one drops.
+pub(crate) fn shown_path(session: &str, root: &Path) -> PathBuf {
+    let id = super::state::session_id(session);
+    let key = session_key(&format!("{id}\0{}", root.to_string_lossy()));
+    state_dir().join("sessions").join(format!("{key}.shown"))
+}
+
+/// Append one `<source>\t<id>` line per id. No-op on empty session or ids.
+pub(crate) fn record_shown(session: &str, root: &Path, source: &str, ids: &[String]) {
+    if session.is_empty() || ids.is_empty() {
+        return;
+    }
+    let p = shown_path(session, root);
+    if p.parent()
+        .is_none_or(|d| std::fs::create_dir_all(d).is_err())
+    {
+        return;
+    }
+    let body: String = ids.iter().map(|id| format!("{source}\t{id}\n")).collect();
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(p)
+        .and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(body.as_bytes())
+        });
+}
+
+/// Sorted unique sources that named `target` in this session's shown file.
+pub(crate) fn shown_for(session: &str, root: &Path, target: &str) -> Vec<String> {
+    let Ok(s) = std::fs::read_to_string(shown_path(session, root)) else {
+        return vec![];
+    };
+    let mut out: Vec<String> = s
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .filter(|(_, id)| *id == target)
+        .map(|(src, _)| src.to_string())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// True for a row neither closed nor superseded.
 fn active(log: &core::Log) -> impl Fn(&str) -> bool {
     let (closed, gone) = (core::closed(log), core::superseded(log));
@@ -125,10 +174,9 @@ pub(super) fn line(c: &Ctx) -> Option<Line> {
     if live.is_empty() {
         return None;
     }
+    let ids: Vec<String> = live.iter().map(|(r, _)| r.id.clone()).collect();
     Some(Line {
-        kind: Kind::Held {
-            ids: live.iter().map(|(r, _)| r.id.clone()).collect(),
-        },
+        kind: Kind::Held { ids },
         text: text(&c.log, &live),
     })
 }
@@ -154,6 +202,15 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
             rest.len(),
             more.join(",")
         ));
+    }
+    // r1: stamp what this output showed, so a later retire names it — the
+    // head only, never the `+N more` tail. The writer session is the caller's
+    // (fail open: none outside one).
+    if !head.is_empty()
+        && let Some(s) = crate::session::writer_session(&r.root)
+    {
+        let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
+        record_shown(&s, &r.root, "done", &ids);
     }
     out
 }

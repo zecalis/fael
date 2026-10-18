@@ -159,7 +159,13 @@ pub(crate) fn add_row(
     files_arg: &[String],
     opts: AddOpts,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
-    let (pending, st, log) = prepare(r, kind, text, files_arg, opts)?;
+    let (mut pending, st, log) = prepare(r, kind, text, files_arg, opts)?;
+    crate::session::tag_superseder(
+        &r.root,
+        &log,
+        &mut pending.row,
+        pending.evaluated.heal.supersedes.as_deref(),
+    );
     let mut warns = pending.warns;
     let (row, path, mut core_warns) = core::add_row(
         &r.fael,
@@ -214,15 +220,9 @@ pub(crate) fn close_row(
     let log = crate::read(r);
     let mut warns = phantom_lines(r, &log, None, why, &[id]);
     warns.extend(crate::unmerged::lines(&r.root, why));
-    let (row, path, mut core_warns) = core::close_row(
-        &r.fael,
-        r.journal.as_deref(),
-        &log,
-        &r.cfg,
-        &crate::stamp(r),
-        id,
-        why,
-    )?;
+    let stamp = crate::session::retire_stamp(r, &log, id);
+    let (row, path, mut core_warns) =
+        core::close_row(&r.fael, r.journal.as_deref(), &log, &r.cfg, &stamp, id, why)?;
     warns.append(&mut core_warns);
     hook::note_closed(&r.root, &row);
     Ok((row, path, warns))
@@ -255,12 +255,13 @@ pub(crate) fn bump(
     let moves =
         a.one("to").is_some() || revisit.is_some() || !matches!(urgent, core::UrgentChange::Keep);
     let (fh, note) = crate::filehash::for_bump(&r.root, &log, id, moves)?;
+    let stamp = crate::session::retire_stamp(r, &log, id);
     let (row, path, mut warns) = core::bump_row(
         &r.fael,
         r.journal.as_deref(),
         &log,
         &r.cfg,
-        &crate::stamp(r),
+        &stamp,
         id,
         core::BumpOpts {
             to: a.one("to"),

@@ -274,6 +274,8 @@ pub(crate) fn stamp(r: &Repo) -> core::Stamp {
         by: writer(r),
         branch: git(&r.root, &["symbolic-ref", "--short", "-q", "HEAD"]),
         sha: git(&r.root, &["rev-parse", "--short", "HEAD"]),
+        session: None,
+        shown: None,
     }
 }
 

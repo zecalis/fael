@@ -13,6 +13,8 @@ fn setup(tag: &str) -> (PathBuf, Config, Stamp) {
         by: "tester-0000".into(),
         branch: None,
         sha: None,
+        session: None,
+        shown: None,
     };
     (dir, Config::default(), st)
 }

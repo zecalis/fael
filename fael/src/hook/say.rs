@@ -45,6 +45,16 @@ impl Reply {
         &self.said
     }
 
+    /// The ids the held line actually said, if it was said: r1 stamps the
+    /// shown file from this, never from a held line a budget cut dropped.
+    pub(crate) fn held_ids(&self) -> Vec<String> {
+        self.said
+            .iter()
+            .filter(|s| s.kind == "held")
+            .filter_map(|s| s.key.clone())
+            .collect()
+    }
+
     /// Two replies as one, in order (a shell call's edit side, then its
     /// commit side): the contexts joined, the first notice kept.
     pub(crate) fn and(self, next: Reply) -> Reply {
