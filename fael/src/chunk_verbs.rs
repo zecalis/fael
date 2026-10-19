@@ -176,11 +176,33 @@ pub(crate) fn show(a: &Args, r: &Repo, keys: &[&str]) -> Result<ExitCode, String
     Ok(ExitCode::SUCCESS)
 }
 
-/// Wrong arguments: the verb's own synopsis when it is a known verb, else the verb list.
+/// Wrong arguments: the verb's own synopsis when it is a known verb; an
+/// unknown verb names itself, the closest real verb, and the short guide —
+/// never the whole verb list. Line one keeps the `unknown chunk verb` needle
+/// the usage log classifies by (the MCP side words it the same way).
 pub(crate) fn bad(verb: Option<&str>) -> String {
-    crate::help::wrong_args(
-        "chunk",
-        verb.filter(|v| crate::chunk::VERBS.contains(v)),
-        crate::chunk::USAGE,
+    if verb.is_some_and(|v| crate::chunk::VERBS.contains(&v)) {
+        return crate::help::wrong_args("chunk", verb, crate::chunk::USAGE);
+    }
+    let v = verb.unwrap_or_default();
+    if v.is_empty() {
+        return format!(
+            "rejected: chunk needs a verb\n{}",
+            crate::help::bare("chunk").unwrap_or_default()
+        );
+    }
+    let hint = crate::chunk::VERBS
+        .iter()
+        .map(|n| (crate::synonyms::lev(n, v), n))
+        .filter(|(d, _)| (1..=2).contains(d))
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, n)| format!(" — did you mean {n}?"))
+        .unwrap_or_default();
+    // the `try` tail keeps the `chunk list|ls` retype answering (it matches on
+    // it); line one keeps the `unknown chunk verb` needle the usage log
+    // classifies by (the MCP side words it the same way).
+    format!(
+        "rejected: unknown chunk verb {v:?}{hint} — try 'fael chunk --help'\n{}",
+        crate::help::bare("chunk").unwrap_or_default()
     )
 }

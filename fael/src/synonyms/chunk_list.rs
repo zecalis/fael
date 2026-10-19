@@ -1,9 +1,10 @@
 //! `fael chunk list|ls`: the verb that never was one — the reads that list chunks.
 //!
-//! A bare `chunk` call with a wrong verb rejects with the whole usage line; `list`
-//! and `ls` have an obvious intent, so they answer with the two reads instead: the
-//! board lists a plan's chunks, the plan export their briefs. Any other error (no db,
-//! a bad flag) passes through untouched — only the usage reject is answered.
+//! A `chunk` call with a wrong verb rejects with the unknown-verb line plus
+//! the short guide; `list` and `ls` have an obvious intent, so they answer
+//! with the two reads instead: the board lists a plan's chunks, the plan
+//! export their briefs. Any other error (no db, a bad flag) passes through
+//! untouched — only the usage reject is answered.
 
 /// The retype for `fael chunk list|ls …`, or `None` for any other argv or error.
 pub(crate) fn retype(argv: &[String], e: &str) -> Option<String> {

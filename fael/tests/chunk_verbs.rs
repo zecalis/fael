@@ -173,3 +173,28 @@ fn list_names_the_reads_that_list_chunks() {
         assert!(err.contains("fael plan export <plan>"), "{err}");
     }
 }
+
+/// An unknown verb names itself and the short guide, never the whole verb list.
+#[test]
+fn an_unknown_verb_names_itself_and_the_short_guide() {
+    let d = repo();
+    plan(&d, "p");
+    let (ok, _, err) = fael(&d, &["chunk", "frobnicate"]);
+    assert!(!ok, "an unknown verb stays a reject");
+    assert!(err.contains("unknown chunk verb \"frobnicate\""), "{err}");
+    assert!(
+        err.contains("fael chunk — the units of work in a plan"),
+        "{err}"
+    );
+    assert!(!err.contains("unapprove"), "{err}");
+}
+
+/// A near-miss verb offers the closest real one.
+#[test]
+fn a_near_miss_verb_suggests_the_closest_one() {
+    let d = repo();
+    plan(&d, "p");
+    let (ok, _, err) = fael(&d, &["chunk", "shwo"]);
+    assert!(!ok, "a near-miss verb stays a reject");
+    assert!(err.contains("did you mean show?"), "{err}");
+}

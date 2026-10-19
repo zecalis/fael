@@ -378,7 +378,7 @@ fn near(cmd: &str, flag: &str) -> String {
 }
 
 /// Edit distance, two rows.
-fn lev(a: &str, b: &str) -> usize {
+pub(crate) fn lev(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();
     for (i, ca) in a.chars().enumerate() {
