@@ -75,6 +75,13 @@ A chunk that waits on events (a draft titled with its gate, or `wait --on data`)
 once the count its brief names meets its locked bar; its result goes in the decision that
 chunk names. Don't file a ledger row for a count that isn't ready.
 
+## New flags
+
+`fael --help` is core-only; workflow stays parseable but is reached via the `fael-plan` skill, `fael chunk start` briefs, Plan Workflow above and the board app.
+A new flag/command ships with (1) the issue id it fixes, (2) the friction it cuts, (3) the `fael stats` by-flag line showing its use (decision 01M59HQJ).
+A new workflow flag is born hidden (outside default help) and named by the skill/brief that sends the agent to it.
+Tier it under `product:cli-tiers-table` (`fael find --key product:cli-tiers-table`); removal follows `fael plan export cli-tiers --section 4` — link, never copy, either list.
+
 ## Git
 
 Follow the repo-wide Git workflow. `push pr` is `git fetch && git rebase origin/main` →
