@@ -5,11 +5,11 @@
 [![CI](https://github.com/zecalis/fael/actions/workflows/ci.yml/badge.svg)](https://github.com/zecalis/fael/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**The ledger behind plan work.** Work runs as plans cut into chunks, one session or agent at a
-time, and no session shares another's chat. fael keeps what passes between them — where a chunk
-stopped, what was decided and why, the issue still open, what the user asked for — in a shared work
-ledger inside the repo, and hands it back when the next session picks the work up: at kickoff of the
-plan or file it names, on the file it opens, and at session start for what is routed to it.
+**The continuity ledger for agent work — with proof.** Every session starts from zero: no
+session shares another's chat. fael keeps what passes between them — where the work stopped,
+what was decided and why, the issue still open, what the user asked for — filed where the code
+is touched, handed back where it is touched, and retired once the code absorbs it. `fael stats`
+shows what was handed over and what got acted on; fael never claims what it can't measure.
 
 One person runs five agents; a team runs fifty — and each of those hands work to sub-agents. They
 don't share a chat, so every one starts from zero: it finds the same flaky test, re-asks why that
@@ -101,6 +101,14 @@ fael stats
 Most useful when several agents (or people) work in one repo and return to the same files over
 days. Little to gain from one short session in a repo you will not touch again.
 Definitions: [docs/stats.md](docs/stats.md).
+
+## Plans, when several agents share the work
+
+Everything above needs no plan. When one person runs five agents toward one goal, the second
+door opens: `fael plan new` cuts the work into chunks, `fael chunk start` hands one to an agent
+with its brief and the open rows on its files, `fael chunk done` takes the hand-off back. Chunks
+read in the terminal (`fael board --plan <plan>`, `fael plan export <plan>`) and in the board
+app. Plans stay out of the way until you make one.
 
 ## Install
 
