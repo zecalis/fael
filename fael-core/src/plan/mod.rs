@@ -43,7 +43,7 @@ pub use owner::Owner;
 pub use ready::{Ready, Unmet};
 pub use shared::shared;
 pub use start::{Brief, Start, Started};
-pub use store::{PlanRow, Store, db_at};
+pub use store::{PlanRow, StatsRun, Store, db_at};
 
 /// A chunk's one stored state (SPEC §1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

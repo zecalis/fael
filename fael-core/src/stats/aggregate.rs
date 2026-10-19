@@ -4,6 +4,7 @@
 
 use super::capture::{Capture, capture};
 use super::experience::{Commits, Experience, experience};
+use super::flow::{Flow, WeekCount, flow as flow_stats, throughput as throughput_stats};
 use super::friction::{Friction, friction};
 use super::metrics::{added_since, ask_totals, non_english_share};
 use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
@@ -125,17 +126,25 @@ pub struct Stats {
     /// This repo's rows by state per kind (`lifecycle.rs`): empty from `aggregate`,
     /// which never sees the disk — the adapter fills it for the repo it runs in.
     pub lifecycle: super::Lifecycle,
+    /// Flow time (filed→closed, start→done, done→merged) with merge coverage.
+    pub flow: Flow,
+    /// Chunk dones per calendar week (Monday, UTC) from `Run.ended`.
+    pub throughput: Vec<WeekCount>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
 
 /// Join parsed usage with pre-loaded logs. `logs` must cover `parsed.repos()`;
 /// a repo with no entry reads as empty (its rows resolve `unknown`). A repo
-/// with no `commits` entry has no fix commits.
+/// with no `commits` entry has no fix commits. `runs`/`merges` feed the flow
+/// spans; empty when the clone has no fael.db or git.
+#[allow(clippy::too_many_arguments)]
 pub fn aggregate(
     parsed: &Parsed,
     logs: &HashMap<String, Log>,
     commits: &Commits,
+    runs: &[super::flow::FlowRun],
+    merges: &[super::flow::FlowMerge],
     cfg: &Config,
     constants: Constants,
     with_rows: bool,
@@ -188,6 +197,8 @@ pub fn aggregate(
         context_loop: super::repeat::context_loop(parsed, logs),
         experience: experience(parsed, logs, commits),
         lifecycle: Default::default(),
+        flow: flow_stats(parsed, logs, runs, merges),
+        throughput: throughput_stats(parsed, runs),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }
@@ -295,6 +306,8 @@ mod tests {
             &p,
             &HashMap::new(),
             &HashMap::new(),
+            &[],
+            &[],
             &Config::default(),
             (1, 2, 3, 4).into(),
             true,

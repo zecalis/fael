@@ -190,7 +190,12 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         .filter_map(|repo| Some((repo.clone(), commits(repo, *u.parsed.first_seen.get(repo)?))))
         .collect();
     let constants = asks::constants().into();
-    let mut s = core::stats::aggregate(&u.parsed, &u.logs, &commits, cfg, constants, rows);
+    let runs = super::flow::runs();
+    let since = u.parsed.first_seen.values().copied().min();
+    let merges = super::flow::merges(since);
+    let mut s = core::stats::aggregate(
+        &u.parsed, &u.logs, &commits, &runs, &merges, cfg, constants, rows,
+    );
     if let Ok(r) = crate::repo() {
         s.lifecycle = super::lifecycle::of(&r);
     }

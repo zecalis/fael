@@ -16,6 +16,7 @@ mod day;
 mod experience;
 #[cfg(test)]
 mod experience_tests;
+mod flow;
 mod friction;
 mod lifecycle;
 mod metrics;
@@ -46,6 +47,7 @@ pub use experience::{
     CLOSE_TEMPLATE, Commit, Commits, Experience, FIX_CUTOFF_MS, Shape, bare_shas, cites_fix,
     close_shape, fael_cites, new_close, pr_cites, resolve,
 };
+pub use flow::{Flow, FlowMerge, FlowRun, Span, WeekCount};
 pub use friction::{FIRST_CALL_WINDOW, Friction, SHAPE_GATE, Tally};
 pub use lifecycle::{Lifecycle, States, lifecycle};
 pub use metrics::ASK_ORDER;

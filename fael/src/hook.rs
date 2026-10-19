@@ -30,6 +30,7 @@ mod claude;
 mod codes;
 mod decision;
 mod experience_text;
+mod flow;
 mod focus;
 mod friction;
 mod held;
