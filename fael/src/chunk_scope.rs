@@ -294,6 +294,22 @@ mod tests {
             "{}",
             both[0]
         );
+        // a missing key, an unknown id and a key shared by two rows stay silent
+        let mut dup = log.clone();
+        dup.rows.push(fael_core::Row {
+            id: "01M0000000000000000000004".into(),
+            kind: "decision".into(),
+            text: "same key again".into(),
+            key: Some("test:cash-basis-edges".into()),
+            ..Default::default()
+        });
+        let silent = closed_warnings(
+            "t",
+            "test:cash-basis-edges test:no-such-key 01M0000000000000000000009",
+            &dup,
+            uid,
+        );
+        assert!(silent.is_empty(), "{silent:?}");
         let open_only = closed_warnings("t", "see test:open-topic, deferred work", &log, uid);
         assert!(open_only.is_empty(), "{open_only:?}");
         // an id token of the closed row warns too, with the close's first line only
