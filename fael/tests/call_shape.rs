@@ -1,5 +1,5 @@
 //! shape-log: a reject/help call row carries the call's shape (`verb`, flag
-//! names, positional count) and never a value; an `ok` row carries none.
+//! names, positional count) and never a value.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -60,16 +60,66 @@ fn a_reject_carries_shape_never_values() {
 }
 
 #[test]
-fn an_ok_row_carries_no_shape() {
+fn an_ok_row_carries_flag_names_never_values() {
     let d = repo();
-    let (ok, _, err) = fael(&d, &["board"]);
+    let (ok, _, err) = fael(&d, &["find", "--recall", "wide", "src/a.rs"]);
     assert!(ok, "{err}");
     let rows = calls(&d);
     assert_eq!(rows.len(), 1, "{rows:?}");
     assert_eq!(rows[0]["outcome"], "ok");
-    for k in ["verb", "flags", "npos"] {
-        assert!(rows[0].get(k).is_none(), "{rows:?}");
-    }
+    assert_eq!(rows[0]["flags"], serde_json::json!(["recall"]));
+    assert_eq!(rows[0]["npos"], 1);
+    assert!(rows[0].get("who").is_none(), "{rows:?}");
+    let line = rows[0].to_string();
+    assert!(
+        !line.contains("\"wide\"") && !line.contains("a.rs"),
+        "{line}"
+    );
+}
+
+#[test]
+fn a_call_with_no_session_is_a_human_row_outside_friction() {
+    let d = repo();
+    let o = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["stats", "--json"])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .env_remove("FAEL_SESSION")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
+        .output()
+        .unwrap();
+    assert!(o.status.success());
+    let rows = calls(&d);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["who"], "human");
+    assert_eq!(rows[0]["cmd"], "stats");
+    assert_eq!(rows[0]["flags"], serde_json::json!(["json"]));
+    // an agent call in the same state; stats counts both as usage, only the agent as friction
+    let (ok, _, err) = fael(&d, &["find", "--recall", "wide"]);
+    assert!(ok, "{err}");
+    let o = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["stats", "--json"])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .env("FAEL_SESSION", "s1")
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["friction"]["calls"], 1, "{v}");
+    let by = v["usage"]["by_flag"].as_array().unwrap();
+    let f = by
+        .iter()
+        .find(|u| u["cmd"] == "find" && u["flag"] == "recall")
+        .unwrap();
+    assert_eq!(
+        (f["agent"].clone(), f["human"].clone()),
+        (1.into(), 0.into())
+    );
+    assert!(
+        by.iter()
+            .any(|u| u["cmd"] == "stats" && u["flag"] == "json" && u["human"] == 1)
+    );
 }
 
 #[test]

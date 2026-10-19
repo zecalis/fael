@@ -93,6 +93,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "throughput",
             "top_rows",
             "unused_rows",
+            "usage",
             "value",
         ],
         "{v}"

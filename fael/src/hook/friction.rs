@@ -3,13 +3,14 @@
 //! say how often a call cost another round. Write side and text; the numbers
 //! are `fael-core::stats::friction`. Fails open like every usage write.
 //!
-//! CLI calls count only inside an agent session (a human's typo is no agent
-//! friction); MCP calls always do. `sig` is a hash of the call's arguments —
+//! CLI calls count as friction only inside an agent session (a human's typo is
+//! no agent friction; such a call is a row tagged `who: human`, read only by
+//! `stats::by_flag`); MCP calls always do. `sig` is a hash of the call's arguments —
 //! the free text itself is never stored. A reject carries its `reason` from
 //! `codes` (plus the gate's `rules`, or the command an unknown one was `near`),
 //! and a `chunk`/`plan` call its `sub` verb — each from a closed vocabulary.
-//! A reject or help also carries the call's `shape` (`verb`, flag names,
-//! positional count — never a value); an `ok` row carries none of those.
+//! Every CLI row carries the call's `shape` (`verb`, flag names, positional
+//! count — never a value); an MCP row carries none.
 
 use super::asks::{UsageMeta, append_row};
 use super::usage::usage_row;
@@ -90,7 +91,7 @@ fn record(
     cmd: &str,
     root: Option<&Path>,
     session: &str,
-    (o, empty): (Outcome, bool),
+    (o, empty, human): (Outcome, bool, bool),
     sig: String,
     argv: Option<&[String]>,
 ) {
@@ -108,12 +109,18 @@ fn record(
     );
     row["cmd"] = cmd.into();
     row["sig"] = sig.into();
+    if human {
+        row["who"] = "human".into();
+    }
     if let Some(s) = argv.and_then(|a| sub(cmd, a)) {
         row["sub"] = s.into();
     }
     match o {
         Outcome::Ok => {
             row["outcome"] = "ok".into();
+            if let Some(a) = argv {
+                super::shape::apply(cmd, a, &mut row);
+            }
             if empty {
                 row["empty"] = true.into();
             }
@@ -153,7 +160,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
     let cmd = command(argv);
     let outcome = match res {
         Ok(_) if crate::help::is_request(argv) => Outcome::Help,
-        Ok(_) if AGENT_CMDS.contains(&cmd) => Outcome::Ok,
+        Ok(_) => Outcome::Ok,
         Err(e) if e.starts_with("rejected:") => Outcome::Reject(e),
         _ => return,
     };
@@ -165,7 +172,13 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         return;
     };
     let session = crate::session::hook_session(&root);
-    if session.is_empty() {
+    // a call outside an agent session, or a clean one to a command no agent
+    // asks an answer from, is a human's: counted as usage, never as friction —
+    // and only in a real repo (`repo_at` falls back to the cwd), so the app's
+    // `board` run from `/` stays unrecorded
+    let human =
+        session.is_empty() || (matches!(outcome, Outcome::Ok) && !AGENT_CMDS.contains(&cmd));
+    if human && !(root.join(".git").exists() || root.join(".fael").exists()) {
         return;
     }
     record(
@@ -173,7 +186,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         cmd,
         Some(&root),
         &session,
-        (outcome, empty),
+        (outcome, empty, human),
         sig(argv),
         Some(argv),
     );
@@ -204,7 +217,7 @@ pub(crate) fn record_mcp_call(
         cmd,
         root,
         "",
-        (outcome, empty),
+        (outcome, empty, false),
         sig(args.to_string()),
         None,
     );

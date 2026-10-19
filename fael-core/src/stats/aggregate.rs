@@ -117,6 +117,9 @@ pub struct Stats {
     /// Rejects, helps and repeat finds per agent call, and first-call
     /// success (`friction.rs`) — what an agent paid to get its answer.
     pub friction: Friction,
+    /// Calls per command and flag, agent and human, ok/help/reject
+    /// (`by_flag.rs`) — which flags are really used.
+    pub usage: super::by_flag::FlagUsage,
     /// Confirmed repeats, the edits they read against, and useful shows
     /// per token (`repeat.rs`, PLAN-fael-context-loop §3).
     pub context_loop: super::repeat::ContextLoop,
@@ -194,6 +197,7 @@ pub fn aggregate(
         unused_rows: unused(parsed, logs),
         said: yields(parsed, logs),
         friction: friction(parsed),
+        usage: super::by_flag::usage(parsed),
         context_loop: super::repeat::context_loop(parsed, logs),
         experience: experience(parsed, logs, commits),
         lifecycle: Default::default(),
