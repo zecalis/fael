@@ -56,6 +56,10 @@ fn crew_corpus() -> Option<String> {
     let mut roots = vec![std::path::PathBuf::from(
         "/Users/delamind/Project/zecalis/fael/crew/skills",
     )];
+    // override for machines where the crew checkout lives elsewhere
+    if let Ok(dir) = std::env::var("FAEL_CREW_SKILLS") {
+        roots.push(std::path::PathBuf::from(dir));
+    }
     if let Ok(home) = std::env::var("HOME") {
         roots.push(std::path::PathBuf::from(home).join(".claude/skills"));
     }
