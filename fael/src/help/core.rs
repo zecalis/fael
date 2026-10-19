@@ -24,10 +24,10 @@ const CORE: &[(&str, &str)] = &[
      (no text; files, key, title and from carry over; old must occur in the body exactly once);
      --to who routes an issue: it lists in full at the session start of whoever's git user.name
      is `who` (lowercased), or of every session of the agent client named `who` (opencode, codex,
-     claude); fael find --to who lists theirs. The receipt prints the line to paste to them and,
+     claude). The receipt prints the line to paste to them and,
      for a client, the headless command that starts it on the row (printed, never run);
      key it `<topic>:handoff` and `fael stats` counts it when picked up; the receiver closes it
-     with how it went (fael close <id> \"...\") and the sender reads that on fael find --all;
+     with how it went (fael close <id> \"...\") and the sender reads that on the closed row;
      working an open issue? fael claim <id> first — others then see (held @<branch>), never a lock;
      a topic list (; / ·), a long text with no --title, or a plan key off the handoff
      convention (plan:<name>:handoff; chunk-<n> only for a chunk run in parallel) is
@@ -60,7 +60,7 @@ const CORE: &[(&str, &str)] = &[
     ),
     (
         "doctor",
-        "fael doctor [--fix]
+        "fael doctor [--fix] [--json]
      (check the log and the repo for problems; --fix repairs what it can, including
       closing the confirmed [Shipped] status notes — rules and facts on a landed
       branch are listed as [Shipped kept], never closed; [Phantom] flags citations of ids

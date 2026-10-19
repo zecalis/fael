@@ -73,10 +73,7 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
     }
     if a.has("watch") {
         if !a.has("json") {
-            return Err(
-                "rejected: --watch prints board lines for the app: `fael board --json --watch`"
-                    .into(),
-            );
+            return Err("rejected: --watch prints board lines: `fael board --json --watch`".into());
         }
         return watch::run(a);
     }

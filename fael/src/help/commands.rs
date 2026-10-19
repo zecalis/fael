@@ -51,7 +51,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "claim",
         "mark an open issue held by this branch",
         "fael claim <id> [--force]
-    (find --kind issue then shows (held @<branch>) so another agent picks
+    (an open issue then shows (held @<branch>) so another agent picks
      something else; two agents racing for one issue: the first wins, the
      second is told who holds it — --force takes it over, and so does a hold
      whose branch no longer exists; it gates the claim, never your edits;
@@ -162,7 +162,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      keeps one plan's chunks; the text view folds blocked into per-plan counts and
      --plan lists them; a path in .fael/shared (one prefix per line) is
      nobody's claim: it never makes an overlap; a repo whose fael.db cannot be read
-     stays listed with its error and the command exits 1; --watch stays up,
+     stays listed with its error and the command exits 1; --watch streams board lines for a terminal or agent (the app reads `--json` only) and stays up,
      rereads each second only the project whose db, ledger jsonl or
      git refs moved, prints a compact board line at start and on each change, and
      exits when stdin closes; --drop takes a finished repo off the registry until a
@@ -286,7 +286,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
     (
         "doctor",
         "check the log; --fix repairs what it can",
-        "fael doctor [--fix] [--fat]
+        "fael doctor [--fix] [--fat] [--json]
      (check the log and the repo for problems; --fix repairs what it can, including
       closing the confirmed [Shipped] status notes — rules and facts on a landed
       branch are listed as [Shipped kept], never closed; [Phantom] flags citations of ids

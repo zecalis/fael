@@ -1,6 +1,6 @@
 # fael stats JSON contract
 
-> **Status:** `schema: 4` — `fael stats --json` prints one `fael-core::stats::Stats`
+> **Status:** `schema: 5` — `fael stats --json` prints one `fael-core::stats::Stats`
 > struct as-is, so the CLI, the desktop app and any outside reader share the
 > shape by construction. The human text (`fael stats`) is unstable by design;
 > only `--json` is a contract.

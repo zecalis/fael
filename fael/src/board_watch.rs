@@ -1,8 +1,8 @@
-//! `fael board --json --watch` (chunk board-watch, issue 01M4SW254): the app's one long-lived
-//! read. Each second it stats what every project's board is built from and rereads only the
-//! project whose sources moved; a line goes out only when the board, but for `at`, changed.
+//! `fael board --json --watch` (chunk board-watch, issue 01M4SW254): a long-lived board
+//! stream for a terminal or agent (the app reads `board --json` only). Each second it stats
+//! what every project's board is built from and rereads only the project whose sources moved; a line goes out only when the board, but for `at`, changed.
 //! A source that did not move is served from memory: no git spawn, no jsonl parse, no write.
-//! It is the app's child, not a daemon: it exits when the app closes its stdin or stdout.
+//! It is its caller's child, not a daemon: it exits when stdin or stdout closes.
 // ponytail: a fixed 1 s poll of stats, no FSEvents/inotify; a db in a repo off the registry
 // is not watched (the registry is reread each tick).
 

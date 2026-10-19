@@ -67,8 +67,8 @@ const VALUE_FLAGS: &[&str] = &[
 ];
 
 /// `--name` or `--name=value` (else `None`), plus whether the value rides
-/// inline. A zsh single word (`"--plan x"`) keeps its value after a space —
-/// either way the value is never stored.
+/// inline. A word with a space and no `=` (`"--secret words"`) is a value
+/// wearing dashes — a positional, never a flag; the value is never stored.
 fn long_flag(w: &str) -> Option<(&str, bool)> {
     let rest = w.strip_prefix("--")?;
     if rest.is_empty() || rest.starts_with('-') {
@@ -76,10 +76,8 @@ fn long_flag(w: &str) -> Option<(&str, bool)> {
     }
     match rest.split_once('=') {
         Some((n, _)) => Some((n, true)),
-        None => match rest.split_once(' ') {
-            Some((n, _)) => Some((n, true)),
-            None => Some((rest, false)),
-        },
+        None if rest.contains(char::is_whitespace) => None,
+        None => Some((rest, false)),
     }
 }
 
@@ -160,7 +158,7 @@ fn push(flags: &mut Vec<String>, n: &str) {
     }
 }
 
-/// Write the shape onto a reject/help call row — `ok` rows never call this.
+/// Write the shape onto a call row (reject, help and ok).
 pub(crate) fn apply(cmd: &str, argv: &[String], row: &mut serde_json::Value) {
     let s = shape(cmd, argv);
     if let Some(v) = s.verb {
