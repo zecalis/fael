@@ -199,8 +199,16 @@ fn a_section_resolves_by_key_title_or_stripped_title() {
     assert_eq!(resolve(&secs, "risks").unwrap().key, "§5");
     assert_eq!(resolve(&secs, "§5").unwrap().key, "§5");
     // export --section takes them too, and a miss still lists the keys
-    assert!(export_section(&s, id, "Goal (why)").unwrap().contains("## 1. Goal"));
-    assert!(export_section(&s, id, "risks").unwrap().contains("## §5 Risks"));
+    assert!(
+        export_section(&s, id, "Goal (why)")
+            .unwrap()
+            .contains("## 1. Goal")
+    );
+    assert!(
+        export_section(&s, id, "risks")
+            .unwrap()
+            .contains("## §5 Risks")
+    );
     let e = export_section(&s, id, "9").unwrap_err();
     assert!(
         e.contains("no section 9") && e.contains("1, 2, 3, 4"),
