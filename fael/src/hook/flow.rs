@@ -21,6 +21,7 @@ pub(crate) fn runs() -> Vec<core::stats::FlowRun> {
             started_ms: core::ts_ms(&r.started),
             ended_ms: r.ended.as_deref().and_then(core::ts_ms),
             pr: r.pr,
+            chunk: r.chunk,
         })
         .collect()
 }

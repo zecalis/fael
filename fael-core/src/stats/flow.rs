@@ -14,7 +14,7 @@
 //! merge commit, or `gh`'s merged list) — never a sha (a squash rewrites it,
 //! decision 01M580PY). PR numbers are unique, so no `(fael:<id>)` or branch
 //! match is needed; runs without a PR shrink `n`, never imputed.
-//! Throughput counts chunk-done per calendar week (Monday, UTC) from
+//! Throughput counts distinct chunk-done per calendar week (Monday, UTC) from
 //! `Run.ended`; weeks with zero dones print zero, never missing.
 
 use super::parse::Parsed;
@@ -50,11 +50,14 @@ pub struct WeekCount {
 }
 
 /// One run for the flow join: times as unix ms, `None` = missing endpoint.
+/// `chunk` is the run's chunk uid — throughput dedupes restarts on it, so one
+/// chunk lands in exactly one week; spans still read every run (each attempt).
 #[derive(Debug, Clone)]
 pub struct FlowRun {
     pub started_ms: Option<i64>,
     pub ended_ms: Option<i64>,
     pub pr: Option<i64>,
+    pub chunk: String,
 }
 
 /// One merged PR on the default branch: its number and merge time as unix ms.
@@ -171,15 +174,30 @@ pub fn flow(
 }
 
 /// Chunk dones per calendar week (Monday, UTC) from `Run.ended` in the usage
-/// window; weeks between the first and last done week print zero, never missing.
+/// window; weeks between the first and last done week print zero, never
+/// missing. One chunk lands once: restarts (several runs, one uid) keep the
+/// latest `ended`, so the series sums to the distinct done-chunk count.
+/// A run with no chunk uid (never from the loader) still counts on its own.
 pub fn throughput(parsed: &Parsed, runs: &[FlowRun]) -> Vec<WeekCount> {
     let window = parsed.first_seen.values().copied().min();
-    let mut per_week: BTreeMap<i64, usize> = BTreeMap::new();
+    let mut latest: HashMap<&str, i64> = HashMap::new();
+    let mut unkeyed: Vec<i64> = vec![];
     for r in runs {
         let Some(e) = r.ended_ms else { continue };
         if window.is_some_and(|w| e < w) {
             continue;
         }
+        if r.chunk.is_empty() {
+            unkeyed.push(e);
+        } else {
+            latest
+                .entry(r.chunk.as_str())
+                .and_modify(|m| *m = (*m).max(e))
+                .or_insert(e);
+        }
+    }
+    let mut per_week: BTreeMap<i64, usize> = BTreeMap::new();
+    for e in latest.values().copied().chain(unkeyed) {
         *per_week.entry(monday_days(e)).or_default() += 1;
     }
     let (Some(&first), Some(&last)) = (per_week.keys().next(), per_week.keys().next_back()) else {
@@ -265,29 +283,19 @@ mod tests {
     fn run_spans_shrink_on_missing_ends_and_unmappable_merges() {
         let p = parsed_of(&usage("/w/r", "2026-10-01T00:00:00.000Z"));
         let t = |s: &str| crate::ts_ms(s).unwrap();
+        let run = |e: Option<&str>, pr: Option<i64>| FlowRun {
+            started_ms: Some(t("2026-10-02T00:00:00Z")),
+            ended_ms: e.map(t),
+            pr,
+            chunk: format!("C{}", pr.unwrap_or(0)),
+        };
         let runs = vec![
-            FlowRun {
-                started_ms: Some(t("2026-10-02T00:00:00Z")),
-                ended_ms: Some(t("2026-10-02T00:10:00Z")),
-                pr: Some(1),
-            },
-            FlowRun {
-                started_ms: Some(t("2026-10-02T00:00:00Z")),
-                ended_ms: Some(t("2026-10-02T00:20:00Z")),
-                pr: Some(2),
-            },
+            run(Some("2026-10-02T00:10:00Z"), Some(1)),
+            run(Some("2026-10-02T00:20:00Z"), Some(2)),
             // no merge for pr 2: shrinks done→merge n, never imputed
-            FlowRun {
-                started_ms: Some(t("2026-10-02T00:00:00Z")),
-                ended_ms: None,
-                pr: Some(3),
-            },
+            run(None, Some(3)),
             // merge before ended: clock moved, not work — left out
-            FlowRun {
-                started_ms: Some(t("2026-10-02T00:00:00Z")),
-                ended_ms: Some(t("2026-10-02T01:00:00Z")),
-                pr: Some(4),
-            },
+            run(Some("2026-10-02T01:00:00Z"), Some(4)),
         ];
         let merges = vec![
             FlowMerge {
@@ -326,16 +334,17 @@ mod tests {
     fn throughput_weeks_fill_zeros_never_missing() {
         let p = parsed_of(&usage("/w/r", "2026-10-01T00:00:00.000Z"));
         let t = |s: &str| crate::ts_ms(s).unwrap();
-        let run = |e: &str| FlowRun {
+        let run = |c: &str, e: &str| FlowRun {
             started_ms: Some(t(e)),
             ended_ms: Some(t(e)),
             pr: None,
+            chunk: c.into(),
         };
         // Mon 2026-10-05 x2, Mon 2026-10-19 x1: the middle week prints zero
         let runs = vec![
-            run("2026-10-05T12:00:00Z"),
-            run("2026-10-06T12:00:00Z"),
-            run("2026-10-19T12:00:00Z"),
+            run("A", "2026-10-05T12:00:00Z"),
+            run("B", "2026-10-06T12:00:00Z"),
+            run("C", "2026-10-19T12:00:00Z"),
         ];
         assert_eq!(
             throughput(&p, &runs),
@@ -355,5 +364,31 @@ mod tests {
             ]
         );
         assert!(throughput(&p, &[]).is_empty());
+    }
+
+    #[test]
+    fn throughput_counts_a_restarted_chunk_once_in_its_latest_week() {
+        let p = parsed_of(&usage("/w/r", "2026-10-01T00:00:00.000Z"));
+        let t = |s: &str| crate::ts_ms(s).unwrap();
+        let run = |c: &str, e: &str| FlowRun {
+            started_ms: Some(t(e)),
+            ended_ms: Some(t(e)),
+            pr: None,
+            chunk: c.into(),
+        };
+        // chunk A restarted: first done Mon 2026-10-05, redone Mon 2026-10-12 —
+        // one chunk, latest week wins, never double-counted
+        let runs = vec![
+            run("A", "2026-10-05T12:00:00Z"),
+            run("A", "2026-10-12T12:00:00Z"),
+            run("B", "2026-10-12T13:00:00Z"),
+        ];
+        assert_eq!(
+            throughput(&p, &runs),
+            vec![WeekCount {
+                week: "2026-10-12".into(),
+                done: 2
+            },]
+        );
     }
 }
