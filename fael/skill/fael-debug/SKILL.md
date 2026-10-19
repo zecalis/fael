@@ -20,7 +20,7 @@ Before a repro, before a hypothesis:
 fael find --files <suspected files> [<symptom words>]
 fael find --files <suspected files> --all --kind issue    # closed ones carry cause → fix → tried
 # advanced: fael find --since <date> --by <writer> --to <who> --revisit --groups --text <q> --recall wide
-# stats/doctor when the ledger itself is suspect: fael stats --rows --day --misses · fael doctor --fat
+# stats/doctor when the ledger itself is suspect: fael stats --rows --day --misses · fael doctor --fat · a leaked test row or a mistake goes with `fael purge <id>` (never a real row)
 ```
 
 An open issue on the symptom is this bug — `fael claim <id>` and work that row.

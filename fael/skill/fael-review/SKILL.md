@@ -188,6 +188,8 @@ kind is `issue` when a finding survived (something is broken), `decision` when
 the verdict turns on scope alone (rework/reject from pass 1 — the review locks
 a direction). title is the verdict in ≤15 words. text is the body, standalone — what broke or
 was decided, not that a review happened. files are the repo-relative paths actually walked.
+Priority lives on the row: a blocker finding is `--urgent` (`fael add --urgent`,
+`fael add --urgent-before <id>`, `fael bump --not-urgent` as it cools).
 No fael in this session (no tool, no `fael` on PATH) = skip the record, never install it
 uninvited. If `add` errors, say so in one line and move on. Whoever fixes a recorded issue later
 closes it by its id — `fael close <id> "fixed in <sha>"`.
