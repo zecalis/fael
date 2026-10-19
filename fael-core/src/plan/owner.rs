@@ -134,14 +134,19 @@ impl Store {
                 .map_err(err)?;
                 return Ok("unapproved".into());
             };
-            let (hint, client): (Option<String>, Option<String>) = tx
+            // `chunk edit` NULLs approved_model with approved_at, so a kept one is never stale
+            let (prev, hint, client): (Option<String>, Option<String>, Option<String>) = tx
                 .query_row(
-                    "SELECT model_hint, client_hint FROM chunk WHERE id = ?1",
+                    "SELECT approved_model, model_hint, client_hint FROM chunk WHERE id = ?1",
                     [id],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .map_err(err)?;
-            let m = m.map(str::to_owned).or(hint).filter(|m| !m.is_empty());
+            let m = m
+                .map(str::to_owned)
+                .or(prev)
+                .or(hint)
+                .filter(|m| !m.is_empty());
             let (m, defaulted) = match m {
                 Some(m) => (m, false),
                 None => ("small".to_owned(), true),

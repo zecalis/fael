@@ -86,3 +86,23 @@ fn the_board_model_is_what_the_start_runs() {
         (serde_json::json!("ok-m"), serde_json::json!("hint-m"))
     );
 }
+
+/// Re-approving without `--model` keeps the model already approved; after an
+/// edit clears the approval it falls back to the hint again.
+#[test]
+fn re_approve_keeps_the_approved_model() {
+    let d = repo();
+    let (_, out, _) = fael(
+        &d,
+        &["chunk", "add", "Ui", "--brief", "b", "--model", "hint-m"],
+    );
+    let u = out.trim().to_string();
+    assert!(fael(&d, &["chunk", "approve", &u, "--model", "ok-m"]).0);
+    let (ok, out, err) = fael(&d, &["chunk", "approve", &u]);
+    assert!(ok && out.contains("model ok-m"), "{out}{err}");
+    assert_eq!(model_of(&d, &u).0, serde_json::json!("ok-m"));
+    // an edit clears the approval and its model: the next bare approve uses the hint
+    assert!(fael(&d, &["chunk", "edit", &u, "--brief", "b2"]).0);
+    let (ok, out, err) = fael(&d, &["chunk", "approve", &u]);
+    assert!(ok && out.contains("model hint-m"), "{out}{err}");
+}
