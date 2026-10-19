@@ -33,6 +33,10 @@ pub(crate) const VERBS: &[&str] = &[
 pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
+    if rest.is_empty() {
+        println!("{}", crate::help::bare("chunk").unwrap_or_default());
+        return Ok(ExitCode::SUCCESS);
+    }
     let r = repo()?;
     crate::plan::in_repo(&r)?;
     let named;
@@ -186,7 +190,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
         ["approve", ..] => crate::chunk_verbs::approve(a, r, &rest[1..], &now)?,
         ["unapprove", ..] => crate::chunk_verbs::unapprove(a, r, &rest[1..], &now)?,
         ["apply", ..] => queue(a, &rest, &mut s()?, &now)?,
-        _ => return Err(format!("rejected: {USAGE}")),
+        _ => return Err(crate::chunk_verbs::bad(rest.first().copied())),
     }
     crate::board::register(r);
     Ok(ExitCode::SUCCESS)
@@ -209,7 +213,7 @@ fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String
                 println!("{line}");
             }
         }
-        _ => return Err(format!("rejected: {USAGE}")),
+        _ => return Err(crate::chunk_verbs::bad(Some("apply"))),
     }
     Ok(())
 }

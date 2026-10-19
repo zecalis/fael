@@ -71,6 +71,43 @@ fn list_args(name: &str, section: &str) -> String {
     s
 }
 
+/// A bare `fael chunk` / `fael plan`: the few verbs met first, not the whole synopsis.
+pub(crate) fn bare(cmd: &str) -> Option<&'static str> {
+    match cmd {
+        "chunk" => Some(
+            "fael chunk — the units of work in a plan
+  start <uid>               claim it and print its brief
+  done <uid> \"<handoff>\"    finish it (--pr N when there is a PR)
+  wait <uid> \"<question>\" --on owner|data
+  show <uid|label>          one chunk as the board has it
+  add \"<title>\"             a new draft (--plan inbox|<plan>)
+one verb: fael chunk <verb> --help · all verbs: fael chunk --help",
+        ),
+        "plan" => Some(
+            "fael plan — sections plus chunks in fael.db
+  list                      every plan
+  export <plan>             read it (--section <key>; --json is the bill)
+  apply <file|-> --dry-run  change it through the bill
+  new <name> \"<title>\"      a new plan
+  park|unpark|done <plan>
+one verb: fael plan <verb> --help · all verbs: fael plan --help",
+        ),
+        _ => None,
+    }
+}
+
+/// The reject for a known verb called with the wrong arguments: its own synopsis
+/// on line two (line one keeps the code the usage log classifies by).
+pub(crate) fn wrong_args(cmd: &str, verb: Option<&str>, fallback: &str) -> String {
+    match verb.and_then(|v| verb::synopsis(cmd, v)) {
+        Some(syn) => format!(
+            "rejected: wrong arguments for {cmd} {} — try 'fael {cmd} --help'\n  {syn}",
+            verb.unwrap_or_default()
+        ),
+        None => format!("rejected: {fallback}"),
+    }
+}
+
 /// Every command name — what an unknown one is measured against.
 pub(crate) fn names() -> impl Iterator<Item = &'static str> {
     COMMANDS.iter().map(|(n, ..)| *n)
