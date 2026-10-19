@@ -3,13 +3,17 @@
 //! never refused, a chunk may create the file.
 
 use fael_core::plan::{Store, overlap};
+use std::collections::HashSet;
 use std::path::Path;
 
-/// A warning on stderr for each scope path of chunk `key` that names nothing under `root`:
-/// its directory is missing, or holds a name within edit distance 2. A new file or directory under an existing one passes silently.
-/// Then each path the stored brief names that exists under `root` but outside the scope.
-pub(crate) fn warn(s: &Store, root: &Path, key: &str) {
+/// A warning on stderr for each scope path of chunk `key` that names nothing under the
+/// repo: its directory is missing, or holds a name within edit distance 2. A new file or
+/// directory under an existing one passes silently.
+/// Then each path the stored brief names that exists under the repo but outside the scope,
+/// and each id/key the brief names whose row is closed.
+pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str) {
     let Ok(b) = s.show(key) else { return };
+    let root = &r.root;
     brief_paths(s, root, &b);
     for p in b.scope.as_deref().unwrap_or_default().lines() {
         if let Some(why) = missing(root, p) {
@@ -19,6 +23,74 @@ pub(crate) fn warn(s: &Store, root: &Path, key: &str) {
             );
         }
     }
+    let log = crate::read(r);
+    for w in closed_warnings(&b.title, &b.brief, &log, &b.uid) {
+        eprintln!("{w}");
+    }
+}
+
+/// Id/key tokens of a brief whose row is closed: warning lines, never a refusal.
+/// An id token resolves through `ref_state` (exactly one row, and it is closed);
+/// a key matches whole through `names_key` (exactly one row carries it, closed).
+/// Anything else (missing, ambiguous, open) stays silent — fael never infers.
+fn closed_warnings(title: &str, brief: &str, log: &fael_core::Log, uid: &str) -> Vec<String> {
+    let text = format!("{title} {brief}");
+    let shut = fael_core::closed(log);
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut out = Vec::new();
+    for tok in fael_core::id_tokens(&text) {
+        let fael_core::Ref::One(row) = fael_core::ref_state(log, tok) else {
+            continue;
+        };
+        if !shut.contains(row.id.as_str()) || !seen.insert(row.id.as_str()) {
+            continue;
+        }
+        out.push(closed_line(tok, log, &row.id, uid));
+    }
+    for k in fael_core::keys(log, None) {
+        if !fael_core::names_key(&text, &k.key) {
+            continue;
+        }
+        let hits: Vec<&fael_core::Row> = log
+            .rows
+            .iter()
+            .filter(|r| r.key.as_deref() == Some(k.key.as_str()))
+            .collect();
+        let [row] = hits.as_slice() else { continue };
+        if !shut.contains(row.id.as_str()) || !seen.insert(row.id.as_str()) {
+            continue;
+        }
+        out.push(closed_line(&k.key, log, &row.id, uid));
+    }
+    out
+}
+
+/// One closed-ref warning: the close text's first line, so the planner sees why it settled.
+fn closed_line(cite: &str, log: &fael_core::Log, id: &str, uid: &str) -> String {
+    let first = close_first_line(log, id);
+    format!("warning: brief cites {cite} — closed: {first} — fael chunk edit {uid} --brief …")
+}
+
+/// The text a row was closed with, first line: the newest close row wins, else the folded
+/// `closed.text` a compacted row carries.
+fn close_first_line(log: &fael_core::Log, id: &str) -> String {
+    let from_close = log
+        .closes
+        .iter()
+        .filter(|c| c.reference.as_deref() == Some(id))
+        .max_by(|a, b| a.ts.cmp(&b.ts))
+        .map(|c| c.text.clone());
+    let from_row = || {
+        log.rows.iter().find(|r| r.id == id).and_then(|r| {
+            r.extra
+                .get("closed")
+                .and_then(|v| v.get("text"))
+                .and_then(|t| t.as_str())
+                .map(String::from)
+        })
+    };
+    let text = from_close.or_else(from_row).unwrap_or_default();
+    text.lines().next().unwrap_or("").trim().to_string()
 }
 
 fn missing(at: &Path, p: &str) -> Option<String> {
@@ -144,7 +216,7 @@ fn paths(text: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{clauses, is_check_line};
+    use super::{clauses, closed_warnings, is_check_line};
 
     #[test]
     fn check_run_verify_lines_are_run_mentions_not_edits() {
@@ -173,5 +245,80 @@ mod tests {
         assert_eq!(c.len(), 2);
         assert!(!is_check_line(c[0]));
         assert!(is_check_line(c[1]));
+    }
+
+    fn log_with_closed_and_open() -> fael_core::Log {
+        let shut = fael_core::Row {
+            id: "01M0000000000000000000001".into(),
+            kind: "decision".into(),
+            text: "cash basis".into(),
+            key: Some("test:cash-basis-edges".into()),
+            ..Default::default()
+        };
+        let open = fael_core::Row {
+            id: "01M0000000000000000000002".into(),
+            kind: "decision".into(),
+            text: "deferred work stays open".into(),
+            key: Some("test:open-topic".into()),
+            ..Default::default()
+        };
+        let close = fael_core::Row {
+            id: "01M0000000000000000000003".into(),
+            reference: Some(shut.id.clone()),
+            text: "shipped in v2\nmore detail".into(),
+            ts: "2026-10-12T00:00:00Z".into(),
+            ..Default::default()
+        };
+        fael_core::Log {
+            rows: vec![shut, open],
+            closes: vec![close],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_closed_key_warns_and_an_open_key_stays_silent() {
+        let log = log_with_closed_and_open();
+        let uid = "01M00000000000000000000W1";
+        let both = closed_warnings(
+            "t",
+            "Fixes test:cash-basis-edges, see test:open-topic",
+            &log,
+            uid,
+        );
+        assert_eq!(both.len(), 1, "{both:?}");
+        assert!(
+            both[0].contains("brief cites test:cash-basis-edges")
+                && both[0].contains("closed: shipped in v2")
+                && both[0].contains(&format!("fael chunk edit {uid} --brief")),
+            "{}",
+            both[0]
+        );
+        // a missing key, an unknown id and a key shared by two rows stay silent
+        let mut dup = log.clone();
+        dup.rows.push(fael_core::Row {
+            id: "01M0000000000000000000004".into(),
+            kind: "decision".into(),
+            text: "same key again".into(),
+            key: Some("test:cash-basis-edges".into()),
+            ..Default::default()
+        });
+        let silent = closed_warnings(
+            "t",
+            "test:cash-basis-edges test:no-such-key 01M0000000000000000000009",
+            &dup,
+            uid,
+        );
+        assert!(silent.is_empty(), "{silent:?}");
+        let open_only = closed_warnings("t", "see test:open-topic, deferred work", &log, uid);
+        assert!(open_only.is_empty(), "{open_only:?}");
+        // an id token of the closed row warns too, with the close's first line only
+        let by_id = closed_warnings("t", "see 01M0000000000000000000001", &log, uid);
+        assert_eq!(by_id.len(), 1, "{by_id:?}");
+        assert!(
+            by_id[0].contains("shipped in v2") && !by_id[0].contains("more detail"),
+            "{}",
+            by_id[0]
+        );
     }
 }

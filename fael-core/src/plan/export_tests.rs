@@ -108,3 +108,79 @@ fn export_prints_the_label_and_the_notes_the_next_brief_will() {
             .is_none()
     );
 }
+
+#[test]
+fn an_after_cycle_still_exports_every_chunk_once() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("do a"));
+    let b = add(&mut s, "b", Some("do b"));
+    add(&mut s, "c", Some("do c"));
+    // add_after refuses a cycle, so write the edges raw
+    for (x, y) in [(&a, &b), (&b, &a)] {
+        s.conn
+            .execute(
+                "INSERT INTO edge(src, dst, kind)
+                 SELECT x.id, y.id, 'after' FROM chunk x, chunk y
+                 WHERE x.uid = ?1 AND y.uid = ?2",
+                [x, y],
+            )
+            .unwrap();
+    }
+    let plan: i64 = s
+        .conn
+        .query_row("SELECT plan FROM chunk WHERE uid = ?1", [&a], |r| r.get(0))
+        .unwrap();
+    let js = super::export_json(&s, plan).unwrap();
+    let mut titles: Vec<&str> = js["chunks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["title"].as_str().unwrap())
+        .collect();
+    titles.sort_unstable();
+    assert_eq!(titles, ["a", "b", "c"], "{js}");
+    assert!(super::export(&s, plan).unwrap().contains("- [ ] b"));
+}
+
+#[test]
+fn after_edges_order_before_seq_in_markdown_and_json() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("do a"));
+    let b = add(&mut s, "b", Some("do b"));
+    let c = add(&mut s, "c", Some("do c"));
+    s.conn
+        .execute(
+            "INSERT INTO edge(src, dst, kind)
+             SELECT x.id, y.id, 'after' FROM chunk x, chunk y
+             WHERE x.uid = ?1 AND y.uid = ?2",
+            [&b, &c],
+        )
+        .unwrap();
+    let plan: i64 = s
+        .conn
+        .query_row("SELECT plan FROM chunk WHERE uid = ?1", [&a], |r| r.get(0))
+        .unwrap();
+    let md = super::export(&s, plan).unwrap();
+    let (mut pa, mut pb, mut pc) = (None, None, None);
+    for (i, l) in md.lines().enumerate() {
+        if l.contains("- [ ] a") {
+            pa = Some(i);
+        }
+        if l.contains("- [ ] b") {
+            pb = Some(i);
+        }
+        if l.contains("- [ ] c") {
+            pc = Some(i);
+        }
+    }
+    let (pa, pb, pc) = (pa.unwrap(), pb.unwrap(), pc.unwrap());
+    assert!(pa < pc && pc < pb, "{md}");
+    let js = super::export_json(&s, plan).unwrap();
+    let titles: Vec<&str> = js["chunks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles, ["a", "c", "b"], "{js}");
+}
