@@ -72,7 +72,7 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 A plan is sections plus chunks in fael.db — no plan file. Read it with
 `fael plan export <plan>` (`--section <key>` for one); change a section through the bill
 (`fael plan export <plan> --json`, edit `sections`, `fael plan apply --dry-run`, then apply).
-Draft or re-cut plans with the `fael-plan` skill.
+Draft or re-cut plans with the `fael-plan` skill (fael crew).
 
 `fael chunk start <uid>` prints the brief and the chunk rules (how to close, wait, checkpoint)
 — don't restate them here. The `fael chunk done <uid> "<handoff>"` text is the handoff: the
@@ -86,7 +86,7 @@ chunk names. Don't file a ledger row for a count that isn't ready.
 
 ## New flags
 
-`fael --help` is core-only; workflow stays parseable but is reached via the `fael-plan` skill, `fael chunk start` briefs, Plan Workflow above and the board app.
+`fael --help` is core-only; workflow stays parseable but is reached via the `fael-plan` skill (fael crew), `fael chunk start` briefs, Plan Workflow above and the board app.
 A new flag/command ships with (1) the issue id it fixes, (2) the friction it cuts, (3) the `fael stats` by-flag line showing its use (decision 01M59HQJ).
 A new workflow flag is born hidden (outside default help) and named by the skill/brief that sends the agent to it.
 Tier it under `product:cli-tiers-table` (`fael find --key product:cli-tiers-table`); removal follows `fael plan export cli-tiers --section 4` — link, never copy, either list.

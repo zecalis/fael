@@ -24,6 +24,8 @@ pub(super) const SKILLS: [(&str, &str, &str); 3] = [
 /// Skills that moved to fael crew (decision 01M5AF2H). `install` removes the
 /// old embedded copy but never a symlink — the crew copy is a symlink into
 /// the crew checkout.
+// ponytail: drop this cleanup once pre-move installs have aged out (embedded
+// copies predate v0.74; remove ~v0.77) — otherwise it stays forever.
 pub(super) const MOVED: [&str; 2] = ["fael-plan", "fael-sweep"];
 
 pub(super) fn remove_moved(c: &Ctx, dir: &Path) -> Result<(), String> {
