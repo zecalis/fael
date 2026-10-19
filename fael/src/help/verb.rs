@@ -45,6 +45,15 @@ pub(crate) fn for_verb(cmd: &str, verb: &str) -> Option<String> {
     Some(out.join("\n"))
 }
 
+/// The first synopsis line naming `verb` — what a wrong-arguments reject shows
+/// instead of the whole verb list.
+pub(crate) fn synopsis(cmd: &str, verb: &str) -> Option<String> {
+    let section = super::for_command_full(cmd)?;
+    invocations(section, cmd)
+        .into_iter()
+        .find(|inv| mentions(inv, verb))
+}
+
 /// Synopsis invocations of `cmd`: every `fael <cmd> …` fragment, with `|` and
 /// `·` separators between invocations kept apart from `|` inside one verb
 /// alternative (`park|unpark|done`). The `<verb>` template line is skipped.

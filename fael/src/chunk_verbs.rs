@@ -36,7 +36,7 @@ fn resolve(s: &Store, plan: Option<&str>, key: &str) -> Result<String, String> {
 /// `fael chunk approve <uid>… [--model M] [--client C]`: the flags apply to all.
 pub(crate) fn approve(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(), String> {
     if uids.is_empty() {
-        return Err(format!("rejected: {}", crate::chunk::USAGE));
+        return Err(bad(Some("approve")));
     }
     a.only("chunk approve", &["model", "client", "plan"])?;
     let plan = a.one("plan");
@@ -73,7 +73,7 @@ pub(crate) fn approve(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<()
 /// `fael chunk unapprove <uid>…`: every uid leaves the queue.
 pub(crate) fn unapprove(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(), String> {
     if uids.is_empty() {
-        return Err(format!("rejected: {}", crate::chunk::USAGE));
+        return Err(bad(Some("unapprove")));
     }
     a.only("chunk unapprove", &["plan"])?;
     let plan = a.one("plan");
@@ -109,7 +109,7 @@ pub(crate) fn unapprove(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<
 /// `fael chunk accept <uid>…`: every uid in review lands as done.
 pub(crate) fn accept(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(), String> {
     if uids.is_empty() {
-        return Err(format!("rejected: {}", crate::chunk::USAGE));
+        return Err(bad(Some("accept")));
     }
     a.only("chunk accept", &["plan"])?;
     let plan = a.one("plan");
@@ -146,7 +146,7 @@ pub(crate) fn accept(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(),
 /// lines, so failures print as their reject line where that chunk's show would be.
 pub(crate) fn show(a: &Args, r: &Repo, keys: &[&str]) -> Result<ExitCode, String> {
     if keys.is_empty() {
-        return Err(format!("rejected: {}", crate::chunk::USAGE));
+        return Err(bad(Some("show")));
     }
     a.only("chunk show", &["json", "plan"])?;
     let plan = a.one("plan");
@@ -174,4 +174,13 @@ pub(crate) fn show(a: &Args, r: &Repo, keys: &[&str]) -> Result<ExitCode, String
         return Err(summary(bad, keys.len()));
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Wrong arguments: the verb's own synopsis when it is a known verb, else the verb list.
+pub(crate) fn bad(verb: Option<&str>) -> String {
+    crate::help::wrong_args(
+        "chunk",
+        verb.filter(|v| crate::chunk::VERBS.contains(v)),
+        crate::chunk::USAGE,
+    )
 }

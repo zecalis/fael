@@ -6,12 +6,18 @@ use fael_core::plan::{Bill, PlanRow, Store};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'";
+
 /// The verbs `plan` answers — `show` is `export` by another name.
 pub(crate) const VERBS: &[&str] = &[
     "new", "export", "show", "apply", "park", "unpark", "done", "list",
 ];
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
+    if rest.is_empty() {
+        println!("{}", crate::help::bare("plan").unwrap_or_default());
+        return Ok(ExitCode::SUCCESS);
+    }
     let r = repo()?;
     if let [new, name, title] = rest
         && new == "new"
@@ -41,10 +47,13 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("list") if rest.len() == 1 => list(&r),
-        _ => Err(
-            "rejected: fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'"
-                .into(),
-        ),
+        _ => Err(crate::help::wrong_args(
+            "plan",
+            rest.first()
+                .map(String::as_str)
+                .filter(|v| VERBS.contains(v)),
+            PLAN_USAGE,
+        )),
     }
     .map(|()| ExitCode::SUCCESS)
 }
