@@ -148,6 +148,7 @@ const WARNINGS: &[(&str, &str)] = &[
     ("was held @", "claim_taken"),
     ("warning: scope", "chunk_scope"),
     ("warning: brief names", "chunk_brief_path"),
+    ("warning: brief cites", "chunk_closed_ref"),
     ("warning: commit ", "unmerged"),
     // self-heal wraps another warning; that one's needle wins above
     ("— key ", "key_moved"),

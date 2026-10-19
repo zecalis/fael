@@ -80,7 +80,76 @@ pub fn export_section(s: &Store, plan: i64, key: &str) -> Result<String, String>
     })
 }
 
+/// Uids of `plan` in plan order: after edges first, seq breaks ties. A cycle
+/// (add_after refuses them) falls back to seq for the rest.
+fn topo_order(c: &Connection, plan: i64) -> Result<Vec<String>, String> {
+    let mut ids: Vec<(i64, i64, String)> = c
+        .prepare("SELECT id, seq, uid FROM chunk WHERE plan = ?1 ORDER BY seq")
+        .map_err(err)?
+        .query_map([plan], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    ids.sort_by_key(|(_, seq, _)| *seq);
+    let pos: std::collections::HashMap<i64, usize> = ids
+        .iter()
+        .enumerate()
+        .map(|(i, (id, _, _))| (*id, i))
+        .collect();
+    let mut deps: Vec<Vec<usize>> = vec![Vec::new(); ids.len()];
+    let mut rdeps: Vec<Vec<usize>> = vec![Vec::new(); ids.len()];
+    let mut e = c
+        .prepare(
+            "SELECT e.src, e.dst FROM edge e JOIN chunk s ON s.id = e.src
+              JOIN chunk d ON d.id = e.dst
+             WHERE s.plan = ?1 AND d.plan = ?1 AND e.kind = 'after'",
+        )
+        .map_err(err)?;
+    for r in e
+        .query_map([plan], |r| Ok((r.get(0)?, r.get(1)?)))
+        .map_err(err)?
+    {
+        let (src, dst): (i64, i64) = r.map_err(err)?;
+        if let (Some(&si), Some(&di)) = (pos.get(&src), pos.get(&dst))
+            && !deps[si].contains(&di)
+        {
+            deps[si].push(di);
+            rdeps[di].push(si);
+        }
+    }
+    let mut indeg: Vec<usize> = deps.iter().map(Vec::len).collect();
+    let mut ready: Vec<usize> = (0..ids.len()).filter(|&i| indeg[i] == 0).collect();
+    ready.sort_by_key(|&i| ids[i].1);
+    let mut out: Vec<String> = Vec::with_capacity(ids.len());
+    let mut done = vec![false; ids.len()];
+    while !ready.is_empty() || out.len() < ids.len() {
+        let next = if let Some(&i) = ready.first() {
+            ready.remove(0);
+            i
+        } else {
+            (0..ids.len())
+                .filter(|&i| !done[i])
+                .min_by_key(|&i| ids[i].1)
+                .unwrap()
+        };
+        if done[next] {
+            continue;
+        }
+        done[next] = true;
+        out.push(ids[next].2.clone());
+        for &dep in &rdeps[next].clone() {
+            indeg[dep] = indeg[dep].saturating_sub(1);
+            if indeg[dep] == 0 && !done[dep] && !ready.contains(&dep) {
+                ready.push(dep);
+            }
+        }
+        ready.sort_by_key(|&i| ids[i].1);
+    }
+    Ok(out)
+}
+
 fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
+    let order = topo_order(&s.conn, plan)?;
     let mut q = s
         .conn
         .prepare(
@@ -109,8 +178,18 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
              ORDER BY id",
         )
         .map_err(err)?;
-    for row in q.query_map([plan], cols::<15>).map_err(err)? {
-        let [title, brief, state, uid, label, rest @ ..] = row.map_err(err)?;
+    let mut rows: Vec<[String; 15]> = q
+        .query_map([plan], cols::<15>)
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    let at: std::collections::HashMap<&str, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(i, u)| (u.as_str(), i))
+        .collect();
+    rows.sort_by_key(|r| at.get(r[3].as_str()).copied().unwrap_or(usize::MAX));
+    for [title, brief, state, uid, label, rest @ ..] in &rows {
         let tick = match state.as_str() {
             "done" => 'x',
             "dropped" | "replaced" => '~',
@@ -119,7 +198,7 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
         };
         // a draft from an unknown checkbox keeps its whole line as the title
         if tick == '?' && title.starts_with(['-', '*']) {
-            o.push_str(&title);
+            o.push_str(title);
         } else {
             let _ = write!(o, "- [{tick}] {title}");
         }
@@ -139,7 +218,7 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
                 let _ = writeln!(o, "  > {l}");
             }
         }
-        for n in notes.query_map([&uid], cols::<2>).map_err(err)? {
+        for n in notes.query_map([uid.as_str()], cols::<2>).map_err(err)? {
             let [day, text] = n.map_err(err)?;
             let _ = writeln!(o, "  > note {day}: {}", text.replace('\n', " "));
         }
@@ -170,6 +249,7 @@ pub(super) fn rev(c: &Connection, plan: i64) -> Result<i64, String> {
 /// fael-board:plan-bill, `"v": 1`) — the header and a line per chunk still planned (not
 /// `replaced` or `dropped`), read in one transaction so `rev` matches the lines.
 pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
+    let order = topo_order(&s.conn, plan)?;
     let tx = s.conn.unchecked_transaction().map_err(err)?;
     let [app, name, title, area, state] = tx
         .query_row(
@@ -196,7 +276,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
     let lines = |t: Option<String>| -> Vec<String> {
         t.iter().flat_map(|t| t.lines()).map(String::from).collect()
     };
-    let chunks: Vec<Json> = q
+    let mut chunks: Vec<Json> = q
         .query_map(params![plan], |r| {
             let g = |i| r.get::<_, Option<String>>(i);
             Ok(json!({
@@ -208,6 +288,17 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)?;
+    let at: std::collections::HashMap<&str, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(i, u)| (u.as_str(), i))
+        .collect();
+    chunks.sort_by_key(|c| {
+        c.get("uid")
+            .and_then(|u| u.as_str())
+            .and_then(|u| at.get(u).copied())
+            .unwrap_or(usize::MAX)
+    });
     let sections: Vec<Json> = section::list(&tx, plan)?
         .into_iter()
         .map(|r| json!({"key": r.key, "title": r.title, "body": r.body}))

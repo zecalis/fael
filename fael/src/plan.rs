@@ -110,11 +110,38 @@ fn apply(r: &Repo, from: &str, dry: bool) -> Result<(), String> {
         (true, _) => println!("dry run: nothing written"),
         (false, true) => println!("no change (rev {rev})"),
         (false, false) => {
+            for uid in changed_uids(&lines) {
+                crate::chunk_scope::warn(&s, r, &uid);
+            }
             crate::board::register(r);
             println!("applied (rev {rev})");
         }
     }
     Ok(())
+}
+
+/// Uids of the chunks a bill added or changed: `+`/`~` lines carry the uid second,
+/// merge/split lines carry the new ones past `→`. Drops (`- `) are history, not warned.
+fn changed_uids(lines: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    let push = |tok: &str, out: &mut Vec<String>| {
+        let t = tok.trim_matches(|c: char| !c.is_alphanumeric());
+        if fael_core::looks_like_id(t) && !out.iter().any(|o| o == t) {
+            out.push(t.to_string());
+        }
+    };
+    for l in lines {
+        if let Some(rest) = l.strip_prefix("+ ").or_else(|| l.strip_prefix("~ ")) {
+            if let Some(uid) = rest.split_whitespace().next() {
+                push(uid, &mut out);
+            }
+        } else if let Some((_, right)) = l.split_once('→') {
+            for tok in right.split(|c: char| c.is_whitespace() || c == ',') {
+                push(tok, &mut out);
+            }
+        }
+    }
+    out
 }
 
 /// `park` · `unpark` · `done`: the owner's word on `plan.state`.
@@ -239,4 +266,30 @@ fn feed(r: &Repo, since: &str) -> Result<(), String> {
     let f = fael_core::plan::feed(&open(r)?, since)?;
     println!("{}", serde_json::to_string(&f).map_err(|e| e.to_string())?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::changed_uids;
+
+    #[test]
+    fn apply_warns_the_chunks_it_added_or_changed() {
+        let a = "01M00000000000000000000AA";
+        let b = "01M00000000000000000000BB";
+        let c = "01M00000000000000000000CC";
+        let d = "01M00000000000000000000DD";
+        let e = "01M00000000000000000000EE";
+        let lines = vec![
+            format!("+ {a} new chunk (open)"),
+            format!("~ {b} edited brief"),
+            format!("- {c} dropped"),
+            "plan inbox: edited title".to_string(),
+            format!("merged {b}, {c} → {d}"),
+            format!("split {b} → {d}, {e}"),
+            format!("paired {a}, {b}"),
+            format!("{a} after {b}"),
+        ];
+        // adds, edits and the new chunks past → warn; drops and pure after/pair lines do not
+        assert_eq!(changed_uids(&lines), vec![a, b, d, e]);
+    }
 }
