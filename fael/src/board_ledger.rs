@@ -31,6 +31,7 @@ struct Item {
     at: String,
     by: String,
     to: Option<String>,
+    from: Option<String>,
     revisit: Option<String>,
     /// the branch that claimed this issue (`fael claim`)
     held: Option<String>,
@@ -79,6 +80,7 @@ pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
         at: row.ts.clone(),
         by: row.by.clone(),
         to: row.to.clone(),
+        from: row.from.clone(),
         revisit: row.revisit.clone(),
         held: row.held().map(String::from),
         chunk: group.and_then(|_| fixer(&row.id)),

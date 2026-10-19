@@ -20,25 +20,29 @@ fixed. A second sweep skips them.
 ## 1. One read
 
 ```bash
-fael board --json
+fael sweep --input
 ```
 
-Take this repo's project. `ledger.issues[]` is every open issue, in shared-file groups
-(`group`); an issue whose `chunk` is set is already triaged — skip it, whatever its state.
-Skip an issue whose `held` names a branch: someone claimed it. `chunks[]` with state `open`,
-`running`, `waiting` or `blocked` are the work already in flight — their `scope` is what a new
-chunk must not collide with.
+This repo only, one command: `issues[]` is every untriaged open issue with its body
+(`title`, `text`), its shared-file `group`, and the commits naming it (`commits`,
+one git log for every id — never a log per issue, never `fael find` per body).
+`active_scopes[]` is the scope of every open/running/waiting chunk, `claimed[]`
+the issues someone holds — together the work already in flight a new chunk must
+not collide with. `drifted[]` is the drifted decisions/notes with `from`, the
+file that moved most (`top_file`) and its count.
 
 Nothing untriaged → say so in one line and go to the drifted pass (step 7).
 
 ## 2. Judge each issue against the code
 
-**Commits first.** Per issue, before any file: `git log origin/main --oneline --grep=<id>`.
-A fix commit that names the id → `drop?` (already fixed), that commit as the evidence; don't
-open the code.
+**Commits first.** `issues[].commits[]` already names the fix commits (one git log
+for every id: `git log --format="%H %s" --grep=<a> --grep=<b> ... HEAD`, ORed, mapped
+back per id — never a log per issue). A fix commit that names the id → `drop?`
+(already fixed), that commit as the evidence; don't open the code.
 
-Per issue left: `fael find <id>` for the body, then open the files and symbols it names. Decide
-from what the code does now, not from the title:
+Per issue left: the body is in `issues[]` — open the files and symbols it names
+(`fael find <id>` only when you need neighbours). Decide from what the code does
+now, not from the title:
 
 | Verdict | When |
 |---|---|
@@ -57,8 +61,10 @@ Already fixed in the code? It is still a `drop?`: the owner closes the issue, no
 - **scope** = the paths the fix will edit, from the code you read.
   It is what lets two agents run side by side; a wrong scope puts two agents on one file.
 - **Parallel** = no `--after`. **Ordered** = scopes overlap, or one fix needs the other's
-  output: `--after <uid>` on the later one. A scope that overlaps a chunk already in flight
-  goes `--after` that chunk too.
+  output: `--after <uid>` on the later one. A scope that overlaps a chunk already in
+  flight goes `--after` that chunk too — in flight means `running` or claimed
+  (`claimed[]`, a live run holding it). An `open` or `waiting` chunk nobody started
+  does not block: order past it, never after it.
 - **size / model**: S (an hour, mechanical, one file) → `sonnet`; M (a session, cause clear
   but spread) → `sonnet` or `opus`; cause unclear or cross-module → `opus`. L → split it.
 
@@ -95,18 +101,22 @@ fael chunk add "<title>" --plan inbox --brief "<brief>" --issue <ids> \
   --scope <paths> --size S|M --model <m> [--after <uid>]
 ```
 
-**ask owner / need data / drop?** — a chunk that waits, so the question sits on the board:
+**ask owner / need data / drop?** — a chunk that waits, so the question sits on the board,
+one command (add + start --no-worktree + wait are one call):
 
 ```bash
-uid=$(fael chunk add "<title>" --plan inbox --brief "<what to do once answered>" \
-  --issue <ids> [--scope <paths>] --size S|M --model <m>)
-fael chunk start "$uid" --no-worktree --run "sweep-$uid"
-fael chunk wait "$uid" "<question>" --on owner          # drop? and ask owner
-fael chunk wait "$uid" "<what is missing>" --on data [--until YYYY-MM-DD]
+fael chunk add "<title>" --plan inbox --brief "<what to do once answered>" \
+  --issue <ids> [--scope <paths>] --size S|M --model <m> \
+  --wait owner --ask "<question>" [--option "A" --option "B" ...]          # drop? and ask owner
+fael chunk add "<title>" --plan inbox --brief "<what to do once answered>" \
+  --issue <ids> [--scope <paths>] --size S|M --model <m> \
+  --wait data --ask "<what is missing>" [--until YYYY-MM-DD]               # need data
 ```
 
-`--run` takes a fresh id per start, and it keeps this start off your own session, which may
-hold the sweep chunk's run.
+A `drop?` verdict puts `drop?` in the title or the brief (e.g. `drop? already fixed
+in <file>: <symbol>`): dropping that chunk also closes its linked issues.
+A path the brief deliberately scopes out says `leave alone` on its line, so no
+scope warning fires for it.
 
 The wait text is what the owner reads on the board, so it carries the whole decision:
 the question, 2–3 options each with what it costs, and **your recommendation and why** —
@@ -133,26 +143,19 @@ moved on, so the row may now restate it, contradict it, or still hold. Settle ea
 Same rule as above: you read code and write ledger rows — never code, never a delete
 (no `fael purge`).
 
-**Input.** From the same `fael board --json`: `ledger.decisions[]` and `ledger.notes[]` whose
-`signals` contain `drifted` (or the ids under `fael doctor` [Drifted]). None → one line, stop.
+**Input.** From the same `fael sweep --input`: `drifted[]` already carries `from`,
+the file that moved most (`top_file`) and its count (`top_count`, `total`) — one
+`git log` for every row, already grouped by file. (`fael doctor` [Drifted] lists the
+same ids.) None → one line, stop.
 
-**Group by file.** A row lands under one file — of its files that are paths (skip `plan:`
-anchors), the one with the most commits since the row was written:
-
-```bash
-git rev-list --count --since=<row at> HEAD -- <file>
-```
-
-Ties go to the first listed. One file, one group, however many rows.
-
-A row written `from: user` (`fael find <id> --json` shows `"from":"user"`) is always **ask**:
-the user said it; only the user retires it. Take it out before anything is judged.
+A row with `from: "user"` is always **ask**: the user said it; only the user retires
+it. Take it out before anything is judged.
 
 **Who judges.** A sub-agent costs its start-up, not its reads, so spend one only on a file
 with 3+ rows. Files with fewer rows you judge yourself, or pack all of them into one
 sub-agent. Never one sub-agent per one-row file. A sub-agent (haiku is enough) gets only:
 
-- its files' rows: `fael find <id>` for each body;
+- its files' rows: bodies are in `drifted[]` (`fael find <id>` only for neighbours);
 - what changed since each row: `git log --since=<oldest row at> -p -- <file>`, trimmed to the
   hunks that touch what the rows name; the log too long to read → the file at HEAD instead.
 

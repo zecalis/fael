@@ -62,7 +62,7 @@ impl Args {
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "yes" | "fix" | "prune" | "urgent"
                 | "not-urgent" | "full" | "rows" | "fat" | "day" | "pin" | "open" | "groups"
-                | "misses" | "wiring" | "auto" | "no-worktree" | "watch" => {
+                | "misses" | "wiring" | "auto" | "no-worktree" | "watch" | "input" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"
@@ -71,7 +71,7 @@ impl Args {
                 | "size" | "model" | "scope" | "after" | "run" | "on" | "until" | "pr" | "cost"
                 | "app" | "area" | "label" | "returns" | "check" | "issue" | "drop" | "section"
                 | "reads" | "uid" | "option" | "worktree" | "verdict" | "review" | "parent"
-                | "recall" => {
+                | "recall" | "wait" | "ask" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("rejected: --{name} needs a value"))?;

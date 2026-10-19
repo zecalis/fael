@@ -54,7 +54,7 @@ const RUN_KEYS: &[&str] = &[
 /// A ledger row (PLAN-fael-board l1); an issue also carries `group` before `signals`, and a
 /// linked one its newest fixing `chunk` {uid, state} after `group` (l2).
 const ROW_KEYS: &[&str] = &[
-    "id", "title", "text", "key", "files", "at", "by", "to", "revisit", "held", "signals",
+    "id", "title", "text", "key", "files", "at", "by", "to", "from", "revisit", "held", "signals",
 ];
 /// `chunk.ticket` (plan fael-intake): only on a chunk `fael intake` brought in; `open` = the
 /// source's staff url with the ref filled, null when the source left `.fael/sources.json`
@@ -91,9 +91,9 @@ fn ledger(l: &Value) {
         for r in rows.as_array().unwrap() {
             let mut want = ROW_KEYS.to_vec();
             if kind == "issues" {
-                want.insert(10, "group");
+                want.insert(11, "group");
                 if !r["chunk"].is_null() {
-                    want.insert(11, "chunk");
+                    want.insert(12, "chunk");
                     assert_eq!(keys(&r["chunk"]), ["uid", "state"], "{r}");
                 }
                 let g = r["group"].as_u64().unwrap();

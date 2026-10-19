@@ -35,6 +35,8 @@ fn missing(at: &Path, p: &str) -> Option<String> {
 
 /// The brief is the planner's text, never the rendered start. A warning only: the scope is
 /// the planner's to change, and a path not on disk may be a file the chunk creates.
+/// A path on a line that says "leave alone" never warns: the planner saw it and
+/// deliberately scoped it out (a `drop?` brief naming what not to touch).
 fn brief_paths(s: &Store, root: &Path, b: &fael_core::plan::Brief) {
     let scope: Vec<String> = b
         .scope
@@ -48,27 +50,32 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_core::plan::Brief) {
         .board(&at[..10], &stale)
         .map(|b| b.chunks)
         .unwrap_or_default();
-    for p in paths(&b.brief) {
-        let hit = [p.clone()];
-        if !root.join(&p).exists() || overlap(&hit, &scope) {
+    for line in b.brief.lines() {
+        if line.to_lowercase().contains("leave alone") {
             continue;
         }
-        let holder = others.iter().find(|c| {
-            c.uid != b.uid
-                && !["done", "replaced", "dropped"].contains(&c.state.as_str())
-                && overlap(&hit, &c.scope)
-        });
-        let by = holder.map_or(String::new(), |c| {
-            format!(
-                " (in {}/{}'s scope)",
-                c.plan,
-                c.label.as_deref().unwrap_or(&c.uid)
-            )
-        });
-        eprintln!(
-            "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope …",
-            b.uid
-        );
+        for p in paths(line) {
+            let hit = [p.clone()];
+            if !root.join(&p).exists() || overlap(&hit, &scope) {
+                continue;
+            }
+            let holder = others.iter().find(|c| {
+                c.uid != b.uid
+                    && !["done", "replaced", "dropped"].contains(&c.state.as_str())
+                    && overlap(&hit, &c.scope)
+            });
+            let by = holder.map_or(String::new(), |c| {
+                format!(
+                    " (in {}/{}'s scope)",
+                    c.plan,
+                    c.label.as_deref().unwrap_or(&c.uid)
+                )
+            });
+            eprintln!(
+                "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope …",
+                b.uid
+            );
+        }
     }
 }
 

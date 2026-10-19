@@ -2,181 +2,710 @@
   "v": 1,
   "at": "2026-10-10T09:00:00Z",
   "needs_you": [
-    { "kind": "waiting", "uid": "01M4M0BRD000000000000000A4" },
-    { "kind": "waiting", "uid": "01M4M0BRD000000000000000P2" },
-    { "kind": "review", "uid": "01M4M0BRD000000000000000A3" },
-    { "kind": "review", "uid": "01M4M0BRD000000000000000P1" },
-    { "kind": "ended", "uid": "01M4M0BRD000000000000000V3" },
-    { "kind": "inbox", "uid": "01M4M0BRD000000000000000N1" },
-    { "kind": "issue-open", "uid": "01M4M0BRD000000000000000N2" }
+    {
+      "kind": "waiting",
+      "uid": "01M4M0BRD000000000000000A4"
+    },
+    {
+      "kind": "waiting",
+      "uid": "01M4M0BRD000000000000000P2"
+    },
+    {
+      "kind": "review",
+      "uid": "01M4M0BRD000000000000000A3"
+    },
+    {
+      "kind": "review",
+      "uid": "01M4M0BRD000000000000000P1"
+    },
+    {
+      "kind": "ended",
+      "uid": "01M4M0BRD000000000000000V3"
+    },
+    {
+      "kind": "inbox",
+      "uid": "01M4M0BRD000000000000000N1"
+    },
+    {
+      "kind": "issue-open",
+      "uid": "01M4M0BRD000000000000000N2"
+    }
   ],
-  "queue": ["01M4M0BRD000000000000000P4", "01M4M0BRD000000000000000V4"],
-  "running": ["01M4M0BRD000000000000000B1", "01M4M0BRD000000000000000V5"],
-  "blocked": ["01M4M0BRD000000000000000B2", "01M4M0BRD000000000000000B3"],
+  "queue": [
+    "01M4M0BRD000000000000000P4",
+    "01M4M0BRD000000000000000V4"
+  ],
+  "running": [
+    "01M4M0BRD000000000000000B1",
+    "01M4M0BRD000000000000000V5"
+  ],
+  "blocked": [
+    "01M4M0BRD000000000000000B2",
+    "01M4M0BRD000000000000000B3"
+  ],
   "projects": [
     {
       "name": "fael",
       "root": "/Users/owner/Project/fael/fael",
       "base": "origin/main",
       "worktrees": [
-        { "path": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "run": null },
-        { "path": "/Users/owner/Project/fael/wt-fael-agent-2", "branch": "feat/plan-schema-v2", "run": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71" }
+        {
+          "path": "/Users/owner/Project/fael/wt-fael-agent-1",
+          "branch": "feat/board-json-v1",
+          "run": null
+        },
+        {
+          "path": "/Users/owner/Project/fael/wt-fael-agent-2",
+          "branch": "feat/plan-schema-v2",
+          "run": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71"
+        }
       ],
       "branches": [
-        { "name": "feat/board-json-v1", "state": "pushed", "chunks": ["01M4M0BRD000000000000000A3"] },
-        { "name": "feat/plan-schema-v2", "state": "local", "chunks": ["01M4M0BRD000000000000000B1"] },
-        { "name": "plan/fael/stack", "state": "local", "chunks": ["01M4M0BRD000000000000000B1"] },
-        { "name": "talk/old-idea", "state": "merged", "chunks": [] }
+        {
+          "name": "feat/board-json-v1",
+          "state": "pushed",
+          "chunks": [
+            "01M4M0BRD000000000000000A3"
+          ]
+        },
+        {
+          "name": "feat/plan-schema-v2",
+          "state": "local",
+          "chunks": [
+            "01M4M0BRD000000000000000B1"
+          ]
+        },
+        {
+          "name": "plan/fael/stack",
+          "state": "local",
+          "chunks": [
+            "01M4M0BRD000000000000000B1"
+          ]
+        },
+        {
+          "name": "talk/old-idea",
+          "state": "merged",
+          "chunks": []
+        }
       ],
-      "shared": ["AGENTS.md", "docs/architecture.md", "fael/tests/golden/"],
+      "shared": [
+        "AGENTS.md",
+        "docs/architecture.md",
+        "fael/tests/golden/"
+      ],
       "plans": [
-        { "app": "", "name": "fael-board", "title": "fael runs the chunk: store, brief, agent contract, board", "area": "dev", "state": "active", "truth": "db", "counts": { "open": 2, "review": 1, "running": 1, "waiting": 1 } },
-        { "app": "", "name": "launch-posts", "title": "October launch posts", "area": "marketing", "state": "active", "truth": "db", "counts": { "open": 1, "review": 1, "waiting": 2 } },
-        { "app": "", "name": "launch-teasers", "title": "Teaser posts under the October launch", "area": "marketing", "state": "active", "truth": "db", "parent": "launch-posts", "counts": { "done": 2 } },
-        { "app": "", "name": "inbox", "title": "Inbox", "area": "dev", "state": "active", "truth": "db", "counts": { "done": 1, "draft": 1 } },
-        { "app": "", "name": "fael-v0", "title": "a repo memory agents cannot skip writing", "area": "dev", "state": "done", "truth": "db", "counts": { "done": 12 } }
+        {
+          "app": "",
+          "name": "fael-board",
+          "title": "fael runs the chunk: store, brief, agent contract, board",
+          "area": "dev",
+          "state": "active",
+          "truth": "db",
+          "counts": {
+            "open": 2,
+            "review": 1,
+            "running": 1,
+            "waiting": 1
+          }
+        },
+        {
+          "app": "",
+          "name": "launch-posts",
+          "title": "October launch posts",
+          "area": "marketing",
+          "state": "active",
+          "truth": "db",
+          "counts": {
+            "open": 1,
+            "review": 1,
+            "waiting": 2
+          }
+        },
+        {
+          "app": "",
+          "name": "launch-teasers",
+          "title": "Teaser posts under the October launch",
+          "area": "marketing",
+          "state": "active",
+          "truth": "db",
+          "parent": "launch-posts",
+          "counts": {
+            "done": 2
+          }
+        },
+        {
+          "app": "",
+          "name": "inbox",
+          "title": "Inbox",
+          "area": "dev",
+          "state": "active",
+          "truth": "db",
+          "counts": {
+            "done": 1,
+            "draft": 1
+          }
+        },
+        {
+          "app": "",
+          "name": "fael-v0",
+          "title": "a repo memory agents cannot skip writing",
+          "area": "dev",
+          "state": "done",
+          "truth": "db",
+          "counts": {
+            "done": 12
+          }
+        }
       ],
       "chunks": [
         {
-          "uid": "01M4M0BRD000000000000000B1", "app": "", "plan": "fael-board", "label": "b1b",
-          "title": "schema v2: uid, edges, approval, wait_until, run.out, plan.truth", "state": "running",
-          "size": "L", "model_hint": "opus", "model": "opus", "scope": ["fael-core/src/plan/"],
-          "ready": false, "blocked_by": [], "unblocks": 2, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null,
-          "run": { "id": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71", "client": "claude", "session": "c0ffee00-1111-4222-8333-444455556666", "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-2", "branch": "feat/plan-schema-v2", "pr": null, "out": null, "started": "2026-10-10T07:40:00Z", "last_seen": "2026-10-10T08:58:00Z", "ended": null, "cost": null },
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
-        },
-        {
-          "uid": "01M4M0BRD000000000000000B2", "app": "", "plan": "fael-board", "label": "b2a",
-          "title": "core contract: chunk add/start/wait/done/accept, run end", "state": "open",
-          "size": "L", "model_hint": "opus", "model": "opus", "scope": ["fael/src/plan.rs", "fael-core/src/plan/"],
-          "ready": false, "blocked_by": [{ "uid": "01M4M0BRD000000000000000B1", "ref": "b1b" }], "unblocks": 1, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
-        },
-        {
-          "uid": "01M4M0BRD000000000000000B3", "app": "", "plan": "fael-board", "label": "b3b",
-          "title": "fael board --json matches board-v1.json", "state": "open",
-          "size": "M", "model_hint": "sonnet", "model": "sonnet", "scope": ["fael/src/board/"],
-          "ready": false, "blocked_by": [{ "uid": "01M4M0BRD000000000000000B2", "ref": "b2a" }, { "uid": null, "ref": "x9" }], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
-        },
-        {
-          "uid": "01M4M0BRD000000000000000A3", "app": "", "plan": "fael-board", "label": "b3a",
-          "title": "pin board JSON v1 as a fixture", "state": "review",
-          "size": "S", "model_hint": "sonnet", "model": "opus", "scope": ["fael/tests/golden/"],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null,
-          "run": { "id": "0d9b7f3a-5e21-4a8c-b6f0-2c4e8a1d9f53", "client": "claude", "session": "ab12cd34-5555-4666-8777-888899990000", "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "feat/board-json-v1", "pr": 341, "out": null, "started": "2026-10-10T08:10:00Z", "last_seen": "2026-10-10T08:40:00Z", "ended": "2026-10-10T08:41:00Z", "cost": 2.17 },
-          "handoff": { "at": "2026-10-10T08:41:00Z", "text": "Fixture pinned; board_shape.rs holds the keys. PR #341." }, "issues": [], "owner_actions": ["answer", "accept", "drop"],
-          "conflicts": ["fael/tests/golden/board-v1.json"],
-          "touched": ["fael/tests/golden/board-v1.json", "fael/tests/board_shape.rs"]
-        },
-        {
-          "uid": "01M4M0BRD000000000000000A4", "app": "", "plan": "fael-board", "label": "g2",
-          "title": "gate: push policy after 30 sessions", "state": "waiting",
-          "size": null, "model_hint": null, "model": null, "scope": [],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": { "on": null, "text": "30 sessions", "until": null, "options": [] }, "approval": null, "run": null,
-          "handoff": null, "issues": [], "owner_actions": ["answer", "park", "drop"]
-        },
-        {
-          "uid": "01M4M0BRD000000000000000P1", "app": "", "plan": "launch-posts", "label": "1",
-          "title": "post: the board in one screenshot", "state": "review",
-          "size": "S", "model_hint": "deepseek", "model": "haiku", "scope": [],
-          "ready": false, "blocked_by": [], "unblocks": 1, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null,
-          "run": { "id": "9a3e5c71-2f4b-4d8e-a0c6-7b1d3e5f9a24", "client": "claude", "session": "de56ef78-aaaa-4bbb-8ccc-ddddeeeeffff", "model": "haiku", "worktree": "/Users/owner/Project/fael/wt-fael-agent-3", "branch": null, "pr": null, "out": "/Users/owner/Project/fael/fael/.git/fael/out/01M4M0BRD000000000000000P1/9a3e5c71-2f4b-4d8e-a0c6-7b1d3e5f9a24", "started": "2026-10-10T06:00:00Z", "last_seen": "2026-10-10T06:20:00Z", "ended": "2026-10-10T06:21:00Z", "cost": 0.43 },
-          "handoff": { "at": "2026-10-10T06:21:00Z", "text": "Screenshot in out/; caption under 200 chars." }, "issues": [], "owner_actions": ["answer", "accept", "drop"]
-        },
-        {
-          "uid": "01M4M0BRD000000000000000P2", "app": "", "plan": "launch-posts", "label": "2",
-          "title": "post: why a ledger, not memory", "state": "waiting",
-          "size": "S", "model_hint": "deepseek", "model": "haiku", "scope": [],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false,
-          "wait": { "on": "owner", "text": "Lead with the hand-off story or the decision story?", "until": null, "options": ["The hand-off story", "The decision story"] },
+          "uid": "01M4M0BRD000000000000000B1",
+          "app": "",
+          "plan": "fael-board",
+          "label": "b1b",
+          "title": "schema v2: uid, edges, approval, wait_until, run.out, plan.truth",
+          "state": "running",
+          "size": "L",
+          "model_hint": "opus",
+          "model": "opus",
+          "scope": [
+            "fael-core/src/plan/"
+          ],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 2,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
           "approval": null,
-          "run": { "id": "4c8e0a2b-6d1f-4e3a-9b75-1f2a3c4d5e6f", "client": "claude", "session": "01234567-89ab-4cde-8f01-23456789abcd", "model": "haiku", "worktree": "/Users/owner/Project/fael/wt-fael-agent-3", "branch": null, "pr": null, "out": null, "started": "2026-10-10T07:00:00Z", "last_seen": "2026-10-10T07:12:00Z", "ended": "2026-10-10T07:13:00Z", "cost": null },
-          "handoff": { "at": "2026-10-10T07:13:00Z", "text": "Lead with the hand-off story or the decision story?" }, "issues": [], "owner_actions": ["answer", "park", "drop"]
+          "run": {
+            "id": "6f1c2a9e-0b7d-4c1e-9a52-3e1f0d4b8c71",
+            "client": "claude",
+            "session": "c0ffee00-1111-4222-8333-444455556666",
+            "model": "opus",
+            "worktree": "/Users/owner/Project/fael/wt-fael-agent-2",
+            "branch": "feat/plan-schema-v2",
+            "pr": null,
+            "out": null,
+            "started": "2026-10-10T07:40:00Z",
+            "last_seen": "2026-10-10T08:58:00Z",
+            "ended": null,
+            "cost": null
+          },
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
         },
         {
-          "uid": "01M4M0BRD000000000000000P3", "app": "", "plan": "launch-posts", "label": "1m",
-          "title": "measure: reach of post 1 after a week", "state": "waiting",
-          "size": "S", "model_hint": "deepseek", "model": "deepseek", "scope": [],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false,
-          "wait": { "on": "data", "text": "Reach settles after 7 days.", "until": "2026-10-18", "options": [] },
-          "approval": null, "run": null,
-          "handoff": null, "issues": [], "owner_actions": ["answer", "park", "drop"]
-        },
-        {
-          "uid": "01M4M0BRD000000000000000P4", "app": "", "plan": "launch-posts", "label": "3",
-          "title": "post: five agents, one board", "state": "open",
-          "size": "S", "model_hint": "deepseek", "model": "haiku", "scope": [],
-          "ready": true, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null,
-          "approval": { "at": "2026-10-10T08:30:00Z", "model": "haiku", "client": "claude" },
+          "uid": "01M4M0BRD000000000000000B2",
+          "app": "",
+          "plan": "fael-board",
+          "label": "b2a",
+          "title": "core contract: chunk add/start/wait/done/accept, run end",
+          "state": "open",
+          "size": "L",
+          "model_hint": "opus",
+          "model": "opus",
+          "scope": [
+            "fael/src/plan.rs",
+            "fael-core/src/plan/"
+          ],
+          "ready": false,
+          "blocked_by": [
+            {
+              "uid": "01M4M0BRD000000000000000B1",
+              "ref": "b1b"
+            }
+          ],
+          "unblocks": 1,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": null,
           "run": null,
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
         },
         {
-          "uid": "01M4M0BRD000000000000000N1", "app": "", "plan": "inbox", "label": null,
-          "title": "Thai labels in the menu bar", "state": "draft",
-          "size": null, "model_hint": null, "model": null, "scope": [],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
+          "uid": "01M4M0BRD000000000000000B3",
+          "app": "",
+          "plan": "fael-board",
+          "label": "b3b",
+          "title": "fael board --json matches board-v1.json",
+          "state": "open",
+          "size": "M",
+          "model_hint": "sonnet",
+          "model": "sonnet",
+          "scope": [
+            "fael/src/board/"
+          ],
+          "ready": false,
+          "blocked_by": [
+            {
+              "uid": "01M4M0BRD000000000000000B2",
+              "ref": "b2a"
+            },
+            {
+              "uid": null,
+              "ref": "x9"
+            }
+          ],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": null,
+          "run": null,
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
         },
         {
-          "uid": "01M4M0BRD000000000000000N2", "app": "", "plan": "inbox", "label": null,
-          "title": "Fix the stale plan count", "state": "done",
-          "size": "S", "model_hint": null, "model": "opus", "scope": [],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null,
-          "run": { "id": "R7", "client": "claude", "session": null, "model": "opus", "worktree": "/Users/owner/Project/fael/wt-fael-agent-1", "branch": "fix/plan-count", "pr": 377, "out": null, "started": "2026-10-10T06:00:00Z", "last_seen": "2026-10-10T06:30:00Z", "ended": "2026-10-10T06:31:00Z", "cost": null },
-          "handoff": { "at": "2026-10-10T06:31:00Z", "text": "The plan card count reads the chunk list. PR #377." },
-          "issues": ["01M4NA00000000000000000001"], "owner_actions": [],
-          "ticket": { "source": "vela-support", "ref": "V-0042", "kind": "report", "reopen": 0, "open": "https://staff.example/staff/incidents/V-0042", "verdict": null }
+          "uid": "01M4M0BRD000000000000000A3",
+          "app": "",
+          "plan": "fael-board",
+          "label": "b3a",
+          "title": "pin board JSON v1 as a fixture",
+          "state": "review",
+          "size": "S",
+          "model_hint": "sonnet",
+          "model": "opus",
+          "scope": [
+            "fael/tests/golden/"
+          ],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": null,
+          "run": {
+            "id": "0d9b7f3a-5e21-4a8c-b6f0-2c4e8a1d9f53",
+            "client": "claude",
+            "session": "ab12cd34-5555-4666-8777-888899990000",
+            "model": "opus",
+            "worktree": "/Users/owner/Project/fael/wt-fael-agent-1",
+            "branch": "feat/board-json-v1",
+            "pr": 341,
+            "out": null,
+            "started": "2026-10-10T08:10:00Z",
+            "last_seen": "2026-10-10T08:40:00Z",
+            "ended": "2026-10-10T08:41:00Z",
+            "cost": 2.17
+          },
+          "handoff": {
+            "at": "2026-10-10T08:41:00Z",
+            "text": "Fixture pinned; board_shape.rs holds the keys. PR #341."
+          },
+          "issues": [],
+          "owner_actions": [
+            "answer",
+            "accept",
+            "drop"
+          ],
+          "conflicts": [
+            "fael/tests/golden/board-v1.json"
+          ],
+          "touched": [
+            "fael/tests/golden/board-v1.json",
+            "fael/tests/board_shape.rs"
+          ]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000A4",
+          "app": "",
+          "plan": "fael-board",
+          "label": "g2",
+          "title": "gate: push policy after 30 sessions",
+          "state": "waiting",
+          "size": null,
+          "model_hint": null,
+          "model": null,
+          "scope": [],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": {
+            "on": null,
+            "text": "30 sessions",
+            "until": null,
+            "options": []
+          },
+          "approval": null,
+          "run": null,
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "answer",
+            "park",
+            "drop"
+          ]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P1",
+          "app": "",
+          "plan": "launch-posts",
+          "label": "1",
+          "title": "post: the board in one screenshot",
+          "state": "review",
+          "size": "S",
+          "model_hint": "deepseek",
+          "model": "haiku",
+          "scope": [],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 1,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": null,
+          "run": {
+            "id": "9a3e5c71-2f4b-4d8e-a0c6-7b1d3e5f9a24",
+            "client": "claude",
+            "session": "de56ef78-aaaa-4bbb-8ccc-ddddeeeeffff",
+            "model": "haiku",
+            "worktree": "/Users/owner/Project/fael/wt-fael-agent-3",
+            "branch": null,
+            "pr": null,
+            "out": "/Users/owner/Project/fael/fael/.git/fael/out/01M4M0BRD000000000000000P1/9a3e5c71-2f4b-4d8e-a0c6-7b1d3e5f9a24",
+            "started": "2026-10-10T06:00:00Z",
+            "last_seen": "2026-10-10T06:20:00Z",
+            "ended": "2026-10-10T06:21:00Z",
+            "cost": 0.43
+          },
+          "handoff": {
+            "at": "2026-10-10T06:21:00Z",
+            "text": "Screenshot in out/; caption under 200 chars."
+          },
+          "issues": [],
+          "owner_actions": [
+            "answer",
+            "accept",
+            "drop"
+          ]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P2",
+          "app": "",
+          "plan": "launch-posts",
+          "label": "2",
+          "title": "post: why a ledger, not memory",
+          "state": "waiting",
+          "size": "S",
+          "model_hint": "deepseek",
+          "model": "haiku",
+          "scope": [],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": {
+            "on": "owner",
+            "text": "Lead with the hand-off story or the decision story?",
+            "until": null,
+            "options": [
+              "The hand-off story",
+              "The decision story"
+            ]
+          },
+          "approval": null,
+          "run": {
+            "id": "4c8e0a2b-6d1f-4e3a-9b75-1f2a3c4d5e6f",
+            "client": "claude",
+            "session": "01234567-89ab-4cde-8f01-23456789abcd",
+            "model": "haiku",
+            "worktree": "/Users/owner/Project/fael/wt-fael-agent-3",
+            "branch": null,
+            "pr": null,
+            "out": null,
+            "started": "2026-10-10T07:00:00Z",
+            "last_seen": "2026-10-10T07:12:00Z",
+            "ended": "2026-10-10T07:13:00Z",
+            "cost": null
+          },
+          "handoff": {
+            "at": "2026-10-10T07:13:00Z",
+            "text": "Lead with the hand-off story or the decision story?"
+          },
+          "issues": [],
+          "owner_actions": [
+            "answer",
+            "park",
+            "drop"
+          ]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P3",
+          "app": "",
+          "plan": "launch-posts",
+          "label": "1m",
+          "title": "measure: reach of post 1 after a week",
+          "state": "waiting",
+          "size": "S",
+          "model_hint": "deepseek",
+          "model": "deepseek",
+          "scope": [],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": {
+            "on": "data",
+            "text": "Reach settles after 7 days.",
+            "until": "2026-10-18",
+            "options": []
+          },
+          "approval": null,
+          "run": null,
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "answer",
+            "park",
+            "drop"
+          ]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000P4",
+          "app": "",
+          "plan": "launch-posts",
+          "label": "3",
+          "title": "post: five agents, one board",
+          "state": "open",
+          "size": "S",
+          "model_hint": "deepseek",
+          "model": "haiku",
+          "scope": [],
+          "ready": true,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": {
+            "at": "2026-10-10T08:30:00Z",
+            "model": "haiku",
+            "client": "claude"
+          },
+          "run": null,
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000N1",
+          "app": "",
+          "plan": "inbox",
+          "label": null,
+          "title": "Thai labels in the menu bar",
+          "state": "draft",
+          "size": null,
+          "model_hint": null,
+          "model": null,
+          "scope": [],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": null,
+          "run": null,
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
+        },
+        {
+          "uid": "01M4M0BRD000000000000000N2",
+          "app": "",
+          "plan": "inbox",
+          "label": null,
+          "title": "Fix the stale plan count",
+          "state": "done",
+          "size": "S",
+          "model_hint": null,
+          "model": "opus",
+          "scope": [],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": null,
+          "run": {
+            "id": "R7",
+            "client": "claude",
+            "session": null,
+            "model": "opus",
+            "worktree": "/Users/owner/Project/fael/wt-fael-agent-1",
+            "branch": "fix/plan-count",
+            "pr": 377,
+            "out": null,
+            "started": "2026-10-10T06:00:00Z",
+            "last_seen": "2026-10-10T06:30:00Z",
+            "ended": "2026-10-10T06:31:00Z",
+            "cost": null
+          },
+          "handoff": {
+            "at": "2026-10-10T06:31:00Z",
+            "text": "The plan card count reads the chunk list. PR #377."
+          },
+          "issues": [
+            "01M4NA00000000000000000001"
+          ],
+          "owner_actions": [],
+          "ticket": {
+            "source": "vela-support",
+            "ref": "V-0042",
+            "kind": "report",
+            "reopen": 0,
+            "open": "https://staff.example/staff/incidents/V-0042",
+            "verdict": null
+          }
         }
       ],
       "ledger": {
         "issues": [
           {
-            "id": "01M4NA00000000000000000001", "title": "Board shows a stale count",
-            "text": "The plan card count lags one refresh behind the chunk list.", "key": "board:counts",
-            "files": ["fael/src/board.rs", "plan:fael-board"], "at": "2026-10-11T08:00:00.000Z",
-            "by": "owner-1a2b", "to": null, "revisit": null, "held": "agent-1/counts", "group": 0,
-            "chunk": { "uid": "01M4M0BRD000000000000000N2", "state": "done" }, "signals": []
+            "id": "01M4NA00000000000000000001",
+            "title": "Board shows a stale count",
+            "text": "The plan card count lags one refresh behind the chunk list.",
+            "key": "board:counts",
+            "files": [
+              "fael/src/board.rs",
+              "plan:fael-board"
+            ],
+            "at": "2026-10-11T08:00:00.000Z",
+            "by": "owner-1a2b",
+            "to": null,
+            "from": null,
+            "revisit": null,
+            "held": "agent-1/counts",
+            "group": 0,
+            "chunk": {
+              "uid": "01M4M0BRD000000000000000N2",
+              "state": "done"
+            },
+            "signals": []
           },
           {
-            "id": "01M4NA00000000000000000002", "title": null,
-            "text": "board --json prints worktrees in git's order, not path order.", "key": null,
-            "files": ["fael/src/board.rs"], "at": "2026-10-11T08:10:00.000Z",
-            "by": "owner-1a2b", "to": null, "revisit": null, "held": null, "group": 0, "signals": []
+            "id": "01M4NA00000000000000000002",
+            "title": null,
+            "text": "board --json prints worktrees in git's order, not path order.",
+            "key": null,
+            "files": [
+              "fael/src/board.rs"
+            ],
+            "at": "2026-10-11T08:10:00.000Z",
+            "by": "owner-1a2b",
+            "to": null,
+            "from": null,
+            "revisit": null,
+            "held": null,
+            "group": 0,
+            "signals": []
           },
           {
-            "id": "01M4NA00000000000000000003", "title": null,
-            "text": "The Thai view has no decision on where translations live.", "key": null,
-            "files": ["fael-core/src/plan/schema.rs"], "at": "2026-10-11T08:20:00.000Z",
-            "by": "owner-1a2b", "to": "agent-2", "revisit": null, "held": null, "group": 1, "signals": ["drifted"]
+            "id": "01M4NA00000000000000000003",
+            "title": null,
+            "text": "The Thai view has no decision on where translations live.",
+            "key": null,
+            "files": [
+              "fael-core/src/plan/schema.rs"
+            ],
+            "at": "2026-10-11T08:20:00.000Z",
+            "by": "owner-1a2b",
+            "to": "agent-2",
+            "from": null,
+            "revisit": null,
+            "held": null,
+            "group": 1,
+            "signals": [
+              "drifted"
+            ]
           }
         ],
         "decisions": [
           {
-            "id": "01M4NA00000000000000000004", "title": "Board reads only board --json",
-            "text": "The app never opens fael.db; the board shape is the contract.", "key": "fael-board:contract",
-            "files": ["plan:fael-board"], "at": "2026-10-10T09:00:00.000Z",
-            "by": "owner-1a2b", "to": null, "revisit": null, "held": null, "signals": []
+            "id": "01M4NA00000000000000000004",
+            "title": "Board reads only board --json",
+            "text": "The app never opens fael.db; the board shape is the contract.",
+            "key": "fael-board:contract",
+            "files": [
+              "plan:fael-board"
+            ],
+            "at": "2026-10-10T09:00:00.000Z",
+            "by": "owner-1a2b",
+            "to": null,
+            "from": null,
+            "revisit": null,
+            "held": null,
+            "signals": []
           }
         ],
         "notes": [
           {
-            "id": "01M4NA00000000000000000005", "title": null,
-            "text": "b3b shipped; next: smoke the app against the real board.", "key": "plan:fael-board:handoff",
-            "files": ["plan:fael-board", "plan/PLAN-fael-board.md"], "at": "2026-10-10T18:00:00.000Z",
-            "by": "owner-1a2b", "to": null, "revisit": "after b5a", "held": null, "signals": ["drifted"]
+            "id": "01M4NA00000000000000000005",
+            "title": null,
+            "text": "b3b shipped; next: smoke the app against the real board.",
+            "key": "plan:fael-board:handoff",
+            "files": [
+              "plan:fael-board",
+              "plan/PLAN-fael-board.md"
+            ],
+            "at": "2026-10-10T18:00:00.000Z",
+            "by": "owner-1a2b",
+            "to": null,
+            "from": null,
+            "revisit": "after b5a",
+            "held": null,
+            "signals": [
+              "drifted"
+            ]
           }
         ]
       }
@@ -186,41 +715,158 @@
       "root": "/Users/owner/Project/zecalis",
       "base": "origin/main",
       "worktrees": [
-        { "path": "/Users/owner/Project/zecalis-wt-1", "branch": "feat/feed-cache", "run": "b7e2d4f6-8a0c-4e1b-9d3f-5a7c9e1b3d5f" },
-        { "path": "/Users/owner/Project/zecalis-wt-2", "branch": "feat/vela-onboarding", "run": null }
+        {
+          "path": "/Users/owner/Project/zecalis-wt-1",
+          "branch": "feat/feed-cache",
+          "run": "b7e2d4f6-8a0c-4e1b-9d3f-5a7c9e1b3d5f"
+        },
+        {
+          "path": "/Users/owner/Project/zecalis-wt-2",
+          "branch": "feat/vela-onboarding",
+          "run": null
+        }
       ],
       "plans": [
-        { "app": "apps/vela", "name": "vela", "title": "vela beta", "area": "dev", "state": "active", "truth": "db", "counts": { "open": 1, "running": 2 } }
+        {
+          "app": "apps/vela",
+          "name": "vela",
+          "title": "vela beta",
+          "area": "dev",
+          "state": "active",
+          "truth": "db",
+          "counts": {
+            "open": 1,
+            "running": 2
+          }
+        }
       ],
       "chunks": [
         {
-          "uid": "01M4M0BRD000000000000000V3", "app": "apps/vela", "plan": "vela", "label": "3",
-          "title": "onboarding: skip button", "state": "running",
-          "size": "S", "model_hint": "sonnet", "model": "sonnet", "scope": ["apps/vela/src/onboarding/"],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": [], "pair": [],
-          "stalled": false, "ended": true, "wait": null, "approval": null,
-          "run": { "id": "e1f3a5c7-9b2d-4f6a-8c0e-2d4f6a8c0e1b", "client": "claude", "session": "fedcba98-7654-4321-8fed-cba987654321", "model": "sonnet", "worktree": "/Users/owner/Project/zecalis-wt-2", "branch": "feat/vela-onboarding", "pr": null, "out": null, "started": "2026-10-10T05:00:00Z", "last_seen": "2026-10-10T05:30:00Z", "ended": "2026-10-10T05:31:00Z", "cost": 1.08 },
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
+          "uid": "01M4M0BRD000000000000000V3",
+          "app": "apps/vela",
+          "plan": "vela",
+          "label": "3",
+          "title": "onboarding: skip button",
+          "state": "running",
+          "size": "S",
+          "model_hint": "sonnet",
+          "model": "sonnet",
+          "scope": [
+            "apps/vela/src/onboarding/"
+          ],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [],
+          "pair": [],
+          "stalled": false,
+          "ended": true,
+          "wait": null,
+          "approval": null,
+          "run": {
+            "id": "e1f3a5c7-9b2d-4f6a-8c0e-2d4f6a8c0e1b",
+            "client": "claude",
+            "session": "fedcba98-7654-4321-8fed-cba987654321",
+            "model": "sonnet",
+            "worktree": "/Users/owner/Project/zecalis-wt-2",
+            "branch": "feat/vela-onboarding",
+            "pr": null,
+            "out": null,
+            "started": "2026-10-10T05:00:00Z",
+            "last_seen": "2026-10-10T05:30:00Z",
+            "ended": "2026-10-10T05:31:00Z",
+            "cost": 1.08
+          },
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
         },
         {
-          "uid": "01M4M0BRD000000000000000V4", "app": "apps/vela", "plan": "vela", "label": "4",
-          "title": "feed: pull to refresh", "state": "open",
-          "size": "S", "model_hint": "sonnet", "model": "sonnet", "scope": ["apps/vela/src/feed/refresh.ts"],
-          "ready": true, "blocked_by": [], "unblocks": 0, "overlaps": ["01M4M0BRD000000000000000V5"], "pair": [],
-          "stalled": false, "ended": false, "wait": null, "approval": null, "run": null,
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
+          "uid": "01M4M0BRD000000000000000V4",
+          "app": "apps/vela",
+          "plan": "vela",
+          "label": "4",
+          "title": "feed: pull to refresh",
+          "state": "open",
+          "size": "S",
+          "model_hint": "sonnet",
+          "model": "sonnet",
+          "scope": [
+            "apps/vela/src/feed/refresh.ts"
+          ],
+          "ready": true,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [
+            "01M4M0BRD000000000000000V5"
+          ],
+          "pair": [],
+          "stalled": false,
+          "ended": false,
+          "wait": null,
+          "approval": null,
+          "run": null,
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
         },
         {
-          "uid": "01M4M0BRD000000000000000V5", "app": "apps/vela", "plan": "vela", "label": "5",
-          "title": "feed: cache the first page", "state": "running",
-          "size": "M", "model_hint": "opus", "model": "opus", "scope": ["apps/vela/src/feed/"],
-          "ready": false, "blocked_by": [], "unblocks": 0, "overlaps": ["01M4M0BRD000000000000000V4"], "pair": [],
-          "stalled": true, "ended": false, "wait": null, "approval": null,
-          "run": { "id": "b7e2d4f6-8a0c-4e1b-9d3f-5a7c9e1b3d5f", "client": "claude", "session": null, "model": "opus", "worktree": "/Users/owner/Project/zecalis-wt-1", "branch": "feat/feed-cache", "pr": null, "out": null, "started": "2026-10-10T08:00:00Z", "last_seen": null, "ended": null, "cost": null },
-          "handoff": null, "issues": [], "owner_actions": ["park", "drop"]
+          "uid": "01M4M0BRD000000000000000V5",
+          "app": "apps/vela",
+          "plan": "vela",
+          "label": "5",
+          "title": "feed: cache the first page",
+          "state": "running",
+          "size": "M",
+          "model_hint": "opus",
+          "model": "opus",
+          "scope": [
+            "apps/vela/src/feed/"
+          ],
+          "ready": false,
+          "blocked_by": [],
+          "unblocks": 0,
+          "overlaps": [
+            "01M4M0BRD000000000000000V4"
+          ],
+          "pair": [],
+          "stalled": true,
+          "ended": false,
+          "wait": null,
+          "approval": null,
+          "run": {
+            "id": "b7e2d4f6-8a0c-4e1b-9d3f-5a7c9e1b3d5f",
+            "client": "claude",
+            "session": null,
+            "model": "opus",
+            "worktree": "/Users/owner/Project/zecalis-wt-1",
+            "branch": "feat/feed-cache",
+            "pr": null,
+            "out": null,
+            "started": "2026-10-10T08:00:00Z",
+            "last_seen": null,
+            "ended": null,
+            "cost": null
+          },
+          "handoff": null,
+          "issues": [],
+          "owner_actions": [
+            "park",
+            "drop"
+          ]
         }
       ],
-      "ledger": { "issues": [], "decisions": [], "notes": [] }
+      "ledger": {
+        "issues": [],
+        "decisions": [],
+        "notes": []
+      }
     }
   ]
 }

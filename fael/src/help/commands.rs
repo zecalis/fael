@@ -115,7 +115,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
         "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--option A] [--pr N] [--out path]
-fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…]
+fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…] [--wait owner|data --ask \"<q>\" [--option A …] [--until YYYY-MM-DD] [--run R]]
 fael chunk show <uid|label> [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree]
 fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
@@ -131,7 +131,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
     (inbox or a plan from `fael plan new`; add prints
      the new uid, no brief = draft; add and edit warn on a --scope path whose directory is
      missing or a typo of a name beside it; --issue links open ledger issues it fixes (its
-     brief prints them; close each once the fix holds, done never does); a --label is unique in its plan and every verb
+     brief prints them; close each once the fix holds, done never does; dropping a chunk whose title or brief contains drop? also closes its linked issues); a --label is unique in its plan and every verb
      takes it for the uid; --reads names the plan sections it works from (another
      plan's as plan/key): its brief prints Goal, Done and those, then an index of the
      rest (no --reads: Goal, Scope, Done, Constraints; one still empty is skipped); show prints one chunk as the board has it, its hand-off,
@@ -167,6 +167,15 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      git refs moved, prints a compact board line at start and on each change, and
      exits when stdin closes; --drop takes a finished repo off the registry until a
      chunk command there adds it back)",
+    ),
+    (
+        "sweep",
+        "this repo's sweep input: untriaged issues, scopes in flight, drifted rows",
+        "fael sweep --input
+    (one JSON object for the sweep: this repo only — untriaged issues with bodies
+     and the commits naming each one (one git log for every id), scopes of
+     open/running/waiting chunks, claimed issues, and drifted decisions/notes
+     with from, the file that moved most and its count)",
     ),
     (
         "intake",
