@@ -57,6 +57,7 @@ mod property;
 mod burst;
 mod decide;
 mod evidence;
+mod flake;
 mod render;
 
 pub(crate) use decide::{Evaluated, evaluate};

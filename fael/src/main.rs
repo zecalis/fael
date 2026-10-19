@@ -9,6 +9,7 @@ mod args;
 mod batch;
 mod board;
 mod chunk;
+mod chunk_ask;
 mod chunk_elsewhere;
 mod chunk_run;
 mod chunk_scope;
@@ -34,6 +35,7 @@ mod restore;
 mod schema;
 mod selfheal;
 mod session;
+mod sweep;
 mod synonyms;
 mod unmerged;
 mod write;
@@ -118,6 +120,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),
         ("plan", rest) => plan::cmd(&a, rest),
         ("board", []) => board::cmd(&a),
+        ("sweep", []) => sweep::cmd(&a),
         ("intake", [] | [_]) => intake::cmd(&a, rest.first()),
         ("chunk", rest) => chunk::cmd(&a, rest),
         ("run", [end, r]) if end == "end" => chunk::run_end(&a, r),

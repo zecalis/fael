@@ -127,6 +127,88 @@ fn headline(r: &core::Row) -> String {
     }
 }
 
+/// One drifted row with what the sweep needs: the file that moved most since the
+/// row was written, its commit count, and the row's total — one `git log` for
+/// every row, parsed once. Code files only (docs counted only when the row
+/// names no code), same rule as `moved`.
+pub(crate) fn detail(log: &core::Log, root: &Path) -> Vec<(core::Row, String, usize, usize)> {
+    let rows: Vec<(&core::Row, i64)> = core::find(log, &core::Filter::default())
+        .into_iter()
+        .filter_map(|r| Some((r, core::ts_ms(&r.ts)?)))
+        .filter(|(r, _)| r.files.iter().any(|f| !crate::hook::is_anchor(f)))
+        .collect();
+    let Some(oldest) = rows.iter().map(|(_, ms)| *ms).min() else {
+        return vec![];
+    };
+    let since = format!("@{}", oldest / 1000);
+    let Some(out) = crate::git(
+        root,
+        &[
+            "log",
+            "--format=%x01%ct",
+            "--name-only",
+            "--since",
+            &since,
+            "HEAD",
+        ],
+    ) else {
+        return vec![];
+    };
+    let commits = parse(&out);
+    let mut out = vec![];
+    for (r, ms) in rows {
+        // code files only (docs counted only when the row names no code), same rule as `moved`
+        let mut files: Vec<&str> = r
+            .files
+            .iter()
+            .filter(|f| !crate::hook::is_anchor(f))
+            .map(|f| f.trim_end_matches('/'))
+            .collect();
+        if files.iter().any(|f| !f.ends_with(".md")) {
+            files.retain(|f| !f.ends_with(".md"));
+        }
+        let mut per: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut total = 0;
+        for (ct, paths) in &commits {
+            if *ct < ms / 1000 {
+                continue;
+            }
+            let mut hit: Vec<&str> = vec![];
+            for p in paths {
+                if files
+                    .iter()
+                    .any(|f| *p == *f || p.strip_prefix(f).is_some_and(|t| t.starts_with('/')))
+                {
+                    hit.push(p);
+                }
+            }
+            if hit.is_empty() {
+                continue;
+            }
+            total += 1;
+            for p in hit {
+                *per.entry(p.to_string()).or_default() += 1;
+            }
+        }
+        if total < DRIFT_COMMITS {
+            continue;
+        }
+        let (top, n) = per
+            .into_iter()
+            .max_by_key(|(_, n)| *n)
+            .map(|(f, n)| (f.to_string(), n))
+            .unwrap_or_default();
+        let top = if top.is_empty() {
+            r.files.first().cloned().unwrap_or_default()
+        } else {
+            top
+        };
+        out.push(((*r).clone(), top, n, total));
+    }
+    out.sort_by_key(|(_, _, _, total)| std::cmp::Reverse(*total));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

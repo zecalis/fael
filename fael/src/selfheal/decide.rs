@@ -246,7 +246,11 @@ fn identity_standing(c: &Candidate, st: &core::Stamp, row: &core::Row) -> Option
     if row.key.is_none() || c.evidence.key != KeyRel::Same || c.evidence.kind != Rel::Same {
         return None;
     }
-    if row.kind == "issue" && !same_finding(&c.evidence) {
+    // a flake re-filed on the same key and files counts on the same row (flake.rs)
+    if row.kind == "issue"
+        && !same_finding(&c.evidence)
+        && !(super::flake::is_key(row.key.as_deref()) && super::flake::same_files(&c.evidence))
+    {
         return Some(Standing::Blocks("a different finding"));
     }
     if c.row.by != st.by {

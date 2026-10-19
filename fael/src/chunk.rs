@@ -4,7 +4,7 @@
 
 use crate::plan::db;
 use crate::{Args, Repo, core, repo};
-use fael_core::plan::{Fields, Here, Owner, Store};
+use fael_core::plan::{Fields, Here, Store};
 use std::process::ExitCode;
 
 /// The verbs `chunk` takes — what usage lines and the call line's `sub` name.
@@ -118,7 +118,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
                 "chunk add",
                 &[
                     "plan", "brief", "size", "model", "client", "scope", "reads", "after", "label",
-                    "issue",
+                    "issue", "wait", "ask", "option", "until", "run",
                 ],
             )?;
             let f = Fields {
@@ -131,6 +131,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             let uid = st.add(&plan, &f, &list(a, "after"), &now)?;
             println!("{uid}");
             crate::chunk_scope::warn(&st, &r.root, &uid);
+            crate::chunk_ask::add_wait(a, &mut st, &uid, &now, &wt, &branch)?;
         }
         ["start", uid] => crate::chunk_run::start(a, r, uid, &here)?,
         ["edit", uid] => {
@@ -176,14 +177,19 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
         ["done", uid, handoff] => crate::chunk_run::done(a, r, uid, handoff, &here)?,
         [verb @ ("answer" | "drop" | "park"), uid, text] => {
             a.only(&format!("chunk {verb}"), &[])?;
-            let (cmd, to) = owner(verb);
+            let (cmd, to) = crate::chunk_ask::owner(verb);
             s()?.owner(uid, cmd, Some(text), &now)?;
             say(uid, to);
+            // a `drop?` chunk the owner drops takes its issue with it (chunk_ask);
+            // answer and park leave issues alone — parked work still needs its fix
+            if *verb == "drop" {
+                crate::chunk_ask::drop_close(r, uid, text);
+            }
         }
         ["accept", ..] => crate::chunk_verbs::accept(a, r, &rest[1..], &now)?,
         [verb @ "unpark", uid] => {
             a.only(&format!("chunk {verb}"), &[])?;
-            let (cmd, to) = owner(verb);
+            let (cmd, to) = crate::chunk_ask::owner(verb);
             s()?.owner(uid, cmd, None, &now)?;
             say(uid, to);
         }
@@ -289,17 +295,6 @@ pub(crate) fn held(session: &str) -> Option<std::path::PathBuf> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-')
         .then(|| fael_core::stats::state_dir().join("held").join(session))
-}
-
-/// The command and the state it lands in.
-fn owner(verb: &str) -> (Owner, &'static str) {
-    match verb {
-        "answer" => (Owner::Answer, "open"),
-        "accept" => (Owner::Accept, "done"),
-        "drop" => (Owner::Drop, "dropped"),
-        "park" => (Owner::Park, "parked"),
-        _ => (Owner::Unpark, "open"),
-    }
 }
 
 /// `--scope a,b --scope c` → [a, b, c]
