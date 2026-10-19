@@ -101,6 +101,9 @@ fael chunk add "<title>" --plan inbox --brief "<brief>" --issue <ids> \
   --scope <paths> --size S|M --model <m> [--after <uid>]
 ```
 
+Priority lives on the row, not the chunk: `fael add --urgent`, `fael add --urgent-before <id>`,
+`fael bump --urgent|--urgent-before <id>|--not-urgent` (still true after its files changed).
+
 **ask owner / need data / drop?** — a chunk that waits, so the question sits on the board,
 one command (add + start --no-worktree + wait are one call):
 
