@@ -150,3 +150,26 @@ fn flag_values_and_positions_never_log() {
         assert!(!line.contains(secret), "{line}");
     }
 }
+
+#[test]
+fn a_dashed_positional_with_spaces_is_never_a_flag() {
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "--secret words",
+            "--title",
+            "x",
+            "--files",
+            "a.rs",
+        ],
+    );
+    assert!(!ok, "{err}"); // the parser rejects it; the row still must not leak
+    let rows = calls(&d);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["flags"], serde_json::json!(["files", "title"]));
+    assert_eq!(rows[0]["npos"], 2); // `note` and the dashed text
+    assert!(!rows[0].to_string().contains("secret"), "{rows:?}");
+}
