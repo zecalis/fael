@@ -49,14 +49,11 @@ fn corpus() -> String {
 }
 
 /// Crew skills (fael-plan, fael-sweep) live in the crew checkout, not in core.
-/// Read them from disk when present: the crew checkout itself (owner path from
-/// 01M5AF2H) or the installed skills dir (the crew copy is a symlink there).
+/// Read them from disk when present: `$FAEL_CREW_SKILLS` (a crew checkout's
+/// `skills/`) or the installed skills dir (the crew copy is a symlink there).
 /// None present (e.g. CI) → None, and the crew-flags check below skips.
 fn crew_corpus() -> Option<String> {
-    let mut roots = vec![std::path::PathBuf::from(
-        "/Users/delamind/Project/zecalis/fael/crew/skills",
-    )];
-    // override for machines where the crew checkout lives elsewhere
+    let mut roots = Vec::new();
     if let Ok(dir) = std::env::var("FAEL_CREW_SKILLS") {
         roots.push(std::path::PathBuf::from(dir));
     }
