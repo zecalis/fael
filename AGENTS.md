@@ -2,25 +2,34 @@
 
 ## North star and product invariant
 
-North star: the engine behind plan work — every chunk's brief, area (dev|marketing), size,
-model hint and state in `.git/fael/fael.db`, started, waited on and finished through
-`fael chunk start|wait|done` — plus the ledger: the hand-off where a chunk stopped, the decision
-and why, the open issue, the note the next session needs, what the user asked for. Git owns what
+North star: fael is the lifecycle ledger for agent work — the hand-off where work stopped, the
+decision and why, the open issue, the claim, the note the next session needs, what the user asked
+for. Its primary user is the agent; the goal is wide adoption by other teams. Git owns what
 changed; fael keeps what git and the code cannot say. The agent discovers, judges and records;
 fael captures, carries and surfaces — never infers, never judges, never fixes for it.
+Memory remembers; fael closes (decision 01M5ABTD, key product:mission).
 
 The mechanism is the team's shared work ledger — context and hand-offs (decisions, requirements,
-assigned issues, claims, where a plan stopped) that pass between sessions and agents — not the
+assigned issues, claims, where work stopped) that pass between sessions and agents — not the
 agent's memory, not a personal notebook, not a generic AI memory store, and not a process or git
 guard. Value is work context (`task (key) → decision → evidence → outcome → closure`) in front
 of the right agent, once — never more rows. Rounds and tokens are a cost to keep low, never a promise.
+Today the log is per machine: shared by every worktree and agent on one machine, moved across
+machines by `fael import`. Team sync over the git remote (`refs/fael/*`, no server) is planned,
+not shipped.
 
-Decision `product:mission` (plan `PLAN-fael-board`): a change ships when it fixes a bug, cuts
-noise, removes code, serves the plan → chunk → agent → ship loop, or brings work in from the
-team's other systems (intake, 01M4TJTW). The owner's SwiftUI app
+Core (public): add, find, close, bump, claim, doctor, stats, hooks, MCP. fael crew is the owner's
+layer: plan, chunk, board (`fael plan|chunk|board`, hidden from default help; plan `cli-tiers`).
+Core never depends on crew; crew reads core through `fael board --json`. Say "fael crew", never
+bare "crew". The crew repo is private: never link it from public docs.
+
+Decision `product:mission` (01M5ABTD): a core change ships when it fixes a bug, cuts noise,
+removes code, strengthens lifecycle or stats, or brings work in from the team's other systems
+(intake, 01M4TJTW). A crew change ships when it serves the owner's plan → chunk → agent → ship
+loop and adds nothing to core default help. The owner's SwiftUI app
 reads `fael board --json` and starts an agent only on the owner's click or from a queue
 the owner approved; dev chunks are started by the owner, by the project's lead after the
-owner approves its set, a lone one as a set of 1 (decision 01M4Z88Y; the lead lives in zecalis/fael-crew, 01M4SQ9B);
+owner approves its set, a lone one as a set of 1 (decision 01M4Z88Y; the lead is part of fael crew, 01M4SQ9B);
 the owner merges every PR; fael itself
 never starts an agent turn or re-prompts on idle,
 adds no daemon, never guesses, never polices the developer's process (worktree, branch, git flow).

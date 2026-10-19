@@ -9,8 +9,8 @@
 > This page is the contract the code is built against —
 > when code and this page disagree, fix one of them in the same commit.
 
-fael is the ledger behind plan work (§0). It is a shared work ledger that lives **inside the repo**: every agent (Claude Code, Codex, OpenCode, a chat
-host speaking MCP, …) and every person on the team reads and writes the same log, git carries it between machines, and there is no server.
+fael is the lifecycle ledger for agent work (§0). It lives **inside the clone** (`.git/fael/`): every agent (Claude Code, Codex, OpenCode, a chat
+host speaking MCP, …) and every worktree on one machine reads and writes the same log, and there is no server. Across machines the log moves only by `fael import`; team sync over the git remote (`refs/fael/*`, no server) is planned, not shipped.
 
 Three ideas carry the whole design:
 
@@ -22,30 +22,39 @@ Three ideas carry the whole design:
 
 ## 0. North star and product invariant
 
-**North star: the engine behind plan work.** Work runs as plans cut into chunks, one session
-or agent at a time, and no session shares another's chat. Fael keeps the plan and every chunk —
-its brief, area (dev or marketing), size, model hint and state — and the ledger of what passes
-between sessions: the hand-off where a chunk stopped, the decision and why, the issue still
-open, the note the next session needs, what the user asked for. An agent starts, waits on the
-owner and finishes a chunk through one contract (`fael chunk start|wait|done`), and the brief
-it starts from carries the plan goal, the last hand-off and the open rows on its files. Git
-owns what changed; fael keeps only what git and the code cannot say (why, what was rejected,
-what is unfinished), and retires a row once the code says it or contradicts it.
+**North star: fael is the lifecycle ledger for agent work.** Its primary user is the agent; the
+goal is wide adoption by other teams. The ledger holds what passes between sessions: the
+hand-off where work stopped, the decision and why, the issue still open, the claim, the note the
+next session needs, what the user asked for. A row is pushed to the agent at the edit that
+touches its files, closes with the commit that settled it, is superseded, or is flagged stale
+when the code moves on. Git owns what changed; fael keeps only what git and the code cannot
+say (why, what was rejected, what is unfinished). Memory remembers; fael closes (decision
+01M5ABTD, key `product:mission`).
 
-Decision `product:mission` (2026-10-10, plan `PLAN-fael-board`): plans and chunks move from
+**Core and fael crew.** Core (public): add, find, close, bump, claim, doctor, stats, hooks, MCP —
+boring-reliable, no daemon, never blocks an edit. **fael crew** is the owner's layer: plans cut
+into chunks (`fael plan|chunk|board`, hidden from default help, plan `cli-tiers`), the board app,
+and the lead and content skills; each chunk's brief, area (dev or marketing), size, model hint and
+state live in the SQLite store, and an agent starts, waits on the owner and finishes a chunk
+through `fael chunk start|wait|done`. Core never depends on crew; crew reads core through
+`fael board --json`. The crew code is private and may later become an external `fael-crew`
+binary that `fael` dispatches to, so the typed commands never change. Public docs say "fael
+crew", never bare "crew", and never link its repo.
+
+Decision `product:mission` (01M5ABTD): plans and chunks move from
 markdown files into fael's SQLite store (`<git-common-dir>/fael/fael.db`, English); the ledger stays
-jsonl. Planner skills (fael-plan; fael-content in zecalis/fael-crew) cut the chunks; the agent
-judges size and model hint, fael stores them, the owner picks. A change ships when it fixes a
-bug, cuts noise, removes code, serves that plan → chunk → agent → ship loop, or brings work in
+jsonl. Planner skills (fael-plan; fael-content, part of fael crew) cut the chunks; the agent
+judges size and model hint, fael stores them, the owner picks. A core change ships when it fixes a
+bug, cuts noise, removes code, strengthens lifecycle or stats, or brings work in
 from the team's other systems (intake, decision 01M4TJTW). The owner's
 window is a separate SwiftUI app reading `fael board --json`: it watches, notifies, and starts
 an agent only on the owner's click or from a queue of chunks the owner approved (dev chunks:
-the owner, or the project's lead — the fael-lead skill in zecalis/fael-crew, decision 01M4SQ9B — after the owner approves its set, a lone ready one as a set of 1, decision 01M4Z88Y); the planner
+the owner, or the project's lead — the fael-lead skill, part of fael crew, decision 01M4SQ9B — after the owner approves its set, a lone ready one as a set of 1, decision 01M4Z88Y); the planner
 agent applies merge / split / pair itself, and every git merge is the owner's. `fael stats` still shows what fael handed over and what
 followed (capture → acted → outcome), never the counterfactual, so claims about value say
 only that.
 
-**The mechanism is the team's shared work ledger**: the context of the work, and the work handed
+**The mechanism is the team's shared work ledger** (per machine today; git-ref team sync is planned): the context of the work, and the work handed
 between sessions and agents — hand-offs, requirements, assigned issues (`--to`), claims,
 come-backs (`--revisit`). It is not the agent's memory, not a personal notebook, not a generic
 AI memory store, and not a process or git guard.
@@ -111,8 +120,8 @@ contract`).
 
 Adding a client touches only an adapter. Changing a rule touches only core. Changing the format is a spec change.
 Free fael is one machine, many agents and worktrees: this binary has no transport (decision 01M4SQ9B
-cut `fael sync`). Sharing between people is the separate fael-sync product, which carries this same
-row format, never a second one; `fael import <path>` is the manual fallback.
+cut `fael sync`). Team sync over the git remote (`refs/fael/*`, no server) is planned, not shipped; it will carry this same
+row format, never a second one. Today `fael import <path>` is how a log crosses machines.
 
 Where a work habit lives (decision 01M4X4DZ) — deleting crew must leave each chunk's quality
 unchanged, only slower:
@@ -122,7 +131,7 @@ unchanged, only slower:
 | contract | `rules()` in `fael-core/src/plan/brief.rs`, printed by every `fael chunk start` | habits every chunk needs, any area or client: checkpoint, ask the owner, hand-off, a fresh-session check against Done before done |
 | bar | the plan's Done and Constraints sections, printed in every brief | what "good" means for this plan: dev gates and criteria, marketing VOICE.md and source rules |
 | judgment skills | fael-plan, fael-review, fael-content | how to cut, check, plan posts |
-| orchestration | fael-lead in zecalis/fael-crew | only running chunks in parallel without collisions |
+| orchestration | fael-lead (fael crew) | only running chunks in parallel without collisions |
 
 No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Constraints.
 

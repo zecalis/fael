@@ -5,7 +5,7 @@ use std::path::Path;
 
 /// Every file of every skill fael ships: (dir name under a client's skills dir, file, body)
 /// (issue 01M4N42X). A file beside SKILL.md is a branch's reference, read on its pointer.
-/// fael-lead and fael-content ship from zecalis/fael-crew (decision 01M4SQ9B).
+/// fael-lead and fael-content ship with fael crew, the owner's layer (decision 01M4SQ9B).
 pub(super) const SKILLS: [(&str, &str, &str); 8] = [
     ("fael", "SKILL.md", include_str!("../../skill/SKILL.md")),
     (
