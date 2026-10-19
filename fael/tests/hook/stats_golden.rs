@@ -41,7 +41,7 @@ fn normalize(out: &str, state: &Path) -> String {
 // Chunk tool (show|start|note|done|wait|after) joined MCP 2026-10-17:
 // schema 3124 → 3739, one workflow without two screens.
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 3310 bytes (~833 est) + MCP schema 3739 bytes (~937 est)";
+    "  constants per session: SKILL.md 3316 bytes (~835 est) + MCP schema 3739 bytes (~937 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -95,7 +95,7 @@ fn stats_json_matches_golden_values() {
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"warning": {"events": 0, "bytes": 0, "codes": {}}},
-            "constants": {"skill_bytes": 3310, "skill_est": 833, "mcp_schema_bytes": 3739, "mcp_schema_est": 937},
+            "constants": {"skill_bytes": 3316, "skill_est": 835, "mcp_schema_bytes": 3739, "mcp_schema_est": 937},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},

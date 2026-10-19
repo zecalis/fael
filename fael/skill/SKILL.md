@@ -21,8 +21,8 @@ Would a new agent reading only code and tests know this? Yes → a test, named i
 Name `(fael:<id>)` in the fix commit — a squash keeps it, a sha does not.
 In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).
 
-- `fael find [<text>] [--files <path>]` — the session brief, rows about a file, or a text search
-- `fael add decision "<the choice, why, what was rejected>" --title "<headline>" --files a,b` — never what code does, progress, or which files changed (git has those)
+- `fael find [<text>] [--files <path>] [--key plan:x]` — the session brief, rows about a file or key, or a text search
+- `fael add decision "<the choice, why, what was rejected>" --title "<headline>" --files a,b` — never what code does, progress, or which files changed
   - the user said or decided it? `--from user`; ask them before you change a `(from user)` row
 - `fael add note "<state the next session needs>" --title "<headline>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
