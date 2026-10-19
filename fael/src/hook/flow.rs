@@ -26,9 +26,9 @@ pub(crate) fn runs() -> Vec<core::stats::FlowRun> {
 }
 
 /// Merged PRs on this clone's default branch: `gh`'s merged list plus the
-/// squash subjects in `git log` (`(#N)` + committer date) — durable links
-/// only (`(#N)`, branch + merge time), never a sha. `gh` failing leaves the
-/// `git log` fallback; both failing leaves none (spans shrink, never impute).
+/// squash subjects in `git log` (`(#N)` + committer date) — matched by PR
+/// number only, never a sha. `gh` failing leaves the `git log` fallback;
+/// both failing leaves none (spans shrink, never impute).
 pub(crate) fn merges(since_ms: Option<i64>) -> Vec<core::stats::FlowMerge> {
     let Ok(r) = crate::repo() else { return vec![] };
     let root = &r.root;

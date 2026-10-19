@@ -10,9 +10,10 @@
 //! `started`/`ended`; done→merged from `Run.pr` to the PR's merge time on the
 //! default branch. A span with a missing endpoint shrinks `n`, never imputed;
 //! a merge before `ended` never counts (the clock moved, not the work).
-//! Matching is durable only: a PR number (`(#N)` in a squash subject, a merge
-//! commit, or `gh`'s merged list), a `(fael:<id>)` cite, or branch + merge
-//! time — never a sha (a squash rewrites it, decision 01M580PY).
+//! Matching is durable only, by PR number (`(#N)` in a squash subject, a
+//! merge commit, or `gh`'s merged list) — never a sha (a squash rewrites it,
+//! decision 01M580PY). PR numbers are unique, so no `(fael:<id>)` or branch
+//! match is needed; runs without a PR shrink `n`, never imputed.
 //! Throughput counts chunk-done per calendar week (Monday, UTC) from
 //! `Run.ended`; weeks with zero dones print zero, never missing.
 
@@ -31,7 +32,7 @@ pub struct Span {
 }
 
 /// The three flow spans plus the done→merge mapping coverage:
-/// `runs_with_pr` of `runs_total` runs carry a PR (today 105/136).
+/// `runs_with_pr` of `runs_total` runs carry a PR (e.g. 105/136).
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct Flow {
     pub filed_to_close: Span,
@@ -109,14 +110,23 @@ pub fn flow(
                     .or_insert(ms);
             }
         }
+        let mut close: HashMap<&str, i64> = HashMap::new();
         for (id, close_ms, _) in issue_closes(log) {
-            if !seen.insert(id) || close_ms < *first {
+            if close_ms >= *first {
+                close
+                    .entry(id)
+                    .and_modify(|m| *m = (*m).min(close_ms))
+                    .or_insert(close_ms);
+            }
+        }
+        for (id, a) in &add {
+            if !seen.insert(*id) {
                 continue;
             }
-            if let Some(a) = add.get(id)
-                && close_ms >= *a
+            if let Some(c) = close.get(id)
+                && *c >= *a
             {
-                filed.push(((close_ms - *a) / 1000).max(0) as u64);
+                filed.push(((*c - *a) / 1000).max(0) as u64);
             }
         }
     }
