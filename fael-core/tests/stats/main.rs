@@ -20,6 +20,8 @@ fn value_of(text: &str, with_rows: bool) -> serde_json::Value {
         &parsed,
         &HashMap::new(),
         &HashMap::new(),
+        &[],
+        &[],
         &Config::default(),
         (1, 2, 3, 4).into(),
         with_rows,
@@ -78,6 +80,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "est_tokens",
             "events",
             "experience",
+            "flow",
             "friction",
             "lifecycle",
             "non_english_rows",
@@ -87,6 +90,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "said",
             "schema",
             "skipped_temp",
+            "throughput",
             "top_rows",
             "unused_rows",
             "value",
@@ -146,6 +150,36 @@ fn json_shape_keys_and_types_are_frozen() {
     assert_eq!(top.len(), 2, "{v}");
     assert_eq!(keys(&top[0]), ["id", "pushes"], "{v}");
     assert!(top[0]["id"].is_string() && top[0]["pushes"].is_u64(), "{v}");
+}
+
+#[test]
+fn json_shape_flow_and_throughput_are_frozen() {
+    let v = value_of(BASE_ROWS, false);
+    assert_eq!(
+        keys(&v["flow"]),
+        [
+            "done_to_merge",
+            "filed_to_close",
+            "runs_total",
+            "runs_with_pr",
+            "start_to_done"
+        ],
+        "{v}"
+    );
+    for k in ["filed_to_close", "start_to_done", "done_to_merge"] {
+        assert_eq!(keys(&v["flow"][k]), ["median", "n", "p90"], "{v}");
+        assert!(
+            v["flow"][k]["median"].is_u64()
+                && v["flow"][k]["p90"].is_u64()
+                && v["flow"][k]["n"].is_u64(),
+            "{k}: {v}"
+        );
+    }
+    assert!(
+        v["flow"]["runs_with_pr"].is_u64() && v["flow"]["runs_total"].is_u64(),
+        "{v}"
+    );
+    assert!(v["throughput"].is_array(), "{v}");
 }
 
 #[test]
@@ -237,6 +271,8 @@ fn carriers_never_count_as_rows_added() {
         &parsed,
         &logs,
         &HashMap::new(),
+        &[],
+        &[],
         &Config::default(),
         (1, 2, 3, 4).into(),
         false,

@@ -167,6 +167,44 @@ impl Store {
         .collect::<Result<_, _>>()
         .map_err(err)
     }
+}
+
+/// One run for the stats flow join: stored RFC 3339 times, the PR number
+/// (`done --pr N`), its branch and its chunk's uid. The caller converts the
+/// times to ms — the store never parses them.
+#[derive(Debug, Clone)]
+pub struct StatsRun {
+    pub started: String,
+    pub ended: Option<String>,
+    pub pr: Option<i64>,
+    pub branch: Option<String>,
+    pub chunk: String,
+}
+
+impl Store {
+    /// Every run with its chunk's uid, oldest first — the flow spans read
+    /// `started`/`ended`/`pr`, throughput reads `ended`.
+    pub fn stats_runs(&self) -> Result<Vec<StatsRun>, String> {
+        let mut q = self
+            .conn
+            .prepare(
+                "SELECT r.started, r.ended, r.pr, r.branch, c.uid
+                 FROM run r JOIN chunk c ON c.id = r.chunk ORDER BY r.id",
+            )
+            .map_err(err)?;
+        q.query_map([], |r| {
+            Ok(StatsRun {
+                started: r.get(0)?,
+                ended: r.get(1)?,
+                pr: r.get(2)?,
+                branch: r.get(3)?,
+                chunk: r.get(4)?,
+            })
+        })
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)
+    }
 
     /// Is `tok` a chunk uid, or the prefix of one? Ledger ids share the ULID shape.
     pub fn is_chunk(&self, tok: &str) -> bool {
