@@ -71,7 +71,7 @@ pub(super) fn one(r: &Row) -> String {
 /// `fael plan export <plan> --section <key>`: that section alone.
 pub fn export_section(s: &Store, plan: i64, key: &str) -> Result<String, String> {
     let secs = section::list(&s.conn, plan)?;
-    secs.iter().find(|r| r.key == key).map(one).ok_or_else(|| {
+    section::resolve(&secs, key).map(one).ok_or_else(|| {
         let keys: Vec<&str> = secs.iter().map(|r| r.key.as_str()).collect();
         format!(
             "rejected: no section {key} — the plan has: {}",

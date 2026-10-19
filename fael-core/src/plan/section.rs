@@ -233,6 +233,45 @@ pub(super) fn reads(refs: &[String]) -> Result<Option<String>, String> {
     Ok((!refs.is_empty()).then(|| refs.join("\n")))
 }
 
+/// What a section ref names: the exact key first (like chunk lookup's uid),
+/// then one normalized hit — key, title or the title without its leading number
+/// (`1. Goal (why)` → `Goal (why)`), `-`/`_`/` ` folded, case-insensitive. Zero or
+/// several hits = no hit: the caller lists the plan's keys as before, so a guess
+/// never lands on the wrong section.
+pub(super) fn resolve<'a>(secs: &'a [Row], want: &str) -> Option<&'a Row> {
+    if let Some(r) = secs.iter().find(|s| s.key == want) {
+        return Some(r);
+    }
+    let norm = |v: &str| {
+        v.to_lowercase()
+            .chars()
+            .map(|c| if c == '-' || c == '_' { ' ' } else { c })
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    fn strip(t: &str) -> &str {
+        t.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == '§' || c == ' ')
+    }
+    let w = norm(want);
+    let keys: Vec<&Row> = secs.iter().filter(|s| norm(&s.key) == w).collect();
+    if keys.len() == 1 {
+        return Some(keys[0]);
+    }
+    if keys.len() > 1 {
+        return None;
+    }
+    let titles: Vec<&Row> = secs
+        .iter()
+        .filter(|s| norm(&s.title) == w || norm(strip(&s.title)) == w)
+        .collect();
+    if titles.len() == 1 {
+        return Some(titles[0]);
+    }
+    None
+}
+
 /// The section a read names, from plan `pid` or the plan before its last `/` (`None` = no
 /// such plan or key). Another plan's keeps the whole ref as its key.
 pub(super) fn read(c: &Connection, pid: i64, r: &str) -> Result<Option<Row>, String> {
@@ -252,7 +291,8 @@ pub(super) fn read(c: &Connection, pid: i64, r: &str) -> Result<Option<Row>, Str
         }
         None => (pid, r),
     };
-    let row = list(c, other)?.into_iter().find(|s| s.key == key);
+    let secs = list(c, other)?;
+    let row = resolve(&secs, key).cloned();
     Ok(row.map(|s| Row {
         key: if other == pid { s.key } else { r.into() },
         ..s
