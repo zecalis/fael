@@ -43,6 +43,18 @@ impl Store {
         Store::init(Connection::open(path).map_err(err)?)
     }
 
+    /// Read-only open for the core seam (`fael-core::work`): never creates,
+    /// never migrates, never takes the write lock — a missing file or a db
+    /// without the plan tables is an `Err` the caller maps to empty, so core
+    /// stays silent with no crew installed.
+    pub fn open_readonly(path: &Path) -> Result<Store, String> {
+        let conn =
+            rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(err)?;
+        conn.busy_timeout(Duration::from_secs(10)).map_err(err)?;
+        Ok(Store { conn })
+    }
+
     /// SQLite's `PRAGMA data_version`: moves when another connection commits, so a held
     /// reader (`fael board --watch`) sees a write without writing or rereading.
     pub fn data_version(&self) -> Result<i64, String> {

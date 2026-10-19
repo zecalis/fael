@@ -41,7 +41,7 @@ pub(crate) fn append_row(row: serde_json::Value) {
     if row
         .get("repo")
         .and_then(|r| r.as_str())
-        .is_some_and(|r| !r.is_empty() && crate::board::scratch(Path::new(r)))
+        .is_some_and(|r| !r.is_empty() && crate::core::work::is_scratch(Path::new(r)))
     {
         return;
     }

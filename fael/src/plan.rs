@@ -9,9 +9,8 @@ use std::process::ExitCode;
 const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'";
 
 /// The verbs `plan` answers — `show` is `export` by another name.
-pub(crate) const VERBS: &[&str] = &[
-    "new", "export", "show", "apply", "park", "unpark", "done", "list",
-];
+/// Canonical in `fael-core::work`; the command reuses it.
+pub(crate) const VERBS: &[&str] = fael_core::work::PLAN_VERBS;
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     if rest.is_empty() {
@@ -61,7 +60,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
 /// Beside the journal, so every worktree of the clone reads one db; the tree's `.fael/`
 /// (or `FAEL_DIR`) without git.
 pub(crate) fn db(r: &Repo) -> PathBuf {
-    fael_core::plan::db_at(r.journal.as_deref().unwrap_or(&r.fael))
+    fael_core::work::db_for(r.journal.as_deref(), &r.fael)
 }
 
 /// `new`: the plan row (chunks in the db from the start) and its Goal/Scope/Done/Constraints

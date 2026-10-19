@@ -10,12 +10,10 @@ use crate::core;
 pub(crate) fn runs() -> Vec<core::stats::FlowRun> {
     let db = crate::repo()
         .ok()
-        .map(|r| crate::plan::db(&r))
+        .map(|r| core::work::db_for(r.journal.as_deref(), &r.fael))
         .filter(|p| p.exists());
     let Some(path) = db else { return vec![] };
-    let runs = core::plan::Store::open(&path)
-        .and_then(|s| s.stats_runs())
-        .unwrap_or_default();
+    let runs = core::work::flow_runs(&path);
     runs.into_iter()
         .map(|r| core::stats::FlowRun {
             started_ms: core::ts_ms(&r.started),

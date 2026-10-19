@@ -23,7 +23,14 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
         && offset == 0
         && !a.has("json")
     {
-        crate::chunk::kickoff(&r, anchor);
+        let db = core::work::db_for(r.journal.as_deref(), &r.fael);
+        let name: &str = anchor.split_once(':').map(|(_, n)| n).unwrap_or(anchor);
+        let today = core::rfc3339(core::now_ms());
+        if let Some(text) =
+            core::work::kickoff_text(&db, name, &r.root.to_string_lossy(), &today[..10])
+        {
+            print!("{text}");
+        }
     }
     let f = Filter {
         files: al.expand_all(&files),

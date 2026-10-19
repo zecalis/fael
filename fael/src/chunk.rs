@@ -8,28 +8,9 @@ use fael_core::plan::{Fields, Here, Store};
 use std::process::ExitCode;
 
 /// The verbs `chunk` takes — what usage lines and the call line's `sub` name.
-pub(crate) const VERBS: &[&str] = &[
-    "add",
-    "show",
-    "start",
-    "edit",
-    "move",
-    "note",
-    "wait",
-    "after",
-    "unafter",
-    "ask",
-    "reply",
-    "answer",
-    "done",
-    "accept",
-    "drop",
-    "park",
-    "unpark",
-    "apply",
-    "approve",
-    "unapprove",
-];
+/// Canonical in `fael-core::work` (the read seam owns the closed vocabulary);
+/// the command reuses it so the two cannot drift.
+pub(crate) const VERBS: &[&str] = fael_core::work::CHUNK_VERBS;
 pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
@@ -348,47 +329,4 @@ fn issues(r: &Repo, ids: &[String]) -> Result<Vec<String>, String> {
             Ok(row.id.clone())
         })
         .collect()
-}
-
-/// `fael kickoff PLAN-x.md` (anchor `plan:x`): the chunk this worktree holds, else the next
-/// ready one of plan `x` — `fael chunk start` prints its brief and the rules.
-pub(crate) fn kickoff(r: &Repo, anchor: &str) {
-    let name = anchor.split_once(':').map_or(anchor, |(_, n)| n);
-    let path = db(r);
-    let Some(s) = path.exists().then(|| Store::open(&path).ok()).flatten() else {
-        return;
-    };
-    let Some(p) = s
-        .plans()
-        .ok()
-        .into_iter()
-        .flatten()
-        .find(|p| p.name == name)
-    else {
-        return;
-    };
-    let wt = r.root.to_string_lossy();
-    if let Some(held) = s.held(&wt).ok().filter(|h| !h.is_empty()) {
-        for (uid, title, run) in &held {
-            println!("you hold chunk {uid} — {title} (run {run})");
-        }
-        print!("{}", fael_core::plan::rules(&held[0].0));
-        return;
-    }
-    // ponytail: UTC date, as `chunk start` reads it; a local-day `--until` when the owner asks
-    let today = fael_core::rfc3339(fael_core::now_ms());
-    match s.first_ready(p.id, &today[..10]) {
-        Ok(Some((uid, title, brief))) => {
-            println!("next chunk: {uid} — {title}");
-            if brief != title {
-                println!("> {}", brief.lines().next().unwrap_or_default());
-            }
-            println!("start it: `fael chunk start {uid}` (prints the brief and the chunk rules)\n");
-        }
-        Ok(None) => println!(
-            "no chunk of {} is ready — `fael plan export {}` shows each state\n",
-            p.name, p.name
-        ),
-        Err(_) => {}
-    }
 }

@@ -124,14 +124,8 @@ fn fix_commit(files: &[String]) -> String {
 /// the same cheap SQLite read session start uses (`Store::held`), no git
 /// spawn, no board read. No fael.db, no run = false.
 fn holds_chunk(repo: &crate::Repo) -> bool {
-    let db = crate::plan::db(repo);
-    if !db.exists() {
-        return false;
-    }
-    fael_core::plan::Store::open(&db)
-        .ok()
-        .and_then(|s| s.held(&repo.root.to_string_lossy()).ok())
-        .is_some_and(|held| !held.is_empty())
+    let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
+    crate::core::work::has_held(&db, &repo.root.to_string_lossy())
 }
 
 /// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):

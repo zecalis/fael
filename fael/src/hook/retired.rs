@@ -4,7 +4,7 @@
 //! append-only. Unproven = still live; fael never reads the note's text to decide.
 
 use crate::Repo;
-use fael_core::{self as core, plan::EndedRun};
+use fael_core::{self as core, work::EndedRun};
 use std::collections::{HashMap, HashSet};
 
 /// `plan:<name>:handoff` / `plan:<name>:chunk-<n>` → the plan name.
@@ -66,14 +66,8 @@ fn derive(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
     // one `for-each-ref --merged` per pull, not one proof per branch; lazily
     // built by the first merge candidate, so a pull with none spawns nothing
     let mut merged: Option<HashSet<String>> = None;
-    let db = crate::plan::db(r);
-    let ends = if db.exists() {
-        core::plan::Store::open(&db)
-            .and_then(|s| s.ended_runs())
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
+    let db = core::work::db_for(r.journal.as_deref(), &r.fael);
+    let ends = core::work::ended_runs(&db);
     log.rows
         .iter()
         .filter(|w| w.kind == "note" && w.held().is_none() && !hide.contains(w.id.as_str()))

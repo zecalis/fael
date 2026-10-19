@@ -234,7 +234,8 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     let mut edited: Vec<String> = vec![];
     for row in &log.rows {
         for f in &row.files {
-            if fael_core::plan::overlap(std::slice::from_ref(f), scope) && seen.insert(f.clone()) {
+            if crate::core::work::overlap(std::slice::from_ref(f), scope) && seen.insert(f.clone())
+            {
                 edited.push(f.clone());
             }
         }
