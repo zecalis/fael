@@ -7,6 +7,7 @@
 
 mod commands;
 mod core;
+mod top;
 mod verb;
 
 #[cfg(test)]
@@ -14,61 +15,14 @@ mod tests;
 
 use commands::COMMANDS;
 
-/// Commands a new user meets in week one; the rest list under "more".
-/// `core_names_are_commands` keeps every name here a real COMMANDS row.
-const CORE: &[&str] = &["add", "find", "close", "kickoff", "install"];
-
-/// Full usage: core commands, the rest, global options, examples.
+/// Core-only usage; the full list is `usage_all()`.
 pub(crate) fn usage() -> String {
-    let rows: Vec<(&str, String, &str)> = COMMANDS
-        .iter()
-        .map(|(name, summary, section)| (*name, list_args(name, section), *summary))
-        .collect();
-    let width = rows.iter().map(|(_, a, _)| a.len()).max().unwrap_or(0);
-    let (core, rest): (Vec<_>, Vec<_>) = rows.iter().partition(|(n, ..)| CORE.contains(n));
-    let list = |rows: Vec<&(&str, String, &str)>| -> String {
-        rows.iter()
-            .map(|(_, a, s)| format!("  {a:width$}   {s}\n"))
-            .collect()
-    };
-    let (core, rest) = (list(core), list(rest));
-    format!(
-        "fael — the repo's work ledger, handed to each agent at the file or chunk it works on
-
-usage: fael <command> [options]
-
-commands:
-{core}
-more commands:
-{rest}
-global options:
-  --json             one JSON row per line, uncut, for programs
-  -h, --help         this help — or one command's: fael <command> --help
-  -v, -V, --version  print the version
-
-examples:
-  fael add issue \"login loops after a token refresh\" --title \"login loop\" --files src/a.rs
-  fael find --files src/
-  fael kickoff src/a.rs
-
-run 'fael <command> --help' for the flags of one command."
-    )
+    top::usage()
 }
 
-/// `find [text|id] [options]` from the section's synopsis line: the
-/// positionals as written, every flag folded into `[options]`.
-fn list_args(name: &str, section: &str) -> String {
-    let synopsis = section.lines().next().unwrap_or_default();
-    let words: Vec<&str> = synopsis.split(' ').skip(2).collect();
-    let pos = words.iter().take_while(|w| !w.starts_with("[--")).count();
-    let mut s = std::iter::once(name)
-        .chain(words[..pos].iter().copied())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if pos < words.len() {
-        s.push_str(" [options]");
-    }
-    s
+/// Every command: core, then the rest under "more commands:".
+pub(crate) fn usage_all() -> String {
+    top::usage_all()
 }
 
 /// A bare `fael chunk` / `fael plan`: the few verbs met first, not the whole synopsis.
@@ -144,9 +98,10 @@ pub(crate) fn is_request(argv: &[String]) -> bool {
 }
 
 /// `fael help` / `fael --help` / `fael <cmd> --help` / `fael help <cmd>`:
-/// the full usage, unless a non-flag word names a command — then only that
+/// the core usage, unless a non-flag word names a command — then only that
 /// command's core section (`help` itself is skipped, so `help find` finds
-/// `find`). With `--all` anywhere before `--`, the full section instead.
+/// `find`). With `--all` anywhere before `--`, the full section instead —
+/// and with no command named, the full usage (`usage_all`).
 pub(crate) fn for_argv(argv: &[String]) -> String {
     if let Some(text) = verb::for_argv(argv) {
         return text;
@@ -163,6 +118,9 @@ pub(crate) fn for_argv(argv: &[String]) -> String {
         Some(text) => {
             format!("{text}\n\nrun 'fael --help' for all commands and global options.")
         }
-        None => usage(),
+        None => match all {
+            true => usage_all(),
+            false => usage(),
+        },
     }
 }

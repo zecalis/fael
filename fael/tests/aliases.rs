@@ -314,13 +314,18 @@ fn mv_file_resolves_doctor_gone() {
 }
 
 #[test]
-fn help_exits_zero_and_lists_mv() {
+fn help_hides_mv_until_all() {
     let d = repo();
+    // top-level help is the 7 core commands; the full list is one --all away
     for args in [&["--help"][..], &["help"][..]] {
         let (ok, out, err) = fael(&d, args, "");
         assert!(ok, "{args:?} {err}");
-        assert!(out.contains("mv <old> <new>"), "{out}");
+        assert!(!out.contains("mv <old> <new>"), "{out}");
+        assert!(out.contains("fael --help --all"), "{out}");
     }
+    let (ok, out, err) = fael(&d, &["--help", "--all"], "");
+    assert!(ok, "{err}");
+    assert!(out.contains("mv <old> <new>"), "{out}");
     // one command's help shows only that command
     let (ok, out, err) = fael(&d, &["find", "--help"], "");
     assert!(ok, "{err}");

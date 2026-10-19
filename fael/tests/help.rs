@@ -48,17 +48,55 @@ fn per_command_help_and_short_errors() {
         assert!(out.contains("fael find"), "{out}");
         assert!(!out.contains("fael mv"), "{out}");
     }
-    // the full help lists every command plus global options and examples
+    // the default help lists the 7 core commands plus the unguided GAP
+    // (next/keys/compact/intake stay shown — owner 2026-10-19) and the --all
+    // line; chunk/plan/board stay hidden until --all
     for args in [&["--help"][..], &["-h"][..], &["help"][..], &[][..]] {
         let (ok, out, err) = fael(&d, args);
         assert!(ok, "{args:?} {err}");
         assert!(
             out.contains("commands:")
-                && out.contains("mv <old> <new>")
                 && out.contains("global options:")
-                && out.contains("examples:"),
+                && out.contains("examples:")
+                && out.contains("fael --help --all"),
             "{out}"
         );
+        for present in [
+            "add", "find", "close", "bump", "claim", "doctor", "stats", "next", "keys", "compact",
+            "intake",
+        ] {
+            assert!(
+                out.contains(&format!("  {present}")),
+                "{present} missing: {out}"
+            );
+        }
+        assert!(
+            !out.contains("more commands:"),
+            "core help lists the rest: {out}"
+        );
+        for hidden in ["chunk", "plan", "board", "kickoff", "install", "mv"] {
+            assert!(
+                !out.lines().any(|l| l.trim_start().starts_with(hidden)),
+                "{hidden} leaks into core help: {out}"
+            );
+        }
+    }
+    // `--help --all` is the full list again
+    for args in [&["--help", "--all"][..], &["help", "--all"][..]] {
+        let (ok, out, err) = fael(&d, args);
+        assert!(ok, "{args:?} {err}");
+        assert!(
+            out.contains("commands:")
+                && out.contains("more commands:")
+                && out.contains("mv <old> <new>"),
+            "{out}"
+        );
+        for present in ["chunk", "plan", "board"] {
+            assert!(
+                out.contains(&format!("  {present}")),
+                "{present} missing: {out}"
+            );
+        }
     }
     // an unknown command or flag is one short line pointing at --help,
     // never a full usage dump on stderr
