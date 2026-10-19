@@ -97,3 +97,26 @@ fn blocked_folds_to_plan_counts_unless_plan_cut() {
         "{t}"
     );
 }
+
+fn draft(uid: &str, plan: &str) -> BoardChunk {
+    let mut c = ready(uid, 0);
+    c.ready = false;
+    c.state = "draft".into();
+    c.plan = plan.into();
+    c.title = "wait run.cost coverage — cost per fixed issue".into();
+    c
+}
+
+#[test]
+fn gated_drafts_listed_only_under_plan_cut_never_queued() {
+    let p = Project {
+        chunks: vec![ready("open1", 0), draft("g1", "fael-flow")],
+        ..Project::named(Path::new(""))
+    };
+    let b = lists(String::new(), vec![&p]);
+    assert_eq!(b.queue, ["open1"]);
+    let t = text::text(&b, false);
+    assert!(!t.contains("g1"), "{t}");
+    let t = text::text(&b, true);
+    assert!(t.contains("gated") && t.contains("g1"), "{t}");
+}

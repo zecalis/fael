@@ -4,6 +4,20 @@ use super::*;
 
 /// The same lists for a person at a terminal: one line per chunk. Blocked folds into per-plan
 /// counts unless a `--plan` cut is active — 78 lines made 14k of a 22k board.
+/// Uids of gated drafts (draft chunks outside inbox, issue 01M59BNV): waiting on
+/// a brief or a gate, listed only under a `--plan` cut — never in the queue.
+fn gated<'a>(b: &'a Board<'a>, plan_cut: bool) -> Vec<(&'a str, &'a str)> {
+    if !plan_cut {
+        return Vec::new();
+    }
+    b.projects
+        .iter()
+        .flat_map(|p| &p.chunks)
+        .filter(|c| c.state == "draft" && c.plan != "inbox")
+        .map(|c| (c.uid.as_str(), "gated"))
+        .collect()
+}
+
 pub(super) fn text(b: &Board, plan_cut: bool) -> String {
     let all: HashMap<&str, &BoardChunk> = b
         .projects
@@ -49,6 +63,7 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
             p.error.as_deref().unwrap_or("")
         ));
     }
+    // Gated drafts show only under a `--plan` cut, never queued (see `gated`).
     for (head, rows) in [
         (
             "needs you",
@@ -73,6 +88,7 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
                 .map(|u| (u.as_str(), "blocked"))
                 .collect(),
         ),
+        ("gated", gated(b, plan_cut)),
     ] {
         if rows.is_empty() {
             continue;

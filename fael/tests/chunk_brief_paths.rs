@@ -91,3 +91,27 @@ fn edit_brief_rechecks_and_a_path_not_on_disk_is_ignored() {
     let (ok, _, err) = fael(&d, &["chunk", "edit", &uid, "--title", "U"]);
     assert!(ok && !err.contains("warning"), "{err}");
 }
+
+#[test]
+fn a_check_line_path_is_run_not_edit_so_it_never_warns() {
+    let d = repo();
+    let (_, err) = add(
+        &d,
+        "inbox",
+        "Edit src/x.rs. Check: run e2e/y.ts suite, gate green.",
+        "src/",
+        "a1",
+    );
+    assert!(!err.contains("brief names"), "{err}");
+    let (_, err) = add(
+        &d,
+        "inbox",
+        "Edit e2e/y.ts. Check: gate green.",
+        "src/",
+        "a2",
+    );
+    assert!(
+        err.contains("warning: brief names e2e/y.ts, not in scope"),
+        "{err}"
+    );
+}

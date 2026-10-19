@@ -37,6 +37,8 @@ fn missing(at: &Path, p: &str) -> Option<String> {
 /// the planner's to change, and a path not on disk may be a file the chunk creates.
 /// A path on a line that says "leave alone" never warns: the planner saw it and
 /// deliberately scoped it out (a `drop?` brief naming what not to touch).
+/// A path on a `Check:`/`Run:`/`Verify:` clause never warns either: the clause
+/// names a command to run, not a file to edit.
 fn brief_paths(s: &Store, root: &Path, b: &fael_core::plan::Brief) {
     let scope: Vec<String> = b
         .scope
@@ -54,29 +56,61 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_core::plan::Brief) {
         if line.to_lowercase().contains("leave alone") {
             continue;
         }
-        for p in paths(line) {
-            let hit = [p.clone()];
-            if !root.join(&p).exists() || overlap(&hit, &scope) {
+        // a `Check:`/`Run:`/`Verify:` clause names commands to run, not files
+        // to edit (issue 01M59BNT): `scripts/gate.sh` there must not widen the
+        // scope. Clauses, not lines: a brief is often one paragraph with
+        // `…bump). Check: …gate.sh green.` mid-line.
+        for clause in clauses(line) {
+            if is_check_line(clause) {
                 continue;
             }
-            let holder = others.iter().find(|c| {
-                c.uid != b.uid
-                    && !["done", "replaced", "dropped"].contains(&c.state.as_str())
-                    && overlap(&hit, &c.scope)
-            });
-            let by = holder.map_or(String::new(), |c| {
-                format!(
-                    " (in {}/{}'s scope)",
-                    c.plan,
-                    c.label.as_deref().unwrap_or(&c.uid)
-                )
-            });
-            eprintln!(
-                "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope …",
-                b.uid
-            );
+            for p in paths(clause) {
+                let hit = [p.clone()];
+                if !root.join(&p).exists() || overlap(&hit, &scope) {
+                    continue;
+                }
+                let holder = others.iter().find(|c| {
+                    c.uid != b.uid
+                        && !["done", "replaced", "dropped"].contains(&c.state.as_str())
+                        && overlap(&hit, &c.scope)
+                });
+                let by = holder.map_or(String::new(), |c| {
+                    format!(
+                        " (in {}/{}'s scope)",
+                        c.plan,
+                        c.label.as_deref().unwrap_or(&c.uid)
+                    )
+                });
+                eprintln!(
+                    "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope …",
+                    b.uid
+                );
+            }
         }
     }
+}
+
+/// A brief line split at sentence ends: a `Check:` clause mid-paragraph is still
+/// a run mention. Paths hold no spaces, so no path breaks across a split.
+fn clauses(line: &str) -> Vec<&str> {
+    let mut out = vec![line];
+    for sep in [". ", "; ", "? ", "! "] {
+        out = out.iter().flat_map(|s| s.split(sep)).collect();
+    }
+    out
+}
+
+/// A verification line names commands to run, not files to edit: `Check:`,
+/// `Run:`, `Verify:` (case-insensitive, after any `>`, `-`, `*` quote).
+fn is_check_line(line: &str) -> bool {
+    let t = line
+        .trim_start()
+        .trim_start_matches(['>', '-', '*', '#'])
+        .trim_start()
+        .to_lowercase();
+    ["check:", "run:", "verify:"]
+        .iter()
+        .any(|p| t.starts_with(p))
 }
 
 /// Path-like tokens of `text` (a `/` and a dot, or a trailing `/`), once each, with the
@@ -106,4 +140,38 @@ fn paths(text: &str) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clauses, is_check_line};
+
+    #[test]
+    fn check_run_verify_lines_are_run_mentions_not_edits() {
+        for l in [
+            "Check: scripts/gate.sh green.",
+            "check: update the shape lock, scripts/gate.sh green",
+            "Run: cargo test -p fael-core",
+            "Verify: fael stats --json shows flow",
+            "> Check: scripts/gate.sh green",
+            "- Check: gate green",
+        ] {
+            assert!(is_check_line(l), "{l}");
+        }
+        for l in [
+            "Add one additive flow object in fael-core/src/stats/flow.rs.",
+            "Edit fael-core/src/stats/aggregate.rs, do not grow it past 400 lines.",
+            "wired through mod.rs and aggregate.rs",
+        ] {
+            assert!(!is_check_line(l), "{l}");
+        }
+    }
+
+    #[test]
+    fn a_mid_paragraph_check_clause_splits_off() {
+        let c = clauses("Edit src/x.rs. Check: run e2e/y.ts suite, gate green.");
+        assert_eq!(c.len(), 2);
+        assert!(!is_check_line(c[0]));
+        assert!(is_check_line(c[1]));
+    }
 }
