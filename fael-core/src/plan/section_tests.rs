@@ -179,6 +179,50 @@ fn export_prints_sections_in_order_each_dated_and_one_alone() {
 }
 
 #[test]
+fn a_section_resolves_by_key_title_or_stripped_title() {
+    use super::resolve;
+    let (mut s, id) = plan();
+    let b = with(
+        &s,
+        id,
+        json!([{"key": "§5", "title": "§5 Risks", "body": "none said"}]),
+    );
+    apply(&mut s, &b, LATER).unwrap();
+    let secs = list(&s.conn, id).unwrap();
+    // exact key still wins
+    assert_eq!(resolve(&secs, "1").unwrap().key, "1");
+    // title, stripped title and case/dash folding
+    assert_eq!(resolve(&secs, "1. Goal (why)").unwrap().key, "1");
+    assert_eq!(resolve(&secs, "goal (why)").unwrap().key, "1");
+    assert_eq!(resolve(&secs, "GOAL (WHY)").unwrap().key, "1");
+    assert_eq!(resolve(&secs, "§5 Risks").unwrap().key, "§5");
+    assert_eq!(resolve(&secs, "risks").unwrap().key, "§5");
+    assert_eq!(resolve(&secs, "§5").unwrap().key, "§5");
+    // export --section takes them too, and a miss still lists the keys
+    assert!(export_section(&s, id, "Goal (why)").unwrap().contains("## 1. Goal"));
+    assert!(export_section(&s, id, "risks").unwrap().contains("## §5 Risks"));
+    let e = export_section(&s, id, "9").unwrap_err();
+    assert!(
+        e.contains("no section 9") && e.contains("1, 2, 3, 4"),
+        "{e}"
+    );
+    // ambiguous: two sections share the stripped title — no guess, keys listed
+    let b = with(
+        &s,
+        id,
+        json!([
+            {"key": "n1", "title": "Notes", "body": "a"},
+            {"key": "n2", "title": "NOTES", "body": "b"},
+        ]),
+    );
+    apply(&mut s, &b, LATER).unwrap();
+    let secs = list(&s.conn, id).unwrap();
+    assert!(resolve(&secs, "notes").is_none());
+    let e = export_section(&s, id, "notes").unwrap_err();
+    assert!(e.contains("no section notes"), "{e}");
+}
+
+#[test]
 fn a_plan_doc_is_cut_into_sections_once() {
     let (s, id) = plan();
     let tx = s.conn.unchecked_transaction().unwrap();
