@@ -65,7 +65,8 @@ How it behaves:
   several and `fael mv old new` points the rows at the new files.
 - **It lives in your git, out of your branches.** Rows are plain JSONL in the clone's `.git/fael/`,
   shared at once by every worktree and every agent on the machine, so PRs never carry log lines to
-  conflict on. No server, no account.
+  conflict on. No server, no account. Across machines, `fael import` moves a log; team sync over the
+  git remote is planned, not shipped.
 
 Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; a hook call takes about 10 ms on a repo with a thousand rows (a session start, once, about 100 ms).
 
@@ -102,9 +103,9 @@ Most useful when several agents (or people) work in one repo and return to the s
 days. Little to gain from one short session in a repo you will not touch again.
 Definitions: [docs/stats.md](docs/stats.md).
 
-## Plans, when several agents share the work
+## fael crew, the owner's layer
 
-Everything above needs no plan. When one person runs five agents toward one goal, the second
+Everything above is core and needs no plan; core never depends on crew. fael crew (`fael plan|chunk|board`, hidden from default help) is the owner's layer for several agents sharing the work. When one person runs five agents toward one goal, the second
 door opens: `fael plan new` cuts the work into chunks, `fael chunk start` hands one to an agent
 with its brief and the open rows on its files, `fael chunk done` takes the hand-off back. Chunks
 read in the terminal (`fael board --plan <plan>`, `fael plan export <plan>`) and in the board
