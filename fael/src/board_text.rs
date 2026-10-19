@@ -4,7 +4,6 @@ use super::*;
 
 /// The same lists for a person at a terminal: one line per chunk. Blocked folds into per-plan
 /// counts unless a `--plan` cut is active — 78 lines made 14k of a 22k board.
-/// Gated drafts (drafts outside inbox) show only under a `--plan` cut, never queued.
 /// Uids of gated drafts (draft chunks outside inbox, issue 01M59BNV): waiting on
 /// a brief or a gate, listed only under a `--plan` cut — never in the queue.
 fn gated<'a>(b: &'a Board<'a>, plan_cut: bool) -> Vec<(&'a str, &'a str)> {
