@@ -42,6 +42,7 @@ mod push_cap;
 mod replay;
 mod review;
 mod said;
+mod seam;
 mod search;
 mod seen;
 mod session;

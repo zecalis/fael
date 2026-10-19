@@ -21,6 +21,7 @@ mod query;
 mod row;
 pub mod stats;
 mod validate;
+pub mod work;
 
 /// The commit a dev build came from (`abc1234`, `abc1234.dirty`); None on a release.
 pub const GIT: Option<&str> = option_env!("FAEL_GIT");

@@ -135,14 +135,8 @@ fn start_rows<'a>(
 /// another session): its uid and the line that points at its brief. No
 /// fael.db, no run = `None`.
 fn chunk_line(repo: &crate::Repo) -> Option<(String, String)> {
-    let db = crate::plan::db(repo);
-    if !db.exists() {
-        return None;
-    }
-    let held = fael_core::plan::Store::open(&db)
-        .ok()?
-        .held(&repo.root.to_string_lossy())
-        .ok()?;
+    let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
+    let held = crate::core::work::held(&db, &repo.root.to_string_lossy());
     let (uid, title, _) = held.into_iter().next()?;
     Some((
         uid.clone(),
@@ -189,8 +183,8 @@ fn warnings(repo: &crate::Repo, adopted: bool) -> Vec<String> {
     // off until then. Writes it now instead of asking the user to; only a pass
     // that fails (or leaves changes behind) falls back to the old warning.
     // a scratch repo under the temp dir never writes the real HOME's wiring (01M4NB34)
-    let scratch = crate::board::in_tmp(&repo.root)
-        && !crate::home().is_some_and(|h| crate::board::in_tmp(&h));
+    let scratch = crate::core::work::in_tmp(&repo.root)
+        && !crate::home().is_some_and(|h| crate::core::work::in_tmp(&h));
     if !scratch && crate::install::pending() > 0 {
         let wrote = crate::install::apply_pending();
         let behind = crate::install::pending();

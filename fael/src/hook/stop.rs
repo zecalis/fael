@@ -36,19 +36,15 @@ pub(super) fn seen(e: &Event) {
         return;
     };
     let now = core::rfc3339(core::now_ms());
-    let db = crate::plan::db(&r);
-    if db.exists()
-        && let Ok(mut s) = fael_core::plan::Store::open(&db)
-    {
-        let _ = s.seen(&r.root.to_string_lossy(), session, &now);
-    }
+    let db = core::work::db_for(r.journal.as_deref(), &r.fael);
+    let _ = core::work::mark_seen(&db, &r.root.to_string_lossy(), session, &now);
 }
 
 /// The run this session's `chunk start` bound, wherever the session works now: a
 /// `--no-worktree` run has no worktree for [`seen`] to match (issue 01M4N4CVC). The marker
 /// goes once no live run is left.
 fn seen_held(session: &str) {
-    let Some(m) = crate::chunk::held(session) else {
+    let Some(m) = core::work::held_session_file(session) else {
         return;
     };
     // a db that is gone is never created again by the open
@@ -60,9 +56,8 @@ fn seen_held(session: &str) {
         return;
     };
     let now = core::rfc3339(core::now_ms());
-    let n = fael_core::plan::Store::open(Path::new(&db))
-        .and_then(|mut s| s.seen_session(session, &now));
-    if matches!(n, Ok(0)) {
+    let n = core::work::mark_seen_session(Path::new(&db), session, &now);
+    if n == 0 {
         let _ = std::fs::remove_file(m);
     }
 }

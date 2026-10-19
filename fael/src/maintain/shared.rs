@@ -8,7 +8,7 @@ use std::path::Path;
 
 pub(super) fn notes(root: &Path) -> Vec<core::Problem> {
     let note = |s: String| core::Problem::info(core::ProblemKind::Shared, s);
-    let shared = match fael_core::plan::shared(root) {
+    let shared = match core::work::shared(root) {
         Ok(s) if s.is_empty() => return Vec::new(),
         Ok(s) => s,
         Err(e) => return vec![note(e)],

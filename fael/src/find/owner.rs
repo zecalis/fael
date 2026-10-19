@@ -2,7 +2,7 @@
 //! chunk in another repo on this machine — the board's registry and every repo usage names.
 //! Read only on the reject path: an agent that was told "no row" hunted repo by repo.
 
-use crate::{Repo, board, core};
+use crate::{Repo, core};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -13,12 +13,12 @@ pub(crate) fn owner(r: &Repo, tok: &str) -> Option<String> {
             "{tok} is a chunk here — `fael chunk show {tok}` reads it"
         ));
     }
-    let mut seen = HashSet::from([board::main_root(r).to_path_buf()]);
+    let mut seen = HashSet::from([core::work::main_root_for(&r.root, r.journal.as_deref())]);
     for path in repos() {
         let Ok(o) = crate::repo_at(&path) else {
             continue;
         };
-        let at = board::main_root(&o).to_path_buf();
+        let at = core::work::main_root_for(&o.root, o.journal.as_deref());
         if !seen.insert(at.clone()) {
             continue;
         }
@@ -39,23 +39,19 @@ pub(crate) fn owner(r: &Repo, tok: &str) -> Option<String> {
 }
 
 fn is_chunk(r: &Repo, tok: &str) -> bool {
-    store(r).is_some_and(|s| s.is_chunk(tok))
-}
-
-fn store(r: &Repo) -> Option<core::plan::Store> {
-    Some(crate::plan::db(r))
-        .filter(|p| p.exists())
-        .and_then(|p| core::plan::Store::open(&p).ok())
+    let db = core::work::db_for(r.journal.as_deref(), &r.fael);
+    core::work::is_chunk(&db, tok)
 }
 
 /// A chunk uid of this repo passed to find: its brief, as MCP `chunk show` prints it. The
 /// "is a chunk here" hint alone still cost agents a round (opencode, 2026-10-17).
 pub(crate) fn chunk_here(r: &Repo, tok: &str) -> Option<String> {
-    store(r)?.show(tok).ok().map(|b| brief(&b))
+    let db = core::work::db_for(r.journal.as_deref(), &r.fael);
+    core::work::chunk_brief(&db, tok).map(|b| brief(&b))
 }
 
 /// The chunk-show text: title, uid, plan, brief.
-pub(crate) fn brief(b: &core::plan::Brief) -> String {
+pub(crate) fn brief(b: &core::work::Brief) -> String {
     format!(
         "# {} ({})\nplan {} — {}\n\n{}\n",
         b.title, b.uid, b.plan, b.plan_title, b.brief
@@ -75,9 +71,9 @@ pub(crate) fn repos() -> Vec<PathBuf> {
             .flatten()
             .map(PathBuf::from)
     });
-    board::registered()
+    core::work::registered()
         .into_iter()
         .chain(named.collect::<Vec<_>>())
-        .filter(|p| !p.as_os_str().is_empty() && p.exists() && !board::scratch(p))
+        .filter(|p| !p.as_os_str().is_empty() && p.exists() && !core::work::is_scratch(p))
         .collect()
 }

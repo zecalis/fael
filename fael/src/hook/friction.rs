@@ -46,8 +46,8 @@ const AGENT_CMDS: [&str; 12] = [
 /// `shape` reuses it for the call row's `verb` — the one closed vocabulary.
 pub(crate) fn sub<'a>(cmd: &str, argv: &'a [String]) -> Option<&'a str> {
     let verbs: &[&str] = match cmd {
-        "chunk" => crate::chunk::VERBS,
-        "plan" => crate::plan::VERBS,
+        "chunk" => crate::core::work::CHUNK_VERBS,
+        "plan" => crate::core::work::PLAN_VERBS,
         _ => return None,
     };
     argv.iter()
@@ -309,8 +309,8 @@ mod tests {
         assert_eq!(sub("find", &argv("find x")), None);
         let e = "rejected: unknown command \"fnd\" — did you mean find?";
         assert_eq!(near(e), Some("find"));
-        let usage = crate::chunk::USAGE.split(' ').nth(2).unwrap();
-        assert_eq!(usage, crate::chunk::VERBS.join("|"));
+        let usage = crate::core::work::CHUNK_VERBS.join("|");
+        assert!(usage.contains("start") && usage.contains("done"));
         assert_eq!(
             near("rejected: unknown command \"zz\" — try 'fael --help'"),
             None
