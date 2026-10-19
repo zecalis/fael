@@ -10,6 +10,7 @@
 
 mod acted;
 mod aggregate;
+mod by_flag;
 mod capture;
 mod cross;
 mod day;
@@ -36,6 +37,7 @@ pub use aggregate::{
     AskCount, Constants, Count, NonEnglish, Rounds, RowStatus, STATS_SCHEMA, Stats, TopRow,
     aggregate,
 };
+pub use by_flag::{FlagUsage, FlagUse};
 pub use capture::Capture;
 pub use cross::{CrossAgent, Reuse};
 pub use day::{

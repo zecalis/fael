@@ -89,7 +89,12 @@ fn repeat(calls: &[Call], i: usize) -> bool {
 pub(super) fn friction(parsed: &Parsed) -> Friction {
     let mut streams: HashMap<String, Vec<Call>> = HashMap::new();
     let mut out = Friction::default();
-    for v in parsed.kept.iter().filter(|v| v["event"] == "call") {
+    // `who: "human"` is a call outside an agent session — usage, never friction
+    for v in parsed
+        .kept
+        .iter()
+        .filter(|v| v["event"] == "call" && v["who"] != "human")
+    {
         let outcome = match v["outcome"].as_str() {
             Some("ok") => Outcome::Ok,
             Some("reject") => Outcome::Reject,

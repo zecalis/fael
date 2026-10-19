@@ -101,6 +101,12 @@ fn an_empty_find_then_another_find_is_one_repeat() {
     );
 }
 
+fn all_human(d: &Path) {
+    let c = calls(d);
+    assert_eq!(c.iter().filter(|r| r["who"] == "human").count(), 2, "{c:?}");
+    assert_eq!(stats_json(d)["friction"]["calls"], 0);
+}
+
 #[test]
 fn help_counts_and_a_call_outside_a_session_does_not() {
     let d = repo();
@@ -114,18 +120,15 @@ fn help_counts_and_a_call_outside_a_session_does_not() {
     let d = repo();
     call(&d, None, &["find", "--stale"]);
     call(&d, None, &["find", "--help"]);
-    assert!(
-        calls(&d).is_empty(),
-        "a human at the keyboard is no agent friction"
-    );
+    all_human(&d);
 }
 
 #[test]
-fn hook_and_stats_calls_leave_no_line() {
+fn stats_and_doctor_calls_are_human_rows_outside_friction() {
     let d = repo();
     call(&d, Some("s1"), &["stats"]);
     call(&d, Some("s1"), &["doctor"]);
-    assert!(calls(&d).is_empty());
+    all_human(&d);
 }
 
 #[test]

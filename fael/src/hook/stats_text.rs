@@ -318,6 +318,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     super::friction::lines(&s.friction)
         .iter()
         .for_each(|l| println!("{l}"));
+    super::flag_usage::lines(&s.usage)
+        .iter()
+        .for_each(|l| println!("{l}"));
     println!(
         "  constants per session: SKILL.md {} bytes (~{} est) + MCP schema {} bytes (~{} est)",
         s.constants.skill_bytes,
