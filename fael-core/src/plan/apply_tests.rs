@@ -190,6 +190,10 @@ fn approve_defaults_to_the_model_hint_and_claude() {
     s.conn
         .execute("UPDATE chunk SET model_hint = 'haiku' WHERE uid = ?1", [&c])
         .unwrap();
+    // a re-approve keeps the model already approved, the hint only fills a fresh approval
+    let text = s.approve(&c, Some((None, None)), NOW).unwrap();
+    assert_eq!(text, "approved · model small · client claude");
+    s.approve(&c, None, NOW).unwrap();
     let text = s.approve(&c, Some((None, None)), NOW).unwrap();
     assert_eq!(text, "approved · model haiku · client claude");
     let text = s.approve(&c, Some((Some("sonnet"), None)), NOW).unwrap();
