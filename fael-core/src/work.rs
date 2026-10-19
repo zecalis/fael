@@ -233,14 +233,14 @@ pub fn kickoff_text(db: &Path, plan_name: &str, worktree: &str, today: &str) -> 
                 out.push_str(&format!("> {}\n", brief.lines().next().unwrap_or_default()));
             }
             out.push_str(
-                "start it: `fael chunk start {uid}` (prints the brief and the chunk rules)\n"
+                "start it: `fael chunk start {uid}` (prints the brief and the chunk rules)\n\n"
                     .replace("{uid}", &uid)
                     .as_str(),
             );
             Some(out)
         }
         Ok(None) => Some(format!(
-            "no chunk of {} is ready — `fael plan export {}` shows each state\n",
+            "no chunk of {} is ready — `fael plan export {}` shows each state\n\n",
             p.name, p.name
         )),
         Err(_) => None,
@@ -268,7 +268,6 @@ mod tests {
         assert_eq!(mark_seen_session(&db, "s", "2026-10-19T00:00:00Z"), 0);
         assert!(overlap(&["src/".to_string()], &["src/a.rs".to_string()]));
         assert!(!overlap(&["src/a".to_string()], &["src/ab.rs".to_string()]));
-        assert!(held_session_file("").is_some() || true);
         assert!(held_session_file("abc-123").is_some());
         assert!(held_session_file("../x").is_none());
     }
