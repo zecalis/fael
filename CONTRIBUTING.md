@@ -98,6 +98,16 @@ cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc 
   for a future that may not come.
 - **Prefer std** — a new dependency needs a reason a few lines of code can't cover.
 
+### New flags and commands
+
+A new flag or command ships with three things (decision 01M59HQJ):
+
+1. the issue id it fixes,
+2. the friction it cuts (`fael stats` `friction.by_command` — rejects, help reads, find-repeats where it happened),
+3. the `fael stats` calls-per-command-and-flag line (`usage.by_flag`; text prints the top 8 with `since`) that will show its use — run it and quote the line in the PR.
+
+A new workflow flag is born hidden: it parses but stays out of default help, and the skill or `fael chunk start` brief that sends the agent to it names it. Tier it under `product:cli-tiers-table` (`fael find --key product:cli-tiers-table`); removal follows the retire bar in `fael plan export cli-tiers --section 4` — link, never copy, either list. Put the flags in the `COMMANDS` table (`fael/src/help/commands.rs`) and the matching `docs/architecture.md` row (`docs_match_flags` holds them equal); default `fael --help` stays core-only.
+
 ## File size: no god files
 
 fael pushes memory **per file** — an agent that reads a small file gets the rows about that file
