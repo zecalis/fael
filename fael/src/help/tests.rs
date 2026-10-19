@@ -1,4 +1,4 @@
-//! Help unit tests: requests, week-one list, docs parity, core surface.
+//! Help unit tests: requests, core list (cli-tiers), docs parity, core surface.
 
 /// `--files`, `--revisit` … named anywhere in `s`.
 fn flags(s: &str) -> std::collections::BTreeSet<&str> {
@@ -23,16 +23,66 @@ fn help_is_a_request_before_dashdash_only() {
     }
 }
 
-/// A misspelled or renamed CORE entry would silently drop that command
-/// from the "commands:" list.
+/// A misspelled or renamed CORE/GAP entry would silently drop that command
+/// from the default list.
 #[test]
 fn core_names_are_commands() {
-    for c in super::CORE {
+    for c in super::top::CORE.iter().chain(super::top::GAP_SHOWN) {
         assert!(
             super::COMMANDS.iter().any(|(n, ..)| n == c),
             "CORE names {c}, which is not in COMMANDS"
         );
     }
+}
+
+/// `usage()` lists the cli-tiers core plus the unguided GAP; `usage_all()` lists everything.
+#[test]
+fn top_usage_tiers() {
+    let core = super::usage();
+    for present in ["add", "find", "close", "bump", "claim", "doctor", "stats"] {
+        assert!(core.contains(&format!("  {present}")), "{present} missing");
+    }
+    // tier GAP stays shown in default help (owner 2026-10-19) — never hidden
+    for present in ["next", "keys", "compact", "intake"] {
+        assert!(core.contains(&format!("  {present}")), "{present} missing");
+    }
+    for hidden in ["chunk", "plan", "board", "kickoff", "install"] {
+        assert!(
+            !core.lines().any(|l| l.trim_start().starts_with(hidden)),
+            "{hidden} leaks into core usage"
+        );
+    }
+    assert!(
+        !core.contains("more commands:"),
+        "core usage has a rest section"
+    );
+    assert!(
+        core.contains("fael --help --all"),
+        "core usage lacks the --all line"
+    );
+    // core examples never name a hidden command
+    for hidden in ["kickoff", "chunk", "plan", "board", "install", "mv "] {
+        assert!(
+            !core
+                .split_once("examples:")
+                .unwrap_or_default()
+                .1
+                .contains(hidden),
+            "core examples name {hidden}"
+        );
+    }
+    let all = super::usage_all();
+    for present in ["chunk", "plan", "board"] {
+        assert!(all.contains(&format!("  {present}")), "{present} missing");
+    }
+    assert!(
+        all.contains("more commands:"),
+        "full usage lost its rest section"
+    );
+    // --all with no command named returns the full usage, not the core
+    let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+    assert_eq!(super::for_argv(&argv("--help --all")), all);
+    assert_eq!(super::for_argv(&argv("--help")), core);
 }
 
 /// docs/architecture.md's CLI table is prose around the same synopses —

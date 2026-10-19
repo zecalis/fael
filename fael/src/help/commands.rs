@@ -162,8 +162,8 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      keeps one plan's chunks; the text view folds blocked into per-plan counts and
      --plan lists them; a path in .fael/shared (one prefix per line) is
      nobody's claim: it never makes an overlap; a repo whose fael.db cannot be read
-     stays listed with its error and the command exits 1; --watch (the app's one
-     read) stays up, rereads each second only the project whose db, ledger jsonl or
+     stays listed with its error and the command exits 1; --watch stays up,
+     rereads each second only the project whose db, ledger jsonl or
      git refs moved, prints a compact board line at start and on each change, and
      exits when stdin closes; --drop takes a finished repo off the registry until a
      chunk command there adds it back)",
