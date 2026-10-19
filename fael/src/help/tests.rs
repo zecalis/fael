@@ -107,19 +107,53 @@ fn docs_match_flags() {
     }
 }
 
-/// Chunk 3: the core is a strict subset of the full surface — every flag the
-/// core names the full names too, and the hidden ones name nothing in core.
+/// Chunk hide-flags: the core is a strict subset of the full surface —
+// every flag the core names the full names too, and the hidden ones name
+// nothing in core. Tiers come from the classify row
+// (`product:cli-tiers-table`): C stays, W hides.
 #[test]
 fn core_is_a_strict_subset_of_full() {
     for (cmd, hidden) in [
         (
             "find",
-            ["--since", "--by", "--to", "--revisit", "--groups"].as_slice(),
+            [
+                "--since",
+                "--by",
+                "--to",
+                "--revisit",
+                "--groups",
+                "--text",
+                "--recall",
+                "--kind",
+                "--full",
+                "--all",
+            ]
+            .as_slice(),
         ),
         (
             "add",
-            ["--urgent-before", "--force", "--dry-run"].as_slice(),
+            [
+                "--urgent",
+                "--urgent-before",
+                "--revisit",
+                "--force",
+                "--dry-run",
+            ]
+            .as_slice(),
         ),
+        (
+            "bump",
+            [
+                "--to",
+                "--revisit",
+                "--urgent",
+                "--urgent-before",
+                "--not-urgent",
+            ]
+            .as_slice(),
+        ),
+        ("doctor", ["--fat"].as_slice()),
+        ("stats", ["--rows", "--day", "--misses"].as_slice()),
     ] {
         let core = super::for_command(cmd).unwrap();
         let full = super::for_command_full(cmd).unwrap();
@@ -141,8 +175,13 @@ fn core_is_a_strict_subset_of_full() {
             );
         }
     }
-    // commands without a core override show their full section as-is
-    for cmd in ["close", "kickoff"] {
+    // commands without a core override show their full section as-is:
+    // close/claim are already core, kickoff is GAP-shown, and hidden
+    // workflow commands keep their full own --help (an agent sent there by a
+    // brief needs it).
+    for cmd in [
+        "close", "claim", "kickoff", "chunk", "plan", "board", "run", "restore",
+    ] {
         assert_eq!(
             super::for_command(cmd),
             super::for_command_full(cmd),
@@ -157,7 +196,7 @@ fn core_is_a_strict_subset_of_full() {
 #[test]
 fn all_flag_shows_the_full_section() {
     let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
-    for cmd in ["find", "add"] {
+    for cmd in ["find", "add", "bump", "doctor", "stats"] {
         let core = super::for_argv(&argv(&format!("{cmd} --help")));
         assert_eq!(
             core.lines().next(),

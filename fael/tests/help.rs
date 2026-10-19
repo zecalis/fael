@@ -136,39 +136,102 @@ fn per_command_help_and_short_errors() {
 #[test]
 fn core_help_hides_advanced_flags_and_all_shows_them() {
     let d = repo();
-    // `fael find --help` is the core: the everyday flags, none hidden ones
+    // `fael find --help` is the core: everyday flags only (tier C), no workflow ones
     let (ok, out, err) = fael(&d, &["find", "--help"]);
     assert!(ok, "{err}");
-    for present in [
-        "--files", "--key", "--kind", "--full", "--all", "--limit", "--offset",
-    ] {
+    for present in ["--files", "--key", "--limit", "--offset"] {
         assert!(out.contains(present), "{present} missing: {out}");
     }
-    for hidden in ["--since", "--by", "--to", "--revisit", "--groups"] {
+    for hidden in [
+        "--since",
+        "--by",
+        "--to",
+        "--revisit",
+        "--groups",
+        "--text",
+        "--recall",
+        "--kind",
+        "--full",
+        "--all",
+    ] {
         assert!(!out.contains(hidden), "{hidden} leaks: {out}");
     }
+    assert!(!out.contains("--recall"), "recall leaks: {out}");
     // `--help --all` is the full surface again
     let (ok, full, err) = fael(&d, &["find", "--help", "--all"]);
     assert!(ok, "{err}");
-    for hidden in ["--since", "--groups"] {
+    for hidden in [
+        "--since", "--groups", "--recall", "--kind", "--full", "--all",
+    ] {
         assert!(full.contains(hidden), "{hidden} missing: {full}");
     }
-    // same for add: --force/--dry-run/--urgent-before hide, --urgent stays
+    // same for add: workflow flags hide (--urgent/--revisit/--force/--dry-run), core stays
     let (ok, out, err) = fael(&d, &["add", "--help"]);
     assert!(ok, "{err}");
-    assert!(out.contains("--urgent"), "{out}");
-    for hidden in ["--force", "--dry-run", "--urgent-before"] {
+    for present in [
+        "--title",
+        "--files",
+        "--key",
+        "--to",
+        "--from",
+        "--supersedes",
+        "--json",
+    ] {
+        assert!(out.contains(present), "{present} missing: {out}");
+    }
+    for hidden in [
+        "--urgent",
+        "--urgent-before",
+        "--revisit",
+        "--force",
+        "--dry-run",
+    ] {
         assert!(!out.contains(hidden), "{hidden} leaks: {out}");
     }
     let (ok, full, err) = fael(&d, &["add", "--help", "--all"]);
     assert!(ok, "{err}");
-    for hidden in ["--force", "--dry-run", "--urgent-before"] {
+    for hidden in ["--force", "--dry-run", "--urgent-before", "--revisit"] {
         assert!(full.contains(hidden), "{hidden} missing: {full}");
     }
-    // no core override: close shows the same text either way
-    let (_, core, _) = fael(&d, &["close", "--help"]);
-    let (_, full, _) = fael(&d, &["close", "--help", "--all"]);
-    assert_eq!(core, full);
+    // bump: every flag is workflow, so the core is the bare id
+    let (ok, out, err) = fael(&d, &["bump", "--help"]);
+    assert!(ok, "{err}");
+    assert!(out.contains("fael bump <id>"), "{out}");
+    for hidden in ["--to", "--revisit", "--urgent", "--not-urgent"] {
+        assert!(!out.contains(hidden), "{hidden} leaks: {out}");
+    }
+    let (ok, full, err) = fael(&d, &["bump", "--help", "--all"]);
+    assert!(ok, "{err}");
+    assert!(full.contains("--to"), "{full}");
+    // doctor: --fat hides, --fix/--json stay
+    let (ok, out, err) = fael(&d, &["doctor", "--help"]);
+    assert!(ok, "{err}");
+    assert!(out.contains("--fix"), "{out}");
+    assert!(!out.contains("--fat"), "--fat leaks: {out}");
+    let (ok, full, err) = fael(&d, &["doctor", "--help", "--all"]);
+    assert!(ok, "{err}");
+    assert!(full.contains("--fat"), "{full}");
+    // stats: --rows/--day/--misses hide, --json/--since stay
+    let (ok, out, err) = fael(&d, &["stats", "--help"]);
+    assert!(ok, "{err}");
+    for present in ["--json", "--since"] {
+        assert!(out.contains(present), "{present} missing: {out}");
+    }
+    for hidden in ["--rows", "--day", "--misses"] {
+        assert!(!out.contains(hidden), "{hidden} leaks: {out}");
+    }
+    let (ok, full, err) = fael(&d, &["stats", "--help", "--all"]);
+    assert!(ok, "{err}");
+    for hidden in ["--rows", "--day", "--misses"] {
+        assert!(full.contains(hidden), "{hidden} missing: {full}");
+    }
+    // no core override: close/claim show the same text either way;
+    // hidden workflow commands keep their full own --help
+    for cmd in ["close", "claim", "chunk", "plan", "board"] {
+        let (_, core, _) = fael(&d, &[cmd, "--help"]);
+        let (_, full, _) = fael(&d, &[cmd, "--help", "--all"]);
+        assert_eq!(core, full, "{cmd}");
+    }
 }
 
 #[test]
@@ -181,10 +244,55 @@ fn hidden_flags_still_run() {
         &["find", "--by", "nobody"],
         &["find", "--to", "nobody"],
         &["find", "--revisit"],
+        &["find", "--recall", "wide"][..],
+        &["find", "--kind", "issue"],
+        &["find", "--full"],
+        &["find", "--all"],
+        &["find", "--text", "nothing-here"],
+        &["find", "--limit", "1"],
     ] {
         let (ok, _, err) = fael(&d, args);
         assert!(ok, "{args:?} {err}");
     }
+    // hidden bump/doctor/stats flags still run too
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = fael(&d, &["add", "note", "probe-bump", "--files", "src/a.rs"]);
+    assert!(ok, "{err} {out}");
+    // hidden add flags still parse (revisit/urgent are workflow-hidden, not removed)
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "probe-hidden-flags",
+            "--title",
+            "probe hidden",
+            "--files",
+            "src/a.rs",
+            "--revisit",
+            "tomorrow",
+            "--urgent",
+        ],
+    );
+    assert!(ok, "{err}");
+    // bump --to still parses: unknown id fails on the id, never on the flag
+    let (ok, _, err) = fael(
+        &d,
+        &["bump", "01J00000000000000000000000", "--to", "nobody"],
+    );
+    assert!(!ok, "bump with a bad id should fail");
+    assert!(
+        !err.contains("unknown flag"),
+        "bump --to no longer parses: {err}"
+    );
+    let (ok, _, err) = fael(&d, &["doctor", "--fat"]);
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&d, &["stats", "--rows"]);
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&d, &["stats", "--misses"]);
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&d, &["stats", "--day"]);
+    assert!(ok, "{err}");
     // --dry-run writes nothing but still previews
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let (ok, out, err) = fael(
