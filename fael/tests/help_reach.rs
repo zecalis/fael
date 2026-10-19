@@ -16,16 +16,13 @@
 
 use std::collections::BTreeSet;
 
-// Every file an agent is sent through: the skills, the owner instructions,
+// Every file an agent is sent through: the core skills, the owner instructions,
 // the new-team doc, plus the brief an agent actually reads on `chunk start`.
+// fael-plan and fael-sweep moved to fael crew (decision 01M5AF2H) — they are
+// read from the crew checkout when present, never embedded here.
 const SKILL_MAIN: &str = include_str!("../skill/SKILL.md");
 const SKILL_DEBUG: &str = include_str!("../skill/fael-debug/SKILL.md");
-const SKILL_PLAN: &str = include_str!("../skill/fael-plan/SKILL.md");
-const SKILL_PLAN_REVIEW: &str = include_str!("../skill/fael-plan/REVIEW.md");
-const SKILL_PLAN_SPEC: &str = include_str!("../skill/fael-plan/SPEC.md");
-const SKILL_PLAN_ADOPT: &str = include_str!("../skill/fael-plan/ADOPT.md");
 const SKILL_REVIEW: &str = include_str!("../skill/fael-review/SKILL.md");
-const SKILL_SWEEP: &str = include_str!("../skill/fael-sweep/SKILL.md");
 const SKILL_OPENCODE: &str = include_str!("../skill/opencode.js");
 const AGENTS: &str = include_str!("../../AGENTS.md");
 const README: &str = include_str!("../../README.md");
@@ -42,18 +39,46 @@ fn corpus() -> String {
     [
         SKILL_MAIN,
         SKILL_DEBUG,
-        SKILL_PLAN,
-        SKILL_PLAN_REVIEW,
-        SKILL_PLAN_SPEC,
-        SKILL_PLAN_ADOPT,
         SKILL_REVIEW,
-        SKILL_SWEEP,
         SKILL_OPENCODE,
         AGENTS,
         README,
         &brief(),
     ]
     .join("\n")
+}
+
+/// Crew skills (fael-plan, fael-sweep) live in the crew checkout, not in core.
+/// Read them from disk when present: `$FAEL_CREW_SKILLS` (a crew checkout's
+/// `skills/`) or the installed skills dir (the crew copy is a symlink there).
+/// None present (e.g. CI) → None, and the crew-flags check below skips.
+fn crew_corpus() -> Option<String> {
+    let mut roots = Vec::new();
+    if let Ok(dir) = std::env::var("FAEL_CREW_SKILLS") {
+        roots.push(std::path::PathBuf::from(dir));
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        roots.push(std::path::PathBuf::from(home).join(".claude/skills"));
+    }
+    const FILES: &[&str] = &[
+        "fael-plan/SKILL.md",
+        "fael-plan/REVIEW.md",
+        "fael-plan/SPEC.md",
+        "fael-plan/ADOPT.md",
+        "fael-sweep/SKILL.md",
+    ];
+    let mut out = String::new();
+    let mut found = false;
+    for root in &roots {
+        for f in FILES {
+            if let Ok(s) = std::fs::read_to_string(root.join(f)) {
+                out.push_str(&s);
+                out.push('\n');
+                found = true;
+            }
+        }
+    }
+    found.then_some(out)
 }
 
 /// Hidden top-level commands (all `COMMANDS` minus core minus GAP_SHOWN).
@@ -91,9 +116,12 @@ const HIDDEN_FLAGS: &[&str] = &[
 
 /// Workflow flags on hidden commands (plan/chunk/board): the pointer that
 /// sends the agent there names them, so `--help --all` is not the only way.
-/// `--app/--area/--parent` live only in `fael-plan/SKILL.md:112` — deleting
-/// that line must fail this test naming `--app` (the Done check).
-const WORKFLOW_FLAGS: &[&str] = &[
+/// Split by owner (decision 01M5AF2H): core flags stay named in the chunk
+/// brief/rules; crew flags live in fael-plan/fael-sweep in the crew checkout.
+/// `--app/--area/--parent` live only in the crew's `fael-plan/SKILL.md` — deleting
+/// that line must fail this test naming `--app` when the crew checkout is present.
+const CORE_WORKFLOW_FLAGS: &[&str] = &["--until", "--section", "--brief", "--pr", "--out"];
+const CREW_WORKFLOW_FLAGS: &[&str] = &[
     "--app",
     "--area",
     "--parent",
@@ -106,14 +134,9 @@ const WORKFLOW_FLAGS: &[&str] = &[
     "--wait",
     "--ask",
     "--option",
-    "--until",
-    "--section",
-    "--brief",
     "--open",
     "--model",
     "--no-worktree",
-    "--pr",
-    "--out",
 ];
 
 // Known gaps reported to the owner as removable-by-hand (retire chunk):
@@ -189,12 +212,23 @@ fn contract_reachable(thing: &str) -> bool {
 #[test]
 fn hidden_commands_still_named() {
     let c = corpus();
+    // `sweep`'s skill moved to fael crew (decision 01M5AF2H): when the crew
+    // checkout is present it must name it there; when absent (e.g. CI) core
+    // skips it — it is crew's to keep reachable.
+    let crew = crew_corpus();
     let mut missing = Vec::new();
     for cmd in HIDDEN_COMMANDS {
         let needle = format!("fael {cmd}");
-        if !c.contains(&needle) && !contract_reachable(cmd) {
-            missing.push(cmd.to_string());
+        if c.contains(&needle) || contract_reachable(cmd) {
+            continue;
         }
+        if *cmd == "sweep" && crew.as_ref().is_some_and(|k| k.contains(&needle)) {
+            continue;
+        }
+        if *cmd == "sweep" && crew.is_none() {
+            continue;
+        }
+        missing.push(cmd.to_string());
     }
     assert!(
         missing.is_empty(),
@@ -206,7 +240,7 @@ fn hidden_commands_still_named() {
 fn hidden_flags_still_named() {
     let c = corpus();
     let mut missing = Vec::new();
-    for flag in HIDDEN_FLAGS.iter().chain(WORKFLOW_FLAGS.iter()) {
+    for flag in HIDDEN_FLAGS.iter().chain(CORE_WORKFLOW_FLAGS.iter()) {
         if !c.contains(*flag) && !contract_reachable(flag) {
             missing.push(flag.to_string());
         }
@@ -215,6 +249,21 @@ fn hidden_flags_still_named() {
         missing.is_empty(),
         "hidden flags named nowhere (add a pointer to the fitting skill or report removable): {missing:?}"
     );
+    // Crew flags live in the crew checkout (decision 01M5AF2H): when it is
+    // present, every one must still be named there; when absent (e.g. CI),
+    // core skips them — they are crew's to keep reachable.
+    if let Some(crew) = crew_corpus() {
+        let mut crew_missing = Vec::new();
+        for flag in CREW_WORKFLOW_FLAGS {
+            if !crew.contains(*flag) && !contract_reachable(flag) {
+                crew_missing.push(flag.to_string());
+            }
+        }
+        assert!(
+            crew_missing.is_empty(),
+            "crew workflow flags named nowhere in the crew checkout: {crew_missing:?}"
+        );
+    }
 }
 
 #[test]

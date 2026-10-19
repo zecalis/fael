@@ -276,6 +276,7 @@ fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {
     skills.dedup();
     for dir in skills {
         skill::retire(c, &dir)?;
+        skill::remove_moved(c, &dir)?;
         for (name, file, body) in skill::SKILLS {
             skill::skill(c, &dir.join(name).join(file), body)?;
         }
