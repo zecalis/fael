@@ -38,8 +38,10 @@ and the lead and content skills; each chunk's brief, area (dev or marketing), si
 state live in the SQLite store, and an agent starts, waits on the owner and finishes a chunk
 through `fael chunk start|wait|done`. Core never depends on crew; crew reads core through
 `fael board --json`. The crew code is the `fael-crew` workspace crate (it depends on `fael-core`, never the
-other way) and may later become an external `fael-crew`
-binary that `fael` dispatches to, so the typed commands never change. Public docs say "fael
+other way) and ships a `fael-crew` binary: `fael plan|chunk|board|sweep|intake|run` exec it with the
+same argv (`FAEL_BIN` names `fael` for the way back), so the typed commands never change. `fael` itself
+does not link `fael-crew` and hooks never run it; the two things crew needs from the ledger's own binary
+(the held-rows text in `chunk start|done`, closing a linked row) are the hidden `fael held` and `fael close`. Public docs say "fael
 crew", never bare "crew", and never link its repo.
 
 Decision `product:mission` (01M5ABTD): plans and chunks move from

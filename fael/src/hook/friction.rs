@@ -154,7 +154,13 @@ fn record(
 /// is a call an agent made for an answer.
 pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
     let empty = take_empty();
-    if matches!(argv.first().map(String::as_str), Some("hook" | "mcp")) {
+    // `FAEL_FROM_CREW`: fael-crew's own call back into this binary — the verb the agent
+    // typed is the one that counts, and `fael` counted it when it handed over
+    if matches!(
+        argv.first().map(String::as_str),
+        Some("hook" | "mcp" | "held")
+    ) || std::env::var_os("FAEL_FROM_CREW").is_some()
+    {
         return;
     }
     let cmd = command(argv);

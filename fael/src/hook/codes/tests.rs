@@ -143,6 +143,8 @@ fn every_message_in_the_source_has_a_code() {
     let mut all = vec![];
     literals(&root.join("src"), &mut all);
     literals(&root.join("../fael-core/src"), &mut all);
+    // fael-crew's CLI rejects reach the usage log through `crew::dispatch`
+    literals(&root.join("../fael-crew/src/cli"), &mut all);
     assert!(all.len() > 150, "found only {}", all.len());
     let other: Vec<_> = all
         .iter()

@@ -85,7 +85,6 @@ name = "fael"
 version = "0.74.0"
 dependencies = [
  "fael-core",
- "fael-crew",
  "serde",
  "serde_json",
 ]

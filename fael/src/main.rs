@@ -6,26 +6,17 @@
 mod aliases;
 mod amend;
 mod batch;
-mod board;
-mod chunk;
-mod chunk_ask;
-mod chunk_elsewhere;
-mod chunk_run;
-mod chunk_scope;
-mod chunk_show;
-mod chunk_verbs;
 mod claim;
 mod close_key;
+mod crew;
 mod filehash;
 mod find;
-mod help;
+mod held;
 mod hook;
 mod install;
-mod intake;
 mod maintain;
 mod mcp;
 mod mv;
-mod plan;
 mod purge;
 mod refs;
 mod report;
@@ -33,13 +24,12 @@ mod restore;
 mod schema;
 mod selfheal;
 mod session;
-mod sweep;
 mod synonyms;
 mod unmerged;
 mod write;
 
 use fael_core::{self as core};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
@@ -47,6 +37,10 @@ fn main() -> ExitCode {
     reset_sigpipe();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let mut argv = synonyms::rewrite(raw.clone());
+    // plan/chunk/board/sweep/intake/run are fael crew's — before help, so `fael chunk --help` is its
+    if let Some(code) = crew::dispatch(&argv) {
+        return code;
+    }
     let mut res = run(argv.clone());
     // the arity reject runs nothing: retry once with `--files a b` as `--files a,b`
     if let Err(e) = &res
@@ -116,13 +110,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),
-        ("plan", rest) => plan::cmd(&a, rest),
-        ("board", []) => board::cmd(&a),
-        ("sweep", []) => sweep::cmd(&a),
-        ("intake", [] | [_]) => intake::cmd(&a, rest.first()),
-        ("chunk", rest) => chunk::cmd(&a, rest),
-        ("run", [end, r]) if end == "end" => chunk::run_end(&a, r),
-        ("run", [beat, r]) if beat == "beat" => chunk::run_beat(&a, r),
+        // hidden: what fael-crew asks for mid-`chunk start|done` (see held.rs)
+        ("held", [kind]) => held::cmd(kind),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
@@ -167,15 +156,9 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
 }
 
 pub(crate) use fael_core::args::Args;
+pub(crate) use fael_core::help;
 pub(crate) use fael_core::journal;
-pub(crate) use fael_core::{Repo, read_repo as read, repo, repo_at};
-
-// answered from the --watch cache while the board lives here (moves with it)
-pub(crate) fn git(dir: &Path, args: &[&str]) -> Option<String> {
-    let (code, out) = board::git_output(dir, args)?;
-    let s = out.trim().to_string();
-    (code == Some(0) && !s.is_empty()).then_some(s)
-}
+pub(crate) use fael_core::{Repo, git, read_repo as read, repo, repo_at};
 
 /// The user's home: `HOME` first (git and Git Bash on Windows honour it too,
 /// and tests set it), else the OS answer (`USERPROFILE` on Windows).

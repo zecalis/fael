@@ -13,12 +13,14 @@ mod compact;
 mod config;
 mod doctor;
 pub mod drift;
+pub mod help;
 mod hook;
 mod id;
 mod import;
 pub mod journal;
 pub mod lang;
 mod log;
+mod overlap;
 mod query;
 mod repo;
 mod row;
@@ -50,6 +52,7 @@ pub use log::{
     BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, append, bump_row, close, close_row,
     decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, restore_row,
 };
+pub use overlap::{overlap, under};
 pub use query::{
     Abbrev, Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_HUB_PEEK, Cut, EXPAND_MAX, Filter, Focus,
     Hidden, KeyUse, MdRef, NO_ROW_WITH_ID, PLAN_KICKOFF_ROWS, PUSH_BACKGROUND, PUSH_HUB_PEEK,
