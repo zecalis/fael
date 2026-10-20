@@ -69,7 +69,7 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 
 ## Plan Workflow
 
-A plan is sections plus chunks in fael.db — no plan file. Read it with
+A plan is sections plus chunks in crew.db — no plan file. Read it with
 `fael plan export <plan>` (`--section <key>` for one); change a section through the bill
 (`fael plan export <plan> --json`, edit `sections`, `fael plan apply --dry-run`, then apply).
 Draft or re-cut plans with the `fael-plan` skill (fael crew).

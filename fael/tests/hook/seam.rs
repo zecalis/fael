@@ -1,11 +1,11 @@
-//! The read seam: hooks stay silent with no fael.db — no chunk line, no
+//! The read seam: hooks stay silent with no crew.db — no chunk line, no
 //! error, and no db created. Core works with no crew installed.
 
 use super::{fael, json};
 use std::path::Path;
 
 fn db_of(d: &Path) -> std::path::PathBuf {
-    d.join(".git/fael/fael.db")
+    d.join(".git/fael/crew.db")
 }
 
 #[test]
@@ -13,7 +13,7 @@ fn hooks_with_no_fael_db_stay_silent() {
     let d = super::repo();
     assert!(
         !db_of(&d).exists(),
-        "fixture has no fael.db: {}",
+        "fixture has no crew.db: {}",
         db_of(&d).display()
     );
     // session start: no brief, no chunk line, still ok
@@ -36,7 +36,7 @@ fn hooks_with_no_fael_db_stay_silent() {
     // the seam never creates the db it could not read
     assert!(
         !db_of(&d).exists(),
-        "hooks never create fael.db: {}",
+        "hooks never create crew.db: {}",
         db_of(&d).display()
     );
 }

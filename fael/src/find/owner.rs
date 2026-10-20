@@ -1,4 +1,4 @@
-//! Where a missing id lives (issue 01M4XKM4): a chunk in this repo's fael.db, or a row or
+//! Where a missing id lives (issue 01M4XKM4): a chunk in this repo's crew.db, or a row or
 //! chunk in another repo on this machine — the board's registry and every repo usage names.
 //! Read only on the reject path: an agent that was told "no row" hunted repo by repo.
 

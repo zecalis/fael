@@ -1,4 +1,4 @@
-//! The board's registry (SPEC §10): every repo whose fael.db a fael command wrote, so
+//! The board's registry (SPEC §10): every repo whose crew.db a fael command wrote, so
 //! `fael board` runs from anywhere — scratch repos under the temp dir stay off it.
 
 use crate::Repo;
@@ -55,7 +55,7 @@ pub(crate) fn main_root(r: &Repo) -> &Path {
         .unwrap_or(&r.root)
 }
 
-/// Put this repo on the board: called by every command that writes its fael.db.
+/// Put this repo on the board: called by every command that writes its crew.db.
 pub(crate) fn register(r: &Repo) {
     let root = main_root(r);
     if scratch(root) || registered().iter().any(|p| p == root) {

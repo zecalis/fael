@@ -1,4 +1,4 @@
-//! Where a chunk uid lives when this repo's fael.db does not hold it (plan
+//! Where a chunk uid lives when this repo's crew.db does not hold it (plan
 //! fael-friction-2 show-elsewhere): the board's registry plus every repo usage
 //! names, read-only, never running the command elsewhere. Labels are per plan,
 //! so only a uid or an 8+-char prefix resolves across repos.

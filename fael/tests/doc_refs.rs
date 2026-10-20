@@ -37,7 +37,7 @@ fn docs_cite_only_code_that_exists() {
             code.contains(&format!("{k} {name} ")) || code.contains(&format!("{k} {name};"))
         }) || src.iter().any(|p| p.file_stem().is_some_and(|s| s == name))
     };
-    // ponytail: top-level and docs/ only; plans live in fael.db, not in files
+    // ponytail: top-level and docs/ only; plans live in crew.db, not in files
     let mut docs = vec![];
     for dir in [root.to_path_buf(), root.join("docs")] {
         for e in std::fs::read_dir(dir).unwrap().flatten() {

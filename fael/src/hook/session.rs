@@ -133,7 +133,7 @@ fn start_rows<'a>(
 
 /// The live chunk run this worktree holds (`fael chunk start` here, maybe in
 /// another session): its uid and the line that points at its brief. No
-/// fael.db, no run = `None`.
+/// crew.db, no run = `None`.
 fn chunk_line(repo: &crate::Repo) -> Option<(String, String)> {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
     let held = crate::core::work::held(&db, &repo.root.to_string_lossy());

@@ -53,7 +53,7 @@ pub(super) fn row(tx: &Transaction, uid: &str) -> Result<Row, String> {
     let (id, uid, state) = lookup(tx, uid)?.ok_or(format!(
         "rejected: no chunk {uid} — `fael plan export` lists every uid"
     ))?;
-    let state = State::parse(&state).ok_or(format!("fael.db: chunk {uid} has state {state}"))?;
+    let state = State::parse(&state).ok_or(format!("crew.db: chunk {uid} has state {state}"))?;
     Ok(Row { id, uid, state })
 }
 

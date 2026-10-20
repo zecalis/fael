@@ -70,7 +70,7 @@ fn rejects_read_as_their_family() {
         ),
         ("rejected: chunk move needs --plan <p>", "missing_value"),
         (
-            "rejected: no plan 'x' in fael.db — `fael board` lists them",
+            "rejected: no plan 'x' in crew.db — `fael board` lists them",
             "no_plan",
         ),
         (

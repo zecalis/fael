@@ -6,7 +6,7 @@ use super::changed::{Blobs, STAMP_MAX_BYTES, file_verdict, mark_dormant, resolve
 use crate::core;
 use std::collections::HashSet;
 
-/// This repo's rows by state per kind, read now: the log, the disk, `fael.db`.
+/// This repo's rows by state per kind, read now: the log, the disk, `crew.db`.
 pub(crate) fn of(r: &crate::Repo) -> core::stats::Lifecycle {
     let mut log = crate::read(r);
     mark_dormant(r, &mut log);

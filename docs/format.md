@@ -88,7 +88,7 @@ Planning rides the existing `key` and `files` fields — no new field, no format
 - `plan:<name>:chunk-<n>` — a row about chunk `n`, the chunk it was filed in. The `n` is a
   plain number.
 
-A note under `:handoff` or `:chunk-<n>`, or filed on a branch, is *retired* — hidden like a closed row, shown `(retired)` under `find --all` — once `fael chunk done` ended the chunk it was filed in or git proves its branch merged (`docs/architecture.md` §Row state). Derived on read from `fael.db` and git; no row, field or close is written.
+A note under `:handoff` or `:chunk-<n>`, or filed on a branch, is *retired* — hidden like a closed row, shown `(retired)` under `find --all` — once `fael chunk done` ended the chunk it was filed in or git proves its branch merged (`docs/architecture.md` §Row state). Derived on read from `crew.db` and git; no row, field or close is written.
 
 These are a **ledger convention**, not fael semantics: fael stores and matches them like any
 other anchor or key, and never infers from them which plan a session is inside — a session's

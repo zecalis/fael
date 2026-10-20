@@ -1,11 +1,11 @@
 //! Flow inputs for `fael stats` (PLAN-fael-flow chunk f1): this clone's runs
-//! from fael.db and its merged PRs from `gh` plus `git log`. Both readers
+//! from crew.db and its merged PRs from `gh` plus `git log`. Both readers
 //! live here so `usage.rs` stays under the file-size cap; core joins them
 //! (pure) in `fael-core::stats::flow`.
 
 use crate::core;
 
-/// One run for the stats flow join, from this clone's fael.db — the caller
+/// One run for the stats flow join, from this clone's crew.db — the caller
 /// converts the stored RFC 3339 times to ms, so core stays string-free.
 pub(crate) fn runs() -> Vec<core::stats::FlowRun> {
     let db = crate::repo()

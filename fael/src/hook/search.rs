@@ -122,7 +122,7 @@ fn fix_commit(files: &[String]) -> String {
 
 /// True when this worktree holds a live chunk run (`fael chunk start` here):
 /// the same cheap SQLite read session start uses (`Store::held`), no git
-/// spawn, no board read. No fael.db, no run = false.
+/// spawn, no board read. No crew.db, no run = false.
 fn holds_chunk(repo: &crate::Repo) -> bool {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
     crate::core::work::has_held(&db, &repo.root.to_string_lossy())

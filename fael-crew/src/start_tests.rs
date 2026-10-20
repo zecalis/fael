@@ -102,7 +102,7 @@ fn two_starts_of_one_chunk_one_wins() {
     // a race shows on some runs only: 30 rounds make one test run catch it
     for _ in 0..30 {
         let dir = std::env::temp_dir().join(format!("fael-start-{}", fael_core::ulid()));
-        let path = dir.join("fael.db");
+        let path = dir.join("crew.db");
         let c = add(&mut Store::open(&path).unwrap(), "c", Some("brief"));
         let racers: Vec<_> = ["/a", "/b"]
             .into_iter()

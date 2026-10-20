@@ -130,7 +130,7 @@ fn watch_rereads_only_what_moved() {
     assert_eq!(v["v"], 1);
     assert_eq!(v["projects"].as_array().unwrap().len(), 2);
     assert!(project(&v, &a)["base"].is_null());
-    let db = a.join(".git/fael/fael.db");
+    let db = a.join(".git/fael/crew.db");
     let size = |p: &Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
     let (spawned, wal) = (calls(), size(&db.with_extension("db-wal")));
 
@@ -140,7 +140,7 @@ fn watch_rereads_only_what_moved() {
     assert_eq!(
         size(&db.with_extension("db-wal")),
         wal,
-        "the watch wrote fael.db"
+        "the watch wrote crew.db"
     );
 
     // a db write in a: a line with it, and no git (refs did not move)

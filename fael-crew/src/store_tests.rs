@@ -4,7 +4,7 @@ use crate::schema::{COLUMNS, TABLES};
 #[test]
 fn a_newer_epoch_is_refused() {
     let dir = std::env::temp_dir().join(format!("fael-plans-{}", fael_core::ulid()));
-    let path = dir.join("fael.db");
+    let path = dir.join("crew.db");
     drop(Store::open(&path).unwrap());
     let c = Connection::open(&path).unwrap();
     c.pragma_update(None, "user_version", 99).unwrap();
@@ -24,7 +24,7 @@ fn a_newer_epoch_is_refused() {
 fn builds_with_different_additions_share_one_db_both_ways() {
     let dir = std::env::temp_dir().join(format!("fael-plans-{}", fael_core::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("fael.db");
+    let path = dir.join("crew.db");
     // the other lane's build adds `ask` and `run.beat` on top of the additions every build has
     let mut t = TABLES.to_vec();
     t.push((
@@ -95,19 +95,19 @@ fn version_of(path: &Path) -> i32 {
 }
 
 #[test]
-fn plans_db_becomes_fael_db_and_a_stub_refuses_an_older_fael() {
+fn fael_db_becomes_crew_db_and_a_stub_refuses_an_older_fael() {
     let dir = scratch();
-    let old = dir.join("plans.db");
+    let old = dir.join("fael.db");
     let c = Connection::open(&old).unwrap();
     c.execute_batch(include_str!("v6.sql")).unwrap();
     c.query_row("PRAGMA journal_mode=WAL", [], |_| Ok(()))
         .unwrap();
     drop(c);
     let path = db_at(&dir);
-    assert_eq!(path, dir.join("fael.db"));
+    assert_eq!(path, dir.join("crew.db"));
     assert_eq!(version_of(&path), 6, "renamed as is; the open upgrades it");
     assert_eq!(version_of(&old), STUB);
-    // what a fael before v8 does with the stub: refuse it, never start an empty db
+    // what a fael before the rename does with the stub: refuse it, never start an empty db
     let e = Store::open(&old).err().unwrap();
     assert!(e.contains(&format!("schema v{STUB}")), "{e}");
     let s = Store::open(&path).unwrap();
@@ -116,7 +116,7 @@ fn plans_db_becomes_fael_db_and_a_stub_refuses_an_older_fael() {
     // later calls leave both alone
     assert_eq!(db_at(&dir), path);
     assert_eq!(version_of(&old), STUB);
-    // fael.db removed by hand: the stub is never renamed in, a fresh db starts
+    // crew.db removed by hand: the stub is never renamed in, a fresh db starts
     std::fs::remove_file(&path).unwrap();
     assert_eq!(db_at(&dir), path);
     assert!(!path.exists());
@@ -124,13 +124,22 @@ fn plans_db_becomes_fael_db_and_a_stub_refuses_an_older_fael() {
 }
 
 #[test]
-fn no_plans_db_names_fael_db_and_an_unreadable_one_stays_the_db() {
+fn no_fael_db_names_crew_db_and_an_unreadable_one_stays_the_db() {
     let dir = scratch();
-    assert_eq!(db_at(&dir), dir.join("fael.db"));
-    assert!(!dir.join("fael.db").exists(), "naming it creates nothing");
-    std::fs::write(dir.join("plans.db"), "not sqlite").unwrap();
+    assert_eq!(db_at(&dir), dir.join("crew.db"));
+    assert!(!dir.join("crew.db").exists(), "naming it creates nothing");
+    std::fs::write(dir.join("fael.db"), "not sqlite").unwrap();
     // the open names the error; the next call tries the rename again
-    assert_eq!(db_at(&dir), dir.join("plans.db"));
+    assert_eq!(db_at(&dir), dir.join("fael.db"));
     assert!(Store::open(&db_at(&dir)).is_err());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_stale_plans_db_stub_is_removed_when_seen() {
+    let dir = scratch();
+    std::fs::write(dir.join("plans.db"), "stub").unwrap();
+    assert_eq!(db_at(&dir), dir.join("crew.db"));
+    assert!(!dir.join("plans.db").exists(), "stale v8 stub goes");
     let _ = std::fs::remove_dir_all(dir);
 }

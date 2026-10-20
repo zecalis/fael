@@ -1,5 +1,5 @@
 //! `fael plan new` · `export` · `apply` · `park|unpark|done` · `repo`: a plan is sections
-//! plus chunks in `fael.db`; `export --json` writes the bill `apply` takes back.
+//! plus chunks in `crew.db`; `export --json` writes the bill `apply` takes back.
 
 use crate::{Args, Repo, repo};
 use fael_crew::{Bill, PlanRow, Store};
@@ -160,11 +160,11 @@ fn state(r: &Repo, verb: &str, want: &str) -> Result<(), String> {
 }
 
 /// A dir with no git and no `.fael` is no repo: never point the agent at `plan new` there,
-/// and never leave a stray fael.db in it.
+/// and never leave a stray crew.db in it.
 pub(crate) fn in_repo(r: &Repo) -> Result<(), String> {
     if r.journal.is_none() && !r.fael.exists() {
         return Err(format!(
-            "rejected: no fael.db yet — {} is in no git repo; run fael from the repo the plan lives in",
+            "rejected: no crew.db yet — {} is in no git repo; run fael from the repo the plan lives in",
             r.cwd.display()
         ));
     }
@@ -176,7 +176,7 @@ fn open(r: &Repo) -> Result<Store, String> {
     in_repo(r)?;
     if !path.exists() {
         return Err(
-            "rejected: no fael.db yet — `fael plan new <name> \"<title>\"` makes the first plan"
+            "rejected: no crew.db yet — `fael plan new <name> \"<title>\"` makes the first plan"
                 .into(),
         );
     }
@@ -201,7 +201,7 @@ fn named(s: &Store, want: Option<&str>) -> Result<Vec<PlanRow>, String> {
         .collect();
     match (want, plans.len()) {
         (Some(w), 0) => Err(format!(
-            "rejected: no plan '{w}' in fael.db — `fael board` lists them"
+            "rejected: no plan '{w}' in crew.db — `fael board` lists them"
         )),
         (Some(w), n) if n > 1 => Err(format!("rejected: '{w}' names {n} plans — use app/name")),
         _ => Ok(plans),
@@ -212,7 +212,7 @@ fn one(s: &Store, want: &str) -> Result<PlanRow, String> {
     named(s, Some(want)).map(|mut v| v.remove(0))
 }
 
-/// `plan list`: one line per plan in this repo's fael.db — what `export` takes, its state,
+/// `plan list`: one line per plan in this repo's crew.db — what `export` takes, its state,
 /// its title. Agents typed it 7 of 7 times into a reject (2026-10-13..15).
 fn list(r: &Repo) -> Result<(), String> {
     for p in open(r)?.plans()? {

@@ -1,7 +1,7 @@
 //! The core read seam (crew-split): every hook, `find` and `refs` read
 //! chunk data through here — never `fael_crew` directly. Opened read-only and
-//! returning empty when `fael.db` or the plan tables are missing, so core
-//! works with no crew installed.
+//! returning empty when `crew.db` (or its `fael.db` predecessor) or the plan
+//! tables are missing, so core works with no crew installed.
 //!
 //! Thin entry only — the pure math lives in `pure` (verbs, overlap, shared,
 //! rules, session files), the SQLite reads in `db` (crew owns the write side

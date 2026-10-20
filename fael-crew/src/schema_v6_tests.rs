@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 fn v6_db(then: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("fael-v6-{}", fael_core::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("fael.db");
+    let path = dir.join("crew.db");
     let c = Connection::open(&path).unwrap();
     c.execute_batch(include_str!("v6.sql")).unwrap();
     c.execute_batch(then).unwrap();
