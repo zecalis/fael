@@ -19,7 +19,19 @@ pub(crate) fn explain(argv: &[String], e: String) -> String {
     let (kind, words) = match rest.split_first() {
         Some((k, w)) if CORE_KINDS.contains(&k.as_str()) => (k.as_str(), w),
         Some(_) => ("<kind>", rest),
-        None => return e,
+        // bare `fael add`: no kind, no text — the retype line with the
+        // kind slot open, so the agent retypes without a `--help` round.
+        None => {
+            let files = a
+                .one("files")
+                .map_or(" --files <files>".to_string(), |f| format!(" --files {f}"));
+            let title = a
+                .one("title")
+                .map_or("<≤15-word headline>".to_string(), String::from);
+            return format!(
+                "rejected: wrong arguments for \"add\" — add needs a kind first (decision, issue or note); retype: fael add decision|issue|note \"<text>\" --title \"{title}\"{files}"
+            );
+        }
     };
     let text = words.join(" ");
     let (why, text) = match (kind, words.len()) {
@@ -66,6 +78,25 @@ mod tests {
         assert!(got.contains("needs a kind"), "{got}");
         // keeps the needle the friction code `usage` reads
         assert!(got.starts_with("rejected: wrong arguments"), "{got}");
+    }
+
+    #[test]
+    fn bare_add_prints_retype_line() {
+        let got = run("add");
+        assert!(
+            got.contains("fael add decision|issue|note \"<text>\" --title"),
+            "{got}"
+        );
+        assert!(got.contains("--files <files>"), "{got}");
+        assert!(got.contains("needs a kind"), "{got}");
+        // keeps the needle the friction code `usage` reads
+        assert!(got.starts_with("rejected: wrong arguments"), "{got}");
+    }
+
+    #[test]
+    fn bare_add_keeps_given_files() {
+        let got = run("add --files x.rs");
+        assert!(got.ends_with("--files x.rs"), "{got}");
     }
 
     #[test]
