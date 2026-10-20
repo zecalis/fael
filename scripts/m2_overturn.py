@@ -4,6 +4,7 @@ target from:user vs agent, plus overturned bumps — a stamped bump whose target
 is closed or superseded later. Read each overturned row: only one that was
 already wrong at bump time counts against (b). Totals match `fael stats --json`
 said.held.acted when run over every repo with usage.
+Retires stamped with a bulk sha (one that closed >= 20 rows) are cut, as in m1.
 Usage: m2_overturn.py <git-common-dir>/fael/log
 """
 import json,sys,glob
@@ -31,20 +32,20 @@ kind=lambda i: rows.get(i,{}).get('kind','?')
 tab=defaultdict(Counter); over=[]
 for r in rows.values():
     t=r.get('bumps')
-    if not t or not r.get('shown') or r['ts']<since: continue
+    if not t or not r.get('shown') or r['ts']<since or r.get('sha') in bulk: continue
     for s in r['shown']:
         tab[s]['bump']+=1; tab[s]['bump_user' if user(t) else 'bump_agent']+=1
     later=[e for e in retire.get(t,[]) if e[0]>r['ts']]
     if later:
         e=min(later); over.append((t,kind(t),user(t),r['shown'],r['ts'][:16],e[1],e[0][:16],e[4] in bulk,e[2][:110]))
-for c in [c for c in closes if c.get('shown')]:
+for c in [c for c in closes if c.get('shown') and c.get('sha') not in bulk]:
     for s in c['shown']: tab[s]['close']+=1; tab[s]['close_user' if user(c.get('ref')) else 'close_agent']+=1
 for r in rows.values():
-    if r.get('supersedes') and r.get('shown') and r['id'] not in rev:
+    if r.get('supersedes') and r.get('shown') and r['id'] not in rev and r.get('sha') not in bulk:
         for s in r['shown']: tab[s]['supersede']+=1
 for s,c in sorted(tab.items()): print(s,dict(c))
-nb=sum(1 for r in rows.values() if r.get('bumps') and r.get('shown') and r['ts']>=since)
-tg={r['bumps'] for r in rows.values() if r.get('bumps') and r.get('shown') and r['ts']>=since}
+nb=sum(1 for r in rows.values() if r.get('bumps') and r.get('shown') and r['ts']>=since and r.get('sha') not in bulk)
+tg={r['bumps'] for r in rows.values() if r.get('bumps') and r.get('shown') and r['ts']>=since and r.get('sha') not in bulk}
 print(f'stamped bumps {nb}, distinct targets {len(tg)}, user targets {sum(map(user,tg))}, kinds {Counter(map(kind,tg))}')
 ot={o[0] for o in over}
 print(f'overturned bumps {len(over)} (distinct targets {len(ot)}; bulk-sha {sum(o[7] for o in over)})')
