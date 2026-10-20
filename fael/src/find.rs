@@ -3,6 +3,7 @@
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
 pub(crate) mod extra;
+pub(crate) mod fallback;
 pub(crate) mod issue;
 mod kickoff;
 pub(crate) mod many;
