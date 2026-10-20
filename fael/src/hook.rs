@@ -13,6 +13,7 @@
 //! `stop` (turn-end work/bug rule), `cited` (the `cited` outcome: a said id typed into a tool input or reply), `session` (session-start kickoff), `named` (open issues a commit on the branch names, at session start),
 //! `push` (read/edit context), `search` (files a grep/glob/shell read touched), `prompt` (the open-key pointer on a user prompt), `focus` (session Focus written at start and
 //! read by the push), `state` (per-machine session files),
+//! `autosync` (session-start and turn-end `fael sync`, off-switch `[sync] auto`),
 //! `tally` (the user channel's per-session ledger: reminders, receipt),
 //! `usage` (SPEC §8 accounting + `stats`), `asks` (chunk-3a ask types +
 //! real tokens), `markers` (bug phrases).
@@ -23,6 +24,7 @@
 mod also;
 mod asks;
 mod askstats;
+mod autosync;
 mod changed;
 mod check;
 mod cited;

@@ -25,6 +25,8 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // 2026-10-03 and its dir is garbage (issue 01M56WGH)
     let _ = std::fs::remove_dir_all(state_dir().join("stop-block"));
     mark_started(&c.session, &c.repo.root);
+    // detached: teammates' rows land before the first read, never awaited
+    super::autosync::start(e);
     // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
     crate::install::auto::start();
     // a compacted or cleared context lost the rows pushed into it — tell them again

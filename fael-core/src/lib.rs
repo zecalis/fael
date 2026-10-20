@@ -25,6 +25,7 @@ mod query;
 mod repo;
 mod row;
 pub mod stats;
+pub mod sync;
 mod validate;
 pub mod work;
 
@@ -50,7 +51,8 @@ pub use id::{
 pub use lang::{Hit, Lang, by_name, fixed_hit, marker_hit, row_language_check};
 pub use log::{
     BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, append, bump_row, close, close_row,
-    decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, restore_row,
+    decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, read_imported,
+    restore_row,
 };
 pub use overlap::{overlap, under};
 pub use query::{

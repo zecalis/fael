@@ -9,7 +9,10 @@ use super::commands::COMMANDS;
 /// Commands a new team meets first (decision `product:cli-tiers-table`,
 /// key `product:cli-tiers-table`, owner-fixed).
 /// `core_names_are_commands` keeps every name here a real COMMANDS row.
-pub(super) const CORE: &[&str] = &["add", "find", "close", "bump", "claim", "doctor", "stats"];
+/// `sync` joined them with git sync's return (decision 01M5C2S7: free for dev teams).
+pub(super) const CORE: &[&str] = &[
+    "add", "find", "close", "bump", "claim", "doctor", "stats", "sync",
+];
 
 /// Workflow commands no tier-test source names yet (tier GAP: the four
 /// commands no skill, brief/rules, AGENTS.md, app contract or README names).

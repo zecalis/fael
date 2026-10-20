@@ -4,13 +4,13 @@
 > `add` `close` `find` `keys` `kickoff` `mv` in the `fael` CLI, `fael mcp`
 > (stdio, 3 tools), `fael hook <stop|session-start|read|edit|search|prompt>` (neutral + claude/codex adapters) with
 > per-machine usage accounting (`fael stats`, `fael report`), `fael install` (Claude Code, Codex, OpenCode),
-> and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` (SPEC §6, §11) ·
+> and the maintenance commands `fael doctor [--fix]` · `fael compact` · `fael import` · `fael sync` (SPEC §6, §11) ·
 > `fael purge` (delete a leaked row for good — the one deliberate exception to the append-only log).
 > This page is the contract the code is built against —
 > when code and this page disagree, fix one of them in the same commit.
 
 fael is the lifecycle ledger for agent work (§0). It lives **inside the clone** (`.git/fael/`): every agent (Claude Code, Codex, OpenCode, a chat
-host speaking MCP, …) and every worktree on one machine reads and writes the same log, and there is no server. Across machines the log moves only by `fael import`; git sync for dev teams over the git remote (`refs/fael/*`, no server, never on code branches) is free, planned, not shipped. Committing `.fael/log` into git was dropped (scattered diffs, heavy merges with many agents); hosted sync and a non-dev web app are a separate paid service, and this binary adds no daemon (decision 01M5C2S7).
+host speaking MCP, …) and every worktree on one machine reads and writes the same log, and there is no server. Across machines the log moves by `fael sync` over the git remote (`refs/fael/*`, no server, never on code branches; free for dev teams) or by hand with `fael import`. Committing `.fael/log` into git was dropped (scattered diffs, heavy merges with many agents); hosted sync and a non-dev web app are a separate paid service, and this binary adds no daemon (decision 01M5C2S7).
 
 Three ideas carry the whole design:
 
@@ -57,7 +57,7 @@ agent applies merge / split / pair itself, and every git merge is the owner's. `
 followed (capture → acted → outcome), never the counterfactual, so claims about value say
 only that.
 
-**The mechanism is the team's shared work ledger** (local today; `fael import` moves it; git-ref sync is planned): the context of the work, and the work handed
+**The mechanism is the team's shared work ledger** (local first; `fael sync` moves it over git refs, `fael import` by hand): the context of the work, and the work handed
 between sessions and agents — hand-offs, requirements, assigned issues (`--to`), claims,
 come-backs (`--revisit`). It is not the agent's memory, not a personal notebook, not a generic
 AI memory store, and not a process or git guard.
@@ -134,9 +134,11 @@ Where code belongs — three workspace crates, one direction (decision 01M5ABTD)
 A change that writes plan or chunk state goes in `fael-crew`. A change a user of core needs with no
 plan goes in `fael-core` or `fael`. Core never depends on crew, so `cargo tree -p fael -e normal` and
 `cargo tree -p fael-core` show no `fael-crew`.
-Free fael is one machine, many agents and worktrees: this binary has no transport (decision 01M4SQ9B
-cut `fael sync`). Git sync for dev teams over the git remote (`refs/fael/*`, no server) is planned, not shipped; it will carry this same
-row format, never a second one. Today `fael import <path>` is how a log crosses machines.
+Free fael is one machine, many agents and worktrees; git sync (decision 01M5C2S7, restoring the transport
+cut in #432) carries the same rows between clones over the git remote (`refs/fael/*`, no server), never
+a second row format. `fael sync` is adapter-side transport, not storage: it reads the journal through
+core and carries it in `refs/fael/<repo-id>/<writer>` ([sync-format.md](sync-format.md)).
+`fael import <path>` stays as the by-hand route.
 
 Where a work habit lives (decision 01M4X4DZ) — deleting crew must leave each chunk's quality
 unchanged, only slower:
@@ -196,14 +198,17 @@ No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Con
 - A `.fael/log` already in the tree stays read (the union above) as frozen
   history and nothing appends to it, so no memory file is ever left to commit
   (decision 01M4V3A02W). `store = "tracked"` (which wrote the tree too) is gone:
-  a config that sets it is rejected with a pointer to `fael import <path>` and fael-sync;
+  a config that sets it is rejected with a pointer to `fael import <path>` and `fael sync`;
   `store = "local"` still parses and changes nothing. The journal keeps
   the alias cache too (`<git-common-dir>/fael/cache`): the tree never grows a `.fael/`.
 - Across clones durability still comes from git; rows are not fsynced one by one.
-- Rows do not travel between clones on their own: `fael import <path>` copies
-  another clone's log in by id-union. Decision 01M4SQ9B cut `fael sync`, its
-  `refs/fael/*` transport and `[sync] auto`; a leftover `fael.remote` or
-  `[sync]` section is ignored.
+- Across clones and machines journals travel through `fael sync`: each writer's
+  journal is pushed to `refs/fael/<repo-id>/<writer>` on the remote named by
+  `git config fael.remote` (never committed, never defaulted — not even to
+  `origin`, decision 01M5D4KX) and every writer's ref is ingested back by
+  id-union. The working tree and checked-out branches are never touched; the
+  full contract is [sync-format.md](sync-format.md). `fael import <path>`
+  copies another clone's log in by hand, by the same id-union.
 
 ### Row state (decision 01M5528X)
 
@@ -257,6 +262,7 @@ and every hook, works without it. The rows for those verbs below describe `fael-
 | `fael install [--client c] [--dry-run]` | detect installed clients and wire MCP, hooks and every skill in `fael/skill/` (fael, fael-debug, fael-review; fael-plan and fael-sweep moved to fael crew, decision 01M5AF2H — install removes the old embedded copy but never a symlink) into each one; a skill dir linked into a fael checkout is replaced by the release copy, and a link under a retired name (plan-with-marketing) into a checkout goes |
 | `fael upgrade [--client c] [--dry-run] [--yes]` | updates the binary by its channel read from the exe path (brew → `brew upgrade zecalis/tap/fael`, npm → `npm i -g @zecalis/fael`, shell/ps1 → the `fael-update` beside it; unknown = none), then the new binary runs `install` that looks first: lists what is out of date, counts it, asks `[y/N]` before writing (`--yes` or no terminal skips the question; `update` is an alias). Session-start writes pending wiring itself and says one Notice; a failed write keeps the "run `fael upgrade`" warning. Session-start also starts `fael upgrade --auto` detached, at most once a day (`<state>/update.json`): it installs a release tag only after seeing it for a day, and the next session-start says one Notice (updated · failed · on Windows only "is out") and takes the result out. Off: `FAEL_NO_AUTO_UPDATE=1` or `auto_update = false` in `~/.config/fael/config.toml` |
 | `fael compact [--writer id] [--before yyyy-mm] [--prune]` | maintenance: fold old rows into per-writer summaries |
+| `fael sync` | push this writer's journal to `refs/fael/<repo-id>/<writer>` on `git config fael.remote` and ingest every other writer's ref back (id-union); no remote set → refuses and prints how, nothing pushed; a secret-looking row is neither pushed nor ingested; `fael purge` leaves a tombstone so a purged row does not come back; one sync at a time per clone; also run once per session by the session-start and Stop hooks (below), and plain `fael sync` works with no hook (cron on a hook-less node) |
 | `fael import <path> [--map old/=new/]` | maintenance: import another clone's log (a log file, a log dir or a repo root — its journal plus any `.fael/log`, never other jsonl under it; a close folds into its row; twice is safe) |
 | `fael doctor [--fix] [--fat] [--json]` | find and repair damaged logs — `--fix` moves bad lines to quarantine (never deletes them) and closes the confirmed `[Shipped]` notes — only status-shaped ones (the note's title or first line says PR opened/rebased, chunk N done, what shipped, not yet committed), never one with a `revisit` or a `*:handoff` key (those wait past the merge); a note on a landed branch that does not read as a status (a rule, a fact, `half done`) is listed as `[Shipped kept]` and left open; `--json` prints each problem's full row ids for a cleanup pass; prose in open rows, close reasons and every `*.md` is checked for dead id citations (`[Phantom]`); `[Superseded]` reports a legacy chain hidden by a supersede marker whose newest version is already closed (`fael close <id>` on each repairs it); `[Drifted]` lists open rows whose files took 10+ commits since they were written, for a check against the code; `[NoVerdict]` lists open rows that name a real file over the 1 MiB edit-push cap (`fael add` stamps up to 16 MiB, push compares up to 1 MiB), so push never says whether those files changed and the generic hint stands — one `metadata()` per file, a note only, never `--fix`; `[Unstamped]` lists open rows with no file stamp (`fh`) that name a real file push could compare, so push never gives them a verdict — once checked against the file, a bare `fael bump <id>` stamps it (a note only, never `--fix`: a bump says "still true", the reader's call) |
 | `fael stats [--json] [--rows] [--day] [--misses] [--since d]` | how many bytes and tokens fael has put into agents' context (`--day` = today's panels per repo and summed; `--since` = only usage from then on; `--misses` = the newest empty text searches, machine-local — the plain page ends with a count line once any exist) |
@@ -274,7 +280,7 @@ Ids are accepted as a unique prefix and printed at the shortest length that stay
 kinds = ["risk"]              # extra kinds on top of decision/issue/note
 key_domains = ["auth", "db"]  # first key segment; outside the list = warning, never a reject
 resolve = true                # follow renames (git log -M + fael mv rows); false = match files[] literally
-store = "local"               # the only value (journal only, the default); "tracked" is rejected — fael import <path> copies rows in
+store = "local"               # the only value (journal only, the default); "tracked" is rejected — share with fael sync or copy rows in with fael import <path>
 [budget]
 kickoff_tokens = 800          # kickoff, and find with no filter (unless --limit is given)
 find_tokens = 800
@@ -293,6 +299,8 @@ user = true                   # one line per beat for the user only (Claude syst
 stop = []                     # ignored since the prompt key hint was cut (01M5528X)
 [plan]
 worktrees = "wt-fael-agent-"  # board pool: only linked worktrees whose path or dir name starts with it; unset = every linked worktree
+[sync]
+auto = true                   # session start and Stop run `fael sync` once per session and newest row when fael.remote is set; false = manual only
 [lang]
 marker = ["english", "thai"]  # Stop-hook phrase packs (default); [] switches the bug rule off
 rows = ["english"]            # accepted row-writing languages; anything else warns once, never rejects ([] switches the check off)
@@ -358,6 +366,8 @@ A row is said once per **context window**, not once per session: the pushed ids 
 The edit hook appends `{"path","at"}` to `~/.local/state/fael/sessions/<session+worktree>.jsonl` — per-machine runtime state, never in `.fael/`; `fael add` without `--files` files the session's edits since its newest row; more than 8 rejects with the list (`--force` files them all), since a row on every file it touched is pushed at each one. The `session` string sent with `edit` must equal the one sent with `stop`.
 
 **Bug line** — a bug or risk announcement in the turn's text (the transcript tail after the latest user message) with no issue or close since the words stashes one line for the next push, shown once; never a turn. **Fix lines** (PLAN-fael-experience-loop chunk 5) catch the fix itself, the moment its cause → fix is worth keeping: a fix phrase (`fixed the bug`, `root cause was`, from the same packs) with no issue or close after it takes the bug line's place and offers `fael add issue` + `fael close`, and so does a `git commit` whose subject opens `fix:`/`fix(` and whose text names no row, in a session that closed none. Each is said once per session (`fixed`, `fixcommit` in `fael stats` `said`); fael never decides which issue a commit fixes. **Held line** (PLAN-fael-row-retire w1): an open decision or note — any writer, the session's own first, at most three — naming a file the session edited whose stamped blob differs from disk (no stamp counts, the edit is all fael knows), is named on the next push after Stop with its three verdicts ready: `fael bump <id>` (still true), `fael close <id> "now in `<path>`"` (the code holds it), re-file with `--supersedes <id>` (wrong now), a `from: user` row saying to ask the user first, once per session (`held`); issues stay out (they have the edit ask). The agent judges; an unjudged row whose files all changed goes dormant (§Row state) and this line is the only place it is asked about, once — silence means dormant. Never at the edit (decision 01M4RRNWC). `fael chunk done` prints the same over the files the chunk's diff touched, at most five, then `+N more: fael find --files <file>` — its own output, no hook line. The phrases come from the `[lang] marker` packs (`english` + `thai` by default, `marker = []` switches the rule off), never from hardcoded lists. The Stop-block mode (`[capture] block = true`) was removed 2026-10-03: 55 blocks, 12 followed by a row; an old config key is ignored.
+
+Session start, and every stop, start one detached `fael sync` per session and newest row when `fael.remote` is set (`[sync] auto`): fail-quiet, never awaited, the hook still exits 0. Session start goes first, so teammates' rows reach the session's edits (not its kickoff context, already built) and a Stop with no new row starts nothing.
 
 **Session start:**
 ```

@@ -3,16 +3,19 @@
 
 use super::markers::{has_bug_marker, has_fix_phrase, signal_from_transcript, transcript_reply};
 use super::protocol::{Event, Reply, ctx};
-use super::state::{file_birth_ms, fixed_path, risk_path, seen_path};
+use super::state::{
+    file_birth_ms, fixed_path, now_rfc3339, risk_path, seen_path, session_key, state_dir,
+};
 use crate::core;
 use std::path::Path;
 
-/// The stop event: `decide`, then the receipt.
+/// The stop event: `decide`, then the once-per-session sync and the receipt.
 pub(crate) fn stop(e: &Event) -> Reply {
     if e.agent.is_some() {
         return subagent_stop(e);
     }
     let mut r = decide(e);
+    super::autosync::start(e);
     seen(e);
     r.notice = receipt(e);
     r
@@ -210,6 +213,51 @@ fn stash(session: &str, path: &Path, marker: &str) -> bool {
             .is_some_and(|p| std::fs::create_dir_all(p).is_ok())
     {
         return std::fs::write(path, format!("{marker}\n")).is_ok();
+    }
+    false
+}
+
+/// True when this session already marked this worktree + kind — else record
+/// the mark and return false. Empty session = no dedupe. Auto sync's
+/// once-per-newest-row guard.
+pub(super) fn seen_before(session: &str, worktree: &str, kind: &str) -> bool {
+    if session.is_empty() {
+        return false;
+    }
+    let path = state_dir()
+        .join("sync-seen")
+        .join(format!("{}.jsonl", session_key(session)));
+    if let Ok(s) = std::fs::read_to_string(&path) {
+        for line in s.lines() {
+            let v: serde_json::Value = match serde_json::from_str(line) {
+                Ok(v) => v,
+                Err(_) => continue, // a torn line must not lose the rest
+            };
+            if v["worktree"] == *worktree && v["kind"] == *kind {
+                return true;
+            }
+        }
+    }
+    if let Some(parent) = path.parent()
+        && std::fs::create_dir_all(parent).is_ok()
+    {
+        use std::io::Write;
+        let row = serde_json::json!({
+            "ts": now_rfc3339().unwrap_or_default(),
+            "worktree": worktree, "kind": kind,
+        });
+        let mut f = match std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(&path)
+        {
+            Ok(f) => f,
+            Err(_) => return false,
+        };
+        // seal a torn tail so the new row starts on its own line
+        let seal = core::needs_seal(&mut f).unwrap_or(false);
+        let _ = writeln!(f, "{}{row}", if seal { "\n" } else { "" });
     }
     false
 }

@@ -24,6 +24,7 @@ mod restore;
 mod schema;
 mod selfheal;
 mod session;
+mod sync;
 mod synonyms;
 mod unmerged;
 mod write;
@@ -125,6 +126,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
+        ("sync", []) => sync::sync(&repo()?).map(|()| ExitCode::SUCCESS),
         ("mcp", []) => mcp::serve(a.has("pin")).map(|()| ExitCode::SUCCESS),
         ("install" | "upgrade" | "update", []) => {
             let (client, dry) = (a.one("client"), a.has("dry-run"));

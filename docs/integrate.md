@@ -97,4 +97,11 @@ fael import ../other-clone               # that clone's journal (+ any .fael/log
 fael import old.jsonl --map src/=lib/      # one log file, a path prefix rewritten on the way in
 ```
 
-Sharing between people, continuously, is the separate fael-sync service, not part of fael.
+To share between clones through git instead, see [sync-format.md](sync-format.md):
+
+```bash
+git config fael.remote git@host:team/repo-ledger.git   # a private remote, set on purpose
+fael sync                                              # push this writer's rows, ingest the others'
+```
+
+Hosted sync with a web app for non-dev members is the separate fael-sync service, not part of fael.
