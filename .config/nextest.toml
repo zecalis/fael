@@ -1,0 +1,7 @@
+# `gate` is scripts/gate.sh's profile: quiet on success, failures summarised once at the end.
+# CI runs the default profile and is unaffected.
+[profile.gate]
+status-level = "fail"
+final-status-level = "fail"
+failure-output = "final"
+success-output = "never"
