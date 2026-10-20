@@ -58,9 +58,6 @@ pub struct Chunk {
     pub issues: Vec<String>,
     /// the owner verbs fael takes for this chunk now (`Owner::takes`)
     pub owner_actions: Vec<&'static str>,
-    /// the ticket `fael intake` brought in; absent = none
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ticket: Option<super::Ticket>,
     /// an open PR's branch merged into the base (`git merge-tree`, the CLI fills it): the
     /// conflicted paths, empty = merges clean; absent = not checked or git < 2.38
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -149,8 +146,6 @@ impl Store {
                 "SELECT c.id, c.uid, p.app, p.name, c.label, c.title, c.state, c.size,
                         c.model_hint, c.scope, c.wait_on, c.wait_text, c.wait_until,
                         c.approved_at, c.approved_model, c.approved_client, c.seq, c.wait_options,
-                        c.ticket_source, c.ticket_ref, c.ticket_kind, c.ticket_reopen,
-                        (SELECT verdict FROM run WHERE chunk = c.id ORDER BY id DESC LIMIT 1),
                         c.touched, c.client_hint
                  FROM chunk c JOIN plan p ON p.id = c.plan
                  WHERE p.state NOT IN ('done', 'parked')
@@ -176,7 +171,7 @@ impl Store {
                         size: r.get(7)?,
                         model_hint: r.get(8)?,
                         model: None, // derive() resolves run → approval → hint
-                        client_hint: r.get(24)?,
+                        client_hint: r.get(19)?,
                         scope: scope
                             .iter()
                             .flat_map(|s| s.lines())
@@ -212,10 +207,9 @@ impl Store {
                         handoff: None,
                         issues: Vec::new(),
                         owner_actions: Owner::actions(&state),
-                        ticket: super::intake::ticket(r, 18)?,
                         conflicts: None,
                         touched: r
-                            .get::<_, Option<String>>(23)?
+                            .get::<_, Option<String>>(18)?
                             .map(|t| t.lines().map(String::from).collect()),
                         seq: r.get(16)?,
                         label,

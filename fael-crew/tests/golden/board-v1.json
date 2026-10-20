@@ -597,15 +597,7 @@
           "issues": [
             "01M4NA00000000000000000001"
           ],
-          "owner_actions": [],
-          "ticket": {
-            "source": "vela-support",
-            "ref": "V-0042",
-            "kind": "report",
-            "reopen": 0,
-            "open": "https://staff.example/staff/incidents/V-0042",
-            "verdict": null
-          }
+          "owner_actions": []
         }
       ],
       "ledger": {

@@ -9,8 +9,6 @@ use super::shared::unshared;
 use super::store::{Store, err};
 use rusqlite::{Transaction, params};
 
-/// `chunk done --verdict` words (plan fael-intake, contract §done --verdict).
-const VERDICTS: &[&str] = &["fix", "answer", "consider", "plan", "decline"];
 /// `chunk done --review` words: the review found nothing, fixed what it found, or left a
 /// finding it could not fix (issue 01M4XN3S).
 const REVIEWS: &[&str] = &["clean", "fixed", "failed"];
@@ -134,38 +132,26 @@ impl Store {
         out: Option<&mut Copy<'_>>,
         here: &Here,
     ) -> Result<(), String> {
-        self.done_verdict(uid, handoff, pr, out, (None, None), here)
+        self.done_review(uid, handoff, pr, out, None, here)
     }
 
-    /// `done` with `--verdict` (plan fael-intake): only a ticket chunk takes one, kept on its
-    /// run for the board's `ticket.verdict`. `--review` is the fresh review's outcome, any
-    /// chunk's, kept as `run.review` (issue 01M4XN3S).
-    pub fn done_verdict(
+    /// `done` with `--review`, the fresh review's outcome, any chunk's, kept as `run.review`
+    /// (issue 01M4XN3S).
+    pub fn done_review(
         &mut self,
         uid: &str,
         handoff: &str,
         pr: Option<i64>,
         out: Option<&mut Copy<'_>>,
-        (verdict, review): (Option<&str>, Option<&str>),
+        review: Option<&str>,
         here: &Here,
     ) -> Result<(), String> {
-        if verdict.is_some_and(|v| !VERDICTS.contains(&v)) {
-            return Err(format!("rejected: --verdict is {}", VERDICTS.join("|")));
-        }
         if review.is_some_and(|v| !REVIEWS.contains(&v)) {
             return Err(format!("rejected: --review is {}", REVIEWS.join("|")));
         }
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         fence(&tx, &r, here)?;
-        let ticket: Option<String> = tx
-            .query_row("SELECT ticket_ref FROM chunk WHERE id = ?1", [r.id], |q| {
-                q.get(0)
-            })
-            .map_err(err)?;
-        if verdict.is_some() && ticket.is_none() {
-            return Err("rejected: --verdict is for a ticket chunk".into());
-        }
         let to = if pr.is_some() {
             State::Done
         } else {
@@ -182,8 +168,8 @@ impl Store {
         let out = out.map(|f| f(&start)).transpose()?;
         tx.execute(
             "UPDATE run SET pr = COALESCE(?1, pr), out = COALESCE(?2, out),
-               verdict = COALESCE(?3, verdict), review = COALESCE(?4, review) WHERE id = ?5",
-            params![pr, out, verdict, review, run],
+               review = COALESCE(?3, review) WHERE id = ?4",
+            params![pr, out, review, run],
         )
         .map_err(err)?;
         end(&tx, r.id, here)?;

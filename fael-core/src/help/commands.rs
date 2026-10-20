@@ -124,7 +124,7 @@ fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
 fael chunk after <uid> <other-uid> \"<why>\" [--run R]
 fael chunk unafter <uid> <other-uid> \"<why>\"
-fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--verdict fix|answer|consider|plan|decline] [--review clean|fixed|failed] [--run R]
+fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--review clean|fixed|failed] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
@@ -143,8 +143,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      latest run and end it, or to --run R naming that run; wait --on owner --option offers the answers
      the owner picks from; done --pr N lands in done (push pr is the ok) — an owner/repo#N or URL of
      another repo than this one's origin is refused; done without a PR in review until accept; done takes the run's branch's diff against origin/HEAD, since the chunk's first start, as the scope
-     and prints each path outside the declared one, unowned or in <plan>/<label>; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; --verdict
-     only on a ticket chunk (fael intake), shown as ticket.verdict on board --json; edit
+     and prints each path outside the declared one, unowned or in <plan>/<label>; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval; unafter drops one after edge and keeps it; move puts a chunk at the end of
      another db plan of this repo with its uid, runs, notes and edges — refused while it
      runs, into a parked or done plan, or onto a label the plan has; apply runs every op or none —
@@ -179,15 +178,18 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
     ),
     (
         "intake",
-        "bring tickets from the team's other systems in as inbox chunks",
+        "bring tickets from the team's other systems in as ledger rows",
         "fael intake [<source>]
     (runs each source's `list` in .fael/sources.json (or the one named) with sh -c — cmd /C
      on Windows — at the repo root; every JSONL line must carry exactly ref, kind, title,
-     reopen, closed, else nothing is written and the command exits 1 naming the line; a
-     ticket round (source+ref+reopen) gets one chunk in any plan: an open one with none is
-     added to inbox (label lower(ref), -rN when reopened, size S, a brief with its read,
-     open, claim and draft commands), one that has a chunk is left alone; fael runs only `list` and never writes to the
-     source; prints one line per change, then a count; board --json shows chunk.ticket)",
+     reopen, closed, else nothing is written and the command exits 1 naming the line (so
+     for a kind with no row or a key the log cannot hold); a write the ledger's own gates
+     reject (a secret in a title) is printed, exits 1 and leaves the other rows saved; a
+     ticket round gets one row, key ticket:<source>:<ref> (-rN when reopened), files = that
+     key, by intake: bug, report, question → issue, idea → note, its text names the source's
+     read and open commands; any row on the key, closed ones too, means it is left alone; a
+     ticket the source closed (closed, dup:<ref>) closes its open row by intake; fael runs
+     only `list` and never writes to the source; prints one line per change, then a count)",
     ),
     (
         "plan",

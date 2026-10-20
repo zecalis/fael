@@ -56,9 +56,6 @@ const RUN_KEYS: &[&str] = &[
 const ROW_KEYS: &[&str] = &[
     "id", "title", "text", "key", "files", "at", "by", "to", "from", "revisit", "held", "signals",
 ];
-/// `chunk.ticket` (plan fael-intake): only on a chunk `fael intake` brought in; `open` = the
-/// source's staff url with the ref filled, null when the source left `.fael/sources.json`
-const TICKET_KEYS: &[&str] = &["source", "ref", "kind", "reopen", "open", "verdict"];
 const SIGNALS: &[&str] = &["drifted"];
 const STATES: &[&str] = &[
     "draft", "open", "running", "waiting", "review", "done", "replaced", "dropped", "parked",
@@ -120,9 +117,8 @@ fn fixes_open(b: &Value, uid: &Value) -> bool {
     })
 }
 
-/// A chunk's keys without the optional tail, each checked: `ticket` (an intake chunk), then
-/// `conflicts` (PLAN-fael-parallel merge-check: only on an open PR), then `touched` (the paths
-/// `done` claimed from the run's diff: only once claimed).
+/// A chunk's keys without the optional tail, each checked: `conflicts` (PLAN-fael-parallel
+/// merge-check: only on an open PR), then `touched` (the paths `done` claimed from the run's diff: only once claimed).
 fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
     let mut k = keys(c);
     if k.last() == Some(&"touched") {
@@ -152,10 +148,6 @@ fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
                 .iter()
                 .all(Value::is_string)
         );
-    }
-    if k.last() == Some(&"ticket") {
-        k.pop();
-        assert_eq!(keys(&c["ticket"]), TICKET_KEYS, "{uid}");
     }
     k
 }

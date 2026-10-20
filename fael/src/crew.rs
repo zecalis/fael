@@ -1,4 +1,4 @@
-//! `fael plan|chunk|board|sweep|intake|run` are fael crew's: `fael-crew` runs them, `fael`
+//! `fael plan|chunk|board|sweep|run` are fael crew's: `fael-crew` runs them, `fael`
 //! only hands the argv over. The child inherits stdin and stdout; its stderr is copied through
 //! as it arrives and kept, so a reject it printed is still counted in the usage log here.
 
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
 /// The verbs that live in `fael-crew`.
-const VERBS: [&str; 6] = ["plan", "chunk", "board", "sweep", "intake", "run"];
+const VERBS: [&str; 5] = ["plan", "chunk", "board", "sweep", "run"];
 
 /// Not found: say how to get it (one line, exit 1).
 const MISSING: &str =

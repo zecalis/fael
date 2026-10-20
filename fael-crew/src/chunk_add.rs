@@ -1,5 +1,5 @@
 //! `fael chunk add` (SPEC-fael-board §1): a new chunk at the end of a plan, in the caller's
-//! transaction (`add_in`) so `fael intake` writes a whole run in one.
+//! transaction (`add_in`).
 
 use super::State;
 use super::chunk::{Fields, add_after, scope, size, tx, uid_id};

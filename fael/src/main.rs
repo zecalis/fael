@@ -14,6 +14,7 @@ mod find;
 mod held;
 mod hook;
 mod install;
+mod intake;
 mod maintain;
 mod mcp;
 mod mv;
@@ -38,7 +39,7 @@ fn main() -> ExitCode {
     reset_sigpipe();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let mut argv = synonyms::rewrite(raw.clone());
-    // plan/chunk/board/sweep/intake/run are fael crew's — before help, so `fael chunk --help` is its
+    // plan/chunk/board/sweep/run are fael crew's — before help, so `fael chunk --help` is its
     if let Some(code) = crew::dispatch(&argv) {
         return code;
     }
@@ -123,6 +124,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         }
         ("stats", []) => hook::stats(&a).map(|()| ExitCode::SUCCESS),
         ("report", []) => report::report(&a).map(|()| ExitCode::SUCCESS),
+        ("intake", [] | [_]) => intake::cmd(&a, rest.first()),
         ("doctor", []) => maintain::doctor(&a),
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
@@ -246,6 +248,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         urgent,
         supersedes: a.one("supersedes"),
         force: a.has("force"),
+        by: None,
     };
     // `--dry-run` prints the Verdict the real add would act on and writes
     // nothing — same `prepare` as the real add, so the two can never disagree

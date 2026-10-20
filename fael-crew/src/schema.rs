@@ -51,11 +51,12 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// `chunk.wait_options`: a JSON array of the answers `chunk wait --option` offers (01M4NWFS).
 /// `chunk.touched`: the paths `done` claimed from the branch's diff, one per line; NULL = never
 /// claimed, so a brief never calls a declared scope touched (issue 01M4TPHMR).
-/// `chunk.ticket_*`: the ticket `fael intake` brought in (source, ref, kind, reopen round).
+/// `chunk.ticket_*`: the ticket the old crew intake brought in (source, ref, kind, reopen round);
+/// core `fael intake` writes ledger rows now and nothing reads these.
 /// `run.base`: HEAD's sha at `chunk start`, so `done` never claims commits from before it
 /// (issue 01M4TVDGG: a lane stacked on another's branch).
 /// `run.review`: the fresh review's outcome on the run's work, `chunk done --review
-/// clean|fixed|failed` — apart from `verdict`, which is intake triage (issue 01M4XN3S).
+/// clean|fixed|failed` — apart from the old `verdict` column, unused now (issue 01M4XN3S).
 /// `chunk.client_hint`: the client the planner picked (`chunk add|edit --client`), which
 /// `approve` falls back to; epoch v8 dropped an unwired one (issue 01M4XM98).
 /// `plan.parent`: the name of the umbrella plan of the same app, one level (issue 01M51KW0).
