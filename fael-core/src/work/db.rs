@@ -3,66 +3,19 @@
 use super::{Brief, EndedRun, PlanRow, StatsRun};
 use std::path::{Path, PathBuf};
 
-/// The breaking epoch crew owns; the seam only needs it to spot the stub.
-const VERSION: i32 = 8;
-/// The stub `fael.db`'s user_version: past any epoch a fael will ever reach.
-const STUB: i32 = 1_000_000;
-
-/// `<dir>/crew.db`, the clone's crew store (the rename's new name).
-pub fn db_at_dir(dir: &Path) -> PathBuf {
-    db_at(dir)
-}
-
 /// The db for a checkout: beside the journal when there is one, else `.fael`.
 pub fn db_for(journal: Option<&Path>, fael: &Path) -> PathBuf {
     db_at(journal.unwrap_or(fael))
 }
 
-/// `<dir>/crew.db`, with the old `fael.db` hard-linked once. A copy of the
-/// crew store's rename so core finds the db without depending on crew.
-/// Silent when neither file exists: `readonly` maps a missing file to empty.
+/// `<dir>/crew.db`, else a not-yet-renamed `fael.db`. Names a path and touches nothing:
+/// the rename to `crew.db` is crew's (`fael_crew::db_at`), so a hook or `find` stays read-only.
 pub fn db_at(dir: &Path) -> PathBuf {
-    for side in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(dir.join(format!("plans.db{side}")));
-    }
     let (path, old) = (dir.join("crew.db"), dir.join("fael.db"));
-    if path.exists() || rename(&old, &path).is_ok() {
-        return path;
+    if !path.exists() && old.exists() {
+        return old;
     }
-    old
-}
-
-fn rename(old: &Path, new: &Path) -> Result<(), String> {
-    let e = |e: String| format!("fael.db → crew.db refused: {e}; nothing changed");
-    let Ok(c) =
-        rusqlite::Connection::open_with_flags(old, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
-    else {
-        return Ok(());
-    };
-    let v: i32 = c
-        .query_row("PRAGMA user_version", [], |r| r.get(0))
-        .map_err(|x| e(x.to_string()))?;
-    if v > VERSION {
-        return Ok(());
-    }
-    c.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
-        .map_err(|x| e(x.to_string()))?;
-    drop(c);
-    if let Err(x) = std::fs::hard_link(old, new) {
-        return match x.kind() {
-            std::io::ErrorKind::AlreadyExists => Ok(()),
-            _ => Err(e(x.to_string())),
-        };
-    }
-    for side in ["-wal", "-shm"] {
-        let from = format!("{}{side}", old.display());
-        let _ = std::fs::rename(&from, format!("{}{side}", new.display()));
-    }
-    let tmp = old.with_extension(format!("stub.{}", crate::ulid()));
-    rusqlite::Connection::open(&tmp)
-        .and_then(|c| c.pragma_update(None, "user_version", STUB))
-        .map_err(|x| e(x.to_string()))?;
-    std::fs::rename(&tmp, old).map_err(|x| e(x.to_string()))
+    path
 }
 
 pub(super) fn readonly(db: &Path) -> Option<rusqlite::Connection> {
@@ -296,4 +249,23 @@ pub fn plan_by_name(db: &Path, name: &str) -> Option<PlanRow> {
         };
         key == name || p.name == name
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn naming_the_db_touches_nothing() {
+        let d = std::env::temp_dir().join(format!("fael-dbat-{}", crate::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        assert_eq!(db_at(&d), d.join("crew.db"));
+        std::fs::write(d.join("fael.db"), "x").unwrap();
+        std::fs::write(d.join("plans.db"), "x").unwrap();
+        assert_eq!(db_at(&d), d.join("fael.db"), "unrenamed: read it as is");
+        assert!(d.join("plans.db").exists() && !d.join("crew.db").exists());
+        std::fs::write(d.join("crew.db"), "x").unwrap();
+        assert_eq!(db_at(&d), d.join("crew.db"));
+        let _ = std::fs::remove_dir_all(d);
+    }
 }

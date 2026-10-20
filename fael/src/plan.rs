@@ -60,7 +60,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
 /// Beside the journal, so every worktree of the clone reads one db; the tree's `.fael/`
 /// (or `FAEL_DIR`) without git.
 pub(crate) fn db(r: &Repo) -> PathBuf {
-    fael_core::work::db_for(r.journal.as_deref(), &r.fael)
+    fael_crew::db_at(r.journal.as_deref().unwrap_or(&r.fael))
 }
 
 /// `new`: the plan row (chunks in the db from the start) and its Goal/Scope/Done/Constraints
