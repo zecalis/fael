@@ -59,7 +59,7 @@ impl Owner {
 
 /// Owner commands from the board, never fenced: `answer` (waiting or review → open, the
 /// next start's brief prints it), `accept` (review → done), `drop`, `park`, `unpark`. `by`
-/// writes the event: `owner`, or `intake` when the ticket's source closed it.
+/// writes the event.
 pub(super) fn owner_in(
     tx: &Transaction,
     uid: &str,

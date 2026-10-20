@@ -30,6 +30,8 @@ pub(crate) struct AddOpts {
     pub urgent: core::Urgent,
     pub supersedes: Option<String>,
     pub force: bool,
+    /// The writer id when it is not the git identity (`intake`); absent = the git identity.
+    pub by: Option<String>,
 }
 
 /// A row built, healed and validated — everything short of the write. Shared
@@ -59,6 +61,7 @@ pub(crate) fn prepare(
         urgent,
         supersedes,
         force,
+        by,
     } = opts;
     let mut files = core::normalize_files(files_arg, &r.cwd, &r.root)?;
     let mut warns = root_relative(r, files_arg, &mut files);
@@ -83,7 +86,10 @@ pub(crate) fn prepare(
         &crate::session::active_edits(&r.root),
         force,
     )?);
-    let st = crate::stamp(r);
+    let mut st = crate::stamp(r);
+    if let Some(by) = by {
+        st.by = by;
+    }
     let mut row = core::Row::new(&st.by, kind, text, files);
     crate::session::tag_writer(&r.root, &mut row); // "written by A, used by B" needs the writer
     // the file as it stood when the row was written; one info line for any
@@ -236,10 +242,23 @@ pub(crate) fn close_row(
     id: &str,
     why: &str,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
+    close_row_as(r, id, why, None)
+}
+
+/// [`close_row`] written by `by` instead of the git identity (`intake`).
+pub(crate) fn close_row_as(
+    r: &crate::Repo,
+    id: &str,
+    why: &str,
+    by: Option<&str>,
+) -> Result<(core::Row, PathBuf, Vec<String>), String> {
     let log = crate::read(r);
     let mut warns = phantom_lines(r, &log, None, why, &[id]);
     warns.extend(crate::unmerged::lines(&r.root, why));
-    let stamp = crate::session::retire_stamp(r, &log, id);
+    let mut stamp = crate::session::retire_stamp(r, &log, id);
+    if let Some(by) = by {
+        stamp.by = by.into();
+    }
     let (row, path, mut core_warns) =
         core::close_row(&r.fael, r.journal.as_deref(), &log, &r.cfg, &stamp, id, why)?;
     warns.append(&mut core_warns);

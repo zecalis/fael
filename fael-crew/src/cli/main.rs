@@ -1,4 +1,4 @@
-//! fael-crew — plan · chunk · board · sweep · intake · run: the owner's layer. `fael` execs
+//! fael-crew — plan · chunk · board · sweep · run: the owner's layer. `fael` execs
 //! this binary for those verbs with the same argv (`fael/src/crew.rs`), so `fael chunk start`
 //! and `fael-crew chunk start` are one command. The ledger's push/write machinery stays in
 //! `fael`: this binary calls back into it (`FAEL_BIN`) for the three things only it can do.
@@ -12,7 +12,6 @@ mod chunk_scope;
 mod chunk_show;
 mod chunk_verbs;
 mod fael_bin;
-mod intake;
 mod plan;
 mod sweep;
 
@@ -23,7 +22,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 /// The crew verbs; anything else is not this binary's.
-const VERBS: [&str; 6] = ["plan", "chunk", "board", "sweep", "intake", "run"];
+const VERBS: [&str; 5] = ["plan", "chunk", "board", "sweep", "run"];
 
 fn main() -> ExitCode {
     #[cfg(unix)]
@@ -90,7 +89,6 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("plan", rest) => plan::cmd(&a, rest),
         ("board", []) => board::cmd(&a),
         ("sweep", []) => sweep::cmd(&a),
-        ("intake", [] | [_]) => intake::cmd(&a, rest.first()),
         ("chunk", rest) => chunk::cmd(&a, rest),
         ("run", [end, r]) if end == "end" => chunk::run_end(&a, r),
         ("run", [beat, r]) if beat == "beat" => chunk::run_beat(&a, r),
