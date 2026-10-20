@@ -174,7 +174,7 @@ pub(crate) fn touched(
     Some(since(dir, st.run_base(uid), (&trunk, tip), d.lines()))
 }
 
-/// h4: each path of `diff` outside `uid`'s declared scope, unowned or in the open chunk that
+/// h4: each path of `diff` outside `uid`'s declared scope, unowned or overlapping the open chunk that
 /// holds it — a fact, never a refusal; empty when all is inside. `done` and `run end` say it.
 pub(crate) fn outside_text(r: &Repo, st: &Store, uid: &str, diff: &[String]) -> String {
     let shared = fael_crew::shared(&r.root).unwrap_or_default();
@@ -188,8 +188,8 @@ pub(crate) fn outside_text(r: &Repo, st: &Store, uid: &str, diff: &[String]) -> 
     let mut s = format!("declared scope: {}\n", declared.join(", "));
     for (f, owner) in out {
         match owner {
-            Some(o) => s += &format!("outside, in {o}: {f}\n"),
-            None => s += &format!("outside, unowned: {f}\n"),
+            Some(o) => s += &format!("outside declared scope: {f} (overlaps open chunk {o})\n"),
+            None => s += &format!("outside declared scope: {f}\n"),
         }
     }
     s
