@@ -252,13 +252,16 @@ fn intake_a_bad_list_writes_nothing_and_exits_one() {
         "not json",
         // a kind with no row to write
         r#"{"ref":"V-9","kind":"feedback","title":"t","reopen":0,"closed":null}"#,
-        r#"{"ref":"V-9","kind":"feedback","title":"t","reopen":0,"closed":"done"}"#,
+        r#"{"ref":"V-9","kind":"feedback","title":"t","reopen":0,"closed":"closed"}"#,
     ] {
         let d = repo();
         list(&d, &[line("V-1", "bug", 0, None), bad.to_string()]);
         let (ok, _, err) = fael(&d, &["intake"]);
         assert!(!ok, "{bad}");
         assert!(err.contains("nothing written"), "{err}");
+        if bad.contains("feedback") {
+            assert!(err.contains("feedback"), "{err}");
+        }
         assert!(rows(&d).is_empty(), "{bad}: V-1 must not be written either");
     }
 }
