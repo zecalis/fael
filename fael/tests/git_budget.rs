@@ -16,6 +16,12 @@ use std::process::{Command, Stdio};
 const KICKOFF_MAX: usize = 6;
 /// `add` = the stamp (config, symbolic-ref, rev-parse) plus the same pull.
 const ADD_MAX: usize = 9;
+/// `find` pulls the same way kickoff does.
+const FIND_MAX: usize = 6;
+/// `hook session-start` = the same pull plus the user-name probe.
+const SESSION_MAX: usize = 7;
+/// `close` = the stamp alone: trunk probe, user name, branch, short sha.
+const CLOSE_MAX: usize = 5;
 
 fn git(d: &Path, args: &[&str]) {
     let ok = Command::new("git")
@@ -143,14 +149,71 @@ fn add_spawns_a_fixed_number_however_many_branches_and_notes() {
     }
 }
 
-/// The push path owns no spawn: a hook edit with branch-tied notes open reads
-/// files only.
 #[test]
-fn the_hook_push_path_spawns_no_git() {
+fn find_spawns_a_fixed_number_however_many_branches() {
+    for n in [4, 12] {
+        let d = repo(n);
+        for args in [
+            &["find", "stopped"][..],
+            &["find", "--all"],
+            &["find", "--files", "f0"],
+        ] {
+            let seen = warm(&d, args);
+            assert!(
+                seen.len() <= FIND_MAX,
+                "fael {args:?}, {n} branches:\n{}",
+                seen.join("\n")
+            );
+        }
+    }
+}
+
+#[test]
+fn session_start_spawns_a_fixed_number_however_many_branches() {
+    for n in [4, 12] {
+        let d = repo(n);
+        let input = format!(r#"{{"cwd":"{}"}}"#, d.display());
+        spawns(&d, &["hook", "session-start"], &input);
+        let seen = spawns(&d, &["hook", "session-start"], &input);
+        assert!(
+            seen.len() <= SESSION_MAX,
+            "{n} branches:\n{}",
+            seen.join("\n")
+        );
+    }
+}
+
+/// The push path owns no spawn, and `close` only the stamp of its line.
+#[test]
+fn the_push_path_spawns_no_git_and_close_only_its_stamp() {
     let d = repo(8);
-    let input = format!(r#"{{"cwd":"{}","files":["f1"]}}"#, d.display());
-    let seen = spawns(&d, &["hook", "edit"], &input);
-    assert!(seen.is_empty(), "{}", seen.join("\n"));
-    let read = spawns(&d, &["hook", "read"], &input);
-    assert!(read.is_empty(), "{}", read.join("\n"));
+    let cwd = d.display();
+    let edit = format!(r#"{{"cwd":"{cwd}","files":["f1"]}}"#);
+    let search = format!(
+        r#"{{"cwd":"{cwd}","session_id":"s","tool_name":"Grep","tool_input":{{"pattern":"x"}},"tool_response":"f1"}}"#
+    );
+    let stop = format!(r#"{{"cwd":"{cwd}"}}"#);
+    for (args, input) in [
+        (&["hook", "edit"][..], &edit),
+        (&["hook", "read"], &edit),
+        (&["hook", "search", "--client", "claude"], &search),
+        (&["hook", "stop"], &stop),
+    ] {
+        let seen = spawns(&d, args, input);
+        assert!(seen.is_empty(), "fael {args:?}:\n{}", seen.join("\n"));
+    }
+    let found = std::process::Command::new(env!("CARGO_BIN_EXE_fael"))
+        .env("FAEL_STATE_DIR", d.join(".state"))
+        .args(["find", "stopped at 1"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    let found = String::from_utf8_lossy(&found.stdout);
+    let id = found
+        .split_once("- [")
+        .and_then(|(_, r)| r.split_once(']'))
+        .map_or("", |(id, _)| id);
+    assert!(!id.is_empty(), "a row to close:\n{found}");
+    let seen = spawns(&d, &["close", id, "done"], "");
+    assert!(seen.len() <= CLOSE_MAX, "close:\n{}", seen.join("\n"));
 }
