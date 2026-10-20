@@ -31,7 +31,7 @@ impl Store {
             .query_row("SELECT id FROM chunk WHERE uid = ?1", [uid], |r| r.get(0))
             .optional()
             .map_err(err)?
-            .ok_or(format!("rejected: no chunk {uid}"))?;
+            .ok_or_else(|| super::lookup::no_chunk(uid))?;
         ready_in(&self.conn, id, today)
     }
 

@@ -88,7 +88,10 @@ fn show_prints_what_the_next_start_will() {
     // running: the notes its start printed
     assert_eq!(s.show(&a).unwrap().notes, ["first"]);
     assert_eq!(s.show(&a).unwrap().brief, "the brief");
-    assert!(s.show("nope").unwrap_err().contains("no chunk nope"));
+    let e = s.show("nope").unwrap_err();
+    assert!(e.contains("no chunk nope"), "{e}");
+    assert!(e.contains("copy a uid from `fael board`"), "{e}");
+    assert!(e.contains("`--plan <plan>`"), "{e}");
 }
 
 #[test]

@@ -85,7 +85,9 @@ fn missing(s: &Store, uid: &str) -> String {
                 {unpark}`fael plan export {plan}` lists its uids"
             )
         }
-        _ => format!("rejected: chunk {uid} is not on the board"),
+        _ => {
+            format!("rejected: chunk {uid} is not on the board — copy a live uid from `fael board`")
+        }
     }
 }
 

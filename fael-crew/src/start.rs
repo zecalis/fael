@@ -6,7 +6,7 @@ use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
 use super::holder::{busy, holder, holder_detail, members, ready_paired};
-use super::lookup::lookup;
+use super::lookup::{lookup, no_chunk};
 use super::ready::Ready;
 use super::section::{self, Row as Section};
 use super::store::{Store, err};
@@ -275,9 +275,7 @@ impl Store {
     /// prints — for a running chunk, the ones its start printed. Read-only, md plans too.
     pub fn show(&self, key: &str) -> Result<Brief, String> {
         let tx = self.conn.unchecked_transaction().map_err(err)?;
-        let (id, _, state, ..) = lookup(&tx, key)?.ok_or(format!(
-            "rejected: no chunk {key} — `fael board` lists every uid"
-        ))?;
+        let (id, _, state, ..) = lookup(&tx, key)?.ok_or_else(|| no_chunk(key))?;
         brief(&tx, id, u32::from(state == "running"), None)
     }
 }
