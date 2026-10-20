@@ -33,6 +33,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         force: a.has("force"),
         session: session.clone(),
         base: crate::git(&r.root, &["rev-parse", "HEAD"]),
+        shared: fael_crew::shared(&r.root).unwrap_or_default(),
     };
     let mut st = Store::open(&db(r))?.start(uid, &o, here)?;
     if let Some(m) = session.as_deref().and_then(crate::chunk::held) {

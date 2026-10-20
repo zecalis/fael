@@ -5,7 +5,7 @@
 use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
-use super::holder::{busy, holder, holder_detail, members, ready_paired};
+use super::holder::{busy, clashes, holder, holder_detail, members, ready_paired};
 use super::lookup::{lookup, no_chunk};
 use super::ready::Ready;
 use super::section::{self, Row as Section};
@@ -30,6 +30,8 @@ pub struct Start {
     pub session: Option<String>,
     /// HEAD's sha in the worktree at start → `run.base`, where `done`'s diff begins
     pub base: Option<String>,
+    /// `.fael/shared` paths: nobody's claim, never an overlap (as on the board)
+    pub shared: Vec<String>,
 }
 
 /// One claimed chunk, with what its brief needs.
@@ -181,6 +183,13 @@ impl Store {
         if let Some(reused) = reuse_live(&tx, &first, &ms, o.session.as_deref())? {
             tx.commit().map_err(err)?;
             return Ok(reused);
+        }
+        let clash = clashes(&tx, &ms, &o.shared)?;
+        if !clash.is_empty() && !o.force {
+            return Err(format!(
+                "rejected: chunk {uid} shares files with a running chunk — {}; `--force` starts it anyway",
+                clash.join("; ")
+            ));
         }
         for m in ms.iter().cloned() {
             let r = row(&tx, &m)?;

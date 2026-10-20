@@ -209,3 +209,69 @@ fn only_a_claimed_diff_reaches_the_next_brief_as_files_touched() {
     s.claim(&a, &["z/q.rs".into()]).unwrap();
     assert_eq!(files(&mut s), "z/q.rs");
 }
+
+fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
+    let c = add(s, title, Some(title));
+    s.conn
+        .execute(
+            "UPDATE chunk SET scope = ?2 WHERE uid = ?1",
+            params![c, scope],
+        )
+        .unwrap();
+    c
+}
+
+#[test]
+fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/");
+    let b = scoped(&mut s, "b", "src/x.rs\ndocs/");
+    start(&mut s, &a, "/w1").unwrap();
+    let e = start(&mut s, &b, "/w2").unwrap_err();
+    assert!(
+        e.contains(&a) && e.contains("src/x.rs") && e.contains("--force"),
+        "{e}"
+    );
+    assert_eq!(state(&s, &b), "open");
+    let o = Start {
+        force: true,
+        ..Start::default()
+    };
+    s.start(&b, &o, &here("/w2")).unwrap();
+    assert_eq!(state(&s, &b), "running");
+}
+
+#[test]
+fn a_pair_partner_or_an_idle_chunk_is_no_overlap() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    let c = scoped(&mut s, "c", "src/y.rs");
+    pair(&s, &a, &b);
+    let r = start(&mut s, &a, "/w1").unwrap();
+    assert_eq!(state(&s, &b), "running", "pair starts together");
+    s.run_end(&r, None, NOW).unwrap();
+    start(&mut s, &c, "/w2").unwrap();
+}
+
+#[test]
+fn another_app_or_a_shared_path_is_no_overlap() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/\nCargo.lock");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    let c = scoped(&mut s, "c", "Cargo.lock");
+    start(&mut s, &a, "/w1").unwrap();
+    s.conn
+        .execute_batch(&format!(
+            "INSERT INTO plan(app, name, title, state) VALUES ('other', 'p', 'p', 'active');
+             UPDATE chunk SET plan = (SELECT id FROM plan WHERE app = 'other') WHERE uid = '{b}'"
+        ))
+        .unwrap();
+    start(&mut s, &b, "/w2").unwrap();
+    assert!(start(&mut s, &c, "/w3").unwrap_err().contains(&a));
+    let o = Start {
+        shared: vec!["Cargo.lock".into()],
+        ..Start::default()
+    };
+    s.start(&c, &o, &here("/w3")).unwrap();
+}
