@@ -65,6 +65,25 @@ fn replaced_line() -> Option<String> {
     ))
 }
 
+/// A write through a replaced binary would use an older schema than the CLI
+/// and hooks; refuse it and point at the CLI (01M5C556). `find` and `chunk show` still read.
+fn refuse_stale_write(name: &str, args: &Value, stale: bool) -> Option<String> {
+    let write = match name {
+        "add" | "close" | "bump" => true,
+        "chunk" => args["verb"].as_str() != Some("show"),
+        _ => false,
+    };
+    (stale && write).then(|| {
+        format!(
+            "refused: this MCP server runs an older fael than the installed one, so {name} would write with a stale schema — run the CLI instead (`fael {name} …`) or restart the fael MCP server"
+        )
+    })
+}
+
+fn stale() -> bool {
+    EXE.get().and_then(Option::as_ref).is_some_and(replaced)
+}
+
 pub fn serve(pin: bool) -> Result<(), String> {
     PIN.store(pin, Ordering::Relaxed);
     EXE.get_or_init(stamp);
@@ -116,7 +135,9 @@ fn error(id: Value, code: i32, msg: &str) -> Value {
 fn call(p: &Value) -> Value {
     let name = p["name"].as_str().unwrap_or("");
     let args = &crate::synonyms::mcp(name, &p["arguments"]);
+    let refused = refuse_stale_write(name, args, stale());
     let res = match name {
+        _ if refused.is_some() => Err(refused.unwrap_or_default()),
         "find" => find::find(args),
         "add" => add::add(args),
         "close" => close::close(args),
@@ -141,7 +162,7 @@ fn call(p: &Value) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::replaced;
+    use super::{refuse_stale_write, replaced};
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -159,5 +180,17 @@ mod tests {
         // removed (brew upgrade deleting the old Cellar dir)
         std::fs::remove_file(&p).unwrap();
         assert!(replaced(&s));
+    }
+
+    #[test]
+    fn a_stale_server_refuses_writes_and_still_reads() {
+        let w = |n, v| refuse_stale_write(n, &serde_json::json!({"verb": v}), true);
+        for n in ["add", "close", "bump"] {
+            assert!(w(n, "").unwrap().contains("fael"), "{n}");
+        }
+        assert!(w("chunk", "done").is_some());
+        assert!(w("find", "").is_none());
+        assert!(w("chunk", "show").is_none());
+        assert!(refuse_stale_write("add", &serde_json::json!({}), false).is_none());
     }
 }
