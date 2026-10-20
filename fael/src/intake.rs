@@ -5,8 +5,11 @@
 //!
 //! Row per ticket round: bug|report|question → issue, idea → note; key
 //! `ticket:<source>:<ref>` (`-r<N>` on reopen N), files = that key (an anchor), by `intake`.
-//! Dedup = any row on the key, closed ones too: a ticket an agent already closed is not
-//! reopened by the source still listing it. The source closing a ticket closes its open row.
+//! One open row per ticket across its rounds: dedup = any row on the key, closed ones too (a
+//! ticket an agent closed is not reopened by the source still listing it); a reopen closes
+//! the earlier round's open row; copies written on the same key by two machines before a
+//! sync are closed on the next run, smallest id wins. The source closing a ticket closes its
+//! open row.
 
 mod list;
 #[cfg(test)]
@@ -139,45 +142,72 @@ fn row_kind(t: &Listed) -> Result<&'static str, String> {
 }
 
 /// What every run writes, from the checked lists and the ledger as it stands. Err = a bad
-/// ticket (kind, key): the caller writes nothing.
+/// ticket (kind, key): the caller writes nothing. One rule per listed ticket: at most one
+/// open row across its rounds, and the smallest id on the current round survives, so every
+/// machine picks the same row after a sync.
 fn plan(log: &core::Log, runs: &[(Source, Vec<Listed>)]) -> Result<Vec<Step>, String> {
     let open = core::find(log, &core::Filter::default());
-    let mut taken: std::collections::HashSet<String> =
-        log.rows.iter().filter_map(|r| r.key.clone()).collect();
     let mut steps = Vec::new();
     for (s, list) in runs {
         for t in list {
             let k = key(s, t);
             core::valid_key(&k)?;
-            if let Some(why) = &t.closed {
-                // the source closed it: shut the open row, if there is one
-                for row in open.iter().filter(|r| r.key.as_deref() == Some(&k)) {
-                    // the same ticket listed twice closes its row once
-                    if steps
-                        .iter()
-                        .any(|s| matches!(s, Step::Close { id, .. } if *id == row.id))
-                    {
-                        continue;
+            let kind = row_kind(t)?;
+            let base = format!("ticket:{}:{}", s.name, t.r#ref.to_lowercase());
+            let mut survivor: Option<&str> = None;
+            let mut shut = Vec::new();
+            for row in &log.rows {
+                let Some(rk) = row.key.as_deref().and_then(|x| x.strip_prefix(&base)) else {
+                    continue;
+                };
+                let round = match rk.strip_prefix("-r").map(str::parse::<u32>) {
+                    None if rk.is_empty() => 0,
+                    Some(Ok(n)) => n,
+                    _ => continue,
+                };
+                if round == t.reopen && survivor.is_none_or(|v| row.id.as_str() < v) {
+                    survivor = Some(&row.id);
+                }
+                if !open.iter().any(|o| o.id == row.id) {
+                    continue;
+                }
+                shut.push((round, row.id.as_str()));
+            }
+            for (round, id) in shut {
+                let why = match (round.cmp(&t.reopen), &t.closed) {
+                    (std::cmp::Ordering::Less, _) => {
+                        format!("reopened at source as round {}", t.reopen)
                     }
+                    (std::cmp::Ordering::Equal, Some(w)) => format!("closed at source: {w}"),
+                    (std::cmp::Ordering::Equal, None) if survivor != Some(id) => {
+                        format!("duplicate of {}", survivor.unwrap_or_default())
+                    }
+                    _ => continue,
+                };
+                // the same ticket listed twice closes a row once
+                if !steps
+                    .iter()
+                    .any(|s| matches!(s, Step::Close { id: c, .. } if c == id))
+                {
                     steps.push(Step::Close {
                         what: t.r#ref.clone(),
-                        id: row.id.clone(),
-                        why: format!("closed at source: {why}"),
+                        id: id.into(),
+                        why,
                     });
                 }
-                continue;
             }
-            let kind = row_kind(t)?;
-            if !taken.insert(k.clone()) {
-                continue;
+            let added = steps
+                .iter()
+                .any(|s| matches!(s, Step::Add { key, .. } if *key == k));
+            if t.closed.is_none() && survivor.is_none() && !added {
+                steps.push(Step::Add {
+                    what: t.r#ref.clone(),
+                    kind,
+                    title: t.title.clone(),
+                    text: text(log, &steps, s, t, &k),
+                    key: k,
+                });
             }
-            steps.push(Step::Add {
-                what: t.r#ref.clone(),
-                kind,
-                title: t.title.clone(),
-                text: text(log, s, t, &k),
-                key: k,
-            });
         }
     }
     Ok(steps)
@@ -185,7 +215,7 @@ fn plan(log: &core::Log, runs: &[(Source, Vec<Listed>)]) -> Result<Vec<Step>, St
 
 /// The row's body: where the ticket lives, and for a reopened round where the one before
 /// stopped (its close reason, else that it is still open).
-fn text(log: &core::Log, s: &Source, t: &Listed, k: &str) -> String {
+fn text(log: &core::Log, steps: &[Step], s: &Source, t: &Listed, k: &str) -> String {
     let fill = |c: &str| c.replace("{ref}", &t.r#ref);
     let mut out = format!("Ticket {} from {} ({}).", t.r#ref, s.name, t.kind);
     if let Some(c) = &s.read {
@@ -208,14 +238,20 @@ fn text(log: &core::Log, s: &Source, t: &Listed, k: &str) -> String {
             .filter(|r| r.key.as_deref() == Some(&prev))
             .map(|r| r.id.as_str())
             .collect();
+        // a round this run closes as reopened has no close on record yet
         let stop = log
             .closes
             .iter()
             .rev()
             .find(|c| c.reference.as_deref().is_some_and(|x| ids.contains(&x)))
-            .map_or("no close on record".to_string(), |c| {
-                format!("closed: {}", c.text)
-            });
+            .map(|c| format!("closed: {}", c.text))
+            .or_else(|| {
+                steps
+                    .iter()
+                    .any(|s| matches!(s, Step::Close { id, .. } if ids.contains(&id.as_str())))
+                    .then(|| "closed as reopened".to_string())
+            })
+            .unwrap_or("no close on record".into());
         let base = k.rsplit_once("-r").map_or(k, |(b, _)| b);
         out += &format!(
             " Reopened (round {}); round {} stopped — {stop}. All rounds: fael find --key '{base}*' --all.",

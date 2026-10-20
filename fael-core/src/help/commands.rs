@@ -188,7 +188,9 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      ticket round gets one row, key ticket:<source>:<ref> (-rN when reopened), files = that
      key, by intake: bug, report, question → issue, idea → note, its text names the source's
      read and open commands; any row on the key, closed ones too, means it is left alone; a
-     ticket the source closed (closed, dup:<ref>) closes its open row by intake; fael runs
+     ticket the source closed (closed, dup:<ref>) closes its open row by intake; one open row
+     per ticket: a reopen closes the earlier round, a duplicate from sync is closed on the
+     next run, oldest id wins; fael runs
      only `list` and never writes to the source; prints one line per change, then a count)",
     ),
     (
