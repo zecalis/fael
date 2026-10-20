@@ -93,7 +93,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     git(&d, &["merge", "-q", "--no-edit", "lane1", "lane2"]);
 
     // l1/a.txt is inside, Cargo.lock is shared: nobody's, never said
-    let want = "declared scope: l1/\noutside, in inbox/o: o/x.txt\noutside, unowned: stray.txt";
+    let want = "declared scope: l1/\noutside declared scope: o/x.txt (overlaps open chunk inbox/o)\noutside declared scope: stray.txt";
     // the lead's run end at the lane's exit says it first, before the lane lands
     let out = f(&["run", "end", "R1"]);
     assert_eq!(out, format!("run R1: {l1} {want}"));
@@ -115,7 +115,10 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     );
     let out = f(&["chunk", "done", &l3, "h", "--run", "R3"]);
     let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
-    assert_eq!(block, "declared scope: l3/\noutside, unowned: stray3.txt");
+    assert_eq!(
+        block,
+        "declared scope: l3/\noutside declared scope: stray3.txt"
+    );
 
     // the lead merges in the lane's own worktree, now on a wave branch: ending the run there
     // must not swap its branch for the cwd's before done reads it; all inside: no block
@@ -139,7 +142,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     }
     git(&d, &["commit", "-qm", "solo"]);
     let out = f(&["chunk", "done", &s, "h"]);
-    assert!(out.ends_with("outside, unowned: solo.txt"), "{out}");
+    assert!(out.ends_with("outside declared scope: solo.txt"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &s, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["s/a.txt", "solo.txt"]));
 }
