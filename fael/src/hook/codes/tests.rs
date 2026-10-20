@@ -49,6 +49,14 @@ fn rejects_read_as_their_family() {
             "chunk_missing",
         ),
         (
+            "rejected: no chunk b9 — copy a uid from `fael board`, or a label with `--plan <plan>`",
+            "chunk_missing",
+        ),
+        (
+            "rejected: chunk 01M4AAAA is not on the board — copy a live uid from `fael board`",
+            "chunk_missing",
+        ),
+        (
             "rejected: uid prefix b9 is too short — use 8+ chars of the uid",
             "chunk_prefix",
         ),

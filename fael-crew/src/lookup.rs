@@ -53,6 +53,13 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
     }
 }
 
+/// The reject for a key that names no chunk: it says what to retype, never a guess.
+pub(super) fn no_chunk(key: &str) -> String {
+    format!(
+        "rejected: no chunk {key} — copy a uid from `fael board`, or a label with `--plan <plan>`"
+    )
+}
+
 impl super::Store {
     /// The uid `key` names inside `plan` (`name` or `app/name`): a label in that plan,
     /// else what `lookup` finds — refused when that chunk sits in another plan. So
