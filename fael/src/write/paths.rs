@@ -2,6 +2,7 @@
 //! reading when only that one exists.
 
 use crate::{core, hook};
+use fael_core::sibling_suggest;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -115,39 +116,4 @@ fn git_status_files(root: &Path) -> HashSet<String> {
         out.insert(p.to_string());
     }
     out
-}
-
-/// A same-directory file on disk close enough that `bad` is almost surely a
-/// typo of it — `None` when the parent directory is unreadable or nothing is
-/// within distance 2. Only siblings count: a row file one char away may be a
-/// genuinely new file (`src/a.rs` exists, `src/b.rs` is planned work), and
-/// rejecting that is the false block the plan forbids.
-pub(crate) fn sibling_suggest(root: &Path, bad: &str) -> Option<String> {
-    let dir = bad.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
-    let sib = if dir.is_empty() {
-        root.to_path_buf()
-    } else {
-        root.join(dir)
-    };
-    let Ok(rd) = std::fs::read_dir(&sib) else {
-        return None;
-    };
-    let mut best: Option<(usize, String)> = None;
-    for e in rd.flatten().take(500) {
-        let n = e.file_name().to_string_lossy().replace('\\', "/");
-        let cand = if dir.is_empty() {
-            n
-        } else {
-            format!("{dir}/{n}")
-        };
-        if cand == bad {
-            continue;
-        }
-        let d = core::levenshtein(bad, &cand);
-        if best.as_ref().is_none_or(|(bd, _)| d < *bd) {
-            best = Some((d, cand));
-        }
-    }
-    let (d, cand) = best?;
-    (d <= 2 && d < bad.chars().count()).then_some(cand)
 }

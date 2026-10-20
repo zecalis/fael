@@ -11,7 +11,7 @@ description = "fael crew — plan/chunk/board store and math (dispatched from fa
 fael-core = { path = "../fael-core", default-features = false }
 rusqlite = { version = "0.40", features = ["functions"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 
 [features]
 default = ["bundled-sqlite"]
@@ -19,3 +19,12 @@ bundled-sqlite = ["fael-core/bundled-sqlite", "rusqlite/bundled"]
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "fael-crew"
+path = "src/cli/main.rs"
+
+# fael-crew is the owner's layer, built from source (`cargo install --path fael-crew`);
+# cargo-dist ships `fael` only (decision 01M5AF2H).
+[package.metadata.dist]
+dist = false

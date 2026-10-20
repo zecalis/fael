@@ -11,8 +11,9 @@ cargo test --workspace
 ```
 
 Rust 1.89 or newer. The workspace has three crates: `fael-core` (log format, find, rules — no git,
-no cwd; never depends on crew), `fael-crew` (plans, chunks, board store — depends on
-`fael-core`) and `fael` (CLI, MCP server, hooks, install).
+no cwd; never depends on crew), `fael-crew` (plans, chunks, board store and the `fael-crew` binary
+`fael` execs for those verbs — depends on `fael-core`; `cargo install --path fael-crew`) and `fael`
+(CLI, MCP server, hooks, install — does not depend on `fael-crew`).
 
 ### Fast test loop
 
@@ -107,7 +108,7 @@ A new flag or command ships with three things (decision 01M59HQJ):
 2. the friction it cuts (`fael stats` `friction.by_command` — rejects, help reads, find-repeats where it happened),
 3. the `fael stats` calls-per-command-and-flag line (`usage.by_flag`; text prints the top 8 with `since`) that will show its use — run it and quote the line in the PR.
 
-A new workflow flag is born hidden: it parses but stays out of default help, and the skill or `fael chunk start` brief that sends the agent to it names it. Tier it under `product:cli-tiers-table` (`fael find --key product:cli-tiers-table`); removal follows the retire bar in `fael plan export cli-tiers --section 4` — link, never copy, either list. Put the flags in the `COMMANDS` table (`fael/src/help/commands.rs`) and the matching `docs/architecture.md` row (`docs_match_flags` holds them equal); default `fael --help` stays core-only.
+A new workflow flag is born hidden: it parses but stays out of default help, and the skill or `fael chunk start` brief that sends the agent to it names it. Tier it under `product:cli-tiers-table` (`fael find --key product:cli-tiers-table`); removal follows the retire bar in `fael plan export cli-tiers --section 4` — link, never copy, either list. Put the flags in the `COMMANDS` table (`fael-core/src/help/commands.rs`) and the matching `docs/architecture.md` row (`docs_match_flags` holds them equal); default `fael --help` stays core-only.
 
 ## File size: no god files
 

@@ -18,7 +18,7 @@ enum To {
 }
 use To::{Flag, Id, Text};
 
-pub(crate) mod chunk_list;
+pub(crate) use fael_core::help::reject::{join_lists, reject, with_usage};
 
 /// (commands, guessed flag, real thing). `*` in the README of the plan: every
 /// guess marked there was seen in an agent transcript.
@@ -75,30 +75,6 @@ const PROPS: &[(&str, &str, &str)] = &[
     ("close", "body", "text"),
     ("add", "body", "text"),
     ("add", "message", "text"),
-];
-
-/// (command, flags, what to say) when no real flag is near enough to name.
-const NO_FLAG: &[(&str, &[&str], &str)] = &[
-    ("find", &["--stale"], "open issues: fael find --kind issue"),
-    (
-        "find",
-        &["--status", "--state"],
-        "--all adds closed rows, --kind issue lists the open issues",
-    ),
-];
-
-/// (command, flags it takes none of, what to say instead).
-const TAKES_NO: &[(&str, &[&str], &str)] = &[
-    (
-        "bump",
-        &["title", "files", "key", "kind", "text", "supersedes"],
-        "re-file it: fael add … --supersedes <id>",
-    ),
-    (
-        "close",
-        &["to"],
-        "the reason is the last word: fael close <id> \"<why>\"",
-    ),
 ];
 
 fn listed(cmds: &str, cmd: &str) -> bool {
@@ -205,77 +181,10 @@ pub(crate) fn mcp(tool: &str, args: &Value) -> Value {
     a
 }
 
-/// Reject with the closest real thing and the command's usage line, instead of
-/// "try 'fael --help'". Deterministic and never runs a guess: near enough to
-/// help is near enough to do the wrong thing.
-pub(crate) fn reject(argv: &[String], e: String) -> String {
-    // `fael chunk list|ls`: the verb that never was one — answer with the reads
-    if let Some(m) = chunk_list::retype(argv, &e) {
-        return m;
-    }
-    let cmd = argv.first().map_or("", String::as_str);
-    let tail = " — try 'fael --help'";
-    if let Some(flag) = e.strip_prefix("rejected: unknown flag ") {
-        let flag = flag.split(' ').next().unwrap_or_default();
-        return with_usage(
-            cmd,
-            format!("rejected: unknown flag {flag} — {}", near(cmd, flag)),
-            &e,
-        );
-    }
-    if let Some(head) = e.strip_suffix(tail).filter(|h| h.contains(" takes no --")) {
-        let (name, flag) = head.split_once(" takes no --").unwrap_or_default();
-        let name = name.trim_start_matches("rejected: ");
-        let said = TAKES_NO
-            .iter()
-            .find(|(c, fs, _)| *c == name && fs.contains(&flag))
-            .map(|(.., t)| format!("{head} — {t}"));
-        return with_usage(name, said.unwrap_or(head.into()), &e);
-    }
-    if e.starts_with("rejected: unknown command") {
-        let close = crate::help::names()
-            .filter(|n| lev(n, cmd) <= 2)
-            .min_by_key(|n| lev(n, cmd));
-        if let Some(n) = close {
-            return format!("rejected: unknown command {cmd:?} — did you mean {n}?");
-        }
-    }
-    e
-}
-
 /// What a failed run says: a text flag clash (`text_twice`), else `reject`.
 /// `raw` is the agent's argv, `argv` the rewritten one.
 pub(crate) fn explain(raw: &[String], argv: &[String], e: String) -> String {
     reject(argv, text_twice(raw, argv, e))
-}
-
-/// `--files a.rs b.rs`: the paths after the first became positionals and the
-/// parser said "wrong arguments" — the most common add reject (23 of 23 seen
-/// 2026-10-14..17). The argv with each path-shaped word after a list flag's
-/// value joined into its comma list; `None` when there is none. Called only
-/// on that arity reject, so an argv that already runs never changes meaning.
-pub(crate) fn join_lists(argv: &[String]) -> Option<Vec<String>> {
-    let pathy =
-        |w: &str| !w.starts_with('-') && !w.contains(char::is_whitespace) && w.contains(['/', '.']);
-    let (mut out, mut joined, mut list) = (Vec::<String>::new(), false, false);
-    for w in argv {
-        // `list`: the word before this one is a list flag's value (or a word joined into it)
-        if list
-            && pathy(w)
-            && let Some(last) = out.last_mut()
-            && pathy(last)
-        {
-            last.push(',');
-            last.push_str(w);
-            joined = true;
-            continue;
-        }
-        list = out
-            .last()
-            .is_some_and(|f| matches!(f.as_str(), "--files" | "--scope"));
-        out.push(w.clone());
-    }
-    joined.then_some(out)
 }
 
 /// `add note "x" --body "y"`: `rewrite` moved the flag into the text slot, so
@@ -312,84 +221,6 @@ fn text_twice(raw: &[String], argv: &[String], e: String) -> String {
         ),
         _ => e,
     }
-}
-
-/// `msg` plus the command's synopsis line; `old` when the command has none.
-fn with_usage(cmd: &str, msg: String, old: &str) -> String {
-    match crate::help::for_command(cmd).and_then(|s| s.lines().next()) {
-        Some(u) => format!("{msg}\nusage: {u}"),
-        None => old.into(),
-    }
-}
-
-/// The real flags of `cmd`, hidden ones included: the full synopsis line
-/// names them, plus `--json`. Chunk 3 trims the shown help to the core, so
-/// reading the shown line here would lose `--groups` and friends.
-fn real_flags(cmd: &str) -> Vec<&'static str> {
-    let line = crate::help::for_command_full(cmd).and_then(|s| s.lines().next());
-    let mut v: Vec<&str> = line
-        .unwrap_or_default()
-        .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
-        .filter(|w| w.starts_with("--") && w.len() > 2)
-        .collect();
-    // the synopsis may already name it mid-line (stats does): pushing blind
-    // suggests it twice, and dedup only folds neighbours.
-    if !v.contains(&"--json") {
-        v.push("--json");
-    }
-    v
-}
-
-/// What to say after an unknown `flag` on `cmd`: the real flags it could mean,
-/// a pointer from the table, else the help.
-fn near(cmd: &str, flag: &str) -> String {
-    let real = real_flags(cmd);
-    let name = flag.trim_start_matches('-');
-    let mut c: Vec<&str> = match flag.starts_with("--") {
-        // a typo or a prefix of a real flag (`--group` → `--groups`)
-        true => real
-            .iter()
-            .copied()
-            .filter(|r| {
-                let r = &r[2..];
-                lev(r, name) <= 1
-                    || (name.len() >= 3 && (r.starts_with(name) || name.starts_with(r)))
-            })
-            .collect(),
-        // `-k`: every real flag that letter could start — never picked for them
-        false => real
-            .iter()
-            .copied()
-            .filter(|r| r[2..].starts_with(name))
-            .collect(),
-    };
-    c.sort_by_key(|r| lev(&r[2..], name));
-    c.truncate(3);
-    let pointer = NO_FLAG
-        .iter()
-        .find(|(k, fs, _)| *k == cmd && fs.contains(&flag))
-        .map(|(.., t)| (*t).to_string());
-    match (c.as_slice(), pointer) {
-        ([], Some(t)) => t,
-        ([], None) => format!("try 'fael {cmd} --help'"),
-        ([one], _) => format!("did you mean {one}?"),
-        ([a @ .., z], _) => format!("did you mean {} or {z}?", a.join(", ")),
-    }
-}
-
-/// Edit distance, two rows.
-pub(crate) fn lev(a: &str, b: &str) -> usize {
-    let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.chars().enumerate() {
-        let mut cur = vec![i + 1];
-        for (j, cb) in b.iter().enumerate() {
-            let sub = prev[j] + usize::from(ca != *cb);
-            cur.push(sub.min(prev[j + 1] + 1).min(cur[j] + 1));
-        }
-        prev = cur;
-    }
-    prev[b.len()]
 }
 
 #[cfg(test)]

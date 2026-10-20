@@ -123,20 +123,6 @@ fn properties_become_the_real_property() {
     assert_eq!(a("find", json!({"why": "x"})), json!({"why": "x"}));
 }
 
-#[test]
-fn near_names_the_closest_and_never_picks() {
-    assert_eq!(near("find", "-k"), "did you mean --key or --kind?");
-    assert_eq!(near("find", "--group"), "did you mean --groups?");
-    assert_eq!(
-        near("find", "--stale"),
-        "open issues: fael find --kind issue"
-    );
-    assert_eq!(near("find", "--why"), "try 'fael find --help'");
-    assert!(near("find", "--status").contains("--all"));
-    // stats' synopsis already names --json: still suggested once
-    assert_eq!(near("stats", "-j"), "did you mean --json?");
-}
-
 /// The table is never advertised: no help section and no schema property names
 /// a guess (advertised, it would be one more thing to learn).
 #[test]
@@ -197,31 +183,6 @@ fn argv(s: &str) -> Vec<String> {
     s.split(' ').map(String::from).collect()
 }
 
-/// A reject that is not ours, or has no command to read usage from, goes out
-/// as it came — never cut, never crashing.
-#[test]
-fn reject_leaves_what_it_cannot_improve() {
-    let flag_first = "rejected: unknown flag --stale — try 'fael --help'";
-    assert_eq!(
-        reject(&argv("--json find --stale"), flag_first.into()),
-        flag_first
-    );
-    // another module's own "takes no" line, which does not end in our tail
-    let auto = "rejected: `upgrade --auto` takes no --dry-run or --client";
-    assert_eq!(reject(&argv("upgrade --auto --dry-run"), auto.into()), auto);
-    // a command with no help section, an empty argv, an error of another kind
-    assert_eq!(reject(&argv("zzz --x"), flag_first.into()), flag_first);
-    assert_eq!(reject(&[], flag_first.into()), flag_first);
-    let other = "rejected: --limit 0 shows nothing";
-    assert_eq!(reject(&argv("find --limit 0"), other.into()), other);
-    // an unknown command far from every name has no "did you mean"
-    let far = "rejected: unknown command \"qqqqqqq\" — try 'fael --help'";
-    assert_eq!(reject(&argv("qqqqqqq"), far.into()), far);
-    // same input, same answer
-    let a = reject(&argv("find --group"), flag_first.into());
-    assert_eq!(a, reject(&argv("find --group"), flag_first.into()));
-}
-
 /// `add note x --body y` is two texts: name the flag, not "wrong arguments".
 /// A flag with no second text, or an arity error of another kind, is left as
 /// it came.
@@ -243,26 +204,4 @@ fn a_text_flag_next_to_a_text_is_named() {
     // the flag alone is one text — whatever failed, it was not this
     let raw = argv("add --body y");
     assert_eq!(text_twice(&raw, &rewrite(raw.clone()), wrong.into()), wrong);
-}
-
-/// `--files a.rs b.rs c.md` joins into one comma list up to the next flag or
-/// word that is not a path; an argv with no spread list is `None`.
-#[test]
-fn a_list_flag_split_by_a_space_is_joined() {
-    let got = join_lists(&argv(
-        "add issue x --files a/b.rs c/d.rs AGENTS.md --key k:t",
-    ));
-    assert_eq!(
-        got,
-        Some(argv(
-            "add issue x --files a/b.rs,c/d.rs,AGENTS.md --key k:t"
-        ))
-    );
-    let got = join_lists(&argv("add note --files a.rs b.rs x"));
-    assert_eq!(got, Some(argv("add note --files a.rs,b.rs x")));
-    let got = join_lists(&argv("chunk edit u --scope a/ b/c.rs"));
-    assert_eq!(got, Some(argv("chunk edit u --scope a/,b/c.rs")));
-    // one path, a text after it, a path that is not after a list flag
-    assert_eq!(join_lists(&argv("add note --files a.rs x y")), None);
-    assert_eq!(join_lists(&argv("add note a.rs b.rs")), None);
 }

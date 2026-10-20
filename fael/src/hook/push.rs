@@ -14,6 +14,7 @@ use super::state::{
 };
 use super::usage::record_usage;
 use crate::{aliases, core};
+use fael_core::is_anchor;
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
@@ -87,21 +88,6 @@ fn cut_body(
         out.push('\n');
     }
     (crate::journal::tag(out, tags), n, bodies)
-}
-
-/// A `scheme:ref` anchor (opaque, never a filesystem path) — the same rule
-/// core uses: a scheme of ≥ 2 lower chars before the first `:`.
-pub(crate) fn is_anchor(f: &str) -> bool {
-    if f.contains("://") || !f.contains(':') {
-        return false;
-    }
-    // cheap anchor check without reaching into core: scheme of ≥2 lower chars
-    let scheme = f.split(':').next().unwrap_or("");
-    scheme.len() >= 2
-        && scheme.as_bytes()[0].is_ascii_lowercase()
-        && scheme
-            .bytes()
-            .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'+' | b'.' | b'-'))
 }
 
 /// The pushed paths as repo-relative files. Outside the repo falls away,

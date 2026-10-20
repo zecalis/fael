@@ -1,10 +1,9 @@
 //! The MCP `chunk` tool — the CLI `chunk` verbs agents need without
 //! switching screens: show, start, note, done, wait, after. One tool with a
-//! `verb`, so the served schema stays small.
+//! `verb`, so the served schema stays small. The verbs run in `fael-crew`
+//! (`crew::capture`): the same call, the same text.
 
 use super::args::{need, repo_for, s};
-use crate::plan::db;
-use fael_crew::{Here, Start, Store};
 use serde_json::Value;
 
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
@@ -13,71 +12,47 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
     let verb = need(a, "verb")?;
     let uid = need(a, "uid")?;
     let text = s(a, "text").unwrap_or_default();
-    let now = fael_core::rfc3339(fael_core::now_ms());
-    let wt = r.root.to_string_lossy().into_owned();
-    let branch = crate::journal::head_branch(&r.root);
-    let run = s(a, "run");
-    let here = Here {
-        worktree: &wt,
-        branch: branch.as_deref(),
-        now: &now,
-        run: run.as_deref(),
+    let need_text = |what: &str| match text.is_empty() {
+        true => Err(format!(
+            "rejected: text is required for chunk {verb} — {what}"
+        )),
+        false => Ok(()),
     };
-    let mut st = Store::open(&db(&r))?;
+    let mut args: Vec<String> = vec!["chunk".into(), verb.clone(), uid];
     match verb.as_str() {
-        "show" => {
-            let b = st.show(&uid)?;
-            Ok(format!(
-                "# {} ({})\nplan {} — {}\n\n{}\n",
-                b.title, b.uid, b.plan, b.plan_title, b.brief
-            )
-            .trim_end()
-            .to_string())
-        }
+        "show" | "start" => {}
         "note" => {
             if text.is_empty() {
                 return Err("rejected: text is required for chunk note".into());
             }
-            st.note(&uid, &text, &now)?;
-            Ok(format!("chunk {uid} → noted for the next start"))
-        }
-        "start" => {
-            let o = Start {
-                run: run.clone(),
-                force: a["force"].as_bool().unwrap_or(false),
-                session: None,
-                base: crate::git(&r.root, &["rev-parse", "HEAD"]),
-                ..Start::default()
-            };
-            let started = st.start(&uid, &o, &here)?;
-            Ok(started.text())
+            args.push(text.clone());
         }
         "done" => {
-            if text.is_empty() {
-                return Err("rejected: text is required for chunk done — the handoff".into());
-            }
-            st.done(&uid, &text, None, None, &here)?;
-            Ok(format!("chunk {uid} → done"))
+            need_text("the handoff")?;
+            args.push(text.clone());
         }
         "wait" => {
-            if text.is_empty() {
-                return Err("rejected: text is required for chunk wait — the question".into());
-            }
-            let on = s(a, "on").unwrap_or_else(|| "owner".into());
-            st.wait(&uid, &on, &text, None, &[], &here)?;
-            Ok(format!("chunk {uid} → waiting on {on}"))
+            need_text("the question")?;
+            args.push(text.clone());
+            args.extend(["--on".into(), s(a, "on").unwrap_or_else(|| "owner".into())]);
         }
         "after" => {
-            if text.is_empty() {
-                return Err("rejected: text is required for chunk after — why".into());
-            }
+            need_text("why")?;
             let other = s(a, "other")
                 .ok_or("rejected: other is required for chunk after — the chunk waited on")?;
-            st.after(&uid, &other, &text, &here)?;
-            Ok(format!("chunk {uid} → after {other}"))
+            args.extend([other, text.clone()]);
         }
-        v => Err(format!(
-            "rejected: unknown chunk verb {v} — show|start|note|done|wait|after"
-        )),
+        v => {
+            return Err(format!(
+                "rejected: unknown chunk verb {v} — show|start|note|done|wait|after"
+            ));
+        }
     }
+    if let Some(run) = s(a, "run").filter(|_| verb != "show" && verb != "note") {
+        args.extend(["--run".into(), run]);
+    }
+    if verb == "start" && a["force"].as_bool().unwrap_or(false) {
+        args.push("--force".into());
+    }
+    crate::crew::capture(&args, &r.root)
 }

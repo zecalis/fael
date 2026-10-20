@@ -9,7 +9,6 @@
 use crate::{core, hook};
 use from::{from_user, over_user};
 use paths::root_relative;
-pub(crate) use paths::sibling_suggest;
 use std::path::PathBuf;
 
 pub(crate) mod arity;

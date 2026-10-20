@@ -3,7 +3,7 @@
 //! in `fael-core` so a hosted server calls the same entry points.
 
 mod alive;
-pub(crate) mod drift;
+pub(crate) use fael_core::drift;
 mod fat;
 mod merged;
 mod noverdict;

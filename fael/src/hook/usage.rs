@@ -228,7 +228,7 @@ fn commits(repo: &str, since_ms: i64) -> Vec<core::stats::Commit> {
         .collect()
 }
 
-pub fn stats(a: &crate::args::Args) -> Result<(), String> {
+pub fn stats(a: &crate::Args) -> Result<(), String> {
     let (json, rows, day_view) = (a.has("json"), a.has("rows"), a.has("day"));
     let u = load(crate::report::since(a)?);
     if day_view {

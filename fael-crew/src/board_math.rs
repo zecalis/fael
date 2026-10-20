@@ -75,18 +75,8 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
     }
 }
 
-/// SPEC §2: two scopes overlap when a path of one is a prefix of a path of the other on a
-/// `/` boundary (`src/` covers `src/a.rs`, `src/a` does not cover `src/ab.rs`).
-pub fn overlap(a: &[String], b: &[String]) -> bool {
-    a.iter()
-        .any(|x| b.iter().any(|y| under(x, y) || under(y, x)))
-}
-
-/// `x` is `y` or below it on a `/` boundary.
-pub(super) fn under(x: &str, y: &str) -> bool {
-    let (x, y) = (x.trim_end_matches('/'), y.trim_end_matches('/'));
-    x == y || x.strip_prefix(y).is_some_and(|r| r.starts_with('/'))
-}
+pub use fael_core::overlap;
+pub(super) use fael_core::under;
 
 /// `# PLAN-x — title` as imported → `title` (also `PLAN-x: title`, `PLAN-x (v1): title`).
 pub(super) fn plan_title(title: &str, name: &str) -> String {
