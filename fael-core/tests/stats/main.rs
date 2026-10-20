@@ -282,3 +282,34 @@ fn carriers_never_count_as_rows_added() {
     assert_eq!(v["rounds"]["rows_added"], 1, "{v}");
     assert_eq!(v["non_english_rows"]["rows"], 1, "{v}");
 }
+
+#[test]
+fn worktrees_sharing_a_journal_count_rows_added_once() {
+    let rows = concat!(
+        "{\"ts\":\"2026-09-26T00:00:00.000Z\",\"repo\":\"/work/a\",\"client\":\"claude\",\"event\":\"read\",\"bytes\":10,\"est_tokens\":3,\"ids\":[\"A\"]}\n",
+        "{\"ts\":\"2026-09-26T00:00:00.000Z\",\"repo\":\"/work/b\",\"client\":\"claude\",\"event\":\"read\",\"bytes\":10,\"est_tokens\":3,\"ids\":[\"A\"]}\n",
+    );
+    let tmp = vec![PathBuf::from("/tmp")];
+    let parsed = parse(rows, Path::new("/work/state/usage.jsonl"), &tmp);
+    let row = fael_core::Row::new("me", "note", "kept", vec!["src/a.rs".into()]);
+    let log = fael_core::Log {
+        rows: vec![row],
+        ..Default::default()
+    };
+    let logs = HashMap::from([
+        ("/work/a".to_string(), log.clone()),
+        ("/work/b".to_string(), log),
+    ]);
+    let s = aggregate(
+        &parsed,
+        &logs,
+        &HashMap::new(),
+        &[],
+        &[],
+        &Config::default(),
+        (1, 2, 3, 4).into(),
+        false,
+    );
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!(v["rounds"]["rows_added"], 1, "{v}");
+}

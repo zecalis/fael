@@ -6,7 +6,7 @@ use super::capture::{Capture, capture};
 use super::experience::{Commits, Experience, experience};
 use super::flow::{Flow, WeekCount, flow as flow_stats, throughput as throughput_stats};
 use super::friction::{Friction, friction};
-use super::metrics::{added_since, ask_totals, non_english_share};
+use super::metrics::{ask_totals, non_english_share, rows_added as count_rows_added};
 use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
 use super::parse::Parsed;
 use super::retire::{Retired, retired};
@@ -152,13 +152,13 @@ pub fn aggregate(
     constants: Constants,
     with_rows: bool,
 ) -> Stats {
-    let (mut rows_added, mut since) = (0usize, i64::MAX);
-    for (repo, first) in &parsed.first_seen {
-        since = since.min(*first);
-        if let Some(log) = logs.get(repo) {
-            rows_added += added_since(log, *first);
-        }
-    }
+    let rows_added = count_rows_added(logs, &parsed.first_seen);
+    let since = parsed
+        .first_seen
+        .values()
+        .copied()
+        .min()
+        .unwrap_or(i64::MAX);
     let (row_total, foreign_rows) = non_english_share(logs, cfg);
     let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
     let value = value(parsed, logs);
