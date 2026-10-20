@@ -10,7 +10,7 @@
 > when code and this page disagree, fix one of them in the same commit.
 
 fael is the lifecycle ledger for agent work (§0). It lives **inside the clone** (`.git/fael/`): every agent (Claude Code, Codex, OpenCode, a chat
-host speaking MCP, …) and every worktree on one machine reads and writes the same log, and there is no server. Across machines the log moves only by `fael import`; team sync over the git remote (`refs/fael/*`, no server) is planned, not shipped.
+host speaking MCP, …) and every worktree on one machine reads and writes the same log, and there is no server. Across machines the log moves only by `fael import`; git sync for dev teams over the git remote (`refs/fael/*`, no server, never on code branches) is free, planned, not shipped. Committing `.fael/log` into git was dropped (scattered diffs, heavy merges with many agents); hosted sync and a non-dev web app are a separate paid service, and this binary adds no daemon (decision 01M5C2S7).
 
 Three ideas carry the whole design:
 
@@ -57,7 +57,7 @@ agent applies merge / split / pair itself, and every git merge is the owner's. `
 followed (capture → acted → outcome), never the counterfactual, so claims about value say
 only that.
 
-**The mechanism is the team's shared work ledger** (per machine today; git-ref team sync is planned): the context of the work, and the work handed
+**The mechanism is the team's shared work ledger** (local today; `fael import` moves it; git-ref sync is planned): the context of the work, and the work handed
 between sessions and agents — hand-offs, requirements, assigned issues (`--to`), claims,
 come-backs (`--revisit`). It is not the agent's memory, not a personal notebook, not a generic
 AI memory store, and not a process or git guard.
@@ -135,7 +135,7 @@ A change that writes plan or chunk state goes in `fael-crew`. A change a user of
 plan goes in `fael-core` or `fael`. Core never depends on crew, so `cargo tree -p fael -e normal` and
 `cargo tree -p fael-core` show no `fael-crew`.
 Free fael is one machine, many agents and worktrees: this binary has no transport (decision 01M4SQ9B
-cut `fael sync`). Team sync over the git remote (`refs/fael/*`, no server) is planned, not shipped; it will carry this same
+cut `fael sync`). Git sync for dev teams over the git remote (`refs/fael/*`, no server) is planned, not shipped; it will carry this same
 row format, never a second one. Today `fael import <path>` is how a log crosses machines.
 
 Where a work habit lives (decision 01M4X4DZ) — deleting crew must leave each chunk's quality

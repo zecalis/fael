@@ -14,9 +14,12 @@ assigned issues, claims, where work stopped) that pass between sessions and agen
 agent's memory, not a personal notebook, not a generic AI memory store, and not a process or git
 guard. Value is work context (`task (key) → decision → evidence → outcome → closure`) in front
 of the right agent, once — never more rows. Rounds and tokens are a cost to keep low, never a promise.
-Today the log is per machine: shared by every worktree and agent on one machine, moved across
-machines by `fael import`. Team sync over the git remote (`refs/fael/*`, no server) is planned,
-not shipped.
+Today the log is local, and local is the only shipped mode: shared by every worktree and agent on
+one machine, moved across machines and between users by `fael import`. Committing `.fael/log` into
+git was tried and dropped — diffs scattered across PRs and merges grew heavy with many agents.
+Git sync over `refs/fael/*` (never on code branches) is free for dev teams, planned, not shipped.
+Hosted sync plus a web app for non-dev members is a separate paid service; the fael binary adds no
+daemon (decision 01M5C2S7, key product:monetization).
 
 Core (public): add, find, close, bump, claim, doctor, stats, hooks, MCP. fael crew is the owner's
 layer: plan, chunk, board (`fael plan|chunk|board`, hidden from default help; plan `cli-tiers`).
