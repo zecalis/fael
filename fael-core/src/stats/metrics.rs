@@ -31,13 +31,22 @@ pub(super) fn ask_totals(rows: &[serde_json::Value]) -> BTreeMap<String, AskCoun
     out
 }
 
-/// Rows filed at or after `since_ms` (the repo's first usage). Carriers
-/// (bump, restore, alias events) move rows, they file none.
-pub(super) fn added_since(log: &Log, since_ms: i64) -> usize {
-    log.rows
-        .iter()
-        .filter(|r| !is_carrier_row(r) && ts_ms(&r.ts).is_some_and(|t| t >= since_ms))
-        .count()
+/// Rows filed at or after their repo's first usage (`first_seen`), each row
+/// once: repos in one clone share the journal, so a row seen by several
+/// repos' logs counts once. Carriers (bump, restore, alias events) move
+/// rows, they file none.
+pub(super) fn rows_added(logs: &HashMap<String, Log>, first_seen: &HashMap<String, i64>) -> usize {
+    let mut seen = HashSet::new();
+    for (repo, first) in first_seen {
+        let Some(log) = logs.get(repo) else { continue };
+        seen.extend(
+            log.rows
+                .iter()
+                .filter(|r| !is_carrier_row(r) && ts_ms(&r.ts).is_some_and(|t| t >= *first))
+                .map(|r| r.id.as_str()),
+        );
+    }
+    seen.len()
 }
 
 /// (rows, rows outside the accepted `[lang] rows` scripts): one global dedup
