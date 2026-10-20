@@ -57,7 +57,7 @@ pub use query::{
     Abbrev, Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_HUB_PEEK, Cut, EXPAND_MAX, Filter, Focus,
     Hidden, KeyUse, MdRef, NO_ROW_WITH_ID, PLAN_KICKOFF_ROWS, PUSH_BACKGROUND, PUSH_HUB_PEEK,
     PUSH_HUB_ROWS, Prior, PushPolicy, Ref, Selection, Urgent, UrgentChange, abbrev, add_gate,
-    backtick_paths, brief, bucket, chunk_stem, closed, cmp_rows, code_spans, due, est_tokens,
+    backtick_paths, brief, bucket, chunk_stem, closed, closed_fallback, cmp_rows, code_spans, due, est_tokens,
     expands, fat_reasons, find, fix_close, fresh_ts, freshness, glob, gone, gone_files, groups,
     handoff_first, id_tokens, is_date, json_note, key_hints, keys, kickoff, levenshtein, names_key,
     nearest, on_work, page, parse_recall, phantom_md_refs, phantom_refs, plan_anchor, push,
