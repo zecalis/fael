@@ -99,6 +99,9 @@ rebase checks, then `scripts/gate.sh` (fmt, clippy with `-D warnings` on host an
 target, `file-size.sh`, tests — one ✓/✗ line each, output only for a failing step), pushes
 and opens or edits the PR. Repo rules for it live in `.fael/worktree.json` (`gate`,
 `ship.regen`). Run `scripts/gate.sh` alone to validate without shipping.
+While iterating, run `cargo check -p <crate> --message-format=short` and
+`cargo nextest run -p <crate> <filter> --profile gate` (profile in `.config/nextest.toml`)
+instead of the full gate; run `scripts/gate.sh` once before ship.
 
 Windows CI runs on `main` and on wave PRs (head `plan/**`), not on other PRs. A PR that touches paths, golden files,
 process spawning, env vars or time-dependent tests runs it and reports its result before
