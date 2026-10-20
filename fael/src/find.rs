@@ -12,6 +12,7 @@ mod merged;
 pub(crate) mod misses;
 pub(crate) mod owner;
 mod page_base;
+mod patch_ids;
 
 pub(crate) use kickoff::kickoff;
 

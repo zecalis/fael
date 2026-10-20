@@ -70,7 +70,7 @@ pub(crate) use usage::{aggregate, load, record_found, stats};
 
 // What the binary shares: `write` reads session edits and checks anchors,
 // `maintain` asks where the gitignore rule comes from.
-pub(crate) use changed::{PUSH_MAX_BYTES, files_changed, mark_dormant};
+pub(crate) use changed::{PUSH_MAX_BYTES, files_changed, mark_dormant, mark_dormant_files};
 pub(crate) use fael_core::is_anchor;
 pub(crate) use state::{Edit, note_seen, now_rfc3339, session_edits, started_path, state_dir};
 pub(crate) use tally::{note_closed, note_filed};

@@ -9,8 +9,19 @@
 use crate::journal::BranchMap;
 use fael_core::Row;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{LazyLock, Mutex};
+
+use super::patch_ids::MEMO_MAX;
+
+// A proof is a pure function of object ids (tip, HEAD, merge base), so this
+// memo is exact for the life of the process — a branch ref that moves changes
+// the tip sha and misses. `add decision` runs the proof twice (the cap check,
+// then the held text), fael:01M5CPNJ; patch-ids persist in `patch_ids`. No
+// HEAD sha (reftable) = no memo, git decides every time.
+type Verdicts = HashMap<(PathBuf, String, String, bool), bool>;
+static VERDICTS: LazyLock<Mutex<Verdicts>> = LazyLock::new(Default::default);
 
 /// Mark the tags of the rows about to be shown; branches of rows off the
 /// page are never asked about.
@@ -103,8 +114,6 @@ pub fn mark_changed(
     branch_of
 }
 
-// ponytail: one patch-id pass over base..HEAD per branch on the page; cache
-// by merge base if kickoff ever shows many branches from one old base
 pub(crate) fn is_merged(root: &Path, b: &str) -> bool {
     // the local branch, else our fetch of it; a deleted branch proves nothing
     match live_tip(root, b) {
@@ -142,27 +151,44 @@ fn live_tip(root: &Path, b: &str) -> Option<String> {
 }
 
 fn merged_tip(root: &Path, tip: &str, ancestor_proves: bool) -> bool {
+    let Some(head) = crate::journal::head_sha(root) else {
+        return prove_tip(root, tip, None, ancestor_proves);
+    };
+    let key = (
+        root.to_path_buf(),
+        tip.to_string(),
+        head.clone(),
+        ancestor_proves,
+    );
+    if let Some(v) = VERDICTS.lock().ok().and_then(|m| m.get(&key).copied()) {
+        return v;
+    }
+    let v = prove_tip(root, tip, Some(&head), ancestor_proves);
+    if let Ok(mut m) = VERDICTS.lock() {
+        if m.len() >= MEMO_MAX {
+            m.clear();
+        }
+        m.insert(key, v);
+    }
+    v
+}
+
+fn prove_tip(root: &Path, tip: &str, head: Option<&str>, ancestor_proves: bool) -> bool {
     let tip = tip.to_string();
-    if ancestor_proves && git(root, &["merge-base", "--is-ancestor", &tip, "HEAD"]).is_some() {
+    if git(root, &["merge-base", "--is-ancestor", &tip, "HEAD"]).is_some() {
         // on HEAD's first-parent line = the branch never left the commit it
         // was cut from (no own commits) — that is not "merged"
-        return git(root, &["rev-list", "--first-parent", "HEAD"])
-            .is_some_and(|l| !l.lines().any(|c| c == tip));
-    }
-    if git(root, &["merge-base", "--is-ancestor", &tip, "HEAD"]).is_some() {
-        return false;
+        return ancestor_proves
+            && git(root, &["rev-list", "--first-parent", "HEAD"])
+                .is_some_and(|l| !l.lines().any(|c| c == tip));
     }
     let Some(base) = git(root, &["merge-base", "HEAD", &tip]) else {
         return false;
     };
-    let Some(want) = patch_ids(root, &["diff", &base, &tip]).pop() else {
+    let Some(want) = super::patch_ids::diff_id(root, &base, &tip) else {
         return false;
     };
-    patch_ids(
-        root,
-        &["log", "-p", "--no-merges", &format!("{base}..HEAD")],
-    )
-    .contains(&want)
+    super::patch_ids::head_ids(root, &base, head).contains(&want)
 }
 
 /// Branches git proves merged into HEAD, in three spawns however many branches
@@ -220,8 +246,13 @@ pub(crate) fn merged_names(root: &Path) -> HashSet<String> {
         .collect()
 }
 
+#[cfg(test)]
+thread_local!(pub(super) static SPAWNED: std::cell::RefCell<Vec<String>> = Default::default());
+
 /// Trimmed stdout of a git command that exited 0.
-fn git(root: &Path, args: &[&str]) -> Option<String> {
+pub(super) fn git(root: &Path, args: &[&str]) -> Option<String> {
+    #[cfg(test)]
+    SPAWNED.with(|s| s.borrow_mut().push(args.join(" ")));
     let out = Command::new("git")
         .args(args)
         .current_dir(root)
@@ -233,31 +264,94 @@ fn git(root: &Path, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// `git <args> | git patch-id --stable`: one id per patch in the output.
-/// A real pipe, so neither side buffers a whole `log -p` in memory.
-fn patch_ids(root: &Path, args: &[&str]) -> Vec<String> {
-    let Ok(mut src) = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return vec![];
-    };
-    let Some(pipe) = src.stdout.take() else {
-        return vec![];
-    };
-    let out = Command::new("git")
-        .args(["patch-id", "--stable"])
-        .current_dir(root)
-        .stdin(pipe)
-        .stderr(Stdio::null())
-        .output();
-    let _ = src.wait();
-    let out = out.map(|o| o.stdout).unwrap_or_default();
-    String::from_utf8_lossy(&out)
-        .lines()
-        .filter_map(|l| l.split(' ').next().map(str::to_string))
-        .collect()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn g(d: &Path, args: &[&str]) {
+        let ok = Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .current_dir(d)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    fn commit_file(d: &Path, name: &str, msg: &str) {
+        std::fs::write(d.join(name), name).unwrap();
+        g(d, &["add", name]);
+        g(d, &["commit", "-qm", msg]);
+    }
+
+    fn spawns(what: &str) -> usize {
+        SPAWNED.with(|s| s.borrow().iter().filter(|a| a.starts_with(what)).count())
+    }
+
+    /// Three branches off one base, two of them squash-merged onto main: the
+    /// verdicts are the same cold and memoised, the `log -p base..HEAD` pass
+    /// runs once, and the second pass proves nothing again (fael:01M5CPNJ).
+    #[test]
+    fn proofs_are_memoised_and_unchanged() {
+        let d = std::env::temp_dir().join(format!("fael-merged-memo-{}", fael_core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let d = d.canonicalize().unwrap();
+        g(&d, &["init", "-q", "-b", "main"]);
+        g(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        for b in ["x", "y", "z"] {
+            g(&d, &["switch", "-qc", b, "main"]);
+            commit_file(&d, b, "branch");
+        }
+        g(&d, &["switch", "-q", "main"]);
+        // the squash: the same diff as a fresh commit on main, no ancestry
+        // a different message: the same second would otherwise hash to the
+        // branch's own commit and make it an ancestor, not a squash
+        commit_file(&d, "x", "squash");
+        commit_file(&d, "y", "squash");
+        let pass = || ["x", "y", "z"].map(|b| is_merged_at(&d, b, None));
+        let cold = pass();
+        assert_eq!(cold, [true, true, false]);
+        assert_eq!(
+            spawns("log -p"),
+            1,
+            "{:?}",
+            SPAWNED.with(|s| s.borrow().clone())
+        );
+        let (logs, diffs, bases) = (spawns("log -p"), spawns("diff"), spawns("merge-base HEAD"));
+        assert_eq!(pass(), cold);
+        assert_eq!(
+            (spawns("log -p"), spawns("diff"), spawns("merge-base HEAD")),
+            (logs, diffs, bases),
+            "the second pass proves nothing again"
+        );
+        // a new process (memos gone) reads the on-disk cache: same verdicts,
+        // no diff, no log, no patch-id of anything it has seen
+        VERDICTS.lock().unwrap().clear();
+        super::super::patch_ids::forget_memo();
+        assert_eq!(pass(), cold);
+        assert_eq!((spawns("log -p"), spawns("diff")), (logs, diffs));
+        // a moved HEAD: only the new commit is diffed, and the ids still
+        // equal a plain `log -p base..HEAD | patch-id` over the whole range
+        commit_file(&d, "z", "squash");
+        assert_eq!(pass(), [true, true, true]);
+        assert_eq!(spawns("log -p"), logs + 1);
+        let base = git(&d, &["rev-parse", "HEAD~3"]).unwrap();
+        let plain = Command::new("sh")
+            .current_dir(&d)
+            .args([
+                "-c",
+                &format!("git log -p --no-merges {base}..HEAD | git patch-id --stable"),
+            ])
+            .output()
+            .unwrap();
+        let mut plain: Vec<String> = String::from_utf8_lossy(&plain.stdout)
+            .lines()
+            .map(|l| l.split(' ').next().unwrap().to_string())
+            .collect();
+        let mut cached = super::super::patch_ids::head_ids(&d, &base, None);
+        plain.sort();
+        cached.sort();
+        assert_eq!(cached, plain);
+    }
 }
