@@ -11,6 +11,7 @@
 mod db;
 mod pure;
 mod ready;
+mod scopes;
 
 /// A chunk's brief, as `chunk show` prints the fields core reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,3 +60,4 @@ pub use pure::{
     overlap, registered, rules, shared,
 };
 pub use ready::{first_ready, kickoff_text, ready_in};
+pub use scopes::{Other, Scopes, scopes};

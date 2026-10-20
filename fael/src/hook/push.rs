@@ -244,6 +244,9 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         text: format!("{}\n", h.text),
     }));
     lines.extend(check::check_line(&ask, edit));
+    if edit {
+        lines.extend(super::overlap::lines(&c, &files));
+    }
     lines.extend(notes);
     // the hint and the stashed notice share the budget the rows left
     if out.say_within(policy.budget, lines) && has_notes {
