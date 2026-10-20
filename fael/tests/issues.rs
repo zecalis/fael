@@ -144,6 +144,23 @@ fn a_hold_whose_branch_is_gone_is_taken_over_without_force() {
     );
 }
 
+/// A hold that arrived by `fael sync` names a branch this clone only knows as
+/// `origin/<branch>`: it is alive, so a plain claim is refused.
+#[test]
+fn a_hold_on_a_remote_tracking_branch_still_gates_the_claim() {
+    let d = repo();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
+    git(&d, &["switch", "-q", "-c", "feat/far"]);
+    let (id, _) = issue(&d, "held elsewhere", "src/a.rs", &[]);
+    assert!(fael(&d, &["claim", &id]).0);
+    git(&d, &["update-ref", "refs/remotes/origin/feat/far", "HEAD"]);
+    git(&d, &["switch", "-q", "feat/one"]);
+    git(&d, &["branch", "-q", "-D", "feat/far"]);
+    let (ok, _, err) = fael(&d, &["claim", &id]);
+    assert!(!ok && err.contains("held @feat/far"), "{err}");
+}
+
 /// Two worktrees, one clone, one issue: exactly one claimer wins.
 #[test]
 fn two_agents_racing_for_one_issue_have_one_winner() {

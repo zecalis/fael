@@ -7,8 +7,8 @@
 //! racing for an issue exactly one wins and the other is told who holds it.
 //! It gates the claim, never the work: `--force` takes an issue over, a hold
 //! whose branch no longer exists is taken over on its own, and nothing here
-//! blocks an edit. Another clone never sees the hold — there the lock
-//! cannot help.
+//! blocks an edit. Across machines a hold is only as fresh as the last
+//! `fael sync` — there the lock cannot help.
 
 use crate::{Repo, core, read};
 use std::path::{Path, PathBuf};
@@ -33,12 +33,30 @@ fn exclusive(r: &Repo) -> Result<Option<std::fs::File>, String> {
 }
 
 /// Does the branch holding an issue still exist in this clone? A hold made on
-/// another machine is stale here until its branch is fetched.
+/// another machine (it arrives by `fael sync`) lives on a remote-tracking
+/// branch here until someone checks it out, so those count too.
 fn alive(r: &Repo, branch: &str) -> bool {
-    r.journal
-        .as_deref()
-        .and_then(Path::parent)
-        .is_some_and(|common| crate::journal::branch_alive(common, branch))
+    let Some(common) = r.journal.as_deref().and_then(Path::parent) else {
+        return false;
+    };
+    crate::journal::branch_alive(common, branch) || remote_alive(common, branch)
+}
+
+/// `refs/remotes/<remote>/<branch>` as a loose ref or a `packed-refs` line.
+fn remote_alive(common: &Path, branch: &str) -> bool {
+    let loose = std::fs::read_dir(common.join("refs/remotes"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|d| d.path().join(branch).is_file());
+    let tail = format!("/{branch}");
+    loose
+        || std::fs::read_to_string(common.join("packed-refs")).is_ok_and(|p| {
+            p.lines().any(|l| {
+                l.split_once(' ')
+                    .is_some_and(|(_, n)| n.starts_with("refs/remotes/") && n.ends_with(&tail))
+            })
+        })
 }
 
 fn me(r: &Repo) -> Result<(core::Stamp, String), String> {

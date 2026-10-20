@@ -1,8 +1,8 @@
 //! Auto sync (PLAN-fael-journal-transport chunk 6): session start, and a Stop
 //! that lets a turn through, start one `fael sync` when `fael.remote` is set —
 //! once per session and worktree for each newest row this writer has filed.
-//! Session start runs it first, so teammates' rows land in the journal before
-//! the session's first read and the rows the last session left behind go out;
+//! Session start runs it first (never awaited), so teammates' rows reach the
+//! session's later reads and the rows the last session left behind go out;
 //! a turn's new rows go out at the next Stop, and a Stop with nothing new
 //! starts nothing. Never per `add`.
 //!
