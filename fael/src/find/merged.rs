@@ -9,8 +9,23 @@
 use crate::journal::BranchMap;
 use fael_core::Row;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{LazyLock, Mutex};
+
+// A proof is a pure function of object ids (tip, HEAD, merge base), so these
+// memos are exact for the life of the process — a branch ref that moves
+// changes the tip sha and misses. `add decision` runs the proof twice (the cap
+// check, then the held text) and a repo with many open branches repeats one
+// `log -p base..HEAD` per tip (fael:01M5CPNJ). No HEAD sha (reftable) = no
+// memo, git decides every time.
+type Verdicts = HashMap<(PathBuf, String, String, bool), bool>;
+type LogIds = HashMap<(PathBuf, String, String), Vec<String>>;
+static VERDICTS: LazyLock<Mutex<Verdicts>> = LazyLock::new(Default::default);
+static LOG_IDS: LazyLock<Mutex<LogIds>> = LazyLock::new(Default::default);
+// ponytail: dropped wholesale past this many entries; an LRU if a long-lived
+// `fael mcp` ever churns through more distinct HEADs than this
+const MEMO_MAX: usize = 256;
 
 /// Mark the tags of the rows about to be shown; branches of rows off the
 /// page are never asked about.
@@ -103,8 +118,6 @@ pub fn mark_changed(
     branch_of
 }
 
-// ponytail: one patch-id pass over base..HEAD per branch on the page; cache
-// by merge base if kickoff ever shows many branches from one old base
 pub(crate) fn is_merged(root: &Path, b: &str) -> bool {
     // the local branch, else our fetch of it; a deleted branch proves nothing
     match live_tip(root, b) {
@@ -142,6 +155,29 @@ fn live_tip(root: &Path, b: &str) -> Option<String> {
 }
 
 fn merged_tip(root: &Path, tip: &str, ancestor_proves: bool) -> bool {
+    let Some(head) = crate::journal::head_sha(root) else {
+        return prove_tip(root, tip, None, ancestor_proves);
+    };
+    let key = (
+        root.to_path_buf(),
+        tip.to_string(),
+        head.clone(),
+        ancestor_proves,
+    );
+    if let Some(v) = VERDICTS.lock().ok().and_then(|m| m.get(&key).copied()) {
+        return v;
+    }
+    let v = prove_tip(root, tip, Some(&head), ancestor_proves);
+    if let Ok(mut m) = VERDICTS.lock() {
+        if m.len() >= MEMO_MAX {
+            m.clear();
+        }
+        m.insert(key, v);
+    }
+    v
+}
+
+fn prove_tip(root: &Path, tip: &str, head: Option<&str>, ancestor_proves: bool) -> bool {
     let tip = tip.to_string();
     if ancestor_proves && git(root, &["merge-base", "--is-ancestor", &tip, "HEAD"]).is_some() {
         // on HEAD's first-parent line = the branch never left the commit it
@@ -158,11 +194,31 @@ fn merged_tip(root: &Path, tip: &str, ancestor_proves: bool) -> bool {
     let Some(want) = patch_ids(root, &["diff", &base, &tip]).pop() else {
         return false;
     };
-    patch_ids(
-        root,
-        &["log", "-p", "--no-merges", &format!("{base}..HEAD")],
-    )
-    .contains(&want)
+    head_patch_ids(root, &base, head).contains(&want)
+}
+
+/// The patch-ids of `base..HEAD`, once per (base, HEAD) however many tips
+/// share the merge base.
+fn head_patch_ids(root: &Path, base: &str, head: Option<&str>) -> Vec<String> {
+    let log = || {
+        patch_ids(
+            root,
+            &["log", "-p", "--no-merges", &format!("{base}..HEAD")],
+        )
+    };
+    let Some(head) = head else { return log() };
+    let key = (root.to_path_buf(), base.to_string(), head.to_string());
+    if let Some(v) = LOG_IDS.lock().ok().and_then(|m| m.get(&key).cloned()) {
+        return v;
+    }
+    let v = log();
+    if let Ok(mut m) = LOG_IDS.lock() {
+        if m.len() >= MEMO_MAX {
+            m.clear();
+        }
+        m.insert(key, v.clone());
+    }
+    v
 }
 
 /// Branches git proves merged into HEAD, in three spawns however many branches
@@ -220,8 +276,13 @@ pub(crate) fn merged_names(root: &Path) -> HashSet<String> {
         .collect()
 }
 
+#[cfg(test)]
+thread_local!(static SPAWNED: std::cell::RefCell<Vec<String>> = Default::default());
+
 /// Trimmed stdout of a git command that exited 0.
 fn git(root: &Path, args: &[&str]) -> Option<String> {
+    #[cfg(test)]
+    SPAWNED.with(|s| s.borrow_mut().push(args.join(" ")));
     let out = Command::new("git")
         .args(args)
         .current_dir(root)
@@ -236,6 +297,8 @@ fn git(root: &Path, args: &[&str]) -> Option<String> {
 /// `git <args> | git patch-id --stable`: one id per patch in the output.
 /// A real pipe, so neither side buffers a whole `log -p` in memory.
 fn patch_ids(root: &Path, args: &[&str]) -> Vec<String> {
+    #[cfg(test)]
+    SPAWNED.with(|s| s.borrow_mut().push(args.join(" ")));
     let Ok(mut src) = Command::new("git")
         .args(args)
         .current_dir(root)
@@ -260,4 +323,71 @@ fn patch_ids(root: &Path, args: &[&str]) -> Vec<String> {
         .lines()
         .filter_map(|l| l.split(' ').next().map(str::to_string))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn g(d: &Path, args: &[&str]) {
+        let ok = Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .current_dir(d)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    fn commit_file(d: &Path, name: &str, msg: &str) {
+        std::fs::write(d.join(name), name).unwrap();
+        g(d, &["add", name]);
+        g(d, &["commit", "-qm", msg]);
+    }
+
+    fn spawns(what: &str) -> usize {
+        SPAWNED.with(|s| s.borrow().iter().filter(|a| a.starts_with(what)).count())
+    }
+
+    /// Three branches off one base, two of them squash-merged onto main: the
+    /// verdicts are the same cold and memoised, the `log -p base..HEAD` pass
+    /// runs once, and the second pass proves nothing again (fael:01M5CPNJ).
+    #[test]
+    fn proofs_are_memoised_and_unchanged() {
+        let d = std::env::temp_dir().join(format!("fael-merged-memo-{}", fael_core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let d = d.canonicalize().unwrap();
+        g(&d, &["init", "-q", "-b", "main"]);
+        g(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        for b in ["x", "y", "z"] {
+            g(&d, &["switch", "-qc", b, "main"]);
+            commit_file(&d, b, "branch");
+        }
+        g(&d, &["switch", "-q", "main"]);
+        // the squash: the same diff as a fresh commit on main, no ancestry
+        // a different message: the same second would otherwise hash to the
+        // branch's own commit and make it an ancestor, not a squash
+        commit_file(&d, "x", "squash");
+        commit_file(&d, "y", "squash");
+        let pass = || ["x", "y", "z"].map(|b| is_merged_at(&d, b, None));
+        let cold = pass();
+        assert_eq!(cold, [true, true, false]);
+        assert_eq!(
+            spawns("log -p"),
+            1,
+            "{:?}",
+            SPAWNED.with(|s| s.borrow().clone())
+        );
+        let (logs, diffs, bases) = (spawns("log -p"), spawns("diff"), spawns("merge-base HEAD"));
+        assert_eq!(pass(), cold);
+        assert_eq!(
+            (spawns("log -p"), spawns("diff"), spawns("merge-base HEAD")),
+            (logs, diffs, bases),
+            "the second pass proves nothing again"
+        );
+        // a moved HEAD is a new key: the proof runs again and still agrees
+        commit_file(&d, "z", "squash");
+        assert_eq!(pass(), [true, true, true]);
+    }
 }
