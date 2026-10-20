@@ -1,6 +1,6 @@
 //! fael.db text never holds a secret: a brief, note or hand-off goes to the model provider
 //! and out through `fael board --json` and `fael plan export`. The check is
-//! [`crate::secret`], the one rows use; it runs in temp triggers on this connection, so every
+//! [`fael_core::secret`], the one rows use; it runs in temp triggers on this connection, so every
 //! write path (add, edit, apply, import, done, note, wait) passes it without its own call.
 
 use super::store::err;
@@ -26,7 +26,7 @@ pub(super) fn guard(conn: &Connection) -> Result<(), String> {
                 if let Some(what) = ctx
                     .get::<Option<String>>(i)?
                     .as_deref()
-                    .and_then(crate::secret)
+                    .and_then(fael_core::secret)
                 {
                     return Ok(Some(what));
                 }
@@ -66,7 +66,7 @@ pub(super) fn guard(conn: &Connection) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::plan::{Fields, Store};
+    use crate::{Fields, Store};
 
     const NOW: &str = "2026-10-11T09:00:00Z";
 

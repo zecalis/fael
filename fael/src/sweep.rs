@@ -177,12 +177,12 @@ fn drifted(log: &core::Log, r: &Repo) -> Vec<Drifted> {
         .collect()
 }
 
-fn fixers(r: &Repo) -> HashMap<String, fael_core::plan::Fixer> {
+fn fixers(r: &Repo) -> HashMap<String, fael_crew::Fixer> {
     let path = crate::plan::db(r);
     if !path.exists() {
         return HashMap::new();
     }
-    fael_core::plan::Store::open(&path)
+    fael_crew::Store::open(&path)
         .map(|s| s.fixers().unwrap_or_default())
         .unwrap_or_default()
 }
@@ -194,7 +194,7 @@ fn scopes(r: &Repo) -> Vec<Scope> {
     if !path.exists() {
         return vec![];
     }
-    let Ok(s) = fael_core::plan::Store::open(&path) else {
+    let Ok(s) = fael_crew::Store::open(&path) else {
         return vec![];
     };
     let (at, stale) = crate::board::clock();

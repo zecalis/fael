@@ -1,4 +1,4 @@
-//! Docs name code that must still exist: every `fael/…/x.rs` or `fael-core/…/x.rs`
+//! Docs name code that must still exist: every `fael/…/x.rs`, `fael-core/…/x.rs` or `fael-crew/…/x.rs`
 //! path and every `Type::item` / `module::item` (first segment defined in this
 //! workspace) cited in a committed Markdown file. A rename that forgets the
 //! docs fails here instead of leaving a dead pointer for the next reader.
@@ -25,7 +25,7 @@ fn spans(md: &str) -> impl Iterator<Item = &str> {
 fn docs_cite_only_code_that_exists() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let mut src = vec![];
-    for krate in ["fael", "fael-core"] {
+    for krate in ["fael", "fael-core", "fael-crew"] {
         walk(&root.join(krate).join("src"), "rs", &mut src);
     }
     let code: String = src
@@ -52,7 +52,9 @@ fn docs_cite_only_code_that_exists() {
         let md = std::fs::read_to_string(doc).unwrap();
         for s in spans(&md) {
             let s = s.trim_end_matches("()");
-            let path_ref = (s.starts_with("fael/") || s.starts_with("fael-core/"))
+            let path_ref = (s.starts_with("fael/")
+                || s.starts_with("fael-core/")
+                || s.starts_with("fael-crew/"))
                 && s.ends_with(".rs")
                 && !s.contains('<');
             if path_ref && !root.join(s).is_file() {

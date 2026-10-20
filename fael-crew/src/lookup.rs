@@ -105,7 +105,7 @@ fn hits(tx: &Transaction, cond: &str, key: &str) -> Result<Vec<Hit>, String> {
 
 /// A label is one word, not uid-shaped, and free in its plan (`id` = the chunk keeping it).
 pub(super) fn label(tx: &Transaction, plan: i64, id: i64, l: &str) -> Result<(), String> {
-    if l.is_empty() || l.contains(char::is_whitespace) || crate::looks_like_id(l) {
+    if l.is_empty() || l.contains(char::is_whitespace) || fael_core::looks_like_id(l) {
         return Err(format!(
             "rejected: --label {l:?} — one short word like b10, not uid-shaped"
         ));

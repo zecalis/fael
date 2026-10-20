@@ -222,7 +222,7 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
         for id in ids {
             tx.execute(
                 &format!("UPDATE {t} SET {col} = ?1 WHERE id = ?2"),
-                rusqlite::params![crate::ulid(), id],
+                rusqlite::params![fael_core::ulid(), id],
             )
             .map_err(e)?;
         }
@@ -340,7 +340,7 @@ pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
     .and_then(|_| {
         tx.execute(
             "INSERT OR IGNORE INTO meta(key, value) VALUES ('db_id', ?1)",
-            [crate::ulid()],
+            [fael_core::ulid()],
         )
     })
     .and_then(|_| {

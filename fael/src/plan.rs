@@ -2,7 +2,7 @@
 //! plus chunks in `fael.db`; `export --json` writes the bill `apply` takes back.
 
 use crate::{Args, Repo, repo};
-use fael_core::plan::{Bill, PlanRow, Store};
+use fael_crew::{Bill, PlanRow, Store};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -235,7 +235,7 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
         let [p] = plans.as_slice() else {
             return Err("rejected: plan export --json names one plan".into());
         };
-        let bill = fael_core::plan::export_json(&s, p.id)?;
+        let bill = fael_crew::export_json(&s, p.id)?;
         println!(
             "{}",
             serde_json::to_string_pretty(&bill).map_err(|e| e.to_string())?
@@ -244,7 +244,7 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
     }
     let docs: Vec<String> = plans
         .iter()
-        .map(|p| fael_core::plan::export(&s, p.id))
+        .map(|p| fael_crew::export(&s, p.id))
         .collect::<Result<_, _>>()?;
     print!("{}", docs.join("\n"));
     Ok(())
@@ -253,7 +253,7 @@ fn export(r: &Repo, want: Option<&str>, json: bool) -> Result<(), String> {
 /// `export <plan> --section <key>`: one section of one plan.
 fn section(r: &Repo, want: &str, key: &str) -> Result<(), String> {
     let s = open(r)?;
-    let text = fael_core::plan::export_section(&s, one(&s, want)?.id, key)?;
+    let text = fael_crew::export_section(&s, one(&s, want)?.id, key)?;
     print!("{text}");
     Ok(())
 }
@@ -263,7 +263,7 @@ fn feed(r: &Repo, since: &str) -> Result<(), String> {
     let since = since
         .parse::<i64>()
         .map_err(|_| format!("rejected: --since takes an event id (0 = all), not {since:?}"))?;
-    let f = fael_core::plan::feed(&open(r)?, since)?;
+    let f = fael_crew::feed(&open(r)?, since)?;
     println!("{}", serde_json::to_string(&f).map_err(|e| e.to_string())?);
     Ok(())
 }

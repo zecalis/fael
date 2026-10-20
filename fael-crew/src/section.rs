@@ -309,7 +309,7 @@ pub(super) fn carry(tx: &Transaction) -> Result<(), String> {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)?;
-    let now = crate::rfc3339(crate::now_ms());
+    let now = fael_core::rfc3339(fael_core::now_ms());
     for (pid, doc) in docs {
         for (key, title, body) in split(&doc) {
             put(tx, pid, &key, Some(&title), Some(&body), &now)?;

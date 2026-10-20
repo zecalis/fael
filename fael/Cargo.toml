@@ -10,12 +10,13 @@ description = "fael CLI — the repo's work ledger, handed to each agent at the 
 
 [dependencies]
 fael-core = { path = "../fael-core", default-features = false }
+fael-crew = { path = "../fael-crew", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 
 [features]
 default = ["bundled-sqlite"]
-bundled-sqlite = ["fael-core/bundled-sqlite"]
+bundled-sqlite = ["fael-core/bundled-sqlite", "fael-crew/bundled-sqlite"]
 
 [lints]
 workspace = true

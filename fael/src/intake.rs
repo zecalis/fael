@@ -4,7 +4,7 @@
 
 use crate::plan::db;
 use crate::{Args, Repo, repo};
-use fael_core::plan::{BoardChunk, Listed, Source, Store, listed, sources};
+use fael_crew::{BoardChunk, Listed, Source, Store, listed, sources};
 use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 

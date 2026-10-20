@@ -1,5 +1,5 @@
 [workspace]
-members = ["fael-core", "fael"]
+members = ["fael-core", "fael-crew", "fael"]
 resolver = "3"
 
 [profile.release]

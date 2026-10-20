@@ -5,7 +5,7 @@
 
 use super::git_output;
 use crate::git;
-use fael_core::plan::BoardChunk;
+use fael_crew::BoardChunk;
 use serde::Serialize;
 use std::path::Path;
 

@@ -1,9 +1,9 @@
 use super::*;
-use crate::plan::schema::{COLUMNS, TABLES};
+use crate::schema::{COLUMNS, TABLES};
 
 #[test]
 fn a_newer_epoch_is_refused() {
-    let dir = std::env::temp_dir().join(format!("fael-plans-{}", crate::ulid()));
+    let dir = std::env::temp_dir().join(format!("fael-plans-{}", fael_core::ulid()));
     let path = dir.join("fael.db");
     drop(Store::open(&path).unwrap());
     let c = Connection::open(&path).unwrap();
@@ -11,7 +11,7 @@ fn a_newer_epoch_is_refused() {
     drop(c);
     let e = Store::open(&path).err().unwrap();
     // a dev build names its commit and a newer main, never the release channel
-    let fix = if crate::GIT.is_some() {
+    let fix = if fael_core::GIT.is_some() {
         "newer main"
     } else {
         "fael upgrade"
@@ -22,7 +22,7 @@ fn a_newer_epoch_is_refused() {
 
 #[test]
 fn builds_with_different_additions_share_one_db_both_ways() {
-    let dir = std::env::temp_dir().join(format!("fael-plans-{}", crate::ulid()));
+    let dir = std::env::temp_dir().join(format!("fael-plans-{}", fael_core::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("fael.db");
     // the other lane's build adds `ask` and `run.beat` on top of the additions every build has
@@ -82,7 +82,7 @@ fn builds_with_different_additions_share_one_db_both_ways() {
 }
 
 fn scratch() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("fael-rename-{}", crate::ulid()));
+    let dir = std::env::temp_dir().join(format!("fael-rename-{}", fael_core::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }

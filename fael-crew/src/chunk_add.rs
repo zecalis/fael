@@ -61,7 +61,7 @@ pub(super) fn add_in(
     if let Some(l) = &f.label {
         label(tx, pid, 0, l)?;
     }
-    let uid = crate::ulid();
+    let uid = fael_core::ulid();
     tx.execute(
         "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
                            label, reads, client_hint)

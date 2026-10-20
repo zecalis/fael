@@ -1,10 +1,10 @@
 //! `fael chunk …` and `fael run end R` (PLAN-fael-board b2a, SPEC §1): the CLI over the
-//! chunk contract in `fael_core::plan`. The worktree is this repo's root; the db is the
+//! chunk contract in `fael_crew`. The worktree is this repo's root; the db is the
 //! clone's `fael.db`; `--out` copies under `<db dir>/out/<uid>/<R>/`.
 
 use crate::plan::db;
 use crate::{Args, Repo, core, repo};
-use fael_core::plan::{Fields, Here, Store};
+use fael_crew::{Fields, Here, Store};
 use std::process::ExitCode;
 
 /// The verbs `chunk` takes — what usage lines and the call line's `sub` name.
@@ -193,7 +193,7 @@ fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String
             let mut stdin = String::new();
             std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin)
                 .map_err(|e| format!("rejected: cannot read stdin: {e}"))?;
-            let ops: Vec<fael_core::plan::Op> = serde_json::from_str(&stdin).map_err(|e| {
+            let ops: Vec<fael_crew::Op> = serde_json::from_str(&stdin).map_err(|e| {
                 format!("rejected: stdin is not a JSON array of merge/split/pair/after ops: {e}")
             })?;
             for line in s.apply(ops, now)? {
