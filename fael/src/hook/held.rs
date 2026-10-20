@@ -324,3 +324,51 @@ fn more_line(rest: &[(&core::Row, String)]) -> String {
         more.join(",")
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Held selection (plan fael-row-retire w1): open decisions and notes, any
+    /// writer, on an edited file — never an issue, a closed or superseded row, or
+    /// a row whose file was not edited; nothing edited is silent.
+    #[test]
+    fn held_names_only_open_decisions_and_notes_on_edited_files() {
+        use crate::core::{Log, Row};
+        let row = |id: &str, kind: &str, file: &str| Row {
+            id: id.into(),
+            kind: kind.into(),
+            files: vec![file.into()],
+            ..Row::default()
+        };
+        let mut closed = row("01CLOSED", "decision", "a.rs");
+        closed.extra.insert("closed".into(), true.into());
+        let newer = Row {
+            supersedes: Some("01OLD".into()),
+            ..row("01NEWER", "decision", "a.rs")
+        };
+        let log = Log {
+            rows: vec![
+                row("01DEC", "decision", "a.rs"),
+                row("01NOTE", "note", "a.rs"),
+                row("01ISSUE", "issue", "a.rs"),
+                row("01OLD", "decision", "a.rs"),
+                newer,
+                closed,
+                row("01OTHER", "decision", "b.rs"),
+            ],
+            ..Log::default()
+        };
+        let a = crate::hook::say_contract::seen("a.rs");
+        std::fs::create_dir_all(a.parent().unwrap()).unwrap();
+        std::fs::write(&a, "x").unwrap();
+        let (root, al) = (a.parent().unwrap(), crate::core::Aliases::default());
+        let ids = |edited: &[String]| -> Vec<String> {
+            let found = pairs(&log, root, &al, "", edited);
+            found.iter().map(|(r, _)| r.id.clone()).collect()
+        };
+        assert_eq!(ids(&["a.rs".into()]), ["01DEC", "01NOTE", "01NEWER"]);
+        assert!(ids(&[]).is_empty() && text(&log, &[]).is_empty());
+        let _ = std::fs::remove_dir_all(root);
+    }
+}

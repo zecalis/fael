@@ -41,6 +41,7 @@ mod in_context;
 mod lifecycle;
 mod markers;
 mod opencode;
+mod overlap;
 mod prompt;
 mod protocol;
 mod push;

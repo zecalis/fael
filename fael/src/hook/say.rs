@@ -106,6 +106,9 @@ pub(crate) enum Kind {
     /// Decisions this session wrote on a file it edited (PLAN-fael-decision-
     /// held chunk 2): stashed by stop, held by the code now? Once per session.
     Held { ids: Vec<String> },
+    /// An edit outside the held chunk's scope, inside another open chunk's
+    /// (issue 01M5D9GB): said once per file and session.
+    Overlap { file: String },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -144,6 +147,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
         Kind::Fixed | Kind::FixCommit | Kind::Held { .. } => (Once::Key, Some("fael close"), false),
+        Kind::Overlap { .. } => (Once::Key, Some("fael chunk note"), false),
         Kind::Brief { .. } => (Once::Key, None, false),
         Kind::Notice => (Once::Event, None, false),
     };
@@ -171,6 +175,7 @@ impl Kind {
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Held { .. } => vec![super::held::KEY.into()],
+            Kind::Overlap { file } => vec![format!("~overlap:{file}")],
             Kind::Brief { keys } => keys.clone(),
             Kind::Notice => vec![],
         }
@@ -200,6 +205,7 @@ impl Kind {
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
             Kind::Held { ids } => ("held", ids.clone()),
+            Kind::Overlap { file } => ("overlap", vec![file.clone()]),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {
