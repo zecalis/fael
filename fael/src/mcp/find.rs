@@ -207,13 +207,34 @@ fn groups(
             ..f.clone()
         },
     );
-    let text = match rows.is_empty() {
-        // the flat list's reason, so an empty open list says all=true adds closed
-        true => core::why_empty(log, &f, "files"),
-        false if is_issue => {
-            crate::find::issue::render_issue_groups(r, log, &rows, branch_of.clone())
+    if rows.is_empty() {
+        // an empty open list answers with the closed rows all=true would
+        // match, marked, under one header — additive: the answers below and
+        // their fields are untouched; nothing anywhere keeps the old line
+        let unpaged = core::Filter {
+            limit: None,
+            offset: 0,
+            ..f.clone()
+        };
+        match crate::find::fallback::closed_rows(log, &unpaged) {
+            Some((head, closed)) => {
+                let body = crate::find::fallback::grouped_text(
+                    r,
+                    log,
+                    &closed,
+                    branch_of.clone(),
+                    is_issue,
+                );
+                let shown = closed.iter().map(|row| row.id.clone()).collect();
+                return (format!("{head}\n{body}"), shown);
+            }
+            None => return (core::why_empty(log, &f, "files"), vec![]),
         }
-        false => crate::journal::tag(core::render_groups(log, &rows), branch_of),
+    }
+    let text = if is_issue {
+        crate::find::issue::render_issue_groups(r, log, &rows, branch_of.clone())
+    } else {
+        crate::journal::tag(core::render_groups(log, &rows), branch_of)
     };
     (text, rows.iter().map(|r| r.id.clone()).collect())
 }

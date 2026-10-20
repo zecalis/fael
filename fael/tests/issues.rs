@@ -229,6 +229,24 @@ fn an_empty_issue_list_says_all_adds_closed() {
     );
 }
 
+/// Only-closed issues answer in the same call: the closed rows --all would
+/// match, marked, under the no-open-row header — no second round.
+#[test]
+fn only_closed_issue_list_shows_marked_rows() {
+    let d = repo();
+    let (id, _) = issue(&d, "ocr timeout", "src/a.rs", &[]);
+    let (ok, _, err) = fael(&d, &["close", &id, "fixed"]);
+    assert!(ok, "{err}");
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(ok, "{err}");
+    assert!(
+        out.starts_with("no open row matches — 1 closed or superseded:")
+            && out.contains("(closed)")
+            && out.contains("ocr timeout"),
+        "{out}"
+    );
+}
+
 #[test]
 fn issue_list_marks_rows_on_gone_files() {
     let d = repo();

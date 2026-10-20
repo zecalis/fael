@@ -44,8 +44,26 @@ pub(crate) fn groups(
         },
     );
     if rows.is_empty() {
-        // the flat list's reason, so an empty open list says --all adds closed
-        eprintln!("fael: {}", core::why_empty(log, f, "--files"));
+        // an empty open list answers with the closed rows --all would match,
+        // marked, under one header — else why nothing matched
+        match super::fallback::closed_rows(log, f) {
+            Some((head, closed)) => {
+                println!("{head}");
+                print!(
+                    "{}",
+                    super::fallback::grouped_text(
+                        r,
+                        log,
+                        &closed,
+                        branch_of,
+                        f.kind.as_deref() == Some("issue"),
+                    )
+                );
+                let shown: Vec<String> = closed.iter().map(|r| r.id.clone()).collect();
+                super::fallback::record_shown(r, f, &shown);
+            }
+            None => eprintln!("fael: {}", core::why_empty(log, f, "--files")),
+        }
     } else if f.kind.as_deref() == Some("issue") {
         print!("{}", render_issue_groups(r, log, &rows, branch_of));
     } else {

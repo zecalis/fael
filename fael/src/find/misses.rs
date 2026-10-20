@@ -24,20 +24,22 @@ pub(crate) fn explain<'a>(
     f: &Filter,
     files_flag: &str,
 ) -> (String, Vec<&'a Row>) {
-    let why = core::why_empty(log, f, files_flag);
-    if let Some(q) = f.text.as_deref().filter(|t| !t.trim().is_empty()) {
-        let row = serde_json::json!({
-            "ts": now_rfc3339().unwrap_or_default(),
-            "repo": repo.to_string_lossy(),
-            "client": client,
-            "text": q,
-            "why": why,
-        });
-        append(&row);
-    }
     match core::nearest(log, f) {
         Some(near) => near,
         None => {
+            // still nothing, even closed: the miss is real, so record it — a
+            // fallback answer above is no miss and stays out of the log
+            let why = core::why_empty(log, f, files_flag);
+            if let Some(q) = f.text.as_deref().filter(|t| !t.trim().is_empty()) {
+                let row = serde_json::json!({
+                    "ts": now_rfc3339().unwrap_or_default(),
+                    "repo": repo.to_string_lossy(),
+                    "client": client,
+                    "text": q,
+                    "why": why,
+                });
+                append(&row);
+            }
             crate::hook::note_empty();
             (why, vec![])
         }

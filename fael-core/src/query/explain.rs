@@ -150,6 +150,47 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
 /// Most rows a `nearest` answer lists: best guesses, not a page.
 const NEAREST_MAX: usize = 5;
 
+/// The exact `--all` answer when the open-only call came back empty: the same
+/// filter with closed rows in, every match, unpaged. `None` when the caller
+/// already asked for all, past the first page, or nothing matches even with
+/// closed rows in. The label says no open row matched; `render` marks each
+/// row closed, dormant or retired.
+pub fn closed_fallback<'a>(log: &'a Log, f: &Filter) -> Option<(String, Vec<&'a Row>)> {
+    if f.all || f.offset > 0 {
+        return None;
+    }
+    let closed = find(
+        log,
+        &Filter {
+            all: true,
+            ..f.clone()
+        },
+    );
+    if closed.is_empty() {
+        return None;
+    }
+    let asleep = closed
+        .iter()
+        .filter(|r| log.dormant.contains(&r.id) && !log.retired.contains(&r.id))
+        .count();
+    let spent = closed.iter().any(|r| log.retired.contains(&r.id));
+    let label = match asleep {
+        0 if spent => format!(
+            "no open row matches — {} closed, superseded or retired:",
+            closed.len()
+        ),
+        0 => format!(
+            "no open row matches — {} closed or superseded:",
+            closed.len()
+        ),
+        n => format!(
+            "no open row matches — {} closed, superseded or dormant ({n} dormant: its files changed since, a bare `fael bump <id>` revives one):",
+            closed.len()
+        ),
+    };
+    Some((label, closed))
+}
+
 /// A find that came back empty, answered in the same call — the agent's next
 /// find would be its own guess at a wider one (the repeat `friction` counts).
 /// First the same call with closed rows in; else, for two or more words, the
@@ -160,36 +201,8 @@ pub fn nearest<'a>(log: &'a Log, f: &Filter) -> Option<(String, Vec<&'a Row>)> {
         return None;
     }
     let top = |rows: Vec<&'a Row>| rows.into_iter().take(NEAREST_MAX).collect();
-    if !f.all {
-        let closed = find(
-            log,
-            &Filter {
-                all: true,
-                ..f.clone()
-            },
-        );
-        if !closed.is_empty() {
-            let asleep = closed
-                .iter()
-                .filter(|r| log.dormant.contains(&r.id) && !log.retired.contains(&r.id))
-                .count();
-            let spent = closed.iter().any(|r| log.retired.contains(&r.id));
-            let label = match asleep {
-                0 if spent => format!(
-                    "no open row matches — {} closed, superseded or retired:",
-                    closed.len()
-                ),
-                0 => format!(
-                    "no open row matches — {} closed or superseded:",
-                    closed.len()
-                ),
-                n => format!(
-                    "no open row matches — {} closed, superseded or dormant ({n} dormant: its files changed since, a bare `fael bump <id>` revives one):",
-                    closed.len()
-                ),
-            };
-            return Some((label, top(closed)));
-        }
+    if let Some((label, closed)) = closed_fallback(log, f) {
+        return Some((label, top(closed)));
     }
     // a key typed as text (`plan:x`, `#k`, `key:k`, `area:*`): the words never
     // match a glob or a `key:`/`#` prefix, but `--key` does — retry it before

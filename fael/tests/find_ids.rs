@@ -264,6 +264,24 @@ fn fake_id_in_a_title_is_named_as_a_mention() {
     );
 }
 
+/// Only-closed text: the closed row answers in the same call, marked, under
+/// the no-open-row header — no second `--all` round.
+#[test]
+fn only_closed_text_shows_marked_rows() {
+    let d = repo();
+    let id = add(&d, "a.rs", "keeper row about widgets");
+    let (ok, _, err) = fael(&d, &["close", &id, "fixed"]);
+    assert!(ok, "{err}");
+    let (ok, out, err) = fael(&d, &["find", "widgets"]);
+    assert!(ok, "{err}");
+    assert!(
+        out.starts_with("no open row matches — 1 closed or superseded:")
+            && out.contains("(closed)")
+            && out.contains("keeper row about widgets"),
+        "{out}"
+    );
+}
+
 /// `find --files a b` (space-separated paths) reads like `--files a,b`.
 #[test]
 fn space_separated_files_match_comma_joined() {
