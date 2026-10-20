@@ -185,6 +185,63 @@ fn intake_a_reopened_round_is_its_own_row_and_says_where_the_round_before_stoppe
     );
 }
 
+fn open_rows(d: &Path) -> Vec<Value> {
+    let all = rows(d);
+    let shut: Vec<&Value> = all.iter().map(|r| &r["ref"]).collect();
+    let open = |r: &&Value| r["ref"].is_null() && !shut.contains(&&r["id"]);
+    all.iter().filter(open).cloned().collect()
+}
+
+#[test]
+fn intake_a_reopen_closes_the_round_still_open() {
+    let d = repo();
+    list(&d, &[line("V-1", "bug", 0, None)]);
+    assert!(fael(&d, &["intake"]).0);
+    list(&d, &[line("V-1", "bug", 1, None)]);
+    let (ok, out, err) = fael(&d, &["intake"]);
+    assert!(ok, "{err}");
+    assert!(out.starts_with("closed V-1 → "), "{out}");
+    let (_, one, _) = fael(&d, &["find", "--json", "--all", "--key", "ticket:vela:v-1"]);
+    assert!(one.contains("reopened at source as round 1"), "{one}");
+    let open = open_rows(&d);
+    assert_eq!(open.len(), 1, "{open:?}");
+    assert_eq!(open[0]["key"], "ticket:vela:v-1-r1");
+}
+
+#[test]
+fn intake_closes_the_newer_of_two_open_rows_on_one_key() {
+    let d = repo();
+    list(&d, &[line("V-1", "bug", 0, None)]);
+    assert!(fael(&d, &["intake"]).0);
+    // what a sync of another machine's intake leaves behind
+    let key = "ticket:vela:v-1";
+    assert!(
+        fael(
+            &d,
+            &[
+                "add", "issue", "copy", "--title", "copy", "--files", key, "--key", key
+            ]
+        )
+        .0
+    );
+    let mut ids: Vec<Value> = open_rows(&d).iter().map(|r| r["id"].clone()).collect();
+    ids.sort_by_key(|i| i.as_str().unwrap().to_string());
+    let (older, newer) = (&ids[0], &ids[1]);
+    let (ok, out, err) = fael(&d, &["intake"]);
+    assert!(ok, "{err}");
+    assert!(out.starts_with("closed V-1 → "), "{out}");
+    let (_, closed, _) = fael(&d, &["find", "--json", "--all", "--key", key]);
+    assert!(
+        closed.contains(&format!("duplicate of {}", older.as_str().unwrap())),
+        "{closed}"
+    );
+    let open = open_rows(&d);
+    assert_eq!(open.len(), 1, "{open:?} {newer}");
+    assert_eq!(&open[0]["id"], older);
+    let (_, again, _) = fael(&d, &["intake"]);
+    assert!(again.starts_with("0 change(s)"), "{again}");
+}
+
 #[test]
 fn intake_a_bad_list_writes_nothing_and_exits_one() {
     for bad in [
@@ -195,6 +252,7 @@ fn intake_a_bad_list_writes_nothing_and_exits_one() {
         "not json",
         // a kind with no row to write
         r#"{"ref":"V-9","kind":"feedback","title":"t","reopen":0,"closed":null}"#,
+        r#"{"ref":"V-9","kind":"feedback","title":"t","reopen":0,"closed":"done"}"#,
     ] {
         let d = repo();
         list(&d, &[line("V-1", "bug", 0, None), bad.to_string()]);
