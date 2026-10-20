@@ -40,13 +40,62 @@ pub(super) fn count(text: &str) -> usize {
         .unwrap_or(1)
 }
 
-/// When the verdict merges a flake, the count line the write stamps.
-/// Returns the new text and the info line, or None when no count rides.
-pub(super) fn stamped(row: &core::Row, n: usize) -> Option<(String, String)> {
+/// Occurrence lines kept on a merged flake row.
+// ponytail: newest 3 occurrences stay, older ones drop; the first report and
+// the `×N` count (max over lines) survive. Raise if reports need more history.
+const KEEP: usize = 3;
+
+/// When the verdict merges a flake, the merged text: the prior text kept, plus
+/// a `×N <day>: <new text>` line. Returns it and the info line, or None when
+/// the new text already carries a count.
+pub(super) fn stamped(row: &core::Row, old: &str, n: usize) -> Option<(String, String)> {
     if count(&row.text) != 1 {
         return None;
     }
-    let day = row.ts.get(..10).unwrap_or(&row.ts).to_string();
-    let text = format!("{} (flake ×{n} {day})", row.text.trim_end());
+    let day = row.ts.get(..10).unwrap_or(&row.ts);
+    let new = row.text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (mut occ, base): (Vec<&str>, Vec<&str>) =
+        old.trim_end().lines().partition(|l| l.starts_with('×'));
+    let line = format!("×{n} {day}: {new}");
+    occ.push(&line);
+    let skip = occ.len().saturating_sub(KEEP);
+    let text = base
+        .into_iter()
+        .chain(occ.into_iter().skip(skip))
+        .collect::<Vec<_>>()
+        .join("\n");
     Some((text, format!("flake ×{n} — counted on the open flake row")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(text: &str) -> core::Row {
+        core::Row {
+            text: text.into(),
+            ts: "2026-10-20T01:02:03Z".into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn merge_keeps_prior_text_and_counts() {
+        let (t, _) = stamped(&row("second"), "first", 2).unwrap();
+        assert_eq!(t, "first\n×2 2026-10-20: second");
+        assert_eq!(count(&t), 2);
+    }
+
+    #[test]
+    fn merge_is_bounded_and_count_survives() {
+        let mut t = "first".to_string();
+        for n in 2..=8 {
+            t = stamped(&row(&format!("r{n}")), &t, n).unwrap().0;
+        }
+        assert_eq!(t.lines().count(), 1 + KEEP);
+        assert!(t.starts_with("first\n"));
+        assert!(t.contains("×6 ") && t.ends_with("r8"));
+        assert!(!t.contains("r5"));
+        assert_eq!(count(&t), 8);
+    }
 }

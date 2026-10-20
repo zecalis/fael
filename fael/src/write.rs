@@ -119,13 +119,13 @@ pub(crate) fn prepare(
         && row.kind == "issue"
         && flake::is_merge(&log, &row, target)
     {
-        let n = log
+        let old = log
             .rows
             .iter()
             .find(|x| x.id == target)
-            .map(|x| flake::count(&x.text) + 1)
-            .unwrap_or(2);
-        if let Some((text, note)) = flake::stamped(&row, n) {
+            .map(|x| x.text.as_str());
+        let n = old.map_or(2, |t| flake::count(t) + 1);
+        if let Some((text, note)) = flake::stamped(&row, old.unwrap_or_default(), n) {
             row.text = text;
             warns.push(note);
         }
