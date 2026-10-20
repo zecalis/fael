@@ -143,7 +143,7 @@ fn a_note_on_a_branch_with_no_commits_stays() {
 #[test]
 fn a_note_stays_when_only_its_remote_is_merged() {
     // 01M555VZ: origin/feat/a merged, local feat/a moved on — the batch must
-    // follow is_merged's order (local first) and leave the note live.
+    // follow the proof's order (local first) and leave the note live.
     let (d, s) = repo();
     let f = |a: &[&str]| fael(&d, &s, None, a);
     git(&d, &["switch", "-qc", "feat/a"]);
