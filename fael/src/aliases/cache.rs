@@ -20,12 +20,14 @@ pub(crate) struct Cache {
     pub(crate) dead: Vec<String>,
 }
 
-/// Read the cache. A wrong version or a broken file is "no cache" — the
+/// Read the cache. Version 2 = per worktree (v1 files were shared across
+/// HEADs and hold other branches' renames; they rebuild once). A wrong
+/// version or a broken file is "no cache" — the
 /// caller rebuilds (or carries on without aliases), never errors.
 pub(crate) fn read_cache(fael: &Path) -> Option<Cache> {
     let s = std::fs::read_to_string(fael.join("cache").join("aliases.json")).ok()?;
     let c: Cache = serde_json::from_str(&s).ok()?;
-    (c.v == 1).then_some(c)
+    (c.v == 2).then_some(c)
 }
 
 /// Write the cache atomically (tmp + rename) and keep `.fael/.gitignore`
@@ -37,7 +39,7 @@ pub(crate) fn write_cache(fael: &Path, head: &str, renames: &[(String, String)],
         return;
     }
     let body =
-        serde_json::json!({"v": 1, "head": head, "renames": renames, "dead": dead}).to_string();
+        serde_json::json!({"v": 2, "head": head, "renames": renames, "dead": dead}).to_string();
     let tmp = dir.join(format!(".aliases-{}.tmp", std::process::id()));
     if std::fs::write(&tmp, body.as_bytes()).is_ok() {
         let _ = std::fs::rename(&tmp, dir.join("aliases.json"));
