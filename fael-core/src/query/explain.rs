@@ -136,6 +136,14 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
     if f.files.is_empty() && words.iter().any(|w| path_like(w)) {
         s.push_str(&format!(" · a path? use {files_flag}"));
     }
+    // a key typed as text (`plan:x`, `#k`, `key:k`, `area:*`) searches row
+    // words, never the key field — glob and prefix forms miss even open rows,
+    // so name the `--key` to repeat with
+    if f.key.is_none()
+        && let Some(k) = f.text.as_deref().and_then(key_text)
+    {
+        s.push_str(&format!(" · a key? use --key {k}"));
+    }
     s
 }
 
@@ -183,6 +191,47 @@ pub fn nearest<'a>(log: &'a Log, f: &Filter) -> Option<(String, Vec<&'a Row>)> {
             return Some((label, top(closed)));
         }
     }
+    // a key typed as text (`plan:x`, `#k`, `key:k`, `area:*`): the words never
+    // match a glob or a `key:`/`#` prefix, but `--key` does — retry it before
+    // the partial-word guesses, other filters kept
+    if f.key.is_none()
+        && let Some(k) = f.text.as_deref().and_then(key_text)
+    {
+        let keyed = find(
+            log,
+            &Filter {
+                text: None,
+                key: Some(k.clone()),
+                ..f.clone()
+            },
+        );
+        if !keyed.is_empty() {
+            return Some((
+                format!("no rows match text — {} with key {k}:", keyed.len()),
+                top(keyed),
+            ));
+        }
+        if !f.all {
+            let closed = find(
+                log,
+                &Filter {
+                    text: None,
+                    key: Some(k.clone()),
+                    all: true,
+                    ..f.clone()
+                },
+            );
+            if !closed.is_empty() {
+                return Some((
+                    format!(
+                        "no open row matches text — {} hidden with key {k}:",
+                        closed.len()
+                    ),
+                    top(closed),
+                ));
+            }
+        }
+    }
     let q = f.text.as_deref()?.to_lowercase();
     let words: Vec<&str> = q.split_whitespace().collect();
     if words.len() < 2 {
@@ -219,4 +268,17 @@ fn path_like(w: &str) -> bool {
                 && (1..=4).contains(&ext.len())
                 && ext.chars().all(|c| c.is_ascii_alphabetic())
         })
+}
+
+/// The `--key` a key-shaped text retries as: one token with a `:` that is no
+/// path (`a/b:c`), after one `#` or `key:` prefix — `plan:x`, `#k`, `key:k`,
+/// `area:*`. `None` for prose (`two words`, `trailing:`) and paths.
+fn key_text(text: &str) -> Option<String> {
+    if text.split_whitespace().count() != 1 {
+        return None;
+    }
+    let t = text.strip_prefix('#').unwrap_or(text);
+    let t = t.strip_prefix("key:").unwrap_or(t);
+    let (a, b) = t.split_once(':')?;
+    (!a.is_empty() && !b.is_empty() && !t.contains('/')).then(|| t.to_string())
 }

@@ -130,6 +130,120 @@ fn an_empty_find_counts_each_part_alone() {
     );
 }
 
+/// An empty find names the `--key` a key-shaped text retries as — glob and
+/// prefix forms included — and stays quiet for prose, paths and word lists.
+#[test]
+fn an_empty_find_names_the_key_a_key_shaped_text_retries_as() {
+    let l = log_of(vec![note(1, &["src/a.rs"], None, "some prose")]);
+    let f = |t: &str| Filter {
+        text: Some(t.into()),
+        ..Filter::default()
+    };
+    assert_eq!(
+        why_empty(&l, &f("feature:*"), "--files"),
+        "no rows match \"feature:*\" (open rows only; --all adds closed) · a key? use --key feature:*"
+    );
+    // `#` and `key:` prefixes retry stripped
+    assert!(
+        why_empty(&l, &f("#feature:login"), "--files")
+            .ends_with("· a key? use --key feature:login")
+    );
+    assert!(
+        why_empty(&l, &f("key:feature:login"), "--files")
+            .ends_with("· a key? use --key feature:login")
+    );
+    // prose with a colon, several words, and paths stay quiet
+    for t in ["review: skipped", "trailing:", "decide.rs", "src/a.rs:12"] {
+        assert!(!why_empty(&l, &f(t), "--files").contains("a key?"), "{t}");
+    }
+}
+
+/// A key typed as text (`plan:x`, `#k`, `key:k`, a glob) retries as `--key`
+/// before the partial-word guesses: a glob answers the open rows its words
+/// never match, and a wholly closed key answers hidden instead of missing —
+/// labelled as a key answer either way.
+#[test]
+fn an_empty_find_retries_a_key_shaped_text_as_key() {
+    let l = log_of(vec![
+        note(1, &["a.md"], Some("feature:login"), "login form"),
+        note(2, &["a.md"], Some("feature:billing"), "billing page"),
+        note(3, &["a.md"], None, "unrelated prose"),
+    ]);
+    let text = |t: &str| Filter {
+        text: Some(t.into()),
+        ..Filter::default()
+    };
+    let got = |f: &Filter| {
+        nearest(&l, f).map(|(label, rows)| {
+            let ids = ids(&rows);
+            (label, ids.iter().map(|i| i.to_string()).collect::<Vec<_>>())
+        })
+    };
+    // a glob no word matches answers the open keys, labelled as a key answer
+    assert_eq!(
+        got(&text("feature:*")),
+        Some((
+            "no rows match text — 2 with key feature:*:".into(),
+            vec!["02".to_string(), "01".to_string()]
+        ))
+    );
+    // `#` and `key:` prefixes retry stripped, other filters kept
+    assert_eq!(
+        got(&text("#feature:billing")).map(|g| g.1),
+        Some(vec!["02".to_string()])
+    );
+    assert_eq!(
+        got(&text("key:feature:billing")).map(|g| g.1),
+        Some(vec!["02".to_string()])
+    );
+    // prose with a colon is no key: the word guesses still answer, unlabelled
+    assert_eq!(
+        got(&text("login billing")).map(|g| g.0),
+        Some("no row has every word — 2 with 1 of 2:".into())
+    );
+}
+
+/// A key-shaped text whose key rows are all closed answers hidden instead of
+/// missing: an exact key is already found by the closed branch (row keys still
+/// match words), while a glob only `--key` matches retries into the same
+/// hidden answer — both labelled, neither a miss.
+#[test]
+fn an_empty_find_retries_a_closed_key_as_hidden() {
+    let mut l = log_of(vec![
+        note(1, &["a.md"], Some("feature:login"), "login form"),
+        note(2, &["a.md"], None, "unrelated prose"),
+    ]);
+    let mut close = row(&rid(9), "close", &[], None);
+    close.reference = Some(rid(1));
+    l.closes.push(close);
+    let text = |t: &str| Filter {
+        text: Some(t.into()),
+        ..Filter::default()
+    };
+    let got = |f: &Filter| {
+        nearest(&l, f).map(|(label, rows)| {
+            let ids = ids(&rows);
+            (label, ids.iter().map(|i| i.to_string()).collect::<Vec<_>>())
+        })
+    };
+    // exact keys keep the long-standing closed label
+    assert_eq!(
+        got(&text("feature:login")),
+        Some((
+            "no open row matches — 1 closed or superseded:".into(),
+            vec!["01".to_string()]
+        ))
+    );
+    // a glob no word matches retries into the hidden key rows
+    assert_eq!(
+        got(&text("feature:*")),
+        Some((
+            "no open row matches text — 1 hidden with key feature:*:".into(),
+            vec!["01".to_string()]
+        ))
+    );
+}
+
 /// Two rows or fewer from the first page show their bodies when the bodies
 /// fit the budget; a paged, limited, longer or fat list stays titles.
 #[test]
