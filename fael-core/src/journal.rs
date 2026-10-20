@@ -18,7 +18,7 @@ pub type BranchMap = HashMap<String, String>;
 /// This checkout's git dir — `.git` itself in a plain repo, or the `gitdir:`
 /// target of a worktree/submodule's `.git` file. Spawn-free (the read/edit
 /// push path must not fork `git`). `None` when `.git` is missing or unreadable.
-fn git_dir(repo_root: &Path) -> Option<PathBuf> {
+pub fn git_dir(repo_root: &Path) -> Option<PathBuf> {
     let dot = repo_root.join(".git");
     if dot.is_dir() {
         return Some(dot);
@@ -125,6 +125,17 @@ pub fn home(r: &crate::repo::Repo) -> Option<&Path> {
         return Some(&r.fael);
     }
     r.journal.as_deref().filter(|j| has(j))
+}
+
+/// Where HEAD-dependent caches live: this checkout's own git dir (`.git`, or
+/// `.git/worktrees/<name>` for a linked worktree) when `home` is the shared
+/// journal, so worktrees at different HEADs never overwrite each other's
+/// file (decision 01M5CRPS). A tree's own `.fael/` is already per-worktree.
+pub fn cache_home(r: &crate::repo::Repo, home: &Path) -> PathBuf {
+    match (r.journal.as_deref(), git_dir(&r.root)) {
+        (Some(j), Some(g)) if j == home => g.join("fael"),
+        _ => home.to_path_buf(),
+    }
 }
 
 /// Any `.jsonl` under `dir` — lazy on purpose: the adopted-here check exits on
