@@ -2,7 +2,9 @@
 //! slot and the after-block — the guards `Store::start` checks before it
 //! claims anything. Split out of `start.rs` (file-size ratchet).
 
+use super::board_math::under;
 use super::ready::{Ready, ready_in};
+use super::shared::unshared;
 use super::store::err;
 use rusqlite::{OptionalExtension, Transaction};
 
@@ -82,4 +84,70 @@ pub(super) fn ready_paired(
         }
         r => r,
     })
+}
+
+/// Live-run chunks of the same app, outside the pair `ms`, whose scope (less `shared`) shares
+/// a path prefix with a member's (the board's `overlap` rule): one `uid (plan/label): path, …`
+/// line each. Judges nothing.
+pub(super) fn clashes(
+    tx: &Transaction,
+    ms: &[String],
+    shared: &[String],
+) -> Result<Vec<String>, String> {
+    let paths = |s: Option<String>| -> Vec<String> {
+        let v: Vec<String> = s.iter().flat_map(|s| s.lines()).map(String::from).collect();
+        unshared(&v, shared)
+    };
+    let mut mine = Vec::new();
+    let mut apps = Vec::new();
+    for m in ms {
+        let (s, app): (Option<String>, String) = tx
+            .query_row(
+                "SELECT c.scope, p.app FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.uid = ?1",
+                [m],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(err)?;
+        mine.extend(paths(s));
+        apps.push(app);
+    }
+    let Some(app) = apps.first() else {
+        return Ok(Vec::new());
+    };
+    let mut q = tx
+        .prepare(
+            "SELECT c.uid, COALESCE(c.label, c.title), p.name, c.scope FROM chunk c
+             JOIN plan p ON p.id = c.plan
+             WHERE c.scope IS NOT NULL AND p.app = ?1 AND EXISTS (
+               SELECT 1 FROM run r WHERE r.chunk = c.id AND r.ended IS NULL)",
+        )
+        .map_err(err)?;
+    let rows = q
+        .query_map([app], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get(3)?,
+            ))
+        })
+        .map_err(err)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(err)?;
+    let mut out = Vec::new();
+    for (uid, label, plan, scope) in rows {
+        if ms.contains(&uid) {
+            continue;
+        }
+        let theirs = paths(scope);
+        let hit: Vec<_> = mine
+            .iter()
+            .filter(|x| theirs.iter().any(|y| under(x, y) || under(y, x)))
+            .cloned()
+            .collect();
+        if !hit.is_empty() {
+            out.push(format!("{uid} ({plan}/{label}): {}", hit.join(", ")));
+        }
+    }
+    Ok(out)
 }
