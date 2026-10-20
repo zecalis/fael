@@ -102,19 +102,10 @@ pub fn kickoff_text(db: &Path, plan_name: &str, worktree: &str, today: &str) -> 
             );
             Some(out)
         }
-        None => {
-            let mut q = c
-                .prepare("SELECT COUNT(*) FROM chunk WHERE plan = ?1")
-                .ok()?;
-            let n: i64 = q.query_row([p.id], |r| r.get(0)).ok()?;
-            if n == 0 {
-                return None;
-            }
-            Some(format!(
-                "no chunk of {} is ready — `fael plan export {}` shows each state\n\n",
-                p.name, p.name
-            ))
-        }
+        None => Some(format!(
+            "no chunk of {} is ready — `fael plan export {}` shows each state\n\n",
+            p.name, p.name
+        )),
     }
 }
 
