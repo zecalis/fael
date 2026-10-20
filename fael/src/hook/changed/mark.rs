@@ -17,20 +17,31 @@ pub(crate) fn mark_dormant(r: &crate::Repo, log: &mut core::Log) {
 /// state a later hook edit trusts instead of rebuilding — the aliases rename
 /// tests).
 pub(crate) fn mark_dormant_with(r: &crate::Repo, log: &mut core::Log, al: &core::Aliases) {
+    let ids = dormant_ids(r, log, al);
+    // retired notes (chunk done, branch merged) are off the live path like dormant ones
+    let retired = crate::hook::retired::ids(r, log, true);
+    log.dormant = ids.union(&retired).cloned().collect();
+    log.retired = retired;
+}
+
+/// `log.dormant` by file change alone: no retired proof, so no git spawn. For
+/// a caller that reads decisions only — retired holds notes, never decisions
+/// (the `add` cap, fael:01M5CPNJ).
+pub(crate) fn mark_dormant_files(r: &crate::Repo, log: &mut core::Log) {
+    let al = crate::aliases::load(r, log, false);
+    log.dormant = dormant_ids(r, log, &al);
+}
+
+fn dormant_ids(r: &crate::Repo, log: &core::Log, al: &core::Aliases) -> HashSet<String> {
     let hide: HashSet<&str> = core::closed(log)
         .union(&core::superseded(log))
         .copied()
         .collect();
     let mut blobs = super::Blobs::new();
-    let ids: HashSet<String> = log
-        .rows
+    log.rows
         .iter()
         .filter(|w| !hide.contains(w.id.as_str()))
         .filter(|w| super::dormant(w, &r.root, al, &mut blobs, super::STAMP_MAX_BYTES))
         .map(|w| w.id.clone())
-        .collect();
-    // retired notes (chunk done, branch merged) are off the live path like dormant ones
-    let retired = crate::hook::retired::ids(r, log, true);
-    log.dormant = ids.union(&retired).cloned().collect();
-    log.retired = retired;
+        .collect()
 }

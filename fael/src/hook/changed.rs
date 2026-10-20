@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 mod mark;
-pub(crate) use mark::{mark_dormant, mark_dormant_with};
+pub(crate) use mark::{mark_dormant, mark_dormant_files, mark_dormant_with};
 
 /// Files bigger than this are never hashed on the push path (the stamp side
 /// covers up to 16 MiB — 01M42CGE). A file over this cap has no verdict here,

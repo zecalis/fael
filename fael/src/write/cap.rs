@@ -19,7 +19,8 @@ pub(crate) fn check(
     if row.kind != "decision" {
         return Ok(());
     }
-    crate::hook::mark_dormant(r, log);
+    // only decisions count and a retired row is a note: no merge proof needed
+    crate::hook::mark_dormant_files(r, log);
     // the same file under its old and new path counts once: both canonicalize
     // through renames (`fael mv` rows, git log -M). Folders and globs are not
     // folded in — they are not the same file.

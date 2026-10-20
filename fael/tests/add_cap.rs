@@ -98,3 +98,63 @@ fn a_rename_counts_both_names_together() {
     );
     assert!(!ok && out.contains("3 live decisions"), "{out}");
 }
+
+/// The cap counts decisions and a retired row is a note, so the reject needs no
+/// merge proof: with a branch-tied note open, a rejected add spawns none of the
+/// git that proves a branch merged (fael:01M5CPNJ).
+#[cfg(unix)]
+#[test]
+fn a_rejected_add_runs_no_merge_proof() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = repo();
+    let git = |a: &[&str]| {
+        let ok = Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(a)
+            .current_dir(&d)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {a:?}");
+    };
+    git(&["add", "."]);
+    git(&["commit", "-qm", "init"]);
+    git(&["switch", "-qc", "feat/x"]);
+    assert!(fael(&d, &["add", "note", "stopped here", "--files", "src/a.rs"]).0);
+    git(&["switch", "-q", "-"]);
+    for t in ["one one", "two two", "three three"] {
+        assert!(add(&d, t, &[]).0);
+    }
+    let shim = d.join(".shim");
+    std::fs::create_dir_all(&shim).unwrap();
+    let real = Command::new("which").arg("git").output().unwrap().stdout;
+    let real = String::from_utf8(real).unwrap();
+    let spawned = shim.join("spawned");
+    let script = shim.join("git");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\necho \"$1\" >> '{}'\nexec '{}' \"$@\"\n",
+            spawned.display(),
+            real.trim()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", shim.display(), std::env::var("PATH").unwrap());
+    let out = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .env("PATH", path)
+        .env("FAEL_STATE_DIR", d.join(".state"))
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .args(["add", "decision", "four four", "--files", "src/a.rs"])
+        .args(["--key", "cap:four"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "rejected");
+    let spawned = std::fs::read_to_string(&spawned).unwrap_or_default();
+    for proof in ["merge-base", "diff", "log", "rev-list", "for-each-ref"] {
+        assert!(!spawned.lines().any(|l| l == proof), "{proof}:\n{spawned}");
+    }
+}
