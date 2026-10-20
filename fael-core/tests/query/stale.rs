@@ -211,6 +211,31 @@ fn stale_close_refs_reads_the_close_text_not_the_row() {
     let _ = std::fs::remove_dir_all(&r);
 }
 
+/// A monorepo agent writes the close path from its subproject: `e2e/s.ts` for
+/// `apps/web/e2e/s.ts` is not gone (01M5C558); one under no ancestor still is.
+#[test]
+fn stale_close_refs_tries_the_ancestor_dirs_of_the_rows_files() {
+    let r = std::env::temp_dir().join(format!("fael-stale-{}", ulid()));
+    std::fs::create_dir_all(r.join("apps/web/e2e")).unwrap();
+    std::fs::create_dir_all(r.join("apps/web/src")).unwrap();
+    std::fs::write(r.join("apps/web/e2e/s.ts"), "x").unwrap();
+    let mut issue = text_row("A0000000000000000000000031", "x");
+    issue.files = vec!["apps/web/src/a.ts".into()];
+    let mut close = text_row("C1", "guarded by `e2e/s.ts` and `e2e/gone.ts`");
+    close.ts = "2026-10-01T00:00:00Z".into();
+    close.reference = Some(issue.id.clone());
+    let log = Log {
+        rows: vec![issue.clone()],
+        closes: vec![close],
+        ..Log::default()
+    };
+    assert_eq!(
+        stale_close_refs(&r, &log, &issue, &Aliases::default()),
+        ["e2e/gone.ts"]
+    );
+    let _ = std::fs::remove_dir_all(&r);
+}
+
 #[test]
 fn backtick_paths_skips_an_unpaired_last_backtick() {
     assert!(backtick_paths("cause → fix `src/a.rs").is_empty());
