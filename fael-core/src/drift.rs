@@ -5,7 +5,7 @@
 //! checked and still true gets `fael bump <id>` (same id, restamped), which
 //! restarts its count. One `git log` spawn for the whole log; no git = no note.
 
-use crate::core;
+use crate as core;
 use std::path::Path;
 
 /// ponytail: one fixed threshold; per-repo config if a team's commit rate
@@ -13,7 +13,7 @@ use std::path::Path;
 const DRIFT_COMMITS: usize = 10;
 
 /// The `[Drifted]` note, most-moved rows first.
-pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
+pub fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
     let mut drifted = drifted(log, root);
     if drifted.is_empty() {
         return None;
@@ -42,7 +42,7 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
 }
 
 /// Full ids of the drifted rows — the board's `drifted` signal (PLAN-fael-board l1).
-pub(crate) fn ids(log: &core::Log, root: &Path) -> std::collections::HashSet<String> {
+pub fn ids(log: &core::Log, root: &Path) -> std::collections::HashSet<String> {
     drifted(log, root)
         .into_iter()
         .map(|(_, r)| r.id.clone())
@@ -54,13 +54,13 @@ fn drifted<'a>(log: &'a core::Log, root: &Path) -> Vec<(usize, &'a core::Row)> {
     let rows: Vec<(&core::Row, i64)> = core::find(log, &core::Filter::default())
         .into_iter()
         .filter_map(|r| Some((r, core::ts_ms(&r.ts)?)))
-        .filter(|(r, _)| r.files.iter().any(|f| !crate::hook::is_anchor(f)))
+        .filter(|(r, _)| r.files.iter().any(|f| !crate::is_anchor(f)))
         .collect();
     let Some(oldest) = rows.iter().map(|(_, ms)| *ms).min() else {
         return vec![];
     };
     let since = format!("@{}", oldest / 1000);
-    let Some(out) = crate::git(
+    let Some(out) = crate::repo::git(
         root,
         &[
             "log",
@@ -100,7 +100,7 @@ fn moved(r: &core::Row, birth_ms: i64, commits: &[(i64, Vec<&str>)]) -> usize {
     let mut files: Vec<&str> = r
         .files
         .iter()
-        .filter(|f| !crate::hook::is_anchor(f))
+        .filter(|f| !crate::is_anchor(f))
         .map(|f| f.trim_end_matches('/'))
         .collect();
     let is_doc = |f: &&str| f.ends_with(".md");
@@ -131,17 +131,17 @@ fn headline(r: &core::Row) -> String {
 /// row was written, its commit count, and the row's total — one `git log` for
 /// every row, parsed once. Code files only (docs counted only when the row
 /// names no code), same rule as `moved`.
-pub(crate) fn detail(log: &core::Log, root: &Path) -> Vec<(core::Row, String, usize, usize)> {
+pub fn detail(log: &core::Log, root: &Path) -> Vec<(core::Row, String, usize, usize)> {
     let rows: Vec<(&core::Row, i64)> = core::find(log, &core::Filter::default())
         .into_iter()
         .filter_map(|r| Some((r, core::ts_ms(&r.ts)?)))
-        .filter(|(r, _)| r.files.iter().any(|f| !crate::hook::is_anchor(f)))
+        .filter(|(r, _)| r.files.iter().any(|f| !crate::is_anchor(f)))
         .collect();
     let Some(oldest) = rows.iter().map(|(_, ms)| *ms).min() else {
         return vec![];
     };
     let since = format!("@{}", oldest / 1000);
-    let Some(out) = crate::git(
+    let Some(out) = crate::repo::git(
         root,
         &[
             "log",
@@ -161,7 +161,7 @@ pub(crate) fn detail(log: &core::Log, root: &Path) -> Vec<(core::Row, String, us
         let mut files: Vec<&str> = r
             .files
             .iter()
-            .filter(|f| !crate::hook::is_anchor(f))
+            .filter(|f| !crate::is_anchor(f))
             .map(|f| f.trim_end_matches('/'))
             .collect();
         if files.iter().any(|f| !f.ends_with(".md")) {

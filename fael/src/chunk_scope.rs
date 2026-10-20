@@ -102,7 +102,7 @@ fn missing(at: &Path, p: &str) -> Option<String> {
     if !at.join(dir).is_dir() {
         return Some(format!("names nothing: no directory {dir:?}"));
     }
-    crate::write::sibling_suggest(at, p).map(|near| format!("is not on disk — {near:?}?"))
+    fael_core::sibling_suggest(at, p).map(|near| format!("is not on disk — {near:?}?"))
 }
 
 /// The brief is the planner's text, never the rendered start. A warning only: the scope is

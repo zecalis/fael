@@ -7,16 +7,20 @@
 //! repo settings in `config`, write-time checks in `validate`.
 
 mod aliases;
+pub mod args;
 mod blob;
 mod compact;
 mod config;
 mod doctor;
+pub mod drift;
 mod hook;
 mod id;
 mod import;
+pub mod journal;
 pub mod lang;
 mod log;
 mod query;
+mod repo;
 mod row;
 pub mod stats;
 mod validate;
@@ -59,6 +63,7 @@ pub use query::{
     select, select_with, stale_close_refs, stale_refs, successors, superseded, today, waiting,
     waiting_line, warnings, why_empty, with_due,
 };
+pub use repo::{Repo, git, git_output, read as read_repo, repo, repo_at, sibling_suggest};
 pub use row::{Row, Stamp};
 pub use validate::{
     normalize_files, secret, valid_key, validate, validate_alias, validate_bump, validate_close,
@@ -90,4 +95,18 @@ pub fn anchor(f: &str) -> Option<&str> {
                     .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'+' | b'.' | b'-'))
         })
         .map(|(_, r)| r)
+}
+
+/// A `scheme:ref` anchor (opaque, never a filesystem path): a scheme of ≥2 lower chars
+/// before the first `:`, and not a `://` url.
+pub fn is_anchor(f: &str) -> bool {
+    if f.contains("://") || !f.contains(':') {
+        return false;
+    }
+    let scheme = f.split(':').next().unwrap_or("");
+    scheme.len() >= 2
+        && scheme.as_bytes()[0].is_ascii_lowercase()
+        && scheme
+            .bytes()
+            .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'+' | b'.' | b'-'))
 }

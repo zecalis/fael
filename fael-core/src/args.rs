@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 
 /// Positionals + `--flag value` / `--flag=value`; `--` ends flags.
-pub(crate) struct Args {
-    pub(crate) pos: Vec<String>,
+pub struct Args {
+    pub pos: Vec<String>,
     flags: HashMap<String, Vec<String>>,
 }
 
@@ -18,7 +18,7 @@ fn is_short_flag(s: &str) -> bool {
 }
 
 impl Args {
-    pub(crate) fn parse(argv: Vec<String>) -> Result<Args, String> {
+    pub fn parse(argv: Vec<String>) -> Result<Args, String> {
         let mut a = Args {
             pos: vec![],
             flags: HashMap::new(),
@@ -87,13 +87,13 @@ impl Args {
         Ok(a)
     }
 
-    pub(crate) fn has(&self, f: &str) -> bool {
+    pub fn has(&self, f: &str) -> bool {
         self.flags.contains_key(f)
     }
 
     /// Reject a flag the parser knows but `cmd` never reads — `bump --dry-run`
     /// must not silently write.
-    pub(crate) fn only(&self, cmd: &str, allowed: &[&str]) -> Result<(), String> {
+    pub fn only(&self, cmd: &str, allowed: &[&str]) -> Result<(), String> {
         match self.flags.keys().find(|f| !allowed.contains(&f.as_str())) {
             Some(f) => Err(format!(
                 "rejected: {cmd} takes no --{f} — try 'fael --help'"
@@ -103,7 +103,7 @@ impl Args {
     }
 
     /// These args less flag `f` — once `chunk … --plan p` has used it.
-    pub(crate) fn without(&self, f: &str) -> Args {
+    pub fn without(&self, f: &str) -> Args {
         let mut flags = self.flags.clone();
         flags.remove(f);
         Args {
@@ -112,17 +112,17 @@ impl Args {
         }
     }
 
-    pub(crate) fn one(&self, f: &str) -> Option<String> {
+    pub fn one(&self, f: &str) -> Option<String> {
         self.flags.get(f).and_then(|v| v.last()).cloned()
     }
 
     /// `--map a=b --map c=d` → all values, in order.
-    pub(crate) fn many(&self, f: &str) -> Vec<String> {
+    pub fn many(&self, f: &str) -> Vec<String> {
         self.flags.get(f).cloned().unwrap_or_default()
     }
 
     /// `--files a,b --files c` → [a, b, c]
-    pub(crate) fn files(&self) -> Vec<String> {
+    pub fn files(&self) -> Vec<String> {
         self.flags
             .get("files")
             .into_iter()
@@ -136,7 +136,7 @@ impl Args {
 
     /// Clone with space-separated `--files` extras appended (see
     /// `find::extra`): `find --files a b` reads like `find --files a,b`.
-    pub(crate) fn with_extra_files(&self, extra: &[String]) -> Args {
+    pub fn with_extra_files(&self, extra: &[String]) -> Args {
         let mut flags = self.flags.clone();
         flags
             .entry("files".to_string())
@@ -151,7 +151,7 @@ impl Args {
     /// `--revisit` on `add`/`bump` always needs a value — bare `--revisit` only
     /// filters on `find`. Shared by the CLI entry and `bump` so the two never
     /// drift apart.
-    pub(crate) fn revisit_value(&self) -> Result<Option<String>, String> {
+    pub fn revisit_value(&self) -> Result<Option<String>, String> {
         match (self.has("revisit"), self.one("revisit")) {
             (false, _) => Ok(None),
             (true, Some(v)) => Ok(Some(v)),
@@ -164,7 +164,7 @@ impl Args {
 
     /// `--limit N` / `--offset M` for pull paging (chunk 5): at most N ranked
     /// rows, skipping M first. Offset without limit pages budget cuts too.
-    pub(crate) fn paging(&self) -> Result<(Option<usize>, usize), String> {
+    pub fn paging(&self) -> Result<(Option<usize>, usize), String> {
         let num = |f: &str| match self.one(f) {
             None => Ok(None),
             Some(v) => v

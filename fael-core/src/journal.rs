@@ -34,7 +34,7 @@ fn git_dir(repo_root: &Path) -> Option<PathBuf> {
 
 /// The checked-out branch, read straight from `<gitdir>/HEAD` — no git spawn.
 /// A raw sha (detached HEAD) is `None`; so is a repo without `.git`.
-pub(crate) fn head_branch(repo_root: &Path) -> Option<String> {
+pub fn head_branch(repo_root: &Path) -> Option<String> {
     let content = std::fs::read_to_string(git_dir(repo_root)?.join("HEAD")).ok()?;
     content
         .strip_prefix("ref:")?
@@ -49,13 +49,13 @@ pub(crate) fn head_branch(repo_root: &Path) -> Option<String> {
 /// `main` they rode the push as Now, past the row cap). The default is
 /// `<common>/refs/remotes/origin/HEAD` (a clone sets it; a symbolic ref is
 /// never packed), else `main` or `master` (whichever `git init` made) — no spawn.
-pub(crate) fn work_branch(repo_root: &Path) -> Option<String> {
+pub fn work_branch(repo_root: &Path) -> Option<String> {
     let head = head_branch(repo_root)?;
     (!is_trunk(repo_root, &head)).then_some(head)
 }
 
 /// Is `b` the repo's default branch (see `work_branch`)? No spawn.
-pub(crate) fn is_trunk(repo_root: &Path, b: &str) -> bool {
+pub fn is_trunk(repo_root: &Path, b: &str) -> bool {
     let trunk = root(repo_root)
         .and_then(|j| std::fs::read_to_string(j.parent()?.join("refs/remotes/origin/HEAD")).ok())
         .and_then(|s| {
@@ -73,7 +73,7 @@ pub(crate) fn is_trunk(repo_root: &Path, b: &str) -> bool {
 /// ref in the worktree's dir, then the common dir, then `packed-refs`) — no
 /// git spawn. `None` for anything else (reftable, unborn branch, a symbolic
 /// ref chain): the caller spawns `git rev-parse` instead.
-pub(crate) fn head_sha(repo_root: &Path) -> Option<String> {
+pub fn head_sha(repo_root: &Path) -> Option<String> {
     let is_sha = |s: &str| matches!(s.len(), 40 | 64) && s.bytes().all(|b| b.is_ascii_hexdigit());
     let g = git_dir(repo_root)?;
     let head = std::fs::read_to_string(g.join("HEAD")).ok()?;
@@ -102,7 +102,7 @@ pub(crate) fn head_sha(repo_root: &Path) -> Option<String> {
 /// `None` without git (then the tree is all there is) or when `.git` is
 /// unreadable. A linked worktree's pointer ends in `worktrees/<name>`, whose
 /// grandparent is the common dir; anything else (submodule, plain dir) is its own.
-pub(crate) fn root(repo_root: &Path) -> Option<PathBuf> {
+pub fn root(repo_root: &Path) -> Option<PathBuf> {
     let g = git_dir(repo_root)?;
     let common = if g
         .parent()
@@ -119,7 +119,7 @@ pub(crate) fn root(repo_root: &Path) -> Option<PathBuf> {
 /// The dir whose `log/` holds this clone's rows: the tree's `.fael/` when it
 /// has a row file, else the journal (`store = "local"`, or a fresh worktree
 /// with no `.fael/` of its own). `None` = fael was never adopted here.
-pub(crate) fn home(r: &crate::Repo) -> Option<&Path> {
+pub fn home(r: &crate::repo::Repo) -> Option<&Path> {
     let has = |d: &Path| walk_jsonl(&d.join("log")).next().is_some();
     if has(&r.fael) {
         return Some(&r.fael);
@@ -152,14 +152,14 @@ fn walk_jsonl(dir: &Path) -> impl Iterator<Item = PathBuf> {
 
 /// Tree + journal union (the tree wins on duplicate ids), plus the ids only
 /// the journal holds. Spawn-free — the hot paths (`crate::read`) stop here.
-fn union(r: &crate::Repo) -> (crate::core::Log, HashSet<String>) {
-    let mut log = crate::core::read(&r.fael);
+fn union(r: &crate::repo::Repo) -> (crate::Log, HashSet<String>) {
+    let mut log = crate::read(&r.fael);
     warn(&log);
     let mut only = HashSet::new();
     let Some(j) = r.journal.as_deref() else {
         return (log, only);
     };
-    let extra = crate::core::read(j);
+    let extra = crate::read(j);
     warn(&extra);
     let mut seen: HashSet<String> = log.rows.iter().map(|x| x.id.clone()).collect();
     for row in extra.rows {
@@ -179,13 +179,13 @@ fn union(r: &crate::Repo) -> (crate::core::Log, HashSet<String>) {
 
 /// The union read, untagged and raw (bump events not folded); the hooks,
 /// the write path and `doctor` go through `crate::read`.
-pub(crate) fn merged(r: &crate::Repo) -> crate::core::Log {
+pub fn merged(r: &crate::repo::Repo) -> crate::Log {
     union(r).0
 }
 
 /// Whether `refs/heads/<branch>` still exists in the clone — a loose ref file
 /// or a `packed-refs` line, read off `<common>`, no git spawn.
-pub(crate) fn branch_alive(common: &Path, branch: &str) -> bool {
+pub fn branch_alive(common: &Path, branch: &str) -> bool {
     if common.join("refs/heads").join(branch).is_file() {
         return true;
     }
@@ -211,9 +211,9 @@ pub(crate) fn branch_alive(common: &Path, branch: &str) -> bool {
 // ponytail: a merged branch that still exists is tagged in a shared tree
 // (ancestry needs a git spawn); an untracked non-symlink tree is not covered
 // — `store = "local"` already makes those rows journal-only.
-pub(crate) fn read(r: &crate::Repo) -> (crate::core::Log, BranchMap) {
+pub fn read(r: &crate::repo::Repo) -> (crate::Log, BranchMap) {
     let (log, only) = union(r);
-    let log = crate::core::fold_bumps(log);
+    let log = crate::fold_bumps(log);
     let cur = head_branch(&r.root);
     let common = r.journal.as_deref().and_then(Path::parent);
     let shared = std::fs::symlink_metadata(&r.fael).is_ok_and(|m| m.file_type().is_symlink());
@@ -235,7 +235,7 @@ pub(crate) fn read(r: &crate::Repo) -> (crate::core::Log, BranchMap) {
 }
 
 /// Read-side skew summary, same shape as the old tree-only one in `crate::read`.
-fn warn(log: &crate::core::Log) {
+fn warn(log: &crate::Log) {
     if let Some(first) = log.warnings.first() {
         eprintln!(
             "fael: {} log line(s) skipped — first: {first}",
@@ -290,7 +290,7 @@ mod tests {
     /// `origin/HEAD` is unset, the branch it points at when set.
     #[test]
     fn work_branch_is_none_on_the_default_branch() {
-        let d = std::env::temp_dir().join(format!("fael-trunk-{}", fael_core::ulid()));
+        let d = std::env::temp_dir().join(format!("fael-trunk-{}", crate::ulid()));
         let git = d.join(".git");
         std::fs::create_dir_all(git.join("refs/remotes/origin")).unwrap();
         let on = |b: &str| {

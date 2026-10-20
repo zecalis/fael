@@ -5,7 +5,6 @@
 
 mod aliases;
 mod amend;
-mod args;
 mod batch;
 mod board;
 mod chunk;
@@ -23,7 +22,6 @@ mod help;
 mod hook;
 mod install;
 mod intake;
-mod journal;
 mod maintain;
 mod mcp;
 mod mv;
@@ -40,7 +38,7 @@ mod synonyms;
 mod unmerged;
 mod write;
 
-use fael_core::{self as core, Config, Log};
+use fael_core::{self as core};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
@@ -168,59 +166,17 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
     }
 }
 
-pub(crate) use args::Args;
-pub(crate) struct Repo {
-    pub(crate) root: PathBuf,
-    pub(crate) cwd: PathBuf,
-    pub(crate) fael: PathBuf,
-    pub(crate) cfg: Config,
-    /// Clone-shared journal (`<git-common-dir>/fael`); `None` without git.
-    pub(crate) journal: Option<PathBuf>,
-}
+pub(crate) use fael_core::args::Args;
+pub(crate) use fael_core::journal;
+pub(crate) use fael_core::{Repo, read_repo as read, repo, repo_at};
 
-pub(crate) fn repo() -> Result<Repo, String> {
-    let cwd = std::env::current_dir()
-        .and_then(|d| d.canonicalize())
-        .map_err(|e| format!("cwd: {e}"))?;
-    repo_at(&cwd)
-}
-
-/// The same resolution from an explicit directory — what hooks pass.
-pub(crate) fn repo_at(cwd: &Path) -> Result<Repo, String> {
-    // normalize_files is lexical, so root must be symlink-resolved like cwd
-    let cwd = cwd.canonicalize().map_err(|e| format!("cwd: {e}"))?;
-    // ponytail: walk up for `.git` (dir, or file for worktree/submodule) instead
-    // of spawning `git rev-parse` — that spawn was ~13 of a hook's ~15 ms.
-    // Ignores GIT_DIR/GIT_WORK_TREE/core.worktree; spawn git if those matter.
-    let find = |name: &str| {
-        cwd.ancestors()
-            .find(|d| d.join(name).exists())
-            .map(Path::to_path_buf)
-    };
-    let root = find(".git")
-        .or_else(|| find(".fael"))
-        .unwrap_or_else(|| cwd.clone());
-    // FAEL_DIR: scratch log (tree only, no journal) — see CONTRIBUTING.
-    let scratch = std::env::var_os("FAEL_DIR").filter(|d| !d.is_empty());
-    let journal = scratch.is_none().then(|| journal::root(&root)).flatten();
-    let fael = scratch.map_or_else(|| root.join(".fael"), PathBuf::from);
-    let cfg = config(&fael.join("config.toml"))?;
-    Ok(Repo {
-        root,
-        cwd,
-        fael,
-        cfg,
-        journal,
-    })
-}
-
+// answered from the --watch cache while the board lives here (moves with it)
 pub(crate) fn git(dir: &Path, args: &[&str]) -> Option<String> {
     let (code, out) = board::git_output(dir, args)?;
     let s = out.trim().to_string();
     (code == Some(0) && !s.is_empty()).then_some(s)
 }
 
-/// `.fael/config.toml` — missing file = defaults, a broken file = error.
 /// The user's home: `HOME` first (git and Git Bash on Windows honour it too,
 /// and tests set it), else the OS answer (`USERPROFILE` on Windows).
 fn home() -> Option<PathBuf> {
@@ -228,19 +184,6 @@ fn home() -> Option<PathBuf> {
         .filter(|h| !h.is_empty())
         .map(PathBuf::from)
         .or_else(std::env::home_dir)
-}
-
-fn config(path: &Path) -> Result<Config, String> {
-    let Ok(s) = std::fs::read_to_string(path) else {
-        return Ok(Config::default());
-    };
-    Config::from_toml(&s).map_err(|e| format!("{}: {e}", path.display()))
-}
-
-/// Read the log — tree + journal union, bumps folded; skipped lines go to
-/// stderr, never fail the command.
-pub(crate) fn read(r: &Repo) -> Log {
-    core::fold_bumps(journal::merged(r))
 }
 
 /// Writer id from git identity; no email → hostname hash, with a warning.

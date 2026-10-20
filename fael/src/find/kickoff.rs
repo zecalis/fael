@@ -1,6 +1,7 @@
 //! `fael kickoff <file|PLAN>`: the rows to start a session on. Split out of
 //! find.rs at the 400-line ratchet.
 
+use super::PageBase;
 use super::show;
 use crate::{Args, aliases};
 use fael_core::{self as core, Filter};
