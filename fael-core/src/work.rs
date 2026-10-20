@@ -51,8 +51,8 @@ pub struct EndedRun {
 }
 
 pub use db::{
-    all_plans, brief_row, chunk_brief, db_at, db_at_dir, db_for, ended_runs, flow_runs, has_held,
-    held, is_chunk, mark_seen, mark_seen_session, plan_by_name,
+    all_plans, brief_row, chunk_brief, db_at, db_for, ended_runs, flow_runs, has_held, held,
+    is_chunk, mark_seen, mark_seen_session, plan_by_name,
 };
 pub use pure::{
     CHUNK_VERBS, PLAN_VERBS, held_session_db, held_session_file, in_tmp, is_scratch, main_root_for,
