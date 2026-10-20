@@ -146,7 +146,16 @@ fn gone_refs(root: &Path, text: &str, filed: &[String], al: &Aliases) -> Vec<Str
         {
             continue;
         }
-        if al.forward(p).iter().all(|q| !root.join(q).exists()) && !out.contains(&p.to_string()) {
+        // a monorepo agent writes the path from its subproject (`e2e/a.ts` for
+        // `apps/web/e2e/a.ts`): the dirs above the row's files are bases too
+        let found = |base: &Path| al.forward(p).iter().any(|q| base.join(q).exists());
+        let under = |f: &String| {
+            Path::new(f)
+                .ancestors()
+                .skip(1)
+                .any(|d| found(&root.join(d)))
+        };
+        if !found(root) && !filed.iter().any(under) && !out.contains(&p.to_string()) {
             out.push(p.to_string());
         }
     }
