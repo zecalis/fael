@@ -158,7 +158,7 @@ pub(super) fn insert(
     if let Some(l) = label {
         super::lookup::label(tx, plan, 0, l)?;
     }
-    let uid = crate::ulid();
+    let uid = fael_core::ulid();
     tx.execute(
         "INSERT INTO chunk(uid, plan, seq, title, state, brief, size, model_hint, scope,
                            label, reads)

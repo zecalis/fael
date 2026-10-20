@@ -9,7 +9,7 @@
 use super::{Project, clock, lists, prs, read, registered};
 use crate::plan::db;
 use crate::{Args, repo_at};
-use fael_core::plan::Store;
+use fael_crew::Store;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;

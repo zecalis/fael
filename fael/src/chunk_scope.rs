@@ -2,7 +2,7 @@
 //! (issue 01M4Q4HHX) — a typo'd scope silently weakens every overlap check, so it is said;
 //! never refused, a chunk may create the file.
 
-use fael_core::plan::{Store, overlap};
+use fael_crew::{Store, overlap};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -111,7 +111,7 @@ fn missing(at: &Path, p: &str) -> Option<String> {
 /// deliberately scoped it out (a `drop?` brief naming what not to touch).
 /// A path on a `Check:`/`Run:`/`Verify:` clause never warns either: the clause
 /// names a command to run, not a file to edit.
-fn brief_paths(s: &Store, root: &Path, b: &fael_core::plan::Brief) {
+fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
     let scope: Vec<String> = b
         .scope
         .as_deref()

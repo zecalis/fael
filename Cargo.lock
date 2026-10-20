@@ -85,6 +85,7 @@ name = "fael"
 version = "0.73.0"
 dependencies = [
  "fael-core",
+ "fael-crew",
  "serde",
  "serde_json",
 ]
@@ -100,6 +101,16 @@ dependencies = [
  "sha1",
  "sha2",
  "toml",
+]
+
+[[package]]
+name = "fael-crew"
+version = "0.0.1"
+dependencies = [
+ "fael-core",
+ "rusqlite",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

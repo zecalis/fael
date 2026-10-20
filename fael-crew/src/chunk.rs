@@ -93,7 +93,7 @@ pub(super) fn last_event(tx: &Transaction) -> Result<i64, String> {
 pub(super) fn batch(tx: &Transaction, since: i64) -> Result<usize, String> {
     tx.execute(
         "UPDATE event SET batch = ?1 WHERE id > ?2",
-        params![crate::ulid(), since],
+        params![fael_core::ulid(), since],
     )
     .map_err(err)
 }

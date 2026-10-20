@@ -286,7 +286,7 @@ pub(super) fn rename(old: &Path, new: &Path) -> Result<(), String> {
         let from = format!("{}{side}", old.display());
         let _ = std::fs::rename(&from, format!("{}{side}", new.display()));
     }
-    let tmp = old.with_extension(format!("stub.{}", crate::ulid()));
+    let tmp = old.with_extension(format!("stub.{}", fael_core::ulid()));
     Connection::open(&tmp)
         .and_then(|c| c.pragma_update(None, "user_version", STUB))
         .map_err(|x| e(x.to_string()))?;
@@ -299,7 +299,7 @@ pub(super) const STUB: i32 = 1_000_000;
 /// A db past this fael's epoch: a breaking change it cannot read. The error names the upgrade.
 fn newer(v: i32) -> String {
     // a dev build is upgraded by building a newer main, not by the release channel
-    let fix = match crate::GIT {
+    let fix = match fael_core::GIT {
         Some(g) => format!(
             "this fael (dev build {g}) knows v{VERSION} — use a fael built from a newer main: `cargo install --path fael --locked`"
         ),

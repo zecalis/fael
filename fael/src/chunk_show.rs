@@ -3,7 +3,7 @@
 
 use crate::plan::db;
 use crate::{Args, Repo};
-use fael_core::plan::Store;
+use fael_crew::Store;
 use std::process::ExitCode;
 
 /// `fael chunk show <uid|label> [--json]`: the board's chunk object plus the brief, owner

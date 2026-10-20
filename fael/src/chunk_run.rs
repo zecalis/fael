@@ -4,7 +4,7 @@
 
 use crate::plan::db;
 use crate::{Args, Repo, core};
-use fael_core::plan::{Here, Start, Started, Store, overlap};
+use fael_crew::{Here, Start, Started, Store, overlap};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -159,7 +159,7 @@ pub(crate) fn done(
     };
     let out = src
         .is_some()
-        .then_some(&mut copy as &mut fael_core::plan::Copy<'_>);
+        .then_some(&mut copy as &mut fael_crew::Copy<'_>);
     let mut st = Store::open(&db(r))?;
     // issue 01M4TFB5: the run's branch, not the cwd's — a lead's done per lane from the wave
     // branch diffs that lane only. Read before done: ending the run from its own worktree
@@ -219,7 +219,7 @@ pub(crate) fn touched(
 /// h4: each path of `diff` outside `uid`'s declared scope, unowned or in the open chunk that
 /// holds it — a fact, never a refusal; empty when all is inside. `done` and `run end` say it.
 pub(crate) fn outside_text(r: &Repo, st: &Store, uid: &str, diff: &[String]) -> String {
-    let shared = fael_core::plan::shared(&r.root).unwrap_or_default();
+    let shared = fael_crew::shared(&r.root).unwrap_or_default();
     let Some((declared, out)) = st
         .outside(uid, diff, &shared)
         .ok()

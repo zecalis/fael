@@ -26,7 +26,7 @@ pub(crate) fn elsewhere(r: &Repo, tok: &str) -> Option<PathBuf> {
         if !db.exists() {
             continue;
         }
-        if core::plan::Store::open(&db).is_ok_and(|s| s.is_chunk(tok)) {
+        if fael_crew::Store::open(&db).is_ok_and(|s| s.is_chunk(tok)) {
             return Some(at);
         }
     }

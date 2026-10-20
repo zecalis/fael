@@ -74,7 +74,7 @@ fn blocked_folds_to_plan_counts_unless_plan_cut() {
         let mut c = ready(uid, 0);
         c.ready = false;
         c.plan = plan.into();
-        c.blocked_by = vec![fael_core::plan::Blocker {
+        c.blocked_by = vec![fael_crew::Blocker {
             uid: None,
             what: "x".into(),
         }];

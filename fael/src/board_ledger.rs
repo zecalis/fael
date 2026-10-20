@@ -10,7 +10,7 @@
 // --rows` give them to the agent that reviews the ledger (l4).
 
 use crate::{Repo, core};
-use fael_core::plan::Fixer;
+use fael_crew::Fixer;
 use serde::Serialize;
 use std::collections::HashMap;
 

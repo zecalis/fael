@@ -5,7 +5,7 @@
 
 use crate::plan::db;
 use crate::{Args, Repo};
-use fael_core::plan::{Here, Store};
+use fael_crew::{Here, Store};
 
 /// `add --wait owner|data --ask "<q>"`: start without a worktree, then wait,
 /// both under one R. The sweep wrote add + start --no-worktree + wait per
@@ -40,7 +40,7 @@ pub(crate) fn add_wait(
     let run = a
         .one("run")
         .unwrap_or_else(|| format!("wait-{}", &uid[..8.min(uid.len())]));
-    let start = fael_core::plan::Start {
+    let start = fael_crew::Start {
         run: Some(run.clone()),
         client: None,
         model: None,
@@ -88,7 +88,7 @@ pub(crate) fn drop_close(r: &Repo, uid: &str, text: &str) {
     }
 }
 
-/// YYYY-MM-DD, mirroring `fael_core::plan`'s date rule for `--until`.
+/// YYYY-MM-DD, mirroring `fael_crew`'s date rule for `--until`.
 fn is_date(d: &str) -> bool {
     let b = d.as_bytes();
     b.len() == 10
@@ -102,8 +102,8 @@ fn is_date(d: &str) -> bool {
 }
 
 /// The command and the state it lands in.
-pub(crate) fn owner(verb: &str) -> (fael_core::plan::Owner, &'static str) {
-    use fael_core::plan::Owner;
+pub(crate) fn owner(verb: &str) -> (fael_crew::Owner, &'static str) {
+    use fael_crew::Owner;
     match verb {
         "answer" => (Owner::Answer, "open"),
         "accept" => (Owner::Accept, "done"),

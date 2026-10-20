@@ -363,7 +363,7 @@ impl Store {
     /// `session` when empty — never an RFC 3339 hook session (opencode's start time),
     /// which `opencode --session` rejects, wanting `ses_…` (01M4ZZQ7). Ended: never.
     pub fn seen(&mut self, worktree: &str, session: &str, now: &str) -> Result<usize, String> {
-        let set = if crate::ts_ms(session).is_some() {
+        let set = if fael_core::ts_ms(session).is_some() {
             "last_seen = ?3"
         } else {
             "session = COALESCE(session, ?2), last_seen = ?3"

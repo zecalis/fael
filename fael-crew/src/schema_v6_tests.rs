@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// A db at v6 as fael's own was on 2026-10-12, made-up rows in every column v8 drops.
 fn v6_db(then: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("fael-v6-{}", crate::ulid()));
+    let dir = std::env::temp_dir().join(format!("fael-v6-{}", fael_core::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("fael.db");
     let c = Connection::open(&path).unwrap();

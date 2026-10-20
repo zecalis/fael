@@ -4,7 +4,7 @@
 
 use super::args::{need, repo_for, s};
 use crate::plan::db;
-use fael_core::plan::{Here, Start, Store};
+use fael_crew::{Here, Start, Store};
 use serde_json::Value;
 
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
@@ -27,7 +27,12 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
     match verb.as_str() {
         "show" => {
             let b = st.show(&uid)?;
-            Ok(crate::find::owner::brief(&b).trim_end().to_string())
+            Ok(format!(
+                "# {} ({})\nplan {} — {}\n\n{}\n",
+                b.title, b.uid, b.plan, b.plan_title, b.brief
+            )
+            .trim_end()
+            .to_string())
         }
         "note" => {
             if text.is_empty() {

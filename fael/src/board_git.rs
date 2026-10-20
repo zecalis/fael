@@ -5,7 +5,7 @@
 //! (the app fetches, decision 01M4K4GFS), no gh, never a state change.
 
 use crate::git;
-use fael_core::plan::{BoardChunk, overlaps, shared};
+use fael_crew::{BoardChunk, overlaps, shared};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 

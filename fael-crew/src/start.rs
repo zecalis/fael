@@ -167,7 +167,7 @@ fn reuse_live(
 
 impl Store {
     pub fn start(&mut self, uid: &str, o: &Start, here: &Here) -> Result<Started, String> {
-        let run = o.run.clone().unwrap_or_else(crate::ulid);
+        let run = o.run.clone().unwrap_or_else(fael_core::ulid);
         let today = &here.now[..here.now.len().min(10)];
         let wt = (!o.no_worktree).then_some(here.worktree);
         let tx = tx(self)?;

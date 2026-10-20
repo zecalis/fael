@@ -37,7 +37,7 @@ pub(super) fn backup(db: &Path, v: i32) -> Result<(), String> {
 pub(super) fn copy(db: &Path, tag: &str) -> Result<PathBuf, String> {
     let mut to = PathBuf::from(format!("{}.{tag}.bak", db.display()));
     if to.exists() {
-        to = PathBuf::from(format!("{}.{tag}.{}.bak", db.display(), crate::ulid()));
+        to = PathBuf::from(format!("{}.{tag}.{}.bak", db.display(), fael_core::ulid()));
     }
     Connection::open(db)
         .and_then(|c| {

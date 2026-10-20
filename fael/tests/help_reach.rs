@@ -31,7 +31,7 @@ const GOLDEN: &str = include_str!("golden/board-v1.json");
 /// The brief an agent reads on `fael chunk start`: rules + the plan footer
 /// (`other sections — read one: fael plan export <plan> --section <key>`).
 fn brief() -> String {
-    fael_core::plan::rules("01M59HV9M3XK711NNBYGXXSM7T")
+    fael_crew::rules("01M59HV9M3XK711NNBYGXXSM7T")
         + "\nother sections — read one: fael plan export <plan> --section <key>\n"
 }
 

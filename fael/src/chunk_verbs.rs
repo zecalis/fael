@@ -7,7 +7,7 @@
 //! any failed, so the rest stay saved without resending them.
 
 use crate::{Args, Repo};
-use fael_core::plan::{Owner, Store};
+use fael_crew::{Owner, Store};
 use std::process::ExitCode;
 
 /// What a partially failed call ends with on stderr: the per-uid lines on stdout say

@@ -7,7 +7,7 @@
 
 use crate::plan::db;
 use crate::{Args, git, repo, repo_at};
-use fael_core::plan::{BoardChunk, BoardPlan, Store};
+use fael_crew::{BoardChunk, BoardPlan, Store};
 use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::HashMap;
