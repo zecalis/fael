@@ -33,6 +33,8 @@ fn a_branch_name_resolves_as_rev_parse_resolves_it() {
     g(&d, &["tag", "-a", "-m", "m", "rel", "HEAD~1"]);
     g(&d, &["tag", "v1.0", "HEAD"]);
     g(&d, &["tag", "treetag", "HEAD^{tree}"]);
+    // a tag of a tag
+    g(&d, &["tag", "-a", "-m", "m", "nested", "rel"]);
     for r in [
         "refs/remotes/origin/r",
         "refs/remotes/origin/a",
@@ -54,6 +56,7 @@ fn a_branch_name_resolves_as_rev_parse_resolves_it() {
         "rel",
         "v1.0",
         "treetag",
+        "nested",
         "cafe",
         "feat/x",
         "HEADLINE",

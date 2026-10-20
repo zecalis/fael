@@ -24,8 +24,10 @@ use std::path::{Path, PathBuf};
 
 enum Ref {
     Commit(String),
-    /// A tag of a tree, a blob, or a tag of a tag: `^{commit}` is not this map's to say.
+    /// A tag of a tree or a blob: `^{commit}` fails on it.
     Other,
+    /// A tag of a tag: peeling it is git's to do.
+    Nested,
 }
 
 pub(super) struct View {
@@ -105,6 +107,7 @@ impl View {
                 let r = match (ty, peeled_ty) {
                     ("commit", _) => Ref::Commit(oid.to_string()),
                     ("tag", "commit") => Ref::Commit(peeled.to_string()),
+                    ("tag", "tag") => Ref::Nested,
                     _ => Ref::Other,
                 };
                 if let Ref::Commit(c) = &r
@@ -225,7 +228,7 @@ impl View {
             match self.lookup(&name) {
                 Some(Some(Ref::Commit(c))) => Some(c.clone()),
                 Some(Some(Ref::Other)) | Some(None) => None,
-                None => git(
+                Some(Some(Ref::Nested)) | None => git(
                     &self.root,
                     &["rev-parse", "--verify", "-q", &format!("{name}^{{commit}}")],
                 ),
