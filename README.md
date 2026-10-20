@@ -65,8 +65,8 @@ How it behaves:
   several and `fael mv old new` points the rows at the new files.
 - **It lives in your git, out of your branches.** Rows are plain JSONL in the clone's `.git/fael/`,
   shared at once by every worktree and every agent on the machine, so PRs never carry log lines to
-  conflict on. No server, no account. Across machines, `fael import` moves a log; team sync over the
-  git remote is planned, not shipped.
+  conflict on. No server, no account. Across machines, `fael import` moves a log; git sync for
+  dev teams (`refs/fael/*`, never on code branches) is planned, not shipped.
 
 Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; a hook call takes about 10 ms on a repo with a thousand rows (a session start, once, about 100 ms).
 
