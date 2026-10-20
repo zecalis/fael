@@ -65,8 +65,8 @@ How it behaves:
   several and `fael mv old new` points the rows at the new files.
 - **It lives in your git, out of your branches.** Rows are plain JSONL in the clone's `.git/fael/`,
   shared at once by every worktree and every agent on the machine, so PRs never carry log lines to
-  conflict on. No server, no account. Across machines, `fael import` moves a log; git sync for
-  dev teams (`refs/fael/*`, never on code branches) is planned, not shipped.
+  conflict on. No server, no account. `fael sync` carries rows between clones through your own
+  git remote (`refs/fael/*`, never on code branches); `fael import` moves a log by hand.
 
 Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; a hook call takes about 10 ms on a repo with a thousand rows (a session start, once, about 100 ms).
 
@@ -148,7 +148,8 @@ an old path. That's also why `npx @zecalis/fael install` is refused: npx keeps t
 throwaway cache. Install it globally first.
 
 **3. Work as usual.** Rows land in `.git/fael/` — nothing to commit. To bring in another clone's
-rows: `fael import <path>` (a log file, a log dir or a repo root — its journal plus any `.fael/log`; importing twice is safe).
+rows: `fael import <path>` (a log file, a log dir or a repo root — its journal plus any `.fael/log`; importing twice is safe),
+or share them through git: `git config fael.remote <url-of-a-private-repo>` once, then `fael sync` (the hooks run it for you once a session, no daemon). There is no default remote — nothing is pushed until you set one, and never to a public repo.
 
 A `.fael/log/` already committed in a repo stays read as frozen history; new rows never go there.
 

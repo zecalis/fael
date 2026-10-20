@@ -58,6 +58,10 @@ pub struct Config {
     pub lang_rows: Vec<String>,
     /// Exposure of a cross-key self-heal act (`[selfheal] cross_key`).
     pub cross_key: CrossKey,
+    /// `[sync] auto` — the Stop hook runs `fael sync` once per session when
+    /// `fael.remote` is set. `false` is the off-switch; the manual command
+    /// is unaffected.
+    pub sync_auto: bool,
     /// `[notify] user` (PLAN-fael-visible-secretary chunk 4): `true`
     /// (default) = the hooks report to the user in one line per beat (brief,
     /// reminder, receipt) on a channel the agent never reads; `false` = off.
@@ -91,6 +95,7 @@ impl Default for Config {
             lang_marker: vec!["english".into(), "thai".into()],
             lang_rows: vec!["english".into()],
             cross_key: CrossKey::Warn,
+            sync_auto: true,
             notify_user: true,
             hint_stop: vec![],
             plan_worktrees: None,
@@ -104,6 +109,13 @@ impl Default for Config {
 #[serde(default)]
 struct Notify {
     user: Option<bool>,
+}
+
+/// `[sync]` in `.fael/config.toml` — outside `from_toml` for the same reason.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Sync {
+    auto: Option<bool>,
 }
 
 /// `[plan]` in `.fael/config.toml` — outside `from_toml` for the same reason.
@@ -138,6 +150,7 @@ impl Config {
             limit: Limit,
             lang: Lang,
             selfheal: Selfheal,
+            sync: Sync,
             notify: Notify,
             hint: Hint,
             plan: Plan,
@@ -187,8 +200,9 @@ impl Config {
             Some("tracked") => {
                 return Err(
                     "rejected: store = \"tracked\" is gone — rows live in this clone's \
-                     journal; copy another clone's rows in with `fael import <path>` (sharing \
-                     between people is fael-sync), and drop the line (or set store = \"local\")"
+                     journal; copy another clone's rows in with `fael import <path>` or share \
+                     them over git with `fael sync` (hosted sharing is fael-sync), and drop \
+                     the line (or set store = \"local\")"
                         .into(),
                 );
             }
@@ -210,6 +224,7 @@ impl Config {
             lang_marker: check_lang("marker", f.lang.marker.unwrap_or(d.lang_marker))?,
             lang_rows: check_lang("rows", f.lang.rows.unwrap_or(d.lang_rows))?,
             cross_key: check_cross_key(f.selfheal.cross_key)?,
+            sync_auto: f.sync.auto.unwrap_or(d.sync_auto),
             notify_user: f.notify.user.unwrap_or(d.notify_user),
             hint_stop: f
                 .hint

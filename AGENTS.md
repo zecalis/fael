@@ -14,14 +14,16 @@ assigned issues, claims, where work stopped) that pass between sessions and agen
 agent's memory, not a personal notebook, not a generic AI memory store, and not a process or git
 guard. Value is work context (`task (key) → decision → evidence → outcome → closure`) in front
 of the right agent, once — never more rows. Rounds and tokens are a cost to keep low, never a promise.
-Today the log is local, and local is the only shipped mode: shared by every worktree and agent on
-one machine, moved across machines and between users by `fael import`. Committing `.fael/log` into
-git was tried and dropped — diffs scattered across PRs and merges grew heavy with many agents.
-Git sync over `refs/fael/*` (never on code branches) is free for dev teams, planned, not shipped.
+The log is local first: shared by every worktree and agent on one machine. It crosses machines and
+users by git sync — `fael sync` pushes this writer's rows to `refs/fael/<repo>/<writer>` on the
+remote named by `git config fael.remote` (set on purpose, no default, never code branches) and
+ingests the other writers' — or by hand with `fael import`. Committing `.fael/log` into git was
+tried and dropped — diffs scattered across PRs and merges grew heavy with many agents.
+Git sync is free for dev teams.
 Hosted sync plus a web app for non-dev members is a separate paid service; the fael binary adds no
 daemon (decision 01M5C2S7, key product:monetization).
 
-Core (public): add, find, close, bump, claim, doctor, stats, hooks, MCP. fael crew is the owner's
+Core (public): add, find, close, bump, claim, doctor, stats, sync, hooks, MCP. fael crew is the owner's
 layer: plan, chunk, board (`fael plan|chunk|board`, hidden from default help; plan `cli-tiers`).
 Core never depends on crew; crew reads core through `fael board --json`. Say "fael crew", never
 bare "crew". The crew repo is private: never link it from public docs.

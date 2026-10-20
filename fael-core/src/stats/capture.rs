@@ -29,7 +29,7 @@ pub struct Silent {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Capture {
     /// Rows added since the repo's first usage, by any writer (an imported
-    /// row counts too).
+    /// or synced row counts too).
     pub manual_adds: usize,
     /// Sessions (per repo) that edited at least one file.
     pub sessions_with_edits: usize,

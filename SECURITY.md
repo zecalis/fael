@@ -10,7 +10,8 @@ Use GitHub's private vulnerability reporting instead:
 ## Scope
 
 fael is a local CLI, a stdio MCP server and a set of agent hooks. It opens no network port and
-talks to no server. The main concerns are:
+talks to no server; the only network use is `fael sync`, which runs `git push`/`git fetch` against
+the remote you set in `git config fael.remote` and ingests other writers' rows from it. The main concerns are:
 
 - **Path handling** — every file path in a row goes through `normalize_files`: paths outside the
   repo or climbing past its root with `..` are rejected. A way to make fael read or write outside
