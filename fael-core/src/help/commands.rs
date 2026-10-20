@@ -182,7 +182,9 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "fael intake [<source>]
     (runs each source's `list` in .fael/sources.json (or the one named) with sh -c — cmd /C
      on Windows — at the repo root; every JSONL line must carry exactly ref, kind, title,
-     reopen, closed, else nothing is written and the command exits 1 naming the line; a
+     reopen, closed, else nothing is written and the command exits 1 naming the line (so
+     for a kind with no row or a key the log cannot hold); a write the ledger's own gates
+     reject (a secret in a title) is printed, exits 1 and leaves the other rows saved; a
      ticket round gets one row, key ticket:<source>:<ref> (-rN when reopened), files = that
      key, by intake: bug, report, question → issue, idea → note, its text names the source's
      read and open commands; any row on the key, closed ones too, means it is left alone; a

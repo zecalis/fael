@@ -152,6 +152,13 @@ fn plan(log: &core::Log, runs: &[(Source, Vec<Listed>)]) -> Result<Vec<Step>, St
             if let Some(why) = &t.closed {
                 // the source closed it: shut the open row, if there is one
                 for row in open.iter().filter(|r| r.key.as_deref() == Some(&k)) {
+                    // the same ticket listed twice closes its row once
+                    if steps
+                        .iter()
+                        .any(|s| matches!(s, Step::Close { id, .. } if *id == row.id))
+                    {
+                        continue;
+                    }
                     steps.push(Step::Close {
                         what: t.r#ref.clone(),
                         id: row.id.clone(),
@@ -240,7 +247,10 @@ fn apply(r: &Repo, step: &Step) -> Result<String, String> {
                 by: Some(BY.into()),
             };
             let (row, _, warns) = write::add_row(r, kind, text, std::slice::from_ref(key), opts)?;
-            warns.iter().for_each(|w| eprintln!("{w}"));
+            // a deterministic key is never "new" news to the caller
+            for w in warns.iter().filter(|w| !w.contains("new key")) {
+                eprintln!("{w}");
+            }
             Ok(format!("added {what} → {}", row.id))
         }
         Step::Close { what, id, why } => {

@@ -230,3 +230,21 @@ fn intake_a_named_source_and_a_missing_file_say_what_is_wrong() {
     assert!(!ok);
     assert!(err.contains("no .fael/sources.json"), "{err}");
 }
+
+#[test]
+fn intake_a_ticket_closed_twice_in_one_list_closes_its_row_once() {
+    let d = repo();
+    list(&d, &[line("A1", "bug", 0, None)]);
+    assert!(fael(&d, &["intake"]).0);
+    list(
+        &d,
+        &[
+            line("A1", "bug", 0, Some("closed")),
+            line("a1", "bug", 0, Some("dup:A9")),
+        ],
+    );
+    let (ok, out, err) = fael(&d, &["intake"]);
+    assert!(ok, "{err}");
+    assert!(out.ends_with("1 change(s) from 2 ticket(s)\n"), "{out}");
+    assert!(!err.contains("new key"), "{err}");
+}
