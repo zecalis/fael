@@ -5,7 +5,7 @@
 
 use crate::Repo;
 use fael_core::{self as core, work::EndedRun};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// `plan:<name>:handoff` / `plan:<name>:chunk-<n>` → the plan name.
 fn plan_of(key: &str) -> Option<&str> {
@@ -36,9 +36,8 @@ fn chunk_done(row: &core::Row, ends: &[EndedRun]) -> bool {
 }
 
 /// Ids of the retired notes among the open rows. `git` adds the merged-branch proof
-/// (`find::merged`, batched to three spawns per pull however many branches the
-/// repo holds, with the per-branch squash proof as fallback) and writes what it
-/// proved to the state cache. The push path passes false — it owns no spawn — and
+/// (`find::view`, a fixed number of spawns per pull however many branches the repo
+/// holds) and writes what it proved to the state cache. The push path passes false — it owns no spawn — and
 /// adds the cached set only while HEAD, its branch and the row count are the pull's.
 pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
     let key = crate::journal::head_sha(&r.root).map(|h| {
@@ -62,41 +61,42 @@ fn derive(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
         .copied()
         .collect();
     let head = crate::journal::head_branch(&r.root);
-    let mut proved: HashMap<(&str, Option<&str>), bool> = HashMap::new();
-    // one `for-each-ref --merged` per pull, not one proof per branch; lazily
-    // built by the first merge candidate, so a pull with none spawns nothing
-    let mut merged: Option<HashSet<String>> = None;
     let db = core::work::db_for(r.journal.as_deref(), &r.fael);
     let ends = core::work::ended_runs(&db);
-    log.rows
+    let notes = log
+        .rows
         .iter()
-        .filter(|w| w.kind == "note" && w.held().is_none() && !hide.contains(w.id.as_str()))
-        .filter(|w| {
-            let tied = w.branch().filter(|b| !b.is_empty());
-            let handoff = w.key.as_deref().and_then(plan_of).is_some();
-            (tied.is_some() || handoff) && chunk_done(w, &ends)
-                // a handoff waits on its chunk, not the merge; a revisit waits on its date
-                || git
-                    && w.revisit.is_none()
-                    && !handoff
-                    // the branch being worked on and the trunk are not "merged work"
-                    && tied.is_some_and(|b| {
-                        Some(b) != head.as_deref() && !crate::journal::is_trunk(&r.root, b)
-                    })
-                    && tied.is_some_and(|b| {
-                        *proved.entry((b, w.sha())).or_insert_with(|| {
-                            let set = merged
-                                .get_or_insert_with(|| crate::find::merged_names(&r.root));
-                            // the batch proves regular merges; a squash merge
-                            // is no ancestor, so it still takes the per-branch
-                            // patch-id proof (empty batch = that path as before)
-                            set.contains(b)
-                                || crate::find::merged_branch_at(&r.root, b, w.sha())
-                        })
-                    })
-        })
-        .map(|w| w.id.clone())
-        .collect()
+        .filter(|w| w.kind == "note" && w.held().is_none() && !hide.contains(w.id.as_str()));
+    let mut out = HashSet::new();
+    // the notes whose branch git must say merged, asked together: one pull however
+    // many branches there are, and none at all when no note is a candidate
+    let mut ask: Vec<(&core::Row, &str)> = vec![];
+    for w in notes {
+        let tied = w.branch().filter(|b| !b.is_empty());
+        let handoff = w.key.as_deref().and_then(plan_of).is_some();
+        if (tied.is_some() || handoff) && chunk_done(w, &ends) {
+            out.insert(w.id.clone());
+        } else if let Some(b) = tied
+            // a handoff waits on its chunk, not the merge; a revisit waits on its date
+            && git
+            && w.revisit.is_none()
+            && !handoff
+            // the branch being worked on and the trunk are not "merged work"
+            && Some(b) != head.as_deref()
+            && !crate::journal::is_trunk(&r.root, b)
+        {
+            ask.push((w, b));
+        }
+    }
+    let items: Vec<(&str, Option<&str>)> = ask.iter().map(|(w, b)| (*b, w.sha())).collect();
+    let merged = crate::find::merged_branches(&r.root, &items);
+    out.extend(
+        ask.iter()
+            .zip(merged)
+            .filter(|(_, m)| *m)
+            .map(|((w, _), _)| w.id.clone()),
+    );
+    out
 }
 
 #[cfg(test)]

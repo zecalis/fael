@@ -1,73 +1,20 @@
-//! Patch-ids for the squash-merge proof (`merged`), cached on disk. A commit's
-//! patch-id and a `base..tip` diff's never change, so `<git-common-dir>/fael/cache/
-//! patch-ids` keeps them for good, shared by every worktree: lines of
-//! `<key> <patch-id>`, key a commit sha or `<base>..<tip>`, `-` for a commit
-//! with no patch. Append-only; a torn or foreign line is skipped on read. A
-//! cache, never row state — losing it costs one proof (fael:01M5CPNJ).
+//! Patch-ids for the squash-merge proof (`view`), cached on disk. A commit's
+//! patch-id and a `base..tip` diff's never change, so `cache/patch-ids` (see
+//! `flat_cache`) keeps them for good: key a commit sha or `<base>..<tip>`,
+//! value the id, `-` for a commit with no patch (fael:01M5CPNJ).
 
-use std::collections::HashMap;
+use super::flat_cache::{Cache, NONE};
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::{LazyLock, Mutex};
 
-// ponytail: a cache past this many bytes is dropped whole and rebuilt; a
-// compaction pass if a repo ever outgrows it between rebuilds
-const CACHE_MAX: u64 = 8 << 20;
-const NONE: &str = "-";
-
-// `head_patch_ids` per (root, base, HEAD sha): one `rev-list` per process
-// however many tips share the merge base. Dropped wholesale past MEMO_MAX.
-type Range = HashMap<(PathBuf, String, String), Vec<String>>;
-static RANGE: LazyLock<Mutex<Range>> = LazyLock::new(Default::default);
-pub(super) const MEMO_MAX: usize = 256;
-
-#[cfg(test)]
-pub(super) fn forget_memo() {
-    RANGE.lock().unwrap().clear();
-}
-
-struct Cache {
-    file: Option<PathBuf>,
-    map: HashMap<String, String>,
-}
-
-impl Cache {
-    fn load(root: &Path) -> Self {
-        let file = crate::journal::root(root).map(|j| j.join("cache").join("patch-ids"));
-        let mut map = HashMap::new();
-        if let Some(f) = &file {
-            if std::fs::metadata(f).is_ok_and(|m| m.len() > CACHE_MAX) {
-                let _ = std::fs::remove_file(f);
-            }
-            for l in std::fs::read_to_string(f).unwrap_or_default().lines() {
-                if let Some((k, v)) = l.split_once(' ') {
-                    map.insert(k.to_string(), v.to_string());
-                }
-            }
-        }
-        Cache { file, map }
-    }
-
-    /// Fails open: unwritable = the next process proves it again.
-    fn put(&mut self, entries: Vec<(String, String)>) {
-        let body: String = entries.iter().map(|(k, v)| format!("{k} {v}\n")).collect();
-        self.map.extend(entries);
-        let Some(f) = &self.file else { return };
-        let _ = f.parent().map(std::fs::create_dir_all);
-        // one write on an O_APPEND handle: two worktrees never interleave a line
-        let _ = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(f)
-            .and_then(|mut h| h.write_all(body.as_bytes()));
-    }
-}
+const FILE: &str = "patch-ids";
 
 /// The patch-id of `git diff <base> <tip>`, `None` when it has none or git failed.
 pub(super) fn diff_id(root: &Path, base: &str, tip: &str) -> Option<String> {
     let key = format!("{base}..{tip}");
-    let mut cache = Cache::load(root);
+    let mut cache = Cache::load(root, FILE);
     if let Some(v) = cache.map.get(&key) {
         return (v != NONE).then(|| v.clone());
     }
@@ -77,39 +24,24 @@ pub(super) fn diff_id(root: &Path, base: &str, tip: &str) -> Option<String> {
     id
 }
 
-/// The patch-ids of `git log -p --no-merges base..HEAD`. Only the commits the
-/// cache has not seen are diffed, in one `log -p --stdin`; `head` (HEAD's sha,
-/// when known) memoises the answer for the rest of the process.
-pub(super) fn head_ids(root: &Path, base: &str, head: Option<&str>) -> Vec<String> {
-    let key = head.map(|h| (root.to_path_buf(), base.to_string(), h.to_string()));
-    if let Some(v) = key
-        .as_ref()
-        .and_then(|k| RANGE.lock().ok()?.get(k).cloned())
-    {
-        return v;
-    }
-    let v = range_ids(root, base);
-    if let (Some(k), Ok(mut m)) = (key, RANGE.lock()) {
-        if m.len() >= MEMO_MAX {
-            m.clear();
-        }
-        m.insert(k, v.clone());
-    }
-    v
-}
-
-fn range_ids(root: &Path, base: &str) -> Vec<String> {
-    let Some(list) =
-        super::merged::git(root, &["rev-list", "--no-merges", &format!("{base}..HEAD")])
-    else {
-        return vec![];
-    };
-    let commits: Vec<&str> = list.lines().collect();
-    let mut cache = Cache::load(root);
-    let new: Vec<&str> = commits
-        .iter()
-        .copied()
+/// For each base, the patch-ids of the non-merge commits of `base..head` — what
+/// `git log -p --no-merges base..HEAD | git patch-id` gives, one walk for all
+/// the bases. Only the commits the cache has not seen are diffed, in one
+/// `log -p --stdin`. A base git could not list has no entry.
+pub(super) fn head_ids(
+    root: &Path,
+    head: &str,
+    bases: &[String],
+) -> HashMap<String, HashSet<String>> {
+    let lists = commit_lists(root, head, bases);
+    let mut cache = Cache::load(root, FILE);
+    let new: Vec<&str> = lists
+        .values()
+        .flatten()
+        .map(String::as_str)
         .filter(|c| !cache.map.contains_key(*c))
+        .collect::<HashSet<_>>()
+        .into_iter()
         .collect();
     if !new.is_empty() {
         // `log` rather than `diff-tree`: same rename and format config as the
@@ -124,12 +56,68 @@ fn range_ids(root: &Path, base: &str) -> Vec<String> {
             cache.put(put);
         }
     }
-    commits
-        .iter()
-        .filter_map(|c| cache.map.get(*c))
-        .filter(|v| *v != NONE)
-        .cloned()
+    lists
+        .into_iter()
+        .map(|(b, commits)| {
+            let ids = commits
+                .iter()
+                .filter_map(|c| cache.map.get(c))
+                .filter(|v| *v != NONE)
+                .cloned()
+                .collect();
+            (b, ids)
+        })
         .collect()
+}
+
+/// The non-merge commits of `base..head`, per base. One base is a plain
+/// `rev-list`. Several share one walk: HEAD's history above their common
+/// ancestor `m` (`merge-base --octopus`), with parents, holds every one of the
+/// ranges — each is that history minus what the base reaches inside it.
+fn commit_lists(root: &Path, head: &str, bases: &[String]) -> HashMap<String, Vec<String>> {
+    let one = |b: &String| {
+        let list = super::merged::git(root, &["rev-list", "--no-merges", &format!("{b}..{head}")])?;
+        Some((b.clone(), list.lines().map(str::to_string).collect()))
+    };
+    if let [b] = bases {
+        return one(b).into_iter().collect();
+    }
+    let walk = || {
+        let mut args = vec!["merge-base", "--octopus"];
+        args.extend(bases.iter().map(String::as_str));
+        let m = super::merged::git(root, &args)?;
+        let walk = super::merged::git(root, &["rev-list", "--parents", head, &format!("^{m}")])?;
+        let graph: HashMap<&str, Vec<&str>> = walk
+            .lines()
+            .filter_map(|l| {
+                let mut f = l.split(' ');
+                Some((f.next()?, f.collect()))
+            })
+            .collect();
+        Some(
+            bases
+                .iter()
+                .map(|b| {
+                    let mut seen: HashSet<&str> = HashSet::new();
+                    let mut todo = vec![b.as_str()];
+                    while let Some(c) = todo.pop() {
+                        if let Some(ps) = graph.get(c).filter(|_| seen.insert(c)) {
+                            todo.extend(ps);
+                        }
+                    }
+                    let mut own: Vec<String> = graph
+                        .iter()
+                        .filter(|(c, ps)| ps.len() < 2 && !seen.contains(*c))
+                        .map(|(c, _)| c.to_string())
+                        .collect();
+                    own.sort();
+                    (b.clone(), own)
+                })
+                .collect(),
+        )
+    };
+    // histories with no common ancestor: the plain range per base
+    walk().unwrap_or_else(|| bases.iter().filter_map(one).collect())
 }
 
 fn log_ids(root: &Path, shas: &[&str]) -> Option<Vec<(String, String)>> {

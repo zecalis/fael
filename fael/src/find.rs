@@ -2,8 +2,10 @@
 //! Moved out of main.rs (file-size ratchet) — no logic of its own beyond the
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
+mod bases;
 pub(crate) mod extra;
 pub(crate) mod fallback;
+mod flat_cache;
 pub(crate) mod issue;
 mod kickoff;
 pub(crate) mod many;
@@ -13,19 +15,21 @@ pub(crate) mod misses;
 pub(crate) mod owner;
 mod page_base;
 mod patch_ids;
+mod view;
 
 pub(crate) use kickoff::kickoff;
 
-/// Does git prove branch `b` merged into HEAD? A deleted branch is proved by the row's
-/// stamped tip sha, by patch-id only.
-pub(crate) fn merged_branch_at(root: &std::path::Path, b: &str, sha: Option<&str>) -> bool {
-    merged::is_merged_at(root, b, sha)
+/// For each `(branch, stamped tip sha)`, does git prove it merged into HEAD? One pull
+/// answers any number of branches in a fixed number of spawns (`view`); a deleted
+/// branch is proved by the row's stamped tip sha, by patch-id only.
+pub(crate) fn merged_branches(root: &std::path::Path, items: &[(&str, Option<&str>)]) -> Vec<bool> {
+    view::prove(root, items)
 }
 
-/// Every branch git proves merged into HEAD, in three spawns total — the batch
-/// read for callers that check many branches per pull (`hook::retired`).
-pub(crate) fn merged_names(root: &std::path::Path) -> std::collections::HashSet<String> {
-    merged::merged_names(root)
+/// End the pull whose refs `merged_branches` has read — a long-lived caller (the MCP
+/// server) calls it before each request, so the next one sees the refs as they are.
+pub(crate) fn forget_refs() {
+    view::forget();
 }
 
 use super::{Args, aliases};

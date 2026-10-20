@@ -133,6 +133,8 @@ fn error(id: Value, code: i32, msg: &str) -> Value {
 }
 
 fn call(p: &Value) -> Value {
+    // this server outlives the request: the refs a merge proof read last time may have moved
+    crate::find::forget_refs();
     let name = p["name"].as_str().unwrap_or("");
     let args = &crate::synonyms::mcp(name, &p["arguments"]);
     let refused = refuse_stale_write(name, args, stale());
