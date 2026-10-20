@@ -98,3 +98,8 @@ if command -v brew >/dev/null 2>&1 && brew list --versions fael >/dev/null 2>&1;
     && echo "local fael -> $(brew list --versions fael | cut -d' ' -f2) (brew)" \
     || echo "release: brew upgrade failed — run: brew update && brew upgrade zecalis/tap/fael" >&2
 fi
+# fael crew is the owner's layer, not released: rebuild it from this tagged main only where it is already installed
+if command -v fael-crew >/dev/null 2>&1; then
+  cargo install -q --path fael-crew --locked && echo "local fael-crew -> $new (cargo)" \
+    || echo "release: fael-crew rebuild failed — run: cargo install --path fael-crew --locked" >&2
+fi
