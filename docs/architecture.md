@@ -122,6 +122,18 @@ contract`).
 | **adapters** | turn each client's input/output into core calls | one client each · never the rules — paths go through `core.normalize`, never an adapter's own cleanup |
 
 Adding a client touches only an adapter. Changing a rule touches only core. Changing the format is a spec change.
+
+Where code belongs — three workspace crates, one direction (decision 01M5ABTD):
+
+| Crate | Holds | Depends on |
+|---|---|---|
+| `fael-core` | log format, find, rank, rules, the read-only seam onto `crew.db` — no git, no cwd | nothing of ours |
+| `fael` | CLI, MCP, hooks, install — the `fael` binary | `fael-core`; never `fael-crew` |
+| `fael-crew` | plans, chunks, board, sweep, intake, `crew.db` schema and writes — the `fael-crew` binary | `fael-core`; reaches the ledger's own binary only through `FAEL_BIN` |
+
+A change that writes plan or chunk state goes in `fael-crew`. A change a user of core needs with no
+plan goes in `fael-core` or `fael`. Core never depends on crew, so `cargo tree -p fael -e normal` and
+`cargo tree -p fael-core` show no `fael-crew`.
 Free fael is one machine, many agents and worktrees: this binary has no transport (decision 01M4SQ9B
 cut `fael sync`). Team sync over the git remote (`refs/fael/*`, no server) is planned, not shipped; it will carry this same
 row format, never a second one. Today `fael import <path>` is how a log crosses machines.
@@ -215,6 +227,11 @@ The storage and core are identical; only how the agent reaches fael differs.
 A standard-compliant MCP host needs no adapter — `fael mcp` is the whole integration.
 
 ### CLI
+
+`fael plan`, `chunk`, `board`, `sweep`, `intake` and `run` are served by the `fael-crew` binary:
+`fael` execs it with the same argv and passes its exit code on. With no `fael-crew` next to `fael`
+or on `PATH` they exit non-zero with the line `cargo install --path fael-crew`; every other command,
+and every hook, works without it. The rows for those verbs below describe `fael-crew`.
 
 | Command | What it does |
 |---|---|

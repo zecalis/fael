@@ -111,6 +111,10 @@ with its brief and the open rows on its files, `fael chunk done` takes the hand-
 read in the terminal (`fael board --plan <plan>`, `fael plan export <plan>`) and in the board
 app. Plans stay out of the way until you make one.
 
+fael crew is a separate binary, `fael-crew`, that `fael` runs for those commands. The installs below
+do not include it; from a clone of this repo, `cargo install --path fael-crew`. Without it `add`,
+`find`, `close` and the hooks work as before, and `fael plan` says how to install it.
+
 ## Install
 
 **1. Get the binary** — prebuilt for macOS, Linux and Windows. No Rust needed.

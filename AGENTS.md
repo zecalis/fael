@@ -72,7 +72,9 @@ read `docs/architecture.md` §1 before deciding where code belongs.
 A plan is sections plus chunks in crew.db — no plan file. Read it with
 `fael plan export <plan>` (`--section <key>` for one); change a section through the bill
 (`fael plan export <plan> --json`, edit `sections`, `fael plan apply --dry-run`, then apply).
-Draft or re-cut plans with the `fael-plan` skill (fael crew).
+Draft or re-cut plans with the `fael-plan` skill. It ships with fael crew (the `zecalis/fael-crew`
+skills, symlinked into the client's skills dir); `fael install` never writes it. `fael plan|chunk|board`
+are served by the `fael-crew` binary that `fael` execs — without it they print `cargo install --path fael-crew`.
 
 `fael chunk start <uid>` prints the brief and the chunk rules (how to close, wait, checkpoint)
 — don't restate them here. The `fael chunk done <uid> "<handoff>"` text is the handoff: the
