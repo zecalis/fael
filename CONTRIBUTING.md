@@ -10,8 +10,9 @@ cd fael
 cargo test --workspace
 ```
 
-Rust 1.89 or newer. The workspace has two crates: `fael-core` (log format, find, rules — no git,
-no cwd) and `fael` (CLI, MCP server, hooks, install).
+Rust 1.89 or newer. The workspace has three crates: `fael-core` (log format, find, rules — no git,
+no cwd; never depends on crew), `fael-crew` (plans, chunks, board store — depends on
+`fael-core`) and `fael` (CLI, MCP server, hooks, install).
 
 ### Fast test loop
 

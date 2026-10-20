@@ -37,7 +37,8 @@ into chunks (`fael plan|chunk|board`, hidden from default help, plan `cli-tiers`
 and the lead and content skills; each chunk's brief, area (dev or marketing), size, model hint and
 state live in the SQLite store, and an agent starts, waits on the owner and finishes a chunk
 through `fael chunk start|wait|done`. Core never depends on crew; crew reads core through
-`fael board --json`. The crew code is private and may later become an external `fael-crew`
+`fael board --json`. The crew code is the `fael-crew` workspace crate (it depends on `fael-core`, never the
+other way) and may later become an external `fael-crew`
 binary that `fael` dispatches to, so the typed commands never change. Public docs say "fael
 crew", never bare "crew", and never link its repo.
 

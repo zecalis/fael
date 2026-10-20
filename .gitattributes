@@ -5,6 +5,6 @@ fael/tests/hook/golden/** -text
 # merge attribute on each; 3-way merge, goldens re-blessed after a rebase, never hand-merged
 AGENTS.md merge=text
 docs/architecture.md merge=text
-fael-core/src/plan/mod.rs merge=text
+fael-crew/src/lib.rs merge=text
 fael/src/help/commands.rs merge=text
 fael/tests/golden/** merge=text
