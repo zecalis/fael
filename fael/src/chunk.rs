@@ -1,6 +1,6 @@
 //! `fael chunk …` and `fael run end R` (PLAN-fael-board b2a, SPEC §1): the CLI over the
 //! chunk contract in `fael_crew`. The worktree is this repo's root; the db is the
-//! clone's `fael.db`; `--out` copies under `<db dir>/out/<uid>/<R>/`.
+//! clone's `crew.db`; `--out` copies under `<db dir>/out/<uid>/<R>/`.
 
 use crate::plan::db;
 use crate::{Args, Repo, core, repo};
@@ -269,7 +269,7 @@ pub(crate) fn run_beat(a: &Args, run: &str) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `<state>/held/<session>`: the fael.db a session's `chunk start` bound a run in, so its
+/// `<state>/held/<session>`: the crew.db a session's `chunk start` bound a run in, so its
 /// Stop hook stamps that run from any cwd (a `--no-worktree` run has no worktree to match).
 pub(crate) fn held(session: &str) -> Option<std::path::PathBuf> {
     session
@@ -304,7 +304,7 @@ fn fields(a: &Args) -> Fields {
 }
 
 /// `--issue a,b`: each an open issue row of this repo's ledger (a unique prefix will do),
-/// as its full id — the ledger is not in fael.db, so the check is here.
+/// as its full id — the ledger is not in crew.db, so the check is here.
 fn issues(r: &Repo, ids: &[String]) -> Result<Vec<String>, String> {
     if ids.is_empty() {
         return Ok(vec![]);

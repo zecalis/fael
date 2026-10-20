@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 
 /// The breaking epoch crew owns; the seam only needs it to spot the stub.
 const VERSION: i32 = 8;
-/// The stub `plans.db`'s user_version: past any epoch a fael will ever reach.
+/// The stub `fael.db`'s user_version: past any epoch a fael will ever reach.
 const STUB: i32 = 1_000_000;
 
-/// `<dir>/fael.db`, the clone's db (epoch v8 name).
+/// `<dir>/crew.db`, the clone's crew store (the rename's new name).
 pub fn db_at_dir(dir: &Path) -> PathBuf {
     db_at(dir)
 }
@@ -18,10 +18,14 @@ pub fn db_for(journal: Option<&Path>, fael: &Path) -> PathBuf {
     db_at(journal.unwrap_or(fael))
 }
 
-/// `<dir>/fael.db`, with the old `plans.db` hard-linked once. A copy of the
+/// `<dir>/crew.db`, with the old `fael.db` hard-linked once. A copy of the
 /// crew store's rename so core finds the db without depending on crew.
+/// Silent when neither file exists: `readonly` maps a missing file to empty.
 pub fn db_at(dir: &Path) -> PathBuf {
-    let (path, old) = (dir.join("fael.db"), dir.join("plans.db"));
+    for side in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(dir.join(format!("plans.db{side}")));
+    }
+    let (path, old) = (dir.join("crew.db"), dir.join("fael.db"));
     if path.exists() || rename(&old, &path).is_ok() {
         return path;
     }
@@ -29,7 +33,7 @@ pub fn db_at(dir: &Path) -> PathBuf {
 }
 
 fn rename(old: &Path, new: &Path) -> Result<(), String> {
-    let e = |e: String| format!("plans.db → fael.db refused: {e}; nothing changed");
+    let e = |e: String| format!("fael.db → crew.db refused: {e}; nothing changed");
     let Ok(c) =
         rusqlite::Connection::open_with_flags(old, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
     else {

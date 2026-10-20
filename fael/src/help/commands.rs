@@ -155,13 +155,13 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "board",
         "every registered repo's plans and chunks: needs you, queue, running, blocked",
         "fael board [--json] [--open] [--plan p] | fael board --json --watch | fael board --drop <root>
-    (the owner's view, run from anywhere: each repo whose fael.db a `fael plan`
+    (the owner's view, run from anywhere: each repo whose crew.db a `fael plan`
      or `fael chunk` command wrote is listed in ~/.local/state/fael/projects;
      --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
      only open chunks — the planner's one read of scope, after and overlaps; --plan
      keeps one plan's chunks; the text view folds blocked into per-plan counts and
      --plan lists them; a path in .fael/shared (one prefix per line) is
-     nobody's claim: it never makes an overlap; a repo whose fael.db cannot be read
+     nobody's claim: it never makes an overlap; a repo whose crew.db cannot be read
      stays listed with its error and the command exits 1; --watch streams board lines for a terminal or agent (the app reads `--json` only) and stays up,
      rereads each second only the project whose db, ledger jsonl or
      git refs moved, prints a compact board line at start and on each change, and
@@ -194,7 +194,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "create a plan, export or edit its sections and chunks, park or finish it",
         "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
      | fael plan park|unpark|done <plan>
-    (a plan is sections and chunks in <git-common-dir>/fael/fael.db, no file;
+    (a plan is sections and chunks in <git-common-dir>/fael/crew.db, no file;
      new: a plan whose chunks live in the db from the start (`fael chunk add --plan`),
      its text four skeleton sections (1 Goal, 2 Scope, 3 Done criteria, 4 Constraints);
      --parent <plan> nests it under an umbrella plan of the same app, one level (board

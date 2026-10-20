@@ -140,7 +140,7 @@ pub struct Stats {
 /// Join parsed usage with pre-loaded logs. `logs` must cover `parsed.repos()`;
 /// a repo with no entry reads as empty (its rows resolve `unknown`). A repo
 /// with no `commits` entry has no fix commits. `runs`/`merges` feed the flow
-/// spans; empty when the clone has no fael.db or git.
+/// spans; empty when the clone has no crew.db or git.
 #[allow(clippy::too_many_arguments)]
 pub fn aggregate(
     parsed: &Parsed,

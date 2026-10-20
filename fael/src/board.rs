@@ -2,7 +2,7 @@
 //! plans and chunks, and four lists of uids across them — needs you (§5), the queue (§3),
 //! running, blocked. The app's only read; `"v": 1` is the contract
 //! (`tests/golden/board-v1.json`). Live git: one worktree list and one base per project.
-//! A project fael cannot read (a newer fael.db) stays on with its `error` and empty lists,
+//! A project fael cannot read (a newer crew.db) stays on with its `error` and empty lists,
 //! and the command exits 1: never an empty board that reads as live (issue 01M4N4CV7).
 
 use crate::plan::db;

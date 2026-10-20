@@ -117,7 +117,7 @@ pub fn shared(root: &Path) -> Result<Vec<String>, String> {
     Ok(lines)
 }
 
-/// `<state>/held/<session>`: the fael.db a session's `chunk start` bound a run in.
+/// `<state>/held/<session>`: the crew.db a session's `chunk start` bound a run in.
 pub fn held_session_file(session: &str) -> Option<PathBuf> {
     session
         .chars()

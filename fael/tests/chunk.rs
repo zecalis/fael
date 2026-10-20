@@ -91,7 +91,7 @@ fn done_out_copies_the_output_per_run() {
     assert_eq!(out, format!("chunk {u} → done\n"));
 }
 
-/// `fael hook <event>` with this worktree as cwd: the event reaches fael.db.
+/// `fael hook <event>` with this worktree as cwd: the event reaches crew.db.
 fn hook(d: &Path, event: &str, session: &str) {
     use std::io::Write as _;
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
@@ -122,7 +122,7 @@ fn the_stop_hook_stamps_its_worktree_run() {
     hook(&d, "stop", "S1");
     // the hook filled `session`: another session's stamp now finds no run
     let wt = d.canonicalize().unwrap().to_string_lossy().into_owned();
-    let mut s = fael_crew::Store::open(&d.join(".git/fael/fael.db")).unwrap();
+    let mut s = fael_crew::Store::open(&d.join(".git/fael/crew.db")).unwrap();
     assert_eq!(s.seen(&wt, "S2", "t").unwrap(), 0);
     assert_eq!(s.seen(&wt, "S1", "t").unwrap(), 1);
 }

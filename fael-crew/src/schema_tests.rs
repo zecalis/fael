@@ -69,7 +69,7 @@ CREATE INDEX run_chunk ON run(chunk);
 fn v1_db(extra: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("fael-v1-{}", fael_core::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("fael.db");
+    let path = dir.join("crew.db");
     let c = Connection::open(&path).unwrap();
     c.execute_batch(V1).unwrap();
     c.execute_batch(
@@ -167,7 +167,7 @@ pub(super) fn db_id(path: &Path) -> String {
 fn a_fresh_db_has_a_db_id() {
     let dir = std::env::temp_dir().join(format!("fael-v0-{}", fael_core::ulid()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("fael.db");
+    let path = dir.join("crew.db");
     drop(Store::open(&path).unwrap());
     assert_eq!(db_id(&path).len(), 26);
     let _ = std::fs::remove_dir_all(dir);
@@ -217,7 +217,7 @@ fn two_first_opens_round() {
 }
 
 pub(super) fn baks(path: &Path, v: i32) -> Vec<PathBuf> {
-    let pre = format!("fael.db.v{v}.");
+    let pre = format!("crew.db.v{v}.");
     std::fs::read_dir(path.parent().unwrap())
         .unwrap()
         .map(|e| e.unwrap().path())

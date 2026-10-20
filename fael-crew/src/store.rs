@@ -1,4 +1,4 @@
-//! `fael.db` — SQLite in WAL mode beside the journal (`<git-common-dir>/fael/`), so every
+//! `crew.db` — SQLite in WAL mode beside the journal (`<git-common-dir>/fael/`), so every
 //! worktree of a clone shares it. Schema per SPEC-fael-board §7; `user_version` carries the
 //! breaking epoch, an older db upgrades on open (release gate: no manual step) and every
 //! open adds the tables and columns it lacks.
@@ -32,7 +32,7 @@ pub struct PlanRow {
 }
 
 pub(super) fn err(e: rusqlite::Error) -> String {
-    format!("fael.db: {e}")
+    format!("crew.db: {e}")
 }
 
 impl Store {
@@ -247,22 +247,27 @@ impl Store {
     }
 }
 
-/// `<dir>/fael.db`, the clone's db. Epoch v8 named it for the product: a `plans.db` there
-/// (and a `-wal`/`-shm` left) becomes `fael.db` on the first call, and a stub `plans.db`
-/// at user_version [`STUB`] stays behind so a fael from before v8 refuses it ("schema v…")
-/// instead of making an empty db. A rename that fails leaves `plans.db` the db (it upgrades
-/// in place) and the next call tries again.
+/// `<dir>/crew.db`, the clone's crew store. Crew owns the whole file (plan, section,
+/// chunk, chunk_issue, edge, event, run, meta); the name `fael.db` stays free for core.
+/// A `fael.db` there (and a `-wal`/`-shm` left) becomes `crew.db` on the first call, and a
+/// stub `fael.db` at user_version [`STUB`] stays behind so a fael from before the rename
+/// refuses it ("schema v…") instead of making an empty db. A rename that fails leaves
+/// `fael.db` the db (it upgrades in place) and the next call tries again. A stale `plans.db`
+/// stub left by epoch v8 is removed when seen.
 pub fn db_at(dir: &Path) -> PathBuf {
-    let (path, old) = (dir.join("fael.db"), dir.join("plans.db"));
+    for side in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(dir.join(format!("plans.db{side}")));
+    }
+    let (path, old) = (dir.join("crew.db"), dir.join("fael.db"));
     if path.exists() || rename(&old, &path).is_ok() {
         return path;
     }
     old
 }
 
-/// The hard link is the lock: of two first opens, one links, the other finds `fael.db`.
+/// The hard link is the lock: of two first opens, one links, the other finds `crew.db`.
 pub(super) fn rename(old: &Path, new: &Path) -> Result<(), String> {
-    let e = |e: String| format!("plans.db → fael.db refused: {e}; nothing changed");
+    let e = |e: String| format!("fael.db → crew.db refused: {e}; nothing changed");
     let Ok(c) = Connection::open_with_flags(old, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
     else {
         return Ok(());
@@ -271,7 +276,7 @@ pub(super) fn rename(old: &Path, new: &Path) -> Result<(), String> {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .map_err(|x| e(x.to_string()))?;
     if v > VERSION {
-        return Ok(()); // the stub itself: fael.db was removed, a fresh one starts
+        return Ok(()); // the stub itself: crew.db was removed, a fresh one starts
     }
     c.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
         .map_err(|x| e(x.to_string()))?;
@@ -293,7 +298,7 @@ pub(super) fn rename(old: &Path, new: &Path) -> Result<(), String> {
     std::fs::rename(&tmp, old).map_err(|x| e(x.to_string()))
 }
 
-/// The stub `plans.db`'s user_version: past any epoch a fael will ever reach.
+/// The stub `fael.db`'s user_version: past any epoch a fael will ever reach.
 pub(super) const STUB: i32 = 1_000_000;
 
 /// A db past this fael's epoch: a breaking change it cannot read. The error names the upgrade.
@@ -305,7 +310,7 @@ fn newer(v: i32) -> String {
         ),
         None => format!("this fael knows v{VERSION} — run `fael upgrade`"),
     };
-    format!("fael.db is schema v{v}, {fix}")
+    format!("crew.db is schema v{v}, {fix}")
 }
 
 #[cfg(test)]

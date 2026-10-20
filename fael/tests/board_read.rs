@@ -1,5 +1,5 @@
 //! The plan-board reads an agent needs (PLAN-fael-board, issues of 2026-10-11): an
-//! unreadable fael.db is never an empty board, `--plan` cuts it, `chunk show` reads one
+//! unreadable crew.db is never an empty board, `--plan` cuts it, `chunk show` reads one
 //! chunk by uid or label, a find matches a key, and a chunk uid is no phantom citation.
 
 use serde_json::Value;
@@ -48,7 +48,7 @@ fn an_unreadable_db_stays_on_the_board_and_fails_it() {
     let (good, bad, state) = (repo(&t, "good"), repo(&t, "bad"), t.join("state"));
     ok(run(&good, &state, &["chunk", "add", "a", "--brief", "b"]));
     ok(run(&bad, &state, &["chunk", "add", "b", "--brief", "b"]));
-    let db = bad.join(".git/fael/fael.db");
+    let db = bad.join(".git/fael/crew.db");
     // user_version = 99: the 4 big-endian bytes at offset 60 of the header (fael's last
     // close checkpointed the WAL into the file); a breaking step: meta row `reads` = 9
     let mut bytes = std::fs::read(&db).unwrap();

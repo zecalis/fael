@@ -38,7 +38,7 @@ pub(crate) fn bare(cmd: &str) -> Option<&'static str> {
 one verb: fael chunk <verb> --help · all verbs: fael chunk --help",
         ),
         "plan" => Some(
-            "fael plan — sections plus chunks in fael.db
+            "fael plan — sections plus chunks in crew.db
   list                      every plan
   export <plan>             read it (--section <key>; --json is the bill)
   apply <file|-> --dry-run  change it through the bill

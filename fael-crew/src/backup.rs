@@ -12,7 +12,7 @@ use std::time::Duration;
 /// made — an older one for the same `v` goes (issue 01M56WGH). Fail-open on the delete.
 pub(super) fn backup(db: &Path, v: i32) -> Result<(), String> {
     let to = copy(db, &format!("v{v}"))
-        .map_err(|e| format!("fael.db v{v} → v{VERSION} refused: {e}; nothing changed"))?;
+        .map_err(|e| format!("crew.db v{v} → v{VERSION} refused: {e}; nothing changed"))?;
     if let (Some(dir), Some(name)) = (to.parent(), db.file_name()) {
         let prefix = format!("{}.v{v}.", name.to_string_lossy());
         if let Ok(rd) = std::fs::read_dir(dir) {

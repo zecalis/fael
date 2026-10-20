@@ -47,7 +47,7 @@ const REJECTS: &[(&str, &str)] = &[
     (".fael/sources.json", "no_source"),
     ("no plan", "no_plan"),
     ("plans — use", "no_plan"),
-    ("no fael.db yet", "no_plan"),
+    ("no crew.db yet", "no_plan"),
     ("names one plan", "usage"),
     ("try 'fael chunk --help'", "usage"),
     ("try 'fael plan --help'", "usage"),

@@ -1,4 +1,4 @@
-//! The fael.db schema (SPEC-fael-board §7) and the step from each older `user_version`.
+//! The crew.db schema (SPEC-fael-board §7) and the step from each older `user_version`.
 //! Every step runs inside the caller's `BEGIN IMMEDIATE`, so a failure rolls back to the
 //! old version and the next open retries.
 
@@ -16,7 +16,7 @@ pub(super) const TABLES: &[(&str, &str)] = &[
     (
         "chunk_issue",
         // the ledger issues a chunk fixes (l2): `row_id` is a `.fael/log` row id, which
-        // fael.db cannot check — `chunk add --issue` rejects an unknown or closed one
+        // crew.db cannot check — `chunk add --issue` rejects an unknown or closed one
         "CREATE TABLE IF NOT EXISTS chunk_issue(
            chunk INTEGER NOT NULL REFERENCES chunk(id) ON DELETE CASCADE,
            row_id TEXT NOT NULL,
@@ -182,7 +182,7 @@ CREATE INDEX event_plan ON event(plan, id);
 /// keeps (v1's `goal`, `kind`, `rank`, `due` and `pin` had no reader), drop. The caller holds
 /// `foreign_keys = OFF` (a pragma a transaction cannot change), so no drop cascades.
 pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
-    let e = |e: rusqlite::Error| format!("fael.db v1 → v2: {e}");
+    let e = |e: rusqlite::Error| format!("crew.db v1 → v2: {e}");
     tx.execute_batch(
         "DROP INDEX chunk_plan; DROP INDEX dep_chunk; DROP INDEX run_chunk;
          ALTER TABLE plan RENAME TO plan_v1;
@@ -243,7 +243,7 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
         .map_err(e)?;
     if broken > 0 {
         return Err(format!(
-            "fael.db v1 → v2 left {broken} dangling reference(s)"
+            "crew.db v1 → v2 left {broken} dangling reference(s)"
         ));
     }
     Ok(())
@@ -252,19 +252,19 @@ pub(super) fn v1_to_v2(tx: &Transaction) -> Result<(), String> {
 /// `run.cost` (k1): what the client reported start R cost, in USD.
 pub(super) fn v2_to_v3(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE run ADD COLUMN cost REAL;")
-        .map_err(|e| format!("fael.db v2 → v3: {e}"))
+        .map_err(|e| format!("crew.db v2 → v3: {e}"))
 }
 
 /// `chunk.client_hint`: which client the planner or owner picked, next to `model_hint`.
 pub(super) fn v3_to_v4(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE chunk ADD COLUMN client_hint TEXT;")
-        .map_err(|e| format!("fael.db v3 → v4: {e}"))
+        .map_err(|e| format!("crew.db v3 → v4: {e}"))
 }
 
 /// `plan.repo` (issue 01M4N4CVH): a plan whose code is in another checkout.
 pub(super) fn v4_to_v5(tx: &Transaction) -> Result<(), String> {
     tx.execute_batch("ALTER TABLE plan ADD COLUMN repo TEXT;")
-        .map_err(|e| format!("fael.db v4 → v5: {e}"))
+        .map_err(|e| format!("crew.db v4 → v5: {e}"))
 }
 
 /// Master-detail (decision fael-board:master-detail): `plan.doc`, `event.plan` + `batch`,
@@ -277,7 +277,7 @@ pub(super) fn v5_to_v6(tx: &Transaction) -> Result<(), String> {
          CREATE INDEX event_plan ON event(plan, id);
          CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);",
     )
-    .map_err(|e| format!("fael.db v5 → v6: {e}"))
+    .map_err(|e| format!("crew.db v5 → v6: {e}"))
 }
 
 /// Epoch v8 (plan fael-v8): the md era's columns and two unread tables go — `plan.truth`,
@@ -285,7 +285,7 @@ pub(super) fn v5_to_v6(tx: &Transaction) -> Result<(), String> {
 /// `tr` (issue 01M4NEYK) and `contract` (decision 01M4QVH4). `plan.doc` is cut into sections
 /// first when this db predates the `section` table.
 pub(super) fn v6_to_v8(tx: &Transaction) -> Result<(), String> {
-    let e = |e: rusqlite::Error| format!("fael.db v6 → v8: {e}");
+    let e = |e: rusqlite::Error| format!("crew.db v6 → v8: {e}");
     let has_section: bool = tx
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'section')",
@@ -350,7 +350,7 @@ pub(super) fn v6_fill(tx: &Transaction) -> Result<(), String> {
         )
     })
     .map(drop)
-    .map_err(|e| format!("fael.db v6: {e}"))
+    .map_err(|e| format!("crew.db v6: {e}"))
 }
 
 #[cfg(test)]
