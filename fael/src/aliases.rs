@@ -1,4 +1,4 @@
-//! L1 rename cache (`.fael/cache/aliases.json`) + the git read that fills it.
+//! L1 rename cache (`cache/aliases.json`, per worktree) + the git read that fills it.
 //! Core (`fael_core::Aliases`) never sees git or the disk; this module is the
 //! one place that does. Everything here is fail-open: any error is an empty
 //! alias set, i.e. the pre-resolver behaviour.
@@ -26,8 +26,8 @@ use git::{git_blobs, git_renames, uncommitted_pairs};
 /// like `load`; the steady-path dead-settling is skipped (it spawns git and
 /// rewrites the cache).
 pub fn cached(r: &Repo, log: &core::Log) -> Option<core::Aliases> {
-    let home = crate::journal::home(r)?;
-    let c = read_cache(home)?;
+    let home = crate::journal::cache_home(r, crate::journal::home(r)?);
+    let c = read_cache(&home)?;
     let mut al = core::Aliases::from_pairs(c.renames.clone());
     al.merge(&core::Aliases::from_log(log));
     Some(al)
@@ -45,6 +45,7 @@ pub fn load(r: &Repo, log: &core::Log, refresh: bool) -> core::Aliases {
     let Some(home) = crate::journal::home(r) else {
         return al;
     };
+    let home = &crate::journal::cache_home(r, home);
     let cached = read_cache(home);
     let mut renames: Vec<(String, String)> = cached
         .as_ref()

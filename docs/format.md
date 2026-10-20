@@ -15,7 +15,7 @@ Reference implementation: [`fael-core`](../fael-core/src).
       compact.<ULID>.jsonl     immutable (+ a `.close.jsonl` companion when closes name no row here)
     _import/<ULID>.jsonl       immutable (+ a `.close.jsonl` companion, same rule)
   quarantine/<file>.<ULID>.jsonl  lines `doctor --fix` removed — never re-read, never deleted
-  cache/aliases.json             rename cache from `git log -M`, gitignored, rebuildable — never a source of truth
+  cache/aliases.json             rename cache from `git log -M`, gitignored, rebuildable — never a source of truth; with `store = "local"` it sits in the worktree's own git dir (`.git/worktrees/<name>/fael/cache/`), since it depends on HEAD
   .lock                        not in git
 ```
 
