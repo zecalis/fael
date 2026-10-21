@@ -86,7 +86,13 @@ pub fn kickoff_text(db: &Path, plan_name: &str, worktree: &str, today: &str) -> 
         for (uid, title, run) in &h {
             out.push_str(&format!("you hold chunk {uid} — {title} (run {run})\n"));
         }
-        out.push_str(&rules(&h[0].0));
+        let model: Option<String> = c
+            .query_row("SELECT model FROM run WHERE start = ?1", [&h[0].2], |r| {
+                r.get(0)
+            })
+            .ok()
+            .flatten();
+        out.push_str(&rules(&h[0].0, model.as_deref()));
         return Some(out);
     }
     match first_ready(db, p.id, today) {
@@ -132,5 +138,12 @@ mod tests {
         assert!(!overlap(&["src/a".to_string()], &["src/ab.rs".to_string()]));
         assert!(held_session_file("abc-123").is_some());
         assert!(held_session_file("../x").is_none());
+    }
+
+    #[test]
+    fn only_a_mixed_run_gets_the_delegate_line() {
+        let has = |m| rules("U1", m).contains("small-model subagents");
+        assert!(has(Some("mixed")));
+        assert!(!has(Some("opus")) && !has(None));
     }
 }

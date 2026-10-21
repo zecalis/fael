@@ -8,7 +8,13 @@ use super::start::{Prev, Started};
 use std::fmt::Write;
 
 /// How a chunk's state moves, said once at the end of every brief and kickoff.
-pub fn rules(uid: &str) -> String {
+pub fn rules(uid: &str, model: Option<&str>) -> String {
+    // crew decision 01M5FYK7: `mixed` = Opus settles the plan, Sonnet subagents do the plain edits
+    let mixed = if model == Some("mixed") {
+        "- model mixed: settle the plan yourself, hand the plain edits to small-model subagents (Claude Code: the Agent tool with `model: sonnet`), and review what they return before each step commit\n"
+    } else {
+        ""
+    };
     format!(
         "## chunk rules\n\
          - state moves only through fael, never by editing a plan file:\n  \
@@ -21,6 +27,7 @@ pub fn rules(uid: &str) -> String {
          - the context was compacted, or the chunk will not finish this session? stop at the last passing step: a part that passes Done on its own ships as this chunk's PR, the rest `fael chunk add`ed and named in `--left`; otherwise a step commit + checkpoint note and end the session — the next `chunk start` resumes it\n\
          - you triggered Windows CI (`gh workflow run ci.yml --ref <branch>`)? wait for it (`gh run watch <id> --exit-status`) and write pass, or fail with the failing test, in the done text — never just \"triggered\"\n\
          - the done text (or the `finished:` note) is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
+         {mixed}\
          - before done: a fresh session (a subagent, not you) checks your output — the diff, or the `--out` file — against this brief's Done and Scope, a Done criterion left undone is a major; fix what it finds and put its verdict in the done text (size S: check it yourself against Done)\n\
          - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read; then one clause per option on what it leads to, and end `Recommend: <option> because <evidence>` — you hold the most context now\n\
          - a wait --on data names what is measured, the command that measures it and the bar that ends the wait\n\
@@ -146,7 +153,11 @@ impl Started {
         }
         self.plan_context(&mut o);
         o.push('\n');
-        o.push_str(&rules(self.chunks.first().map_or("<uid>", |c| &c.uid)));
+        let first = self.chunks.first();
+        o.push_str(&rules(
+            first.map_or("<uid>", |c| &c.uid),
+            first.and_then(|c| c.model.as_deref()),
+        ));
         o
     }
 

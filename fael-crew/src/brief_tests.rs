@@ -116,7 +116,7 @@ fn the_brief_prints_the_plan_sections_once() {
 
 #[test]
 fn the_rules_ask_for_the_windows_ci_result_not_the_trigger() {
-    let r = rules("U1");
+    let r = rules("U1", None);
     assert!(r.contains("gh run watch <id> --exit-status"), "{r}");
     assert!(
         r.contains("fail with the failing test, in the done text"),
@@ -157,10 +157,28 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
 
 #[test]
 fn the_rules_tell_a_git_ship_agent_to_leave_the_handoff_as_a_finished_note() {
-    let r = rules("U1");
+    let r = rules("U1", None);
     assert!(
         r.contains("`fael chunk note U1 \"finished: <handoff>\"`"),
         "{r}"
     );
     assert!(r.contains("`Fael-Chunk: U1`"), "{r}");
+}
+
+#[test]
+fn only_a_mixed_chunk_gets_the_delegate_line() {
+    let mixed = rules("U1", Some("mixed"));
+    assert!(mixed.contains("`model: sonnet`"), "{mixed}");
+    assert!(mixed.contains("before each step commit"), "{mixed}");
+    for m in [None, Some("opus"), Some("sonnet")] {
+        assert!(!rules("U1", m).contains("small-model subagents"), "{m:?}");
+    }
+    let mut c = chunk("A");
+    c.model = Some("mixed".into());
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+    }
+    .text();
+    assert!(t.contains("small-model subagents"), "{t}");
 }
