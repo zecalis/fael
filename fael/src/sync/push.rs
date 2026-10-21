@@ -8,7 +8,7 @@
 //! clone or worktree, keeps what the ref says (docs/sync-format.md).
 
 use super::git::{Fetched, commit_tree, fetch_tree, ls_remote, push, tip_tree, write_tree};
-use super::ingest::{Others, folded_closes, ingest};
+use super::ingest::{Others, ingest};
 use super::purged;
 use crate::{Repo, core};
 use std::collections::HashSet;
@@ -72,15 +72,10 @@ impl Own<'_> {
                 core::sync::union(&fetched.rows, &rows0),
                 &filter,
             ));
-            // a close folded into its row by `compact` does not ride the ref again
-            let folded = folded_closes(&rows);
             let closes = no_secrets(core::sync::without_purged(
                 core::sync::union(&fetched.closes, &closes0),
                 &filter,
-            ))
-            .into_iter()
-            .filter(|c| !folded.contains(&c.id))
-            .collect::<Vec<_>>();
+            ));
             out.ingested += ingest(r, &log, &rows, &closes)?;
             log.rows.extend(rows.iter().cloned());
             log.closes.extend(closes.iter().cloned());

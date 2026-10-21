@@ -1,5 +1,6 @@
 //! `fael compact` is authoritative for this writer's own rows: a pruned row and
-//! a folded close stay gone after the next sync, here and on the own ref.
+//! a folded close is not re-appended to the local log by the next sync. The
+//! raw close stays on the own ref so a teammate who held the row first gets it.
 
 use super::*;
 
@@ -77,11 +78,6 @@ fn compact_prune_and_folded_closes_survive_a_sync() {
 
     let body = ref_body(&remote, &own);
     assert!(!body.contains(&format!("\"id\":\"{PRUNED}\"")), "{body}");
-    let files = ref_files(&remote, &own);
-    assert!(
-        !files.iter().any(|f| f.ends_with(".close.jsonl")),
-        "a folded close rides the ref again: {files:?}"
-    );
     assert!(body.contains(FOLDED) && body.contains(&keep));
 
     // other writers still ingest everything the ref carries now
@@ -89,4 +85,45 @@ fn compact_prune_and_folded_closes_survive_a_sync() {
     let seen = ids(&b);
     assert!(seen.contains(&FOLDED.to_string()) && seen.contains(&keep));
     assert!(!seen.contains(&PRUNED.to_string()));
+}
+
+#[test]
+fn teammate_holding_the_row_still_gets_a_folded_close() {
+    let remote = bare("compact-mate");
+    let src = repo("compact-mate-src", "Seed", "seed@example.com");
+    let a = clone(&src, "compact-mate-a", "Alice", "alice@example.com");
+    let b = clone(&src, "compact-mate-b", "Bob", "bob@example.com");
+    point(&a, &remote);
+    point(&b, &remote);
+    let by = writer("Alice", "alice@example.com");
+
+    // the row alone reaches Bob first
+    let dir = a.join(".git/fael/log").join(&by);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("2000-01.jsonl"),
+        format!("{}\n", row(FOLDED, &by, "doc:old")),
+    )
+    .unwrap();
+    assert!(sync(&a).0);
+    assert!(sync(&b).0);
+    assert!(ids(&b).contains(&FOLDED.to_string()));
+
+    // then the close lands and is pushed, Alice compacts and syncs before Bob does
+    std::fs::write(
+        dir.join("2000-01.close.jsonl"),
+        format!("{}\n", close(CLOSE_F, &by, FOLDED)),
+    )
+    .unwrap();
+    assert!(sync(&a).0);
+    let (ok, _, err) = fael(&a, &["compact", "--prune"]);
+    assert!(ok, "{err}");
+    assert!(sync(&a).0);
+    assert!(!ids(&a).contains(&CLOSE_F.to_string()));
+
+    assert!(sync(&b).0);
+    assert!(
+        ids(&b).contains(&CLOSE_F.to_string()),
+        "teammate never got the close"
+    );
 }
