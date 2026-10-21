@@ -127,3 +127,26 @@ fn the_more_tail_is_not_stamped() {
             .all(|i| !rec.contains(i.as_str()))
     );
 }
+
+#[test]
+fn done_states_the_evidence_under_each_row() {
+    let (d, s, _) = repo();
+    git(&d, &["add", "src/a.rs"]);
+    git(&d, &["commit", "-qm", "touch a"]);
+    let out = run(&d, &s, "S1", &["held", "done"], "src/a.rs\n");
+    assert!(
+        out.contains("1/2 files changed, still matches: src/b.rs"),
+        "{out}"
+    );
+    assert!(out.contains("1 commit(s) on `src/a.rs`"), "{out}");
+    assert!(
+        out.contains("\"touch a\"") && out.contains("bumped 0×"),
+        "{out}"
+    );
+    assert!(
+        out.contains("inspect: fael find") && out.contains("git log --oneline -5 -- src/a.rs"),
+        "{out}"
+    );
+    let per_row = out.matches("inspect:").count();
+    assert_eq!(per_row, 5, "{out}");
+}

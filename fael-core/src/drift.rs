@@ -118,6 +118,46 @@ fn moved(r: &core::Row, birth_ms: i64, commits: &[(i64, Vec<&str>)]) -> usize {
         .count()
 }
 
+/// One commit of `log_since`: commit second, subject, touched paths.
+pub struct Commit {
+    pub ct: i64,
+    pub subject: String,
+    pub paths: Vec<String>,
+}
+
+/// Newest-first commits since `since_ms` touching any of `files`: one scoped
+/// `git log` for the named rows, never one per row. No git = empty.
+pub fn log_since(root: &Path, since_ms: i64, files: &[&str]) -> Vec<Commit> {
+    if files.is_empty() {
+        return vec![];
+    }
+    let since = format!("@{}", since_ms / 1000);
+    let mut args = vec![
+        "log",
+        "--format=%x01%ct%x02%s",
+        "--name-only",
+        "--since",
+        &since,
+        "HEAD",
+        "--",
+    ];
+    args.extend(files);
+    let Some(out) = crate::repo::git(root, &args) else {
+        return vec![];
+    };
+    out.split('\u{1}')
+        .filter_map(|block| {
+            let mut lines = block.lines().map(str::trim).filter(|l| !l.is_empty());
+            let (ct, subject) = lines.next()?.split_once('\u{2}')?;
+            Some(Commit {
+                ct: ct.parse().ok()?,
+                subject: subject.to_string(),
+                paths: lines.map(String::from).collect(),
+            })
+        })
+        .collect()
+}
+
 /// The row's title, else the start of its text — enough to recognise it.
 fn headline(r: &core::Row) -> String {
     let t = r.title.as_deref().unwrap_or(&r.text);
