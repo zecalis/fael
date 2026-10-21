@@ -7,7 +7,7 @@ use super::flat_cache::{Cache, NONE};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 
 const FILE: &str = "patch-ids";
 
@@ -136,7 +136,7 @@ fn log_ids(root: &Path, shas: &[&str]) -> Option<Vec<(String, String)>> {
 fn spawn(root: &Path, args: &[&str], stdin: bool) -> Option<Child> {
     #[cfg(test)]
     super::merged::SPAWNED.with(|s| s.borrow_mut().push(args.join(" ")));
-    Command::new("git")
+    fael_core::git_cmd()
         .args(args)
         .current_dir(root)
         .stdin(if stdin { Stdio::piped() } else { Stdio::null() })
@@ -150,7 +150,7 @@ fn spawn(root: &Path, args: &[&str], stdin: bool) -> Option<Child> {
 /// side failed. A real pipe, so neither side buffers a whole `log -p` in memory.
 fn pipe_ids(root: &Path, mut src: Child) -> Option<Vec<(String, String)>> {
     let pipe = src.stdout.take()?;
-    let out = Command::new("git")
+    let out = fael_core::git_cmd()
         .args(["patch-id", "--stable"])
         .current_dir(root)
         .stdin(pipe)

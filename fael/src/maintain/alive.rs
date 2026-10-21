@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 
 pub(crate) struct BranchFiles<'a> {
     root: &'a Path,
@@ -76,7 +76,7 @@ struct Probe {
 
 impl Probe {
     fn start(root: &Path) -> Option<Probe> {
-        let mut child = Command::new("git")
+        let mut child = fael_core::git_cmd()
             .args(["cat-file", "--batch-check=%(objecttype)"])
             .current_dir(root)
             .stdin(Stdio::piped())

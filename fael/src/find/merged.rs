@@ -10,7 +10,7 @@ use crate::journal::BranchMap;
 use fael_core::Row;
 use std::collections::HashMap;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 /// Mark the tags of the rows about to be shown; branches of rows off the
 /// page are never asked about.
@@ -123,7 +123,7 @@ pub(super) fn git(root: &Path, args: &[&str]) -> Option<String> {
 pub(super) fn git_out(root: &Path, args: &[&str]) -> Option<(Option<i32>, String)> {
     #[cfg(test)]
     SPAWNED.with(|s| s.borrow_mut().push(args.join(" ")));
-    let out = Command::new("git")
+    let out = fael_core::git_cmd()
         .args(args)
         .current_dir(root)
         .stderr(Stdio::null())
@@ -138,6 +138,7 @@ pub(super) fn git_out(root: &Path, args: &[&str]) -> Option<(Option<i32>, String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     fn g(d: &Path, args: &[&str]) {
         let ok = Command::new("git")

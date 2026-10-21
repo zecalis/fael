@@ -3,7 +3,6 @@
 //! fail-open throughout.
 
 use std::path::Path;
-use std::process::Command;
 
 /// `git rev-parse HEAD`, then `git log -M -z --name-status --diff-filter=R
 /// --format=%H [<since>..]HEAD`. The head comes from `rev-parse`, never from
@@ -18,7 +17,7 @@ pub(crate) fn git_renames(
     since: Option<&str>,
 ) -> Option<(String, Vec<(String, String)>)> {
     let git = |args: &[&str]| {
-        Command::new("git")
+        fael_core::git_cmd()
             .args(args)
             .current_dir(root)
             .output()
@@ -138,7 +137,7 @@ pub(crate) fn git_blobs(
 ) -> Option<std::collections::HashMap<String, String>> {
     let mut args = vec!["ls-tree", "HEAD", "-z", "--"];
     args.extend(paths.iter().map(String::as_str));
-    let o = Command::new("git")
+    let o = fael_core::git_cmd()
         .args(&args)
         .current_dir(root)
         .output()
@@ -175,7 +174,7 @@ fn git_new_files(root: &Path) -> Vec<String> {
             "--",
         ][..],
     ] {
-        if let Ok(o) = Command::new("git").args(args).current_dir(root).output()
+        if let Ok(o) = fael_core::git_cmd().args(args).current_dir(root).output()
             && o.status.success()
         {
             out.extend(
@@ -195,7 +194,7 @@ fn git_new_files(root: &Path) -> Vec<String> {
 fn git_hash_object(root: &Path, files: &[&String]) -> Option<Vec<String>> {
     let mut args = vec!["hash-object", "--"];
     args.extend(files.iter().map(|s| s.as_str()));
-    let o = Command::new("git")
+    let o = fael_core::git_cmd()
         .args(&args)
         .current_dir(root)
         .output()

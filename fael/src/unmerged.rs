@@ -2,7 +2,6 @@
 //! branch is dropped, the issue stays closed with no guard behind it. Warn, never reject.
 
 use std::path::Path;
-use std::process::Command;
 
 /// One `warning:` line per commit cited in `text` that git knows and the remote's
 /// default branch does not contain. No remote ref, or a hex word git can't resolve → silent.
@@ -27,7 +26,7 @@ pub(crate) fn lines(root: &Path, text: &str) -> Vec<String> {
         if crate::git(root, &["rev-parse", "--verify", "-q", &commit]).is_none() {
             continue;
         }
-        let on_base = Command::new("git")
+        let on_base = fael_core::git_cmd()
             .args(["merge-base", "--is-ancestor", tok, &base])
             .current_dir(root)
             .status()
@@ -44,6 +43,7 @@ pub(crate) fn lines(root: &Path, text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) -> String {
         let o = Command::new("git")

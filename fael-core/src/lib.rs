@@ -13,6 +13,7 @@ mod compact;
 mod config;
 mod doctor;
 pub mod drift;
+mod gitcmd;
 pub mod help;
 mod hook;
 mod id;
@@ -45,6 +46,7 @@ pub use doctor::{
 
 pub use hook::last_row_ms;
 
+pub use gitcmd::git_cmd;
 pub use id::{
     looks_like_id, now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id,
 };
