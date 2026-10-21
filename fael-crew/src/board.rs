@@ -56,6 +56,11 @@ pub struct Chunk {
     pub handoff: Option<Handoff>,
     /// the ledger issue ids it fixes (`chunk add --issue`)
     pub issues: Vec<String>,
+    /// ids/uids on the `left:` line of the latest hand-off (`chunk done --left`); `[]` = none
+    pub left: Vec<String>,
+    /// closed-row warning lines for the title+brief (`chunk start` would refuse); `[]` = none.
+    /// Filled by the CLI, only for chunks not done/dropped/replaced
+    pub stale: Vec<String>,
     /// the owner verbs fael takes for this chunk now (`Owner::takes`)
     pub owner_actions: Vec<&'static str>,
     /// an open PR's branch merged into the base (`git merge-tree`, the CLI fills it): the
@@ -206,6 +211,8 @@ impl Store {
                         run: runs.get(&id).cloned(),
                         handoff: None,
                         issues: Vec::new(),
+                        left: Vec::new(),
+                        stale: Vec::new(),
                         owner_actions: Owner::actions(&state),
                         conflicts: None,
                         touched: r

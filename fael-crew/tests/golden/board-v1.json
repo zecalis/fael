@@ -196,6 +196,8 @@
           },
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
@@ -232,6 +234,8 @@
           "run": null,
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
@@ -271,6 +275,8 @@
           "run": null,
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
@@ -317,6 +323,8 @@
             "text": "Fixture pinned; board_shape.rs holds the keys. PR #341."
           },
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "answer",
             "accept",
@@ -358,6 +366,8 @@
           "run": null,
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "answer",
             "park",
@@ -403,6 +413,8 @@
             "text": "Screenshot in out/; caption under 200 chars."
           },
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "answer",
             "accept",
@@ -456,6 +468,8 @@
             "text": "Lead with the hand-off story or the decision story?"
           },
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "answer",
             "park",
@@ -490,6 +504,8 @@
           "run": null,
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "answer",
             "park",
@@ -523,6 +539,8 @@
           "run": null,
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
@@ -551,6 +569,8 @@
           "run": null,
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
@@ -597,6 +617,8 @@
           "issues": [
             "01M4NA00000000000000000001"
           ],
+          "left": [],
+          "stale": [],
           "owner_actions": []
         }
       ],
@@ -768,6 +790,8 @@
           },
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
@@ -800,6 +824,8 @@
           "run": null,
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
@@ -845,6 +871,8 @@
           },
           "handoff": null,
           "issues": [],
+          "left": [],
+          "stale": [],
           "owner_actions": [
             "park",
             "drop"
