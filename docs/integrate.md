@@ -105,3 +105,98 @@ fael sync                                              # push this writer's rows
 ```
 
 Hosted sync with a web app for non-dev members is the separate fael-sync service, not part of fael.
+
+## A shared node for non-dev members (free VM, no secrets here)
+
+An independent fael node on a free VM lets a Claude chat (iPhone included) read and add rows
+in a repo's ledger. It is not the production host, never touches its DB or secrets, and
+converges with your machine only through `fael sync`. fael adds no daemon: the bridge and the
+tunnel are off-the-shelf processes you run.
+
+```text
+Claude (iPhone app / claude.ai) ──HTTPS──> Cloudflare Access ──> cloudflared (outbound only)
+   └ request headers: service token            └ refuses without it   └ stdio->HTTP MCP bridge
+                                                                         └ fael mcp --pin  (cwd = the clone)
+```
+
+### 1. Pick the VM — the invoice must read $0.00
+
+Checked 2026-10-21 against the providers' own pages:
+
+* **Oracle Always Free** ([resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)):
+  `VM.Standard.E2.1.Micro` (1 GB, one VNIC with one public IP, 10 TB/month outbound, 200 GB
+  block storage) or `VM.Standard.A1.Flex` (up to 2 OCPU / 12 GB). Idle reclamation applies
+  (7 days under 20% CPU/network, plus memory on A1) — a cron plus a live tunnel is traffic, but
+  watch for it. Pick this one.
+* **Google e2-micro** ([free tier](https://docs.cloud.google.com/free/docs/free-cloud-features)):
+  compute (1 VM, `us-west1`/`us-central1`/`us-east1`) and 30 GB standard disk are free, but that
+  page says nothing on an external IPv4 or Cloud NAT, which bill on their own pricing pages.
+  Use it only if you confirm those two lines on the invoice are $0.
+
+Do not trust the SKU: after the first month open the real invoice and check it reads $0.00.
+Open no inbound port (security list: ingress none) — `cloudflared` dials out.
+
+### 2. Install on the VM
+
+```bash
+# fael: the linux release binary from the GitHub release, on PATH
+fael --version
+git clone <vela-repo-url> ~/vela && cd ~/vela     # deploy key, read/write only the ledger remote
+git config fael.remote <the private ledger remote>  # set on purpose; see Rows from another clone
+fael sync
+```
+
+No DB, no Redis, no Docker.
+
+### 3. Serve the ledger
+
+Run `fael mcp --pin` from the clone behind any stdio->HTTP MCP bridge that serves Streamable
+HTTP (e.g. `npx -y supergateway --stdio "fael mcp --pin" --outputTransport streamableHttp
+--port 8000`), bound to `127.0.0.1` only. `--pin` makes the server act on its own cwd: a call
+with a `cwd` arg is rejected (`this server is pinned to one workspace — drop cwd`), so no caller
+can reach another directory on the host. Never expose a non-pinned `fael mcp` over HTTP.
+
+### 4. Tunnel and auth
+
+1. Cloudflare Zero Trust: create a Tunnel (`cloudflared tunnel create fael-node`), route
+   `fael.<your-domain>` to `http://127.0.0.1:8000`, run it under systemd.
+2. Access: add a self-hosted application for that hostname, a policy with action **Service Auth**
+   whose selector is one service token, and create the token (Client ID + Secret).
+3. In Claude (web, Settings > Connectors > Add custom connector): URL
+   `https://fael.<your-domain>/mcp`, no sign-in, **Request headers**
+   `CF-Access-Client-Id` and `CF-Access-Client-Secret` ([connector docs](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)).
+   Custom connectors are available on Free (one connector), Pro, Max, Team and Enterprise, and are
+   brokered through the account, so they work in the mobile apps; add it on the web. Each person
+   uses their own Claude account. Static headers match Access service-token auth; the OAuth
+   alternatives (Access MCP servers / managed OAuth) need an IdP and a server that validates the
+   Access JWT, which `fael mcp` does not.
+4. The secret lives only in Cloudflare and the connector; never in this repo or a row.
+
+Check Cloudflare's current free-plan limits and the connector's mobile behaviour on the pages
+above before relying on them; neither was readable in full when this was written.
+
+### 5. Keep it converged
+
+```bash
+*/5 * * * * cd ~/vela && fael sync >/dev/null 2>&1   # crontab -e
+```
+
+### 6. Verify
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://fael.<your-domain>/mcp                       # refused: 302/401/403
+curl -s https://fael.<your-domain>/mcp -H 'CF-Access-Client-Id: …' -H 'CF-Access-Client-Secret: …' \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                                       # find, add, close
+```
+
+A `find` with `"cwd":"/tmp"` must return `isError` (pinned).
+
+### Stop and tear down
+
+```bash
+sudo systemctl disable --now cloudflared fael-bridge
+cloudflared tunnel delete fael-node      # then delete the Access app and the service token
+```
+
+Then delete the VM and the clone; rows already synced remain on the ledger remote.
