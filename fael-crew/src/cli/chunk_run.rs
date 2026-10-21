@@ -35,7 +35,11 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         base: crate::git(&r.root, &["rev-parse", "HEAD"]),
         shared: fael_crew::shared(&r.root).unwrap_or_default(),
     };
-    let mut st = Store::open(&db(r))?.start(uid, &o, here)?;
+    let mut store = Store::open(&db(r))?;
+    if !o.force {
+        crate::chunk_scope::gate(&store, r, uid)?;
+    }
+    let mut st = store.start(uid, &o, here)?;
     if let Some(m) = session.as_deref().and_then(crate::chunk::held) {
         // the Stop hook finds this db from any cwd; a failed write only skips stamps
         let _ = m.parent().map(std::fs::create_dir_all);
@@ -82,7 +86,7 @@ pub(crate) fn done(
     handoff: &str,
     here: &Here,
 ) -> Result<(), String> {
-    a.only("chunk done", &["pr", "out", "run", "review"])?;
+    a.only("chunk done", &["pr", "out", "run", "review", "left"])?;
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
     let raw = a.one("pr");
     let pr = raw
@@ -120,6 +124,8 @@ pub(crate) fn done(
         .is_some()
         .then_some(&mut copy as &mut fael_crew::Copy<'_>);
     let mut st = Store::open(&db(r))?;
+    // issue 01M5FMHQX: leftovers are rows; the statement rides in the hand-off the next brief prints
+    let handoff = &crate::chunk_left::resolve(a.one("left"), handoff, &st, &crate::read(r))?;
     // issue 01M4TFB5: the run's branch, not the cwd's — a lead's done per lane from the wave
     // branch diffs that lane only. Read before done: ending the run from its own worktree
     // stamps the cwd's branch on it, and a lead merges there on the wave branch

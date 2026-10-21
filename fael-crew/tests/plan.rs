@@ -81,7 +81,15 @@ fn park_unpark_done_move_a_plan_and_unknown_names_are_refused() {
     assert!(fael(&d, &["chunk", "start", uid]).0);
     let (ok, _, err) = fael(&d, &["plan", "done", "p"]);
     assert!(!ok && err.contains("1 running chunk(s)"), "{err}");
-    assert!(fael(&d, &["chunk", "done", uid, "shipped", "--pr", "1"]).0);
+    assert!(
+        fael(
+            &d,
+            &[
+                "chunk", "done", uid, "shipped", "--left", "none", "--pr", "1"
+            ]
+        )
+        .0
+    );
     let (ok, out, err) = fael(&d, &["plan", "done", "p"]);
     assert!(ok && out == "plan p active → done\n", "{err}{out}");
     let (ok, _, err) = fael(&d, &["plan", "export", "nope"]);

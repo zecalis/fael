@@ -126,7 +126,14 @@ fn labels_show_and_the_plan_cut() {
     // the text form carries the hand-off too: an owner without the board app reads it here
     assert!(!text.contains("hand-off"), "none before done: {text}");
     f(&["chunk", "start", &a]);
-    f(&["chunk", "done", &a, "Did: it works.\nWatch: nothing"]);
+    f(&[
+        "chunk",
+        "done",
+        &a,
+        "Did: it works.\nWatch: nothing",
+        "--left",
+        "none",
+    ]);
     let text = f(&["chunk", "show", "b10"]);
     assert!(
         text.contains("\nhand-off ") && text.contains("\n< Did: it works.\n< Watch: nothing\n"),

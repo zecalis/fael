@@ -52,7 +52,7 @@ bug, cuts noise, removes code, strengthens lifecycle or stats, or brings work in
 from the team's other systems (intake, decision 01M4TJTW). The owner's
 window is a separate SwiftUI app reading `fael board --json`: it watches, notifies, and starts
 an agent only on the owner's click or from a queue of chunks the owner approved (dev chunks:
-the owner, or the project's lead — the fael-lead skill, part of fael crew, decision 01M4SQ9B — after the owner approves its set of 2-5, a lone ready one by the owner, decision 01M5FH2P); the planner
+the owner, one per session; the project's lead — the fael-lead skill, part of fael crew, decision 01M4SQ9B — only for multi-chunk work that needs a shared contract, after the owner approves its set, decision 01M5FMHQZ superseding 01M5FH2P); the planner
 agent applies merge / split / pair itself, and every git merge is the owner's. `fael stats` still shows what fael handed over and what
 followed (capture → acted → outcome), never the counterfactual, so claims about value say
 only that.

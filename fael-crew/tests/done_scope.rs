@@ -97,7 +97,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     // the lead's run end at the lane's exit says it first, before the lane lands
     let out = f(&["run", "end", "R1"]);
     assert_eq!(out, format!("run R1: {l1} {want}"));
-    let out = f(&["chunk", "done", &l1, "h", "--run", "R1"]);
+    let out = f(&["chunk", "done", &l1, "h", "--left", "none", "--run", "R1"]);
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &l1, "--json"])).unwrap();
     let scope = serde_json::json!(["Cargo.lock", "l1/a.txt", "o/x.txt", "stray.txt"]);
     assert_eq!(c["scope"], scope, "lane1's diff, not the wave's l2/b.txt");
@@ -113,7 +113,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
         "R3",
         &["l3/a.txt", "stray3.txt"],
     );
-    let out = f(&["chunk", "done", &l3, "h", "--run", "R3"]);
+    let out = f(&["chunk", "done", &l3, "h", "--left", "none", "--run", "R3"]);
     let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
     assert_eq!(
         block,
@@ -124,7 +124,11 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     // must not swap its branch for the cwd's before done reads it; all inside: no block
     let w2 = d.with_file_name("lane2");
     git(&w2, &["switch", "-q", "-c", "wave2", "wave"]);
-    let out = fael(&w2, &state, &["chunk", "done", &l2, "h", "--run", "R2"]);
+    let out = fael(
+        &w2,
+        &state,
+        &["chunk", "done", &l2, "h", "--left", "none", "--run", "R2"],
+    );
     assert!(!out.contains("declared scope"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &l2, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["l2/b.txt"]));
@@ -141,7 +145,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
         git(&d, &["add", p]);
     }
     git(&d, &["commit", "-qm", "solo"]);
-    let out = f(&["chunk", "done", &s, "h"]);
+    let out = f(&["chunk", "done", &s, "h", "--left", "none"]);
     assert!(out.ends_with("outside declared scope: solo.txt"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &s, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["s/a.txt", "solo.txt"]));
@@ -177,7 +181,7 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     lane(&d, &state, &p2, ("lanep", "main"), "RP", &both);
     // each done of the pair: the partner's files are the pair's, never "outside"
     for u in [&p1, &p2] {
-        let out = f(&["chunk", "done", u, "h", "--run", "RP"]);
+        let out = f(&["chunk", "done", u, "h", "--left", "none", "--run", "RP"]);
         assert!(!out.contains("declared scope"), "{out}");
         let c: Value = serde_json::from_str(&f(&["chunk", "show", u, "--json"])).unwrap();
         assert_eq!(c["scope"], serde_json::json!(both));
@@ -187,7 +191,7 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     let (a, b) = (add("a", &[]), add("b", &[]));
     lane(&d, &state, &a, ("lanea", "main"), "RA", &["a/x.txt"]);
     lane(&d, &state, &b, ("laneb", "lanea"), "RB", &["b/y.txt"]);
-    let out = f(&["chunk", "done", &b, "h", "--run", "RB"]);
+    let out = f(&["chunk", "done", &b, "h", "--left", "none", "--run", "RB"]);
     assert!(!out.contains("declared scope"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &b, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["b/y.txt"]));
@@ -202,7 +206,7 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
         "all inside: run end says nothing"
     );
     git(&d.with_file_name("lanef"), &["rebase", "-q", "lanee"]);
-    let out = f(&["chunk", "done", &g, "h", "--run", "RF"]);
+    let out = f(&["chunk", "done", &g, "h", "--left", "none", "--run", "RF"]);
     assert!(!out.contains("declared scope"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &g, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["f/y.txt"]));
@@ -250,7 +254,7 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     git(&d, &["commit", "-qam", "trunk moves"]);
     git(&d, &["update-ref", "refs/remotes/origin/main", "main"]);
     git(&d.with_file_name("laneh"), &["rebase", "-q", "main"]);
-    f(&["chunk", "done", &h, "h", "--run", "RH"]);
+    f(&["chunk", "done", &h, "h", "--left", "none", "--run", "RH"]);
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &h, "--json"])).unwrap();
     assert_eq!(
         c["scope"],
@@ -300,7 +304,7 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     git(&d, &["switch", "-q", "-c", "touch"]);
     std::fs::write(d.join("w/a.txt"), "v2").unwrap();
     git(&d, &["commit", "-qam", "touch"]);
-    let out = f(&["chunk", "done", &u, "h"]);
+    let out = f(&["chunk", "done", &u, "h", "--left", "none"]);
     let id = said_id(&out, &ids[0]).unwrap_or_default();
     for want in [
         format!("fael bump {id}"),
@@ -322,7 +326,7 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     git(&d, &["add", "w/c.txt"]);
     git(&d, &["commit", "-qm", "quiet"]);
     assert_eq!(
-        f(&["chunk", "done", &v, "h"]),
+        f(&["chunk", "done", &v, "h", "--left", "none"]),
         format!("chunk {v} → review")
     );
 }

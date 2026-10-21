@@ -122,7 +122,7 @@ fael chunk note <uid> \"<text>\"
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
 fael chunk after <uid> <other-uid> \"<why>\" [--run R]
 fael chunk unafter <uid> <other-uid> \"<why>\"
-fael chunk done <uid> \"<handoff>\" [--pr N|owner/repo#N|URL | --out <path>] [--review clean|fixed|failed] [--run R]
+fael chunk done <uid> \"<handoff>\" --left none|<id|uid>,… [--pr N|owner/repo#N|URL | --out <path>] [--review clean|fixed|failed] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid>
 fael chunk apply --json -   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"brief\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>

@@ -33,8 +33,9 @@ removes code, strengthens lifecycle or stats, or brings work in from the team's 
 (intake, 01M4TJTW). A crew change ships when it serves the owner's plan → chunk → agent → ship
 loop and adds nothing to core default help. The owner's SwiftUI app
 reads `fael board --json` and starts an agent only on the owner's click or from a queue
-the owner approved; dev chunks are started by the owner, by the project's lead after the
-owner approves its set of 2-5, a lone one by the owner (decision 01M5FH2P; the lead is part of fael crew, 01M4SQ9B);
+the owner approved; dev chunks are started by the owner, one per session from the board; the project's lead
+(fael crew, 01M4SQ9B) only for multi-chunk work that needs a shared contract, after the owner
+approves its set, on Sonnet (decision 01M5FMHQZ, supersedes 01M5FH2P);
 the owner merges every PR; fael itself
 never starts an agent turn or re-prompts on idle,
 adds no daemon, never guesses, never polices the developer's process (worktree, branch, git flow).

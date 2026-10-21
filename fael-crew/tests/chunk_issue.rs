@@ -132,7 +132,9 @@ fn a_chunk_fixes_open_issues_and_the_board_follows_it() {
     // done does not close the issue: the owner sees it until someone does
     let (ok, _, err) = fael(
         &d,
-        &["chunk", "done", uid, "fixed", "--pr", "5", "--run", "R"],
+        &[
+            "chunk", "done", uid, "fixed", "--left", "none", "--pr", "5", "--run", "R",
+        ],
     );
     assert!(ok, "{err}");
     assert_eq!(issue_open(&board(&d)), [uid]);
