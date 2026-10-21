@@ -1,7 +1,7 @@
 //! The ledger on the board (PLAN-fael-board l1, decision 01M4NCWEQ): a project's open issues,
 //! decisions and notes, read-only, so the app shows them without calling `fael find` — a board
 //! poll is not an agent pull, so nothing here records a find or marks a row seen (01M4MSMF).
-//! fael shows facts only: `group` is `find --groups`' union-find over shared files, `signals`
+//! fael shows facts only: `signals`
 //! holds `drifted` (doctor's rule: the row's files took 10+ commits since; one `git log`).
 //! Which row is stale, and what to do with it, is the agent's call.
 // ponytail: only the cheap signal rides every refresh. No `gone` (a git spawn per branch and
@@ -35,16 +35,13 @@ struct Item {
     revisit: Option<String>,
     /// the branch that claimed this issue (`fael claim`)
     held: Option<String>,
-    /// issues only: the index of its shared-file group, groups largest first
-    #[serde(skip_serializing_if = "Option::is_none")]
-    group: Option<usize>,
     /// issues only: the newest chunk linked to it by `chunk add --issue` (l2)
     #[serde(skip_serializing_if = "Option::is_none")]
     chunk: Option<Fixer>,
     signals: Vec<&'static str>,
 }
 
-/// Every open row of `r`'s log, by kind; issues in group order. `fixers` = issue id → its
+/// Every open row of `r`'s log, by kind; issues in find order. `fixers` = issue id → its
 /// newest linked chunk (`Store::fixers`), found through the issue's older versions too.
 pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
     // under --watch, parsed once until the jsonl or the refs move (drift is a `git log`)
@@ -71,7 +68,7 @@ pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
         }
         None
     };
-    let item = |row: &core::Row, group: Option<usize>| Item {
+    let item = |row: &core::Row, issue: bool| Item {
         id: row.id.clone(),
         title: row.title.clone(),
         text: row.text.clone(),
@@ -83,8 +80,7 @@ pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
         from: row.from.clone(),
         revisit: row.revisit.clone(),
         held: row.held().map(String::from),
-        chunk: group.and_then(|_| fixer(&row.id)),
-        group,
+        chunk: issue.then(|| fixer(&row.id)).flatten(),
         signals: drifted
             .contains(&row.id)
             .then_some("drifted")
@@ -94,14 +90,9 @@ pub(crate) fn read(r: &Repo, fixers: &HashMap<String, Fixer>) -> Ledger {
     let of = |kind: &'static str| open.iter().filter(move |r| r.kind == kind).copied();
     let issues: Vec<&core::Row> = of("issue").collect();
     Ledger {
-        issues: core::groups(&issues)
-            .iter()
-            .enumerate()
-            .flat_map(|(g, rows)| rows.iter().map(move |r| (g, *r)))
-            .map(|(g, r)| item(r, Some(g)))
-            .collect(),
-        decisions: of("decision").map(|r| item(r, None)).collect(),
-        notes: of("note").map(|r| item(r, None)).collect(),
+        issues: issues.iter().map(|r| item(r, true)).collect(),
+        decisions: of("decision").map(|r| item(r, false)).collect(),
+        notes: of("note").map(|r| item(r, false)).collect(),
     }
 }
 

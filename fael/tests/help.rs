@@ -147,7 +147,6 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
         "--by",
         "--to",
         "--revisit",
-        "--groups",
         "--text",
         "--recall",
         "--kind",
@@ -160,9 +159,7 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     // `--help --all` is the full surface again
     let (ok, full, err) = fael(&d, &["find", "--help", "--all"]);
     assert!(ok, "{err}");
-    for hidden in [
-        "--since", "--groups", "--recall", "--kind", "--full", "--all",
-    ] {
+    for hidden in ["--since", "--recall", "--kind", "--full", "--all"] {
         assert!(full.contains(hidden), "{hidden} missing: {full}");
     }
     // same for add: workflow flags hide (--urgent/--revisit/--force/--dry-run), core stays
@@ -239,8 +236,7 @@ fn hidden_flags_still_run() {
     let d = repo();
     // every hidden CLI flag still parses and runs — hiding is discovery only
     for args in [
-        &["find", "--groups"][..],
-        &["find", "--since", "2026-01"],
+        &["find", "--since", "2026-01"][..],
         &["find", "--by", "nobody"],
         &["find", "--to", "nobody"],
         &["find", "--revisit"],
@@ -302,8 +298,8 @@ fn hidden_flags_still_run() {
     assert!(ok, "{err}");
     assert!(!out.is_empty(), "dry-run prints the verdict");
     // did-you-mean still knows the hidden flags (reads the full surface)
-    let (ok, _, err) = fael(&d, &["find", "--group"]);
-    assert!(!ok && err.contains("did you mean --groups?"), "{err}");
+    let (ok, _, err) = fael(&d, &["find", "--groups"]);
+    assert!(!ok && err.contains("fael find --kind issue"), "{err}");
     let (ok, _, err) = fael(&d, &["find", "--stale"]);
     assert!(!ok && err.contains("fael find --kind issue"), "{err}");
 }

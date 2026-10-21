@@ -115,8 +115,8 @@ fn a_guess_that_cannot_run_names_the_closest_and_the_usage() {
             "unknown flag -k — did you mean --key or --kind?",
         ),
         (
-            &["find", "--group"],
-            "unknown flag --group — did you mean --groups?",
+            &["find", "--groups"],
+            "unknown flag --groups — gone: open issues, ready first: fael find --kind issue",
         ),
         (
             &["find", "--status", "open"],

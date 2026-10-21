@@ -30,7 +30,6 @@ struct Issue {
     by: String,
     from: Option<String>,
     to: Option<String>,
-    group: usize,
     commits: Vec<String>,
 }
 
@@ -94,12 +93,6 @@ fn untriaged(r: &Repo, log: &core::Log, open: &[&core::Row]) -> Vec<Issue> {
     let fixers = fixers(r);
     let mut issues: Vec<&core::Row> = open.iter().copied().filter(|x| x.kind == "issue").collect();
     issues.sort_by_key(|x| x.id.clone());
-    let mut group_of: HashMap<&str, usize> = HashMap::new();
-    for (g, rows) in core::groups(&issues).iter().enumerate() {
-        for x in rows {
-            group_of.insert(&x.id, g);
-        }
-    }
     // a re-filed issue (superseded) links through its newest id — like the board
     let pred: HashMap<&str, &str> = core::successors(log)
         .into_iter()
@@ -135,7 +128,6 @@ fn untriaged(r: &Repo, log: &core::Log, open: &[&core::Row]) -> Vec<Issue> {
             by: x.by.clone(),
             from: x.from.clone(),
             to: x.to.clone(),
-            group: group_of.get(x.id.as_str()).copied().unwrap_or(0),
             commits: commits.get(&x.id).cloned().unwrap_or_default(),
         })
         .collect()

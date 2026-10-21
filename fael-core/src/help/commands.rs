@@ -68,7 +68,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "find",
         "search rows",
-        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M] [--groups] [--text query] [--recall wide]
+        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M] [--text query] [--recall wide]
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
       why: `closed: <text> (<sha>)`; several ids print every body in one call,
       a bad id reports alone and the exit is 1; several words with no id are
@@ -84,8 +84,6 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
       an empty search counts each word, --files and filter on its own, so the
       one that matched nothing shows;
       --kind issue lists issues ready to work first, (waiting: …) ones last;
-      --groups groups every match by shared files — what to fix in one PR
-      (*.md and anchors never link);
       text finds rows holding every word, in any order; on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*' (a bare key also matches its k:* children);
      --recall wide also pulls rows sharing a key with an exact hit and the text match off any file, exact hits first;

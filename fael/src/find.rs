@@ -4,7 +4,6 @@
 
 mod bases;
 pub(crate) mod extra;
-pub(crate) mod fallback;
 mod flat_cache;
 pub(crate) mod issue;
 mod kickoff;
@@ -99,9 +98,6 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         limit,
         offset,
     };
-    if a.has("groups") || issue::auto_grouped(a, &f) {
-        return issue::groups(a, &log, &f, branch_of, &r);
-    }
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
     if rows.is_empty() {
         nearest(a, &r.root, &log, &f, budget, &branch_of);
@@ -118,6 +114,9 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         true => format!("{base} --offset {n} --limit {}", total.saturating_sub(n)),
         false => format!("{base} --offset {n}"),
     };
+    // issues also carry the git-proven marks: `(merged)`, `(files changed since)`, `[Gone]`
+    let is_issue = f.kind.as_deref() == Some("issue") && !a.has("json");
+    let (branch_of, gone) = issue::marks(&r, &log, is_issue, &rows, branch_of);
     let shown = show(
         a,
         full,
@@ -129,7 +128,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             offset,
             next: &next,
         },
-        &branch_of,
+        (&branch_of, &gone),
     )?;
     super::hook::record_found(
         "cli",
@@ -239,7 +238,10 @@ pub(super) fn show(
     rows: &[&Row],
     budget: usize,
     cut: core::Cut,
-    branch_of: &crate::journal::BranchMap,
+    (branch_of, gone): (
+        &crate::journal::BranchMap,
+        &std::collections::HashSet<String>,
+    ),
 ) -> Result<Vec<String>, String> {
     if rows.is_empty() {
         eprintln!("fael: no rows match");
@@ -262,7 +264,7 @@ pub(super) fn show(
         crate::journal::tag(core::render_page(log, rows, budget, cut), branch_of)
     };
     let n = out.lines().filter(|l| l.starts_with("- [")).count();
-    print!("{out}");
+    print!("{}", issue::tag_gone(&out, gone));
     Ok(rows.iter().take(n).map(|r| r.id.clone()).collect())
 }
 

@@ -2,7 +2,7 @@
 //! an agent may be working in another worktree.
 
 mod find;
-mod issue_groups;
+mod issue_list;
 mod recall;
 mod session;
 mod surface;

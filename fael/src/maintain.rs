@@ -21,7 +21,7 @@ pub(crate) use merged::{default_branch, head_branch};
 
 /// Full ids of `rows` whose every file is gone from `root` — through the
 /// alias resolver, and never a file alive on the row's own unmerged branch
-/// (same judgement as `doctor [Gone]`). Chunk 4's tag for the grouped issue
+/// (same judgement as `doctor [Gone]`). The `[Gone]` tag for the issue
 /// list; partial losses stay untagged here (`doctor` reports `[PartGone]`).
 pub(crate) fn gone_ids(
     root: &std::path::Path,

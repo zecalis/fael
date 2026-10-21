@@ -19,7 +19,7 @@ Before a repro, before a hypothesis:
 ```bash
 fael find --files <suspected files> [<symptom words>]
 fael find --files <suspected files> --all --kind issue    # closed ones carry cause → fix → tried
-# advanced: fael find --since <date> --by <writer> --to <who> --revisit --groups --text <q> --recall wide
+# advanced: fael find --since <date> --by <writer> --to <who> --revisit --text <q> --recall wide
 # stats/doctor when the ledger itself is suspect: fael stats --rows --day --misses · fael doctor --fat · a leaked test row or a mistake goes with `fael purge <id>` (never a real row)
 ```
 

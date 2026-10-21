@@ -16,7 +16,6 @@ mod anchor;
 mod bump;
 mod carrier;
 mod focus;
-mod groups;
 mod keyhint;
 mod lookup;
 mod md;

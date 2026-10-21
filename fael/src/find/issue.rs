@@ -1,101 +1,38 @@
-//! `find --kind issue` default surface (PLAN-fael-agent-ergonomics chunk 4):
-//! the grouped list, with `[Gone]` on rows whose files are all gone and
-//! `(merged)` on rows whose branch already landed. The grouping is the
-//! `--groups` renderer, the merge mark is kickoff's `merged::mark` channel —
-//! one tag channel, no second writer: `(files changed since)` shares it — an
-//! issue fixed on another branch has no other sign (issue find:issue-changed).
+//! `find --kind issue` tags: `[Gone]` on rows whose files are all gone,
+//! `(merged)` and `(files changed since)` on rows whose branch already landed
+//! or whose files moved. The merge mark is kickoff's `merged::mark` channel —
+//! one tag channel, no second writer: an issue fixed on another branch has no
+//! other sign (issue find:issue-changed).
 
 use crate::journal::BranchMap;
-use crate::{Args, aliases, core};
+use crate::{aliases, core};
 use std::collections::HashSet;
 
-/// The plain issue list wants the grouped answer without asking for it:
-/// unpaged text, no machine shape. An explicit `--full`/`--limit`/`--offset`
-/// keeps the flat list — the caller asked for a slice, not the whole picture.
-pub(crate) fn auto_grouped(a: &Args, f: &core::Filter) -> bool {
-    f.kind.as_deref() == Some("issue")
-        && !a.has("json")
-        && !a.has("full")
-        && f.limit.is_none()
-        && f.offset == 0
-}
-
-/// `find --groups`, and the auto-grouped issue list: every match, grouped by
-/// shared files — what to fix in one PR. Unpaged and unbudgeted: half a group
-/// answers the question wrong.
-pub(crate) fn groups(
-    a: &Args,
-    log: &core::Log,
-    f: &core::Filter,
-    branch_of: BranchMap,
-    r: &crate::Repo,
-) -> Result<(), String> {
-    if a.has("json") || a.has("full") || f.limit.is_some() || f.offset > 0 {
-        return Err(
-            "rejected: --groups lists every match as text — drop --json, --full, --limit and --offset"
-                .into(),
-        );
-    }
-    let rows = core::find(
-        log,
-        &core::Filter {
-            limit: None,
-            ..f.clone()
-        },
-    );
-    if rows.is_empty() {
-        // an empty open list answers with the closed rows --all would match,
-        // marked, under one header — else why nothing matched
-        match super::fallback::closed_rows(log, f) {
-            Some((head, closed)) => {
-                println!("{head}");
-                print!(
-                    "{}",
-                    super::fallback::grouped_text(
-                        r,
-                        log,
-                        &closed,
-                        branch_of,
-                        f.kind.as_deref() == Some("issue"),
-                    )
-                );
-                let shown: Vec<String> = closed.iter().map(|r| r.id.clone()).collect();
-                super::fallback::record_shown(r, f, &shown);
-            }
-            None => eprintln!("fael: {}", core::why_empty(log, f, "--files")),
-        }
-    } else if f.kind.as_deref() == Some("issue") {
-        print!("{}", render_issue_groups(r, log, &rows, branch_of));
-    } else {
-        print!(
-            "{}",
-            crate::journal::tag(core::render_groups(log, &rows), &branch_of)
-        );
-    }
-    Ok(())
-}
-
-/// The grouped issue list with its tags: `(merged)` and `(files changed since)` through kickoff's
-/// git-proven channel, `[Gone]` through the same judgement `doctor` uses
-/// (resolver + the row's own branch still holding the file = not gone).
-pub(crate) fn render_issue_groups(
+/// For an issue list, the branch tags with `(merged)` and `(files changed since)` added through
+/// kickoff's git-proven channel, and the ids `[Gone]` applies to — the same
+/// judgement `doctor` uses (resolver + the row's own branch still holding the
+/// file = not gone).
+pub(crate) fn marks(
     r: &crate::Repo,
     log: &core::Log,
+    is_issue: bool,
     rows: &[&core::Row],
     branch_of: BranchMap,
-) -> String {
+) -> (BranchMap, HashSet<String>) {
+    if !is_issue {
+        return (branch_of, HashSet::new());
+    }
     let branch_of = super::merged::mark(&r.root, branch_of, rows);
     let al = aliases::load(r, log, true);
     let branch_of =
         super::merged::mark_changed(&r.root, branch_of, rows, &al, &r.cfg.anchor_prefixes);
     let gone = crate::maintain::gone_ids(&r.root, &al, rows);
-    let out = crate::journal::tag(core::render_groups(log, rows), &branch_of);
-    tag_gone(&out, &gone)
+    (branch_of, gone)
 }
 
 /// Suffix ` [Gone]` on every rendered row line whose full id is gone.
 /// Header and hint lines never start with `- [`, so they pass through.
-fn tag_gone(out: &str, gone: &HashSet<String>) -> String {
+pub(crate) fn tag_gone(out: &str, gone: &HashSet<String>) -> String {
     if gone.is_empty() {
         return out.to_string();
     }

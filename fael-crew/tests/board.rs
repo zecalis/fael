@@ -325,7 +325,7 @@ fn snapshot(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     out
 }
 
-/// PLAN-fael-board l1: the open ledger rides the board, issues grouped by shared files, and
+/// PLAN-fael-board l1: the open ledger rides the board, and
 /// the read leaves no trace — no find recorded, no row marked seen (issue 01M4MSMF).
 #[test]
 fn the_ledger_rides_the_board_and_reads_like_nothing() {
@@ -363,24 +363,21 @@ fn the_ledger_rides_the_board_and_reads_like_nothing() {
     let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
     assert!(before == snapshot(&state), "board wrote to the state dir");
     let l = &v["projects"][0]["ledger"];
-    let rows = |k: &str| -> Vec<(String, Option<u64>)> {
+    let rows = |k: &str| -> Vec<String> {
         l[k].as_array()
             .unwrap()
             .iter()
-            .map(|r| (r["id"].as_str().unwrap().to_string(), r["group"].as_u64()))
+            .map(|r| r["id"].as_str().unwrap().to_string())
             .collect()
     };
     let mut issues = rows("issues");
-    issues[..2].sort();
-    let mut want = vec![(a, Some(0)), (ab, Some(0))];
+    issues.sort();
+    let mut want = vec![a, ab, c];
     want.sort();
-    want.push((c, Some(1)));
-    assert_eq!(
-        issues, want,
-        "a shared file is one group; a closed issue is gone"
-    );
-    assert_eq!(rows("decisions"), [(dec, None)]);
-    assert_eq!(rows("notes"), [(note, None)]);
+    assert_eq!(issues, want, "a closed issue is gone");
+    assert!(l["issues"][0].get("group").is_none(), "no group field");
+    assert_eq!(rows("decisions"), [dec]);
+    assert_eq!(rows("notes"), [note]);
     assert_eq!(l["decisions"][0]["key"], "c:size");
     assert_eq!(l["notes"][0]["signals"], serde_json::json!([]));
 }

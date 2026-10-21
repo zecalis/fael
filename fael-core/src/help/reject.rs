@@ -3,6 +3,11 @@
 
 /// (command, flags, what to say) when no real flag is near enough to name.
 const NO_FLAG: &[(&str, &[&str], &str)] = &[
+    (
+        "find",
+        &["--groups"],
+        "gone: open issues, ready first: fael find --kind issue",
+    ),
     ("find", &["--stale"], "open issues: fael find --kind issue"),
     (
         "find",
@@ -102,7 +107,7 @@ pub fn with_usage(cmd: &str, msg: String, old: &str) -> String {
 
 /// The real flags of `cmd`, hidden ones included: the full synopsis line
 /// names them, plus `--json`. Chunk 3 trims the shown help to the core, so
-/// reading the shown line here would lose `--groups` and friends.
+/// reading the shown line here would lose the hidden flags.
 fn real_flags(cmd: &str) -> Vec<&'static str> {
     let line = super::for_command_full(cmd).and_then(|s| s.lines().next());
     let mut v: Vec<&str> = line
@@ -124,7 +129,7 @@ fn near(cmd: &str, flag: &str) -> String {
     let real = real_flags(cmd);
     let name = flag.trim_start_matches('-');
     let mut c: Vec<&str> = match flag.starts_with("--") {
-        // a typo or a prefix of a real flag (`--group` → `--groups`)
+        // a typo or a prefix of a real flag (`--ful` → `--full`)
         true => real
             .iter()
             .copied()
@@ -183,7 +188,10 @@ mod tests {
     #[test]
     fn near_names_the_closest_and_never_picks() {
         assert_eq!(near("find", "-k"), "did you mean --key or --kind?");
-        assert_eq!(near("find", "--group"), "did you mean --groups?");
+        assert_eq!(
+            near("find", "--groups"),
+            "gone: open issues, ready first: fael find --kind issue"
+        );
         assert_eq!(
             near("find", "--stale"),
             "open issues: fael find --kind issue"
