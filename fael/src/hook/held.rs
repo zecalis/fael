@@ -119,18 +119,26 @@ pub(crate) fn pairs<'a>(
 /// `from: user` row says to ask the user first; the chain hint once when there
 /// are several.
 pub(crate) fn text(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
+    text_with(log, rows, &[])
+}
+
+/// `text`, with `extra[i]` (evidence lines) right under row `i`'s line.
+fn text_with(log: &core::Log, rows: &[(&core::Row, String)], extra: &[String]) -> String {
     let ab = core::abbrev(log);
-    let mut out: String = rows
-        .iter()
-        .map(|(r, f)| {
-            let (id, user) = (ab.short(&r.id), user_note(std::iter::once(*r)));
-            let title = r.title.as_deref().map(|t| format!(" \"{t}\"")).unwrap_or_default();
-            format!(
-                "fael: {} {id}{title} — `{f}` changed since it was written · still true? fael bump {id} · the code holds it? fael close {id} \"now in `{f}`\" · wrong now? re-file with --supersedes {id}{user}\n",
-                r.kind
-            )
-        })
-        .collect();
+    let mut out = String::new();
+    for (i, (r, f)) in rows.iter().enumerate() {
+        let (id, user) = (ab.short(&r.id), user_note(std::iter::once(*r)));
+        let title = r
+            .title
+            .as_deref()
+            .map(|t| format!(" \"{t}\""))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "fael: {} {id}{title} — `{f}` changed since it was written · still true? fael bump {id} · the code holds it? fael close {id} \"now in `{f}`\" · wrong now? re-file with --supersedes {id}{user}\n",
+            r.kind
+        ));
+        out.push_str(extra.get(i).map_or("", String::as_str));
+    }
     if rows.len() > 1 {
         out.push_str("fael: chain several in one shell call with &&\n");
     }
@@ -203,7 +211,8 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
     let mut found = select(&log, &r.root, &al, files, "");
     super::held_rotate::order(&mut found, &super::held_rotate::load(&r.root));
     let (head, rest) = found.split_at(found.len().min(DONE_MAX));
-    let mut out = text(&log, head);
+    let ev = super::held_evidence::lines(&log, &r.root, &al, head);
+    let mut out = text_with(&log, head, &ev);
     out.push_str(&more_line(rest));
     // r1: stamp what this output showed, so a later retire names it — the
     // head only, never the `+N more` tail. The writer session is the caller's
@@ -252,7 +261,8 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     let mut found = select(&log, &r.root, &al, &edited, "");
     super::held_rotate::order(&mut found, &super::held_rotate::load(&r.root));
     let (head, rest) = found.split_at(found.len().min(START_MAX));
-    let mut out = text(&log, head);
+    let ev = super::held_evidence::lines(&log, &r.root, &al, head);
+    let mut out = text_with(&log, head, &ev);
     out.push_str(&more_line(rest));
     // r1: stamp what this output showed under `start`, so a later retire of
     // one of these rows carries `shown: ["start", …]` — head only, fail open.
