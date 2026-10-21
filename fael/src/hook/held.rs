@@ -25,6 +25,10 @@ const MAX: usize = 3;
 /// `chunk done` names more: its diff is the whole chunk, not one session's turn.
 const DONE_MAX: usize = 5;
 
+/// `chunk start` names fewer than done: it comes before the work, when an agent
+/// reads a brief and will not judge five rows it has not touched yet.
+const START_MAX: usize = 3;
+
 /// `fael add` names fewer: the row's own files, not the chunk's diff.
 const ADD_MAX: usize = 3;
 
@@ -191,22 +195,24 @@ pub(super) fn line(c: &Ctx) -> Option<Line> {
 }
 
 /// `fael chunk done`: the held text over the files the chunk touched, at most
-/// `DONE_MAX` rows, then where the rest are. Empty when none.
+/// `DONE_MAX` rows (never-shown first, see `held_rotate`), then where the rest are. Empty when none.
 pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
     let mut log = crate::read(r);
     super::changed::mark_dormant(r, &mut log);
     let al = crate::aliases::load(r, &log, true);
-    let found = select(&log, &r.root, &al, files, "");
+    let mut found = select(&log, &r.root, &al, files, "");
+    super::held_rotate::order(&mut found, &super::held_rotate::load(&r.root));
     let (head, rest) = found.split_at(found.len().min(DONE_MAX));
     let mut out = text(&log, head);
     out.push_str(&more_line(rest));
     // r1: stamp what this output showed, so a later retire names it — the
     // head only, never the `+N more` tail. The writer session is the caller's
     // (fail open: none outside one).
+    let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
+    super::held_rotate::stamp(&r.root, &ids);
     if !head.is_empty()
         && let Some(s) = crate::session::writer_session(&r.root)
     {
-        let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
         record_shown(&s, &r.root, "done", &ids);
     }
     out
@@ -217,7 +223,7 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
 /// passes. `scope` holds the declared scope lines (dirs or files); a row
 /// counts when one of its files sits under the scope on a `/` boundary.
 /// Same selection and wording as `done_text` (`select` + `text` + `more_line`),
-/// at most `DONE_MAX` rows, then where the rest are. Silent when none. Never
+/// at most `START_MAX` rows, then where the rest are. Silent when none. Never
 /// blocks start, never closes anything.
 pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     use std::collections::HashSet;
@@ -243,16 +249,18 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     if edited.is_empty() {
         return String::new();
     }
-    let found = select(&log, &r.root, &al, &edited, "");
-    let (head, rest) = found.split_at(found.len().min(DONE_MAX));
+    let mut found = select(&log, &r.root, &al, &edited, "");
+    super::held_rotate::order(&mut found, &super::held_rotate::load(&r.root));
+    let (head, rest) = found.split_at(found.len().min(START_MAX));
     let mut out = text(&log, head);
     out.push_str(&more_line(rest));
     // r1: stamp what this output showed under `start`, so a later retire of
     // one of these rows carries `shown: ["start", …]` — head only, fail open.
+    let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
+    super::held_rotate::stamp(&r.root, &ids);
     if !head.is_empty()
         && let Some(s) = crate::session::writer_session(&r.root)
     {
-        let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
         record_shown(&s, &r.root, "start", &ids);
     }
     out
