@@ -1,11 +1,15 @@
 //! `fael chunk start <uid> [--run R] [--client C] [--force]` (SPEC §1 run rules, §4 pair):
 //! claim the chunk and every chunk paired with it in one `BEGIN IMMEDIATE` — all or none —
 //! insert one run row each under the same R, and hand back what the brief prints.
+//! One worktree is one seat: a live run there is an agent that left, so a start ends it
+//! (`--force` is only for a live run in another worktree).
 
 use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
-use super::holder::{busy, clashes, holder, holder_detail, members, ready_paired};
+use super::holder::{
+    clashes, end_in_worktree, holder, holder_detail, holder_worktree, members, ready_paired,
+};
 use super::lookup::{lookup, no_chunk};
 use super::ready::Ready;
 use super::section::{self, Row as Section};
@@ -23,7 +27,8 @@ pub struct Start {
     /// a client that writes a file and exits (image gen): the run holds no worktree, so it
     /// takes no slot, and `done --run R` from the launching shell finishes it
     pub no_worktree: bool,
-    /// take over a live run (its end names who took it), never a kill
+    /// take over a live run in another worktree (its end names who took it), never a kill;
+    /// a live run in the caller's own worktree is taken over without it
     pub force: bool,
     /// the calling agent's session (`CLAUDE_CODE_SESSION_ID`) on a start without `--run`:
     /// kept for `--resume` even when `done` ends the run before any Stop
@@ -206,8 +211,10 @@ impl Store {
             if r.state == State::Running {
                 was = prev(&tx, r.id)?;
                 // a running chunk whose run ended (the agent exited) starts again as is
+                // the same worktree is the same seat: the agent that held it is gone
+                let seat = wt.is_some() && holder_worktree(&tx, r.id)?.as_deref() == wt;
                 let text = match holder(&tx, r.id)? {
-                    Some(h) if !o.force => {
+                    Some(h) if !o.force && !seat => {
                         return Err(format!(
                             "rejected: chunk {m}{pair} is held by run {h} — `--force` takes it over"
                         ));
@@ -246,11 +253,9 @@ impl Store {
             }
             claim.push((r, was));
         }
-        if let Some(b) = wt.map(|w| busy(&tx, w)).transpose()?.flatten() {
-            return Err(format!(
-                "rejected: {} holds run {b} — one start per worktree: `fael run end {b}` first, or another worktree",
-                here.worktree
-            ));
+        // one start per worktree: a run of another chunk still live here is an agent that left
+        if let Some(w) = wt {
+            end_in_worktree(&tx, w, here.now)?;
         }
         let mut chunks = Vec::new();
         for (r, was) in claim {
