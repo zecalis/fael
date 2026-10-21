@@ -179,3 +179,22 @@ fn show_in_a_parked_plan_names_the_plan() {
     assert!(err.contains("parked"), "{err}");
     assert!(err.contains("pl"), "{err}");
 }
+
+#[test]
+fn show_warns_when_the_brief_cites_a_closed_issue() {
+    let (d, _) = repo();
+    let (ok, id, err) = fael(&d, &["add", "issue", "broken x", "--files", "a.rs"]);
+    assert!(ok, "{err}");
+    let id = id.split_whitespace().next().unwrap().to_string();
+    assert!(fael(&d, &["close", &id, "fixed"]).0);
+    let brief = format!("fix {id}");
+    let (ok, uid, err) = fael(
+        &d,
+        &[
+            "chunk", "add", "Fix", "--plan", "pl", "--label", "b2", "--brief", &brief,
+        ],
+    );
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&d, &["chunk", "show", uid.trim()]);
+    assert!(ok && err.contains(&format!("brief cites {id}")), "{err}");
+}

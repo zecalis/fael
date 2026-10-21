@@ -35,7 +35,12 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str) {
 /// An id token resolves through `ref_state` (exactly one row, and it is closed);
 /// a key matches whole through `names_key` (exactly one row carries it, closed).
 /// Anything else (missing, ambiguous, open) stays silent — fael never infers.
-fn closed_warnings(title: &str, brief: &str, log: &fael_core::Log, uid: &str) -> Vec<String> {
+pub(crate) fn closed_warnings(
+    title: &str,
+    brief: &str,
+    log: &fael_core::Log,
+    uid: &str,
+) -> Vec<String> {
     let text = format!("{title} {brief}");
     let shut = fael_core::closed(log);
     let mut seen: HashSet<&str> = HashSet::new();
