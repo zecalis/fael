@@ -72,8 +72,14 @@ fn repo() -> (PathBuf, PathBuf, Vec<String>) {
 }
 
 fn named<'a>(out: &str, ids: &'a [String]) -> Vec<&'a String> {
+    // each held line reads `fael: note <short id> — ...`
+    let shorts: Vec<&str> = out
+        .lines()
+        .filter_map(|l| l.strip_prefix("fael: note "))
+        .filter_map(|l| l.split_whitespace().next())
+        .collect();
     ids.iter()
-        .filter(|i| out.contains(&format!("{} \"", &i[..9])))
+        .filter(|i| shorts.iter().any(|s| i.starts_with(s)))
         .collect()
 }
 
