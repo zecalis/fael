@@ -84,7 +84,7 @@ impl Store {
             if e.sqlite_error_code() != Some(rusqlite::ErrorCode::DatabaseBusy)
                 || t.elapsed() > wait
             {
-                return Err(err(e));
+                return Err(format!("{} (wal switch)", err(e)));
             }
             std::thread::sleep(Duration::from_millis(20));
         }
@@ -96,7 +96,7 @@ impl Store {
         // although another first open is about to finish: migrate is one transaction, retry it
         while let Err(e) = s.migrate(tables, columns) {
             if !e.ends_with("database is locked") || t.elapsed() > wait * 3 {
-                return Err(e);
+                return Err(format!("{e} (migrate)"));
             }
             std::thread::sleep(Duration::from_millis(20));
         }
