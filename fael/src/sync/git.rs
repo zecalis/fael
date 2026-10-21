@@ -179,13 +179,38 @@ pub(crate) fn tip_tree(root: &Path, tip: &Option<String>) -> Result<Option<Strin
 }
 
 /// `files` (paths relative to the ref root, `meta.json` first) as one tree:
-/// one blob per file via `hash-object -w`, then one `mktree`. Returns the
-/// tree sha — identical journals build identical trees, so a repeat sync
-/// compares before it commits.
+/// every blob through one `hash-object -w --stdin-paths` over a scratch copy
+/// of the bodies, then one `mktree` — two spawns however many month files.
+/// Returns the tree sha — identical journals build identical trees, so a
+/// repeat sync compares before it commits.
 pub(crate) fn write_tree(root: &Path, files: &[core::sync::TreeFile]) -> Result<String, String> {
+    let tmp = std::env::temp_dir().join(format!("fael-sync-{}", core::ulid()));
+    let blobs = (|| {
+        std::fs::create_dir_all(&tmp).map_err(|e| format!("fael: sync scratch: {e}"))?;
+        let mut paths = String::new();
+        for (i, f) in files.iter().enumerate() {
+            let p = tmp.join(i.to_string());
+            std::fs::write(&p, &f.body).map_err(|e| format!("fael: sync scratch: {e}"))?;
+            paths.push_str(&format!("{}\n", p.display()));
+        }
+        stdin(
+            root,
+            &["hash-object", "-w", "--no-filters", "--stdin-paths"],
+            &paths,
+        )
+    })();
+    let _ = std::fs::remove_dir_all(&tmp);
+    let blobs = blobs?;
+    let blobs: Vec<&str> = blobs.lines().collect();
+    if blobs.len() != files.len() {
+        return Err(format!(
+            "fael: git hash-object: {} blobs for {} files",
+            blobs.len(),
+            files.len()
+        ));
+    }
     let mut entries = String::new();
-    for f in files {
-        let blob = stdin(root, &["hash-object", "-w", "--stdin"], &f.body)?;
+    for (f, blob) in files.iter().zip(blobs) {
         entries.push_str(&format!("100644 blob {blob}\t{}\n", f.path));
     }
     stdin(root, &["mktree"], &entries)

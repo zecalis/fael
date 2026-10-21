@@ -3,7 +3,9 @@
 //! the hook push path spawns none. Counted through a PATH shim, so a spawn from
 //! anywhere in the binary shows. The bound is on the warm run — the second pull,
 //! once the caches of facts that are a pure function of object ids are written;
-//! a cold pull proves each branch it has not seen, once.
+//! a cold pull proves each branch it has not seen, once. `stats`, `doctor` and
+//! `sync` hold the same line however many worktrees, branches or month files
+//! (issue 01M5F53Y).
 
 #![cfg(unix)]
 
@@ -22,6 +24,15 @@ const FIND_MAX: usize = 6;
 const SESSION_MAX: usize = 7;
 /// `close` = the stamp alone: trunk probe, user name, branch, short sha.
 const CLOSE_MAX: usize = 5;
+/// `stats` = one log pair per clone (origin's base, else the local one), the
+/// same pair for merged PRs, the `gh` remote probe, and its in-repo `find` pull.
+const STATS_MAX: usize = 13;
+/// `doctor` = one `cat-file --batch-check` for every row's branch, plus its
+/// fixed probes (remotes ×2, branches, merged, recent log).
+const DOCTOR_MAX: usize = 8;
+/// `sync` push = config and remote probes, one `ls-remote`, then one
+/// `hash-object`, `mktree`, `commit-tree` and `push` however many month files.
+const SYNC_MAX: usize = 16;
 
 fn git(d: &Path, args: &[&str]) {
     let ok = Command::new("git")
@@ -58,16 +69,25 @@ fn shim(d: &Path) -> (PathBuf, String) {
 
 /// Run fael with every `git` it starts counted; the spawned command lines.
 fn spawns(d: &Path, args: &[&str], stdin: &str) -> Vec<String> {
+    spawns_in(d, d, args, stdin)
+}
+
+/// `spawns` with fael run in `cwd` (a worktree of `d`). The OS temp dir moves
+/// into `d`, so stats reads `d` as a real repo, not a skipped temp one.
+fn spawns_in(d: &Path, cwd: &Path, args: &[&str], stdin: &str) -> Vec<String> {
     use std::io::Write;
     let (log, path) = shim(d);
     let _ = std::fs::remove_file(&log);
+    let tmp = d.join(".tmp");
+    std::fs::create_dir_all(&tmp).unwrap();
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .env("PATH", path)
         .env("FAEL_STATE_DIR", d.join(".state"))
+        .env("TMPDIR", tmp)
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("FAEL_SESSION")
         .args(args)
-        .current_dir(d)
+        .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -216,4 +236,83 @@ fn the_push_path_spawns_no_git_and_close_only_its_stamp() {
     assert!(!id.is_empty(), "a row to close:\n{found}");
     let seen = spawns(&d, &["close", id, "done"], "");
     assert!(seen.len() <= CLOSE_MAX, "close:\n{}", seen.join("\n"));
+}
+
+/// `git worktree add` `k` checkouts of `d`, each with an `add` whose missing
+/// file earns a warning (an injection), so the usage `fael stats` reads names
+/// `k + 1` repos of one clone.
+fn worktrees(d: &Path, k: usize) {
+    let mut dirs = vec![d.to_path_buf()];
+    for i in 0..k {
+        let w = d.join(format!(".wt{i}"));
+        let wt = w.display().to_string();
+        git(d, &["worktree", "add", "-q", "-b", &format!("wt{i}"), &wt]);
+        dirs.push(w.canonicalize().unwrap());
+    }
+    for w in &dirs {
+        spawns_in(d, w, &["add", "note", "here", "--files", "nope"], "");
+    }
+}
+
+/// `fael stats` logs each clone once, however many of its worktrees the
+/// usage names, and reads every default branch off the ref file.
+#[test]
+fn stats_spawns_a_fixed_number_however_many_worktrees() {
+    for k in [0, 3] {
+        let d = repo(4);
+        worktrees(&d, k);
+        let seen = spawns(&d, &["stats"], "");
+        assert!(
+            seen.len() <= STATS_MAX,
+            "{k} worktrees:\n{}",
+            seen.join("\n")
+        );
+    }
+}
+
+/// `fael doctor` asks every row's branch through one batch probe.
+#[test]
+fn doctor_spawns_a_fixed_number_however_many_branches() {
+    for n in [4, 12] {
+        let d = repo(n);
+        let seen = warm(&d, &["doctor"]);
+        assert!(
+            seen.len() <= DOCTOR_MAX,
+            "{n} branches:\n{}",
+            seen.join("\n")
+        );
+    }
+}
+
+/// `fael sync` writes every month file of the tree through one
+/// `hash-object`, however many months the journal spans.
+#[test]
+fn sync_spawns_a_fixed_number_however_many_months() {
+    for months in [1, 6] {
+        let d = repo(2);
+        let bare = d.join(".remote");
+        git(&d, &["init", "-q", "--bare", &bare.display().to_string()]);
+        git(
+            &d,
+            &["remote", "add", "origin", &bare.display().to_string()],
+        );
+        git(&d, &["config", "fael.remote", "origin"]);
+        let rows: String = (1..=months)
+            .map(|m| {
+                format!(
+                    r#"{{"v":1,"id":"{}","ts":"2026-{m:02}-10T00:00:00.000Z","by":"t-0000","kind":"note","text":"month {m}","files":["base"]}}"#,
+                    fael_core::ulid()
+                ) + "\n"
+            })
+            .collect();
+        let src = d.join(".import.jsonl");
+        std::fs::write(&src, rows).unwrap();
+        spawns(&d, &["import", &src.display().to_string()], "");
+        let seen = spawns(&d, &["sync"], "");
+        assert!(
+            seen.len() <= SYNC_MAX,
+            "{months} months:\n{}",
+            seen.join("\n")
+        );
+    }
 }
