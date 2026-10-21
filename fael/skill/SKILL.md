@@ -8,13 +8,12 @@ description: This repo's memory of what git and code do not say — why a choice
 # fael — the repo's memory
 
 Rows in English — title, key, body; `quote` foreign terms; the dev reads them through you, in their language.
-Add each in the same message as your next tool call or final edit — never a turn of its own; batch rows in one `rows` call, not one per row.
-Rows about a file come back when you touch it. One the code now says or contradicts misleads:
-close it (`now in <file>`) or re-file it with `--supersedes <id>` (one passage of it:
-`--replace "<old>" --with "<new>"`), in that same message.
+Add each in the same message as your next tool call or final edit, never a turn of its own; batch rows in one `rows` call.
+A row fael names: run its `inspect:` line, then in that same message —
+code holds it → `fael close <id> "now in <file>"`; wrong now → `--supersedes <id>`; still true, not in code → `fael bump <id>`.
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --title "<headline>" --files <path>` right there, one per finding — do not wait for the end of the task.**
-That includes your own earlier bug, a regression you caused, and a reviewer's finding that outlives this turn.
+That includes your own bug and a reviewer's finding.
 Fixed one with no row yet, however found (failing test, review, reading code)? File it now; close it after the commit — a row closes once:
 `fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]"``.
 Would a new agent reading only code and tests know this? Yes → a test, named in `guard`. No → what not to do, and why.
@@ -23,7 +22,8 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 
 - `fael find [<text>] [--files <path>] [--key plan:x]` — the session brief, rows about a file or key, or a text search
 - `fael add decision "<the choice, why, what was rejected>" --title "<headline>" --files a,b` — never what code does, progress, or which files changed
-  - the user said or decided it? `--from user`; ask them before you change a `(from user)` row
+  - a rule later chunks follow? One decision, `--key <area>:<topic>`, `--files` the 1–2 files that enforce it
+  - the user decided it? `--from user`; ask them before changing a `(from user)` row
 - `fael add note "<state the next session needs>" --title "<headline>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
 - Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
