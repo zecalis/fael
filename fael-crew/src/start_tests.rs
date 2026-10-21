@@ -275,3 +275,20 @@ fn another_app_or_a_shared_path_is_no_overlap() {
     };
     s.start(&c, &o, &here("/w3")).unwrap();
 }
+
+#[test]
+fn a_mixed_model_is_recorded_on_the_run_from_approve_or_start() {
+    let q = "SELECT r.model FROM run r JOIN chunk c ON c.id = r.chunk WHERE c.uid = ?1";
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    s.approve(&a, Some((Some("mixed"), None)), NOW).unwrap();
+    start(&mut s, &a, "/a").unwrap();
+    assert_eq!(get(&s, q, &a).as_deref(), Some("mixed"));
+    let b = add(&mut s, "b", Some("b"));
+    let o = Start {
+        model: Some("mixed".into()),
+        ..Start::default()
+    };
+    s.start(&b, &o, &here("/b")).unwrap();
+    assert_eq!(get(&s, q, &b).as_deref(), Some("mixed"));
+}
