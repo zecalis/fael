@@ -27,6 +27,8 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         run: None,
         handoff: None,
         issues: vec![],
+        left: vec![],
+        stale: vec![],
         owner_actions: Vec::new(),
         conflicts: None,
         touched: None,

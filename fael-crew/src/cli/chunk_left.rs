@@ -6,6 +6,22 @@ use fael_crew::Store;
 
 const HOW: &str = "file the leftover first: `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` or `fael add issue \"<text>\" --files <f>`; `--left none` when nothing is left (git ship: a `left: none|<ids>` line in the `finished:` note)";
 
+/// The value of the hand-off's `left:` line.
+fn line(handoff: &str) -> Option<String> {
+    handoff
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("left:"))
+        .map(|v| v.trim().to_string())
+}
+
+/// The ids/uids a stored hand-off leaves undone; `none`, no line or no hand-off = empty.
+pub(crate) fn listed(handoff: &str) -> Vec<String> {
+    line(handoff)
+        .filter(|l| l != "none")
+        .map(|l| l.split(',').map(|t| t.trim().to_string()).collect())
+        .unwrap_or_default()
+}
+
 /// The hand-off to store: `handoff` with the validated statement on a `left:` line.
 pub(crate) fn resolve(
     flag: Option<String>,
@@ -13,10 +29,7 @@ pub(crate) fn resolve(
     s: &Store,
     log: &fael_core::Log,
 ) -> Result<String, String> {
-    let line = handoff
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("left:"))
-        .map(|v| v.trim().to_string());
+    let line = line(handoff);
     let (list, text) = match (flag, line) {
         (Some(_), Some(_)) => {
             return Err("rejected: --left and a `left:` line both given — once".into());

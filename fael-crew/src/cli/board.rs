@@ -177,6 +177,7 @@ fn project(
     let s = Store::open(&path)?;
     let mut b = s.board(today, stale)?;
     let base = git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+    fill_left_stale(&s, &r, &mut b.chunks);
     let shared = prs::open_prs(&mut b.chunks, &r.root, base.as_deref());
     let branches = branches::branches(&r.root, base.as_deref(), &b.chunks);
     // before `--open` drops the running chunks: their live runs hold worktrees (a lead picks
@@ -207,6 +208,22 @@ fn project(
         },
         ..Project::named(root)
     }))
+}
+
+/// `left` from the latest hand-off, `stale` from the brief against the ledger (read once).
+fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
+    let log = crate::read(r);
+    for c in chunks {
+        if let Some(h) = &c.handoff {
+            c.left = crate::chunk_left::listed(&h.text);
+        }
+        if matches!(c.state.as_str(), "done" | "dropped" | "replaced") {
+            continue;
+        }
+        if let Ok(b) = s.show(&c.uid) {
+            c.stale = crate::chunk_scope::closed_warnings(&b.title, &b.brief, &log, &b.uid);
+        }
+    }
 }
 
 /// Every linked worktree; a repo with none pools its main checkout as one slot.

@@ -29,6 +29,8 @@ const CHUNK_KEYS: &[&str] = &[
     "run",
     "handoff",
     "issues",
+    "left",
+    "stale",
     "owner_actions",
 ];
 /// `options`: the answers `chunk wait --option` offers, `[]` = none (issue 01M4NWFS)
