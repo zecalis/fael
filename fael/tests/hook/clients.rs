@@ -5,7 +5,7 @@ use super::{fael, flagged, json, repo, state, transcript};
 
 /// Every path the edit hook recorded, across sessions.
 fn recorded_edits(d: &std::path::Path) -> String {
-    std::fs::read_dir(state(d).join("sessions"))
+    std::fs::read_dir(state(d).join("sessions").join("edits"))
         .unwrap()
         .map(|e| std::fs::read_to_string(e.unwrap().path()).unwrap())
         .collect()

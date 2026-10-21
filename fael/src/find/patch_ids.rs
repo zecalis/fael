@@ -10,6 +10,7 @@ use std::path::Path;
 use std::process::{Child, Stdio};
 
 const FILE: &str = "patch-ids";
+const SQUASH: &str = "squash";
 
 /// The patch-id of `git diff <base> <tip>`, `None` when it has none or git failed.
 pub(super) fn diff_id(root: &Path, base: &str, tip: &str) -> Option<String> {
@@ -22,6 +23,34 @@ pub(super) fn diff_id(root: &Path, base: &str, tip: &str) -> Option<String> {
     let id = pipe_ids(root, src)?.pop().map(|(p, _)| p);
     cache.put(vec![(key, id.clone().unwrap_or_else(|| NONE.into()))]);
     id
+}
+
+/// The squash verdicts of `tips` against `head`, kept in `cache/squash` (key
+/// `<head>:<tip>`, value `1`/`0`): whether the tip's `base..tip` diff has the
+/// patch-id of a commit on HEAD is a pure function of the two object ids, and
+/// proving it costs the `commit_lists` walk on every pull. Only a proven
+/// answer is stored, never a git failure.
+pub(super) fn squash_cached(root: &Path, head: &str, tips: &[&str]) -> HashMap<String, bool> {
+    let cache = Cache::load(root, SQUASH);
+    tips.iter()
+        .filter_map(|t| {
+            let v = cache.map.get(&format!("{head}:{t}"))?;
+            Some((t.to_string(), v == "1"))
+        })
+        .collect()
+}
+
+pub(super) fn squash_put(root: &Path, head: &str, verdicts: &[(&str, bool)]) {
+    let put = verdicts
+        .iter()
+        .map(|(t, v)| {
+            (
+                format!("{head}:{t}"),
+                if *v { "1" } else { "0" }.to_string(),
+            )
+        })
+        .collect();
+    Cache::load(root, SQUASH).put(put);
 }
 
 /// For each base, the patch-ids of the non-merge commits of `base..head` — what

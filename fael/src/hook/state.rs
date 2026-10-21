@@ -25,7 +25,10 @@ pub(crate) fn session_key(s: &str) -> String {
 /// Keyed by session + worktree so one session across two repos stays apart.
 pub(crate) fn edits_path(session: &str, root: &Path) -> PathBuf {
     let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
-    state_dir().join("sessions").join(format!("{key}.jsonl"))
+    state_dir()
+        .join("sessions")
+        .join("edits")
+        .join(format!("{key}.jsonl"))
 }
 
 /// The session id inside a hook session string. Claude keys hooks by the
@@ -266,6 +269,7 @@ pub(crate) fn edited_files(session: &str, root: &Path, n: usize) -> Vec<String> 
 /// files are its own, in its repo (the filename hash is one-way).
 pub(crate) fn record_edits(path: &Path, worktree: &str, session: &str, files: &[String]) {
     let Some(at) = now_rfc3339() else { return };
+    crate::session::forget_sessions();
     if let Some(parent) = path.parent()
         && std::fs::create_dir_all(parent).is_ok()
     {
@@ -307,6 +311,13 @@ fn systemtime_to_rfc3339(st: SystemTime) -> Option<String> {
 mod tests {
     use super::{STALE_SECS, head_branch, prune_sessions};
     use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn edit_logs_live_in_their_own_dir() {
+        let p = super::edits_path("s", std::path::Path::new("/w"));
+        assert_eq!(p.parent().unwrap().file_name().unwrap(), "edits");
+        assert_eq!(p.extension().unwrap(), "jsonl");
+    }
 
     #[test]
     fn prune_drops_only_stale_session_files() {

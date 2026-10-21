@@ -207,8 +207,15 @@ mod tests {
         );
         // a new pull (view gone) reads the on-disk caches: same verdicts, no
         // diff, no log, no merge-base — only the ref listings are read again
+        let walks = spawns("rev-list --no-merges");
+        assert!(walks > 0);
         super::super::view::forget();
         assert_eq!(pass(), cold);
+        assert_eq!(
+            spawns("rev-list --no-merges"),
+            walks,
+            "the squash verdicts of this HEAD come off the disk, no commit walk"
+        );
         assert_eq!(
             (spawns("log -p"), spawns("diff"), bases()),
             (logs, diffs, 1)
