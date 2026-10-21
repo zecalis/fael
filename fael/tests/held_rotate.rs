@@ -150,3 +150,24 @@ fn done_states_the_evidence_under_each_row() {
     let per_row = out.matches("inspect:").count();
     assert_eq!(per_row, 5, "{out}");
 }
+
+#[test]
+fn done_since_leaves_out_what_start_named() {
+    let (d, s, ids) = repo();
+    let t0 = fael_core::rfc3339(fael_core::now_ms());
+    let start = run(&d, &s, "S1", &["held", "start"], "src/\n");
+    let started = named(&start, &ids);
+    assert_eq!(started.len(), 3, "{start}");
+    let with = run(
+        &d,
+        &s,
+        "S2",
+        &["held", "done", "--since", &t0],
+        "src/a.rs\n",
+    );
+    let got = named(&with, &ids);
+    assert_eq!(got.len(), 4, "{with}");
+    assert!(got.iter().all(|i| !started.contains(i)), "{with}");
+    let none = run(&d, &s, "S3", &["held", "done"], "src/a.rs\n");
+    assert_eq!(named(&none, &ids).len(), 5, "{none}");
+}

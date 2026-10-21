@@ -113,7 +113,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("kickoff", [] | [_]) => find::kickoff(&a, rest.first()).map(|()| ExitCode::SUCCESS),
         ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),
         // hidden: what fael-crew asks for mid-`chunk start|done` (see held.rs)
-        ("held", [kind]) => held::cmd(kind),
+        ("held", [kind]) => held::cmd(kind, a.one("since")),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),

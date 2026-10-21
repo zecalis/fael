@@ -130,6 +130,8 @@ pub(crate) fn done(
     let branch = st.run_branch(uid, here.run).filter(|b| !on_trunk(b));
     // a run `run end` ended kept its lane's diff then: the lane may be rebased since
     let kept = st.claimed_at_end(uid, here.run);
+    // the run's start, read before done ends it: held rows `start` named after it are not repeated
+    let started = st.run_started(uid, here.run);
     st.done_review(uid, handoff, pr, out, a.one("review").as_deref(), here)?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
@@ -145,7 +147,7 @@ pub(crate) fn done(
     // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
     // ready — the agent judges, done never closes or bumps
     if let Some(d) = &diff {
-        print!("{}", crate::fael_bin::held("done", d));
+        print!("{}", crate::fael_bin::held_done(d, started.as_deref()));
     }
     if let (Some(trunk), Some(_)) = (trunk, pr) {
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());

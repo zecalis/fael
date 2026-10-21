@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::io::Read;
 use std::process::ExitCode;
 
-pub(crate) fn cmd(kind: &str) -> Result<ExitCode, String> {
+pub(crate) fn cmd(kind: &str, since: Option<String>) -> Result<ExitCode, String> {
     if kind == "repos" {
         let paths = crate::find::owner::repos();
         paths.iter().for_each(|p| println!("{}", p.display()));
@@ -26,7 +26,10 @@ pub(crate) fn cmd(kind: &str) -> Result<ExitCode, String> {
             contracts(&r, &files);
             print!("{}", hook::held_start(&r, &files));
         }
-        "done" => print!("{}", hook::held_text(&r, &files)),
+        "done" => {
+            let since = since.as_deref().and_then(core::ts_ms);
+            print!("{}", hook::held_text(&r, &files, since))
+        }
         _ => return Err(format!("held: unknown kind {kind:?} — start|done|repos")),
     }
     Ok(ExitCode::SUCCESS)

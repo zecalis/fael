@@ -214,6 +214,18 @@ impl Store {
             .flatten()
     }
 
+    /// When the latest run of `uid` (or `run`'s) started, as stored. None = no run.
+    pub fn run_started(&self, uid: &str, run: Option<&str>) -> Option<String> {
+        self.conn
+            .query_row(
+                "SELECT r.started FROM run r JOIN chunk c ON c.id = r.chunk
+                 WHERE c.uid = ?1 AND (?2 IS NULL OR r.start = ?2) ORDER BY r.id DESC LIMIT 1",
+                params![uid, run],
+                |q| q.get(0),
+            )
+            .ok()
+    }
+
     /// Start `run`'s live rows (a pair is one start): uid, branch, worktree.
     pub fn run_rows(&self, run: &str) -> Result<Vec<RunRow>, String> {
         let mut q = self

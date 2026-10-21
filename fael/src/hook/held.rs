@@ -204,12 +204,18 @@ pub(super) fn line(c: &Ctx) -> Option<Line> {
 
 /// `fael chunk done`: the held text over the files the chunk touched, at most
 /// `DONE_MAX` rows (never-shown first, see `held_rotate`), then where the rest are. Empty when none.
-pub(crate) fn done_text(r: &crate::Repo, files: &[String]) -> String {
+pub(crate) fn done_text(r: &crate::Repo, files: &[String], since: Option<i64>) -> String {
     let mut log = crate::read(r);
     super::changed::mark_dormant(r, &mut log);
     let al = crate::aliases::load(r, &log, true);
     let mut found = select(&log, &r.root, &al, files, "");
-    super::held_rotate::order(&mut found, &super::held_rotate::load(&r.root));
+    let seen = super::held_rotate::load(&r.root);
+    // `since` = the chunk's start: a row named at or after it was shown by this
+    // chunk's `start`, so done does not repeat it. None keeps every row.
+    if let Some(t) = since {
+        found.retain(|(w, _)| seen.get(&w.id).is_none_or(|&ms| (ms as i64) < t));
+    }
+    super::held_rotate::order(&mut found, &seen);
     let (head, rest) = found.split_at(found.len().min(DONE_MAX));
     let ev = super::held_evidence::lines(&log, &r.root, &al, head);
     let mut out = text_with(&log, head, &ev);
