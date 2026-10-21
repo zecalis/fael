@@ -59,6 +59,10 @@ pub struct Brief {
     /// `(title, handoff, touched)`: the done / review word of each chunk this one is after,
     /// and the files its done claimed (one path per line, empty when none)
     pub after: Vec<(String, String, String)>,
+    /// the same for done chunks that touched files under this scope since the brief was written
+    /// (newest first, capped), and how many more there were
+    pub by_file: Vec<(String, String, String)>,
+    pub by_file_more: usize,
     /// the run this start took over or restarted — where the last agent stopped
     pub resume: Option<Prev>,
     /// the ledger issue ids it fixes (`add --issue`); the CLI swaps each for its row's text
@@ -316,6 +320,8 @@ fn brief(tx: &Transaction, id: i64, skip: u32, start: Option<&str>) -> Result<Br
                     said: vec![],
                     notes: vec![],
                     after: vec![],
+                    by_file: vec![],
+                    by_file_more: 0,
                     resume: None,
                     issues: vec![],
                 };
@@ -367,21 +373,8 @@ fn brief(tx: &Transaction, id: i64, skip: u32, start: Option<&str>) -> Result<Br
     )?;
     b.notes = texts(tx, &since("by = 'note'"), &b.uid)?;
     b.issues = super::issue::of(tx, id)?;
-    let mut q = tx
-        .prepare(
-            "SELECT c.title, e.text, COALESCE(c.touched, '') FROM edge g
-             JOIN chunk c ON c.id = g.dst
-             JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid
-                                       AND by = 'agent' AND to_state IN ('done', 'review'))
-             WHERE g.src = ?1 AND g.kind = 'after' AND e.text != ''
-             ORDER BY c.seq",
-        )
-        .map_err(err)?;
-    b.after = q
-        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)?;
+    b.after = super::handoff::after(tx, id)?;
+    (b.by_file, b.by_file_more) = super::handoff::by_file(tx, id, b.scope.as_deref())?;
     Ok(b)
 }
 

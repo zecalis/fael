@@ -33,6 +33,7 @@ const VALUE_FLAGS: &[&str] = &[
     "key",
     "kind",
     "label",
+    "left",
     "limit",
     "map",
     "model",

@@ -79,11 +79,28 @@ fn done_out_copies_the_output_per_run() {
     let d = repo();
     let u = add(&d);
     assert!(fael(&d, &["chunk", "start", &u, "--run", "R1"]).0);
-    let (ok, _, err) = fael(&d, &["chunk", "done", &u, "h", "--out", "nope.png"]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "chunk", "done", &u, "h", "--left", "none", "--out", "nope.png",
+        ],
+    );
     assert!(!ok && err.contains("does not exist"), "{err}");
     std::fs::create_dir_all(d.join("out/img")).unwrap();
     std::fs::write(d.join("out/img/a.png"), "png").unwrap();
-    let (ok, _, err) = fael(&d, &["chunk", "done", &u, "two images", "--out", "out/img"]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "done",
+            &u,
+            "two images",
+            "--left",
+            "none",
+            "--out",
+            "out/img",
+        ],
+    );
     assert!(ok, "{err}");
     let kept = d.join(".git/fael/out").join(&u).join("R1/img/a.png");
     assert_eq!(std::fs::read_to_string(kept).unwrap(), "png");
@@ -181,7 +198,9 @@ fn an_agent_start_keeps_its_session_through_done() {
             .success()
     };
     assert!(with(&["chunk", "start", &u]));
-    assert!(with(&["chunk", "done", &u, "shipped", "--pr", "7"]));
+    assert!(with(&[
+        "chunk", "done", &u, "shipped", "--left", "none", "--pr", "7"
+    ]));
     let (_, out, _) = fael(&d, &["board", "--json"]);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["projects"][0]["chunks"][0]["run"]["session"], "S9", "{v}");
@@ -263,12 +282,25 @@ fn a_bare_start_takes_the_approval_and_done_keeps_the_review() {
     ];
     assert!(fael(&d, &approve).0);
     assert!(fael(&d, &["chunk", "start", &u, "--run", "R1"]).0);
-    let (ok, _, err) = fael(&d, &["chunk", "done", &u, "h", "--review", "meh"]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "chunk", "done", &u, "h", "--left", "none", "--review", "meh",
+        ],
+    );
     assert!(
         !ok && err.contains("--review is clean|fixed|failed"),
         "{err}"
     );
-    assert!(fael(&d, &["chunk", "done", &u, "h", "--review", "fixed"]).0);
+    assert!(
+        fael(
+            &d,
+            &[
+                "chunk", "done", &u, "h", "--left", "none", "--review", "fixed"
+            ]
+        )
+        .0
+    );
     let (_, json, _) = fael(&d, &["board", "--json"]);
     let b: serde_json::Value = serde_json::from_str(&json).unwrap();
     let run = &b["projects"][0]["chunks"][0]["run"];
@@ -311,12 +343,15 @@ fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
     let sub = d.join("gen");
     std::fs::create_dir_all(&sub).unwrap();
     std::fs::write(sub.join("a.png"), "png").unwrap();
-    let (ok, _, err) = fael(&sub, &["chunk", "done", &u, "h", "--run", "R0"]);
+    let (ok, _, err) = fael(
+        &sub,
+        &["chunk", "done", &u, "h", "--left", "none", "--run", "R0"],
+    );
     assert!(!ok && err.contains("not R0"), "{err}");
     let (ok, out, err) = fael(
         &sub,
         &[
-            "chunk", "done", &u, "drawn", "--run", "R1", "--out", "a.png",
+            "chunk", "done", &u, "drawn", "--left", "none", "--run", "R1", "--out", "a.png",
         ],
     );
     assert!(ok, "{err}");

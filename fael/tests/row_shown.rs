@@ -179,7 +179,7 @@ fn a_done_bump_stamps_done() {
         &d,
         &s,
         Some("SD"),
-        &["chunk", "done", &chunk, "h", "--run", "R1"],
+        &["chunk", "done", &chunk, "h\nleft: none", "--run", "R1"],
     );
     assert!(out.contains(&full[..8]), "{out}");
     fael(&d, &s, Some("SD"), &["bump", &full]);

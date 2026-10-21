@@ -55,7 +55,7 @@ fn a_note_retires_when_its_chunk_is_done() {
     let a = f(&["chunk", "add", "a", "--brief", "b"]);
     f(&["chunk", "start", &a, "--run", "R1"]);
     assert!(f(&["find", "stopped"]).contains("stopped at step two"));
-    f(&["chunk", "done", &a, "h", "--run", "R1"]);
+    f(&["chunk", "done", &a, "h", "--left", "none", "--run", "R1"]);
     assert!(f(&["find", "stopped"]).starts_with("no open row matches"));
     let all = f(&["find", "stopped", "--all"]);
     assert!(all.contains("(retired)"), "{all}");
@@ -77,7 +77,7 @@ fn a_handoff_note_with_no_stamped_session_stays() {
     ]);
     let a = f(&["chunk", "add", "a", "--plan", "demo", "--brief", "b"]);
     f(&["chunk", "start", &a, "--run", "R1", "--no-worktree"]);
-    f(&["chunk", "done", &a, "h", "--run", "R1"]);
+    f(&["chunk", "done", &a, "h", "--left", "none", "--run", "R1"]);
     // the run's session is stamped by the Stop hook, not by start; here: unproven, stays
     assert!(f(&["find", "where it stopped"]).contains("where it stopped"));
 }

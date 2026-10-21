@@ -62,7 +62,9 @@ fn done_takes_the_pr_url_and_refuses_another_repos() {
         run(
             &d,
             &state,
-            &["chunk", "done", &a, "h", "--pr", pr, "--run", "R1"],
+            &[
+                "chunk", "done", &a, "h", "--left", "none", "--pr", pr, "--run", "R1",
+            ],
         )
     };
     let err = String::from_utf8_lossy(&done("zecalis/fael#7").stderr).into_owned();

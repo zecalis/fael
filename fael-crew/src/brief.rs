@@ -16,6 +16,7 @@ pub fn rules(uid: &str) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
+         - leftovers are rows, not PR prose: file each first (`fael add issue … --files <f>` or `fael chunk add …`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…`; a `finished:` note says it as its own `left: none|<id|uid>,…` line — done refuses without it\n\
          - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
          - you triggered Windows CI (`gh workflow run ci.yml --ref <branch>`)? wait for it (`gh run watch <id> --exit-status`) and write pass, or fail with the failing test, in the done text — never just \"triggered\"\n\
          - the done text (or the `finished:` note) is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
@@ -60,6 +61,18 @@ fn resume(o: &mut String, p: &Prev) {
             o,
             "branch {b} in {wt} — what it did: `git log origin/main..{b}` · `git status`"
         );
+    }
+}
+
+/// Each chunk's hand-off (its `left:` line is part of it) and the files its done claimed.
+fn handoffs(o: &mut String, how: &str, all: &[(String, String, String)]) {
+    for (who, text, scope) in all {
+        let _ = writeln!(o, "\n{who}, {how}:");
+        let _ = writeln!(o, "> {}", text.replace('\n', "\n> "));
+        let files: Vec<&str> = scope.lines().filter(|l| !l.is_empty()).collect();
+        if !files.is_empty() {
+            let _ = writeln!(o, "files it touched: {}", files.join(", "));
+        }
     }
 }
 
@@ -120,16 +133,14 @@ impl Started {
             );
             quote(&mut o, "owner said", &c.said);
             quote(&mut o, "notes left for this chunk", &c.notes);
-            for (who, text, scope) in &c.after {
-                quote(
-                    &mut o,
-                    &format!("{who}, before this, handed off"),
-                    std::slice::from_ref(text),
-                );
-                let files: Vec<&str> = scope.lines().filter(|l| !l.is_empty()).collect();
-                if !files.is_empty() {
-                    let _ = writeln!(o, "files it touched: {}", files.join(", "));
-                }
+            handoffs(&mut o, "before this, handed off", &c.after);
+            handoffs(
+                &mut o,
+                "touched files in this scope, handed off",
+                &c.by_file,
+            );
+            if c.by_file_more > 0 {
+                let _ = writeln!(o, "({} more such chunks not shown)", c.by_file_more);
             }
         }
         self.plan_context(&mut o);

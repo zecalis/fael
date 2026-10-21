@@ -39,7 +39,11 @@ fn ship(d: &Path, state: &Path, uid: &str, branch: &str, file: &str, done: &[&st
     std::fs::write(d.join(file), branch).unwrap();
     git(d, &["add", file]);
     git(d, &["commit", "-qm", branch]);
-    fael(d, state, &[&["chunk", "done", uid, "h"], done].concat());
+    fael(
+        d,
+        state,
+        &[&["chunk", "done", uid, "h", "--left", "none"], done].concat(),
+    );
     git(d, &["switch", "-q", "main"]);
 }
 
@@ -130,7 +134,7 @@ fn done_says_which_files_conflict_with_the_base() {
         std::fs::write(d.join(file), branch).unwrap();
         git(&d, &["add", file]);
         git(&d, &["commit", "-qm", branch]);
-        f(&["chunk", "done", uid, "h", "--pr", "5"])
+        f(&["chunk", "done", uid, "h", "--left", "none", "--pr", "5"])
     };
     // main moves on under a.txt; the checkout's fetched base is origin/main
     std::fs::write(d.join("a.txt"), "main").unwrap();

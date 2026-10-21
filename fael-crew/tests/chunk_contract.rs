@@ -93,7 +93,7 @@ fn start_prints_the_contracts_on_its_scope_and_done_says_what_left_it() {
         git(&d, &["add", p]);
     }
     git(&d, &["commit", "-qm", "lane"]);
-    let out = f(&["chunk", "done", &a, "h", "--run", "R"]);
+    let out = f(&["chunk", "done", &a, "h", "--left", "none", "--run", "R"]);
     let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
     let want = "declared scope: a/\noutside declared scope: b/y.rs (overlaps open chunk inbox/b)\noutside declared scope: c/new.rs\n";
     // the held lines over the touched files follow (plan fael-row-retire w2)

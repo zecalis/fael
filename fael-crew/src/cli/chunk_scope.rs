@@ -41,6 +41,39 @@ pub(crate) fn closed_warnings(
     log: &fael_core::Log,
     uid: &str,
 ) -> Vec<String> {
+    closed_cites(title, brief, log)
+        .into_iter()
+        .map(|(cite, first)| closed_line(&cite, &first, uid))
+        .collect()
+}
+
+/// `fael chunk start` (issue 01M5FMHQX): a brief citing a closed row is refused before
+/// anything is claimed; the correction goes in a note, `--force` starts anyway.
+pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> {
+    let b = s.show(uid)?;
+    if s.chunk_place(&b.uid)?
+        .is_some_and(|(st, ..)| st == "running")
+    {
+        return Ok(());
+    }
+    let cites = closed_cites(&b.title, &b.brief, &crate::read(r));
+    if cites.is_empty() {
+        return Ok(());
+    }
+    let lines: Vec<String> = cites
+        .iter()
+        .map(|(cite, first)| format!("  {cite} — closed: {first}"))
+        .collect();
+    Err(format!(
+        "rejected: chunk {} brief cites closed rows:\n{}\nput the correction in `fael chunk note {} \"<text>\"` (never `chunk edit`: it clears the owner's approval); `--force` starts anyway",
+        b.uid,
+        lines.join("\n"),
+        b.uid
+    ))
+}
+
+/// `(cite, close text's first line)` of each closed row the brief names.
+fn closed_cites(title: &str, brief: &str, log: &fael_core::Log) -> Vec<(String, String)> {
     let text = format!("{title} {brief}");
     let shut = fael_core::closed(log);
     let mut seen: HashSet<&str> = HashSet::new();
@@ -52,7 +85,7 @@ pub(crate) fn closed_warnings(
         if !shut.contains(row.id.as_str()) || !seen.insert(row.id.as_str()) {
             continue;
         }
-        out.push(closed_line(tok, log, &row.id, uid));
+        out.push((tok.to_string(), close_first_line(log, &row.id)));
     }
     for k in fael_core::keys(log, None) {
         if !fael_core::names_key(&text, &k.key) {
@@ -67,14 +100,13 @@ pub(crate) fn closed_warnings(
         if !shut.contains(row.id.as_str()) || !seen.insert(row.id.as_str()) {
             continue;
         }
-        out.push(closed_line(&k.key, log, &row.id, uid));
+        out.push((k.key.clone(), close_first_line(log, &row.id)));
     }
     out
 }
 
 /// One closed-ref warning: the close text's first line, so the planner sees why it settled.
-fn closed_line(cite: &str, log: &fael_core::Log, id: &str, uid: &str) -> String {
-    let first = close_first_line(log, id);
+fn closed_line(cite: &str, first: &str, uid: &str) -> String {
     format!("warning: brief cites {cite} — closed: {first} — fael chunk edit {uid} --brief …")
 }
 

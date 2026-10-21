@@ -284,7 +284,9 @@ fn a_done_plan_shows_counts_and_lists_no_chunk() {
     let uid = f(&["chunk", "add", "o1", "--plan", "old", "--brief", "b"]);
     let uid = uid.split_whitespace().next().unwrap();
     f(&["chunk", "start", uid, "--no-worktree"]);
-    f(&["chunk", "done", uid, "shipped", "--pr", "1"]);
+    f(&[
+        "chunk", "done", uid, "shipped", "--left", "none", "--pr", "1",
+    ]);
     f(&["plan", "done", "old"]);
     let v: Value = serde_json::from_str(&fael(&tmp, &state, &["board", "--json"])).unwrap();
     let p = &v["projects"][0];
