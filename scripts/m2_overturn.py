@@ -5,16 +5,19 @@ is closed or superseded later. Read each overturned row: only one that was
 already wrong at bump time counts against (b). Totals match `fael stats --json`
 said.held.acted when run over every repo with usage.
 Retires stamped with a bulk sha (one that closed >= 20 rows) are cut, as in m1.
-Usage: m2_overturn.py <git-common-dir>/fael/log
+Usage: m2_overturn.py <git-common-dir>/fael/log [--until RFC3339]
+--until cuts every row, close and supersede stamped after it (window end).
 """
 import json,sys,glob
 from collections import Counter,defaultdict
 L=sys.argv[1]
+U=sys.argv[sys.argv.index('--until')+1] if '--until' in sys.argv else '9'
 rows,closes={},[]
 for f in glob.glob(L+'/**/*.jsonl',recursive=True):
     for line in open(f):
         try: r=json.loads(line)
         except: continue
+        if r['ts']>U: continue
         (closes.append(r) if f.endswith('.close.jsonl') else rows.__setitem__(r['id'],r))
 rev={r['restores'] for r in rows.values() if r.get('restores')}
 shacnt=Counter(c.get('sha') for c in closes)

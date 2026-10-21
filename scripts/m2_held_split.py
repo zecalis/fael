@@ -3,16 +3,19 @@
 part (held) vs all (all-changed), split by from:user. An approximation of
 `fael stats` lifecycle (no rename aliases, no retired-note proof): fael read 31
 vs lifecycle 33 decisions on 2026-10-21.
-Usage (cwd = repo root): m2_held_split.py <repo-root> <git-common-dir>/fael/log
+Usage (cwd = repo root): m2_held_split.py <repo-root> <git-common-dir>/fael/log [--until RFC3339]
+--until drops rows and closes stamped after it; file hashes are still read from disk now.
 """
 import json,glob,subprocess,sys,os
 from collections import Counter
 root,L=sys.argv[1],sys.argv[2]
+U=sys.argv[sys.argv.index('--until')+1] if '--until' in sys.argv else '9'
 rows,gone={},set()
 for f in glob.glob(L+'/**/*.jsonl',recursive=True):
     for l in open(f):
         try: r=json.loads(l)
         except: continue
+        if r['ts']>U: continue
         if f.endswith('.close.jsonl'):
             if r.get('ref'): gone.add(r['ref'])
         else: rows[r['id']]=r
