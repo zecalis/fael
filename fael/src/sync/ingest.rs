@@ -110,9 +110,14 @@ pub(super) fn ingest(
     closes: &[core::Row],
 ) -> Result<usize, String> {
     let mut n = 0;
+    let folded = folded_closes(&log.rows);
     for (fetched, is_close) in [(rows, false), (closes, true)] {
         let local = if is_close { &log.closes } else { &log.rows };
         for row in core::sync::missing(fetched, local) {
+            // a close `compact` folded into its row is not a missing close
+            if is_close && folded.contains(&row.id) {
+                continue;
+            }
             // a leaked row is never carried in: it would be re-served under
             // every ref and come back after `fael purge`. Label + id only.
             if let Some(what) = core::secret(&row.to_line()) {
@@ -143,4 +148,11 @@ pub(super) fn ingest(
 fn put(r: &Repo, row: &core::Row, is_close: bool) -> Result<(), String> {
     let dir = r.journal.as_deref().unwrap_or(&r.fael);
     core::append(dir, row, is_close).map(drop)
+}
+
+/// Ids of the closes `compact` folded into their rows (`closed.id`): the
+/// ref still carries them raw, but the local log already has them.
+pub(super) fn folded_closes(rows: &[core::Row]) -> HashSet<String> {
+    let id = |r: &core::Row| r.extra.get("closed")?.get("id")?.as_str().map(String::from);
+    rows.iter().filter_map(id).collect()
 }

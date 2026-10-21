@@ -14,8 +14,10 @@
 //! `private` (public source repo, memory in a separate private remote),
 //! `secret` (a leaked row is neither pushed nor ingested, never echoed),
 //! `robust` (a bad ref or row is skipped, ingest never dirties the tree, one sync at a time),
+//! `compact` (prune and folded closes stay gone after a sync),
 //! `heal` (purge tombstones, an earlier writer id, meta at the first push, the pushed count).
 
+mod compact;
 mod errors;
 mod heal;
 mod imported;
