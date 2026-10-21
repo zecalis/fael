@@ -174,13 +174,7 @@ impl View {
         };
         let mut pending: Vec<(String, String, String)> = vec![];
         // squash verdicts proven on an earlier pull at this HEAD (object ids only)
-        let todo: Vec<&str> = resolved
-            .iter()
-            .flatten()
-            .map(|(t, _)| t.as_str())
-            .filter(|t| !(self.tips.contains(*t) && self.merged.contains(*t)))
-            .collect();
-        let known = super::patch_ids::squash_cached(&self.root, &head, &todo);
+        let known = super::patch_ids::squash_cached(&self.root, &head, &wanted);
         let mut proven: Vec<(String, bool)> = vec![];
         for (tip, anc) in resolved.iter().flatten() {
             if self.verdicts.contains_key(&(tip.clone(), *anc)) {
