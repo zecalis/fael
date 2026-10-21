@@ -173,8 +173,21 @@ impl View {
             super::bases::merge_bases(&self.root, &head, &wanted)
         };
         let mut pending: Vec<(String, String, String)> = vec![];
+        // squash verdicts proven on an earlier pull at this HEAD (object ids only)
+        let todo: Vec<&str> = resolved
+            .iter()
+            .flatten()
+            .map(|(t, _)| t.as_str())
+            .filter(|t| !(self.tips.contains(*t) && self.merged.contains(*t)))
+            .collect();
+        let known = super::patch_ids::squash_cached(&self.root, &head, &todo);
+        let mut proven: Vec<(String, bool)> = vec![];
         for (tip, anc) in resolved.iter().flatten() {
             if self.verdicts.contains_key(&(tip.clone(), *anc)) {
+                continue;
+            }
+            if let Some(v) = known.get(tip) {
+                self.verdicts.insert((tip.clone(), *anc), *v);
                 continue;
             }
             let base = bases.get(tip).cloned().flatten();
@@ -204,11 +217,20 @@ impl View {
             bs.dedup();
             let ids = super::patch_ids::head_ids(&self.root, &head, &bs);
             for (tip, base, want) in pending {
+                // a base git could not list has no entry: a failure, not a verdict
+                let listed = ids.contains_key(&base);
                 let v = ids.get(&base).is_some_and(|s| s.contains(&want));
                 for anc in [true, false] {
                     self.verdicts.insert((tip.clone(), anc), v);
                 }
+                if listed {
+                    proven.push((tip, v));
+                }
             }
+        }
+        if !proven.is_empty() {
+            let p: Vec<(&str, bool)> = proven.iter().map(|(t, v)| (t.as_str(), *v)).collect();
+            super::patch_ids::squash_put(&self.root, &head, &p);
         }
         resolved
             .iter()

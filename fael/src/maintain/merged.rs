@@ -126,7 +126,7 @@ pub(super) fn merged_prs(root: &Path) -> Option<BTreeMap<String, Vec<Merge>>> {
 /// The one `gh pr list --state all` call per process, shared by `[Merged]`
 /// and `[Orphan]` (each used to spawn its own, ~1.5 s apiece). The union of
 /// fields both read; None = no `gh` or it failed.
-// ponytail: newest 200 PRs of any state: ~1.4 s per 100-PR page pair, so a larger limit
+// ponytail: newest 200 PRs of any state: ~0.7 s per 100 PRs, so a larger limit
 // costs back what sharing saves. On this repo 198 of them are merged (was 200
 // merged), so coverage is equal in practice; raise --limit if a repo outgrows it.
 pub(super) fn gh_prs(root: &Path) -> Option<String> {
