@@ -52,7 +52,7 @@ bug, cuts noise, removes code, strengthens lifecycle or stats, or brings work in
 from the team's other systems (intake, decision 01M4TJTW). The owner's
 window is a separate SwiftUI app reading `fael board --json`: it watches, notifies, and starts
 an agent only on the owner's click or from a queue of chunks the owner approved (dev chunks:
-the owner, one per session; the project's lead — the fael-lead skill, part of fael crew, decision 01M4SQ9B — only for multi-chunk work that needs a shared contract, after the owner approves its set, decision 01M5FMHQZ superseding 01M5FH2P); the planner
+the owner, one per session; the project's lead (part of fael crew, decision 01M4SQ9B) only for multi-chunk work that needs a shared contract, after the owner approves its set, decision 01M5FMHQZ superseding 01M5FH2P); the planner
 agent applies merge / split / pair itself, and every git merge is the owner's. `fael stats` still shows what fael handed over and what
 followed (capture → acted → outcome), never the counterfactual, so claims about value say
 only that.
@@ -150,7 +150,7 @@ unchanged, only slower:
 | contract | `rules()` in `fael-crew/src/brief.rs`, printed by every `fael chunk start` | habits every chunk needs, any area or client: checkpoint, ask the owner, hand-off, a fresh-session check against Done before done |
 | bar | the plan's Done and Constraints sections, printed in every brief | what "good" means for this plan: dev gates and criteria, marketing VOICE.md and source rules |
 | judgment skills | fael-plan, fael-review, fael-content | how to cut, check, plan posts |
-| orchestration | fael-lead (fael crew) | only running chunks in parallel without collisions |
+| overlap | `fael chunk start` | claim plus an overlap check, so two agents do not take the same chunk or files |
 
 No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Constraints.
 

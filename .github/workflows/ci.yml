@@ -75,7 +75,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     # ponytail: Windows runs on main only (best effort): its tests spawn git and fael ~8x
     # slower and set every PR's wall time. Add it back to the PR list if Windows breaks often.
-    # A fael-lead wave PR (head plan/<plan>/w<n>) runs it: few of them, each many lanes
+    # A wave PR (head plan/<plan>/w<n>) runs it: few of them, each many lanes
     strategy:
       fail-fast: false
       matrix:
