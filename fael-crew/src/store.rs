@@ -92,7 +92,14 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", false)
             .map_err(err)?;
         let mut s = Store { conn };
-        s.migrate(tables, columns)?;
+        // a lock step that skips the busy handler (Windows, loaded runner) fails with BUSY
+        // although another first open is about to finish: migrate is one transaction, retry it
+        while let Err(e) = s.migrate(tables, columns) {
+            if !e.ends_with("database is locked") || t.elapsed() > wait * 3 {
+                return Err(e);
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
         s.conn
             .pragma_update(None, "foreign_keys", true)
             .map_err(err)?;
