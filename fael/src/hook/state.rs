@@ -313,6 +313,13 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     #[test]
+    fn edit_logs_live_in_their_own_dir() {
+        let p = super::edits_path("s", std::path::Path::new("/w"));
+        assert_eq!(p.parent().unwrap().file_name().unwrap(), "edits");
+        assert_eq!(p.extension().unwrap(), "jsonl");
+    }
+
+    #[test]
     fn prune_drops_only_stale_session_files() {
         let d = std::env::temp_dir().join(format!("fael-prune-{}", fael_core::ulid()));
         std::fs::create_dir_all(&d).unwrap();

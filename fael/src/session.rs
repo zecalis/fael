@@ -194,8 +194,10 @@ fn active_sessions(root: &Path) -> Vec<Vec<hook::Edit>> {
     v
 }
 
+type Memo = ((PathBuf, PathBuf), Vec<Vec<hook::Edit>>);
+
 thread_local! {
-    static SESSIONS_MEMO: std::cell::RefCell<Option<((PathBuf, PathBuf), Vec<Vec<hook::Edit>>)>> =
+    static SESSIONS_MEMO: std::cell::RefCell<Option<Memo>> =
         const { std::cell::RefCell::new(None) };
 }
 
