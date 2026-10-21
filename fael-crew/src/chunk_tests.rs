@@ -138,9 +138,15 @@ fn run_end_forced_takeover_and_fencing() {
     let e = s.after(&c, &other, "why", &here("/b")).unwrap_err();
     assert!(e.contains("taken over"), "after is fenced too: {e}");
     assert_eq!(live(&s, &c), 1, "a fenced after ends no run");
-    let e = start(&mut s, &other, "/c").unwrap_err();
-    assert!(e.contains(&format!("holds run {r3}")), "{e}");
-    assert_eq!(state(&s, &other), "open", "a refused start claims nothing");
+    // one worktree is one seat: another chunk's live run there ends, the start goes through
+    start(&mut s, &other, "/c").unwrap();
+    assert_eq!((live(&s, &c), live(&s, &other)), (0, 1));
+    assert_eq!(
+        state(&s, &c),
+        "running",
+        "the ended run keeps its chunk's state"
+    );
+    let r3 = start(&mut s, &c, "/c").unwrap();
     s.done(&c, "shipped", Some(7), None, &here("/c")).unwrap();
     // push pr is the owner's ok: a PR lands in done, no review
     assert_eq!((state(&s, &c), live(&s, &c)), ("done".into(), 0));

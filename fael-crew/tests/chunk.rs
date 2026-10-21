@@ -53,12 +53,13 @@ fn a_lost_start_prints_no_brief_and_its_run_end_ends_nothing() {
         ok && brief.starts_with("fael run R1 · 1 chunk\n"),
         "{brief}"
     );
-    let (ok, out, err) = fael(&d, &["chunk", "start", &u, "--run", "R2"]);
+    // a start outside R1's worktree (same worktree = same seat, taken over) loses
+    let (ok, out, err) = fael(&d, &["chunk", "start", &u, "--run", "R2", "--no-worktree"]);
     assert!(!ok && out.is_empty(), "the shell opens no agent: {out}");
     assert!(err.contains("held by run R1 (claude)"), "{err}");
     // the loser's cleanup: exit 0, R1 still holds
     assert!(fael(&d, &["run", "end", "R2"]).0);
-    let (_, _, err) = fael(&d, &["chunk", "start", &u, "--run", "R3"]);
+    let (_, _, err) = fael(&d, &["chunk", "start", &u, "--run", "R3", "--no-worktree"]);
     assert!(err.contains("held by run R1"), "{err}");
     assert!(fael(&d, &["run", "end", "R1"]).0);
     assert!(fael(&d, &["run", "end", "R1"]).0, "none left is fine");

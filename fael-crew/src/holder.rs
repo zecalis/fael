@@ -52,14 +52,29 @@ pub(super) fn holder_detail(
     .map_err(err)
 }
 
-/// The live start R in a worktree, if any.
-pub(super) fn busy(tx: &Transaction, worktree: &str) -> Result<Option<String>, String> {
+/// The worktree of the chunk's live run, if it has one — the seat that run sits in.
+pub(super) fn holder_worktree(tx: &Transaction, id: i64) -> Result<Option<String>, String> {
     tx.query_row(
-        "SELECT start FROM run WHERE worktree = ?1 AND ended IS NULL LIMIT 1",
-        [worktree],
+        "SELECT worktree FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
+        [id],
         |r| r.get(0),
     )
     .optional()
+    .map(Option::flatten)
+    .map_err(err)
+}
+
+/// End every live run in a worktree: one start per worktree, so a run still live there
+/// belongs to an agent that left. The chunk stays `running`; its next start says so.
+pub(super) fn end_in_worktree(
+    tx: &Transaction,
+    worktree: &str,
+    now: &str,
+) -> Result<usize, String> {
+    tx.execute(
+        "UPDATE run SET ended = ?2 WHERE worktree = ?1 AND ended IS NULL",
+        rusqlite::params![worktree, now],
+    )
     .map_err(err)
 }
 

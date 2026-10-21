@@ -75,7 +75,6 @@ const REJECTS: &[(&str, &str)] = &[
     ("is for issues", "row_state"),
     ("is taken by chunk", "label_taken"),
     ("on no branch", "no_branch"),
-    ("holds run", "chunk_state"),
     ("was already used", "chunk_state"),
     ("cannot become", "chunk_state"),
     ("cannot wait on itself", "chunk_state"),

@@ -292,3 +292,50 @@ fn a_mixed_model_is_recorded_on_the_run_from_approve_or_start() {
     s.start(&b, &o, &here("/b")).unwrap();
     assert_eq!(get(&s, q, &b).as_deref(), Some("mixed"));
 }
+
+fn sess(s: &mut Store, uid: &str, wt: &str, session: &str) -> Result<String, String> {
+    let o = Start {
+        session: Some(session.into()),
+        ..Start::default()
+    };
+    s.start(uid, &o, &here(wt)).map(|x| x.run)
+}
+
+#[test]
+fn a_live_run_in_the_same_worktree_is_taken_over_without_force() {
+    let mut s = Store::open_in_memory().unwrap();
+    let c = add(&mut s, "c", Some("brief"));
+    let r1 = sess(&mut s, &c, "/a", "s1").unwrap();
+    // another worktree still needs --force
+    let e = sess(&mut s, &c, "/b", "s2").unwrap_err();
+    assert!(
+        e.contains(&format!("held by run {r1}")) && e.contains("--force"),
+        "{e}"
+    );
+    assert_eq!(live(&s, &c), 1);
+    // a new session in the same worktree: the seat is its own
+    let r2 = sess(&mut s, &c, "/a", "s3").unwrap();
+    assert_ne!(r1, r2);
+    assert_eq!(live(&s, &c), 1);
+    let ev = get(
+        &s,
+        "SELECT text FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",
+        &c,
+    )
+    .unwrap();
+    assert!(
+        ev.contains("taken over from run") && ev.contains(&r2),
+        "{ev}"
+    );
+}
+
+#[test]
+fn another_chunks_live_run_in_the_worktree_ends_on_start() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    let b = add(&mut s, "b", Some("b"));
+    start(&mut s, &a, "/w").unwrap();
+    start(&mut s, &b, "/w").unwrap();
+    assert_eq!((live(&s, &a), live(&s, &b)), (0, 1));
+    assert_eq!(state(&s, &a), "running", "run end keeps the state");
+}
