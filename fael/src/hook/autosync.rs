@@ -12,15 +12,17 @@
 //! a failed auth costs the turn nothing and nothing retries. `GIT_TERMINAL_PROMPT=0`
 //! turns a credential prompt into a failure instead of a hang; ssh prompts
 //! (host key, passphrase) read `/dev/tty` instead, so OpenSSH gets `BatchMode`.
-// ponytail: the mark is the writer's newest row id, read from the journal at each
-// event; a row filed after the last Stop of a session waits for the next session's
+// ponytail: with a remote set, the mark is the writer's newest row id, read from the
+// journal at each event; without one the session is marked "no-remote" and later
+// events skip both the spawn and the read (a remote set mid-session waits for the
+// next session); a row filed after the last Stop of a session waits for the next session's
 // start (a real SessionEnd event is the upgrade). The session-start sync is never
 // awaited, so its rows reach reads and pushes, not that session's kickoff context. No timeout either — a wedged
 // remote leaves one idle git child until the OS reaps it.
 
 use super::protocol::Event;
 use super::state::{session_key, state_dir};
-use super::stop::seen_before;
+use super::stop::{marked, seen_before};
 use crate::{git, repo_at};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -39,16 +41,20 @@ pub(crate) fn start(e: &Event) {
         return;
     };
     let Ok(repo) = repo_at(&cwd) else { return };
-    // marks the session even without a remote: the git spawn below runs once
-    // per newest row for everyone, not once per turn
     if !repo.cfg.sync_auto {
         return;
     }
-    let kind = format!("sync:{}", newest(&repo));
-    if seen_before(session, &repo.root.to_string_lossy(), &kind) {
+    // remote first: a worktree with none pays one `git config` spawn per
+    // session (the "no-remote" mark), never a journal read
+    let wt = repo.root.to_string_lossy();
+    if marked(session, &wt, "no-remote") {
         return;
     }
     if git(&repo.root, &["config", "fael.remote"]).is_none() {
+        seen_before(session, &wt, "no-remote");
+        return;
+    }
+    if seen_before(session, &wt, &format!("sync:{}", newest(&repo))) {
         return;
     }
     let Ok(exe) = std::env::current_exe() else {
