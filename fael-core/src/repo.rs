@@ -3,7 +3,6 @@
 
 use crate::{Config, Log};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 pub struct Repo {
     pub root: PathBuf,
@@ -62,7 +61,7 @@ pub fn git(dir: &Path, args: &[&str]) -> Option<String> {
 
 /// `git <args>` in `dir`: its exit code and stdout; `None` when git cannot spawn.
 pub fn git_output(dir: &Path, args: &[&str]) -> Option<(Option<i32>, String)> {
-    let o = Command::new("git")
+    let o = crate::gitcmd::git_cmd()
         .args(args)
         .current_dir(dir)
         .output()

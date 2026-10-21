@@ -290,13 +290,13 @@ impl View {
 /// that is no commit in the object store has no entry.
 fn commits_of(root: &Path, shas: &[&str]) -> HashMap<String, String> {
     use std::io::Write;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     if shas.is_empty() {
         return HashMap::new();
     }
     #[cfg(test)]
     super::merged::SPAWNED.with(|s| s.borrow_mut().push("cat-file --batch-check".into()));
-    let Ok(mut child) = Command::new("git")
+    let Ok(mut child) = fael_core::git_cmd()
         .args(["cat-file", "--batch-check"])
         .current_dir(root)
         .stdin(Stdio::piped())

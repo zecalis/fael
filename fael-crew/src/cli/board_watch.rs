@@ -14,7 +14,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
@@ -33,7 +33,7 @@ thread_local! {
 /// from memory until `dir`'s refs move: every git read the board makes depends on refs only.
 pub(crate) fn git_output(dir: &Path, args: &[&str]) -> GitOut {
     let spawn = || {
-        let o = Command::new("git")
+        let o = fael_core::git_cmd()
             .args(args)
             .current_dir(dir)
             .output()

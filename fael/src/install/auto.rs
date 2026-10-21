@@ -242,7 +242,7 @@ fn update(home: &Path, exe: &Path, to: &str) -> Result<(), String> {
 }
 
 fn ls_remote(remote: &str) -> String {
-    Command::new("git")
+    fael_core::git_cmd()
         .args(["ls-remote", "--tags", "--refs", remote])
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::null())

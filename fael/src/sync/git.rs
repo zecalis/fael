@@ -6,7 +6,7 @@
 
 use crate::core;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 /// One fetched ref: its `meta.json` plus both row streams, parsed the way
 /// readers parse (torn tail ignored, bad lines warned, never fatal).
@@ -82,7 +82,7 @@ fn blobs(root: &Path, tree: &str, paths: &[&str]) -> Result<Vec<String>, String>
         return Ok(vec![]);
     }
     let err = |e: &dyn std::fmt::Display| format!("fael: git cat-file --batch: {e}");
-    let mut c = Command::new("git")
+    let mut c = fael_core::git_cmd()
         .args(["cat-file", "--batch"])
         .current_dir(root)
         .stdin(Stdio::piped())
@@ -143,7 +143,7 @@ pub(crate) fn ls_remote(
 /// remote (or its fael namespace) is empty. A transport-level failure is an
 /// error; an empty namespace is not.
 pub(crate) fn ls_prefix(root: &Path, remote: &str, prefix: &str) -> Result<Option<String>, String> {
-    match Command::new("git")
+    match fael_core::git_cmd()
         .args(["ls-remote", remote, &format!("{prefix}*")])
         .current_dir(root)
         .output()
@@ -223,7 +223,7 @@ pub(crate) fn commit_tree(root: &Path, tree: &str, parent: Option<&str>) -> Resu
     let name = crate::git(root, &["config", "user.name"]).unwrap_or_else(|| "fael".into());
     let email =
         crate::git(root, &["config", "user.email"]).unwrap_or_else(|| "fael@localhost".into());
-    let mut c = Command::new("git");
+    let mut c = fael_core::git_cmd();
     c.args(["commit-tree", tree, "-m", "fael sync"]);
     if let Some(p) = parent {
         c.args(["-p", p]);
@@ -253,7 +253,7 @@ pub(crate) fn push(
     refname: &str,
     commit: &str,
 ) -> Result<Option<()>, String> {
-    let o = Command::new("git")
+    let o = fael_core::git_cmd()
         .args(["push", remote, &format!("{commit}:{refname}")])
         .current_dir(root)
         .output()
@@ -278,7 +278,7 @@ pub(crate) fn run(root: &Path, args: &[&str]) -> Result<String, String> {
 /// newline is content (`cat-file`), not framing. Callers trim when the
 /// output is lines or a single sha.
 fn raw(root: &Path, args: &[&str]) -> Result<String, String> {
-    let o = Command::new("git")
+    let o = fael_core::git_cmd()
         .args(args)
         .current_dir(root)
         .output()
@@ -295,7 +295,7 @@ fn raw(root: &Path, args: &[&str]) -> Result<String, String> {
 
 /// Run git with `input` on stdin, return trimmed stdout.
 fn stdin(root: &Path, args: &[&str], input: &str) -> Result<String, String> {
-    let mut c = Command::new("git")
+    let mut c = fael_core::git_cmd()
         .args(args)
         .current_dir(root)
         .stdin(Stdio::piped())
