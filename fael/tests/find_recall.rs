@@ -11,6 +11,10 @@ fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", root.join("state"))
+        // x and y share a key: past the 1 s same-burst window (a slow runner
+        // between two spawned adds) y would supersede x and hide it. Pin the
+        // window open so the setup never depends on the clock.
+        .env("FAEL_BURST_MS", "3600000")
         .output()
         .unwrap();
     let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();

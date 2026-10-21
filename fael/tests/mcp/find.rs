@@ -1,6 +1,6 @@
 //! MCP `find` answers like the CLI: filters, id shapes, text search.
 
-use super::{main_and_worktree, mcp_tool, texts};
+use super::{main_and_worktree, mcp_tool, mcp_tool_env, texts};
 
 /// Issue 01M3HMYS: MCP `find` gains the CLI's `by` and `all` filters.
 #[test]
@@ -155,7 +155,9 @@ fn find_recall_wide_unions_key_sharing_and_unfiled_text() {
     for f in ["src/x.rs", "src/y.rs", "src/z.rs", "src/w.rs"] {
         std::fs::write(wt.join(f), "// x\n").unwrap();
     }
-    let added = mcp_tool(
+    // x and y share a key: past the 1 s same-burst window y would supersede x
+    // and hide it — pin the window open so the setup never depends on the clock
+    let added = mcp_tool_env(
         &wt,
         "add",
         &[
@@ -164,6 +166,7 @@ fn find_recall_wide_unions_key_sharing_and_unfiled_text() {
             serde_json::json!({"kind": "note", "text": "sunset deploy on z", "files": ["src/z.rs"]}),
             serde_json::json!({"kind": "note", "text": "unrelated other", "files": ["src/w.rs"]}),
         ],
+        &[("FAEL_BURST_MS", "3600000")],
     );
     assert!(
         added.iter().all(|v| v["result"]["isError"] == false),
