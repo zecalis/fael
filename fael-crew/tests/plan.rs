@@ -189,3 +189,38 @@ fn the_guessed_plan_and_chunk_calls_answer_or_name_the_real_one() {
         "{err}"
     );
 }
+
+#[test]
+fn plan_edit_replaces_one_passage_of_a_section_through_the_bill() {
+    let d = repo();
+    fael(&d, &["plan", "new", "n", "New work"]);
+    let (_, json, _) = fael(&d, &["plan", "export", "n", "--json"]);
+    let mut bill: serde_json::Value = serde_json::from_str(&json).unwrap();
+    bill["sections"] = serde_json::json!([{"key": "1", "body": "ship n (soon)\nship m\nship m"}]);
+    let file = d.join("bill.json");
+    write(file.clone(), &bill.to_string());
+    let (ok, _, err) = fael(&d, &["plan", "apply", file.to_str().unwrap()]);
+    assert!(ok, "{err}");
+    let edit = |old: &str, new: &str| {
+        let a = [
+            "plan",
+            "edit",
+            "n",
+            "--section",
+            "1",
+            "--replace",
+            old,
+            "--with",
+            new,
+        ];
+        fael(&d, &a)
+    };
+    let (ok, _, err) = edit("nope", "x");
+    assert!(!ok && err.contains("0 matches"), "{err}");
+    let (ok, _, err) = edit("ship m", "x");
+    assert!(!ok && err.contains("occurs 2 times"), "{err}");
+    let (ok, out, err) = edit("(soon)", "(now)");
+    assert!(ok && out.contains("applied (rev "), "{err}{out}");
+    let (_, out, _) = fael(&d, &["plan", "export", "n", "--section", "1"]);
+    assert!(out.ends_with("\nship n (now)\nship m\nship m\n"), "{out}");
+}

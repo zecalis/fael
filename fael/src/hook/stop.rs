@@ -217,6 +217,27 @@ fn stash(session: &str, path: &Path, marker: &str) -> bool {
     false
 }
 
+fn marks_path(session: &str) -> std::path::PathBuf {
+    state_dir()
+        .join("sync-seen")
+        .join(format!("{}.jsonl", session_key(session)))
+}
+
+/// True when this session already marked this worktree + kind (read only).
+pub(super) fn marked(session: &str, worktree: &str, kind: &str) -> bool {
+    if session.is_empty() {
+        return false;
+    }
+    let Ok(s) = std::fs::read_to_string(marks_path(session)) else {
+        return false;
+    };
+    s.lines().any(|line| {
+        // a torn line must not lose the rest
+        serde_json::from_str::<serde_json::Value>(line)
+            .is_ok_and(|v| v["worktree"] == *worktree && v["kind"] == *kind)
+    })
+}
+
 /// True when this session already marked this worktree + kind — else record
 /// the mark and return false. Empty session = no dedupe. Auto sync's
 /// once-per-newest-row guard.
@@ -224,20 +245,10 @@ pub(super) fn seen_before(session: &str, worktree: &str, kind: &str) -> bool {
     if session.is_empty() {
         return false;
     }
-    let path = state_dir()
-        .join("sync-seen")
-        .join(format!("{}.jsonl", session_key(session)));
-    if let Ok(s) = std::fs::read_to_string(&path) {
-        for line in s.lines() {
-            let v: serde_json::Value = match serde_json::from_str(line) {
-                Ok(v) => v,
-                Err(_) => continue, // a torn line must not lose the rest
-            };
-            if v["worktree"] == *worktree && v["kind"] == *kind {
-                return true;
-            }
-        }
+    if marked(session, worktree, kind) {
+        return true;
     }
+    let path = marks_path(session);
     if let Some(parent) = path.parent()
         && std::fs::create_dir_all(parent).is_ok()
     {

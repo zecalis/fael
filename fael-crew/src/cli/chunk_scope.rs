@@ -6,6 +6,8 @@ use fael_crew::{Store, overlap};
 use std::collections::HashSet;
 use std::path::Path;
 
+use super::chunk_scope_skip as skip;
+
 /// A warning on stderr for each scope path of chunk `key` that names nothing under the
 /// repo: its directory is missing, or holds a name within edit distance 2. A new file or
 /// directory under an existing one passes silently.
@@ -136,27 +138,34 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
             if is_check_line(clause) {
                 continue;
             }
-            for p in paths(clause) {
-                let hit = [p.clone()];
-                if !root.join(&p).exists() || overlap(&hit, &scope) {
-                    continue;
+            for sentence in skip::sentences(clause) {
+                for p in paths(sentence) {
+                    let hit = [p.clone()];
+                    // "do not touch X" / "run X" name a path without asking an edit
+                    // (issue 01M5D5FCS)
+                    if !root.join(&p).exists()
+                        || overlap(&hit, &scope)
+                        || skip::skipped(sentence, &p)
+                    {
+                        continue;
+                    }
+                    let holder = others.iter().find(|c| {
+                        c.uid != b.uid
+                            && !["done", "replaced", "dropped"].contains(&c.state.as_str())
+                            && overlap(&hit, &c.scope)
+                    });
+                    let by = holder.map_or(String::new(), |c| {
+                        format!(
+                            " (in {}/{}'s scope)",
+                            c.plan,
+                            c.label.as_deref().unwrap_or(&c.uid)
+                        )
+                    });
+                    eprintln!(
+                        "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope …",
+                        b.uid
+                    );
                 }
-                let holder = others.iter().find(|c| {
-                    c.uid != b.uid
-                        && !["done", "replaced", "dropped"].contains(&c.state.as_str())
-                        && overlap(&hit, &c.scope)
-                });
-                let by = holder.map_or(String::new(), |c| {
-                    format!(
-                        " (in {}/{}'s scope)",
-                        c.plan,
-                        c.label.as_deref().unwrap_or(&c.uid)
-                    )
-                });
-                eprintln!(
-                    "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope …",
-                    b.uid
-                );
             }
         }
     }

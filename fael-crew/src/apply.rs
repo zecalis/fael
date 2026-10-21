@@ -40,6 +40,17 @@ pub enum Op {
     },
 }
 
+impl Op {
+    /// Every chunk key the op names (`--plan` turns labels into uids through these).
+    pub fn keys_mut(&mut self) -> Vec<&mut String> {
+        match self {
+            Op::Merge { chunks, .. } | Op::Pair { chunks } => chunks.iter_mut().collect(),
+            Op::Split { chunk, .. } => vec![chunk],
+            Op::After { chunk, on, .. } => vec![chunk, on],
+        }
+    }
+}
+
 /// One chunk a split makes; no brief = `draft`, as `chunk add`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

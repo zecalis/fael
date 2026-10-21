@@ -208,6 +208,11 @@ pub fn compact(a: &Args) -> Result<ExitCode, String> {
         &core::current_month(),
         &al,
     )?;
+    // a pruned row is tombstoned like a purged one, so `fael sync` cannot bring
+    // it back from this writer's own ref (docs/sync-format.md)
+    for id in rep.writers.iter().flat_map(|w| &w.pruned_ids) {
+        crate::sync::record_purge(&r, id)?;
+    }
     if a.has("json") {
         let ws: Vec<_> = rep
             .writers

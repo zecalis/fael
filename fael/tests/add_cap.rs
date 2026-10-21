@@ -158,3 +158,45 @@ fn a_rejected_add_runs_no_merge_proof() {
         assert!(!spawned.lines().any(|l| l == proof), "{proof}:\n{spawned}");
     }
 }
+
+#[test]
+fn doc_file_rejection_offers_the_anchor_and_code_does_not() {
+    let d = repo();
+    std::fs::write(d.join("README.md"), "v1\n").unwrap();
+    for t in ["one one", "two two", "three three"] {
+        let (ok, out) = fael(
+            &d,
+            &[
+                "add",
+                "decision",
+                t,
+                "--files",
+                "README.md",
+                "--key",
+                &format!("cap:{}", t.replace(' ', "-")),
+            ],
+        );
+        assert!(ok, "{out}");
+    }
+    let (ok, out) = fael(
+        &d,
+        &[
+            "add",
+            "decision",
+            "four four",
+            "--files",
+            "README.md",
+            "--key",
+            "cap:four",
+        ],
+    );
+    assert!(!ok && out.contains("--files doc:<topic>"), "{out}");
+    for t in ["one one", "two two", "three three"] {
+        assert!(add(&d, t, &[]).0);
+    }
+    let (ok, out) = add(&d, "four four", &[]);
+    assert!(
+        !ok && out.contains("--supersedes") && !out.contains("doc:<topic>"),
+        "{out}"
+    );
+}

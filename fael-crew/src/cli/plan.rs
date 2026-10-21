@@ -32,6 +32,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let flags: &[&str] = match sub {
         Some("export") => &["json", "since", "section"],
         Some("apply") => &["dry-run"],
+        Some("edit") => &["section", "replace", "with"],
         _ => &[],
     };
     a.only("plan", flags)?;
@@ -44,6 +45,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
             export(&r, rest.get(1).map(String::as_str), a.has("json"))
         }
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
+        Some("edit") if rest.len() == 2 => edit(a, &r, &rest[1]),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("list") if rest.len() == 1 => list(&r),
         _ => Err(fael_core::help::wrong_args(
@@ -85,6 +87,26 @@ fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     println!(
         "add chunks: fael chunk add \"<title>\" --plan {key} --brief \"…\" --size S|M|L --model small|large --scope <paths>"
     );
+    Ok(())
+}
+
+/// `edit <plan> --section <key> --replace <old> --with <new>`: one passage of a section,
+/// through the same bill as `apply` (issue 01M5D5FCG).
+fn edit(a: &Args, r: &Repo, want: &str) -> Result<(), String> {
+    let (Some(key), Some(old)) = (a.one("section"), a.one("replace")) else {
+        return Err(
+            "rejected: plan edit needs --section <key> --replace <old> --with <new>".into(),
+        );
+    };
+    let new = a
+        .one("with")
+        .ok_or("rejected: --replace needs --with \"<new text>\"")?;
+    let mut s = open(r)?;
+    let p = one(&s, want)?;
+    let now = fael_core::rfc3339(fael_core::now_ms());
+    let (_, rev) = s.plan_edit(&p, &key, &old, &new, &now)?;
+    crate::board::register(r);
+    println!("applied (rev {rev})");
     Ok(())
 }
 

@@ -27,6 +27,8 @@ pub struct WriterReport {
     pub rows: usize,
     pub folded: usize,
     pub pruned: usize,
+    /// Ids `--prune` dropped — the caller tombstones them so a sync cannot bring them back.
+    pub pruned_ids: Vec<String>,
     /// Closes whose target wasn't in the compacted months — carried forward
     /// untouched so nothing is lost.
     pub carried: usize,
@@ -143,10 +145,10 @@ pub fn compact(
             .into_iter()
             .filter(|c| !resolved.contains(c.id.as_str()))
             .collect();
-        let pruned = if opts.prune {
+        let pruned_ids = if opts.prune {
             prune(&mut rows, root, al)
         } else {
-            0
+            vec![]
         };
         rows.sort_by(|a, b| a.id.cmp(&b.id));
         let stamp = ulid();
@@ -189,7 +191,8 @@ pub fn compact(
             writer,
             rows: rows.len(),
             folded: folded.len(),
-            pruned,
+            pruned: pruned_ids.len(),
+            pruned_ids,
             carried: carried.len(),
             deleted,
         });
@@ -261,8 +264,14 @@ pub(crate) fn fold(rows: &mut [Row], closes: &[Row]) -> Vec<(String, Row)> {
 /// resolver, so a row whose file was merely renamed stays. Anchors are opaque
 /// (never filesystem paths) and keep their row; rows without `files` are
 /// legacy and are never pruned.
-fn prune(rows: &mut Vec<Row>, root: &Path, al: &crate::Aliases) -> usize {
-    let before = rows.len();
-    rows.retain(|r| !r.extra.contains_key("closed") || !crate::gone(root, r, al));
-    before - rows.len()
+fn prune(rows: &mut Vec<Row>, root: &Path, al: &crate::Aliases) -> Vec<String> {
+    let mut dropped = vec![];
+    rows.retain(|r| {
+        let drop = r.extra.contains_key("closed") && crate::gone(root, r, al);
+        if drop {
+            dropped.push(r.id.clone());
+        }
+        !drop
+    });
+    dropped
 }

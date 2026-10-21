@@ -50,6 +50,11 @@ pub(crate) fn check(
                 o.display_title()
             ));
         }
+        if is_doc(f) {
+            lines.push(format!(
+                "  or anchor it to a topic, not {f}: --files doc:<topic> (anchors are not capped)"
+            ));
+        }
     }
     if lines.is_empty() {
         return Ok(());
@@ -58,4 +63,10 @@ pub(crate) fn check(
         "rejected: nothing written — at most {MAX_LIVE} live decisions per file; supersede or merge into one\n{}\n(or add --force to file it as is)",
         lines.join("\n")
     ))
+}
+
+/// A doc file (any `.md`, or under `docs/`) can carry its decision on a
+/// `doc:<topic>` anchor instead, which has no disk and is not capped.
+fn is_doc(f: &str) -> bool {
+    f.ends_with(".md") || f.starts_with("docs/")
 }

@@ -19,6 +19,7 @@ mod lookup;
 mod r#move;
 mod owner;
 mod parent;
+mod plan_edit;
 mod ready;
 mod schema;
 mod secret;

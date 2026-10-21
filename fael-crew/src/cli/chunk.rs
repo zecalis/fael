@@ -189,13 +189,19 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
 fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String> {
     match rest {
         ["apply", "-"] if a.has("json") => {
-            a.only("chunk apply", &["json"])?;
+            a.only("chunk apply", &["json", "plan"])?;
             let mut stdin = String::new();
             std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin)
                 .map_err(|e| format!("rejected: cannot read stdin: {e}"))?;
-            let ops: Vec<fael_crew::Op> = serde_json::from_str(&stdin).map_err(|e| {
+            let mut ops: Vec<fael_crew::Op> = serde_json::from_str(&stdin).map_err(|e| {
                 format!("rejected: stdin is not a JSON array of merge/split/pair/after ops: {e}")
             })?;
+            if let Some(plan) = a.one("plan") {
+                // the resolver the other verbs use: a label in that plan, else a uid checked against it
+                for key in ops.iter_mut().flat_map(fael_crew::Op::keys_mut) {
+                    *key = s.uid_in(key, &plan)?;
+                }
+            }
             for line in s.apply(ops, now)? {
                 println!("{line}");
             }

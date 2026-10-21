@@ -180,6 +180,28 @@ fn session_start_ingests_a_teammates_row_and_the_stop_after_it_stays_quiet() {
     assert_eq!(tips(&remote), after_start);
 }
 
+/// No `fael.remote`: the first event marks the session "no-remote", later
+/// stops read neither git config nor the journal — a remote set afterwards
+/// waits for the next session (a journal read per turn was the cost).
+#[test]
+fn no_remote_is_remembered_for_the_session() {
+    let d = repo();
+    let remote = bare();
+    add(&d, "filed with no remote");
+    stop(&d, "s1");
+    point(&d, &remote);
+    add(&d, "filed after the remote was set");
+    stop(&d, "s1");
+    settle();
+    assert_eq!(
+        tips(&remote),
+        "",
+        "same session: no second look at the remote"
+    );
+    stop(&d, "s2");
+    wait_ref(&remote);
+}
+
 /// The `auto-sync-<hash>.log` files in this repo's state dir.
 fn logs(d: &Path) -> impl Iterator<Item = std::path::PathBuf> {
     std::fs::read_dir(d.join("state"))
