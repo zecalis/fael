@@ -43,29 +43,14 @@ pub(super) fn rows(log: &core::Log) -> Vec<(String, Vec<String>)> {
 /// Windows `CreateProcess` never resolves a `.bat` fake off PATH, and CI
 /// runners ship a real `gh` that answers on its own, so no fake survives
 /// there; cf. `FAEL_STATE_DIR`).
-// ponytail: newest 200 PRs; a branch whose PRs all fell out of the window is
-// unknown (silent), not orphan — raise --limit if a repo outgrows it.
+// ponytail: newest 400 PRs (see `gh_prs`); a branch whose PRs all fell out is
+// unknown (silent), not orphan.
 fn dead_branches() -> Option<HashSet<String>> {
     if let Ok(fake) = std::env::var("FAEL_GH_JSON") {
         return parse_dead(&fake);
     }
-    let out = std::process::Command::new("gh")
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "all",
-            "--json",
-            "headRefName,state,mergedAt",
-            "--limit",
-            "200",
-        ])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    parse_dead(&String::from_utf8_lossy(&out.stdout))
+    let json = super::merged::gh_prs(std::path::Path::new("."))?;
+    parse_dead(&json)
 }
 
 /// Pure half of the above: None on unparseable output. Entries without a

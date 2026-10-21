@@ -4,7 +4,7 @@
 //! `orphan.rs`: the `gh` half must never live in core (core spawns no
 //! processes).
 //!
-//! This file owns the single `gh pr list --state merged` call. `shipped`
+//! This file owns the single `gh pr list --state all` call (`gh_prs`). `shipped`
 //! (durable-log chunk 2) reads the same rows for their `mergedAt`/`number`
 //! instead of spawning `gh` a second time.
 
@@ -118,26 +118,38 @@ pub(super) fn merged_prs(root: &Path) -> Option<BTreeMap<String, Vec<Merge>>> {
     let json = if let Ok(fake) = std::env::var("FAEL_GH_MERGED_JSON") {
         fake
     } else {
+        gh_prs(root)?
+    };
+    parse_merged(&json)
+}
+
+/// The one `gh pr list --state all` call per process, shared by `[Merged]`
+/// and `[Orphan]` (each used to spawn its own, ~1.5 s apiece). The union of
+/// fields both read; None = no `gh` or it failed.
+// ponytail: newest 400 PRs (was 200 merged / 200 all) — a merged PR older than
+// that window is unknown, as before; raise --limit if a repo outgrows it.
+pub(super) fn gh_prs(root: &Path) -> Option<String> {
+    static ALL: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    ALL.get_or_init(|| {
         let out = std::process::Command::new("gh")
             .args([
                 "pr",
                 "list",
                 "--state",
-                "merged",
+                "all",
                 "--json",
-                "headRefName,mergedAt,number",
+                "headRefName,state,mergedAt,number",
                 "--limit",
-                "200",
+                "400",
             ])
             .current_dir(root)
             .output()
             .ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        String::from_utf8_lossy(&out.stdout).into_owned()
-    };
-    parse_merged(&json)
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+    })
+    .clone()
 }
 
 /// Pure half of the above: None on unparseable output (nothing to say), else
@@ -151,6 +163,13 @@ fn parse_merged(json: &str) -> Option<BTreeMap<String, Vec<Merge>>> {
         .clone();
     let mut out: BTreeMap<String, Vec<Merge>> = BTreeMap::new();
     for p in &ps {
+        // the shared `--state all` list carries `state`; canned/old lists do not
+        if p.get("state")
+            .and_then(|s| s.as_str())
+            .is_some_and(|s| s != "MERGED")
+        {
+            continue;
+        }
         let Some(name) = p.get("headRefName").and_then(|h| h.as_str()) else {
             continue;
         };
@@ -190,6 +209,12 @@ mod tests {
         )
         .unwrap();
         assert!(m.values().all(|v| v[0].at.is_none()));
+        // the shared all-state list: only MERGED entries count
+        let m = parse_merged(
+            r#"[{"headRefName":"a","state":"CLOSED"},{"headRefName":"b","state":"MERGED","number":2},{"headRefName":"c","state":"OPEN"}]"#,
+        )
+        .unwrap();
+        assert_eq!(m.keys().collect::<Vec<_>>(), ["b"]);
         // rows without the head key contribute nothing, silently
         assert!(parse_merged(r#"[{"number":1}]"#).is_some_and(|m| m.is_empty()));
         // a head-only entry (the old shape) is still a key in the map
