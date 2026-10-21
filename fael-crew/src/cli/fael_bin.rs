@@ -48,6 +48,14 @@ pub(crate) fn held(kind: &str, files: &[String]) -> String {
     run(&["held", kind], &files.join("\n")).unwrap_or_default()
 }
 
+/// `held("done", …)` that leaves out rows named at or after `since` (the run's start, as
+/// stored): this chunk's `start` already showed them.
+pub(crate) fn held_done(files: &[String], since: Option<&str>) -> String {
+    let mut args = vec!["held", "done"];
+    args.extend(since.into_iter().flat_map(|s| ["--since", s]));
+    run(&args, &files.join("\n")).unwrap_or_default()
+}
+
 /// `fael close <id> "<why>"` — the row, closed by the ledger's own write path.
 pub(crate) fn close(id: &str, why: &str) -> Result<(), String> {
     run(&["close", id, why], "").map(|_| ())
