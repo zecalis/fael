@@ -184,11 +184,7 @@ pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -
 
 /// The `Stats` `fael stats --json` prints — `fael report` renders the same one.
 pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stats::Stats {
-    let commits = u
-        .logs
-        .keys()
-        .filter_map(|repo| Some((repo.clone(), commits(repo, *u.parsed.first_seen.get(repo)?))))
-        .collect();
+    let commits = commits_by_clone(u);
     let constants = asks::constants().into();
     let runs = super::flow::runs();
     let since = u.parsed.first_seen.values().copied().min();
@@ -202,28 +198,50 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     s
 }
 
-/// The default branch's commits since the repo's first usage (H5 capture
-/// recall) — one `git log` per repo, read by `fael stats`, never on a push.
-/// No git, no branch: none.
-fn commits(repo: &str, since_ms: i64) -> Vec<core::stats::Commit> {
-    let root = Path::new(repo);
+/// Each repo's default-branch commits since its first usage (H5 capture
+/// recall), read by `fael stats`, never on a push. Worktrees of one clone
+/// share its object store, so the clone gets one `git log` from its earliest
+/// first usage and each worktree keeps the commits since its own.
+fn commits_by_clone(u: &Usage) -> core::stats::Commits {
+    let mut clones: HashMap<PathBuf, Vec<(&String, i64)>> = HashMap::new();
+    for repo in u.logs.keys() {
+        if let Some(&since) = u.parsed.first_seen.get(repo) {
+            let key = crate::journal::root(Path::new(repo)).unwrap_or_else(|| repo.into());
+            clones.entry(key).or_default().push((repo, since));
+        }
+    }
+    let mut out = core::stats::Commits::new();
+    for repos in clones.values() {
+        let since = repos.iter().map(|(_, s)| *s).min().unwrap_or(0);
+        let all = commits(Path::new(repos[0].0), since);
+        for (repo, since) in repos {
+            let mine = all.iter().filter(|(at, _)| *at >= *since);
+            out.insert((*repo).clone(), mine.map(|(_, c)| c.clone()).collect());
+        }
+    }
+    out
+}
+
+/// The default branch's commits since `since_ms`, each with its committer
+/// time (what `--since` filters on). No git, no branch: none.
+fn commits(root: &Path, since_ms: i64) -> Vec<(i64, core::stats::Commit)> {
     let branch = crate::maintain::default_branch(root);
     let since = format!("--since={}", core::rfc3339(since_ms.max(0) as u64));
     let log = |r: &str| {
-        crate::git(
-            root,
-            &["log", r, "--no-merges", &since, "--format=%H%x1f%B%x1e"],
-        )
+        let fmt = "--format=%H%x1f%cI%x1f%B%x1e";
+        crate::git(root, &["log", r, "--no-merges", &since, fmt])
     };
     let out = log(&format!("origin/{branch}")).or_else(|| log(&branch));
     out.unwrap_or_default()
         .split('\x1e')
         .filter_map(|c| {
-            let (sha, message) = c.trim().split_once('\x1f')?;
-            Some(core::stats::Commit {
+            let mut p = c.trim().splitn(3, '\x1f');
+            let (sha, at, message) = (p.next()?, p.next()?, p.next()?);
+            let commit = core::stats::Commit {
                 sha: sha.to_string(),
                 message: message.trim().to_string(),
-            })
+            };
+            Some((core::ts_ms(at)?, commit))
         })
         .collect()
 }

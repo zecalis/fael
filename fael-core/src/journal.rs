@@ -40,6 +40,7 @@ pub fn head_branch(repo_root: &Path) -> Option<String> {
         .strip_prefix("ref:")?
         .trim()
         .strip_prefix("refs/heads/")
+        .filter(|b| *b != ".invalid") // reftable's placeholder HEAD
         .map(String::from)
 }
 
@@ -56,17 +57,28 @@ pub fn work_branch(repo_root: &Path) -> Option<String> {
 
 /// Is `b` the repo's default branch (see `work_branch`)? No spawn.
 pub fn is_trunk(repo_root: &Path, b: &str) -> bool {
-    let trunk = root(repo_root)
-        .and_then(|j| std::fs::read_to_string(j.parent()?.join("refs/remotes/origin/HEAD")).ok())
-        .and_then(|s| {
-            s.trim()
-                .strip_prefix("ref: refs/remotes/origin/")
-                .map(String::from)
-        });
-    match trunk {
+    match origin_head(repo_root) {
         Some(t) => b == t,
         None => b == "main" || b == "master",
     }
+}
+
+/// The branch `refs/remotes/origin/HEAD` names, read from the common dir (a
+/// symbolic ref is never packed) — no spawn. `None` without the pointer, or
+/// on a reftable repo, whose refs no file holds.
+pub fn origin_head(repo_root: &Path) -> Option<String> {
+    let s = std::fs::read_to_string(root(repo_root)?.parent()?.join("refs/remotes/origin/HEAD"));
+    s.ok()?
+        .trim()
+        .strip_prefix("ref: refs/remotes/origin/")
+        .map(String::from)
+}
+
+/// Is this clone's ref store reftable (no loose ref files to read)?
+pub fn is_reftable(repo_root: &Path) -> bool {
+    root(repo_root)
+        .and_then(|j| Some(j.parent()?.join("reftable")))
+        .is_some_and(|d| d.exists())
 }
 
 /// HEAD's full sha, read off `<gitdir>/HEAD` and the ref it names (a loose

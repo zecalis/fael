@@ -206,7 +206,7 @@ pub(crate) fn writer(r: &Repo) -> String {
 pub(crate) fn stamp(r: &Repo) -> core::Stamp {
     core::Stamp {
         by: writer(r),
-        branch: git(&r.root, &["symbolic-ref", "--short", "-q", "HEAD"]),
+        branch: maintain::head_branch(&r.root),
         sha: git(&r.root, &["rev-parse", "--short", "HEAD"]),
         session: None,
         shown: None,

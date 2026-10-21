@@ -59,7 +59,7 @@ fn rows(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Vec<String> {
     if local.is_empty() {
         return vec![];
     }
-    let current = crate::git(root, &["symbolic-ref", "--short", "-q", "HEAD"]);
+    let current = head_branch(root);
     let default = default_branch(root);
     let mut out: Vec<String> = local
         .into_iter()
@@ -72,14 +72,27 @@ fn rows(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Vec<String> {
 
 /// The remote's default branch from `origin/HEAD` (set by clone, or
 /// `git remote set-head origin -a`); no remote or no pointer → `main`.
-/// Shared with `shipped` (its `git branch --merged` source).
+/// Shared with `shipped` (its `git branch --merged` source). Read from the
+/// ref file; git is asked only on a reftable repo.
 pub(crate) fn default_branch(root: &Path) -> String {
+    if !crate::journal::is_reftable(root) {
+        return crate::journal::origin_head(root).unwrap_or_else(|| "main".into());
+    }
     crate::git(
         root,
         &["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"],
     )
     .and_then(|r| r.strip_prefix("origin/").map(str::to_string))
     .unwrap_or_else(|| "main".into())
+}
+
+/// The checked-out branch (`symbolic-ref --short HEAD`), read from the HEAD
+/// file; git is asked only on a reftable repo. Detached = `None`.
+pub(crate) fn head_branch(root: &Path) -> Option<String> {
+    if !crate::journal::is_reftable(root) {
+        return crate::journal::head_branch(root);
+    }
+    crate::git(root, &["symbolic-ref", "--short", "-q", "HEAD"])
 }
 
 /// Every local branch head, one per line.
