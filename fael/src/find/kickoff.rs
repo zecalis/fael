@@ -65,7 +65,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
             offset,
             next: &|n| format!("{base} --offset {n}"),
         },
-        &branch_of,
+        (&branch_of, &Default::default()),
     )?;
     let none = (None, &files[..], None);
     crate::hook::record_found("cli", "kickoff", &r.root, &shown, none);

@@ -61,8 +61,8 @@ impl Args {
             }
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "yes" | "fix" | "prune" | "urgent"
-                | "not-urgent" | "full" | "rows" | "fat" | "day" | "pin" | "open" | "groups"
-                | "misses" | "wiring" | "auto" | "no-worktree" | "watch" | "input" => {
+                | "not-urgent" | "full" | "rows" | "fat" | "day" | "pin" | "open" | "misses"
+                | "wiring" | "auto" | "no-worktree" | "watch" | "input" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"

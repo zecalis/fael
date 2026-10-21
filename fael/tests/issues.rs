@@ -1,5 +1,5 @@
 //! Working the issue list in the real binary: waiting issues list last,
-//! `claim` shows who holds one, `--groups` says what to fix in one PR, and
+//! `claim` shows who holds one, and
 //! `--full` asks for the rest in one call.
 
 use std::path::{Path, PathBuf};
@@ -65,23 +65,14 @@ fn waiting_issues_list_after_ready_ones() {
     issue(&d, "scope bug", "src/b.rs", &[]);
     let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
     assert!(ok, "{err}");
-    // grouped by default: the two src/a.rs rows share a group, scope bug stands alone
+    // ready first, waiting last, as one flat list
+    let ready = out.find("scope bug").unwrap();
+    assert!(ready < out.find("ocr gated").unwrap(), "{out}");
     assert!(
-        out.starts_with("## group 1 · 2 rows · shared: src/a.rs\n"),
+        out.contains("ocr gated (waiting: vendor fixes 5xx)"),
         "{out}"
     );
-    assert!(!out.contains("shares no file"), "{out}");
-    let g1 = out.split("scope bug").next().unwrap();
-    assert!(
-        g1.contains("ocr gated (waiting: vendor fixes 5xx)"),
-        "{out}"
-    );
-    assert!(out.contains("scope bug"), "{out}");
-    // the grouping answer rides the list itself now — no tip left to learn a flag from
-    assert!(
-        !out.contains("fix together") && !out.contains("--groups"),
-        "{out}"
-    );
+    assert!(!out.contains("## group"), "{out}");
 }
 
 #[test]
@@ -214,27 +205,13 @@ fn next_claims_the_best_free_issue_and_prints_it() {
 }
 
 #[test]
-fn groups_by_shared_files() {
+fn groups_flag_names_its_replacement() {
     let d = repo();
-    issue(&d, "ocr timeout", "src/a.rs,src/b.rs", &[]);
-    issue(&d, "scope leak", "src/b.rs", &[]);
-    issue(&d, "auth typo", "src/c.rs", &[]);
-    let (ok, out, err) = fael(&d, &["find", "--kind", "issue", "--groups"]);
-    assert!(ok, "{err}");
-    assert!(
-        out.starts_with("## group 1 · 2 rows · shared: src/b.rs\n"),
-        "{out}"
-    );
-    assert!(!out.contains("shares no file"), "{out}");
-    assert!(
-        out.contains("auth typo") && out.contains("scope leak"),
-        "{out}"
-    );
-    let (ok, _, err) = fael(&d, &["find", "--kind", "issue", "--groups", "--limit", "2"]);
-    assert!(!ok && err.contains("--groups lists every match"), "{err}");
+    let (ok, _, err) = fael(&d, &["find", "--kind", "issue", "--groups"]);
+    assert!(!ok && err.contains("fael find --kind issue"), "{err}");
 }
 
-/// An empty grouped list says why like the flat one: closed rows need --all.
+/// An empty issue list says why like the flat one: closed rows need --all.
 #[test]
 fn an_empty_issue_list_says_all_adds_closed() {
     let d = repo();

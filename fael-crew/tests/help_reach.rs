@@ -97,7 +97,6 @@ const HIDDEN_FLAGS: &[&str] = &[
     "--by",
     "--to",
     "--revisit",
-    "--groups",
     "--text",
     "--recall",
     "--kind",

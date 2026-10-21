@@ -6,13 +6,12 @@
 //! glob primitives), `render` (token-budgeted markdown), `lookup` (resolve,
 //! keys, query, warnings), `stale` (backticked paths gone from disk),
 //! `md` (id citations in markdown prose), `focus` (push buckets + row cap),
-//! `groups` (open rows linked by a shared file), `explain` (why a find came
+//! `explain` (why a find came
 //! back empty, when a short list shows bodies).
 
 mod chunks;
 mod explain;
 mod focus;
-mod groups;
 mod keyhint;
 mod lookup;
 mod matching;
@@ -33,7 +32,6 @@ pub use focus::{
     PUSH_HUB_PEEK, PUSH_HUB_ROWS, Prior, PushPolicy, Selection, bucket, on_work, select,
     select_with,
 };
-pub use groups::{groups, render_groups};
 pub use keyhint::{key_hints, names_key};
 pub use lookup::{
     KeyUse, NO_ROW_WITH_ID, chunk_stem, fat_reasons, keys, levenshtein, query, resolve,

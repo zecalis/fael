@@ -51,8 +51,8 @@ const RUN_KEYS: &[&str] = &[
     "ended",
     "cost",
 ];
-/// A ledger row (PLAN-fael-board l1); an issue also carries `group` before `signals`, and a
-/// linked one its newest fixing `chunk` {uid, state} after `group` (l2).
+/// A ledger row (PLAN-fael-board l1); a linked issue also carries its newest fixing
+/// `chunk` {uid, state} before `signals` (l2).
 const ROW_KEYS: &[&str] = &[
     "id", "title", "text", "key", "files", "at", "by", "to", "from", "revisit", "held", "signals",
 ];
@@ -80,22 +80,15 @@ fn truth_db(b: &Value, c: &Value) -> bool {
     })
 }
 
-/// Open rows by kind; issues in group order (largest group first, `find --groups`).
+/// Open rows by kind; issues, decisions and notes.
 fn ledger(l: &Value) {
     assert_eq!(keys(l), ["issues", "decisions", "notes"]);
-    let mut last = 0;
     for (kind, rows) in l.as_object().unwrap() {
         for r in rows.as_array().unwrap() {
             let mut want = ROW_KEYS.to_vec();
-            if kind == "issues" {
-                want.insert(11, "group");
-                if !r["chunk"].is_null() {
-                    want.insert(12, "chunk");
-                    assert_eq!(keys(&r["chunk"]), ["uid", "state"], "{r}");
-                }
-                let g = r["group"].as_u64().unwrap();
-                assert!(g == last || g == last + 1, "{r}: groups in order");
-                last = g;
+            if kind == "issues" && !r["chunk"].is_null() {
+                want.insert(11, "chunk");
+                assert_eq!(keys(&r["chunk"]), ["uid", "state"], "{r}");
             }
             assert_eq!(keys(r), want, "{r}");
             assert_eq!(r["id"].as_str().unwrap().len(), 26, "{r}: a ULID");

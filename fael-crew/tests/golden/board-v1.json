@@ -617,7 +617,6 @@
             "from": null,
             "revisit": null,
             "held": "agent-1/counts",
-            "group": 0,
             "chunk": {
               "uid": "01M4M0BRD000000000000000N2",
               "state": "done"
@@ -638,7 +637,6 @@
             "from": null,
             "revisit": null,
             "held": null,
-            "group": 0,
             "signals": []
           },
           {
@@ -655,7 +653,6 @@
             "from": null,
             "revisit": null,
             "held": null,
-            "group": 1,
             "signals": [
               "drifted"
             ]

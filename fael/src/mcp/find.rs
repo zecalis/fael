@@ -97,9 +97,6 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         },
         offset: a["offset"].as_u64().unwrap_or(0) as usize,
     };
-    if a["groups"].as_bool().unwrap_or(false) || auto_issue(&f, a) {
-        return Ok(groups(r, &log, f, &branch_of));
-    }
     // same rows as the CLI: query() pages after ranking, the cut line names
     // the next offset to repeat the call with
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
@@ -130,10 +127,15 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         let n = body.lines().filter(|l| l.starts_with("- [")).count();
         let body = crate::journal::tag(body, &branch_of);
         return Ok((format!("{head}\n{body}"), shown.take(n).collect()));
-    } else if full {
-        crate::journal::tag(core::render_full_page(&log, &rows, budget, cut), &branch_of)
     } else {
-        crate::journal::tag(core::render_page(&log, &rows, budget, cut), &branch_of)
+        // issues also carry the git-proven marks, like the CLI list
+        let is_issue = f.kind.as_deref() == Some("issue");
+        let (branch_of, gone) = crate::find::issue::marks(r, &log, is_issue, &rows, branch_of);
+        let page = match full {
+            true => core::render_full_page(&log, &rows, budget, cut),
+            false => core::render_page(&log, &rows, budget, cut),
+        };
+        crate::find::issue::tag_gone(&crate::journal::tag(page, &branch_of), &gone)
     };
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
@@ -171,16 +173,6 @@ fn ids_call(
     }
 }
 
-/// The plain issue list wants the grouped answer without asking for it —
-/// same rule as the CLI (`find::issue::auto_grouped` takes `Args`; MCP takes
-/// the flag straight off the tool object).
-fn auto_issue(f: &core::Filter, a: &Value) -> bool {
-    f.kind.as_deref() == Some("issue")
-        && !a["full"].as_bool().unwrap_or(false)
-        && f.limit.is_none()
-        && f.offset == 0
-}
-
 /// Rows that merely mention `row`'s id ride under its body, so the reader
 /// sees who cites it — silent when nobody does (CLI `find <id>` parity).
 fn with_mentioned(log: &core::Log, row: &core::Row, mut text: String) -> String {
@@ -189,52 +181,4 @@ fn with_mentioned(log: &core::Log, row: &core::Row, mut text: String) -> String 
         text.push_str(&format!("mentioned by: {}\n", who.join(", ")));
     }
     text
-}
-
-/// `groups: true` — every match, unpaged: half a group answers the question wrong.
-fn groups(
-    r: &Repo,
-    log: &core::Log,
-    f: core::Filter,
-    branch_of: &crate::journal::BranchMap,
-) -> (String, Vec<String>) {
-    let is_issue = f.kind.as_deref() == Some("issue");
-    let rows = core::find(
-        log,
-        &core::Filter {
-            limit: None,
-            offset: 0,
-            ..f.clone()
-        },
-    );
-    if rows.is_empty() {
-        // an empty open list answers with the closed rows all=true would
-        // match, marked, under one header — additive: the answers below and
-        // their fields are untouched; nothing anywhere keeps the old line
-        let unpaged = core::Filter {
-            limit: None,
-            offset: 0,
-            ..f.clone()
-        };
-        match crate::find::fallback::closed_rows(log, &unpaged) {
-            Some((head, closed)) => {
-                let body = crate::find::fallback::grouped_text(
-                    r,
-                    log,
-                    &closed,
-                    branch_of.clone(),
-                    is_issue,
-                );
-                let shown = closed.iter().map(|row| row.id.clone()).collect();
-                return (format!("{head}\n{body}"), shown);
-            }
-            None => return (core::why_empty(log, &f, "files"), vec![]),
-        }
-    }
-    let text = if is_issue {
-        crate::find::issue::render_issue_groups(r, log, &rows, branch_of.clone())
-    } else {
-        crate::journal::tag(core::render_groups(log, &rows), branch_of)
-    };
-    (text, rows.iter().map(|r| r.id.clone()).collect())
 }

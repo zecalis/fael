@@ -121,7 +121,6 @@ fn core_is_a_strict_subset_of_full() {
                 "--by",
                 "--to",
                 "--revisit",
-                "--groups",
                 "--text",
                 "--recall",
                 "--kind",
