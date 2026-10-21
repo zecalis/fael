@@ -20,6 +20,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // a run killed mid-turn never reaches Stop: its session is kept from the first turn
     super::stop::seen(e);
     prune_sessions(&state_dir().join("sessions"));
+    prune_sessions(&state_dir().join("sessions").join("edits"));
     prune_sessions(&state_dir().join("held"));
     prune_sessions(&state_dir().join("sync-seen"));
     // one line, every start, fail-open: the Stop-block mode was removed

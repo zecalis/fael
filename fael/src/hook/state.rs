@@ -25,7 +25,10 @@ pub(crate) fn session_key(s: &str) -> String {
 /// Keyed by session + worktree so one session across two repos stays apart.
 pub(crate) fn edits_path(session: &str, root: &Path) -> PathBuf {
     let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
-    state_dir().join("sessions").join(format!("{key}.jsonl"))
+    state_dir()
+        .join("sessions")
+        .join("edits")
+        .join(format!("{key}.jsonl"))
 }
 
 /// The session id inside a hook session string. Claude keys hooks by the
@@ -266,6 +269,7 @@ pub(crate) fn edited_files(session: &str, root: &Path, n: usize) -> Vec<String> 
 /// files are its own, in its repo (the filename hash is one-way).
 pub(crate) fn record_edits(path: &Path, worktree: &str, session: &str, files: &[String]) {
     let Some(at) = now_rfc3339() else { return };
+    crate::session::forget_sessions();
     if let Some(parent) = path.parent()
         && std::fs::create_dir_all(parent).is_ok()
     {

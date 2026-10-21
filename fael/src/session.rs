@@ -174,7 +174,38 @@ const ACTIVE_SECS: u64 = 2 * 60 * 60;
 /// the 2 h window); lines naming another worktree are dropped — without this
 /// a row filed in repo A would inherit files touched in repo B.
 fn active_sessions(root: &Path) -> Vec<Vec<hook::Edit>> {
-    let dir = hook::state_dir().join("sessions");
+    // ponytail: memoized per process (several callers per `find`); the MCP
+    // server is long-lived so it never memoizes, and `record_edits` drops it.
+    let key = (root.to_path_buf(), hook::state_dir());
+    if !mcp_server()
+        && let Some(v) = SESSIONS_MEMO.with(|m| {
+            m.borrow()
+                .as_ref()
+                .filter(|(k, _)| *k == key)
+                .map(|(_, v)| v.clone())
+        })
+    {
+        return v;
+    }
+    let v = scan_sessions(root);
+    if !mcp_server() {
+        SESSIONS_MEMO.with(|m| *m.borrow_mut() = Some((key, v.clone())));
+    }
+    v
+}
+
+thread_local! {
+    static SESSIONS_MEMO: std::cell::RefCell<Option<((PathBuf, PathBuf), Vec<Vec<hook::Edit>>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Drop the memo — an edit was just appended.
+pub(crate) fn forget_sessions() {
+    SESSIONS_MEMO.with(|m| *m.borrow_mut() = None);
+}
+
+fn scan_sessions(root: &Path) -> Vec<Vec<hook::Edit>> {
+    let dir = hook::state_dir().join("sessions").join("edits");
     let Ok(rd) = std::fs::read_dir(&dir) else {
         return vec![];
     };
