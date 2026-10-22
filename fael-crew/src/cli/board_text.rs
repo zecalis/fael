@@ -118,5 +118,18 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
     if out.is_empty() {
         out.push_str("nothing on the board — `fael chunk add` or `fael plan new` in a repo\n");
     }
+    out.push_str(&repos_line(b));
     out
+}
+
+/// The roots the board merged (issue 01M5H0VZ): human mode never showed
+/// where it looked, so an empty sweep elsewhere read as nothing to do.
+fn repos_line(b: &Board) -> String {
+    if b.projects.is_empty() {
+        return String::new();
+    }
+    let mut roots: Vec<&str> = b.projects.iter().map(|p| p.root.as_str()).collect();
+    roots.sort_unstable();
+    roots.dedup();
+    format!("repos: {}\n", roots.join(", "))
 }

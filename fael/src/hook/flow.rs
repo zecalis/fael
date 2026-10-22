@@ -27,40 +27,18 @@ pub(crate) fn runs() -> Vec<core::stats::FlowRun> {
 /// Merged PRs on this clone's default branch: `gh`'s merged list plus the
 /// squash subjects in `git log` (`(#N)` + committer date) — matched by PR
 /// number only, never a sha. `gh` failing leaves the `git log` fallback;
-/// both failing leaves none (spans shrink, never impute).
+/// both failing leaves none (spans shrink, never impute). The `gh` half is
+/// cached per process (issue 01M5F53Y): repeated `stats` in one run share
+/// the one network call.
 pub(crate) fn merges(since_ms: Option<i64>) -> Vec<core::stats::FlowMerge> {
     let Ok(r) = crate::repo() else { return vec![] };
     let root = &r.root;
     let mut out: Vec<core::stats::FlowMerge> = vec![];
-    if let Ok(gh) = std::process::Command::new("gh")
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "merged",
-            "--json",
-            "mergedAt,number",
-            "--limit",
-            "500",
-        ])
-        .current_dir(root)
-        .output()
-        && gh.status.success()
-        && let Ok(list) = serde_json::from_slice::<Vec<serde_json::Value>>(&gh.stdout)
-    {
-        for m in &list {
-            if let (Some(n), Some(at)) = (
-                m.get("number").and_then(|n| n.as_i64()),
-                m.get("mergedAt")
-                    .and_then(|s| s.as_str())
-                    .and_then(core::ts_ms),
-            ) {
-                out.push(core::stats::FlowMerge {
-                    number: n,
-                    at_ms: at,
-                });
-            }
-        }
+    for (n, at) in gh_merged(root) {
+        out.push(core::stats::FlowMerge {
+            number: n,
+            at_ms: at,
+        });
     }
     let branch = crate::maintain::default_branch(root);
     let since = since_ms.map(|ms| format!("--since={}", core::rfc3339(ms.max(0) as u64)));
@@ -95,4 +73,48 @@ pub(crate) fn merges(since_ms: Option<i64>) -> Vec<core::stats::FlowMerge> {
         }
     }
     out
+}
+
+/// The one `gh pr list --state merged` call per process, shared by repeated
+/// `stats` in one run. `(number, merged_at_ms)`, empty when `gh` is missing
+/// or fails — the `git log` fallback in `merges` still applies.
+fn gh_merged(root: &std::path::Path) -> Vec<(i64, i64)> {
+    static CACHE: std::sync::OnceLock<Vec<(i64, i64)>> = std::sync::OnceLock::new();
+    // the cache is per process, not per repo: `stats` reads one clone per
+    // run, so the first root wins — same single-clone assumption as `runs`.
+    CACHE
+        .get_or_init(|| {
+            let out = std::process::Command::new("gh")
+                .args([
+                    "pr",
+                    "list",
+                    "--state",
+                    "merged",
+                    "--json",
+                    "mergedAt,number",
+                    "--limit",
+                    "500",
+                ])
+                .current_dir(root)
+                .output()
+                .ok()
+                .filter(|o| o.status.success());
+            let Some(out) = out else { return vec![] };
+            let Ok(list) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else {
+                return vec![];
+            };
+            let mut merged = vec![];
+            for m in &list {
+                if let (Some(n), Some(at)) = (
+                    m.get("number").and_then(|n| n.as_i64()),
+                    m.get("mergedAt")
+                        .and_then(|s| s.as_str())
+                        .and_then(core::ts_ms),
+                ) {
+                    merged.push((n, at));
+                }
+            }
+            merged
+        })
+        .clone()
 }

@@ -5,12 +5,14 @@ use std::path::Path;
 
 /// One `warning:` line per commit cited in `text` that git knows and the remote's
 /// default branch does not contain. No remote ref, or a hex word git can't resolve → silent.
+/// Fixed spawns however many shas `text` cites (issue 01M5F53Y): one
+/// `cat-file --batch-check` for existence plus one `rev-list` for ancestry.
 pub(crate) fn lines(root: &Path, text: &str) -> Vec<String> {
     let base = format!("origin/{}", crate::maintain::default_branch(root));
     if crate::git(root, &["rev-parse", "--verify", "-q", &base]).is_none() {
         return vec![];
     }
-    let mut out = vec![];
+    let mut toks: Vec<String> = vec![];
     for tok in text.split(|c: char| !c.is_ascii_alphanumeric()) {
         // ponytail: a sha needs a digit and a-f letter, so plain words and numbers never spawn git
         let sha = (7..=40).contains(&tok.len())
@@ -19,25 +21,74 @@ pub(crate) fn lines(root: &Path, text: &str) -> Vec<String> {
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             && tok.bytes().any(|b| b.is_ascii_digit())
             && tok.bytes().any(|b| b.is_ascii_alphabetic());
-        if !sha || out.iter().any(|l: &String| l.contains(tok)) {
+        if !sha || toks.iter().any(|t| t == tok) {
             continue;
         }
-        let commit = format!("{tok}^{{commit}}");
-        if crate::git(root, &["rev-parse", "--verify", "-q", &commit]).is_none() {
+        toks.push(tok.to_string());
+    }
+    if toks.is_empty() {
+        return vec![];
+    }
+    let known = existing(root, &toks);
+    let ancestors = ancestors_of(root, &base);
+    let mut out = vec![];
+    for tok in toks {
+        if !known.contains(&tok) || ancestors.contains(&tok) {
             continue;
         }
-        let on_base = fael_core::git_cmd()
-            .args(["merge-base", "--is-ancestor", tok, &base])
-            .current_dir(root)
-            .status()
-            .is_ok_and(|s| s.success());
-        if !on_base {
-            out.push(format!(
-                "warning: commit {tok} is not on {base} — its guard holds only once it merges; if that branch is dropped, reopen the issue"
-            ));
-        }
+        out.push(format!(
+            "warning: commit {tok} is not on {base} — its guard holds only once it merges; if that branch is dropped, reopen the issue"
+        ));
     }
     out
+}
+
+/// The subset of `toks` git knows as commits, in one `cat-file --batch-check`.
+fn existing(root: &Path, toks: &[String]) -> std::collections::HashSet<String> {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut known = std::collections::HashSet::new();
+    let Ok(mut child) = fael_core::git_cmd()
+        .args(["cat-file", "--batch-check"])
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return known;
+    };
+    let input: String = toks.iter().map(|s| format!("{s}^{{commit}}\n")).collect();
+    let mut w = child.stdin.take();
+    let out = std::thread::scope(|sc| {
+        sc.spawn(move || {
+            if let Some(w) = w.as_mut() {
+                let _ = w.write_all(input.as_bytes());
+            }
+        });
+        child.wait_with_output()
+    });
+    let Ok(out) = out else { return known };
+    for (line, tok) in String::from_utf8_lossy(&out.stdout).lines().zip(toks) {
+        if line
+            .split_whitespace()
+            .nth(1)
+            .is_some_and(|t| t == "commit")
+        {
+            known.insert(tok.clone());
+        }
+    }
+    known
+}
+
+/// Full shas on `base`, in one `rev-list`; empty (never `None`) when git fails.
+fn ancestors_of(root: &Path, base: &str) -> std::collections::HashSet<String> {
+    crate::git(root, &["rev-list", base])
+        .unwrap_or_default()
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
 }
 
 #[cfg(test)]
