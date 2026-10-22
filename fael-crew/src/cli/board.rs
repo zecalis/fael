@@ -90,7 +90,20 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         let s = serde_json::to_string(&b).map_err(|e| e.to_string())?;
         println!("{s}");
     } else {
-        print!("{}", text::text(&b, a.one("plan").is_some()));
+        let mut out = text::text(&b, a.one("plan").is_some());
+        // empty registry, not empty projects: a --plan/--open cut can hide
+        // every project while the registry still names repos (01M5H0VZ)
+        if registry::registered().is_empty() {
+            let cwd = std::env::current_dir()
+                .and_then(|d| d.canonicalize())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            out.push_str(&format!(
+                "repos: (none) — cwd {}, registry {}\n",
+                cwd.display(),
+                registry::registry().display()
+            ));
+        }
+        print!("{out}");
     }
     Ok(ExitCode::from(u8::from(broken)))
 }
