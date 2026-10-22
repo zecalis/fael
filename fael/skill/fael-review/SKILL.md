@@ -27,9 +27,15 @@ is another tool's job.
 3. **A finding needs a failing input.** Cannot write one? Not a finding.
 4. **Facts carry a citation.** `file:line`, output, or trace step — or it doesn't ship.
 
-Carry them silently — the reader wants what you found, not proof that you looked. Start at pass 1.
+Carry them silently — the reader wants what you found, not proof that you looked. Start at pass 0.
 
 ---
+
+## Pass 0 — Own the tree
+
+1. `git status --short` must be empty. Else stop and ask — never touch changes you didn't make.
+2. `git worktree list`: cwd must be this agent's own worktree. Never touch another agent's.
+3. Record `git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD` before any detach.
 
 ## Pass 1 — Scope is a finding
 
@@ -75,9 +81,12 @@ The diff is where you enter, not what you review (slices, per Pass 1).
 - **Run what can be run.** Reading cannot see a command that exits 0 without doing anything, a
   timeout budget no real suite fits, or a server still serving last week's build. A green result
   you produced outranks a green result you inferred, every time.
-  Another branch's code runs in your own worktree only: note `git rev-parse --abbrev-ref HEAD`
-  and `git rev-parse HEAD` first, `git switch --detach <sha>`, and when done switch back to the
-  branch, or to the sha when it was merged and deleted meanwhile. Never touch another agent's worktree.
+  Another branch's code runs in your own worktree only: `git switch --detach <sha>` (Pass 0
+  has the HEAD record), and when done switch back to the branch, or to the sha when it was merged
+  and deleted meanwhile.
+  Diff touches `fael/src/schema.rs` or any `SKILL.md`? Also run `constants_stay_small`
+  (`fael/src/schema.rs:148`) and `cargo nextest run -p fael stats_golden --profile gate`
+  (`fael/tests/hook/stats_golden.rs`).
 - **For a plan or design doc**, walk the proposed flow against the system that exists — where
   does it touch reality, and what does it assume that isn't true today?
 
