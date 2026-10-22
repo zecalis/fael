@@ -277,11 +277,13 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     }
     git(&d, &["add", "w"]);
     git(&d, &["commit", "-qm", "w"]);
+    let n = std::cell::Cell::new(0);
     let row = |kind: &str, file: &str| {
+        n.set(n.get() + 1); // distinct text: an identical open row is not filed twice
         let out = f(&[
             "add",
             kind,
-            &format!("{kind} on {file}"),
+            &format!("{kind} on {file} #{}", n.get()),
             "--files",
             file,
             "--force",

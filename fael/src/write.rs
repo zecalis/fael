@@ -184,6 +184,18 @@ pub(crate) fn add_row(
     opts: AddOpts,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
     let (mut pending, st, log) = prepare(r, kind, text, files_arg, opts)?;
+    // the same open row already says this: write nothing, hand back its id
+    if let Some(old) = recall::exact(&log, &pending.row) {
+        let mut warns = pending.warns;
+        warns.push(recall::already_line(&log, old));
+        let month = old.ts.get(..7).unwrap_or_default();
+        let path = r
+            .fael
+            .join("log")
+            .join(&old.by)
+            .join(format!("{month}.jsonl"));
+        return Ok((old.clone(), path, warns));
+    }
     crate::session::tag_superseder(
         &r.root,
         &log,
@@ -202,6 +214,7 @@ pub(crate) fn add_row(
     )?;
     warns.append(&mut core_warns);
     warns.extend(recall::lines(&log, &row)); // closed earlier on these files (context-loop 5)
+    warns.extend(recall::near(&log, &row)); // open duplicates of this issue
     warns.extend(keys::lines(&log, &row));
     // PLAN-fael-languages chunk 2: the row-language warning lives in core
     // (`lang::row_language_check` behind `[lang] rows`) — never a reject, one
