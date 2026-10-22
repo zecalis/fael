@@ -71,6 +71,7 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         );
     }
     let r = crate::repo()?;
+    crate::plan::in_repo(&r)?;
     let log = crate::read(&r);
     let open = core::find(&log, &core::Filter::default());
     let input = Input {

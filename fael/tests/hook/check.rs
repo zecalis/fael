@@ -146,6 +146,10 @@ fn a_read_is_silent_and_a_shell_edit_is_said() {
     let (ok, out, err) = fael(&d, &["hook", "read", "--client", "claude"], &read);
     assert!(ok, "{err}");
     assert!(!out.contains("now gone"), "{out}");
+    // the shell hook counts a named file as its own write only when its mtime
+    // is within EDIT_WINDOW (3 s): re-touch it here, so a slow `add`/`close`
+    // under parallel-build load cannot age it out before this call.
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let shell = format!(
         r#"{{"cwd":{},"session_id":"s1","tool_name":"Bash","tool_input":{{"command":"sed -i s/a/b/ src/a.rs"}},"tool_response":{{"stdout":""}}}}"#,
         json(&d)
