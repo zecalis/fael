@@ -340,7 +340,13 @@ fn changed_hint(log: &core::Log, rows: &[(&core::Row, String)]) -> String {
     let said: Vec<String> = rows
         .iter()
         .map(|(r, file)| {
-            let who = if r.from_user() { " (from user)" } else { "" };
+            let who = if r.from_user() {
+                " (from user)"
+            } else if r.from_report() {
+                " (from report, unchecked)"
+            } else {
+                ""
+            };
             format!("{file} changed since {} was written{who}", ab.short(&r.id))
         })
         .collect();

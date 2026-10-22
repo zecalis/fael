@@ -152,6 +152,7 @@ const WARNINGS: &[(&str, &str)] = &[
     ("fael.remote is set", "purge_remote"),
     ("warning: brief names", "chunk_brief_path"),
     ("warning: brief cites", "chunk_closed_ref"),
+    ("is from a report, unchecked", "chunk_report_ref"),
     (" named by chunk ", "chunk_path_gone"),
     ("warning: commit ", "unmerged"),
     // self-heal wraps another warning; that one's needle wins above

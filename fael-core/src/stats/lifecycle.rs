@@ -24,6 +24,13 @@ pub struct Lifecycle {
     pub decision: States,
     pub issue: States,
     pub note: States,
+    /// issues filed `from: report` that are closed — audit accuracy, read later
+    #[serde(skip_serializing_if = "is_zero")]
+    pub report_closed: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 impl Lifecycle {
@@ -54,6 +61,9 @@ pub fn lifecycle(log: &Log, held: &HashSet<String>) -> Lifecycle {
             &mut t.live
         };
         *slot += 1;
+        if r.kind == "issue" && r.from_report() && gone.contains(r.id.as_str()) {
+            out.report_closed += 1;
+        }
     }
     out
 }
@@ -107,5 +117,30 @@ mod tests {
             }
         );
         assert_eq!(l.issue.live, 1);
+    }
+
+    #[test]
+    fn closed_report_issues_are_counted() {
+        let mut log = Log::default();
+        for (id, kind, from) in [
+            ("a", "issue", Some("report")),
+            ("b", "issue", Some("report")),
+            ("c", "issue", None),
+            ("d", "note", Some("report")),
+        ] {
+            log.rows.push(Row {
+                from: from.map(String::from),
+                ..row(id, kind)
+            });
+        }
+        log.closes.push(Row {
+            reference: Some("a".into()),
+            ..Row::default()
+        });
+        log.closes.push(Row {
+            reference: Some("c".into()),
+            ..Row::default()
+        });
+        assert_eq!(lifecycle(&log, &HashSet::new()).report_closed, 1);
     }
 }

@@ -52,7 +52,14 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         for id in st.chunks.iter_mut().flat_map(|c| &mut c.issues) {
             if let Ok(row) = core::resolve_row(&log, id) {
                 let title = row.title.as_deref().map(|t| format!("{t}\n"));
-                *id = format!("{} {}{}", row.id, title.unwrap_or_default(), row.text);
+                let tag = row.from_report().then_some("(from report, unchecked)\n");
+                *id = format!(
+                    "{} {}{}{}",
+                    row.id,
+                    tag.unwrap_or_default(),
+                    title.unwrap_or_default(),
+                    row.text
+                );
             }
         }
     }
