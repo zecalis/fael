@@ -23,7 +23,7 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - `fael find [<text>] [--files <path>] [--key plan:x]` — the session brief, rows about a file or key, or a text search
 - `fael add decision "<the choice, why, what was rejected>" --title "<headline>" --files a,b` — never what code does, progress, or which files changed
   - a rule later chunks follow? One decision, `--key <area>:<topic>`, `--files` the 1–2 files that enforce it
-  - the user decided it? `--from user`; ask them before changing a `(from user)` row
+  - the user decided it? `--from user`, ask before changing it; unchecked report claim? `--from report`
 - `fael add note "<state the next session needs>" --title "<headline>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
 - Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that

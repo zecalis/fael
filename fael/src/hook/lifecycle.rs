@@ -53,4 +53,7 @@ pub(super) fn print(l: &core::stats::Lifecycle) {
             s.live, s.held, s.dormant, s.retired
         );
     }
+    if l.report_closed > 0 {
+        println!("  issues from a report, closed: {}", l.report_closed);
+    }
 }

@@ -100,6 +100,11 @@ impl Row {
         self.from.as_deref() == Some("user")
     }
 
+    /// A claim relayed from someone else's report, not checked (`from: report`).
+    pub fn from_report(&self) -> bool {
+        self.from.as_deref() == Some("report")
+    }
+
     /// The branch this row was filed on: `extra.branch`, stamped by the
     /// adapter from git (servers leave it absent). Read like `to_who` — the
     /// branch a row's work belongs to, for the `[Orphan]` doctor check.

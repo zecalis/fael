@@ -94,6 +94,10 @@ pub fn bump_row(
             "rejected: urgent is for issues — file it as kind issue or drop --urgent".into(),
         );
     }
+    // bump = checked, still true: a relayed claim stops being one
+    if old.from_report() && opts.fh.is_some() {
+        ev.extra.insert("checked".into(), true.into());
+    }
     if let Some(h) = opts.held.as_deref().or(old.held()) {
         ev.extra.insert("held".into(), h.into());
     }
@@ -107,9 +111,16 @@ pub fn bump_row(
         validate_bump(&ev, cfg)?;
         append(d, &ev, false)
     })?;
+    let mut warns = vec![];
+    if ev.extra.contains_key("checked") {
+        warns.push(format!(
+            "{} was from a report, unchecked — bump marks it checked, `from` dropped",
+            old.id
+        ));
+    }
     let mut row = old;
     apply(&mut row, &ev);
-    Ok((row, path, vec![]))
+    Ok((row, path, warns))
 }
 
 /// Lay every bump event onto the row it names, oldest first, so the newest
@@ -153,6 +164,9 @@ fn apply(row: &mut Row, ev: &Row) {
     row.urgent = ev.urgent;
     row.revisit = ev.revisit.clone();
     row.ts = ev.ts.clone();
+    if ev.extra.contains_key("checked") && row.from_report() {
+        row.from = None;
+    }
     for k in ["held", "fh"] {
         match ev.extra.get(k) {
             Some(v) => row.extra.insert(k.into(), v.clone()),

@@ -7,7 +7,7 @@
 //! resulting list through the normal `add_row` path.
 
 use crate::{core, hook};
-use from::{from_user, over_user};
+use from::{from_user, on_files, over_user};
 use paths::root_relative;
 use std::path::PathBuf;
 
@@ -23,7 +23,7 @@ mod recall;
 pub(crate) struct AddOpts {
     pub key: Option<String>,
     pub to: Option<String>,
-    /// `user` when the user said or decided it; absent = the agent chose.
+    /// `user` when the user said or decided it, `report` when relayed unchecked; absent = the agent chose.
     pub from: Option<String>,
     pub title: Option<String>,
     pub revisit: Option<String>,
@@ -119,6 +119,7 @@ pub(crate) fn prepare(
         crate::selfheal::evaluate(&log, &st, &row, supersedes.as_deref(), r.cfg.cross_key);
     warns.extend(evaluated.heal.notes.clone());
     warns.extend(over_user(&log, &row, evaluated.heal.supersedes.as_deref()));
+    warns.extend(on_files(&log, &row, evaluated.heal.supersedes.as_deref()));
     // a flake repeat merges onto the same row (write/flake.rs): the count rides
     // the merged write, so the board shows how often it fired.
     if let Some(target) = evaluated.verdict.target()

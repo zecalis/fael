@@ -40,10 +40,11 @@ fn normalize(out: &str, state: &Path) -> String {
 // properties leave the served surface; they still work when called.)
 // Chunk tool (show|start|note|done|wait|after) joined MCP 2026-10-17:
 // schema 3124 → 3739, one workflow without two screens.
+// from: report (2026-10-22): skill 3308 → 3327, schema 3862 → 3875.
 // Add batch schema (rows, force) 2026-10-22: schema 3739 → 3862, batch-only
 // calls pass validation with no top-level required, one round per row.
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 3308 bytes (~834 est) + MCP schema 3862 bytes (~968 est)";
+    "  constants per session: SKILL.md 3327 bytes (~838 est) + MCP schema 3875 bytes (~971 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -97,7 +98,7 @@ fn stats_json_matches_golden_values() {
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"warning": {"events": 0, "bytes": 0, "codes": {}}},
-            "constants": {"skill_bytes": 3308, "skill_est": 834, "mcp_schema_bytes": 3862, "mcp_schema_est": 968},
+            "constants": {"skill_bytes": 3327, "skill_est": 838, "mcp_schema_bytes": 3875, "mcp_schema_est": 971},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},

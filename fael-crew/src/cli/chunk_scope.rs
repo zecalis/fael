@@ -32,6 +32,9 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str) {
     for w in closed_warnings(&b.title, &b.brief, &log, &b.uid) {
         eprintln!("{w}");
     }
+    for w in super::chunk_scope_report::warnings(&b.title, &b.brief, &log) {
+        eprintln!("{w}");
+    }
 }
 
 /// Id/key tokens of a brief whose row is closed: warning lines, never a refusal.

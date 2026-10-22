@@ -13,13 +13,15 @@
 const CORE: &[(&str, &str)] = &[
     (
         "add",
-        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user] [--supersedes id [--replace old --with new, no <text>]] [--json]
+        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user|report] [--supersedes id [--replace old --with new, no <text>]] [--json]
     (write rows in English; file each in the same message as your next tool call, never alone;
      no --files = the files this session edited, as the edit hook recorded;
      --title = the ≤15-word headline lists show, the body is pulled by id — give one to any
      text longer than a sentence (past 60 words or 400 chars the add is rejected without it);
      --from user = the user said or decided it (omit when you chose): lists say (from user),
      and a later agent asks the user before re-filing or closing it;
+     --from report = relayed from someone else's report, not checked against the code:
+     lists say (from report, unchecked), `fael bump <id>` drops it once you checked it;
      --replace old --with new re-files the --supersedes row with that one passage changed
      (no text; files, key, title and from carry over; old must occur in the body exactly once);
      --to who routes an issue: it lists in full at the session start of whoever's git user.name

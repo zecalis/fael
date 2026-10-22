@@ -218,6 +218,8 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
         // `(from user, urgent 1, to: ploy, waiting: mdl lands, held @feat/x)` — whichever are set
         let route = [
             r.from_user().then(|| "from user".to_string()),
+            r.from_report()
+                .then(|| "from report, unchecked".to_string()),
             r.urgent_value().map(|u| format!("urgent {u}")),
             r.to_who().map(|t| format!("to: {t}")),
             super::revisit::row_waiting(r, &day)
