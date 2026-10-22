@@ -19,7 +19,7 @@ pub(crate) fn registered() -> Vec<PathBuf> {
         .collect();
     let mut keep: Vec<PathBuf> = Vec::new();
     for p in all.iter().filter(|p| !scratch(p)).map(|p| main_of(p)) {
-        if !keep.contains(&p) {
+        if !keep.iter().any(|k| same(k, &p)) {
             keep.push(p);
         }
     }
@@ -73,14 +73,19 @@ fn main_of(p: &Path) -> PathBuf {
         .and_then(Path::parent)
         .filter(|g| g.file_name().is_some_and(|n| n == ".git"))
         .and_then(Path::parent)
-        .and_then(|m| m.canonicalize().ok())
-        .unwrap_or_else(|| p.to_path_buf())
+        .map_or_else(|| p.to_path_buf(), Path::to_path_buf)
+}
+
+/// One repo however spelt: `..` from a relative gitdir, `\\?\` from a Windows canonicalize.
+fn same(a: &Path, b: &Path) -> bool {
+    let c = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    a == b || c(a) == c(b)
 }
 
 /// Put this repo on the board: called by every command that writes its crew.db.
 pub(crate) fn register(r: &Repo) {
     let root = &main_of(main_root(r));
-    if scratch(root) || registered().iter().any(|p| p == root) {
+    if scratch(root) || registered().iter().any(|p| same(p, root)) {
         return;
     }
     let f = registry();
