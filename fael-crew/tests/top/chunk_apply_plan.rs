@@ -1,14 +1,12 @@
 //! `fael chunk apply --plan P`: labels in the ops resolve in plan P like every other chunk verb
 //! (issue 01M5D5FCM); without `--plan` a label keeps its error.
 
-mod common;
-
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 fn fael(d: &Path, args: &[&str], stdin: Option<&str>) -> (bool, String, String) {
-    let mut c = Command::new(common::fael_bin())
+    let mut c = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(d)
         .env("FAEL_STATE_DIR", d.join("state"))

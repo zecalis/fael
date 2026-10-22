@@ -2,14 +2,12 @@
 //! unreadable crew.db is never an empty board, `--plan` cuts it, `chunk show` reads one
 //! chunk by uid or label, a find matches a key, and a chunk uid is no phantom citation.
 
-mod common;
-
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn run(dir: &Path, state: &Path, args: &[&str]) -> Output {
-    Command::new(common::fael_bin())
+    Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)
@@ -169,7 +167,7 @@ fn a_bound_session_is_seen_by_its_stop_hook_in_another_repo() {
     let (d, other, state) = (repo(&t, "r"), repo(&t, "code"), t.join("state"));
     let uid = ok(run(&d, &state, &["chunk", "add", "c", "--brief", "b"]));
     let uid = uid.lines().next().unwrap();
-    let start = Command::new(common::fael_bin())
+    let start = Command::new(crate::common::fael_bin())
         .args(["chunk", "start", uid, "--no-worktree"])
         .current_dir(&d)
         .env("FAEL_STATE_DIR", &state)
@@ -190,7 +188,7 @@ fn a_bound_session_is_seen_by_its_stop_hook_in_another_repo() {
     let ev = serde_json::json!({
         "cwd": other, "session": "/x/.claude/projects/p/sess-1.jsonl", "text": "ok"
     });
-    let mut stop = Command::new(common::fael_bin())
+    let mut stop = Command::new(crate::common::fael_bin())
         .args(["hook", "stop"])
         .current_dir(&other)
         .env("FAEL_STATE_DIR", &state)

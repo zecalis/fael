@@ -1,14 +1,12 @@
 //! `project.branches[]` (decision 01M4V0FY): each local branch but the base's, `local` /
 //! `pushed` / `merged` by git alone, and the unfinished chunks whose run branch it holds.
 
-mod common;
-
 use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
 
 fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)

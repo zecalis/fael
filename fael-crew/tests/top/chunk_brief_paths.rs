@@ -1,13 +1,11 @@
 //! `fael chunk add|edit` warn on a path the stored brief names that exists on disk but is
 //! outside the scope (plan fael-handover h3) — a warning only, the scope is never touched.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))

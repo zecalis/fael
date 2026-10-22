@@ -52,7 +52,7 @@ rules:
   `CreateProcess` never resolves a `.bat` fake off `PATH`. Stub an external tool through an env
   seam the code reads instead, the way `FAEL_GH_JSON` stands in for `gh`.
 - **Unix-only APIs gate the whole test.** Anything from `std::os::unix` goes in a test marked
-  `#[cfg(unix)]` (see `fael/tests/install.rs`). Do not gate single lines inside a shared test.
+  `#[cfg(unix)]` (see `fael/tests/top/install.rs`). Do not gate single lines inside a shared test.
 
 ### A race test repeats itself
 

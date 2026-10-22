@@ -1,0 +1,48 @@
+//! Consolidated top-level integration suites: one binary instead of one per file.
+//!
+//! Thin entry only — each module is a former `tests/*.rs` file.
+
+mod add_cap;
+mod add_dup;
+mod aliases;
+mod aliases_worktrees;
+mod auto_update;
+mod batch;
+mod bump;
+mod call_shape;
+mod cli;
+mod close_key;
+mod crew_missing;
+mod doc_refs;
+mod doctor_branch_gone;
+mod doctor_drift;
+mod doctor_fat;
+mod doctor_wiring;
+mod dryrun;
+mod find_batch;
+mod find_ids;
+mod find_owner;
+mod find_recall;
+mod git_budget;
+mod held_rotate;
+mod help;
+mod install;
+mod install_skills;
+mod intake;
+mod issues;
+mod kickoff_files_changed;
+mod kickoff_merged;
+mod kickoff_plan;
+mod mcp_pin;
+mod mcp_unstamped;
+mod paging;
+mod purge;
+mod report;
+mod restore;
+mod revisit;
+mod row_retire;
+mod row_shown;
+mod state_dir_guard;
+mod store_default;
+mod synonyms;
+mod upgrade_channel;

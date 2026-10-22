@@ -1,13 +1,11 @@
 //! The seams `chunk start` and `chunk done` close without an LLM (issue 01M5FMHQX): a brief
 //! citing a closed row is refused before it claims, and `done` names what it leaves.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))

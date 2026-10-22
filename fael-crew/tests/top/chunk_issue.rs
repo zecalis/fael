@@ -2,14 +2,12 @@
 //! links, the brief prints it with the close rule, and the board shows the fixing chunk —
 //! under needs you `issue-open` once it is done while the issue stays open.
 
-mod common;
-
 use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))

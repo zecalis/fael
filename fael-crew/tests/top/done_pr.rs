@@ -1,14 +1,12 @@
 //! `done --pr` (issue 01M4QFJ6V): the number, `owner/repo#N` or the PR URL; another
 //! repo's PR is refused, never dropped, and a repo's own matches its origin in any case.
 
-mod common;
-
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn run(dir: &Path, state: &Path, args: &[&str]) -> Output {
-    Command::new(common::fael_bin())
+    Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)

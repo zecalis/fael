@@ -2,13 +2,11 @@
 //! on files under the chunk's scope, verdicts ready; a clean scope prints
 //! nothing extra.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)

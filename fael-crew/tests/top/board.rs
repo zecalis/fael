@@ -2,14 +2,12 @@
 //! §10): every object carries the fixture's keys in its order, the four lists follow §5 and
 //! §3, and the board runs from outside any repo off the registry, as the app runs it.
 
-mod common;
-
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn run(dir: &Path, state: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(common::fael_bin())
+    Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)

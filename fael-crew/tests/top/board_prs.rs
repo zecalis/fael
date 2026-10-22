@@ -1,14 +1,12 @@
 //! PLAN-fael-parallel: an open PR (a review chunk, or done with `--pr N` and no `(#N)` on
 //! `origin/HEAD` yet) still holds its scope, and `conflicts` says whether its branch merges.
 
-mod common;
-
 use serde_json::Value;
 use std::path::Path;
 use std::process::Command;
 
 fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)
