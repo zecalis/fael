@@ -134,7 +134,9 @@ fn add_lands_in_the_worktree_the_call_names() {
 }
 
 /// Chunk 6b over MCP: `rows: [...]` with one bad row — it reports alone
-/// (`rejected: row 1:`), the rest save, the call is an error.
+/// (`rejected: row 1:`), the rest save, and the call succeeds so the agent
+/// fixes only the rejected row instead of resending the saved ones.
+/// All-failed stays an error, like the CLI batch's exit.
 #[test]
 fn add_rows_batch_partial() {
     let (_, wt) = main_and_worktree();
@@ -148,15 +150,52 @@ fn add_rows_batch_partial() {
     );
     assert_eq!(r.len(), 1);
     let body = r[0]["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(r[0]["result"]["isError"] == true, "{body}");
+    assert!(r[0]["result"]["isError"] == false, "{body}");
     assert!(body.contains("recorded"), "{body}");
     assert!(body.contains("rejected: row 1:"), "{body}");
+    assert!(body.contains("do not resend them"), "{body}");
     let log = texts(&wt);
     assert!(
         log.contains("first mcp batch row") && log.contains("third mcp batch row"),
         "{log}"
     );
     assert!(!log.contains("bad kind row"), "{log}");
+}
+
+/// A batch where every row fails stays an error and writes nothing; stray
+/// top-level kind/text beside `rows` is ignored with a note, never a reject —
+/// a batch carries its rows inside `rows`, so the top level can only be
+/// an accident.
+#[test]
+fn add_rows_batch_all_failed_and_mixed() {
+    let (_, wt) = main_and_worktree();
+    let r = mcp(
+        &wt,
+        &[
+            serde_json::json!({"rows": [
+                {"kind": "nope", "text": "bad kind row", "files": ["src/a.rs"]},
+                {"kind": "note", "files": ["src/a.rs"]},
+            ]}),
+            serde_json::json!({"kind": "note", "text": "stray", "rows": [
+                {"kind": "note", "text": "batched", "files": ["src/a.rs"]},
+            ]}),
+        ],
+    );
+    assert_eq!(r.len(), 2);
+    assert_eq!(r[0]["result"]["isError"], true);
+    let all = r[0]["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(all.contains("2 of 2 rows rejected"), "{all}");
+    assert!(!all.contains("recorded"), "{all}");
+    // the mix still files the batch — with the note up front, not an error
+    assert_eq!(r[1]["result"]["isError"], false);
+    let mixed = r[1]["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(mixed.contains("top-level kind/text ignored"), "{mixed}");
+    assert!(mixed.contains("recorded"), "{mixed}");
+    let log = texts(&wt);
+    assert!(
+        !log.contains("bad kind row") && log.contains("batched"),
+        "{log}"
+    );
 }
 
 /// A routed row over MCP gets the CLI's paste line, under the id line the

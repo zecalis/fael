@@ -307,6 +307,8 @@ fn a_shape_gate_reject_is_counted_apart_not_as_friction() {
 
 /// A batch whose every rejected row met the gate is the gate too, CLI and MCP;
 /// one row rejected for another reason makes the call a `partial` (01M4GD6C).
+/// Over MCP a partial batch reports success, but stats still counts the named
+/// reject — the agent moves on, the signal stays.
 #[test]
 fn a_batch_rejected_only_by_the_gate_is_counted_as_the_gate() {
     let d = repo();
