@@ -165,6 +165,27 @@ fn the_rules_tell_a_git_ship_agent_to_leave_the_handoff_as_a_finished_note() {
     assert!(r.contains("`Fael-Chunk: U1`"), "{r}");
 }
 
+/// The add lines carry the full form, the gate's title and one-topic rules in
+/// it: an elided `fael add issue …` sent agents to `fael add --help` first.
+#[test]
+fn the_rules_spell_out_the_full_add_form() {
+    let r = rules("U1", None);
+    assert!(
+        !r.contains("fael add issue …") && !r.contains("fael add note …"),
+        "{r}"
+    );
+    assert!(
+        r.contains(
+            "`fael add issue \"<one topic, no ; list>\" --title \"<≤15 words>\" --files <f>`"
+        ),
+        "{r}"
+    );
+    assert!(
+        r.contains("`fael add note \"<state>\" --title \"<≤15 words>\" --files <f>`"),
+        "{r}"
+    );
+}
+
 #[test]
 fn only_a_mixed_chunk_gets_the_delegate_line() {
     let mixed = rules("U1", Some("mixed"));
