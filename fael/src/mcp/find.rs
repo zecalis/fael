@@ -18,6 +18,7 @@ pub(super) fn find(a: &Value) -> Result<String, String> {
         "mcp",
         "mcp-find",
         &r.root,
+        &text,
         &shown,
         (q.0.as_deref(), &q.1, q.2.as_deref()),
     );

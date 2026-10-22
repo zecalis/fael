@@ -23,6 +23,7 @@ mod find_batch;
 mod find_ids;
 mod find_owner;
 mod find_recall;
+mod found_bytes;
 mod git_budget;
 mod held_rotate;
 mod help;
