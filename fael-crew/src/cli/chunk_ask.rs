@@ -49,6 +49,7 @@ pub(crate) fn add_wait(
         session: None,
         base: None,
         shared: Vec::new(),
+        stale: String::new(),
     };
     let here = || Here {
         worktree: wt,
