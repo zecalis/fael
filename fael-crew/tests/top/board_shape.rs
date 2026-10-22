@@ -177,7 +177,7 @@ fn plan_shape(project: &Value, pl: &Value) {
 }
 
 /// Issue 01M5F9DH: the golden shows every live field once, so the app builds against
-/// it — a `client_hint` chunk and a `dropped` count.
+/// it — a `client_hint` chunk, a `dropped` count, and a reviewed run.
 fn shows_live_fields(b: &Value, chunks: &[&Value]) {
     assert!(
         chunks
@@ -193,6 +193,12 @@ fn shows_live_fields(b: &Value, chunks: &[&Value]) {
             .flat_map(|p| p["plans"].as_array().unwrap())
             .any(|pl| pl["counts"].get("dropped").is_some()),
         "golden shows no dropped count"
+    );
+    assert!(
+        chunks
+            .iter()
+            .any(|c| c["run"].get("review").is_some_and(Value::is_string)),
+        "golden shows no reviewed run"
     );
 }
 
