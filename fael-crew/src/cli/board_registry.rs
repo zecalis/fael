@@ -17,9 +17,15 @@ pub(crate) fn registered() -> Vec<PathBuf> {
         .filter(|l| !l.trim().is_empty())
         .map(PathBuf::from)
         .collect();
-    let keep: Vec<PathBuf> = all.iter().filter(|p| !scratch(p)).cloned().collect();
-    // prune what older faels registered (issue 01M4MH3H7); a failed write only skips again
-    if keep.len() < all.len() {
+    let mut keep: Vec<PathBuf> = Vec::new();
+    for p in all.iter().filter(|p| !scratch(p)).map(|p| main_of(p)) {
+        if !keep.iter().any(|k| same(k, &p)) {
+            keep.push(p);
+        }
+    }
+    // prune what older faels registered (issue 01M4MH3H7) and fold a worktree into its
+    // main (01M5J7Q3); a failed write only skips again
+    if keep != all {
         let text: String = keep.iter().map(|p| format!("{}\n", p.display())).collect();
         let _ = std::fs::write(registry(), text);
     }
@@ -55,10 +61,31 @@ pub(crate) fn main_root(r: &Repo) -> &Path {
         .unwrap_or(&r.root)
 }
 
+/// A linked worktree's main checkout, read from its `.git` file; any other path as is.
+/// The board lists each repo once: a worktree reached the registry by a path never
+/// reproduced (issue 01M5J7Q3), so every line is folded here, whatever wrote it.
+fn main_of(p: &Path) -> PathBuf {
+    if !p.join(".git").is_file() {
+        return p.to_path_buf();
+    }
+    fael_core::journal::root(p)
+        .as_deref()
+        .and_then(Path::parent)
+        .filter(|g| g.file_name().is_some_and(|n| n == ".git"))
+        .and_then(Path::parent)
+        .map_or_else(|| p.to_path_buf(), Path::to_path_buf)
+}
+
+/// One repo however spelt: `..` from a relative gitdir, `\\?\` from a Windows canonicalize.
+fn same(a: &Path, b: &Path) -> bool {
+    let c = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    a == b || c(a) == c(b)
+}
+
 /// Put this repo on the board: called by every command that writes its crew.db.
 pub(crate) fn register(r: &Repo) {
-    let root = main_root(r);
-    if scratch(root) || registered().iter().any(|p| p == root) {
+    let root = &main_of(main_root(r));
+    if scratch(root) || registered().iter().any(|p| same(p, root)) {
         return;
     }
     let f = registry();
