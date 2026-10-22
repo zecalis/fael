@@ -15,17 +15,17 @@ pub(crate) fn tools() -> Value {
     let str_ = |d: &str| json!({"type": "string", "description": d});
     let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
     // chunk 6d: one short sentence — it repeats on every tool, so every word is paid three times
-    let cwd = str_("repo, if not the session cwd");
+    let cwd = str_("repo if not session cwd");
     let mut t = json!([
         {
             "name": "find",
             "description": "No args = the session brief; call it first only if no fael hook gave one.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
-                "id": str_("exact id or prefix, pulls the body — id-shaped with no row rejects; pass it as text for a text search"),
+                "id": str_("id or prefix, pulls the body — a missing id rejects; text search: pass as text"),
                 "ids": files("many ids, bodies in one call — a bad id fails alone"),
                 "full": {"type": "boolean", "description": "bodies under titles"},
-                "files": files("paths, dirs, globs, anchors like doc:pricing — rows on any"),
+                "files": files("paths, dirs, globs, anchors — rows on any"),
                 "text": str_("all words, any order, in text or title"),
                 "key": str_("key glob, e.g. auth:*"),
                 "kind": str_("decision | issue | note, or a repo kind"),
@@ -40,11 +40,11 @@ pub(crate) fn tools() -> Value {
             "inputSchema": {"type": "object", "properties": {
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "text": str_("what happened and why, standalone, one topic (no ; or · list)"),
-                "title": str_("≤15-word headline for text past a sentence; required past 60 words/400 chars"),
+                "title": str_("≤15-word headline; required past 60 words/400 chars"),
                 "files": {"type": "array", "items": {"type": "string"},
-                    "description": "paths or scheme:ref anchors — omit for this session's edited files"},
+                    "description": "paths or anchors — omit for this session's edited files"},
                 "rows": {"type": "array", "items": {"type": "object", "required": ["kind", "text"]},
-                    "description": "batch many rows in one call, same fields as top-level [{kind, text, files, ...}] — a bad row reports alone, the rest save"},
+                    "description": "batch rows in one call — a bad row reports alone, the rest save"},
                 "key": str_("optional colon key, e.g. auth:session"),
                 "to": str_("who answers, e.g. ploy"),
                 "from": str_("user (user's call) | report (relayed, unchecked)"),
@@ -77,6 +77,8 @@ pub(crate) fn tools() -> Value {
                 "on": str_("owner|data"),
                 "run": str_("run R"),
                 "force": {"type": "boolean", "description": "take over"},
+                "pr": str_("PR number for done"),
+                "left": str_("leftover ids for done, or none"),
             }},
         },
     ]);
@@ -117,6 +119,10 @@ mod tests {
     ///
     /// Close `force` (issue-only shape gate, 2026-10-22) paid by trimming the
     /// 4×-repeated `cwd` sentence, schema 3862 → 3861.
+    ///
+    /// Chunk `pr` + `left` (2026-10-22): `done` through MCP alone — an MCP
+    /// `done` that named them was silently dropping them. Paid by trimming
+    /// find.id/find.files/add.title/add.rows/cwd, schema 3874 → 3850.
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
@@ -200,7 +206,9 @@ mod tests {
         assert_eq!(props("close"), set(&["id", "ids", "key", "text", "force"]));
         assert_eq!(
             props("chunk"),
-            set(&["verb", "uid", "text", "other", "on", "run", "force"])
+            set(&[
+                "verb", "uid", "text", "other", "on", "run", "force", "pr", "left"
+            ])
         );
     }
 }

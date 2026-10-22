@@ -146,6 +146,70 @@ fn find_id_shapes_match_cli() {
     assert!(!is_err && body.contains("for context"), "{body}");
 }
 
+/// The opencode round-trip (2026-10-22): MCP `find {"id"}` for a row that
+/// lives in another repo on this machine reads it there instead of
+/// rejecting — ULIDs never collide, so one hit is the row. Writes never
+/// follow; only this read does.
+#[test]
+fn find_id_follows_a_row_in_another_repo() {
+    let (_, wt) = main_and_worktree();
+    // a second, independent repo: its own journal, not this clone's
+    let other = std::env::temp_dir().join(format!("fael-mcp-elsewhere-{}", fael_core::ulid()));
+    std::fs::create_dir_all(other.join("src")).unwrap();
+    let git = |args: &[&str]| {
+        assert!(
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(&other)
+                .status()
+                .unwrap()
+                .success()
+        );
+    };
+    git(&["init", "-q"]);
+    git(&["config", "user.name", "Elsewhere"]);
+    git(&["config", "user.email", "elsewhere@example.com"]);
+    std::fs::create_dir_all(other.join(".fael")).unwrap();
+    let other = other.canonicalize().unwrap();
+    // file the row there, through this server so `cwd` routing is exercised too
+    let added = mcp_tool(
+        &wt,
+        "add",
+        &[
+            serde_json::json!({"kind": "note", "text": "row over there", "files": ["src/a.rs"], "cwd": other}),
+        ],
+    );
+    let id = added[0]["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        .unwrap()
+        .to_string();
+    // no `cwd`: the row is not here, but exactly one repo holds it
+    let r = mcp_tool(&wt, "find", &[serde_json::json!({"id": id})]);
+    assert_eq!(r[0]["result"]["isError"], false, "{r:?}");
+    let body = r[0]["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(body.contains("row over there"), "{body}");
+    assert!(body.contains(&other.display().to_string()), "{body}");
+    // a token no repo holds stays a miss, now with the MCP routing beside
+    // the CLI one
+    let r = mcp_tool(&wt, "find", &[serde_json::json!({"id": "01M4ZZZZZZZZ"})]);
+    let miss = r[0]["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        r[0]["result"]["isError"] == true
+            && miss.contains("rejected: no row with id")
+            && !miss.contains("MCP:"),
+        "{miss}"
+    );
+}
+
 /// f1: MCP `find {"recall": "wide"}` unions the exact file hits, the rows
 /// sharing a key with one, and the text match off any file — in that order,
 /// never the unrelated row; without it only today's exact hit.

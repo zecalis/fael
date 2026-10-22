@@ -47,9 +47,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
                 Ok((with_mentioned(&log, row.as_ref(), text), vec![shown]))
             }
             crate::refs::Wide::Many(rows) => Err(crate::find::reject_many(&id, &rows)),
-            crate::refs::Wide::Missing => crate::find::owner::chunk_here(r, &id)
-                .map(|c| (c, vec![]))
-                .ok_or_else(|| crate::find::reject_missing(r, &log, &id)),
+            crate::refs::Wide::Missing => missed(r, &log, &id),
         };
     }
     // a non-id-shaped `id` keeps the old prefix shortcut: an exact id or
@@ -172,6 +170,36 @@ fn ids_call(
         true => Ok((text, p.shown)),
         false => Err(text),
     }
+}
+
+/// An id-shaped query with no row here: its chunk brief, the row where it
+/// lives (one owner only), else the miss with where fael looked.
+fn missed(r: &Repo, log: &core::Log, id: &str) -> Result<(String, Vec<String>), String> {
+    match crate::find::owner::chunk_here(r, id) {
+        Some(c) => Ok((c, vec![])),
+        None => match crate::find::owner::row_elsewhere(r, id) {
+            Some(w) => followed(&w),
+            None => Err(crate::find::reject_missing(r, log, id)),
+        },
+    }
+}
+
+/// The row lives in exactly one other repo on this machine (ULIDs never
+/// collide, so one hit is the row): read it there instead of rejecting.
+/// Writes never follow — only this read does.
+fn followed(w: &crate::find::owner::Elsewhere) -> Result<(String, Vec<String>), String> {
+    let o = crate::repo_at(&w.at).map_err(|e| format!("rejected: {e}"))?;
+    let (log, tags) = crate::journal::read(&o);
+    let row = core::resolve_row(&log, &w.id).map_err(|e| format!("rejected: {e}"))?;
+    let body = crate::journal::tag(core::render_full(&log, &[row], 10_000), &tags);
+    let text = format!(
+        "in {} ({}) — pass {{\"cwd\": \"{}\"}} to work there\n{}",
+        w.at.display(),
+        w.kind,
+        w.at.display(),
+        with_mentioned(&log, row, body)
+    );
+    Ok((text, vec![row.id.clone()]))
 }
 
 /// Rows that merely mention `row`'s id ride under its body, so the reader

@@ -1,6 +1,7 @@
 //! `fael mcp` picks the repo per call — the server runs in the session's cwd,
 //! an agent may be working in another worktree.
 
+mod chunk;
 mod find;
 mod issue_list;
 mod recall;
