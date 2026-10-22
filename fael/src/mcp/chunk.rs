@@ -13,7 +13,7 @@ use serde_json::Value;
 pub(crate) const HIDDEN: &[&str] = &[];
 /// Every key `chunk` reads.
 pub(crate) const KNOWN: &[&str] = &[
-    "verb", "uid", "text", "other", "on", "run", "force", "pr", "left",
+    "verb", "uid", "text", "other", "on", "run", "force", "pr", "left", "review",
 ];
 
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
@@ -140,7 +140,7 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             if has_force {
                 fell.push("`force` (only start takes it)".into());
             }
-            for k in ["other", "on", "pr", "left"] {
+            for k in ["other", "on", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
@@ -150,7 +150,7 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             if has_text {
                 fell.push("`text` (start takes none)".into());
             }
-            for k in ["other", "on", "pr", "left"] {
+            for k in ["other", "on", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
@@ -163,7 +163,7 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             if has_force {
                 fell.push("`force` (only start takes it)".into());
             }
-            for k in ["other", "on", "pr", "left"] {
+            for k in ["other", "on", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
@@ -180,7 +180,7 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             }
         }
         "wait" => {
-            for k in ["other", "pr", "left"] {
+            for k in ["other", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
@@ -190,7 +190,7 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             }
         }
         "after" => {
-            for k in ["on", "pr", "left"] {
+            for k in ["on", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
