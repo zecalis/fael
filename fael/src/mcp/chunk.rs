@@ -102,7 +102,7 @@ fn show_elsewhere(r: &Repo, uid: &str, e: String) -> Result<String, String> {
             let args = vec!["chunk".into(), "show".into(), uid.to_string()];
             match crate::crew::capture(&args, &at) {
                 Ok(t) => Ok(format!(
-                    "in {} (MCP cwd \"{}\")\n{t}",
+                    "in {} (chunk) — pass {{\"cwd\": \"{}\"}} to work there\n{t}",
                     at.display(),
                     at.display()
                 )),
