@@ -150,7 +150,19 @@ fn call(p: &Value) -> Value {
         )),
     };
     let root = args::repo_for(args).ok().map(|r| r.root);
-    crate::hook::record_mcp_call(name, args, root.as_deref(), &res);
+    // a partial batch succeeds for the agent but stats counts its reject line
+    let partial = match &res {
+        Ok(t) if name == "add" && t.starts_with("rejected: ") => {
+            Some(Err(t.lines().next().unwrap_or("").to_string()))
+        }
+        _ => None,
+    };
+    crate::hook::record_mcp_call(
+        name,
+        args,
+        root.as_deref(),
+        partial.as_ref().unwrap_or(&res),
+    );
     let (mut text, is_error) = match res {
         Ok(t) => (t, false),
         Err(e) => (e, true),

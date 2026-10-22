@@ -30,46 +30,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // chunk 6b: `rows: [...]` files many rows in one call — each runs the same
     // validate + self-heal as a single add; a bad row reports alone, the rest save
     if let Some(rows) = a["rows"].as_array() {
-        if rows.is_empty() {
-            return Err("rejected: rows is empty — pass at least one row".into());
-        }
-        let mut out = vec![];
-        let mut warns = vec![];
-        let (mut failed, mut gated) = (0, 0);
-        for (i, v) in rows.iter().enumerate() {
-            let b = crate::batch::batch_row(v).map_err(|e| row_err(e, i))?;
-            match add_row(r, &b.kind, &b.text, &b.files, b.opts) {
-                Ok((row, _, w)) => {
-                    record_row_asks("mcp", "mcp-add", &r.root, &row, &w);
-                    out.push(format!("recorded {}", row.id));
-                    out.extend(crate::batch::paste_line(&row));
-                    out.extend(crate::batch::launch_line(&row));
-                    // like a single add: each row's info/warning lines sit under its id
-                    out.extend(w.iter().cloned());
-                    // c2: held rows on this row's files, verdicts ready
-                    let held = crate::hook::held_add_text(r, &row.files, &row.id);
-                    if !held.is_empty() {
-                        out.extend(held.lines().map(String::from));
-                    }
-                    warns.extend(w);
-                }
-                Err(e) => {
-                    failed += 1;
-                    gated += usize::from(e.starts_with(crate::batch::GATE_REJECT));
-                    let e = format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "));
-                    out.push(e);
-                }
-            }
-        }
-        // like the CLI batch: any rejection turns the call into an error —
-        // the saved rows stay saved, their warnings already sit under their ids
-        // its first line says why, like the CLI batch's one reject
-        if failed > 0 {
-            out.insert(0, crate::batch::batch_reject(failed, gated, rows.len()));
-            return Err(out.join("\n"));
-        }
-        // chunk 6e rides inside write::add_row — the saved ids are already seen
-        return Ok((out.join("\n"), warns));
+        return add_rows(a, rows, r);
     }
     let (row, _, warns) = add_row(
         r,
@@ -110,4 +71,69 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
 
 fn row_err(e: String, i: usize) -> String {
     format!("rejected: row {i}: {}", e.trim_start_matches("rejected: "))
+}
+
+/// The `rows: [...]` batch: each row runs the same validate + self-heal as a
+/// single add. A row that does not even parse reports alone — it must not
+/// abort the rows already saved (`?` here once dropped the whole batch on a
+/// single malformed row). A partial batch still saved rows, so it reports
+/// success and the agent fixes only the rejected rows instead of resending
+/// the batch and filing the saved ones twice. All-failed stays an error,
+/// like the CLI batch's exit. Stats counts the summary line behind a
+/// success, so no signal goes quiet.
+fn add_rows(a: &Value, rows: &[Value], r: &Repo) -> Result<(String, Vec<String>), String> {
+    if rows.is_empty() {
+        return Err("rejected: rows is empty — pass at least one row".into());
+    }
+    let mut out = vec![];
+    let mut warns = vec![];
+    // kind/text beside `rows` is an accident (a batch carries its rows
+    // inside `rows`): read the rows and say the top level fell away —
+    // never reject a call that saves
+    if s(a, "kind").is_some() || s(a, "text").is_some() {
+        out.push("note: top-level kind/text ignored — each row carries its own".to_string());
+    }
+    let (mut failed, mut gated) = (0, 0);
+    for (i, v) in rows.iter().enumerate() {
+        match crate::batch::batch_row(v) {
+            Err(e) => {
+                failed += 1;
+                out.push(row_err(e, i));
+            }
+            Ok(b) => match add_row(r, &b.kind, &b.text, &b.files, b.opts) {
+                Ok((row, _, w)) => {
+                    record_row_asks("mcp", "mcp-add", &r.root, &row, &w);
+                    out.push(format!("recorded {}", row.id));
+                    out.extend(crate::batch::paste_line(&row));
+                    out.extend(crate::batch::launch_line(&row));
+                    // like a single add: each row's info/warning lines sit under its id
+                    out.extend(w.iter().cloned());
+                    // c2: held rows on this row's files, verdicts ready
+                    let held = crate::hook::held_add_text(r, &row.files, &row.id);
+                    if !held.is_empty() {
+                        out.extend(held.lines().map(String::from));
+                    }
+                    warns.extend(w);
+                }
+                Err(e) => {
+                    failed += 1;
+                    gated += usize::from(e.starts_with(crate::batch::GATE_REJECT));
+                    out.push(row_err(e, i));
+                }
+            },
+        }
+    }
+    if failed > 0 {
+        out.insert(0, crate::batch::batch_reject(failed, gated, rows.len()));
+        if failed < rows.len() {
+            out.push(
+                "saved rows above are filed — do not resend them; fix only the rejected rows"
+                    .to_string(),
+            );
+            return Ok((out.join("\n"), warns));
+        }
+        return Err(out.join("\n"));
+    }
+    // chunk 6e rides inside write::add_row — the saved ids are already seen
+    Ok((out.join("\n"), warns))
 }

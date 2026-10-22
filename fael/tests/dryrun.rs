@@ -311,11 +311,15 @@ fn shape_gate_rejects_on_dry_run_and_mcp() {
         is_err && text.contains("rejected: nothing written"),
         "{text}"
     );
-    // a batch row is judged alone: the bad one reports, the clean one saves
+    // a batch row is judged alone: the bad one reports, the clean one saves,
+    // and the call succeeds with a do-not-resend line — all-failed stays an error
     let rows = serde_json::json!({"rows": [note, {"kind": "note", "text": "clean", "files": ["src/a.rs"]}]});
     let (is_err, text) = mcp(&d, "add", rows);
     assert!(
-        is_err && text.contains("rejected: row 0") && text.contains("recorded"),
+        !is_err
+            && text.contains("rejected: row 0")
+            && text.contains("recorded")
+            && text.contains("do not resend them"),
         "{text}"
     );
     let (ok, out, _) = fael(&d, &["find", "--files", "src/a.rs"], "");
