@@ -37,6 +37,9 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
             if let Some(l) = left_arg(a) {
                 args.extend(["--left".into(), l]);
             }
+            if let Some(v) = s(a, "review") {
+                args.extend(["--review".into(), v]);
+            }
         }
         "wait" => {
             need_text("the question")?;
