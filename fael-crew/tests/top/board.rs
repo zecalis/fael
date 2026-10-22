@@ -191,6 +191,13 @@ fn a_linked_worktree_pool_and_the_registry() {
     // written from a worktree, the registry names the main checkout
     let reg = std::fs::read_to_string(state.join("projects")).unwrap();
     assert_eq!((canon(&reg), reg.lines().count()), (d.clone(), 1));
+    // a worktree line, however it got there, folds into its main: one project (01M5J7Q3)
+    write(state.join("projects"), &format!("{reg}{}\n", wt1.display()));
+    let o = run(&tmp, &state, &["board", "--json"]);
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["projects"].as_array().unwrap().len(), 1, "{v}");
+    let reg = std::fs::read_to_string(state.join("projects")).unwrap();
+    assert_eq!((canon(&reg), reg.lines().count()), (d.clone(), 1));
 
     // a root gone from disk is skipped; a crew.db that is not a database stays listed
     // with its error and fails the board (issue 01M4N4CV7)
