@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 2
       # ponytail: a short allowlist of files nothing compiles. skill/ stays out:
       # include_str! builds skill/SKILL.md into the binary. docs/*.md only feeds tests
-      # (help/tests.rs reads architecture.md, tests/doc_refs.rs every .md), so a
+      # (help/tests.rs reads architecture.md, tests/top/doc_refs.rs every .md), so a
       # docs-only PR runs the tests on one OS and skips lint and msrv
       - id: diff
         run: |

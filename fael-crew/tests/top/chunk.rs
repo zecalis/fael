@@ -1,13 +1,11 @@
 //! `fael chunk …` / `fael run end` through the real binary: the launcher's shell line
 //! (`b=$(fael chunk start <uid> --run R) && { claude "$b"; fael run end R; }`) and `--out`.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))
@@ -114,7 +112,7 @@ fn done_out_copies_the_output_per_run() {
 /// `fael hook <event>` with this worktree as cwd: the event reaches crew.db.
 fn hook(d: &Path, event: &str, session: &str) {
     use std::io::Write as _;
-    let mut c = Command::new(common::fael_bin())
+    let mut c = Command::new(crate::common::fael_bin())
         .args(["hook", event])
         .current_dir(d)
         .env("FAEL_STATE_DIR", d.join("state"))
@@ -185,7 +183,7 @@ fn an_agent_start_keeps_its_session_through_done() {
     let d = repo();
     let u = add(&d);
     let with = |args: &[&str]| {
-        Command::new(common::fael_bin())
+        Command::new(crate::common::fael_bin())
             .args(args)
             .current_dir(&d)
             .env("FAEL_STATE_DIR", d.join("state"))
@@ -213,7 +211,7 @@ fn apply_reads_stdin_and_the_board_sees_the_approval() {
     let (a, b) = (add(&d), add(&d));
     let apply = |json: String| {
         use std::io::Write;
-        let mut c = Command::new(common::fael_bin())
+        let mut c = Command::new(crate::common::fael_bin())
             .args(["chunk", "apply", "--json", "-"])
             .current_dir(&d)
             .env("FAEL_STATE_DIR", d.join("state"))

@@ -1,13 +1,11 @@
 //! `fael plan new` / `export` / `apply` / `park` through the real binary: crew.db lands in
 //! the git common dir, a read without a db is a reject, and the md-era verbs are gone.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))

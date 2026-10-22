@@ -3,8 +3,6 @@
 //! and a closed stdin ends it. Unix: git is counted through a wrapper script on PATH.
 #![cfg(unix)]
 
-mod common;
-
 use serde_json::Value;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -13,7 +11,7 @@ use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 
 fn run(dir: &Path, state: &Path, args: &[&str]) -> String {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)
@@ -92,7 +90,7 @@ fn watch(tmp: &Path, state: &Path, count: &Path) -> (Child, Receiver<String>) {
         .status()
         .unwrap();
     let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-    let mut child = Command::new(common::fael_bin())
+    let mut child = Command::new(crate::common::fael_bin())
         .args(["board", "--json", "--watch"])
         .current_dir(tmp)
         .env("FAEL_STATE_DIR", state)

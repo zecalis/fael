@@ -1,8 +1,6 @@
 //! `fael-crew` run directly and through `fael`: one help, the same unknown-flag reject, and the
 //! hidden `fael held` that `chunk start` and `chunk done` call back into.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -10,7 +8,7 @@ fn crew(dir: &Path, args: &[&str]) -> (bool, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_fael-crew"))
         .args(args)
         .current_dir(dir)
-        .env("FAEL_BIN", common::fael_bin())
+        .env("FAEL_BIN", crate::common::fael_bin())
         .env("FAEL_STATE_DIR", dir.join("state"))
         .env_remove("FAEL_DIR")
         .env_remove("CLAUDE_CODE_SESSION_ID")
@@ -22,7 +20,7 @@ fn crew(dir: &Path, args: &[&str]) -> (bool, String, String) {
 }
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))
@@ -85,7 +83,7 @@ fn the_crew_binary_and_fael_print_the_same_help_and_rejects() {
 fn held_prints_nothing_for_a_repo_with_no_rows_and_rejects_an_unknown_kind() {
     let d = repo();
     let run = |args: &[&str]| {
-        let o = Command::new(common::fael_bin())
+        let o = Command::new(crate::common::fael_bin())
             .args(args)
             .current_dir(&d)
             .env("FAEL_STATE_DIR", d.join("state"))

@@ -2,13 +2,11 @@
 //! scope under its own `contracts:` heading — never one off the scope, never a superseded
 //! one — and `chunk done` then says what left that scope (h4).
 
-mod common;
-
 use std::path::Path;
 use std::process::Command;
 
 fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)

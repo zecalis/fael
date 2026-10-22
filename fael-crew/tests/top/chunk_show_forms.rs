@@ -1,12 +1,10 @@
 //! `fael chunk show` with the forms agents type: `p/label`, `p:label`, `p label`, `--uid`.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))
@@ -75,7 +73,7 @@ fn a_wrong_form_names_the_retype() {
 }
 
 fn fael_in(dir: &Path, state: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)

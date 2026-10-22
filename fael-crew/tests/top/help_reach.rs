@@ -20,13 +20,13 @@ use std::collections::BTreeSet;
 // the new-team doc, plus the brief an agent actually reads on `chunk start`.
 // fael-plan and fael-sweep moved to fael crew (decision 01M5AF2H) — they are
 // read from the crew checkout when present, never embedded here.
-const SKILL_MAIN: &str = include_str!("../../fael/skill/SKILL.md");
-const SKILL_DEBUG: &str = include_str!("../../fael/skill/fael-debug/SKILL.md");
-const SKILL_REVIEW: &str = include_str!("../../fael/skill/fael-review/SKILL.md");
-const SKILL_OPENCODE: &str = include_str!("../../fael/skill/opencode.js");
-const AGENTS: &str = include_str!("../../AGENTS.md");
-const README: &str = include_str!("../../README.md");
-const GOLDEN: &str = include_str!("golden/board-v1.json");
+const SKILL_MAIN: &str = include_str!("../../../fael/skill/SKILL.md");
+const SKILL_DEBUG: &str = include_str!("../../../fael/skill/fael-debug/SKILL.md");
+const SKILL_REVIEW: &str = include_str!("../../../fael/skill/fael-review/SKILL.md");
+const SKILL_OPENCODE: &str = include_str!("../../../fael/skill/opencode.js");
+const AGENTS: &str = include_str!("../../../AGENTS.md");
+const README: &str = include_str!("../../../README.md");
+const GOLDEN: &str = include_str!("../golden/board-v1.json");
 
 /// The brief an agent reads on `fael chunk start`: rules + the plan footer
 /// (`other sections — read one: fael plan export <plan> --section <key>`).

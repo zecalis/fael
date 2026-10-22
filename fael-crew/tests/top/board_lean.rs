@@ -1,14 +1,12 @@
 //! An agent's cut of the board (`--plan`, `--open`) carries no `ledger`; the app's plain
 //! `fael board --json` still does (issue 01M4TEHR).
 
-mod common;
-
 use serde_json::Value;
 use std::path::Path;
 use std::process::Command;
 
 fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)

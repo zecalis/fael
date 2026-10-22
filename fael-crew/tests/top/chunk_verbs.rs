@@ -2,13 +2,11 @@
 //! (plan fael-friction-2 chunk-verbs): every uid runs in order, one result line per
 //! uid, a failed one never stops the rest; `list` names the reads that do.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", dir.join("state"))

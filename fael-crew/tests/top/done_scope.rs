@@ -2,14 +2,12 @@
 //! per lane from the wave branch claims that lane only — and prints each file the lane
 //! touched outside its declared scope: unowned, or in the open chunk whose scope holds it.
 
-mod common;
-
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
-    let o = Command::new(common::fael_bin())
+    let o = Command::new(crate::common::fael_bin())
         .args(args)
         .current_dir(dir)
         .env("FAEL_STATE_DIR", state)
@@ -167,7 +165,7 @@ fn a_pair_with_an_after_starts_as_one_run_and_a_stacked_lane_claims_only_its_own
     let p1 = add("p1", &[]);
     let p2 = add("p2", &["--after", &p1]);
     let pair = format!(r#"[{{"op":"pair","chunks":["{p1}","{p2}"]}}]"#);
-    let mut c = Command::new(common::fael_bin())
+    let mut c = Command::new(crate::common::fael_bin())
         .args(["chunk", "apply", "--json", "-"])
         .current_dir(&d)
         .env("FAEL_STATE_DIR", &state)
