@@ -9,7 +9,9 @@
 use super::capture::mine;
 use super::parse::Parsed;
 use super::repeat::{closed_issues, closes, pairs};
-use crate::{Log, backtick_paths, code_spans, ts_ms};
+use crate::shape::guard;
+pub use crate::shape::{CLOSE_TEMPLATE, Shape, close_shape};
+use crate::{Log, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
@@ -65,17 +67,6 @@ fn pr_like(w: &str) -> bool {
     w.strip_prefix('#')
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
-
-/// The close text a fixed bug is taught to take — one const for every channel
-/// (skill, MCP `close`, fix-net, fix-commit line) so what is taught and what
-/// `close_shape`/`names_fix` read cannot drift. The core `<cause> → <fix>` is
-/// `close_shape`'s; the branch right after it (a test to `guard`, or what not
-/// to do when no test can say it) comes before `tried`, so carry's 160-char
-/// clip cuts what failed, never the lesson. It asks for no sha — a squash or a
-/// rebase rewrites it (fael:01M4HTZ4): the fix commit cites `(fael:<id>)`,
-/// and the close ends on an optional `(#N)`.
-pub const CLOSE_TEMPLATE: &str =
-    "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]";
 
 /// A close text that names its fix: a sha or a `(#N)` — the evidence `fixed`
 /// counts, and the one an edit's carry-back line reads (`fix_close`).
@@ -151,44 +142,6 @@ fn close_texts(log: &Log) -> HashMap<&str, Vec<&str>> {
         out.entry(id).or_default().push(text);
     }
     out
-}
-
-/// A close text's label shape (`format:label`, `docs/format.md` § Label).
-/// Pure form, never meaning: the text itself is kept as written either way.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Shape {
-    /// `cause → fix`: the first `→` or `->` outside a code span, with text on
-    /// both sides once code spans are cut — blanks and stray backticks are none.
-    pub core: bool,
-    /// `guard`: a backticked path holding a `/`.
-    pub guard: bool,
-}
-
-pub fn close_shape(text: &str) -> Shape {
-    let prose: String = code_spans(text)
-        .into_iter()
-        .map(|(code, t)| if code { " " } else { t }) // a space, so no arrow is glued
-        .collect();
-    let arrow = [
-        prose.find('→').map(|i| (i, '→'.len_utf8())),
-        prose.find("->").map(|i| (i, 2)),
-    ];
-    let said = |s: &str| s.chars().any(|c| !c.is_whitespace() && c != '`');
-    let core = arrow
-        .into_iter()
-        .flatten()
-        .min()
-        .is_some_and(|(i, n)| said(&prose[..i]) && said(&prose[i + n..]));
-    Shape {
-        core,
-        guard: guard(text),
-    }
-}
-
-/// A backticked path holding a `/`, read off the whole text, code spans
-/// included — the check `closed_with_check` counts and `Shape::guard` reads.
-fn guard(text: &str) -> bool {
-    backtick_paths(text).iter().any(|p| p.contains('/'))
 }
 
 pub(super) fn names_check(texts: &[&str]) -> bool {

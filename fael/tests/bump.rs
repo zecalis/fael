@@ -196,8 +196,11 @@ fn close_and_mv_reject_a_flag_they_never_read() {
     assert!(!ok && err.contains("close takes no --dry-run"), "{err}");
     let (ok, _, err) = fael(&d, &["mv", "src/a.rs", "src/b.rs", "--force"]);
     assert!(!ok && err.contains("mv takes no --force"), "{err}");
+    // a shapeless close rejects before the write; --force files it as is
     let (ok, _, err) = fael(&d, &["close", &id, "done"]);
-    assert!(ok, "close was not rejected, so it still works: {err}");
+    assert!(!ok && err.contains("close names no fix"), "{err}");
+    let (ok, _, err) = fael(&d, &["close", &id, "done", "--force"]);
+    assert!(ok, "close --force was rejected: {err}");
 }
 
 /// A bump or claim moves the row in place: it never says `supersedes` (the

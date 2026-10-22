@@ -27,7 +27,9 @@ fn only_closed_issue_list_shows_marked_rows() {
     let closed = mcp_tool(
         &wt,
         "close",
-        &[serde_json::json!({"id": id, "text": "fixed"})],
+        &[
+            serde_json::json!({"id": id, "text": "ocr slow → raised the timeout; guard `src/ocr_test.rs`"}),
+        ],
     );
     assert!(
         closed.iter().all(|v| v["result"]["isError"] == false),

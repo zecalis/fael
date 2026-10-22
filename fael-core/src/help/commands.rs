@@ -38,9 +38,10 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "close",
         "close a row",
-        "fael close (<id> | --key <key>) \"<why>\"
+        "fael close (<id> | --key <key>) \"<why>\" [--force]
     (an exact id or unique prefix names the row; closing twice is rejected;
-     --key closes the one open row on that key, and lists them if there are several)",
+     --key closes the one open row on that key, and lists them if there are several;
+     an issue's reason needs <cause> → <fix> plus guard `<test>` or don't <X> because <Y> — or pass --force)",
     ),
     (
         "bump",

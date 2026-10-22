@@ -164,11 +164,11 @@ pub(crate) fn closed_line(r: &crate::Repo, close: &Row) -> Option<String> {
 /// batch add above). A single id keeps the old behaviour byte for byte: the
 /// original error returns unchanged, so `already closed` still lands on stderr.
 pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<ExitCode, String> {
-    a.only("close", &["json", "key"])?;
+    a.only("close", &["json", "key", "force"])?;
     let r = crate::repo()?;
     let (mut failed, mut first) = (0, String::new());
     for id in ids {
-        match write::close_row(&r, id, why) {
+        match write::close_row(&r, id, why, a.has("force")) {
             Ok((row, path, warns)) => {
                 warns.iter().for_each(|w| eprintln!("{w}"));
                 record_asks("cli", ASK_WARN, "close", Some(&r.root), &warns);

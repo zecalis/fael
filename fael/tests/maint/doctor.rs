@@ -177,7 +177,14 @@ fn doctor_flags_close_reason_citing_fake_id() {
     let seed = add(&d, "note", "src/a.rs", "keeper row");
     let fake = phantom_of(&seed);
     let target = add(&d, "issue", "src/b.rs", "broken thing");
-    let (ok, _, err) = fael(&d, &["close", &target, &format!("fixed, see {fake}")]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "close",
+            &target,
+            &format!("leak → plugged; guard `src/b_test.rs`; tried {fake}"),
+        ],
+    );
     assert!(ok, "{err}");
     let (ok, _, _) = fael(&d, &["doctor", "--fix"]);
     assert!(ok);
@@ -266,7 +273,10 @@ fn doctor_stays_clean_for_real_ambiguous_and_closed_citations() {
     // a closed row's own text went quiet with the row: only close texts
     // and open rows are scanned, so closing clears the citation
     let target = add(&d, "issue", "src/h.rs", &format!("broken, see {fake}"));
-    let (ok, _, err) = fael(&d, &["close", &target, "really fixed"]);
+    let (ok, _, err) = fael(
+        &d,
+        &["close", &target, "leak → plugged; guard `src/h_test.rs`"],
+    );
     assert!(ok, "{err}");
     let (_, out, _) = fael(&d, &["doctor"]);
     assert!(!out.contains("[Phantom]"), "{out}");
@@ -294,7 +304,10 @@ fn doctor_json_lists_full_row_ids() {
     let gone = ps.iter().find(|p| p["kind"] == "gone").expect("gone");
     assert_eq!(gone["ids"], serde_json::json!([id]), "{gone}");
     // the id is actionable: closing it clears the problem
-    let (ok, _, err) = fael(&d, &["close", &id, "moved"]);
+    let (ok, _, err) = fael(
+        &d,
+        &["close", &id, "gone → deleted; guard `src/gone_test.rs`"],
+    );
     assert!(ok, "{err}");
     let (_, out, _) = fael(&d, &["doctor", "--json"]);
     assert!(!out.contains("\"gone\""), "{out}");

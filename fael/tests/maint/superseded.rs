@@ -67,7 +67,14 @@ fn doctor_flags_a_chain_hidden_by_a_closed_head() {
         .expect("superseded");
     assert_eq!(sup["ids"], serde_json::json!([a]), "{sup}");
     // the fix is a plain `fael close` on the old id — now allowed
-    let (ok, _, err) = fael(&d, &["close", &a, "superseded"]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "close",
+            &a,
+            "superseded → closed at head; guard `src/a_test.rs`",
+        ],
+    );
     assert!(ok, "{err}");
     let (_, out, _) = fael(&d, &["doctor"]);
     assert!(!out.contains("[Superseded]"), "{out}");

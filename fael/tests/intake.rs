@@ -147,7 +147,17 @@ fn intake_a_ticket_an_agent_closed_is_not_reopened_while_the_source_lists_it() {
     three(&d);
     assert!(fael(&d, &["intake"]).0);
     let id = rows(&d)[0]["id"].as_str().unwrap().to_string();
-    assert!(fael(&d, &["close", &id, "fixed in abc123"]).0);
+    assert!(
+        fael(
+            &d,
+            &[
+                "close",
+                &id,
+                "ticket fixed → shipped; guard `src/v_test.rs`"
+            ]
+        )
+        .0
+    );
     let (ok, out, _) = fael(&d, &["intake"]);
     assert!(ok);
     assert!(out.starts_with("0 change(s)"), "{out}");
@@ -163,7 +173,12 @@ fn intake_a_reopened_round_is_its_own_row_and_says_where_the_round_before_stoppe
     assert!(
         fael(
             &d,
-            &["close", "--key", "ticket:vela:v-1", "fixed in abc123"]
+            &[
+                "close",
+                "--key",
+                "ticket:vela:v-1",
+                "ticket fixed → shipped; guard `src/v_test.rs`",
+            ]
         )
         .0
     );
@@ -180,7 +195,7 @@ fn intake_a_reopened_round_is_its_own_row_and_says_where_the_round_before_stoppe
         .unwrap()
         .to_string();
     assert!(
-        text.contains("round 0 stopped — closed: fixed in abc123"),
+        text.contains("round 0 stopped — closed: ticket fixed → shipped"),
         "{text}"
     );
 }

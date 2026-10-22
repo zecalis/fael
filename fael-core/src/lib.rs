@@ -25,6 +25,7 @@ mod overlap;
 mod query;
 mod repo;
 mod row;
+mod shape;
 pub mod stats;
 pub mod sync;
 mod validate;
@@ -72,6 +73,7 @@ pub use query::{
 };
 pub use repo::{Repo, git, git_output, read as read_repo, repo, repo_at, sibling_suggest};
 pub use row::{Row, Stamp};
+pub use shape::{close_gate, close_rejects};
 pub use validate::{
     normalize_files, secret, valid_key, validate, validate_alias, validate_bump, validate_close,
     validate_restore,

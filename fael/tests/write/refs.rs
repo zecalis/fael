@@ -123,7 +123,15 @@ fn close_reason_citing_fake_id_warns_but_closes() {
         .as_str()
         .unwrap()
         .to_string();
-    let (ok, _, err) = fael(&d, &["close", &target, &format!("fixed, see {fake}")], "");
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "close",
+            &target,
+            &format!("leak → plugged; guard `src/b_test.rs`; tried {fake}"),
+        ],
+        "",
+    );
     assert!(ok, "{err}");
     assert!(
         err.contains(&format!("no row with id {fake}")) && err.contains(LINE),
@@ -133,7 +141,7 @@ fn close_reason_citing_fake_id_warns_but_closes() {
     let (_, out, _) = fael(&d, &["find", "--json", "--all"], "");
     assert!(
         out.lines()
-            .any(|l| l.contains(&target) && l.contains("fixed, see")),
+            .any(|l| l.contains(&target) && l.contains("leak → plugged")),
         "{out}"
     );
 }
@@ -155,7 +163,11 @@ fn close_reason_citing_the_target_stays_silent() {
         .to_string();
     let (ok, _, err) = fael(
         &d,
-        &["close", &target, &format!("done, closing {target}")],
+        &[
+            "close",
+            &target,
+            &format!("leak → plugged; guard `src/b_test.rs`; closing {target}"),
+        ],
         "",
     );
     assert!(ok, "{err}");

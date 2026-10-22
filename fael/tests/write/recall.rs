@@ -17,7 +17,15 @@ fn issue(d: &Path, text: &str, extra: &[&str]) -> (String, String) {
 }
 
 fn close(d: &Path, id: &str) {
-    let (ok, _, err) = fael(d, &["close", id, "fixed"], "");
+    let (ok, _, err) = fael(
+        d,
+        &[
+            "close",
+            id,
+            "heic broke → pinned the decoder; guard `src/a_test.rs`",
+        ],
+        "",
+    );
     assert!(ok, "{err}");
 }
 

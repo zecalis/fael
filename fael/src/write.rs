@@ -248,15 +248,17 @@ fn phantom_lines(
         .collect()
 }
 
-/// `fael close` — resolve the target, stamp, append the close row. The reason
-/// is scanned like `add_row`'s text (skipping the target); the row closes
-/// regardless of what the scan finds.
+/// `fael close` — resolve the target, gate the reason's shape, stamp, append
+/// the close row. The reason is scanned like `add_row`'s text (skipping the
+/// target); the row closes regardless of what the scan finds. A bad shape
+/// rejects before the write (like `add`), `--force` files it as is.
 pub(crate) fn close_row(
     r: &crate::Repo,
     id: &str,
     why: &str,
+    force: bool,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
-    close_row_as(r, id, why, None)
+    close_row_as(r, id, why, None, force)
 }
 
 /// [`close_row`] written by `by` instead of the git identity (`intake`).
@@ -265,8 +267,19 @@ pub(crate) fn close_row_as(
     id: &str,
     why: &str,
     by: Option<&str>,
+    force: bool,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
     let log = crate::read(r);
+    // the gate needs the target's kind (only an issue owes the template's
+    // arrow and guard); the id names its repo too, so a miss says where fael
+    // looked — copy the id from `fael find` in the repo that holds it, or
+    // pass that repo's `cwd`
+    let target =
+        core::resolve_row(&log, id).map_err(|e| format!("{e} (searched {})", r.root.display()))?;
+    // an already-closed row says so, whatever the reason's shape
+    if !core::closed(&log).contains(target.id.as_str()) && !force {
+        core::close_gate(why, &target.kind)?;
+    }
     let mut warns = phantom_lines(r, &log, None, why, &[id]);
     warns.extend(crate::unmerged::lines(&r.root, why));
     let mut stamp = crate::session::retire_stamp(r, &log, id);

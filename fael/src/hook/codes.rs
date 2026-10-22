@@ -136,6 +136,8 @@ const REJECTS: &[(&str, &str)] = &[
 const WARNINGS: &[(&str, &str)] = &[
     ("with no title", "untitled"),
     ("topic separators", "topic_list"),
+    ("names no fix", "no_fix"),
+    ("names no check", "no_check"),
     ("files derived", "derived_files"),
     ("no --key", "no_key"),
     ("WHEN:", "when_no_revisit"),
@@ -183,7 +185,7 @@ pub(crate) fn gate_rules(msg: &str) -> Vec<&'static str> {
     let Some((_, why)) = msg.split_once("nothing written — ") else {
         return vec![];
     };
-    let why = why.split(" (or add --force").next().unwrap_or(why);
+    let why = why.split(" (or ").next().unwrap_or(why);
     let mut r: Vec<&str> = why.split(" · ").map(warning).collect();
     r.dedup();
     r

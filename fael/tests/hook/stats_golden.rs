@@ -43,8 +43,10 @@ fn normalize(out: &str, state: &Path) -> String {
 // from: report (2026-10-22): skill 3308 → 3327, schema 3862 → 3875.
 // Add batch schema (rows, force) 2026-10-22: schema 3739 → 3862, batch-only
 // calls pass validation with no top-level required, one round per row.
+// Close shape gate (force, issue-only) 2026-10-22: schema 3875 → 3874 — the
+// new `force` paid by trimming the 4×-repeated `cwd` sentence.
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 3327 bytes (~838 est) + MCP schema 3875 bytes (~971 est)";
+    "  constants per session: SKILL.md 3327 bytes (~838 est) + MCP schema 3874 bytes (~971 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -98,7 +100,7 @@ fn stats_json_matches_golden_values() {
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"warning": {"events": 0, "bytes": 0, "codes": {}}},
-            "constants": {"skill_bytes": 3327, "skill_est": 838, "mcp_schema_bytes": 3875, "mcp_schema_est": 971},
+            "constants": {"skill_bytes": 3327, "skill_est": 838, "mcp_schema_bytes": 3874, "mcp_schema_est": 971},
             "rounds": {"rows_added": 0, "since": "2026-09-26"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},

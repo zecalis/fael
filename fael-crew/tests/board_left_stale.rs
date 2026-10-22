@@ -44,7 +44,7 @@ fn left_and_stale_ride_the_board() {
     let first = |s: String| s.split_whitespace().next().unwrap().to_string();
 
     let shut = first(f(&["add", "issue", "old bug", "--files", "a.rs"]));
-    f(&["close", &shut, "fixed elsewhere"]);
+    f(&["close", &shut, "old bug → fixed; guard `src/a_test.rs`"]);
     let open = first(f(&["add", "issue", "still broken", "--files", "a.rs"]));
 
     let live = first(f(&[

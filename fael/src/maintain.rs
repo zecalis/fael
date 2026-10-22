@@ -112,7 +112,7 @@ fn fix_shipped(r: &crate::Repo, rep: &mut core::DoctorReport, json: bool) {
     {
         let mut left = vec![];
         for (id, text) in p.closes.drain(..) {
-            match crate::write::close_row(r, &id, &text) {
+            match crate::write::close_row(r, &id, &text, true) {
                 Ok((row, _, _)) => say(json, &format!("fixed: closed {} — {text}", row.id)),
                 Err(e) => {
                     eprintln!("skip: {e}");

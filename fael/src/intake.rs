@@ -290,7 +290,7 @@ fn apply(r: &Repo, step: &Step) -> Result<String, String> {
             Ok(format!("added {what} → {}", row.id))
         }
         Step::Close { what, id, why } => {
-            let (row, _, warns) = write::close_row_as(r, id, why, Some(BY))?;
+            let (row, _, warns) = write::close_row_as(r, id, why, Some(BY), true)?;
             warns.iter().for_each(|w| eprintln!("{w}"));
             Ok(format!("closed {what} → {}", row.id))
         }
