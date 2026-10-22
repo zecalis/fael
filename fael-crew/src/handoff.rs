@@ -4,6 +4,7 @@
 
 use super::overlap;
 use super::store::err;
+use fael_core::under;
 use rusqlite::{Transaction, params};
 
 /// `(title, handoff, touched)`: one done / review word and the files its done claimed.
@@ -32,7 +33,7 @@ pub(super) fn after(tx: &Transaction, id: i64) -> Result<Vec<Word>, String> {
 
 /// Done chunks (any plan of this db, not already printed through `after`) whose `touched`
 /// meets `scope` and whose done is newer than the last edit of chunk `id`'s brief (its
-/// creation when never edited): newest first, `CAP` of them, and how many were left out.
+/// creation when never edited): ranked (most touched files under the scope, same plan, deepest scope, newest), `CAP` of them, and how many were left out.
 pub(super) fn by_file(
     tx: &Transaction,
     id: i64,
@@ -49,7 +50,9 @@ pub(super) fn by_file(
     }
     let mut q = tx
         .prepare(
-            "SELECT c.title, e.text, COALESCE(c.touched, '') FROM chunk c
+            "SELECT c.title, e.text, COALESCE(c.touched, ''), e.id,
+                    c.plan IS (SELECT plan FROM chunk WHERE id = ?1)
+             FROM chunk c
              JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid
                                        AND by = 'agent' AND to_state = 'done')
              WHERE c.state = 'done' AND c.id != ?1 AND c.touched IS NOT NULL AND e.text != ''
@@ -63,24 +66,41 @@ pub(super) fn by_file(
              ORDER BY e.id DESC",
         )
         .map_err(err)?;
-    let all: Vec<Word> = q
-        .query_map(params![id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+    let all: Vec<(Word, i64, bool)> = q
+        .query_map(params![id], |r| {
+            Ok(((r.get(0)?, r.get(1)?, r.get(2)?), r.get(3)?, r.get(4)?))
+        })
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)?;
-    let hit: Vec<Word> = all
+    // rank key: (files under the scope, same plan, deepest matching scope, event id)
+    let mut hit: Vec<((usize, bool, usize, i64), Word)> = all
         .into_iter()
-        .filter(|(.., t)| {
-            let files: Vec<String> = t
-                .lines()
-                .filter(|l| !l.is_empty())
-                .map(String::from)
-                .collect();
-            overlap(&mine, &files)
+        .filter_map(|(w, ev, same)| {
+            let files: Vec<String> =
+                w.2.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(String::from)
+                    .collect();
+            if !overlap(&mine, &files) {
+                return None;
+            }
+            let under_n = files
+                .iter()
+                .filter(|f| mine.iter().any(|m| under(f, m)))
+                .count();
+            let depth = mine
+                .iter()
+                .filter(|m| files.iter().any(|f| under(f, m)))
+                .map(|m| m.trim_end_matches('/').matches('/').count())
+                .max()
+                .unwrap_or(0);
+            Some(((under_n, same, depth, ev), w))
         })
         .collect();
+    hit.sort_by_key(|h| std::cmp::Reverse(h.0));
     let more = hit.len().saturating_sub(CAP);
-    Ok((hit.into_iter().take(CAP).collect(), more))
+    Ok((hit.into_iter().take(CAP).map(|(_, w)| w).collect(), more))
 }
 
 #[cfg(test)]

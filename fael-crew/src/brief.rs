@@ -46,6 +46,9 @@ fn resume(o: &mut String, p: &Prev) {
 }
 
 /// Each chunk's hand-off (its `left:` line is part of it) and the files its done claimed.
+/// By-file hand-offs printed in full; the rest get one line.
+const FULL: usize = 2;
+
 fn handoffs(o: &mut String, how: &str, all: &[(String, String, String)]) {
     for (who, text, scope) in all {
         let _ = writeln!(o, "\n{who}, {how}:");
@@ -115,11 +118,13 @@ impl Started {
             quote(&mut o, "owner said", &c.said);
             quote(&mut o, "notes left for this chunk", &c.notes);
             handoffs(&mut o, "before this, handed off", &c.after);
-            handoffs(
-                &mut o,
-                "touched files in this scope, handed off",
-                &c.by_file,
-            );
+            let (full, rest) = c.by_file.split_at(c.by_file.len().min(FULL));
+            handoffs(&mut o, "touched files in this scope, handed off", full);
+            for (who, _, files) in rest {
+                let f: Vec<&str> = files.lines().filter(|l| !l.is_empty()).collect();
+                let tail = if f.len() > 5 { ", …" } else { "" };
+                let _ = writeln!(o, "- {who} — {}{tail}", f[..f.len().min(5)].join(", "));
+            }
             if c.by_file_more > 0 {
                 let _ = writeln!(o, "({} more such chunks not shown)", c.by_file_more);
             }
