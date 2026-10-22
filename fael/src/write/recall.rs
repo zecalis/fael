@@ -27,10 +27,6 @@ fn words(t: &str) -> std::collections::HashSet<String> {
         .collect()
 }
 
-fn is_open(log: &core::Log, r: &core::Row) -> bool {
-    !core::closed(log).contains(r.id.as_str()) && !core::superseded(log).contains(r.id.as_str())
-}
-
 /// An open row with the same kind, key, normalized text and `--files` set as `row`
 /// — filing it again would only add noise (idempotency, not a judgement).
 pub(crate) fn exact<'a>(log: &'a core::Log, row: &core::Row) -> Option<&'a core::Row> {
@@ -66,10 +62,12 @@ pub(crate) fn near(log: &core::Log, row: &core::Row) -> Vec<String> {
         return vec![];
     }
     let mine = words(&row.display_title());
+    let (gone, linked) = (core::closed(log), core::superseded(log));
     let mut hits: Vec<&core::Row> = log
         .rows
         .iter()
-        .filter(|r| r.kind == "issue" && is_open(log, r))
+        .filter(|r| r.kind == "issue")
+        .filter(|r| !gone.contains(r.id.as_str()) && !linked.contains(r.id.as_str()))
         .filter(|r| shares_file(r, row))
         .filter(|r| {
             let theirs = words(&r.display_title());
