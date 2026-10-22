@@ -45,10 +45,10 @@ fn resume(o: &mut String, p: &Prev) {
     }
 }
 
-/// Each chunk's hand-off (its `left:` line is part of it) and the files its done claimed.
 /// By-file hand-offs printed in full; the rest get one line.
 const FULL: usize = 2;
 
+/// Each chunk's hand-off (its `left:` line is part of it) and the files its done claimed.
 fn handoffs(o: &mut String, how: &str, all: &[(String, String, String)]) {
     for (who, text, scope) in all {
         let _ = writeln!(o, "\n{who}, {how}:");

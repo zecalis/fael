@@ -33,7 +33,8 @@ pub(super) fn after(tx: &Transaction, id: i64) -> Result<Vec<Word>, String> {
 
 /// Done chunks (any plan of this db, not already printed through `after`) whose `touched`
 /// meets `scope` and whose done is newer than the last edit of chunk `id`'s brief (its
-/// creation when never edited): ranked (most touched files under the scope, same plan, deepest scope, newest), `CAP` of them, and how many were left out.
+/// creation when never edited): ranked (most touched files under the scope, same plan,
+/// deepest scope, newest), `CAP` of them, and how many were left out.
 pub(super) fn by_file(
     tx: &Transaction,
     id: i64,
