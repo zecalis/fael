@@ -216,4 +216,46 @@ mod tests {
             ])
         );
     }
+
+    /// KNOWN covers the schema: a new schema prop without a KNOWN entry would
+    /// false-note a valid call, so the test fails instead of the agent's round.
+    #[test]
+    fn known_covers_the_schema() {
+        let tools = super::tools();
+        let props = |name: &str| -> BTreeSet<String> {
+            tools
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["name"] == name)
+                .unwrap()["inputSchema"]["properties"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .filter(|k| *k != "cwd")
+                .cloned()
+                .collect()
+        };
+        let known =
+            |ks: &[&str]| -> BTreeSet<String> { ks.iter().map(ToString::to_string).collect() };
+        for (tool, k, h) in [
+            ("find", crate::mcp::find::KNOWN, crate::mcp::find::HIDDEN),
+            ("add", crate::mcp::add::KNOWN, crate::mcp::add::HIDDEN),
+            ("close", crate::mcp::close::KNOWN, crate::mcp::close::HIDDEN),
+            ("chunk", crate::mcp::chunk::KNOWN, crate::mcp::chunk::HIDDEN),
+        ] {
+            let missing: Vec<String> = props(tool).difference(&known(k)).cloned().collect();
+            assert!(
+                missing.is_empty(),
+                "{tool}: schema props missing from KNOWN: {missing:?} — add them (or HIDDEN)"
+            );
+            let outside: Vec<&&str> = h.iter().filter(|x| !k.contains(x)).collect();
+            assert!(
+                outside.is_empty(),
+                "{tool}: HIDDEN not in KNOWN: {outside:?}"
+            );
+        }
+        // bump is unlisted (no schema surface) — its KNOWN is the whole set.
+        assert!(!crate::mcp::bump::KNOWN.is_empty());
+    }
 }

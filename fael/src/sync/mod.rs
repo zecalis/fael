@@ -67,6 +67,11 @@ fn run(r: &Repo, remote: &str) -> Result<(), String> {
     };
     let p = own.push(&others)?;
     let ingested = others.ingested + p.ingested;
+    if ingested > 0 {
+        // rows landed in the local journal from other writers: this clone
+        // holds a ledger now, so cross-repo lookup knows it (fail-open).
+        core::work::register_repo(&core::work::main_root_for(&r.root, r.journal.as_deref()));
+    }
     if p.pushed == 0 && ingested == 0 && others.own_tip.is_none() {
         println!("nothing to sync");
     } else {

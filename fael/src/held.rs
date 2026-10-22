@@ -1,8 +1,7 @@
-//! `fael held start|done|repos` (hidden): the text `fael-crew` prints in the middle of `chunk start`
+//! `fael held start|done` (hidden): the text `fael-crew` prints in the middle of `chunk start`
 //! and `chunk done` — contracts and the open rows on the chunk's files, with their verdicts.
 //! It needs this binary's session state and said-once outbox, so fael-crew asks (FAEL_BIN)
-//! instead of copying it (`repos`: every repo the usage log names, for `chunk show` of a uid
-//! another repo holds). Files arrive one per line on stdin; stdout is the finished text.
+//! instead of copying it. Files arrive one per line on stdin; stdout is the finished text.
 
 use crate::{core, hook};
 use std::collections::HashSet;
@@ -10,11 +9,6 @@ use std::io::Read;
 use std::process::ExitCode;
 
 pub(crate) fn cmd(kind: &str, since: Option<String>) -> Result<ExitCode, String> {
-    if kind == "repos" {
-        let paths = crate::find::owner::repos();
-        paths.iter().for_each(|p| println!("{}", p.display()));
-        return Ok(ExitCode::SUCCESS);
-    }
     let r = crate::repo()?;
     let mut raw = String::new();
     std::io::stdin()
@@ -30,7 +24,7 @@ pub(crate) fn cmd(kind: &str, since: Option<String>) -> Result<ExitCode, String>
             let since = since.as_deref().and_then(core::ts_ms);
             print!("{}", hook::held_text(&r, &files, since))
         }
-        _ => return Err(format!("held: unknown kind {kind:?} — start|done|repos")),
+        _ => return Err(format!("held: unknown kind {kind:?} — start|done")),
     }
     Ok(ExitCode::SUCCESS)
 }

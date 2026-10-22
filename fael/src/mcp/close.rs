@@ -1,14 +1,26 @@
 //! The MCP `close` tool — one `id`, `ids: [...]` sharing one reason, or a `key`. Split
 //! out of mcp.rs at the 400-line ratchet.
 
-use super::args::{done, need, repo_for};
+use super::args::{done, need, repo_for, unknown_note, with_notes};
 use crate::batch::closed_line;
 use crate::close_key::{BOTH, open_row_on};
 use crate::hook::{ASK_WARN, record_asks};
 use crate::write::close_row;
 use serde_json::Value;
 
+/// No hidden `close` properties — KNOWN is the schema surface plus routing.
+#[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
+pub(crate) const HIDDEN: &[&str] = &[];
+/// Every key `close` reads.
+pub(crate) const KNOWN: &[&str] = &["id", "ids", "key", "text", "force"];
+
 pub(super) fn close(a: &Value) -> Result<String, String> {
+    let extra = unknown_note(a, KNOWN);
+    let res = close_checked(a);
+    with_notes(res, vec![extra])
+}
+
+fn close_checked(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
     let why = need(a, "text")?;
     // `ids: [...]` closes many in one call, like the CLI's `close a b "why"`:

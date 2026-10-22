@@ -337,7 +337,7 @@ mod text;
 #[path = "board_watch.rs"]
 mod watch;
 
-pub(crate) use registry::{main_root, register, registered};
+pub(crate) use registry::{register, registered};
 pub(crate) use watch::git_output;
 
 #[cfg(test)]

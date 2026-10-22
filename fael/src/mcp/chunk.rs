@@ -3,12 +3,29 @@
 //! `verb`, so the served schema stays small. The verbs run in `fael-crew`
 //! (`crew::capture`): the same call, the same text.
 
-use super::args::{need, repo_for, s};
+use super::args::{need, repo_for, s, unknown_note, with_notes};
 use crate::Repo;
 use serde_json::Value;
 
+/// No hidden `chunk` properties — every verb key is in the schema; a key the
+/// verb ignores is still known, so it gets the verb note below, not unknown.
+#[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
+pub(crate) const HIDDEN: &[&str] = &[];
+/// Every key `chunk` reads.
+pub(crate) const KNOWN: &[&str] = &[
+    "verb", "uid", "text", "other", "on", "run", "force", "pr", "left", "review",
+];
+
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
 pub(super) fn chunk(a: &Value) -> Result<String, String> {
+    let extra = unknown_note(a, KNOWN);
+    let verb = s(a, "verb").unwrap_or_default();
+    let misplaced = misplaced_note(a, &verb);
+    let res = chunk_checked(a);
+    with_notes(res, vec![extra, misplaced])
+}
+
+fn chunk_checked(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
     let verb = need(a, "verb")?;
     let uid = need(a, "uid")?;
@@ -95,6 +112,103 @@ fn left_arg(a: &Value) -> Option<String> {
                 .join(",")
         })
         .filter(|s| !s.is_empty())
+}
+
+/// A verb's keys that do nothing there — the opencode `pr`/`left` round-trip
+/// (2026-10-22) was this: a `done` naming them silently dropped them. Say the
+/// key and where it applies, never reject a call that saves.
+fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
+    let has = |k: &str| a.get(k).is_some_and(|v| !v.is_null());
+    let has_text = a
+        .get("text")
+        .and_then(Value::as_str)
+        .is_some_and(|t| !t.is_empty());
+    let has_run = a
+        .get("run")
+        .and_then(Value::as_str)
+        .is_some_and(|t| !t.is_empty());
+    let has_force = a.get("force").and_then(Value::as_bool).unwrap_or(false);
+    let mut fell: Vec<String> = vec![];
+    match verb {
+        "show" => {
+            if has_text {
+                fell.push("`text` (show takes none)".into());
+            }
+            if has_run {
+                fell.push("`run` (show takes none)".into());
+            }
+            if has_force {
+                fell.push("`force` (only start takes it)".into());
+            }
+            for k in ["other", "on", "pr", "left", "review"] {
+                if has(k) {
+                    fell.push(format!("`{k}` (only its verb takes it)"));
+                }
+            }
+        }
+        "start" => {
+            if has_text {
+                fell.push("`text` (start takes none)".into());
+            }
+            for k in ["other", "on", "pr", "left", "review"] {
+                if has(k) {
+                    fell.push(format!("`{k}` (only its verb takes it)"));
+                }
+            }
+        }
+        "note" => {
+            if has_run {
+                fell.push("`run` (note takes none)".into());
+            }
+            if has_force {
+                fell.push("`force` (only start takes it)".into());
+            }
+            for k in ["other", "on", "pr", "left", "review"] {
+                if has(k) {
+                    fell.push(format!("`{k}` (only its verb takes it)"));
+                }
+            }
+        }
+        "done" => {
+            for k in ["other", "on"] {
+                if has(k) {
+                    fell.push(format!("`{k}` (only its verb takes it)"));
+                }
+            }
+            if has_force {
+                fell.push("`force` (only start takes it)".into());
+            }
+        }
+        "wait" => {
+            for k in ["other", "pr", "left", "review"] {
+                if has(k) {
+                    fell.push(format!("`{k}` (only its verb takes it)"));
+                }
+            }
+            if has_force {
+                fell.push("`force` (only start takes it)".into());
+            }
+        }
+        "after" => {
+            for k in ["on", "pr", "left", "review"] {
+                if has(k) {
+                    fell.push(format!("`{k}` (only its verb takes it)"));
+                }
+            }
+            if has_force {
+                fell.push("`force` (only start takes it)".into());
+            }
+        }
+        _ => return None,
+    }
+    match fell.as_slice() {
+        [] => None,
+        [one] => Some(format!("note: {one} ignored for chunk {verb}")),
+        many => Some(format!(
+            "note: {} ignored for chunk {verb}",
+            many.join(", ")
+        )),
+    }
 }
 
 /// A `show` for a chunk this repo does not hold: read it where it lives (one

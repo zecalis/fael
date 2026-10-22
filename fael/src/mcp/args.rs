@@ -78,3 +78,50 @@ pub(super) fn urgent_ask(a: &Value) -> Result<core::Urgent, String> {
         ),
     }
 }
+
+/// Unknown top-level keys as a `note:` line — never a reject, so a newer
+/// client sending a field this binary does not know keeps working
+/// (forward-compat). The agent dropped the key silently before (opencode
+/// `pr`/`left` round-trip, 2026-10-22); now it says what fell away.
+pub(super) fn unknown_note(a: &Value, known: &[&str]) -> Option<String> {
+    let o = a.as_object()?;
+    let mut extra: Vec<&str> = o
+        .keys()
+        .map(String::as_str)
+        .filter(|k| *k != "cwd" && !known.contains(k))
+        .collect();
+    extra.sort_unstable();
+    extra.dedup();
+    match extra.as_slice() {
+        [] => None,
+        [one] => Some(format!(
+            "note: unknown arg `{one}` ignored — update fael if it should mean something"
+        )),
+        many => Some(format!(
+            "note: unknown args `{}` ignored — update fael if they should mean something",
+            many.join(", ")
+        )),
+    }
+}
+
+/// Append notes without moving the first line — an error still opens with
+/// `rejected:`, so stats keep counting it.
+pub(super) fn with_notes(
+    mut res: Result<String, String>,
+    notes: Vec<Option<String>>,
+) -> Result<String, String> {
+    let extra: Vec<String> = notes.into_iter().flatten().collect();
+    if extra.is_empty() {
+        return res;
+    }
+    let tail = extra.join("\n");
+    match &mut res {
+        Ok(t) | Err(t) => {
+            if !t.is_empty() {
+                t.push('\n');
+            }
+            t.push_str(&tail);
+        }
+    }
+    res
+}
