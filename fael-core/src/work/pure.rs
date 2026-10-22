@@ -147,7 +147,7 @@ pub fn rules(uid: &str, model: Option<&str>) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
-         - leftovers are rows, not PR prose: file each first (`fael add issue … --files <f>` or `fael chunk add …`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…`; a `finished:` note says it as its own `left: none|<id|uid>,…` line — done refuses without it\n\
+         - leftovers are rows, not PR prose: file each first (`fael add issue \"<one topic, no ; list>\" --title \"<≤15 words>\" --files <f>` or `fael chunk add …`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…`; a `finished:` note says it as its own `left: none|<id|uid>,…` line — done refuses without it\n\
          - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
          - the context was compacted, or the chunk will not finish this session? stop at the last passing step: a part that passes Done on its own ships as this chunk's PR, the rest `fael chunk add`ed and named in `--left`; otherwise a step commit + checkpoint note and end the session — the next `chunk start` resumes it\n\
          - you triggered Windows CI (`gh workflow run ci.yml --ref <branch>`)? wait for it (`gh run watch <id> --exit-status`) and write pass, or fail with the failing test, in the done text — never just \"triggered\"\n\
@@ -158,6 +158,6 @@ pub fn rules(uid: &str, model: Option<&str>) -> String {
          - a wait --on data names what is measured, the command that measures it and the bar that ends the wait\n\
          - after each step that passes: a step commit (Conventional Commits, says what the step did, e.g. `feat(x): …`; never `WIP:`) + `fael chunk note {uid} \"<done; next>\"` — the checkpoint a resume reads\n\
          - a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done\n\
-         - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note … --files <f>`\n"
+         - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note \"<state>\" --title \"<≤15 words>\" --files <f>`\n"
     )
 }
