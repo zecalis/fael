@@ -34,7 +34,13 @@ fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
 }
 
 fn keys(v: &Value) -> Vec<&str> {
-    v.as_object().unwrap().keys().map(String::as_str).collect()
+    // `client_hint` rides only chunks that set it (01M5F9DH): skipped in key compares
+    v.as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .filter(|k| *k != "client_hint")
+        .collect()
 }
 
 fn fixture() -> Value {
@@ -78,7 +84,7 @@ fn the_binary_speaks_board_v1() {
     let b = f(&["chunk", "add", "b", "--brief", "b", "--after", &a]);
     let ask = f(&["chunk", "add", "ask", "--brief", "b"]);
     let free = f(&[
-        "chunk", "add", "free", "--brief", "b", "--scope", "src/x.rs",
+        "chunk", "add", "free", "--brief", "b", "--scope", "src/x.rs", "--client", "opencode",
     ]);
     let idea = f(&["chunk", "add", "idea"]);
     let gone = f(&["chunk", "add", "gone", "--brief", "b"]);
@@ -119,6 +125,7 @@ fn the_binary_speaks_board_v1() {
     assert_eq!(chunk(&a)["run"]["cost"], Value::Null);
     assert_eq!(chunk(&gone)["run"]["cost"], 0.42);
     assert_eq!(chunk(&a)["unblocks"], 1);
+    assert_eq!(chunk(&free)["client_hint"], "opencode");
     assert_eq!(chunk(&a)["overlaps"], serde_json::json!([free]));
     assert_eq!(p["shared"], serde_json::json!(["docs/"]));
     assert_eq!(chunk(&ask)["handoff"]["text"], "Which tone?");

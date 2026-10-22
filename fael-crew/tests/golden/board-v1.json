@@ -153,7 +153,8 @@
           "state": "done",
           "truth": "db",
           "counts": {
-            "done": 12
+            "done": 12,
+            "dropped": 1
           }
         }
       ],
@@ -316,7 +317,8 @@
             "started": "2026-10-10T08:10:00Z",
             "last_seen": "2026-10-10T08:40:00Z",
             "ended": "2026-10-10T08:41:00Z",
-            "cost": 2.17
+            "cost": 2.17,
+            "review": "clean"
           },
           "handoff": {
             "at": "2026-10-10T08:41:00Z",
@@ -522,6 +524,7 @@
           "size": "S",
           "model_hint": "deepseek",
           "model": "haiku",
+          "client_hint": "opencode",
           "scope": [],
           "ready": true,
           "blocked_by": [],
