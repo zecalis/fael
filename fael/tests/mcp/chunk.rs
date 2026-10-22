@@ -109,4 +109,9 @@ fn chunk_done_forwards_pr_and_left() {
         is_err && out.contains("--left 01NOSUCHROW is no open ledger row"),
         "{out}"
     );
+    // `review` rides through too: the CLI's own reject, not a silent drop
+    let (is_err, out) = done(
+        serde_json::json!({"verb": "done", "uid": uid, "text": "did it", "left": "none", "review": "bogus"}),
+    );
+    assert!(is_err && out.contains("--review"), "{out}");
 }

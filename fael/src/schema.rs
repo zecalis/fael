@@ -44,7 +44,7 @@ pub(crate) fn tools() -> Value {
                 "files": {"type": "array", "items": {"type": "string"},
                     "description": "paths or anchors — omit for this session's edited files"},
                 "rows": {"type": "array", "items": {"type": "object", "required": ["kind", "text"]},
-                    "description": "batch rows in one call — a bad row reports alone, the rest save"},
+                    "description": "batch rows; a bad row fails alone, the rest save"},
                 "key": str_("optional colon key, e.g. auth:session"),
                 "to": str_("who answers, e.g. ploy"),
                 "from": str_("user (user's call) | report (relayed, unchecked)"),
@@ -68,7 +68,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "chunk",
-            "description": "Chunk: show|start|note|done|wait|after.",
+            "description": "Chunk lifecycle.",
             "inputSchema": {"type": "object", "required": ["verb", "uid"], "properties": {
                 "verb": str_("show|start|note|done|wait|after"),
                 "uid": str_("chunk uid"),
@@ -79,6 +79,7 @@ pub(crate) fn tools() -> Value {
                 "force": {"type": "boolean", "description": "take over"},
                 "pr": str_("PR number for done"),
                 "left": str_("leftover ids for done, or none"),
+                "review": str_("done: clean|fixed|failed"),
             }},
         },
     ]);
@@ -123,6 +124,10 @@ mod tests {
     /// Chunk `pr` + `left` (2026-10-22): `done` through MCP alone — an MCP
     /// `done` that named them was silently dropping them. Paid by trimming
     /// find.id/find.files/add.title/add.rows/cwd, schema 3874 → 3850.
+    ///
+    /// Chunk `review` (2026-10-22): `done --review` through MCP. Paid by
+    /// trimming the chunk description (the `verb` field lists the verbs) and
+    /// add.rows.
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
@@ -207,7 +212,7 @@ mod tests {
         assert_eq!(
             props("chunk"),
             set(&[
-                "verb", "uid", "text", "other", "on", "run", "force", "pr", "left"
+                "verb", "uid", "text", "other", "on", "run", "force", "pr", "left", "review"
             ])
         );
     }
