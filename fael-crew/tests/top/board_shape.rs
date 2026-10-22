@@ -1,7 +1,8 @@
 //! `tests/golden/board-v1.json` is the app contract (SPEC-fael-board §10): the SwiftUI app is
 //! built against it before `fael board --json` exists. This pins its keys and invariants, so
 //! a shape change is a deliberate edit here; a removed or retyped key also bumps `v` (a new
-//! nullable key does not); `tests/board.rs` holds the binary to it.
+//! nullable key does not — `client_hint`, `run.review` are optional, absent = none);
+//! `tests/board.rs` holds the binary to it.
 
 use serde_json::Value;
 use std::collections::HashSet;
@@ -114,6 +115,8 @@ fn fixes_open(b: &Value, uid: &Value) -> bool {
 
 /// A chunk's keys without the optional tail, each checked: `conflicts` (PLAN-fael-parallel
 /// merge-check: only on an open PR), then `touched` (the paths `done` claimed from the run's diff: only once claimed).
+/// `client_hint` (`chunk add|edit --client`; absent = none, issue 01M5F9DH) is stripped
+/// wherever serde put it (after `model`) before the base-keys compare.
 fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
     let mut k = keys(c);
     if k.last() == Some(&"touched") {
@@ -144,14 +147,22 @@ fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
                 .all(Value::is_string)
         );
     }
+    if let Some(i) = k.iter().position(|k| *k == "client_hint") {
+        k.remove(i);
+        assert!(c["client_hint"].is_string(), "{uid}");
+    }
     k
 }
 
 /// A plan carries `PLAN_KEYS` and, when nested, a `parent` that is a top-level plan of its app.
+/// Its `counts` keys are chunk states (`dropped` rides along, issue 01M5F9DH).
 fn plan_shape(project: &Value, pl: &Value) {
     let mut k = keys(pl);
     k.retain(|k| *k != "parent");
     assert_eq!(k, PLAN_KEYS, "{pl}");
+    for k in pl["counts"].as_object().unwrap().keys() {
+        assert!(STATES.contains(&k.as_str()), "{pl}: counts key {k}");
+    }
     if let Some(par) = pl.get("parent") {
         let up = project["plans"]
             .as_array()
@@ -162,6 +173,43 @@ fn plan_shape(project: &Value, pl: &Value) {
             up.is_some_and(|q| q.get("parent").is_none()),
             "a parent is a top-level plan of the same app: {pl}"
         );
+    }
+}
+
+/// Issue 01M5F9DH: the golden shows every live field once, so the app builds against
+/// it — a `client_hint` chunk and a `dropped` count.
+fn shows_live_fields(b: &Value, chunks: &[&Value]) {
+    assert!(
+        chunks
+            .iter()
+            .any(|c| c.get("client_hint").is_some_and(Value::is_string)),
+        "golden shows no client_hint chunk"
+    );
+    assert!(
+        b["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["plans"].as_array().unwrap())
+            .any(|pl| pl["counts"].get("dropped").is_some()),
+        "golden shows no dropped count"
+    );
+}
+
+/// A chunk's `run`/`wait` objects carry their key sets; `review`
+/// (`chunk done --review clean|fixed|failed`; absent = none) is the run's trailing
+/// optional, like `client_hint` is the chunk's.
+fn subkeys(c: &Value, uid: &str) {
+    for (k, want) in [("run", RUN_KEYS), ("wait", WAIT_KEYS)] {
+        let mut have = Vec::new();
+        if !c[k].is_null() {
+            have = keys(&c[k]);
+            if k == "run" && have.last() == Some(&"review") {
+                have.pop();
+                assert!(c["run"]["review"].is_string(), "{uid}");
+            }
+        }
+        assert!(c[k].is_null() || have == want, "{uid}: {k}");
     }
 }
 
@@ -210,15 +258,14 @@ fn board_v1_shape() {
         .collect();
     let uids: HashSet<&str> = chunks.iter().map(|c| c["uid"].as_str().unwrap()).collect();
     assert_eq!(uids.len(), chunks.len(), "uid is unique across projects");
+    shows_live_fields(&b, &chunks);
     for c in &chunks {
         let uid = c["uid"].as_str().unwrap();
         assert_eq!(uid.len(), 26, "{uid}: a ULID");
         let k = optional(c, uid);
         assert_eq!(k, CHUNK_KEYS, "{uid}");
         assert!(STATES.contains(&c["state"].as_str().unwrap()), "{uid}");
-        for (k, want) in [("run", RUN_KEYS), ("wait", WAIT_KEYS)] {
-            assert!(c[k].is_null() || keys(&c[k]) == want, "{uid}: {k}");
-        }
+        subkeys(c, uid);
         assert!(
             c["ready"] == false || truth_db(&b, c),
             "{uid}: only a db plan's chunk is ready (chunk start takes no md chunk)"

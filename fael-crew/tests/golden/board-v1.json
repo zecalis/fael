@@ -153,7 +153,8 @@
           "state": "done",
           "truth": "db",
           "counts": {
-            "done": 12
+            "done": 12,
+            "dropped": 1
           }
         }
       ],
@@ -522,6 +523,7 @@
           "size": "S",
           "model_hint": "deepseek",
           "model": "haiku",
+          "client_hint": "opencode",
           "scope": [],
           "ready": true,
           "blocked_by": [],
