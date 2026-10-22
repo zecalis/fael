@@ -61,11 +61,12 @@ fn named(dir: &Path, cwd: &Path, p: &str) -> String {
 /// Files a shell call wrote: a word of the command (quotes, brackets and
 /// redirects split it) that is a file modified within `EDIT_WINDOW`. A
 /// script that writes a file it never names is missed — never guessed.
-pub(crate) fn edited(tool: &str, input: &Value, cwd: &Path) -> Vec<String> {
+/// `now` is a parameter (not read inside) so tests pin both sides of the
+/// comparison; production passes `SystemTime::now()` through `edited`.
+pub(crate) fn edited_at(tool: &str, input: &Value, cwd: &Path, now: SystemTime) -> Vec<String> {
     if !SHELLS.contains(&tool.to_ascii_lowercase().as_str()) {
         return vec![];
     }
-    let now = SystemTime::now();
     let fresh = |p: &str| {
         std::fs::metadata(cwd.join(p)).is_ok_and(|m| {
             m.is_file()
@@ -83,6 +84,11 @@ pub(crate) fn edited(tool: &str, input: &Value, cwd: &Path) -> Vec<String> {
         }
     }
     out
+}
+
+/// The production entry: `edited_at` with this instant.
+pub(crate) fn edited(tool: &str, input: &Value, cwd: &Path) -> Vec<String> {
+    edited_at(tool, input, cwd, SystemTime::now())
 }
 
 /// The push for one search/shell call: the files it wrote, as a `SHELL_EDIT`.
@@ -199,6 +205,82 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A temp dir holding each named file with exactly this mtime. The caller
+    /// captures its own `now` first and passes it to `edited_at`, so both
+    /// sides of the comparison are pinned — the test never races the clock.
+    fn dir_with(mtimes: &[(&str, SystemTime)]) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("fael-edited-{}", crate::core::ulid()));
+        for (name, t) in mtimes {
+            let p = d.join(name);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(&p, "// x\n").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&p)
+                .unwrap()
+                .set_modified(*t)
+                .unwrap();
+        }
+        d
+    }
+
+    fn shell(cmd: &str) -> Value {
+        serde_json::json!({"command": cmd})
+    }
+
+    #[test]
+    fn a_write_within_the_window_counts_as_the_calls_own_edit() {
+        let now = SystemTime::now();
+        let d = dir_with(&[("src/a.rs", now - Duration::from_secs(2))]);
+        let got = edited_at("Bash", &shell("sed -i s/a/b/ src/a.rs"), &d, now);
+        assert_eq!(got, vec!["src/a.rs".to_string()]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_write_outside_the_window_is_ignored() {
+        let now = SystemTime::now();
+        let d = dir_with(&[("src/a.rs", now - Duration::from_secs(5))]);
+        let got = edited_at("Bash", &shell("sed -i s/a/b/ src/a.rs"), &d, now);
+        assert!(got.is_empty(), "{got:?}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_future_mtime_counts_as_fresh() {
+        // the clock-skew branch (`duration_since` on a future mtime fails →
+        // fresh) is intended behaviour: integration tests pin mtimes here
+        // (01M5F1GH), so this branch is covered, not accidental.
+        let now = SystemTime::now();
+        let d = dir_with(&[("src/a.rs", now + Duration::from_secs(10))]);
+        let got = edited_at("Bash", &shell("sed -i s/a/b/ src/a.rs"), &d, now);
+        assert_eq!(got, vec!["src/a.rs".to_string()]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_window_boundary_is_exact() {
+        let now = SystemTime::now();
+        let d = dir_with(&[
+            ("fresh.rs", now - Duration::from_millis(2900)),
+            ("stale.rs", now - Duration::from_millis(3100)),
+        ]);
+        let got = edited_at("Bash", &shell("cat fresh.rs stale.rs"), &d, now);
+        assert_eq!(got, vec!["fresh.rs".to_string()]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_non_shell_tool_names_no_write() {
+        let now = SystemTime::now();
+        let d = dir_with(&[("src/a.rs", now - Duration::from_secs(1))]);
+        let got = edited_at("Grep", &shell("cat src/a.rs"), &d, now);
+        assert!(got.is_empty(), "{got:?}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn fix_commit_is_one_line_with_cli_and_mcp_forms() {

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// `~/.local/state/fael/projects`: one main-checkout root per line — every repo the board
 /// covers (SPEC §10). The app runs `fael board` from home, outside any repo.
-fn registry() -> PathBuf {
+pub(super) fn registry() -> PathBuf {
     fael_core::stats::state_dir().join("projects")
 }
 

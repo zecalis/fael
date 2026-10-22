@@ -317,6 +317,20 @@ fn a_done_plan_shows_counts_and_lists_no_chunk() {
     );
 }
 
+#[test]
+fn an_empty_registry_names_cwd_in_human_text() {
+    // outside any repo, nothing registered: exit 0 names where it looked (01M5H0VZ)
+    let tmp = std::env::temp_dir().join(format!("fael-board-{}", fael_core::ulid()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let state = tmp.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    let o = run(&tmp, &state, &["board"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(out.contains("nothing on the board"), "{out}");
+    assert!(out.contains("repos: (none)"), "{out}");
+}
+
 /// Every file under `dir` with its bytes: what a run wrote to the state dir.
 fn snapshot(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     let mut out = Vec::new();
