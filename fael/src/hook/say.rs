@@ -45,16 +45,6 @@ impl Reply {
         &self.said
     }
 
-    /// The ids the held line actually said, if it was said: r1 stamps the
-    /// shown file from this, never from a held line a budget cut dropped.
-    pub(crate) fn held_ids(&self) -> Vec<String> {
-        self.said
-            .iter()
-            .filter(|s| s.kind == "held")
-            .filter_map(|s| s.key.clone())
-            .collect()
-    }
-
     /// Two replies as one, in order (a shell call's edit side, then its
     /// commit side): the contexts joined, the first notice kept.
     pub(crate) fn and(self, next: Reply) -> Reply {
@@ -103,9 +93,6 @@ pub(crate) enum Kind {
     /// A `fix:` commit naming no fael row in a session that closed none
     /// (chunk 5b): said once per session.
     FixCommit,
-    /// Decisions this session wrote on a file it edited (PLAN-fael-decision-
-    /// held chunk 2): stashed by stop, held by the code now? Once per session.
-    Held { ids: Vec<String> },
     /// An edit outside the held chunk's scope, inside another open chunk's
     /// (issue 01M5D9GB): said once per file and session.
     Overlap { file: String },
@@ -146,7 +133,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
         Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
-        Kind::Fixed | Kind::FixCommit | Kind::Held { .. } => (Once::Key, Some("fael close"), false),
+        Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close"), false),
         Kind::Overlap { .. } => (Once::Key, Some("fael chunk note"), false),
         Kind::Brief { .. } => (Once::Key, None, false),
         Kind::Notice => (Once::Event, None, false),
@@ -174,7 +161,6 @@ impl Kind {
             Kind::Check { id } => vec![format!("~check:{id}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
-            Kind::Held { .. } => vec![super::held::KEY.into()],
             Kind::Overlap { file } => vec![format!("~overlap:{file}")],
             Kind::Brief { keys } => keys.clone(),
             Kind::Notice => vec![],
@@ -204,7 +190,6 @@ impl Kind {
             Kind::Check { id } => ("check", vec![id.clone()]),
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
-            Kind::Held { ids } => ("held", ids.clone()),
             Kind::Overlap { file } => ("overlap", vec![file.clone()]),
             Kind::Notice => ("notice", vec![]),
         };
@@ -345,7 +330,7 @@ impl Outbox {
         while cost(&keep) > budget {
             let first = |f: fn(&Kind) -> bool| keep.iter().position(|l| f(&l.kind));
             let cut = first(|k| matches!(k, Kind::Notice))
-                .or_else(|| first(|k| matches!(k, Kind::Fixed | Kind::Held { .. })))
+                .or_else(|| first(|k| matches!(k, Kind::Fixed)))
                 .or_else(|| first(|k| matches!(k, Kind::Check { .. })))
                 .or_else(|| {
                     keep.iter()

@@ -68,12 +68,6 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael: a.rs is outside chunk 01C's scope and inside open chunk p/x's — coordinate: fael chunk note 01D \"<text>\", or go on\n",
         ),
-        line(
-            Kind::Held {
-                ids: vec!["01HELD".into()],
-            },
-            "fael: decision 01HELD — `a.rs` changed since it was written · still true? fael bump 01HELD · the code holds it? fael close 01HELD \"now in `a.rs`\" · wrong now? re-file with --supersedes 01HELD\n",
-        ),
     ]
 }
 
@@ -89,7 +83,6 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Notice => 7,
         Kind::Fixed => 8,
         Kind::FixCommit => 9,
-        Kind::Held { .. } => 11,
         Kind::Overlap { .. } => 10,
     }
 }
@@ -356,8 +349,7 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "notice",
             "fixed",
             "fixcommit",
-            "overlap",
-            "held"
+            "overlap"
         ]
     );
 }

@@ -1,5 +1,5 @@
 //! r1: retire rows stamp where the writing session was shown the row —
-//! `extra.shown` is a captured fact (`held`, `done`), never inferred.
+//! `extra.shown` is a captured fact (`add`, `done`, `start`), never inferred.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -100,29 +100,40 @@ fn close_row(d: &Path, target: &str) -> serde_json::Value {
     panic!("no retire row for {target}");
 }
 
+/// File a two-file decision, edit one file, then a note on it: that `add`
+/// names the decision (held), so a later retire of it carries `shown: ["add"]`.
 fn hold(d: &Path, s: &Path, session: &str) -> String {
     let out = fael(
         d,
         s,
         Some(session),
-        &["add", "decision", "held rule", "--files", "src/a.rs"],
+        &[
+            "add",
+            "decision",
+            "held rule",
+            "--files",
+            "src/a.rs,src/b.rs",
+        ],
     );
     let id = out.split_whitespace().next().unwrap().to_string();
     std::fs::write(d.join("src/a.rs"), "fn x() { 1 }\n").unwrap();
-    hook(d, s, "edit", session, &["src/a.rs"]);
-    hook(d, s, "stop", session, &[]);
-    let out = hook(d, s, "edit", session, &["src/c.rs"]);
+    let out = fael(
+        d,
+        s,
+        Some(session),
+        &["add", "note", "n", "--files", "src/a.rs"],
+    );
     assert!(out.contains(HELD), "{out}");
     id
 }
 
 #[test]
-fn a_held_close_stamps_held_in_the_same_session() {
+fn a_held_close_stamps_add_in_the_same_session() {
     let (d, s) = repo();
     let full = hold(&d, &s, "S1");
     fael(&d, &s, Some("S1"), &["close", &full, "now in src/a.rs"]);
     let row = close_row(&d, &full);
-    assert_eq!(row["shown"], serde_json::json!(["held"]), "{row}");
+    assert_eq!(row["shown"], serde_json::json!(["add"]), "{row}");
 }
 
 #[test]
@@ -212,64 +223,15 @@ fn mcp_close(d: &Path, s: &Path, session: &str, id: &str) -> String {
 }
 
 #[test]
-fn an_mcp_close_after_held_stamps_held() {
+fn an_mcp_close_after_add_stamps_add() {
     let (d, s) = repo();
+    // the edit hook records the session, so the MCP server's env id meets it
     let full = hold(&d, &s, "SM");
+    hook(&d, &s, "edit", "SM", &["src/c.rs"]);
     let out = mcp_close(&d, &s, "SM", &full);
     assert!(out.contains("recorded"), "{out}");
     let row = close_row(&d, &full);
-    assert_eq!(row["shown"], serde_json::json!(["held"]), "{row}");
-}
-
-/// Every `<source>\t<id>` line in the state dir's shown files.
-fn shown_text(s: &Path) -> String {
-    let mut out = String::new();
-    for e in std::fs::read_dir(s.join("sessions"))
-        .into_iter()
-        .flatten()
-        .flatten()
-    {
-        let p = e.path();
-        if p.extension().is_some_and(|x| x == "shown") {
-            out += &std::fs::read_to_string(&p).unwrap_or_default();
-        }
-    }
-    out
-}
-
-/// f2: a held line the push budget cut was never shown, so nothing is stamped
-/// from it; once it fits, it is said and stamped.
-#[test]
-fn a_budget_cut_held_line_stamps_nothing() {
-    let (d, s) = repo();
-    let id = add_id(
-        &d,
-        &s,
-        Some("S1"),
-        &["add", "decision", "cut rule", "--files", "src/a.rs"],
-    );
-    std::fs::write(d.join("src/a.rs"), "fn x() { 1 }\n").unwrap();
-    hook(&d, &s, "edit", "S1", &["src/a.rs"]);
-    hook(&d, &s, "stop", "S1", &[]);
-    // too small for any line: the held line is offered, then dropped
-    std::fs::create_dir_all(d.join(".fael")).unwrap();
-    std::fs::write(d.join(".fael/config.toml"), "[budget]\npush_tokens = 1\n").unwrap();
-    let out = hook(&d, &s, "edit", "S1", &["src/c.rs"]);
-    assert!(!out.contains(HELD), "nothing was said: {out}");
-    assert!(
-        !shown_text(&s).contains("held\t"),
-        "a cut line stamps nothing: {}",
-        shown_text(&s)
-    );
-    // room again: the same push says it and stamps it
-    std::fs::write(d.join(".fael/config.toml"), "[budget]\npush_tokens = 800\n").unwrap();
-    let out = hook(&d, &s, "edit", "S1", &["src/c.rs"]);
-    assert!(out.contains(HELD), "{out}");
-    assert!(
-        shown_text(&s).contains(&format!("held\t{id}")),
-        "{}",
-        shown_text(&s)
-    );
+    assert_eq!(row["shown"], serde_json::json!(["add"]), "{row}");
 }
 
 /// The full id `add` prints as its first line.
@@ -282,7 +244,7 @@ fn add_id(d: &Path, s: &Path, session: Option<&str>, args: &[&str]) -> String {
 }
 
 /// f1: a chain close files one close row per version, but only the requested
-/// row is the one the Held line named — an older version was never shown.
+/// row is the one `add` named — an older version was never shown.
 #[test]
 fn a_chain_close_stamps_shown_on_the_requested_row_only() {
     let (d, s) = repo();
@@ -295,7 +257,7 @@ fn a_chain_close_stamps_shown_on_the_requested_row_only() {
             "decision",
             "old rule A",
             "--files",
-            "src/a.rs",
+            "src/a.rs,src/b.rs",
             "--key",
             "k:t",
         ],
@@ -309,7 +271,7 @@ fn a_chain_close_stamps_shown_on_the_requested_row_only() {
             "decision",
             "new rule B",
             "--files",
-            "src/a.rs",
+            "src/a.rs,src/b.rs",
             "--key",
             "k:t",
             "--supersedes",
@@ -317,9 +279,12 @@ fn a_chain_close_stamps_shown_on_the_requested_row_only() {
         ],
     );
     std::fs::write(d.join("src/a.rs"), "fn x() { 1 }\n").unwrap();
-    hook(&d, &s, "edit", "S1", &["src/a.rs"]);
-    hook(&d, &s, "stop", "S1", &[]);
-    let out = hook(&d, &s, "edit", "S1", &["src/c.rs"]);
+    let out = fael(
+        &d,
+        &s,
+        Some("S1"),
+        &["add", "note", "n", "--files", "src/a.rs"],
+    );
     assert!(out.contains(HELD), "{out}");
     fael(&d, &s, Some("S1"), &["close", &b, "now in src/a.rs"]);
     let old = close_row(&d, &a);
@@ -328,26 +293,7 @@ fn a_chain_close_stamps_shown_on_the_requested_row_only() {
         "the older version was never itself shown: {old}"
     );
     let new = close_row(&d, &b);
-    assert_eq!(new["shown"], serde_json::json!(["held"]), "{new}");
-}
-
-/// `fael` with a Claude-shaped session: the CLI reads `$CLAUDE_CODE_SESSION_ID`.
-fn fael_claude(d: &Path, s: &Path, uuid: &str, args: &[&str]) -> String {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"));
-    c.args(args)
-        .current_dir(d)
-        .env("FAEL_STATE_DIR", s)
-        .env("CLAUDE_CODE_SESSION_ID", uuid)
-        .env_remove("FAEL_DIR")
-        .env_remove("FAEL_SESSION")
-        .env_remove("CODEX_THREAD_ID");
-    let o = c.output().unwrap();
-    assert!(
-        o.status.success(),
-        "{args:?}: {}",
-        String::from_utf8_lossy(&o.stderr)
-    );
-    String::from_utf8_lossy(&o.stdout).trim().to_string()
+    assert_eq!(new["shown"], serde_json::json!(["add"]), "{new}");
 }
 
 /// Brief item 4: a superseder stamps shown for the row it retires, too.
@@ -371,30 +317,5 @@ fn a_superseder_stamps_shown() {
     );
     let row = close_row(&d, &old);
     assert_eq!(row["id"], out.split_whitespace().next().unwrap(), "{row}");
-    assert_eq!(row["shown"], serde_json::json!(["held"]), "{row}");
-}
-
-/// f3: the push speaks a Claude transcript path while the CLI speaks its stem
-/// — the shown key must bridge the two, or nothing is stamped on the client
-/// where most rows are filed.
-#[test]
-fn a_claude_transcript_push_and_a_stem_close_meet() {
-    let (d, s) = repo();
-    let uuid = "abc-123-xyz";
-    let tr = d.join("t").join(format!("{uuid}.jsonl"));
-    let full = add_id(
-        &d,
-        &s,
-        None,
-        &["add", "decision", "claude shaped", "--files", "src/a.rs"],
-    );
-    std::fs::write(d.join("src/a.rs"), "fn x() { 1 }\n").unwrap();
-    hook(&d, &s, "edit", tr.to_str().unwrap(), &["src/a.rs"]);
-    hook(&d, &s, "stop", tr.to_str().unwrap(), &[]);
-    let out = hook(&d, &s, "edit", tr.to_str().unwrap(), &["src/c.rs"]);
-    assert!(out.contains(HELD), "{out}");
-    fael_claude(&d, &s, uuid, &["close", &full, "now in src/a.rs"]);
-    let row = close_row(&d, &full);
-    assert_eq!(row["shown"], serde_json::json!(["held"]), "{row}");
-    assert_eq!(row["session"], serde_json::json!(uuid), "{row}");
+    assert_eq!(row["shown"], serde_json::json!(["add"]), "{row}");
 }
