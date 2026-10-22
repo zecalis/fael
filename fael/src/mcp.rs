@@ -7,12 +7,12 @@
 //! Split into mcp.rs + mcp/ at the 400-line ratchet — one file per tool, this
 //! file keeps only the JSON-RPC framing.
 
-mod add;
-mod args;
-mod bump;
-mod chunk;
-mod close;
-mod find;
+pub(crate) mod add;
+pub(crate) mod args;
+pub(crate) mod bump;
+pub(crate) mod chunk;
+pub(crate) mod close;
+pub(crate) mod find;
 
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};

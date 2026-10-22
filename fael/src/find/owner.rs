@@ -1,71 +1,24 @@
 //! Where a missing id lives (issue 01M4XKM4): a chunk in this repo's crew.db, or a row or
-//! chunk in another repo on this machine — the board's registry and every repo usage names.
+//! chunk in another repo on this machine — the registry and every repo usage names.
 //! Read only on the reject path: an agent that was told "no row" hunted repo by repo.
+//!
+//! Thin over `fael-core::work::elsewhere` — the scan itself lives there so
+//! `fael` and `fael-crew` cannot drift; this file keeps only the message
+//! wording and the chunk-here brief.
 
 use crate::{Repo, core};
-use std::collections::HashSet;
 use std::path::PathBuf;
 
-/// A row this repo does not hold but exactly one other repo on this machine
-/// does. ULIDs never collide across machines, so one hit is the row — reads
-/// may follow it, writes never do.
-pub(crate) struct Elsewhere {
-    pub at: PathBuf,
-    pub kind: String,
-    pub id: String,
-}
+pub(crate) use core::work::Elsewhere;
 
-/// The unique owner of `tok` outside `r`, if there is exactly one. Two repos
-/// holding the prefix stays a reject: a prefix is an address, not a name.
+/// The unique owner of `tok` outside `r`, if there is exactly one.
 pub(crate) fn row_elsewhere(r: &Repo, tok: &str) -> Option<Elsewhere> {
-    let mut seen = HashSet::from([core::work::main_root_for(&r.root, r.journal.as_deref())]);
-    let mut hit: Option<Elsewhere> = None;
-    for path in repos() {
-        let Ok(o) = crate::repo_at(&path) else {
-            continue;
-        };
-        let at = core::work::main_root_for(&o.root, o.journal.as_deref());
-        if !seen.insert(at.clone()) {
-            continue;
-        }
-        if let Ok(row) = core::resolve_row(&crate::read(&o), tok) {
-            if hit.is_some() {
-                return None;
-            }
-            hit = Some(Elsewhere {
-                at,
-                kind: row.kind.clone(),
-                id: row.id.clone(),
-            });
-        }
-    }
-    hit
+    core::work::row_elsewhere(r, tok)
 }
 
-/// The repo root holding `tok` as a chunk, if exactly one does. Labels never
-/// cross repos — they are per plan — so only a uid or prefix resolves.
+/// The repo root holding `tok` as a chunk, if exactly one does.
 pub(crate) fn chunk_elsewhere(r: &Repo, tok: &str) -> Option<PathBuf> {
-    if !core::looks_like_id(tok) {
-        return None;
-    }
-    let mut seen = HashSet::from([core::work::main_root_for(&r.root, r.journal.as_deref())]);
-    let mut hit: Option<PathBuf> = None;
-    for path in repos() {
-        let Ok(o) = crate::repo_at(&path) else {
-            continue;
-        };
-        let at = core::work::main_root_for(&o.root, o.journal.as_deref());
-        if !seen.insert(at.clone()) {
-            continue;
-        }
-        if is_chunk(&o, tok) {
-            if hit.is_some() {
-                return None;
-            }
-            hit = Some(at);
-        }
-    }
-    hit
+    core::work::chunk_elsewhere(r, tok)
 }
 
 /// The line naming `tok`'s owner, if it is anything but missing everywhere.
@@ -75,27 +28,20 @@ pub(crate) fn owner(r: &Repo, tok: &str) -> Option<String> {
             "{tok} is a chunk here — `fael chunk show {tok}` reads it"
         ));
     }
-    let mut seen = HashSet::from([core::work::main_root_for(&r.root, r.journal.as_deref())]);
-    for path in repos() {
-        let Ok(o) = crate::repo_at(&path) else {
-            continue;
-        };
-        let at = core::work::main_root_for(&o.root, o.journal.as_deref());
-        if !seen.insert(at.clone()) {
-            continue;
-        }
+    // one hit is the row (ULIDs never collide); two holders of a prefix stay
+    // a reject — a prefix is an address, not a name.
+    if let Some(w) = row_elsewhere(r, tok) {
+        let at = w.at.display();
+        return Some(format!(
+            "{tok} is a ledger {} in {at} — `cd {at} && fael find {tok}` (MCP: {{\"cwd\": \"{at}\"}})",
+            w.kind
+        ));
+    }
+    if let Some(at) = chunk_elsewhere(r, tok) {
         let at = at.display();
-        if let Ok(row) = core::resolve_row(&crate::read(&o), tok) {
-            return Some(format!(
-                "{tok} is a ledger {} in {at} — `cd {at} && fael find {tok}` (MCP: {{\"cwd\": \"{at}\"}})",
-                row.kind
-            ));
-        }
-        if is_chunk(&o, tok) {
-            return Some(format!(
-                "{tok} is a chunk in {at} — `cd {at} && fael chunk show {tok}` (MCP: {{\"cwd\": \"{at}\"}})"
-            ));
-        }
+        return Some(format!(
+            "{tok} is a chunk in {at} — `cd {at} && fael chunk show {tok}` (MCP: {{\"cwd\": \"{at}\"}})"
+        ));
     }
     None
 }
@@ -118,24 +64,4 @@ pub(crate) fn brief(b: &core::work::Brief) -> String {
         "# {} ({})\nplan {} — {}\n\n{}\n",
         b.title, b.uid, b.plan, b.plan_title, b.brief
     )
-}
-
-/// The board's repos, then every distinct `"repo"` in usage — scratch repos and paths that
-/// are gone left out.
-pub(crate) fn repos() -> Vec<PathBuf> {
-    let usage = crate::hook::usage_files::read(None);
-    let mut seen = HashSet::new();
-    let named = usage.lines().filter_map(|l| {
-        let raw = l.split_once("\"repo\":\"")?.1.split('"').next()?;
-        // ponytail: dedupe the raw slice first, unescape once per repo (27 MB, ~8k repos)
-        seen.insert(raw)
-            .then(|| serde_json::from_str::<String>(&format!("\"{raw}\"")).ok())
-            .flatten()
-            .map(PathBuf::from)
-    });
-    core::work::registered()
-        .into_iter()
-        .chain(named.collect::<Vec<_>>())
-        .filter(|p| !p.as_os_str().is_empty() && p.exists() && !core::work::is_scratch(p))
-        .collect()
 }

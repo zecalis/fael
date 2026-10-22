@@ -119,6 +119,7 @@ pub fn import(
     let dir = journal.unwrap_or(fael).join("log").join("_import");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let paths = write_import(&dir, &stamp, &body, close)?;
+    crate::work::elsewhere::register_store(fael, journal);
     Ok(Report {
         adds: adds.len(),
         folded: folded.len(),

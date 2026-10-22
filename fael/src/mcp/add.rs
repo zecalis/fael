@@ -1,12 +1,42 @@
 //! The MCP `add` tool — one row, `rows: [...]` batch, `dry_run` preview.
 //! Split out of mcp.rs at the 400-line ratchet.
 
-use super::args::{done, files, need, repo_for, s, urgent_ask};
+use super::args::{done, files, need, repo_for, s, unknown_note, urgent_ask, with_notes};
 use crate::hook::record_row_asks;
 use crate::{Repo, write::AddOpts, write::add_row};
 use serde_json::Value;
 
+/// Hidden `add` properties: read but not in the schema surface.
+#[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
+pub(crate) const HIDDEN: &[&str] = &["urgent_before", "dry_run"];
+/// Every key `add` reads: the schema surface plus HIDDEN plus routing.
+pub(crate) const KNOWN: &[&str] = &[
+    "kind",
+    "text",
+    "title",
+    "files",
+    "rows",
+    "key",
+    "to",
+    "from",
+    "revisit",
+    "urgent",
+    "urgent_before",
+    "supersedes",
+    "force",
+    "dry_run",
+];
+
 pub(super) fn add(a: &Value) -> Result<String, String> {
+    // truly unknown keys first — forward-compat: say them, never reject.
+    // Row fields beside `rows` are known but ignored (each row carries its
+    // own): that note lives in `add_rows` so it stays beside the batch.
+    let extra = unknown_note(a, KNOWN);
+    let res = add_checked(a);
+    with_notes(res, vec![extra])
+}
+
+fn add_checked(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
     // warnings are recorded per row where filed (with its id + session);
     // a preview costs no round — its lines are the answer, not an ask
@@ -92,6 +122,36 @@ fn add_rows(a: &Value, rows: &[Value], r: &Repo) -> Result<(String, Vec<String>)
     // never reject a call that saves
     if s(a, "kind").is_some() || s(a, "text").is_some() {
         out.push("note: top-level kind/text ignored — each row carries its own".to_string());
+    }
+    // any other row field beside `rows` fell away too — same shape, one line.
+    {
+        let mut fell: Vec<&str> = [
+            "title",
+            "files",
+            "key",
+            "to",
+            "from",
+            "revisit",
+            "urgent",
+            "urgent_before",
+            "supersedes",
+            "force",
+        ]
+        .into_iter()
+        .filter(|k| a.get(k).is_some_and(|v| !v.is_null()))
+        .filter(|k| *k != "files" || a["files"].as_array().is_some_and(|v| !v.is_empty()))
+        .collect();
+        fell.sort_unstable();
+        match fell.as_slice() {
+            [] => {}
+            [one] => out.push(format!(
+                "note: top-level `{one}` ignored — each row carries its own"
+            )),
+            many => out.push(format!(
+                "note: top-level `{}` ignored — each row carries its own",
+                many.join(", ")
+            )),
+        }
     }
     let (mut failed, mut gated) = (0, 0);
     for (i, v) in rows.iter().enumerate() {

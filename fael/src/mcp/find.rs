@@ -1,11 +1,28 @@
 //! The MCP `find` tool — the same rows as the CLI, ids just shown marked seen.
 //! Split out of mcp.rs at the 400-line ratchet.
 
-use super::args::{files, repo_for, s};
+use super::args::{files, repo_for, s, unknown_note, with_notes};
 use crate::{Repo, aliases, core};
 use serde_json::Value;
 
+/// Hidden `find` properties: read but not offered first (schema stays small,
+/// agents find them through the note when they guess). Declared beside KNOWN
+/// so a new schema prop lands with its entry here (or fails the test).
+#[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
+pub(crate) const HIDDEN: &[&str] = &["since", "by", "to", "revisit", "recall"];
+/// Every key `find` reads: the schema surface plus HIDDEN plus routing.
+pub(crate) const KNOWN: &[&str] = &[
+    "id", "ids", "text", "files", "key", "kind", "full", "all", "limit", "offset", "since", "by",
+    "to", "revisit", "recall",
+];
+
 pub(super) fn find(a: &Value) -> Result<String, String> {
+    let extra = unknown_note(a, KNOWN);
+    let res = find_checked(a).map(|(text, _)| text);
+    with_notes(res, vec![extra])
+}
+
+fn find_checked(a: &Value) -> Result<(String, Vec<String>), String> {
     let r = repo_for(a)?;
     let (text, shown) = find_inner(a, &r)?;
     // chunk 6e: ids just shown are already in this session's context
@@ -22,7 +39,7 @@ pub(super) fn find(a: &Value) -> Result<String, String> {
         &shown,
         (q.0.as_deref(), &q.1, q.2.as_deref()),
     );
-    Ok(text)
+    Ok((text, shown))
 }
 
 fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {

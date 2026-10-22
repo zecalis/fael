@@ -116,12 +116,16 @@ pub fn add_row(
 /// The one write shared by add/close/mv/restore: `put` writes one validated row
 /// to the journal, or to the tree when there is no journal (no git). A tree
 /// log already in the repo is frozen history — read, never written.
+/// A successful write registers the repo (fail-open), so cross-repo lookup
+/// needs no scan: the ledger exists locally only if fael wrote it.
 pub(crate) fn write_both(
     fael: &Path,
     journal: Option<&Path>,
     put: impl Fn(&Path) -> Result<PathBuf, String>,
 ) -> Result<PathBuf, String> {
-    put(journal.unwrap_or(fael))
+    let path = put(journal.unwrap_or(fael))?;
+    crate::work::elsewhere::register_store(fael, journal);
+    Ok(path)
 }
 
 /// Resolve `id`, stamp, validate, append a close row. A row already closed is rejected.

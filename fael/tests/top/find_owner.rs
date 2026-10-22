@@ -46,6 +46,52 @@ fn add(d: &Path, text: &str) -> String {
     out.split_whitespace().next().unwrap().to_string()
 }
 
+/// `fael` with an explicit shared state dir (cross-repo tests without any
+/// manual usage.jsonl: registration, not faked history, is what resolves).
+fn fael_shared(dir: &Path, state: &Path, args: &[&str]) -> (bool, String, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(args)
+        .current_dir(dir)
+        .env("FAEL_STATE_DIR", state)
+        .output()
+        .unwrap();
+    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    (o.status.success(), s(&o.stdout), s(&o.stderr))
+}
+
+/// Register-on-write: with a fresh shared state dir (no usage, no registry),
+/// an `add` in one repo registers it, so `find` from the other names it —
+/// no usage.jsonl hand-written.
+#[test]
+fn an_add_in_another_repo_registers_it_without_usage() {
+    let state = std::env::temp_dir().join(format!("fael-find-owner-reg-{}", fael_core::ulid()));
+    let (here, there) = (repo(), repo());
+    std::fs::write(there.join("src/a.rs"), "// x\n").unwrap();
+    let (ok, out, err) = fael_shared(
+        &there,
+        &state,
+        &[
+            "add",
+            "note",
+            "a row of the other repo",
+            "--files",
+            "src/a.rs",
+        ],
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    // the write registered the repo (and nothing else needed faking)
+    let reg = std::fs::read_to_string(state.join("repos")).unwrap_or_default();
+    assert!(reg.contains(&there.display().to_string()), "{reg}");
+    // drop the usage the add itself recorded: registration alone must resolve
+    let _ = std::fs::remove_file(state.join("usage.jsonl"));
+    let (ok, out, err) = fael_shared(&here, &state, &["find", &id]);
+    assert!(!ok, "{out}");
+    let all = format!("{out}{err}");
+    let want = format!("{id} is a ledger note in {}", there.display());
+    assert!(all.contains(&want), "{all}");
+}
+
 #[test]
 fn words_as_separate_args_are_one_text_query() {
     let d = repo();
