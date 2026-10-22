@@ -109,7 +109,6 @@ fn decide(e: &Event) -> Reply {
         return no;
     }
     note_reply(e, &c);
-    super::held::stash(&c);
     // session start: an RFC 3339 time, or a transcript file's birthtime, at
     // ms precision — whole seconds race with rows filed just before it
     let Some(since_ms) = session_start(e) else {

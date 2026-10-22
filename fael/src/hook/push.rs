@@ -53,8 +53,7 @@ fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
             text: fixed_line(&p, if edited.is_empty() { files } else { &edited }),
         }
     });
-    let held = super::held::line(c);
-    notice.into_iter().chain(fixed).chain(held).collect()
+    notice.into_iter().chain(fixed).collect()
 }
 
 /// Render the selected rows with the token budget — the hard cap after the
@@ -253,12 +252,6 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         clear_stash(&c.session, &c.repo.root);
     }
     let mut r = out.reply();
-    // r1: stamp the shown file only for the held ids the push actually said —
-    // a line a budget cut dropped was never shown
-    let held = r.held_ids();
-    if !held.is_empty() {
-        super::held::record_shown(&c.session, &c.repo.root, "held", &held);
-    }
     if let Some(context) = r.context() {
         let decision = decision::record(trigger, &sel, n, &focus);
         let meta = UsageMeta {

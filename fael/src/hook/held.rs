@@ -1,26 +1,16 @@
-//! Held ask (PLAN-fael-row-retire w1, from PLAN-fael-decision-held chunk 2): an
-//! open decision or note — any writer — naming a file this session edited,
-//! whose file moved since the row was written, may still be true, be what the
-//! code holds now, or be wrong. Stop stashes those ids; the next push names
-//! them once per session with the three verdicts ready to run. The agent
-//! judges — fael only names the pair it saw, and an unjudged row stays active.
-//! `fael chunk done` prints the same over the files the chunk touched (w2);
-//! `fael chunk start` over the files under the chunk's scope (c3).
+//! Held ask (PLAN-fael-row-retire): an open decision or note — any writer —
+//! naming a file whose file moved since the row was written may still be true,
+//! be what the code holds now, or be wrong. The agent judges — fael only names
+//! the pair it saw, and an unjudged row stays active. `fael chunk done` prints
+//! it over the files the chunk touched (w2); `fael chunk start` over the files
+//! under the chunk's scope (c3); `fael add` over the new row's files (c2).
+//! There is no push at Stop (decision 01M5H5AQV): that path said 168 asks for
+//! 1 useful retire.
 
 use super::changed::{Blobs, moved, own_row, user_note};
-use super::protocol::Ctx;
-use super::say::{Kind, Line};
-use super::state::{edited_files, seen_path, session_key, state_dir};
+use super::state::{session_key, state_dir};
 use crate::core;
 use std::path::{Path, PathBuf};
-
-/// The seen-list line of the session's one held line: stop reads it too, so
-/// a session already told stashes nothing more.
-pub(crate) const KEY: &str = "~held";
-
-// ponytail: a session that edited more names only the first few; the rest stay
-// active and keep pushing — raise it if `fael stats` held yield says so
-const MAX: usize = 3;
 
 /// `chunk done` names more: its diff is the whole chunk, not one session's turn.
 const DONE_MAX: usize = 5;
@@ -32,15 +22,9 @@ const START_MAX: usize = 3;
 /// `fael add` names fewer: the row's own files, not the chunk's diff.
 const ADD_MAX: usize = 3;
 
-/// The ids stop stashed for the next push, one `<id>\t<path>` line each.
-fn path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
-    state_dir().join("sessions").join(format!("{key}.held"))
-}
-
 /// Per-session file of where each retired row was shown: one
 /// `<source>\t<id>` line each (`held`, `done`, later `add`/`start`). Keyed
-/// like `path` but through `session_id`, so a transcript path and its stem
+/// by `session_key` of `session_id`, so a transcript path and its stem
 /// meet — the push speaks the former, `writer_session` the latter. Fail open
 /// everywhere: an unreadable file is no sources, an unwritable one drops.
 pub(crate) fn shown_path(session: &str, root: &Path) -> PathBuf {
@@ -145,63 +129,6 @@ fn text_with(log: &core::Log, rows: &[(&core::Row, String)], extra: &[String]) -
     out
 }
 
-/// At stop: stash the session's held candidates, unless the session was
-/// already told. A sub-agent's stop never reaches here. A row this session
-/// already showed (an `add`, `chunk done` or `chunk start` listed it) is
-/// left out, so the Held line names only the rows still unshown.
-pub(super) fn stash(c: &Ctx) {
-    if c.session.is_empty() {
-        return;
-    }
-    let seen = std::fs::read_to_string(seen_path(&c.session, "", &c.repo.root));
-    if seen.is_ok_and(|s| s.lines().any(|l| l == KEY)) {
-        return;
-    }
-    let edited = edited_files(&c.session, &c.repo.root, usize::MAX);
-    if edited.is_empty() {
-        return;
-    }
-    let al = crate::aliases::load(&c.repo, &c.log, false);
-    let mut found = pairs(&c.log, &c.repo.root, &al, &c.session, &edited);
-    // c2: add no longer spends ~held — it stamps shown instead, so the Held
-    // line keeps the rows add never named and drops only the ones it did
-    found.retain(|(r, _)| shown_for(&c.session, &c.repo.root, &r.id).is_empty());
-    found.truncate(MAX);
-    let p = path(&c.session, &c.repo.root);
-    if found.is_empty()
-        || p.parent()
-            .is_none_or(|d| std::fs::create_dir_all(d).is_err())
-    {
-        return;
-    }
-    let body: String = found
-        .iter()
-        .map(|(r, f)| format!("{}\t{f}\n", r.id))
-        .collect();
-    let _ = std::fs::write(p, body);
-}
-
-/// At the next push: the held line for the stashed ids still active — one
-/// closed or superseded since stop is not named. `None` = nothing to say.
-pub(super) fn line(c: &Ctx) -> Option<Line> {
-    let s = std::fs::read_to_string(path(&c.session, &c.repo.root)).ok()?;
-    let active = active(&c.log);
-    let live: Vec<(&core::Row, String)> = s
-        .lines()
-        .filter_map(|l| l.split_once('\t'))
-        .filter(|(id, _)| active(id))
-        .filter_map(|(id, f)| Some((c.log.rows.iter().find(|r| r.id == id)?, f.to_string())))
-        .collect();
-    if live.is_empty() {
-        return None;
-    }
-    let ids: Vec<String> = live.iter().map(|(r, _)| r.id.clone()).collect();
-    Some(Line {
-        kind: Kind::Held { ids },
-        text: text(&c.log, &live),
-    })
-}
-
 /// `fael chunk done`: the held text over the files the chunk touched, at most
 /// `DONE_MAX` rows (never-shown first, see `held_rotate`), then where the rest are. Empty when none.
 pub(crate) fn done_text(r: &crate::Repo, files: &[String], since: Option<i64>) -> String {
@@ -290,8 +217,7 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
 /// Command output, not a hook line (no Outbox kind): the caller prints the
 /// returned text after the add result. Each named row is stamped shown
 /// `add`, so a later close/bump of it carries `shown: ["add", …]`, and
-/// `held::stash` skips a row this session already showed — the Stop Held
-/// line names only the rest, never a row add already named. A row already
+/// A row already
 /// shown this session (held, done, start or an earlier add) is not named
 /// again.
 pub(crate) fn add_text(r: &crate::Repo, files: &[String], exclude: &str) -> String {
@@ -328,8 +254,7 @@ fn select<'a>(
     exclude: &str,
 ) -> Vec<(&'a core::Row, String)> {
     let mut found = pairs(log, root, al, "", files);
-    // decision 01M5528X: the Held line at Stop is the one ask over a changed
-    // row; this list leaves the dormant ones out
+    // decision 01M5528X: dormant rows stay out of these lists
     found.retain(|(w, _)| !log.dormant.contains(&w.id) && w.id != exclude);
     found
 }
