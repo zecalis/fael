@@ -80,6 +80,31 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     Ok(())
 }
 
+/// issue 01M5H3FGB: a fence rejection that names `--run R` gets the whole retype appended,
+/// built from the args passed. The run is never picked for the agent.
+fn with_retype(
+    e: String,
+    uid: &str,
+    handoff: &str,
+    flag: impl Fn(&str) -> Option<String>,
+) -> String {
+    let Some(run) = e
+        .split("pass --run ")
+        .nth(1)
+        .and_then(|t| t.split_whitespace().next())
+    else {
+        return e;
+    };
+    let q = |v: &str| format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\""));
+    let mut cmd = format!("fael chunk done {uid} {}", q(handoff));
+    for f in ["pr", "out", "review", "left"] {
+        if let Some(v) = flag(f) {
+            cmd += &format!(" --{f} {}", if v.contains(' ') { q(&v) } else { v });
+        }
+    }
+    format!("{e}\nretype: {cmd} --run {run}")
+}
+
 pub(crate) fn done(
     a: &Args,
     r: &Repo,
@@ -139,7 +164,8 @@ pub(crate) fn done(
     let kept = st.claimed_at_end(uid, here.run);
     // the run's start, read before done ends it: held rows `start` named after it are not repeated
     let started = st.run_started(uid, here.run);
-    st.done_review(uid, handoff, pr, out, a.one("review").as_deref(), here)?;
+    st.done_review(uid, handoff, pr, out, a.one("review").as_deref(), here)
+        .map_err(|e| with_retype(e, uid, handoff, |f| a.one(f)))?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
@@ -289,4 +315,31 @@ fn copy_all(src: &Path, to: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(d)?;
     }
     std::fs::copy(src, to).map(|_| ())
+}
+
+#[cfg(test)]
+mod retype_tests {
+    use super::with_retype;
+
+    #[test]
+    fn a_fence_reject_gets_a_copyable_retype_and_other_errors_stay() {
+        let e = "rejected: chunk C1 was taken over by run R9 (codex) in /w — pass --run R9";
+        let flag = |f: &str| match f {
+            "pr" => Some("12".to_string()),
+            "left" => Some("none".to_string()),
+            _ => None,
+        };
+        let got = with_retype(e.into(), "C1", "said \"hi\"", flag);
+        assert!(got.starts_with(e), "{got}");
+        assert!(
+            got.ends_with(
+                "retype: fael chunk done C1 \"said \\\"hi\\\"\" --pr 12 --left none --run R9"
+            ),
+            "{got}"
+        );
+        assert_eq!(
+            with_retype("rejected: x".into(), "C1", "h", flag),
+            "rejected: x"
+        );
+    }
 }

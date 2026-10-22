@@ -211,7 +211,7 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
                         )
                     });
                     eprintln!(
-                        "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope …",
+                        "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope … · only read? write \"read {p}\"",
                         b.uid
                     );
                 }

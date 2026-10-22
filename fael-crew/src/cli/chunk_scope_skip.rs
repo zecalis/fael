@@ -16,6 +16,9 @@ const NEGATIONS: &[&str] = &[
 /// Words that make the next path a command to run, not a file to edit.
 const RUN_WORDS: &[&str] = &["run", "runs", "running"];
 
+/// Words that make the next path a doc to read, not a file to edit (issue 01M5H3FG8).
+const READ_WORDS: &[&str] = &["read", "reads", "see", "per", "follow"];
+
 /// Sentence pieces of `text`: split at `.` `;` and newline only where a space or the end
 /// follows a `.`, so `foo.rs` and `a/b.sh` stay whole.
 pub(crate) fn sentences(text: &str) -> Vec<&str> {
@@ -37,7 +40,7 @@ pub(crate) fn sentences(text: &str) -> Vec<&str> {
     out
 }
 
-/// True when `path` in `sentence` follows a negation phrase, or the word "run".
+/// True when `path` in `sentence` follows a negation phrase, or the word "run" / "read".
 pub(crate) fn skipped(sentence: &str, path: &str) -> bool {
     let Some(at) = sentence.find(path) else {
         return false;
@@ -51,7 +54,7 @@ pub(crate) fn skipped(sentence: &str, path: &str) -> bool {
         .rsplit(|c: char| !c.is_alphanumeric())
         .next()
         .unwrap_or("");
-    RUN_WORDS.contains(&prev)
+    RUN_WORDS.contains(&prev) || READ_WORDS.contains(&prev)
 }
 
 #[cfg(test)]
@@ -64,6 +67,15 @@ mod tests {
         assert!(skipped(s, "fael/src/maintain/noverdict.rs"));
         assert!(skipped("Then run `scripts/gate.sh`", "scripts/gate.sh"));
         assert!(skipped("Running scripts/gate.sh", "scripts/gate.sh"));
+    }
+
+    #[test]
+    fn read_words_skip_the_path_but_an_edit_sentence_still_warns() {
+        assert!(skipped("First read docs/ACCESS.md", "docs/ACCESS.md"));
+        assert!(skipped("Shape per `docs/PAGES.md`", "docs/PAGES.md"));
+        assert!(skipped("See docs/A.md", "docs/A.md"));
+        assert!(!skipped("Edit docs/ACCESS.md to add it", "docs/ACCESS.md"));
+        assert!(!skipped("Read it, then edit docs/A.md", "docs/A.md"));
     }
 
     #[test]

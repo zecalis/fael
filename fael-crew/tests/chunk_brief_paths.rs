@@ -85,7 +85,7 @@ fn edit_brief_rechecks_and_a_path_not_on_disk_is_ignored() {
     let d = repo();
     let (uid, err) = add(&d, "inbox", "edit src/x.rs and e2e/none.ts", "src/", "a1");
     assert!(!err.contains("warning"), "{err}");
-    let (ok, _, err) = fael(&d, &["chunk", "edit", &uid, "--brief", "see e2e/y.ts."]);
+    let (ok, _, err) = fael(&d, &["chunk", "edit", &uid, "--brief", "touch e2e/y.ts."]);
     assert!(
         ok && err.contains("brief names e2e/y.ts, not in scope"),
         "{err}"
