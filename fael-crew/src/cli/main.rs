@@ -10,6 +10,7 @@ mod chunk_elsewhere;
 mod chunk_left;
 mod chunk_run;
 mod chunk_scope;
+mod chunk_scope_gone;
 mod chunk_scope_skip;
 mod chunk_show;
 mod chunk_verbs;

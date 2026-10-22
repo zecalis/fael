@@ -6,6 +6,7 @@ use fael_crew::{Store, overlap};
 use std::collections::HashSet;
 use std::path::Path;
 
+use super::chunk_scope_gone as gone;
 use super::chunk_scope_skip as skip;
 
 /// A warning on stderr for each scope path of chunk `key` that names nothing under the
@@ -23,6 +24,8 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str) {
                 "warning: scope {p:?} {why} in {} — a typo? fael chunk edit {key} --scope …",
                 root.display()
             );
+        } else if let Some(w) = gone::warning(root, &b.uid, p) {
+            eprintln!("{w}");
         }
     }
     let log = crate::read(r);
@@ -149,7 +152,7 @@ fn missing(at: &Path, p: &str) -> Option<String> {
 /// A path on a line that says "leave alone" never warns: the planner saw it and
 /// deliberately scoped it out (a `drop?` brief naming what not to touch).
 /// A path on a `Check:`/`Run:`/`Verify:` clause never warns either: the clause
-/// names a command to run, not a file to edit.
+/// names a command to run, not a file to edit; it only warns when git removed the path.
 fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
     let scope: Vec<String> = b
         .scope
@@ -172,11 +175,20 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
         // scope. Clauses, not lines: a brief is often one paragraph with
         // `…bump). Check: …gate.sh green.` mid-line.
         for clause in clauses(line) {
+            // on a check clause the removed/renamed word is the only one said
             if is_check_line(clause) {
+                for p in paths(clause) {
+                    if let Some(w) = gone::warning(root, &b.uid, &p) {
+                        eprintln!("{w}");
+                    }
+                }
                 continue;
             }
             for sentence in skip::sentences(clause) {
                 for p in paths(sentence) {
+                    if let Some(w) = gone::warning(root, &b.uid, &p) {
+                        eprintln!("{w}");
+                    }
                     let hit = [p.clone()];
                     // "do not touch X" / "run X" name a path without asking an edit
                     // (issue 01M5D5FCS)

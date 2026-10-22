@@ -24,19 +24,19 @@ pub struct Start {
     pub client: Option<String>,
     /// what the launcher runs it with → `run.model`; None = the approval's, else `model_hint`
     pub model: Option<String>,
-    /// a client that writes a file and exits (image gen): the run holds no worktree, so it
-    /// takes no slot, and `done --run R` from the launching shell finishes it
+    /// a client that writes a file and exits (image gen): no worktree, no slot; `done --run R`
+    /// from the launching shell finishes it
     pub no_worktree: bool,
     /// take over a live run in another worktree (its end names who took it), never a kill;
     /// a live run in the caller's own worktree is taken over without it
     pub force: bool,
-    /// the calling agent's session (`CLAUDE_CODE_SESSION_ID`) on a start without `--run`:
-    /// kept for `--resume` even when `done` ends the run before any Stop
+    /// the agent's session (`CLAUDE_CODE_SESSION_ID`) on a start without `--run`, for `--resume`
     pub session: Option<String>,
     /// HEAD's sha in the worktree at start → `run.base`, where `done`'s diff begins
     pub base: Option<String>,
     /// `.fael/shared` paths: nobody's claim, never an overlap (as on the board)
     pub shared: Vec<String>,
+    pub stale: String, // a live run last seen before this is `stalled` in a clash line
 }
 
 /// One claimed chunk, with what its brief needs.
@@ -193,7 +193,7 @@ impl Store {
             tx.commit().map_err(err)?;
             return Ok(reused);
         }
-        let clash = clashes(&tx, &ms, &o.shared)?;
+        let clash = clashes(&tx, &ms, &o.shared, &o.stale)?;
         if !clash.is_empty() && !o.force {
             return Err(format!(
                 "rejected: chunk {uid} shares files with a running chunk — {}; `--force` starts it anyway",

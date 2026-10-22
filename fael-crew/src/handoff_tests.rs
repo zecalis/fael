@@ -98,3 +98,44 @@ fn by_file_is_newest_first_and_capped_with_the_rest_counted() {
     .text();
     assert!(t.contains("(2 more such chunks not shown)"), "{t}");
 }
+
+#[test]
+fn more_touched_files_under_the_scope_beats_newer() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    let u = add(&mut s, "wide", Some("b"));
+    start(&mut s, &u, "/wide").unwrap();
+    let files: Vec<String> = (0..3).map(|i| format!("src/w{i}.rs")).collect();
+    s.claim(&u, &files).unwrap();
+    s.done(&u, "wide done", Some(3), None, &here("/wide"))
+        .unwrap();
+    finish(&mut s, "narrow", "src/n.rs", "narrow done");
+    let b = s.show(&me).unwrap();
+    assert_eq!(b.by_file[0].0, "wide", "{:?}", b.by_file);
+    assert_eq!(b.by_file[1].0, "narrow");
+}
+
+#[test]
+fn entries_after_the_second_are_one_line_without_handoff_text() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    for i in 0..4 {
+        finish(
+            &mut s,
+            &format!("c{i}"),
+            &format!("src/f{i}.rs"),
+            &format!("text-{i}"),
+        );
+    }
+    let t = super::super::start::Started {
+        run: "R".into(),
+        chunks: vec![s.show(&me).unwrap()],
+    }
+    .text();
+    assert!(t.contains("> text-3") && t.contains("> text-2"), "{t}");
+    assert!(!t.contains("text-1") && !t.contains("text-0"), "{t}");
+    assert!(
+        t.contains("- c1 — src/f1.rs") && t.contains("- c0 — src/f0.rs"),
+        "{t}"
+    );
+}

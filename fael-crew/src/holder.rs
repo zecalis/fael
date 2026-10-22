@@ -102,12 +102,14 @@ pub(super) fn ready_paired(
 }
 
 /// Live-run chunks of the same app, outside the pair `ms`, whose scope (less `shared`) shares
-/// a path prefix with a member's (the board's `overlap` rule): one `uid (plan/label): path, …`
-/// line each. Judges nothing.
+/// a path prefix with a member's (the board's `overlap` rule): one `uid (plan/label): path, … —
+/// since T · last seen T` line each, plus `· stalled` when the run is older than `stale` (the
+/// board's rule). Judges nothing.
 pub(super) fn clashes(
     tx: &Transaction,
     ms: &[String],
     shared: &[String],
+    stale: &str,
 ) -> Result<Vec<String>, String> {
     let paths = |s: Option<String>| -> Vec<String> {
         let v: Vec<String> = s.iter().flat_map(|s| s.lines()).map(String::from).collect();
@@ -131,10 +133,11 @@ pub(super) fn clashes(
     };
     let mut q = tx
         .prepare(
-            "SELECT c.uid, COALESCE(c.label, c.title), p.name, c.scope FROM chunk c
-             JOIN plan p ON p.id = c.plan
-             WHERE c.scope IS NOT NULL AND p.app = ?1 AND EXISTS (
-               SELECT 1 FROM run r WHERE r.chunk = c.id AND r.ended IS NULL)",
+            "SELECT c.uid, COALESCE(c.label, c.title), p.name, c.scope, r.started, r.last_seen
+             FROM chunk c JOIN plan p ON p.id = c.plan
+             JOIN run r ON r.id = (SELECT x.id FROM run x WHERE x.chunk = c.id
+               AND x.ended IS NULL ORDER BY x.started DESC LIMIT 1)
+             WHERE c.scope IS NOT NULL AND p.app = ?1",
         )
         .map_err(err)?;
     let rows = q
@@ -144,13 +147,15 @@ pub(super) fn clashes(
                 r.get::<_, String>(1)?,
                 r.get::<_, String>(2)?,
                 r.get(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, Option<String>>(5)?,
             ))
         })
         .map_err(err)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(err)?;
     let mut out = Vec::new();
-    for (uid, label, plan, scope) in rows {
+    for (uid, label, plan, scope, started, seen) in rows {
         if ms.contains(&uid) {
             continue;
         }
@@ -161,7 +166,13 @@ pub(super) fn clashes(
             .cloned()
             .collect();
         if !hit.is_empty() {
-            out.push(format!("{uid} ({plan}/{label}): {}", hit.join(", ")));
+            let stalled = seen.as_deref().unwrap_or(&started) < stale;
+            out.push(format!(
+                "{uid} ({plan}/{label}): {} — since {started} · last seen {}{}",
+                hit.join(", "),
+                seen.as_deref().unwrap_or("never"),
+                if stalled { " · stalled" } else { "" }
+            ));
         }
     }
     Ok(out)

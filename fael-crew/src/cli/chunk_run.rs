@@ -34,6 +34,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         session: session.clone(),
         base: crate::git(&r.root, &["rev-parse", "HEAD"]),
         shared: fael_crew::shared(&r.root).unwrap_or_default(),
+        stale: crate::board::clock().1,
     };
     let mut store = Store::open(&db(r))?;
     if !o.force {

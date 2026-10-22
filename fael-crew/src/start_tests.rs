@@ -233,6 +233,16 @@ fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
         "{e}"
     );
     assert_eq!(state(&s, &b), "open");
+    assert!(
+        e.contains("last seen never") && !e.contains("stalled"),
+        "{e}"
+    );
+    let o = Start {
+        stale: "2026-10-12T00:00:00Z".into(),
+        ..Start::default()
+    };
+    let e = s.start(&b, &o, &here("/w2")).unwrap_err();
+    assert!(e.contains("last seen never · stalled"), "{e}");
     let o = Start {
         force: true,
         ..Start::default()
