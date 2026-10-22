@@ -296,7 +296,7 @@ fn stats_counts_rows_by_state_per_kind() {
     ]);
     let listed = f(&["find", "--kind", "issue"]);
     let id = listed.split(['[', ']']).nth(1).unwrap().to_string();
-    f(&["close", &id, "done"]);
+    f(&["close", &id, "gone → removed; guard `src/b_test.rs`"]);
     std::fs::write(d.join("a.rs"), "2\n").unwrap();
     let out = f(&["stats", "--json"]);
     let l: serde_json::Value = serde_json::from_str(&out).unwrap();

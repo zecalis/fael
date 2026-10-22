@@ -173,7 +173,15 @@ fn mcp_close_with_key_behaves_the_same() {
 fn close_names_the_row_it_closed() {
     let d = repo();
     add(&d, "issue", "leaky pipe in the sink", "plan:x:leak");
-    let (ok, out, err) = fael(&d, &["close", "--key", "plan:x:leak", "fixed"]);
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "close",
+            "--key",
+            "plan:x:leak",
+            "leak → plugged; guard `src/x_test.rs`",
+        ],
+    );
     assert!(ok, "{err}");
     let line = out.lines().find(|l| l.starts_with("closed ")).expect(&out);
     assert!(

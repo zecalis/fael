@@ -168,6 +168,38 @@ fn show_elsewhere_names_the_repo_that_holds_the_uid() {
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
+/// A `drop?` chunk the owner drops closes its linked issue — a machine close,
+/// so the shape gate (an issue owes cause → fix) must not refuse it.
+#[test]
+fn drop_closes_the_linked_issue_through_the_shape_gate() {
+    let (d, _) = repo();
+    let (ok, iid, err) = fael(&d, &["add", "issue", "broken x", "--files", "a.rs"]);
+    assert!(ok, "{err}");
+    let iid = iid.split_whitespace().next().unwrap().to_string();
+    let (ok, uid, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "add",
+            "Maybe",
+            "--plan",
+            "pl",
+            "--brief",
+            "drop? if the bug is elsewhere",
+            "--issue",
+            &iid,
+        ],
+    );
+    assert!(ok, "{err}");
+    let uid = uid.trim().to_string();
+    let (ok, out, err) = fael(&d, &["chunk", "drop", &uid, "not our bug"]);
+    assert!(ok, "{err}");
+    assert!(out.contains(&format!("closed {iid}")), "{out}");
+    // the issue really closed — a second close says so
+    let (ok, _, err) = fael(&d, &["close", &iid, "already closed"]);
+    assert!(!ok && err.contains("already closed"), "{err}");
+}
+
 #[test]
 fn show_in_a_parked_plan_names_the_plan() {
     let (d, uid) = repo();
@@ -186,7 +218,13 @@ fn show_warns_when_the_brief_cites_a_closed_issue() {
     let (ok, id, err) = fael(&d, &["add", "issue", "broken x", "--files", "a.rs"]);
     assert!(ok, "{err}");
     let id = id.split_whitespace().next().unwrap().to_string();
-    assert!(fael(&d, &["close", &id, "fixed"]).0);
+    assert!(
+        fael(
+            &d,
+            &["close", &id, "broken x → fixed; guard `src/a_test.rs`"]
+        )
+        .0
+    );
     let brief = format!("fix {id}");
     let (ok, uid, err) = fael(
         &d,

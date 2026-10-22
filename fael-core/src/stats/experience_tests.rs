@@ -174,7 +174,8 @@ fn folded_closes_sha_edges_and_worktrees() {
 /// PLAN-fael-label §7, locked before the code: (text, core, guard).
 #[test]
 fn close_shape_locks_the_label_table() {
-    use super::experience::{Shape, close_shape, names_check};
+    use super::experience::names_check;
+    use crate::shape::{Shape, close_shape};
     let table = [
         (
             "stale cache → invalidate on mtime; tried ttl; guard `fael/tests/a.rs`",
@@ -226,7 +227,8 @@ fn close_shape_locks_the_label_table() {
 /// here so a change to either side shows.
 #[test]
 fn close_template_fills_into_a_label_core_and_a_fix() {
-    use super::experience::{CLOSE_TEMPLATE, Shape, close_shape, names_fix};
+    use super::experience::names_fix;
+    use crate::shape::{CLOSE_TEMPLATE, Shape, close_shape};
     let fill = |path: &str, fix: &str| {
         CLOSE_TEMPLATE
             .replace("<cause>", "stale cache")

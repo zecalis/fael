@@ -70,7 +70,13 @@ fn a_chunk_fixes_open_issues_and_the_board_follows_it() {
     );
     let old = row(&d, &["add", "issue", "Old bug", "--files", "a.rs"]);
     let pick = row(&d, &["add", "decision", "Use one query", "--files", "a.rs"]);
-    assert!(fael(&d, &["close", &old, "fixed long ago"]).0);
+    assert!(
+        fael(
+            &d,
+            &["close", &old, "old bug → fixed; guard `src/a_test.rs`"]
+        )
+        .0
+    );
     let add = |ids: &str| fael(&d, &["chunk", "add", "fix", "--brief", "b", "--issue", ids]);
 
     // rejected, naming the id: unknown, closed, not an issue — and nothing is added
@@ -138,6 +144,16 @@ fn a_chunk_fixes_open_issues_and_the_board_follows_it() {
     );
     assert!(ok, "{err}");
     assert_eq!(issue_open(&board(&d)), [uid]);
-    assert!(fael(&d, &["close", &lag, "the count reads the chunk list"]).0);
+    assert!(
+        fael(
+            &d,
+            &[
+                "close",
+                &lag,
+                "count lags → reads chunk list; guard `src/a_test.rs`"
+            ]
+        )
+        .0
+    );
     assert!(issue_open(&board(&d)).is_empty());
 }

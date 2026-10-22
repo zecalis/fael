@@ -31,7 +31,7 @@ pub(super) fn close(a: &Value) -> Result<String, String> {
     };
     let (mut out, mut failed) = (vec![], 0);
     for id in &ids {
-        match close_row(&r, id, &why) {
+        match close_row(&r, id, &why, a["force"].as_bool().unwrap_or(false)) {
             Err(e) => {
                 failed += 1;
                 // one id keeps the plain error, as before

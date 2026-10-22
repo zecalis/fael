@@ -47,7 +47,10 @@ fn closed_with(d: &Path, why: &str) {
 #[test]
 fn a_gone_check_is_said_once_per_session() {
     let d = repo();
-    closed_with(&d, "guarded by `scripts/check-retry.sh`");
+    closed_with(
+        &d,
+        "retry loops → capped at 3; guarded by `scripts/check-retry.sh`",
+    );
     let first = edit(&d, "s1");
     assert!(
         first.contains("closed pointing at `scripts/check-retry.sh`, now gone"),
@@ -72,10 +75,16 @@ fn a_check_that_is_there_or_no_check_is_silent() {
     let d = repo();
     std::fs::create_dir_all(d.join("scripts")).unwrap();
     std::fs::write(d.join("scripts/check-retry.sh"), "#!/bin/sh\n").unwrap();
-    closed_with(&d, "guarded by `scripts/check-retry.sh`");
+    closed_with(
+        &d,
+        "retry loops → capped at 3; guarded by `scripts/check-retry.sh`",
+    );
     assert!(!edit(&d, "s1").contains("now gone"));
     let d = repo();
-    closed_with(&d, "fixed in abc1234");
+    closed_with(
+        &d,
+        "retry loops → capped at 3; don't add a check because flakes never reproduce",
+    );
     assert!(!edit(&d, "s1").contains("now gone"));
 }
 
@@ -84,7 +93,10 @@ fn a_check_that_is_there_or_no_check_is_silent() {
 #[test]
 fn the_check_is_earned_when_the_issue_is_superseded() {
     let d = repo();
-    closed_with(&d, "guarded by `scripts/check-retry.sh`");
+    closed_with(
+        &d,
+        "retry loops → capped at 3; guarded by `scripts/check-retry.sh`",
+    );
     let said = edit(&d, "s1");
     let id = said.split("--supersedes ").nth(1).expect(&said);
     let id = id
@@ -122,7 +134,10 @@ fn the_check_is_earned_when_the_issue_is_superseded() {
 #[test]
 fn a_read_is_silent_and_a_shell_edit_is_said() {
     let d = repo();
-    closed_with(&d, "guarded by `scripts/check-retry.sh`");
+    closed_with(
+        &d,
+        "retry loops → capped at 3; guarded by `scripts/check-retry.sh`",
+    );
     let read = format!(
         r#"{{"cwd":{},"session_id":"s1","tool_input":{{"file_path":{}}}}}"#,
         json(&d),

@@ -24,7 +24,9 @@ fn add_issue_names_the_closed_issue_on_its_file() {
     let closed = mcp_tool(
         &wt,
         "close",
-        &[serde_json::json!({"id": old, "text": "fixed"})],
+        &[
+            serde_json::json!({"id": old, "text": "heic broke → pinned the decoder; guard `src/a_test.rs`"}),
+        ],
     );
     text(&closed[0]);
     let again = mcp_tool(

@@ -15,7 +15,7 @@ pub(crate) fn tools() -> Value {
     let str_ = |d: &str| json!({"type": "string", "description": d});
     let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
     // chunk 6d: one short sentence — it repeats on every tool, so every word is paid three times
-    let cwd = str_("repo this call is about, if not the session cwd");
+    let cwd = str_("repo, if not the session cwd");
     let mut t = json!([
         {
             "name": "find",
@@ -62,6 +62,7 @@ pub(crate) fn tools() -> Value {
                 "ids": {"type": "array", "items": {"type": "string"},
                     "description": "many ids, one reason"},
                 "key": str_("the one open row on this key"),
+                "force": {"type": "boolean", "description": "file as is, skip the shape gate"},
                 "text": str_(&format!("why; a fixed bug: {}", fael_core::stats::CLOSE_TEMPLATE)),
             }},
         },
@@ -113,6 +114,9 @@ mod tests {
     ///
     /// Raised to 7300 (measured 7170, 2026-10-22) when the `add` schema
     /// learned batch rows (`rows`, one round per extra row) and `force`.
+    ///
+    /// Close `force` (issue-only shape gate, 2026-10-22) paid by trimming the
+    /// 4×-repeated `cwd` sentence, schema 3862 → 3861.
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
@@ -193,7 +197,7 @@ mod tests {
                 "force"
             ])
         );
-        assert_eq!(props("close"), set(&["id", "ids", "key", "text"]));
+        assert_eq!(props("close"), set(&["id", "ids", "key", "text", "force"]));
         assert_eq!(
             props("chunk"),
             set(&["verb", "uid", "text", "other", "on", "run", "force"])

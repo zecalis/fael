@@ -56,7 +56,9 @@ pub(crate) fn held_done(files: &[String], since: Option<&str>) -> String {
     run(&args, &files.join("\n")).unwrap_or_default()
 }
 
-/// `fael close <id> "<why>"` — the row, closed by the ledger's own write path.
+/// `fael close <id> "<why>" --force` — the row, closed by the ledger's own
+/// write path. `--force` because this is a machine close (a drop's one-word
+/// verdict, no cause → fix); the shape gate is for an agent's own close.
 pub(crate) fn close(id: &str, why: &str) -> Result<(), String> {
-    run(&["close", id, why], "").map(|_| ())
+    run(&["close", id, why, "--force"], "").map(|_| ())
 }

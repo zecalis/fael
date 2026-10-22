@@ -85,7 +85,14 @@ fn add_find_close_round_trip() {
     let (_, out, _) = fael(&d, &["find", "--json"]);
     assert!(out.contains("\"files\":[\"src/a.rs\"]"), "{out}");
 
-    let (ok, _, err) = fael(&d, &["close", &id[..12], "fixed"]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "close",
+            &id[..12],
+            "token expired → refreshed on login; guard `src/a_test.rs`",
+        ],
+    );
     assert!(ok, "{err}");
     // closing twice writes nothing — the log stays clean
     let (ok, _, err) = fael(&d, &["close", &id[..12], "again"]);
@@ -108,7 +115,8 @@ fn add_find_close_round_trip() {
     assert!(!out.contains("closed: "), "{out}");
     let (_, out, _) = fael(&d, &["find", &id[..12]]);
     assert!(
-        out.contains("issue (closed)") && out.contains("  closed: fixed"),
+        out.contains("issue (closed)")
+            && out.contains("  closed: token expired → refreshed on login"),
         "{out}"
     );
     // --json --all carries the close row too, so a consumer can tell it is closed

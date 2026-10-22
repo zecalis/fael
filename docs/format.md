@@ -105,9 +105,11 @@ A row is labelled in three layers, each with one job (decision key `format:label
 | `key` | which: supersede, close and find by name | a proper name, not a category; reuse rate is no quality score |
 | close text | what was learned | core `cause → fix`; tried and guard are optional |
 
-The close text is the agent's own words, stored as written: fael never rejects, edits or
-completes it. `close_shape()` (`fael-core/src/stats/experience.rs`) reads its form, never its
-meaning:
+The close text is the agent's own words, stored as written: fael never edits or
+completes it. An issue closed with no `<cause> → <fix>` — or with neither a
+guard nor a don't-because — rejects before the write (`--force` files it as
+is); notes and decisions owe nothing. `close_shape()` (`fael-core/src/shape.rs`)
+reads its form, never its meaning:
 
 - **Code spans** — markdown's: a run of n backticks opens a span that the next run of
   exactly n closes, so a double-backtick span may hold a backtick. A run nothing closes is

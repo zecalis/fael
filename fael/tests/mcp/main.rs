@@ -270,7 +270,9 @@ fn write_phantom_info_line_matches_cli() {
     let r = mcp_tool(
         &wt,
         "close",
-        &[serde_json::json!({"id": id, "text": "fixed, see 01DEFACED01"})],
+        &[
+            serde_json::json!({"id": id, "text": "leak → plugged; guard `src/b_test.rs`; tried 01DEFACED01"}),
+        ],
     );
     let closed = body(&r);
     assert!(
@@ -303,7 +305,9 @@ fn close_ids_closes_the_rest_and_names_the_bad_one() {
     let r = mcp_tool(
         &wt,
         "close",
-        &[serde_json::json!({"ids": [a, "01NOSUCHROW", b], "text": "fixed"})],
+        &[
+            serde_json::json!({"ids": [a, "01NOSUCHROW", b], "text": "leak → plugged; guard `src/b_test.rs`"}),
+        ],
     );
     assert_eq!(r[0]["result"]["isError"], true);
     let out = text(&r);
@@ -314,7 +318,7 @@ fn close_ids_closes_the_rest_and_names_the_bad_one() {
     let again = mcp_tool(
         &wt,
         "close",
-        &[serde_json::json!({"id": a, "text": "again"})],
+        &[serde_json::json!({"id": a, "text": "still leaks → reopened; guard `src/b_test.rs`"})],
     );
     assert!(text(&again).contains("closed"), "{}", text(&again));
 }

@@ -31,6 +31,23 @@ fn push(d: &Path, session: &str) -> String {
 
 const SAID: &str = "said it fixed a bug";
 
+/// The skill-taught close for this file's retry issue (an issue owes the
+/// template's arrow and guard).
+fn close_retry(d: &Path, key: &str, env: &[(&str, &str)]) {
+    let (ok, _, err) = fael_env(
+        d,
+        &[
+            "close",
+            "--key",
+            key,
+            "retry loops → capped at 3; guard `src/a_test.rs`",
+        ],
+        "",
+        env,
+    );
+    assert!(ok, "{err}");
+}
+
 #[test]
 fn a_fix_phrase_with_nothing_filed_is_said_once_per_session() {
     let d = super::repo();
@@ -84,8 +101,7 @@ fn an_issue_or_a_close_after_the_words_clears_them_one_before_does_not() {
     // a close after the words clears them
     let s = fael_core::rfc3339(fael_core::now_ms());
     std::thread::sleep(std::time::Duration::from_millis(5));
-    let (ok, _, err) = fael(&d, &["close", "--key", "a:retry", "cap at 3"], "");
-    assert!(ok, "{err}");
+    close_retry(&d, "a:retry", &[]);
     stop(&d, &s, "fixed the bug in the retry loop");
     assert!(!push(&d, &s).contains(SAID));
 }
@@ -162,13 +178,7 @@ fn a_fix_commit_naming_a_row_or_after_a_close_is_silent() {
     let msg = format!("fix: cap retries\n\n(fael:{})", &id[..8]);
     assert!(!commit(&d, &msg).contains(FIX), "names a row");
     // a session that closed a row already filed what it fixed
-    let (ok, _, err) = fael_env(
-        &d,
-        &["close", "--key", "a:retry", "cap at 3"],
-        "",
-        &[("CLAUDE_CODE_SESSION_ID", "s1")],
-    );
-    assert!(ok, "{err}");
+    close_retry(&d, "a:retry", &[("CLAUDE_CODE_SESSION_ID", "s1")]);
     assert!(!commit(&d, "fix: cap retries").contains(FIX));
 }
 
@@ -233,13 +243,7 @@ fn a_close_under_the_session_uuid_silences_the_commit_line() {
         "",
     );
     assert!(ok, "{err}");
-    let (ok, _, err) = fael_env(
-        &d,
-        &["close", "--key", "a:retry", "cap at 3"],
-        "",
-        &[("CLAUDE_CODE_SESSION_ID", "u1")],
-    );
-    assert!(ok, "{err}");
+    close_retry(&d, "a:retry", &[("CLAUDE_CODE_SESSION_ID", "u1")]);
     let out = claude_commit(&d, "fix: cap retries");
     assert!(!out.contains(FIX), "{out}");
 }
@@ -355,7 +359,7 @@ fn a_close_earlier_in_the_turn_clears_the_summarys_fix_phrase() {
     let said = |key: &str, in_turn: bool, reply: bool| {
         let args = ["add", "issue", key, "--files", "src/a.rs", "--key", key];
         assert!(fael(&d, &args, "").0);
-        let close = || assert!(fael(&d, &["close", "--key", key, "capped"], "").0);
+        let close = || close_retry(&d, key, &[]);
         let t = d.join(format!("{}.jsonl", key.replace(':', "-")));
         std::fs::write(&t, "").unwrap();
         pause();

@@ -348,7 +348,7 @@ fn the_ledger_rides_the_board_and_reads_like_nothing() {
     ]));
     let c = id(f(&["add", "issue", "c is slow", "--files", "src/c.rs"]));
     let old = id(f(&["add", "issue", "c was odd", "--files", "src/c.rs"]));
-    f(&["close", &old, "fixed"]);
+    f(&["close", &old, "c was odd → fixed; guard `src/c_test.rs`"]);
     let dec = id(f(&[
         "add",
         "decision",

@@ -229,7 +229,14 @@ fn an_empty_issue_list_says_all_adds_closed() {
 fn only_closed_issue_list_shows_marked_rows() {
     let d = repo();
     let (id, _) = issue(&d, "ocr timeout", "src/a.rs", &[]);
-    let (ok, _, err) = fael(&d, &["close", &id, "fixed"]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "close",
+            &id,
+            "ocr slow → raised the timeout; guard `src/ocr_test.rs`",
+        ],
+    );
     assert!(ok, "{err}");
     let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
     assert!(ok, "{err}");

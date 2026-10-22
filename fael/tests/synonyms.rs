@@ -92,10 +92,18 @@ fn a_guess_runs_like_the_real_command() {
         "{out}"
     );
     // close: every spelling of the reason, wherever it stands
-    let (ok, _, err) = fael(&d, &["close", &id, "--why", "fixed in a1b2c3"]);
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "close",
+            &id,
+            "--why",
+            "login loops → debounced; guard `src/a_test.rs`",
+        ],
+    );
     assert!(ok, "{err}");
     let (_, out, _) = fael(&d, &["find", &id, "--all"]);
-    assert!(out.contains("fixed in a1b2c3"), "{out}");
+    assert!(out.contains("login loops → debounced"), "{out}");
     let n = add(&d, &["add", "note", "-m", "via -m", "--files", "src/d.rs"]);
     let (ok, _, err) = fael(&d, &["done", "--reason", "done", &n]);
     assert!(ok, "{err}");
@@ -176,11 +184,11 @@ fn mcp_properties_are_read_like_the_real_ones() {
     let r = mcp(
         &d,
         "close",
-        serde_json::json!({"id": id, "why": "fixed in a1b2c3"}),
+        serde_json::json!({"id": id, "why": "login loops → debounced; guard `src/a_test.rs`"}),
     );
     assert_eq!(r["result"]["isError"], false, "{r}");
     let (_, out, _) = fael(&d, &["find", &id, "--all"]);
-    assert!(out.contains("fixed in a1b2c3"), "{out}");
+    assert!(out.contains("login loops → debounced"), "{out}");
 }
 
 fn fael_in(d: &Path, args: &[&str], stdin: &str) -> (bool, String, String) {
