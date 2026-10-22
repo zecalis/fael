@@ -51,8 +51,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             super::refs::Wide::One(row) => {
                 // the body was just printed — the next push must not say it again
                 super::hook::note_seen(&super::session::hook_session(&r.root), &r.root, &[&row.id]);
-                found(&r.root, &row.id);
-                show_one(a, &log, &row, &branch_of)
+                show_found(a, &r.root, &log, &row, &branch_of)
             }
             super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
             // --json is the machine shape: a chunk there stays the reject
@@ -73,8 +72,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         && let Some(t) = text
         && let Ok(row) = core::resolve_row(&log, t)
     {
-        found(&r.root, &row.id);
-        return show_one(a, &log, row, &branch_of);
+        return show_found(a, &r.root, &log, row, &branch_of);
     }
     // `find plan:x` reads the anchor the way `kickoff plan:x` does
     let (query, anchor, text_key) = text_or_anchor(&log, forced.as_ref(), text, &r);
@@ -117,7 +115,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // issues also carry the git-proven marks: `(merged)`, `(files changed since)`, `[Gone]`
     let is_issue = f.kind.as_deref() == Some("issue") && !a.has("json");
     let (branch_of, gone) = issue::marks(&r, &log, is_issue, &rows, branch_of);
-    let shown = show(
+    let (shown, text) = show(
         a,
         full,
         &log,
@@ -134,6 +132,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         "cli",
         "find",
         &r.root,
+        &text,
         &shown,
         (f.key.as_deref(), &files, None),
     );
@@ -177,23 +176,39 @@ fn nearest(
     let out = crate::journal::tag(out, branch_of);
     println!("{head}");
     print!("{out}");
+    let text = format!("{head}\n{out}");
     let n = out.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = near.iter().take(n).map(|r| r.id.clone()).collect();
     super::hook::record_found(
         "cli",
         "find",
         root,
+        &text,
         &shown,
         (f.key.as_deref(), &f.files, None),
     );
 }
 
+/// Show one body, then record what was shown.
+fn show_found(
+    a: &Args,
+    root: &std::path::Path,
+    log: &Log,
+    row: &Row,
+    branch_of: &crate::journal::BranchMap,
+) -> Result<(), String> {
+    let text = show_one(a, log, row, branch_of);
+    found(root, &row.id, &text);
+    Ok(())
+}
+
 /// A body pulled by id: the outcome a `bodies:` line earns on.
-fn found(root: &std::path::Path, id: &str) {
+fn found(root: &std::path::Path, id: &str, text: &str) {
     super::hook::record_found(
         "cli",
         "find",
         root,
+        text,
         &[id.to_string()],
         (None, &[], Some(id)),
     );
@@ -242,19 +257,20 @@ pub(super) fn show(
         &crate::journal::BranchMap,
         &std::collections::HashSet<String>,
     ),
-) -> Result<Vec<String>, String> {
+) -> Result<(Vec<String>, String), String> {
     if rows.is_empty() {
         eprintln!("fael: no rows match");
-        return Ok(vec![]);
+        return Ok((vec![], String::new()));
     }
     if a.has("json") {
         // JSON stays the row shape (consumers dedupe by id) — the branch tag
         // is a list-display feature, like titles
-        rows.iter().for_each(|r| println!("{}", r.to_line()));
+        let text: String = rows.iter().map(|r| r.to_line() + "\n").collect();
+        print!("{text}");
         if let Some(n) = core::json_note(rows, budget) {
             eprintln!("fael: {n}");
         }
-        return Ok(rows.iter().map(|r| r.id.clone()).collect());
+        return Ok((rows.iter().map(|r| r.id.clone()).collect(), text));
     }
     // only what fit the budget was said — like the push, the cut rows may come
     // on a later read, so seen-ids take just the shown lines
@@ -264,32 +280,28 @@ pub(super) fn show(
         crate::journal::tag(core::render_page(log, rows, budget, cut), branch_of)
     };
     let n = out.lines().filter(|l| l.starts_with("- [")).count();
-    print!("{}", issue::tag_gone(&out, gone));
-    Ok(rows.iter().take(n).map(|r| r.id.clone()).collect())
+    let out = issue::tag_gone(&out, gone);
+    print!("{out}");
+    Ok((rows.iter().take(n).map(|r| r.id.clone()).collect(), out))
 }
 
 /// One row pulled by id: always the body (`render_full`), or the JSON line —
 /// plus the rows that merely mention the id, so the reader sees who cites it
 /// without knowing a flag for it (chunk 4). Silent when nobody cites it.
-fn show_one(
-    a: &Args,
-    log: &Log,
-    row: &Row,
-    branch_of: &crate::journal::BranchMap,
-) -> Result<(), String> {
-    if a.has("json") {
-        println!("{}", row.to_line());
+fn show_one(a: &Args, log: &Log, row: &Row, branch_of: &crate::journal::BranchMap) -> String {
+    let mut text = if a.has("json") {
+        row.to_line() + "\n"
     } else {
-        print!(
-            "{}",
-            crate::journal::tag(core::render_full(log, &[row], 10_000), branch_of)
-        );
+        crate::journal::tag(core::render_full(log, &[row], 10_000), branch_of)
+    };
+    if !a.has("json") {
         let who = mentions::mentioners(log, row);
         if !who.is_empty() {
-            println!("mentioned by: {}", who.join(", "));
+            text += &format!("mentioned by: {}\n", who.join(", "));
         }
     }
-    Ok(())
+    print!("{text}");
+    text
 }
 
 /// An id-shaped query matching ≥2 rows: an abbreviation that decayed as the

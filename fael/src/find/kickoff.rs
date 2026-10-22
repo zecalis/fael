@@ -53,7 +53,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let branch_of =
         super::merged::mark_changed(&r.root, branch_of, &rows, &al, &r.cfg.anchor_prefixes);
     let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
-    let shown = show(
+    let (shown, text) = show(
         a,
         a.has("full"),
         &log,
@@ -68,7 +68,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
         (&branch_of, &Default::default()),
     )?;
     let none = (None, &files[..], None);
-    crate::hook::record_found("cli", "kickoff", &r.root, &shown, none);
+    crate::hook::record_found("cli", "kickoff", &r.root, &text, &shown, none);
     // free-text revisits never list — one count line points at them
     // (due dates list in full above, so they need no line)
     if !a.has("json") && offset == 0 {

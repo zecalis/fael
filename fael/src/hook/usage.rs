@@ -28,11 +28,13 @@ pub(crate) fn record_usage(
 /// chunk 3): the outcome a Pointer, Count or Bodies line earns on. The shown
 /// ids go under `found`, never `ids` (those count as pushes), and stats keeps
 /// the line out of the injection totals. The query's key, files and id only —
-/// free text is never stored (`find-misses.jsonl` holds the misses).
+/// free text is never stored (`find-misses.jsonl` holds the misses). `text`
+/// is what the agent saw: its bytes and tokens are the pull's cost.
 pub(crate) fn record_found(
     client: &str,
     event: &str,
     root: &Path,
+    text: &str,
     found: &[String],
     (key, files, id): (Option<&str>, &[String], Option<&str>),
 ) {
@@ -44,7 +46,7 @@ pub(crate) fn record_found(
         session: (!session.is_empty()).then_some(session.as_str()),
         ..UsageMeta::default()
     };
-    let mut row = usage_row(client, event, root, "", &[], &meta);
+    let mut row = usage_row(client, event, root, text, &[], &meta);
     row["found"] = found.into();
     let mut q = serde_json::json!({});
     if let Some(k) = key {
