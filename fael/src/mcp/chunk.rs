@@ -4,6 +4,7 @@
 //! (`crew::capture`): the same call, the same text.
 
 use super::args::{need, repo_for, s};
+use crate::Repo;
 use serde_json::Value;
 
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
@@ -18,7 +19,7 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
         )),
         false => Ok(()),
     };
-    let mut args: Vec<String> = vec!["chunk".into(), verb.clone(), uid];
+    let mut args: Vec<String> = vec!["chunk".into(), verb.clone(), uid.clone()];
     match verb.as_str() {
         "show" | "start" => {}
         "note" => {
@@ -30,6 +31,12 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
         "done" => {
             need_text("the handoff")?;
             args.push(text.clone());
+            if let Some(p) = pr_arg(a) {
+                args.extend(["--pr".into(), p]);
+            }
+            if let Some(l) = left_arg(a) {
+                args.extend(["--left".into(), l]);
+            }
         }
         "wait" => {
             need_text("the question")?;
@@ -54,5 +61,63 @@ pub(super) fn chunk(a: &Value) -> Result<String, String> {
     if verb == "start" && a["force"].as_bool().unwrap_or(false) {
         args.push("--force".into());
     }
-    crate::crew::capture(&args, &r.root)
+    match crate::crew::capture(&args, &r.root) {
+        Ok(t) => Ok(t),
+        Err(e) if verb == "show" => show_elsewhere(&r, &uid, e),
+        Err(e) => Err(with_cwd_hint(e)),
+    }
+}
+
+/// `done --pr N`: a number or its string; anything else rides through for the
+/// CLI to reject — MCP never invents a stricter gate than `chunk done` has.
+fn pr_arg(a: &Value) -> Option<String> {
+    a["pr"]
+        .as_str()
+        .map(String::from)
+        .or_else(|| a["pr"].as_i64().map(|n| n.to_string()))
+}
+
+/// `done --left`: `none`, one id, or many — an array rides comma-joined, as
+/// the CLI spells it. Anything else rides through for the CLI to reject.
+fn left_arg(a: &Value) -> Option<String> {
+    if let Some(s) = a["left"].as_str() {
+        return Some(s.to_string());
+    }
+    a["left"]
+        .as_array()
+        .map(|v| {
+            v.iter()
+                .filter_map(Value::as_str)
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .filter(|s| !s.is_empty())
+}
+
+/// A `show` for a chunk this repo does not hold: read it where it lives (one
+/// owner only — an ambiguous prefix stays a reject). Writes never follow.
+fn show_elsewhere(r: &Repo, uid: &str, e: String) -> Result<String, String> {
+    match crate::find::owner::chunk_elsewhere(r, uid) {
+        Some(at) => {
+            let args = vec!["chunk".into(), "show".into(), uid.to_string()];
+            match crate::crew::capture(&args, &at) {
+                Ok(t) => Ok(format!(
+                    "in {} (chunk) — pass {{\"cwd\": \"{}\"}} to work there\n{t}",
+                    at.display(),
+                    at.display()
+                )),
+                Err(_) => Err(e),
+            }
+        }
+        None => Err(with_cwd_hint(e)),
+    }
+}
+
+/// A write naming a chunk in another repo keeps pointing there, now with the
+/// MCP routing beside the CLI one — same call, plus `"cwd"`.
+fn with_cwd_hint(e: String) -> String {
+    match e.contains("lives in") {
+        true => format!("{e}\nMCP: re-run this call with \"cwd\" set to that repo root"),
+        false => e,
+    }
 }

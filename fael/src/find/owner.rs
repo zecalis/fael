@@ -6,6 +6,68 @@ use crate::{Repo, core};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+/// A row this repo does not hold but exactly one other repo on this machine
+/// does. ULIDs never collide across machines, so one hit is the row — reads
+/// may follow it, writes never do.
+pub(crate) struct Elsewhere {
+    pub at: PathBuf,
+    pub kind: String,
+    pub id: String,
+}
+
+/// The unique owner of `tok` outside `r`, if there is exactly one. Two repos
+/// holding the prefix stays a reject: a prefix is an address, not a name.
+pub(crate) fn row_elsewhere(r: &Repo, tok: &str) -> Option<Elsewhere> {
+    let mut seen = HashSet::from([core::work::main_root_for(&r.root, r.journal.as_deref())]);
+    let mut hit: Option<Elsewhere> = None;
+    for path in repos() {
+        let Ok(o) = crate::repo_at(&path) else {
+            continue;
+        };
+        let at = core::work::main_root_for(&o.root, o.journal.as_deref());
+        if !seen.insert(at.clone()) {
+            continue;
+        }
+        if let Ok(row) = core::resolve_row(&crate::read(&o), tok) {
+            if hit.is_some() {
+                return None;
+            }
+            hit = Some(Elsewhere {
+                at,
+                kind: row.kind.clone(),
+                id: row.id.clone(),
+            });
+        }
+    }
+    hit
+}
+
+/// The repo root holding `tok` as a chunk, if exactly one does. Labels never
+/// cross repos — they are per plan — so only a uid or prefix resolves.
+pub(crate) fn chunk_elsewhere(r: &Repo, tok: &str) -> Option<PathBuf> {
+    if !core::looks_like_id(tok) {
+        return None;
+    }
+    let mut seen = HashSet::from([core::work::main_root_for(&r.root, r.journal.as_deref())]);
+    let mut hit: Option<PathBuf> = None;
+    for path in repos() {
+        let Ok(o) = crate::repo_at(&path) else {
+            continue;
+        };
+        let at = core::work::main_root_for(&o.root, o.journal.as_deref());
+        if !seen.insert(at.clone()) {
+            continue;
+        }
+        if is_chunk(&o, tok) {
+            if hit.is_some() {
+                return None;
+            }
+            hit = Some(at);
+        }
+    }
+    hit
+}
+
 /// The line naming `tok`'s owner, if it is anything but missing everywhere.
 pub(crate) fn owner(r: &Repo, tok: &str) -> Option<String> {
     if is_chunk(r, tok) {
@@ -25,13 +87,13 @@ pub(crate) fn owner(r: &Repo, tok: &str) -> Option<String> {
         let at = at.display();
         if let Ok(row) = core::resolve_row(&crate::read(&o), tok) {
             return Some(format!(
-                "{tok} is a ledger {} in {at} — `cd {at} && fael find {tok}`",
+                "{tok} is a ledger {} in {at} — `cd {at} && fael find {tok}` (MCP: {{\"cwd\": \"{at}\"}})",
                 row.kind
             ));
         }
         if is_chunk(&o, tok) {
             return Some(format!(
-                "{tok} is a chunk in {at} — `cd {at} && fael chunk show {tok}`"
+                "{tok} is a chunk in {at} — `cd {at} && fael chunk show {tok}` (MCP: {{\"cwd\": \"{at}\"}})"
             ));
         }
     }

@@ -274,8 +274,13 @@ pub(crate) fn close_row_as(
     // arrow and guard); the id names its repo too, so a miss says where fael
     // looked — copy the id from `fael find` in the repo that holds it, or
     // pass that repo's `cwd`
-    let target =
-        core::resolve_row(&log, id).map_err(|e| format!("{e} (searched {})", r.root.display()))?;
+    let target = core::resolve_row(&log, id).map_err(|e| {
+        let mut m = format!("{e} (searched {})", r.root.display());
+        if let Some(o) = crate::find::owner::owner(r, id) {
+            m.push_str(&format!("\n{o}"));
+        }
+        m
+    })?;
     // an already-closed row says so, whatever the reason's shape
     if !core::closed(&log).contains(target.id.as_str()) && !force {
         core::close_gate(why, &target.kind)?;

@@ -101,9 +101,41 @@ fn an_id_from_another_repo_names_that_repo() {
     let all = format!("{out}{err}");
     let want = format!("{id} is a ledger note in {}", there.display());
     assert!(all.contains(&want), "{all}");
+    // the MCP routing rides beside the CLI one, so an agent that cannot `cd`
+    // (opencode, 2026-10-22) still knows where to point `cwd`
+    let want_mcp = format!("(MCP: {{\"cwd\": \"{}\"}})", there.display());
+    assert!(all.contains(&want_mcp), "{all}");
     // a token no repo owns stays a plain miss
     let (_, out, err) = fael(&here, &["find", "01M4ZZZZZZZZ"]);
     assert!(!format!("{out}{err}").contains(" is a "), "{out}{err}");
+}
+
+/// `close` for another repo's id names that repo (with the MCP routing, like
+/// `find`): closing across repos is refused, never filed elsewhere.
+#[test]
+fn close_names_the_repo_that_owns_the_id() {
+    let (here, there) = (repo(), repo());
+    add(&here, "a row of this repo");
+    let id = add(&there, "a row of the other repo");
+    std::fs::create_dir_all(here.join("state")).unwrap();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(here.join("state/usage.jsonl"))
+        .unwrap();
+    writeln!(f, "{}", serde_json::json!({"event": "call", "repo": there})).unwrap();
+    let (ok, out, err) = fael(&here, &["close", &id, "fixed elsewhere"]);
+    assert!(!ok, "{out}");
+    let all = format!("{out}{err}");
+    assert!(all.contains("rejected: no row with id"), "{all}");
+    let want = format!("{id} is a ledger note in {}", there.display());
+    assert!(all.contains(&want), "{all}");
+    let want_mcp = format!("(MCP: {{\"cwd\": \"{}\"}})", there.display());
+    assert!(all.contains(&want_mcp), "{all}");
+    // and nothing closed anywhere: the row is still open over there
+    let (ok, out, err) = fael(&there, &["find", &id]);
+    assert!(ok, "{out}{err}");
+    assert!(!out.contains("closed:"), "{out}");
 }
 
 /// `chunk show` with another repo's uid names that repo (one lead tried four repos, 2026-10-14).
