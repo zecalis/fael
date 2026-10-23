@@ -116,10 +116,58 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
         ));
     }
     if out.is_empty() {
-        out.push_str("nothing on the board — `fael chunk add` or `fael plan new` in a repo\n");
+        out.push_str(&empty_msg(b, plan_cut));
     }
     out.push_str(&repos_line(b));
     out
+}
+
+/// What an empty board prints: a `--plan` cut on a parked or done plan names
+/// the hidden work, anything else keeps the old nothing-here line.
+fn empty_msg(b: &Board, plan_cut: bool) -> String {
+    if plan_cut && let Some(msg) = parked_done_msg(b) {
+        return msg;
+    }
+    "nothing on the board — `fael chunk add` or `fael plan new` in a repo\n".into()
+}
+
+/// A `--plan` cut on a parked or done plan lists no chunks (the board only
+/// lists active plans' chunks): say the plan is parked/done, how many open
+/// chunks it hides, and the retype that lists them — the same wording
+/// `chunk show` uses for a hidden uid (issue 01M5KVYE).
+fn parked_done_msg(b: &Board) -> Option<String> {
+    let mut out = String::new();
+    for p in b.projects.iter().flat_map(|p| &p.plans) {
+        if !matches!(p.state.as_str(), "parked" | "done") {
+            continue;
+        }
+        let key = if p.app.is_empty() {
+            p.name.clone()
+        } else {
+            format!("{}/{}", p.app, p.name)
+        };
+        let hidden: usize = p
+            .counts
+            .iter()
+            .filter(|(s, _)| !matches!(s.as_str(), "done" | "dropped" | "replaced"))
+            .map(|(_, n)| n)
+            .sum();
+        let chunks = if hidden == 1 {
+            "1 open chunk".to_string()
+        } else {
+            format!("{hidden} open chunks")
+        };
+        if p.state == "parked" {
+            out.push_str(&format!(
+                "plan {key} is parked — {chunks} hidden; `fael plan unpark {key}` first, or `fael plan export {key}` lists its uids\n"
+            ));
+        } else {
+            out.push_str(&format!(
+                "plan {key} is done — {chunks} hidden; `fael plan export {key}` lists its uids\n"
+            ));
+        }
+    }
+    (!out.is_empty()).then_some(out)
 }
 
 /// The roots the board merged (issue 01M5H0VZ): human mode never showed

@@ -198,7 +198,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "plan",
         "create a plan, export or edit its sections and chunks, park or finish it",
         "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
-     | fael plan park|unpark|done <plan>
+     | fael plan park|unpark|done <plan> | fael plan lint <plan>
     (a plan is sections and chunks in <git-common-dir>/fael/crew.db, no file;
      new: a plan whose chunks live in the db from the start (`fael chunk add --plan`),
      its text four skeleton sections (1 Goal, 2 Scope, 3 Done criteria, 4 Constraints);

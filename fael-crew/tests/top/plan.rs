@@ -197,6 +197,60 @@ fn the_guessed_plan_and_chunk_calls_answer_or_name_the_real_one() {
 }
 
 #[test]
+fn lint_flags_dangling_refs_and_parked_board_names_hidden() {
+    let d = repo();
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    assert!(fael(&d, &["plan", "new", "hb", "House books"]).0);
+    let (_, json, _) = fael(&d, &["plan", "export", "hb", "--json"]);
+    let mut bill: serde_json::Value = serde_json::from_str(&json).unwrap();
+    bill["sections"] = serde_json::json!([{"key": "2", "body": "Do H4-H8."}]);
+    bill["chunks"] = serde_json::json!([{"title": "wire H4", "brief": "do H4", "label": "H4", "size": "S", "scope": ["src/"]}]);
+    let file = d.join("bill.json");
+    write(file.clone(), &bill.to_string());
+    assert!(fael(&d, &["plan", "apply", file.to_str().unwrap()]).0);
+    // drift: H5-H8 cited with no rows — exit 1, H4 present stays silent
+    let (ok, out, _) = fael(&d, &["plan", "lint", "hb"]);
+    assert!(
+        !ok && out.contains("4 refs with no chunk row") && out.contains("H5 (cited in 2)"),
+        "{out}"
+    );
+    assert!(!out.contains("H4 ("), "{out}");
+    // fix the drift: every cited ref gets a row, lint goes clean
+    for l in ["H5", "H6", "H7", "H8"] {
+        let (ok, _, err) = fael(
+            &d,
+            &[
+                "chunk",
+                "add",
+                &format!("t {l}"),
+                "--plan",
+                "hb",
+                "--brief",
+                "b",
+                "--size",
+                "S",
+                "--scope",
+                "src/",
+                "--label",
+                l,
+            ],
+        );
+        assert!(ok, "{err}");
+    }
+    let (ok, out, _) = fael(&d, &["plan", "lint", "hb"]);
+    assert!(ok && out.contains("no dangling refs"), "{out}");
+    // parked: the --plan cut names the hidden open count, never an empty board
+    assert!(fael(&d, &["plan", "park", "hb"]).0);
+    let (ok, out, _) = fael(&d, &["board", "--plan", "hb"]);
+    assert!(
+        ok && out.contains("plan hb is parked — 5 open chunks hidden")
+            && out.contains("`fael plan export hb` lists its uids"),
+        "{out}"
+    );
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
 fn plan_edit_replaces_one_passage_of_a_section_through_the_bill() {
     let d = repo();
     fael(&d, &["plan", "new", "n", "New work"]);

@@ -21,6 +21,7 @@ mod r#move;
 mod owner;
 mod parent;
 mod plan_edit;
+mod plan_lint;
 mod ready;
 mod schema;
 mod secret;
