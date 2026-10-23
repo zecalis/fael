@@ -48,7 +48,7 @@ pub(super) fn tx(s: &mut Store) -> Result<Transaction<'_>, String> {
         .map_err(err)
 }
 
-/// A chunk, by uid or label.
+/// A chunk, by uid, label, uid prefix, or `plan/label`.
 pub(super) fn row(tx: &Transaction, uid: &str) -> Result<Row, String> {
     let (id, uid, state) = lookup(tx, uid)?.ok_or_else(|| no_chunk(uid))?;
     let state = State::parse(&state).ok_or(format!("crew.db: chunk {uid} has state {state}"))?;
@@ -160,8 +160,9 @@ pub(super) fn scope(paths: &[String]) -> Result<Option<String>, String> {
     Ok((!paths.is_empty()).then(|| paths.join("\n")))
 }
 
-/// The chunk an `after` names: a label in plan `pid` first (a label is unique in its plan,
-/// not across plans), else what `lookup` finds.
+/// The chunk an `after` names: a `plan/label` through its plan (cross-plan stays in
+/// this crew.db — edges never leave it), else a label in plan `pid` first (a label
+/// is unique in its plan, not across plans), else what the resolver finds.
 pub(super) fn uid_id(tx: &Transaction, pid: i64, uid: &str) -> Result<i64, String> {
     let here: Option<i64> = tx
         .query_row(
@@ -174,9 +175,18 @@ pub(super) fn uid_id(tx: &Transaction, pid: i64, uid: &str) -> Result<i64, Strin
     if let Some(id) = here {
         return Ok(id);
     }
+    let at: String = tx
+        .query_row(
+            "SELECT CASE app WHEN '' THEN name ELSE app || '/' || name END FROM plan WHERE id = ?1",
+            [pid],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(err)?
+        .unwrap_or_else(|| "<plan>".into());
     Ok(lookup(tx, uid)?
         .ok_or(format!(
-            "rejected: no chunk {uid} — an `after` names a chunk that exists"
+            "rejected: no chunk {uid} — an `after` names a chunk that exists; try --plan {at} {uid} or {at}/{uid} (`fael plan export {at}` lists its uids)"
         ))?
         .0)
 }
