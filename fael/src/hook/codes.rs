@@ -179,12 +179,14 @@ pub(crate) fn warning(msg: &str) -> &'static str {
     code(WARNINGS, msg)
 }
 
-/// The faults a shape gate named (`nothing written — a · b (or add --force …)`),
+/// The faults a shape gate named (`nothing written — a · b — try …`),
 /// each as its warning code — empty for the batch summary, which names none.
 pub(crate) fn gate_rules(msg: &str) -> Vec<&'static str> {
     let Some((_, why)) = msg.split_once("nothing written — ") else {
         return vec![];
     };
+    // the fix tail: `— try …` (shape gates) or the older `(or add --force …)`
+    let why = why.split(" — try ").next().unwrap_or(why);
     let why = why.split(" (or ").next().unwrap_or(why);
     let mut r: Vec<&str> = why.split(" · ").map(warning).collect();
     r.dedup();

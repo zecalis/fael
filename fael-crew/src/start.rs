@@ -124,7 +124,7 @@ fn check_fresh(tx: &Transaction, run: &str) -> Result<(), String> {
         .map_err(err)?;
     if reused {
         return Err(format!(
-            "rejected: run {run} was already used — one R per start"
+            "rejected: run {run} was already used — one R per start — try `fael chunk start <uid> --run <a new R>`"
         ));
     }
     Ok(())
@@ -196,7 +196,7 @@ impl Store {
         let clash = clashes(&tx, &ms, &o.shared, &o.stale)?;
         if !clash.is_empty() && !o.force {
             return Err(format!(
-                "rejected: chunk {uid} shares files with a running chunk — {}; `--force` starts it anyway",
+                "rejected: chunk {uid} shares files with a running chunk — {}; try `fael chunk start {uid} --force` to start it anyway",
                 clash.join("; ")
             ));
         }
@@ -216,7 +216,7 @@ impl Store {
                 let text = match holder(&tx, r.id)? {
                     Some(h) if !o.force && !seat => {
                         return Err(format!(
-                            "rejected: chunk {m}{pair} is held by run {h} — `--force` takes it over"
+                            "rejected: chunk {m}{pair} is held by run {h} — try `fael chunk start {m} --force` to take it over"
                         ));
                     }
                     Some(h) => {
@@ -239,14 +239,16 @@ impl Store {
                         let w: Vec<_> = u.into_iter().map(|u| u.uid.unwrap_or(u.what)).collect();
                         if !o.force {
                             return Err(format!(
-                                "rejected: chunk {m}{pair} is blocked — after {} first, or `--force` starts it anyway",
+                                "rejected: chunk {m}{pair} is blocked — after {} first, or try `fael chunk start {m} --force` to start it anyway",
                                 w.join(", ")
                             ));
                         }
                         Some(format!("started by --force past after {}", w.join(", ")))
                     }
                     Ready::No(why) => {
-                        return Err(format!("rejected: chunk {m}{pair} is not ready: {why}"));
+                        return Err(format!(
+                            "rejected: chunk {m}{pair} is not ready: {why} — try `fael chunk show {m}`"
+                        ));
                     }
                 };
                 set(&tx, &r, State::Running, "agent", text.as_deref(), here.now)?;

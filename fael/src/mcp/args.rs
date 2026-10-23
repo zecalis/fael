@@ -10,7 +10,7 @@ pub(super) fn s(a: &Value, k: &str) -> Option<String> {
 }
 
 pub(super) fn need(a: &Value, k: &str) -> Result<String, String> {
-    s(a, k).ok_or(format!("rejected: {k} is required — pass it in arguments"))
+    s(a, k).ok_or(format!("rejected: {k} is required — pass it in arguments; try {{{k}: \"<value>\"}} added to this call"))
 }
 
 pub(super) fn files(a: &Value) -> Vec<String> {
@@ -30,7 +30,7 @@ pub(super) fn files(a: &Value) -> Vec<String> {
 pub(super) fn repo_for(a: &Value) -> Result<Repo, String> {
     if super::pinned() {
         if s(a, "cwd").is_some() {
-            return Err("rejected: this server is pinned to one workspace — drop cwd".into());
+            return Err("rejected: this server is pinned to one workspace — drop cwd; try the same call without cwd".into());
         }
         return repo();
     }
@@ -73,7 +73,7 @@ pub(super) fn urgent_ask(a: &Value) -> Result<core::Urgent, String> {
         (true, None) => Ok(core::Urgent::End),
         (false, Some(t)) => Ok(core::Urgent::Before(t)),
         (true, Some(_)) => Err(
-            "rejected: urgent and urgent_before pick one — the queue takes a single position"
+            "rejected: urgent and urgent_before pick one — the queue takes a single position; try urgent: true alone"
                 .into(),
         ),
     }

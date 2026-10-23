@@ -13,7 +13,6 @@ A row fael names: run its `inspect:` line, then in that same message —
 code holds it → `fael close <id> "now in <file>"`; wrong now → `--supersedes <id>`; still true, not in code → `fael bump <id>`.
 
 **Saw something broken, inconsistent or likely to break? `fael add issue "<what>" --title "<headline>" --files <path>` right there, one per finding — do not wait for the end of the task.**
-That includes your own bug and a reviewer's finding.
 Fixed one with no row yet, however found (failing test, review, reading code)? File it now; close it after the commit — a row closes once:
 `fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]"``.
 Would a new agent reading only code and tests know this? Yes → a test, named in `guard`. No → what not to do, and why.
@@ -26,11 +25,12 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
   - the user decided it? `--from user`, ask before changing it; unchecked report claim? `--from report`
 - `fael add note "<state the next session needs>" --title "<headline>" --files a,b` — where work stopped, what is half-done
 - `fael close <id> "<why>"` — a fixed issue, a done note, a row the code now says
-- Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff` — the receipt gives the line to paste to them. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
+- Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff`. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
+
+A reject ends with `try <call>`: run it. Close: ``fael close 01M5ABCD "tick used as delay → backoff; guard `tests/backoff.rs`"``
 
 Each row is read months later with no chat: one or two standalone sentences, one topic (a `;`/`·` list is rejected),
 with a ≤15-word `--title` (count first: required past 60 words/400 chars).
 `--files` names the paths or anchor `fael find` showed — never invent one; default: this session's edited files.
-Type an id only once this session's `fael find` or `add` printed it — never from memory;
-the listed prefix works.
+Type an id only once this session's `fael find` or `add` printed it — never from memory.

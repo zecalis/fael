@@ -283,7 +283,7 @@ pub(crate) fn close_row_as(
     })?;
     // an already-closed row says so, whatever the reason's shape
     if !core::closed(&log).contains(target.id.as_str()) && !force {
-        core::close_gate(why, &target.kind)?;
+        core::close_gate(&target.id, why, &target.kind)?;
     }
     let mut warns = phantom_lines(r, &log, None, why, &[id]);
     warns.extend(crate::unmerged::lines(&r.root, why));

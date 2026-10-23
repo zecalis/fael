@@ -121,13 +121,13 @@ pub(super) fn fence(tx: &Transaction, r: &Row, here: &Here) -> Result<(), String
     let who = client.as_deref().unwrap_or("agent");
     match (here.run, wt) {
         (Some(run), _) if run != start => Err(format!(
-            "rejected: chunk {}'s latest run is {start} ({who}), not {run} — that start no longer holds it",
-            r.uid
+            "rejected: chunk {}'s latest run is {start} ({who}), not {run} — that start no longer holds it; try `fael chunk show {}` for the run that does",
+            r.uid, r.uid
         )),
         (Some(_), _) => Ok(()),
         _ if r.state != State::Running => Ok(()),
         (None, Some(w)) if w != here.worktree => Err(format!(
-            "rejected: chunk {} was taken over by run {start} ({who}) in {w} — this session no longer holds it; if it is yours (moved worktree), pass --run {start}",
+            "rejected: chunk {} was taken over by run {start} ({who}) in {w} — this session no longer holds it; if it is yours (moved worktree), try the same command with --run {start}",
             r.uid
         )),
         _ => Ok(()),
@@ -138,7 +138,7 @@ pub(super) fn fence(tx: &Transaction, r: &Row, here: &Here) -> Result<(), String
 pub(super) fn size(f: &Fields) -> Result<(), String> {
     match f.size.as_deref() {
         None | Some("S" | "M" | "L" | "") => Ok(()),
-        Some(v) => Err(format!("rejected: --size {v} — S, M or L")),
+        Some(v) => Err(format!("rejected: --size {v} — S, M or L; try --size M")),
     }
 }
 
@@ -153,7 +153,7 @@ pub(super) fn scope(paths: &[String]) -> Result<Option<String>, String> {
                 .any(|s| s.is_empty() || s == "." || s == "..");
         if bad {
             return Err(format!(
-                "rejected: scope {p:?} — a repo-relative path prefix (`src/a.rs`, `docs/`), no `..`, no globs"
+                "rejected: scope {p:?} — a repo-relative path prefix (`src/a.rs`, `docs/`), no `..`, no globs; try --scope src/a.rs,docs/"
             ));
         }
     }
@@ -204,7 +204,7 @@ pub(super) fn add_after(tx: &Transaction, src: i64, dst: i64) -> Result<(), Stri
         .map_err(err)?;
     if cycle {
         return Err(
-            "rejected: that `after` closes a loop — the other chunk already waits on this one"
+            "rejected: that `after` closes a loop — the other chunk already waits on this one; try `fael chunk unafter <other-uid> <uid> \"<why>\"` first"
                 .into(),
         );
     }
@@ -231,7 +231,7 @@ pub(super) fn edit_in(
     let r = row(tx, uid)?;
     if r.state.terminal() {
         return Err(format!(
-            "rejected: chunk {uid} is {} — history, not edited",
+            "rejected: chunk {uid} is {} — history, not edited; try `fael chunk add \"<title>\" --plan <plan>` for new work",
             r.state.as_str()
         ));
     }
@@ -262,7 +262,7 @@ pub(super) fn edit_in(
     ] {
         let Some(v) = v else { continue };
         if col == "title" && v.is_empty() {
-            return Err("rejected: a chunk needs a title".into());
+            return Err("rejected: a chunk needs a title — try --title \"<headline>\"".into());
         }
         let v = (!v.is_empty() || matches!(col, "brief" | "title")).then_some(v);
         tx.execute(
@@ -274,7 +274,7 @@ pub(super) fn edit_in(
     }
     if what.is_empty() {
         return Err(
-            "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope, --reads or --label"
+            "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope, --reads or --label; try `fael chunk edit <uid> --title \"<new title>\"`"
                 .into(),
         );
     }
@@ -325,7 +325,7 @@ impl Store {
         let r = row(&tx, uid)?;
         if r.state.terminal() {
             return Err(format!(
-                "rejected: chunk {uid} is {} — it waits on nothing",
+                "rejected: chunk {uid} is {} — it waits on nothing; try `fael chunk show {uid}`",
                 r.state.as_str()
             ));
         }
@@ -340,7 +340,9 @@ impl Store {
             )
             .map_err(err)?;
         if n == 0 {
-            return Err(format!("rejected: chunk {uid} does not wait on {other}"));
+            return Err(format!(
+                "rejected: chunk {uid} does not wait on {other} — try `fael chunk show {uid}` for what it waits on"
+            ));
         }
         let text = format!("no longer after {other}: {why}");
         set(&tx, &r, r.state, "owner", Some(&text), now)?;

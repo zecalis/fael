@@ -53,7 +53,7 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         (true, None, false) => core::UrgentChange::End,
         (false, Some(t), false) => core::UrgentChange::Before(t),
         (false, None, true) => core::UrgentChange::Remove,
-        _ => return Err("rejected: urgent, urgent_before and not_urgent pick one — the queue takes a single position".into()),
+        _ => return Err("rejected: urgent, urgent_before and not_urgent pick one — the queue takes a single position; try bump {id: \"<id>\", urgent: true}".into()),
     };
     let routing = s(a, "to").is_some()
         || s(a, "revisit").is_some()

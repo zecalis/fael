@@ -126,7 +126,7 @@ fn run_end_forced_takeover_and_fencing() {
         "{e}"
     );
     assert!(
-        e.contains(&format!("pass --run {r3}")),
+        e.contains(&format!("try the same command with --run {r3}")),
         "the reject names the flag: {e}"
     );
     assert!(s.done(&c, "h", Some(1), None, &here("/b")).is_err());
@@ -391,7 +391,9 @@ fn accept_takes_only_a_review_chunk() {
         let e = s.owner(c, Owner::Accept, None, NOW).unwrap_err();
         assert_eq!(
             e,
-            format!("rejected: chunk {c} is {st} — `accept` takes a chunk in review")
+            format!(
+                "rejected: chunk {c} is {st} — `accept` takes a chunk in review; try `fael chunk show {c}`"
+            )
         );
         assert_eq!((state(&s, c), events(&s)), (st.to_string(), before));
     }

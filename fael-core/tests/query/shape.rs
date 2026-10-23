@@ -20,7 +20,10 @@ fn topic_list_and_untitled_reject_before_write() {
     let e = gate(&list, &log, None).unwrap_err();
     assert!(e.starts_with("rejected: nothing written"), "{e}");
     assert!(
-        e.contains("topic separators") && e.contains("--force"),
+        e.contains("topic separators")
+            && e.contains("try one call per topic: `fael add decision")
+            && e.contains("--key <area>:<topic>")
+            && !e.contains("--force"),
         "{e}"
     );
     let long = row("note", &"word ".repeat(70), None);
@@ -55,13 +58,19 @@ fn refile_of_a_fat_row_passes() {
 /// don't-because; a note owes the arrow only.
 #[test]
 fn close_gate_needs_core_and_a_check_for_issues() {
-    let bad = close_gate("fixed it", "issue").unwrap_err();
+    let bad = close_gate("01ID", "fixed it", "issue").unwrap_err();
     assert!(bad.starts_with("rejected: nothing written"), "{bad}");
-    assert!(bad.contains("no fix") && bad.contains("--force"), "{bad}");
-    let noguard = close_gate("slow query → added index", "issue").unwrap_err();
+    assert!(
+        bad.contains("no fix")
+            && bad.contains("— try `fael close 01ID ")
+            && !bad.contains("--force"),
+        "{bad}"
+    );
+    let noguard = close_gate("01ID", "slow query → added index", "issue").unwrap_err();
     assert!(noguard.contains("no check"), "{noguard}");
     assert!(
         close_gate(
+            "01ID",
             "slow query → added index; guard `db/index_test.rs`",
             "issue"
         )
@@ -69,19 +78,21 @@ fn close_gate_needs_core_and_a_check_for_issues() {
     );
     assert!(
         close_gate(
+            "01ID",
             "slow query → added index; don't add a covering index because writes double",
             "issue"
         )
         .is_ok()
     );
     // a note owes nothing: a done handoff, a held verdict are complete as written
-    assert!(close_gate("handoff done", "note").is_ok());
-    assert!(close_gate("now in `src/a.rs`", "decision").is_ok());
+    assert!(close_gate("01ID", "handoff done", "note").is_ok());
+    assert!(close_gate("01ID", "now in `src/a.rs`", "decision").is_ok());
     // an arrow inside a code span alone is no fix
-    assert!(close_gate("`a -> b` fixed", "issue").is_err());
+    assert!(close_gate("01ID", "`a -> b` fixed", "issue").is_err());
     // the full template shape passes: `;` clauses are the template, not a topic list
     assert!(
         close_gate(
+            "01ID",
             "slow query → added an index; guard `db/index_test.rs`; tried vacuuming first",
             "issue"
         )
