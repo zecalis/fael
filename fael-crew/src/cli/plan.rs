@@ -6,7 +6,7 @@ use fael_crew::{Bill, PlanRow, Store};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> — try 'fael plan --help'";
+const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> | fael plan lint <plan> — try 'fael plan --help'";
 
 /// The verbs `plan` answers — `show` is `export` by another name.
 /// Canonical in `fael-core::work`; the command reuses it.
@@ -48,6 +48,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         Some("edit") if rest.len() == 2 => edit(a, &r, &rest[1]),
         Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
         Some("list") if rest.len() == 1 => list(&r),
+        Some("lint") if rest.len() == 2 => return lint(&r, &rest[1]),
         _ => Err(fael_core::help::wrong_args(
             "plan",
             rest.first()
@@ -278,6 +279,38 @@ fn section(r: &Repo, want: &str, key: &str) -> Result<(), String> {
     let text = fael_crew::export_section(&s, one(&s, want)?.id, key)?;
     print!("{text}");
     Ok(())
+}
+
+/// `fael plan lint <plan>`: section-cited H-refs and label-like tokens with
+/// no chunk row (issue 01M5KVYE). Clean exits 0; drift exits 1 with the fix.
+fn lint(r: &Repo, want: &str) -> Result<ExitCode, String> {
+    let s = open(r)?;
+    let p = one(&s, want)?;
+    let missing = s.plan_lint(p.id)?;
+    if missing.is_empty() {
+        println!("plan {}: no dangling refs", key(&p));
+        return Ok(ExitCode::SUCCESS);
+    }
+    println!(
+        "plan {}: {} {} with no chunk row",
+        key(&p),
+        missing.len(),
+        if missing.len() == 1 { "ref" } else { "refs" }
+    );
+    for m in &missing {
+        println!(
+            "  {} (cited in {}) — no chunk with label {}",
+            m.name,
+            m.sections.join(", "),
+            m.name
+        );
+    }
+    println!(
+        "fix: `fael chunk add \"<title>\" --plan {} --label <ref> --brief \"…\"` or edit the section (`fael plan export {} --section <key>`)",
+        key(&p),
+        key(&p)
+    );
+    Ok(ExitCode::from(1))
 }
 
 /// `fael plan export --since <event-id>`: the change feed, JSON whatever `--json` says.

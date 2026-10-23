@@ -121,3 +121,60 @@ fn gated_drafts_listed_only_under_plan_cut_never_queued() {
     let t = text::text(&b, true);
     assert!(t.contains("gated") && t.contains("g1"), "{t}");
 }
+
+fn archived(plan: &str, state: &str, counts: &[(&str, usize)]) -> BoardPlan {
+    BoardPlan {
+        app: String::new(),
+        name: plan.into(),
+        title: plan.into(),
+        area: "dev".into(),
+        state: state.into(),
+        truth: "db",
+        parent: None,
+        counts: counts.iter().map(|(s, n)| (s.to_string(), *n)).collect(),
+    }
+}
+
+#[test]
+fn plan_cut_on_parked_plan_names_hidden_chunks() {
+    // the board lists no chunks of a parked plan: the cut would read empty
+    let p = Project {
+        plans: vec![archived("house-books", "parked", &[("open", 2)])],
+        chunks: vec![],
+        ..Project::named(Path::new(""))
+    };
+    let t = text::text(&lists(String::new(), vec![&p]), true);
+    assert!(
+        t.contains("plan house-books is parked — 2 open chunks hidden"),
+        "{t}"
+    );
+    // same retype `chunk show` on a hidden uid prints (issue 01M5KVYE)
+    assert!(
+        t.contains("`fael plan export house-books` lists its uids"),
+        "{t}"
+    );
+    assert!(!t.contains("nothing on the board"), "{t}");
+}
+
+#[test]
+fn plan_cut_on_done_plan_names_hidden_chunks_without_unpark() {
+    let p = Project {
+        plans: vec![archived("old", "done", &[("open", 1), ("done", 4)])],
+        chunks: vec![],
+        ..Project::named(Path::new(""))
+    };
+    let t = text::text(&lists(String::new(), vec![&p]), true);
+    assert!(t.contains("plan old is done — 1 open chunk hidden"), "{t}");
+    assert!(!t.contains("unpark"), "{t}");
+}
+
+#[test]
+fn plan_cut_on_active_empty_plan_stays_empty() {
+    let p = Project {
+        plans: vec![archived("fresh", "active", &[])],
+        chunks: vec![],
+        ..Project::named(Path::new(""))
+    };
+    let t = text::text(&lists(String::new(), vec![&p]), true);
+    assert!(t.contains("nothing on the board"), "{t}");
+}
