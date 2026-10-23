@@ -42,6 +42,24 @@ pub(crate) struct Pending {
     pub warns: Vec<String>,
 }
 
+/// Too many files derived from this session's edits to push the row at every
+/// one of them: the caller names the few it is about (PLAN-fael-context-loop
+/// §5b). The reject's `try` tail spells that retry with the kind and the
+/// first two files, beside the `--force` escape.
+fn derived_cap(kind: &str, files: &[String], force: bool) -> Result<(), String> {
+    let cap = crate::filehash::MAX_FILES;
+    if files.len() > cap && !force {
+        let few: Vec<String> = files.iter().take(2).cloned().collect();
+        return Err(format!(
+            "rejected: nothing written — {} files derived from this session's edits (over {cap}); name the ones the row is about with --files — try `fael add {kind} \"<text>\" --files {}` (or add --force to file it on all): {}",
+            files.len(),
+            few.join(","),
+            files.join(",")
+        ));
+    }
+    Ok(())
+}
+
 /// Build + heal + validate without writing (normalise · check · self-heal ·
 /// provenance · id scan). Dry runs stop here, so the previewed Verdict is
 /// the one `add_row` would act on.
@@ -68,16 +86,7 @@ pub(crate) fn prepare(
     let mut log = crate::read(r);
     if files.is_empty() {
         files = crate::session::derive(&r.root, &log);
-        // a long session's edits would push the row at every one of them:
-        // the caller names the few it is about (PLAN-fael-context-loop §5b)
-        let cap = crate::filehash::MAX_FILES;
-        if files.len() > cap && !force {
-            return Err(format!(
-                "rejected: nothing written — {} files derived from this session's edits (over {cap}); name the ones the row is about with --files (or add --force to file it on all): {}",
-                files.len(),
-                files.join(",")
-            ));
-        }
+        derived_cap(kind, &files, force)?;
     }
     warns.extend(paths::check(
         &r.root,

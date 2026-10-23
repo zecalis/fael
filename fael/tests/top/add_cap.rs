@@ -62,6 +62,31 @@ fn fourth_live_decision_is_rejected_with_ready_commands() {
     assert!(add(&d, "four four", &["--force"]).0);
 }
 
+/// The reject's `try` tail names the exact re-file that passes: its
+/// `--supersedes` is a short prefix — run it verbatim and the retry succeeds
+/// on the first try (fael:01M5MA4N).
+#[test]
+fn try_tail_refile_with_short_prefix_passes() {
+    let d = repo();
+    for t in ["one one", "two two", "three three"] {
+        let (ok, out) = add(&d, t, &[]);
+        assert!(ok, "{out}");
+    }
+    let (ok, out) = add(&d, "four four", &[]);
+    assert!(!ok, "{out}");
+    let tail = out.rsplit("— try `").next().unwrap_or("");
+    assert!(tail.starts_with("fael add decision"), "{out}");
+    let id = out
+        .rsplit("--supersedes ")
+        .next()
+        .and_then(|s| s.split('`').next())
+        .map(str::trim)
+        .unwrap_or("");
+    assert!(!id.is_empty(), "{out}");
+    let (ok, out) = add(&d, "four four", &["--supersedes", id]);
+    assert!(ok, "{out}");
+}
+
 #[test]
 fn dormant_rows_do_not_count() {
     let d = repo();

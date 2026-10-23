@@ -28,7 +28,15 @@ pub(crate) fn check(
     let canon = |f: &String| al.current(f).unwrap_or_else(|| f.clone());
     let open = core::find(log, &core::Filter::default());
     let ab = core::abbrev(log);
+    // the flag may name a unique prefix (the lines below print those): resolve
+    // it to the full id, or the row it names stays counted and the advised
+    // re-file rejects again
+    let resolved = superseding.and_then(|s| core::resolve_row(log, s).ok().map(|r| r.id.clone()));
+    let superseding = resolved.as_deref().or(superseding);
     let mut lines = vec![];
+    // the first capped file and one of its live ids: the `try` tail names the
+    // exact re-file that passes, beside the `--force` escape
+    let mut first: Option<(String, String)> = None;
     for f in row.files.iter().filter(|f| !crate::hook::is_anchor(f)) {
         let want = canon(f);
         let live: Vec<&&core::Row> = open
@@ -41,6 +49,11 @@ pub(crate) fn check(
             .collect();
         if live.len() < MAX_LIVE {
             continue;
+        }
+        if first.is_none()
+            && let Some(o) = live.first()
+        {
+            first = Some((f.clone(), ab.short(&o.id).to_string()));
         }
         lines.push(format!("{f} already has {} live decisions:", live.len()));
         for o in live {
@@ -59,8 +72,13 @@ pub(crate) fn check(
     if lines.is_empty() {
         return Ok(());
     }
+    let try_tail = first.map_or(String::new(), |(f, id)| {
+        format!(
+            " — try `fael add decision \"<one topic>\" --title \"<≤15-word headline>\" --files {f} --supersedes {id}`"
+        )
+    });
     Err(format!(
-        "rejected: nothing written — at most {MAX_LIVE} live decisions per file; supersede or merge into one\n{}\n(or add --force to file it as is)",
+        "rejected: nothing written — at most {MAX_LIVE} live decisions per file; supersede or merge into one\n{}\n(or add --force to file it as is){try_tail}",
         lines.join("\n")
     ))
 }
