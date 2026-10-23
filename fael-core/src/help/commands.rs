@@ -32,6 +32,9 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
      --dry-run prints the verdict and the row the real add would write, writing nothing;
      a repeat on these files or key, \"Supersedes <id>\" in the text, and the
      only key on these files are filled in for you;
+     text mode prints `<id> → <path>` on stdout first (the first word is the id,
+     never `added`); warns go to stderr `warn:`-prefixed, so a combined stream
+     still separates the receipt from its notes; --json keeps stdout one JSON row;
      batch: fael add --json - < rows.json (a JSON array; a bad row reports alone, the rest save);
      text that starts with - goes after --: fael add note --files a.rs -- \"-h\")",
     ),
@@ -87,7 +90,8 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
       an empty search counts each word, --files and filter on its own, so the
       one that matched nothing shows;
       --kind issue lists issues ready to work first, (waiting: …) ones last;
-      text finds rows holding every word, in any order; on a busy file add
+      text finds rows holding every word, in any order (literal AND, not regex -
+      a query with regex metachars prints a hint suggesting --key glob or two finds); on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*' (a bare key also matches its k:* children);
      --recall wide also pulls rows sharing a key with an exact hit and the text match off any file, exact hits first;
      a cut list prints the exact next call — rerun it with the new --offset)",

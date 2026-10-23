@@ -136,3 +136,23 @@ pub fn glob(pattern: &str, s: &str) -> bool {
     let mut dead = vec![false; (p.len() + 1) * (s.len() + 1)];
     m(&p, &s, 0, 0, &mut dead)
 }
+
+/// True when `q` contains regex metachars that [`all_words`] treats literally.
+/// `find` is literal AND, not regex — the caller hints `--key` glob or two finds.
+pub fn has_regex_chars(q: &str) -> bool {
+    q.chars().any(|c| {
+        matches!(
+            c,
+            '|' | '\\' | '(' | ')' | '[' | ']' | '*' | '?' | '+' | '^' | '$'
+        )
+    })
+}
+
+/// The machine hint for a regex-like text query, or None when `q` has no
+/// metachars. Same text for CLI (`--key`) and MCP (`key`).
+pub fn regex_hint(q: Option<&str>) -> Option<String> {
+    let q = q?;
+    has_regex_chars(q).then(|| {
+        "hint: text search is literal AND, not regex — for patterns use --key 'glob*' (MCP: key) or run two finds".to_string()
+    })
+}

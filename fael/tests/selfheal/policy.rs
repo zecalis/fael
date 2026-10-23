@@ -130,8 +130,11 @@ fn explicit_act_reports_the_lower_class_as_also_kept() {
         "{err}"
     );
     // chunk 3: the cross-key act is one `warning:` line — the move exposed,
-    // the trailer still info
-    let warns: Vec<&str> = err.lines().filter(|l| l.starts_with("warning:")).collect();
+    // the trailer still info. Printed `warn:`-prefixed on stderr, `warning:` kept inside.
+    let warns: Vec<&str> = err
+        .lines()
+        .filter(|l| l.starts_with("warn:") && l.contains("warning:"))
+        .collect();
     assert_eq!(warns.len(), 1, "{err}");
     assert!(
         warns[0].contains("auth:x") && warns[0].contains("billing:invoice"),

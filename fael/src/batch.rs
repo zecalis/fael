@@ -51,7 +51,10 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
     } else {
         let rel = path.strip_prefix(&r.root).unwrap_or(path);
         // the first word stays the full id (callers and tests take it as is); a
-        // supersede, flagged or self-healed, says which row it replaced
+        // supersede, flagged or self-healed, says which row it replaced.
+        // Never prefix `added`: the id stays the first word for machines.
+        // Warns ride stderr `warn:`-prefixed (see `emit_warns`), so a combined
+        // stream still separates the receipt from its notes.
         let old = row
             .supersedes
             .as_deref()
@@ -59,6 +62,20 @@ pub(crate) fn written(a: &crate::Args, r: &crate::Repo, row: &Row, path: &std::p
         let to = paste_line(row).map_or(String::new(), |p| format!(" · {p}"));
         println!("{} → {}{old}{to}", row.id, rel.display());
         launch_line(row).iter().for_each(|l| println!("{l}"));
+    }
+}
+
+/// Every secondary line an add/bump/claim prints: stderr, `warn:`-prefixed,
+/// so a combined stream still separates the `<id> → <path>` receipt (stdout,
+/// id first) from its notes. Already-prefixed lines pass through; `warning:`
+/// stays inside, so `contains("warning:")` readers still match.
+pub(crate) fn emit_warns(warns: &[String]) {
+    for w in warns {
+        if w.starts_with("warn: ") {
+            eprintln!("{w}");
+        } else {
+            eprintln!("warn: {w}");
+        }
     }
 }
 
@@ -118,7 +135,7 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
         let res = parsed.and_then(|b| write::add_row(&r, &b.kind, &b.text, &b.files, b.opts));
         match res {
             Ok((row, _path, warns)) => {
-                warns.iter().for_each(|w| eprintln!("{w}"));
+                emit_warns(&warns);
                 record_row_asks("cli", "add", &r.root, &row, &warns);
                 // batch rides `--json`: one JSON row per line, like single add
                 println!("{}", row.to_line());
@@ -170,7 +187,7 @@ pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<
     for id in ids {
         match write::close_row(&r, id, why, a.has("force")) {
             Ok((row, path, warns)) => {
-                warns.iter().for_each(|w| eprintln!("{w}"));
+                emit_warns(&warns);
                 record_asks("cli", ASK_WARN, "close", Some(&r.root), &warns);
                 written(a, &r, &row, &path);
                 if !a.has("json") {
