@@ -54,7 +54,7 @@ pub struct EndedRun {
 
 pub use db::{
     all_plans, brief_row, chunk_brief, db_at, db_for, ended_runs, flow_runs, has_held, held,
-    is_chunk, mark_seen, mark_seen_session, plan_by_name,
+    is_chunk, linked_open_chunks, mark_seen, mark_seen_session, plan_by_name,
 };
 pub use elsewhere::{
     Elsewhere, chunk_elsewhere, register_repo, repos as elsewhere_repos, row_elsewhere,

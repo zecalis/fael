@@ -148,6 +148,25 @@ pub fn is_chunk(db: &Path, tok: &str) -> bool {
     .unwrap_or(false)
 }
 
+/// Open chunks linked to ledger row `row_id` — `(uid, state)`, oldest first.
+/// Empty when no db, no tables, or none linked. Fail-open: crew owns writes.
+pub fn linked_open_chunks(db: &Path, row_id: &str) -> Vec<(String, String)> {
+    let Some(c) = readonly(db) else {
+        return Vec::new();
+    };
+    let mut q = match c.prepare(
+        "SELECT c.uid, c.state FROM chunk_issue i JOIN chunk c ON c.id = i.chunk
+         WHERE i.row_id = ?1 AND c.state NOT IN ('done','dropped','replaced')
+         ORDER BY c.id",
+    ) {
+        Ok(q) => q,
+        Err(_) => return Vec::new(),
+    };
+    q.query_map([row_id], |r| Ok((r.get(0)?, r.get(1)?)))
+        .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
+        .unwrap_or_default()
+}
+
 pub fn brief_row(c: &rusqlite::Connection, cond: &str, key: &str) -> Option<Brief> {
     let sql = format!(
         "SELECT c.uid, c.title, c.brief,
@@ -266,6 +285,54 @@ mod tests {
         assert!(d.join("plans.db").exists() && !d.join("crew.db").exists());
         std::fs::write(d.join("crew.db"), "x").unwrap();
         assert_eq!(db_at(&d), d.join("crew.db"));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn linked_open_chunks_skips_terminal_and_missing() {
+        let d = std::env::temp_dir().join(format!("fael-linked-{}", crate::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let db = d.join("crew.db");
+        // missing file: fail-open empty
+        assert!(linked_open_chunks(&d.join("nope.db"), "01X").is_empty());
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute_batch(
+            "CREATE TABLE chunk(id INTEGER PRIMARY KEY, uid TEXT, state TEXT);
+             CREATE TABLE chunk_issue(chunk INTEGER, row_id TEXT);",
+        )
+        .unwrap();
+        let issue = "01M0000000000000000000001";
+        for (id, uid, state) in [
+            (1, "01M00000000000000000000A1", "open"),
+            (2, "01M00000000000000000000A2", "done"),
+            (3, "01M00000000000000000000A3", "running"),
+            (4, "01M00000000000000000000A4", "dropped"),
+        ] {
+            c.execute(
+                "INSERT INTO chunk(id, uid, state) VALUES (?1, ?2, ?3)",
+                rusqlite::params![id, uid, state],
+            )
+            .unwrap();
+            c.execute(
+                "INSERT INTO chunk_issue(chunk, row_id) VALUES (?1, ?2)",
+                rusqlite::params![id, issue],
+            )
+            .unwrap();
+        }
+        drop(c);
+        let got = linked_open_chunks(&db, issue);
+        assert_eq!(
+            got,
+            vec![
+                ("01M00000000000000000000A1".to_string(), "open".to_string()),
+                (
+                    "01M00000000000000000000A3".to_string(),
+                    "running".to_string()
+                ),
+            ],
+            "{got:?}"
+        );
+        assert!(linked_open_chunks(&db, "01M0000000000000000000009").is_empty());
         let _ = std::fs::remove_dir_all(d);
     }
 }
