@@ -91,7 +91,7 @@ fn rejects_read_as_their_family() {
         ),
         ("rejected: 01M4AAAA is already closed", "row_state"),
         (
-            "rejected: nothing written — text is 131 words with no title — add --title \"<h>\" (or add --force to file it as is)",
+            "rejected: nothing written — text is 131 words with no title — add --title \"<h>\" — try `fael add note \"<one topic>\" --title \"<≤15-word headline>\" --files <paths>`",
             "shape_gate",
         ),
     ] {

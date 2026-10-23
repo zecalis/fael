@@ -28,7 +28,8 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
      working an open issue? fael claim <id> first — others then see (held @<branch>), never a lock;
      a topic list (; / ·), a long text with no --title, or a plan key off the handoff
      convention (plan:<name>:handoff; chunk-<n> only for a chunk run in parallel) is
-     rejected before the write — --force files it, or a path that looks like a typo;
+     rejected before the write — the reject ends with the `try` call that passes;
+     --force files it as is, or a path that looks like a typo;
      --dry-run prints the verdict and the row the real add would write, writing nothing;
      a repeat on these files or key, \"Supersedes <id>\" in the text, and the
      only key on these files are filled in for you;
@@ -44,7 +45,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "fael close (<id> | --key <key>) \"<why>\" [--force]
     (an exact id or unique prefix names the row; closing twice is rejected;
      --key closes the one open row on that key, and lists them if there are several;
-     an issue's reason needs <cause> → <fix> plus guard `<test>` or don't <X> because <Y> — or pass --force)",
+     an issue's reason needs <cause> → <fix> plus guard `<test>` or don't <X> because <Y> — the reject ends with the `try` call; or pass --force)",
     ),
     (
         "bump",
