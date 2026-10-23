@@ -204,7 +204,7 @@ pub(super) fn add_after(tx: &Transaction, src: i64, dst: i64) -> Result<(), Stri
         .map_err(err)?;
     if cycle {
         return Err(
-            "rejected: that `after` closes a loop — the other chunk already waits on this one; try `fael chunk unafter <other-uid> <uid> \"<why>\"` first"
+            "rejected: that `after` closes a loop — the other chunk already waits on this one; try `fael chunk unafter <other> <uid> \"<why>\"` first"
                 .into(),
         );
     }

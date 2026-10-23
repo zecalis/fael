@@ -145,7 +145,7 @@ pub fn rules(uid: &str, model: Option<&str>) -> String {
          - state moves only through fael, never by editing a plan file:\n  \
          finished → shipping with `git ship`: first `fael chunk note {uid} \"finished: <handoff>\"` and put `Fael-Chunk: {uid}` in the commit trailer — git ship closes the chunk with that note; otherwise `fael chunk done {uid} \"<handoff>\" --pr N` (or `--out <path>` for a file, image or video): done with a PR, review for a file the owner accepts\n  \
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
-         needs another chunk first → `fael chunk after {uid} <other-uid> \"<why>\"`\n\
+         needs another chunk first → `fael chunk after {uid} <other> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
          - leftovers are rows, not PR prose: file each first (`fael add issue \"<one topic, no ; list>\" --title \"<≤15 words>\" --files <f>` or `fael chunk add …`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…`; a `finished:` note says it as its own `left: none|<id|uid>,…` line — done refuses without it\n\
          - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
