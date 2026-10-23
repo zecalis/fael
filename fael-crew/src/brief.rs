@@ -95,6 +95,26 @@ impl Started {
             if !fields.is_empty() {
                 let _ = writeln!(o, "{}", fields.join(" · "));
             }
+            // zero-knowledge first line: what to do, then the exact close verb
+            let task = if c.brief == c.title || c.brief.trim().is_empty() {
+                c.title.clone()
+            } else {
+                c.brief
+                    .lines()
+                    .next()
+                    .unwrap_or(&c.title)
+                    .trim()
+                    .to_string()
+            };
+            let task = match task.char_indices().nth(100) {
+                Some((i, _)) => format!("{}…", &task[..i]),
+                None => task,
+            };
+            let _ = writeln!(
+                o,
+                "TLDR: do \"{task}\" then `fael chunk done {} \"<handoff>\" --pr N`",
+                c.uid
+            );
             if let Some(p) = &c.resume {
                 resume(&mut o, p);
             }
@@ -172,11 +192,25 @@ impl Started {
                 .filter(|s| !shown.contains(&s.key.as_str()))
                 .filter(|s| base(&s.title, !reads.is_empty()))
                 .collect();
-            if !heads.is_empty() {
+            // a blank Goal/Done names its fill command instead of printing nothing
+            let missing: Vec<&Row> = c
+                .sections
+                .iter()
+                .filter(|s| shown.contains(&s.key.as_str()))
+                .filter(|s| base(&s.title, true))
+                .collect();
+            if !missing.is_empty() || !heads.is_empty() {
                 let _ = writeln!(o, "\n<!-- plan {} -->", c.plan);
                 for s in heads {
                     let _ = write!(o, "\n{}", one(s));
                     shown.push(&s.key);
+                }
+                for s in missing {
+                    let _ = writeln!(
+                        o,
+                        "\nsection {} ({}) is still blank — fill it: `fael plan export {} --json`, edit `sections`, `fael plan apply`",
+                        s.key, s.title, c.plan
+                    );
                 }
             }
             for (r, s) in &reads {

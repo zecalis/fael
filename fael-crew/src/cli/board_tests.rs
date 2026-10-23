@@ -178,3 +178,19 @@ fn plan_cut_on_active_empty_plan_stays_empty() {
     let t = text::text(&lists(String::new(), vec![&p]), true);
     assert!(t.contains("nothing on the board"), "{t}");
 }
+
+#[test]
+fn empty_repo_names_its_next_command_before_other_repos_rows() {
+    // repos registered, no chunks anywhere: a fresh repo's own empty state
+    // names the next command, then the repos line lists where it looked
+    let p = Project {
+        chunks: vec![],
+        ..Project::named(Path::new("here"))
+    };
+    let t = text::text(&lists(String::new(), vec![&p]), false);
+    assert!(
+        t.contains("this repo has no chunks — start one: `fael plan new <name> \"<title>\"`"),
+        "{t}"
+    );
+    assert!(t.contains("repos:"), "{t}");
+}
