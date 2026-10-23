@@ -131,8 +131,6 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     // only what fit the budget was said — like the push, count the shown lines
     // a list of one or two shows its bodies: the next call would be `find id=<id>`
     let full = a["full"].as_bool().unwrap_or(false) || core::expands(&rows, total, &f, budget);
-    // regex metachars are literal AND here, same hint as the CLI (MCP: `key`).
-    let hint = core::regex_hint(f.text.as_deref());
     let text = if rows.is_empty() {
         let (head, near) = crate::find::misses::explain(&r.root, "mcp", &log, &f, "files");
         let full = full || core::expands(&near, near.len(), &f, budget);
@@ -144,12 +142,10 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         let shown = near.iter().map(|r| r.id.clone());
         let n = body.lines().filter(|l| l.starts_with("- [")).count();
         let body = crate::journal::tag(body, &branch_of);
-        let mut out = format!("{head}\n{body}");
-        if let Some(h) = hint {
-            out.push('\n');
-            out.push_str(&h);
-        }
-        return Ok((out, shown.take(n).collect()));
+        return Ok((
+            with_hint(format!("{head}\n{body}"), &f),
+            shown.take(n).collect(),
+        ));
     } else {
         // issues also carry the git-proven marks, like the CLI list
         let is_issue = f.kind.as_deref() == Some("issue");
@@ -162,11 +158,15 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     };
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
-    let text = match hint {
+    Ok((with_hint(text, &f), shown))
+}
+
+/// Regex metachars are literal AND here, same hint as the CLI (MCP: `key`).
+fn with_hint(text: String, f: &core::Filter) -> String {
+    match core::regex_hint(f.text.as_deref()) {
         Some(h) => format!("{text}\n{h}"),
         None => text,
-    };
-    Ok((text, shown))
+    }
 }
 
 /// `ids: [...]` pulls several bodies in one call under the find budget; a bad

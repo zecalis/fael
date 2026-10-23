@@ -101,13 +101,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         nearest(a, &r.root, &log, &f, budget, &branch_of);
         return Ok(());
     }
-    // regex metachars are literal AND here: hint `--key` glob or two finds.
-    // Stderr only, so `--json` stdout stays exact.
-    if !a.has("json")
-        && let Some(h) = core::regex_hint(f.text.as_deref())
-    {
-        eprintln!("fael: {h}");
-    }
+    emit_hint(a, &f);
     // a list of one or two shows its bodies: the next call would be `find <id>`
     let full = a.has("full") || core::expands(&rows, total, &f, budget);
     // the cut line reprints this call with the next offset — same flags, no
@@ -158,6 +152,16 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             .for_each(|c| println!("{}", c.to_line()));
     }
     Ok(())
+}
+
+/// Regex metachars are literal AND here: hint `--key` glob or two finds.
+/// Stderr only, so `--json` stdout stays exact.
+fn emit_hint(a: &Args, f: &Filter) {
+    if !a.has("json")
+        && let Some(h) = core::regex_hint(f.text.as_deref())
+    {
+        eprintln!("fael: {h}");
+    }
 }
 
 /// An empty find: the nearest rows under their label, else why nothing

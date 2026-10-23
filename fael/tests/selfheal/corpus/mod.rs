@@ -65,7 +65,10 @@ fn replay(path: &std::path::Path) {
     let (ok, _, err) = add_row(&d, &fx["add"]);
     let ex = &fx["expect"];
     assert!(ok, "{tag}: {err}");
-    let warns: Vec<&str> = err.lines().filter(|l| l.starts_with("warn:") && l.contains("warning:")).collect();
+    let warns: Vec<&str> = err
+        .lines()
+        .filter(|l| l.starts_with("warn:") && l.contains("warning:"))
+        .collect();
     assert_eq!(
         warns.len(),
         ex["warning_lines"].as_u64().unwrap() as usize,

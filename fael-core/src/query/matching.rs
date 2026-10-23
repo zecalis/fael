@@ -4,7 +4,8 @@ use crate::{Row, anchor};
 /// show titles and keys, so they count — in any order: `login timeout` finds "timeout on
 /// the login page", `schema-silent` finds the row keyed `board:schema-silent`. A blank `q`
 /// holds no word and matches every row.
-pub(super) fn all_words(q: &str, r: &Row) -> bool {    let low = |s: Option<&str>| s.map(str::to_lowercase).unwrap_or_default();
+pub(super) fn all_words(q: &str, r: &Row) -> bool {
+    let low = |s: Option<&str>| s.map(str::to_lowercase).unwrap_or_default();
     let (text, title, key) = (
         r.text.to_lowercase(),
         low(r.title.as_deref()),
@@ -139,8 +140,12 @@ pub fn glob(pattern: &str, s: &str) -> bool {
 /// True when `q` contains regex metachars that [`all_words`] treats literally.
 /// `find` is literal AND, not regex — the caller hints `--key` glob or two finds.
 pub fn has_regex_chars(q: &str) -> bool {
-    q.chars()
-        .any(|c| matches!(c, '|' | '\\' | '(' | ')' | '[' | ']' | '*' | '?' | '+' | '^' | '$'))
+    q.chars().any(|c| {
+        matches!(
+            c,
+            '|' | '\\' | '(' | ')' | '[' | ']' | '*' | '?' | '+' | '^' | '$'
+        )
+    })
 }
 
 /// The machine hint for a regex-like text query, or None when `q` has no
