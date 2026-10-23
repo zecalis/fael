@@ -73,7 +73,7 @@ fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<Stri
         .map_err(err)?;
     if b.state.as_deref().is_some_and(|s| s != state) {
         return Err(format!(
-            "rejected: plan {name} is {state} — `fael plan park|unpark|done` moves it, a bill does not"
+            "rejected: plan {name} is {state} — `fael plan park|unpark|done` moves it, a bill does not; try `fael plan unpark {name}`"
         ));
     }
     let mut what = Vec::new();
@@ -82,10 +82,14 @@ fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<Stri
             continue;
         };
         if col == "title" && v.trim().is_empty() {
-            return Err("rejected: a plan needs a title".into());
+            return Err(
+                "rejected: a plan needs a title — try \"title\": \"<headline>\" in the bill".into(),
+            );
         }
         if col == "area" && !matches!(v.as_str(), "dev" | "marketing") {
-            return Err(format!("rejected: area {v} — dev or marketing"));
+            return Err(format!(
+                "rejected: area {v} — dev or marketing; try \"area\": \"dev\" in the bill"
+            ));
         }
         tx.execute(
             &format!("UPDATE plan SET {col} = NULLIF(?1, '') WHERE id = ?2"),
@@ -128,7 +132,7 @@ fn waits(tx: &Transaction, id: i64) -> Result<Vec<i64>, String> {
 
 fn add_line(tx: &Transaction, pid: i64, l: &Line, now: &str) -> Result<String, String> {
     if l.drop {
-        return Err("rejected: drop:true needs the uid of the chunk to drop".into());
+        return Err("rejected: drop:true needs the uid of the chunk to drop — try {\"op\":..., \"uid\":\"<uid>\", \"drop\":true} (`fael plan export <plan> --json` lists uids)".into());
     }
     let f = Fields {
         title: l.title.clone(),

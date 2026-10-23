@@ -32,7 +32,7 @@ fn close_checked(a: &Value) -> Result<String, String> {
         // `key` closes the one open row on that topic; none or several close nothing
         (Some(key), _) => vec![open_row_on(&r, key)?],
         (None, Some(v)) if v.is_empty() => {
-            return Err("rejected: ids is empty — pass at least one id".into());
+            return Err("rejected: ids is empty — pass at least one id; try close {ids: [\"<id>\"], text: \"<why>\"}".into());
         }
         (None, Some(v)) => v
             .iter()

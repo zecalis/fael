@@ -102,7 +102,7 @@ fn rejects_read_as_their_family() {
 #[test]
 fn a_gate_names_each_rule_once() {
     let m = "rejected: nothing written — text has 4 topic separators (; / ·) — one topic per row · \
-text is 131 words with no title — add --title · decision has no --key — add --key (or add --force to file it as is)";
+text is 131 words with no title — add --title · decision has no --key — add --key — try `fael add decision \"<one topic>\" --files a`";
     assert_eq!(gate_rules(m), ["topic_list", "untitled", "no_key"]);
     assert!(gate_rules("rejected: nothing written for 2 of 3 rows — the rest saved").is_empty());
 }

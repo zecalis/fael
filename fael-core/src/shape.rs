@@ -73,6 +73,7 @@ pub fn shape_rejects(row: &Row, old: Option<&Row>) -> Vec<String> {
 /// message names every other fat reason too, so one re-run fixes them all.
 /// `old` is the id the row re-files, if any.
 pub fn add_gate(row: &Row, log: &Log, cfg: &Config, old: Option<&str>) -> Result<(), String> {
+    let old_id = old;
     let old = old.and_then(|s| crate::resolve_row(log, s).ok());
     let mut why = shape_rejects(row, old);
     if why.is_empty() {
@@ -83,10 +84,32 @@ pub fn add_gate(row: &Row, log: &Log, cfg: &Config, old: Option<&str>) -> Result
             why.push(f);
         }
     }
+    let topics = topic_list(row).is_some();
     Err(format!(
-        "rejected: nothing written — {} (or add --force to file it as is)",
-        why.join(" · ")
+        "rejected: nothing written — {} — {}",
+        why.join(" · "),
+        add_try(row, topics, old_id)
     ))
+}
+
+/// The add that passes the gate, in CLI and MCP form — one message serves
+/// both channels. A topic list is split, so each topic gets its own `--key`.
+fn add_try(row: &Row, topics: bool, supersedes: Option<&str>) -> String {
+    let files = if row.files.is_empty() {
+        "<paths>".into()
+    } else {
+        row.files.join(",")
+    };
+    let key = if topics { " --key <area>:<topic>" } else { "" };
+    let sup = supersedes
+        .map(|s| format!(" --supersedes {s}"))
+        .unwrap_or_default();
+    let once = if topics { "one call per topic: " } else { "" };
+    format!(
+        "try {once}`fael add {kind} \"<one topic>\" --title \"<≤15-word headline>\" --files {files}{key}{sup}` \
+(MCP: add {{kind: \"{kind}\", text, title, files}})",
+        kind = row.kind
+    )
 }
 
 /// The close text a fixed bug is taught to take — one const for every channel
@@ -168,22 +191,23 @@ pub fn close_rejects(text: &str, kind: &str) -> Vec<String> {
                 .into(),
         );
     }
-    if kind == "issue" && !shape.guard && !dont_because(text) {
+    if !shape.guard && !dont_because(text) {
         r.push("close names no check — guard `<test path>` or don't <X> because <Y>".into());
     }
     r
 }
 
 /// `close_rejects` as the close path's reject: nothing is written. Only
-/// issues are gated (a fixed bug owes its evidence); other kinds pass. The
-/// `--force` escape mirrors `add_gate`.
-pub fn close_gate(text: &str, kind: &str) -> Result<(), String> {
+/// issues are gated (a fixed bug owes its evidence); other kinds pass. `id` is the row being closed, so the
+/// reject names the exact call to retry.
+pub fn close_gate(id: &str, text: &str, kind: &str) -> Result<(), String> {
     let why = close_rejects(text, kind);
     if why.is_empty() {
         return Ok(());
     }
     Err(format!(
-        "rejected: nothing written — {} (or close with --force to file it as is)",
+        "rejected: nothing written — {} — try `fael close {id} \"<cause> → <fix>; guard \\`<test path>\\` \
+or don't <X> because <Y>\"` (MCP: close {{id: \"{id}\", text: \"<cause> → <fix>; guard `<test path>`\"}})",
         why.join(" · ")
     ))
 }

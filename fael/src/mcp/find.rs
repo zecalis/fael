@@ -102,7 +102,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         all: a["all"].as_bool().unwrap_or(false),
         limit: match a["limit"].as_u64() {
             Some(0) => {
-                return Err("rejected: limit 0 shows nothing — drop it or give 1 or more".into());
+                return Err("rejected: limit 0 shows nothing — drop it or give 1 or more; try find {limit: 5}".into());
             }
             n => n.map(|n| n as usize),
         },
@@ -188,7 +188,9 @@ fn ids_call(
         .map(String::from)
         .collect();
     if ids.is_empty() {
-        return Err("rejected: ids is empty — pass at least one id".into());
+        return Err(
+            "rejected: ids is empty — pass at least one id; try find {ids: [\"<id>\"]}".into(),
+        );
     }
     let spell = |left: &[String]| format!("ids=[{}]", left.join(", "));
     let p = crate::find::many::pull(r, base, jtags, &ids, false, &spell);

@@ -55,7 +55,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         return Ok((v, p.warns));
     }
     if a["dry_run"].as_bool().unwrap_or(false) {
-        return Err("rejected: dry_run takes one row — drop rows: [...]".into());
+        return Err("rejected: dry_run takes one row — drop rows: [...]; try add {kind, text, dry_run: true}".into());
     }
     // chunk 6b: `rows: [...]` files many rows in one call — each runs the same
     // validate + self-heal as a single add; a bad row reports alone, the rest save
@@ -113,7 +113,10 @@ fn row_err(e: String, i: usize) -> String {
 /// success, so no signal goes quiet.
 fn add_rows(a: &Value, rows: &[Value], r: &Repo) -> Result<(String, Vec<String>), String> {
     if rows.is_empty() {
-        return Err("rejected: rows is empty — pass at least one row".into());
+        return Err(
+            "rejected: rows is empty — pass at least one row; try add {rows: [{kind, text}]}"
+                .into(),
+        );
     }
     let mut out = vec![];
     let mut warns = vec![];

@@ -79,12 +79,16 @@ pub(super) fn owner_in(
         let st = r.state.as_str();
         return Err(match cmd {
             Owner::Answer => format!(
-                "rejected: chunk {uid} is {st} — `answer` replies to a waiting chunk or sends a review back"
+                "rejected: chunk {uid} is {st} — `answer` replies to a waiting chunk or sends a review back; try `fael chunk show {uid}`"
             ),
             Owner::Accept => {
-                format!("rejected: chunk {uid} is {st} — `accept` takes a chunk in review")
+                format!(
+                    "rejected: chunk {uid} is {st} — `accept` takes a chunk in review; try `fael chunk show {uid}`"
+                )
             }
-            Owner::Unpark => format!("rejected: chunk {uid} is {st}, not parked"),
+            Owner::Unpark => {
+                format!("rejected: chunk {uid} is {st}, not parked — try `fael chunk show {uid}`")
+            }
             // the state table's reject; set() skips it when the state stays (park a parked)
             Owner::Park | Owner::Drop => {
                 format!("{} ({uid})", check(r.state, to).err().unwrap_or_default())
@@ -178,7 +182,7 @@ impl Store {
         let r = row(&tx, uid)?;
         if r.state.terminal() {
             return Err(format!(
-                "rejected: chunk {uid} is {} — history, never queued",
+                "rejected: chunk {uid} is {} — history, never queued; try `fael chunk add \"<title>\" --plan <plan>` for new work",
                 r.state.as_str()
             ));
         }

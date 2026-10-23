@@ -161,7 +161,8 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "fael board [--json] [--open] [--plan p] | fael board --json --watch | fael board --drop <root>
     (the owner's view, run from anywhere: each repo whose crew.db a `fael plan`
      or `fael chunk` command wrote is listed in ~/.local/state/fael/projects;
-     --json is the app's contract (\"v\": 1, tests/golden/board-v1.json); --open keeps
+     --json is the app's contract (\"v\": 1, tests/golden/board-v1.json): a removed or
+     retyped key bumps v, a new nullable key does not, and a key absent means null; --open keeps
      only open chunks — the planner's one read of scope, after and overlaps; --plan
      keeps one plan's chunks; the text view folds blocked into per-plan counts and
      --plan lists them; a path in .fael/shared (one prefix per line) is

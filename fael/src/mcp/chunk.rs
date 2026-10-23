@@ -32,7 +32,7 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
     let text = s(a, "text").unwrap_or_default();
     let need_text = |what: &str| match text.is_empty() {
         true => Err(format!(
-            "rejected: text is required for chunk {verb} — {what}"
+            "rejected: text is required for chunk {verb} — {what}; try chunk {{verb: \"{verb}\", uid: \"{uid}\", text: \"<{what}>\"}}"
         )),
         false => Ok(()),
     };
@@ -41,7 +41,9 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
         "show" | "start" => {}
         "note" => {
             if text.is_empty() {
-                return Err("rejected: text is required for chunk note".into());
+                return Err(format!(
+                    "rejected: text is required for chunk note; try chunk {{verb: \"note\", uid: \"{uid}\", text: \"<what the next start needs>\"}}"
+                ));
             }
             args.push(text.clone());
         }
@@ -66,12 +68,14 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
         "after" => {
             need_text("why")?;
             let other = s(a, "other")
-                .ok_or("rejected: other is required for chunk after — the chunk waited on")?;
+                .ok_or(format!(
+                    "rejected: other is required for chunk after — the chunk waited on; try chunk {{verb: \"after\", uid: \"{uid}\", other: \"<uid it waits on>\", text: \"<why>\"}}"
+                ))?;
             args.extend([other, text.clone()]);
         }
         v => {
             return Err(format!(
-                "rejected: unknown chunk verb {v} — show|start|note|done|wait|after"
+                "rejected: unknown chunk verb {v} — show|start|note|done|wait|after; try chunk {{verb: \"show\", uid: \"{uid}\"}}"
             ));
         }
     }
