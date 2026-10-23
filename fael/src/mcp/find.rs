@@ -88,12 +88,7 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let (text, anchor, text_key) = crate::find::text_or_anchor(&log, None, text.as_ref(), r);
     let mut files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
     files.extend(anchor);
-    // `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`)
-    let revisit = match (a["revisit"].as_bool(), s(a, "revisit")) {
-        (_, Some(v)) => Some(v),
-        (Some(true), None) => Some(String::new()),
-        _ => None,
-    };
+    let revisit = revisit_arg(a);
     let f = core::Filter {
         text: text.cloned(),
         files: aliases::load(r, &log, true).expand_all(&files),
@@ -159,6 +154,15 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown: Vec<String> = rows.iter().take(n).map(|r| r.id.clone()).collect();
     Ok((with_hint(text, &f), shown))
+}
+
+/// `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`).
+fn revisit_arg(a: &serde_json::Value) -> Option<String> {
+    match (a["revisit"].as_bool(), s(a, "revisit")) {
+        (_, Some(v)) => Some(v),
+        (Some(true), None) => Some(String::new()),
+        _ => None,
+    }
 }
 
 /// Regex metachars are literal AND here, same hint as the CLI (MCP: `key`).
