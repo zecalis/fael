@@ -304,3 +304,60 @@ fn merge_unions_reads_and_split_inherits_them_unless_a_part_names_its_own() {
     assert_eq!(get(&s, by_title, "c1").as_deref(), Some("goal"));
     assert_eq!(get(&s, by_title, "c2").as_deref(), Some("done"));
 }
+
+#[test]
+fn split_carries_label_size_scope_in_one_op() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    s.conn
+        .execute(
+            "UPDATE chunk SET size = 'M', scope = 'src/', reads = 'goal' WHERE uid = ?1",
+            [&a],
+        )
+        .unwrap();
+    let j = format!(
+        r#"[{{"op":"split","chunk":"{a}","into":[{{"title":"a1","label":"b1","brief":"one","size":"S","model":"opus","scope":["docs/"],"reads":["model"]}},{{"title":"a2","label":"b2"}}]}}]"#
+    );
+    let out = ops(&mut s, &j).unwrap();
+    assert!(
+        !out[0].contains("warning"),
+        "explicit scopes differ: {}",
+        out[0]
+    );
+    let q = "SELECT COALESCE(size, '-') FROM chunk WHERE title = ?1";
+    assert_eq!(get(&s, q, "a1").as_deref(), Some("S"));
+    assert_eq!(get(&s, q, "a2").as_deref(), Some("M"), "size inherits");
+    let scope = "SELECT COALESCE(scope, '-') FROM chunk WHERE title = ?1";
+    assert_eq!(get(&s, scope, "a1").as_deref(), Some("docs/"));
+    assert_eq!(
+        get(&s, scope, "a2").as_deref(),
+        Some("src/"),
+        "scope inherits"
+    );
+    let label = "SELECT label FROM chunk WHERE title = ?1";
+    assert_eq!(get(&s, label, "a1").as_deref(), Some("b1"));
+    assert_eq!(get(&s, label, "a2").as_deref(), Some("b2"));
+    let brief = "SELECT brief FROM chunk WHERE title = ?1";
+    assert_eq!(get(&s, brief, "a1").as_deref(), Some("one"));
+}
+
+#[test]
+fn scopeless_split_of_scoped_parent_warns() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    s.conn
+        .execute("UPDATE chunk SET scope = 'src/' WHERE uid = ?1", [&a])
+        .unwrap();
+    let j =
+        format!(r#"[{{"op":"split","chunk":"{a}","into":[{{"title":"a1"}},{{"title":"a2"}}]}}]"#);
+    let out = ops(&mut s, &j).unwrap();
+    assert!(
+        out[0].contains("warning"),
+        "inherited overlap warns: {}",
+        out[0]
+    );
+    assert!(out[0].contains("src/"), "{}", out[0]);
+    let scope = "SELECT COALESCE(scope, '-') FROM chunk WHERE title = ?1";
+    assert_eq!(get(&s, scope, "a1").as_deref(), Some("src/"));
+    assert_eq!(get(&s, scope, "a2").as_deref(), Some("src/"));
+}

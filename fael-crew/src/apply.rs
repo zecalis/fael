@@ -28,7 +28,8 @@ pub enum Op {
         reads: Option<Vec<String>>,
     },
     /// new chunks in its place, each inheriting its `after` and, unless the part names its
-    /// own, its `reads`; it → `replaced`
+    /// own, its `reads`, `scope` and `size`; it → `replaced`. When two or more parts
+    /// inherit the same non-empty scope the line warns — narrow one with `chunk edit --scope`.
     Split { chunk: String, into: Vec<Part> },
     /// `chunk start` of one claims them all (SPEC §4)
     Pair { chunks: Vec<String> },
@@ -70,6 +71,7 @@ pub(super) struct Src {
     pub(super) plan: i64,
     pub(super) title: String,
     pub(super) brief: String,
+    pub(super) size: Option<String>,
     pub(super) scope: Vec<String>,
     pub(super) reads: Vec<String>,
 }
@@ -87,11 +89,27 @@ fn src(tx: &Transaction, uid: &str) -> Result<Src, String> {
             r.state.as_str()
         ));
     }
-    let (plan, title, brief, scope, reads): (i64, String, String, Option<String>, Option<String>) =
-        tx.query_row(
-            "SELECT plan, title, brief, scope, reads FROM chunk WHERE id = ?1",
+    let (plan, title, brief, size, scope, reads): (
+        i64,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) = tx
+        .query_row(
+            "SELECT plan, title, brief, size, scope, reads FROM chunk WHERE id = ?1",
             [r.id],
-            |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?, q.get(3)?, q.get(4)?)),
+            |q| {
+                Ok((
+                    q.get(0)?,
+                    q.get(1)?,
+                    q.get(2)?,
+                    q.get(3)?,
+                    q.get(4)?,
+                    q.get(5)?,
+                ))
+            },
         )
         .map_err(err)?;
     let lines = |s: Option<String>| s.iter().flat_map(|s| s.lines()).map(String::from).collect();
@@ -100,6 +118,7 @@ fn src(tx: &Transaction, uid: &str) -> Result<Src, String> {
         plan,
         title,
         brief,
+        size,
         scope: lines(scope),
         reads: lines(reads),
     })
@@ -240,14 +259,18 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
     let seqs = slots(tx, old.plan, old.row.id, into.len() as i64)?;
     let text = format!("split from {uid}");
     let mut new = Vec::new();
+    let mut inherited_scope = 0usize;
     for (p, seq) in into.into_iter().zip(seqs) {
+        if p.scope.is_none() {
+            inherited_scope += 1;
+        }
         let f = Fields {
             title: Some(p.title),
             label: p.label,
             brief: p.brief,
-            size: p.size,
+            size: p.size.or_else(|| old.size.clone()),
             model: p.model,
-            scope: p.scope,
+            scope: p.scope.or_else(|| Some(old.scope.clone())),
             reads: p.reads.or_else(|| Some(old.reads.clone())),
             ..Fields::default()
         };
@@ -258,6 +281,17 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
     replace(tx, std::slice::from_ref(&old), &new, now)?;
     let names: Vec<&str> = new.iter().map(|(_, u)| u.as_str()).collect();
     let mut line = format!("split {uid} → {}", names.join(", "));
+    if inherited_scope >= 2 && !old.scope.is_empty() {
+        let who = if inherited_scope == 2 {
+            "both parts".to_string()
+        } else {
+            format!("{inherited_scope} parts")
+        };
+        line.push_str(&format!(
+            " · warning: {who} share scope {} — narrow one with `fael chunk edit <uid> --scope …`",
+            old.scope.join(", ")
+        ));
+    }
     if dropped > 0 {
         line.push_str(&format!(
             " · its {dropped} pair(s) dropped — pair a part again"

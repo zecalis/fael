@@ -172,9 +172,9 @@ fn example(cmd: &str, verb: &str) -> Option<&'static str> {
         }
         ("chunk", "accept") => Some("fael chunk accept 01M582E4V1RQR033P5V00B4WVV"),
         ("chunk", "unpark") => Some("fael chunk unpark 01M582E4V1RQR033P5V00B4WVV"),
-        ("chunk", "apply") => {
-            Some("echo '[{\"op\":\"merge\",\"chunks\":[\"a\",\"b\"]}]' | fael chunk apply --json -")
-        }
+        ("chunk", "apply") => Some(
+            "echo '[{\"op\":\"split\",\"chunk\":\"a\",\"into\":[{\"title\":\"a1\",\"label\":\"b1\",\"size\":\"S\",\"scope\":[\"src/\"]},{\"title\":\"a2\"}]}]' | fael chunk apply --json -",
+        ),
         ("chunk", "approve") => Some("fael chunk approve 01M582E4V1RQR033P5V00B4WVV --model small"),
         ("chunk", "unapprove") => Some("fael chunk unapprove 01M582E4V1RQR033P5V00B4WVV"),
         ("plan", "new") => Some("fael plan new my-plan \"My title\""),
