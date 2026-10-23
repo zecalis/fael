@@ -58,7 +58,7 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
     }
     // the closed-ref warnings start prints, said before a lead picks the chunk for a set
     let log = crate::read(r);
-    for w in crate::chunk_scope::closed_warnings(&b.title, &b.brief, &log, &b.uid) {
+    for w in crate::chunk_scope::stale_warnings(&b.title, &b.brief, &b.issues, &log, &b.uid) {
         eprintln!("{w}");
     }
     for (head, texts) in [("owner said", &b.said), ("note", &b.notes)] {

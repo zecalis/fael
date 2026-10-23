@@ -70,6 +70,27 @@ fn ready_line_says_no_scope() {
 }
 
 #[test]
+fn stale_chunks_get_their_own_section() {
+    let mut s = ready("fresh", 0);
+    s.title = "live work".into();
+    let mut old = ready("ghost", 0);
+    old.title = "landed elsewhere".into();
+    old.stale = vec!["warning: linked issue 01M1 — closed: shipped in #902 — done elsewhere? fael chunk drop ghost …".into()];
+    let p = Project {
+        chunks: vec![s, old],
+        ..Project::named(Path::new(""))
+    };
+    for cut in [false, true] {
+        let t = text::text(&lists(String::new(), vec![&p]), cut);
+        assert!(t.contains("stale\n"), "{t}");
+        assert!(
+            t.contains("ghost") && t.contains("linked issue 01M1"),
+            "{t}"
+        );
+    }
+}
+
+#[test]
 fn blocked_folds_to_plan_counts_unless_plan_cut() {
     let blocked = |uid: &str, plan: &str| {
         let mut c = ready(uid, 0);
