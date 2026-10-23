@@ -234,7 +234,8 @@ fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
             continue;
         }
         if let Ok(b) = s.show(&c.uid) {
-            c.stale = crate::chunk_scope::closed_warnings(&b.title, &b.brief, &log, &b.uid);
+            c.stale =
+                crate::chunk_scope::stale_warnings(&b.title, &b.brief, &b.issues, &log, &b.uid);
         }
     }
 }

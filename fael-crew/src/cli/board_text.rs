@@ -25,36 +25,6 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
         .flat_map(|p| &p.chunks)
         .map(|c| (c.uid.as_str(), c))
         .collect();
-    let line = |uid: &str, tag: &str| {
-        let c = all[uid];
-        let label = c
-            .label
-            .as_deref()
-            .map(|l| format!(" {l}"))
-            .unwrap_or_default();
-        let extra = match tag {
-            "waiting" => c.wait.as_ref().and_then(|w| w.text.clone()),
-            // a lead's overlap check cannot place it, so its set skips it (01M4WZ4M)
-            "ready" if c.scope.is_empty() => Some("no scope".into()),
-            "blocked" => Some(
-                c.blocked_by
-                    .iter()
-                    .map(|x| x.what.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            )
-            .map(|w| format!("after {w}")),
-            _ => None,
-        }
-        .map(|x| format!(" — {x}"))
-        .unwrap_or_default();
-        // ponytail: a terminal line, cut at 80 chars; the app reads --json
-        let title: String = match c.title.char_indices().nth(80) {
-            Some((i, _)) => format!("{}…", &c.title[..i]),
-            None => c.title.clone(),
-        };
-        format!("  {tag:<8} {uid}  {}{label}  {title}{extra}\n", c.plan)
-    };
     let mut out = String::new();
     for p in b.projects.iter().filter(|p| p.error.is_some()) {
         out.push_str(&format!(
@@ -63,6 +33,10 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
             p.error.as_deref().unwrap_or("")
         ));
     }
+    // Done elsewhere: an open chunk whose linked issue is closed, or whose
+    // brief cites a closed row — the board already knew (`stale`), it just
+    // never said it. One line per chunk, in every view.
+    let stale = stale_rows(b);
     // Gated drafts show only under a `--plan` cut, never queued (see `gated`).
     for (head, rows) in [
         (
@@ -72,6 +46,7 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
                 .map(|n| (n.uid.as_str(), n.kind))
                 .collect::<Vec<_>>(),
         ),
+        ("stale", stale),
         (
             "queue",
             b.queue.iter().map(|u| (u.as_str(), "ready")).collect(),
@@ -95,7 +70,7 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
         }
         out.push_str(&format!("{head}\n"));
         for (uid, tag) in rows {
-            out.push_str(&line(uid, tag));
+            out.push_str(&chunk_line(&all, uid, tag));
         }
     }
     if !plan_cut && !b.blocked.is_empty() {
@@ -120,6 +95,55 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
     }
     out.push_str(&repos_line(b));
     out
+}
+
+/// One terminal row: the plan, the cut title, and why this list holds it.
+fn chunk_line(all: &HashMap<&str, &BoardChunk>, uid: &str, tag: &str) -> String {
+    let c = all[uid];
+    let label = c
+        .label
+        .as_deref()
+        .map(|l| format!(" {l}"))
+        .unwrap_or_default();
+    let extra = match tag {
+        "waiting" => c.wait.as_ref().and_then(|w| w.text.clone()),
+        // a stale chunk names why: the first warning, without its prefix
+        "stale" => c
+            .stale
+            .first()
+            .map(|w| w.strip_prefix("warning: ").unwrap_or(w).to_string()),
+        // a lead's overlap check cannot place it, so its set skips it (01M4WZ4M)
+        "ready" if c.scope.is_empty() => Some("no scope".into()),
+        "blocked" => Some(
+            c.blocked_by
+                .iter()
+                .map(|x| x.what.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+        .map(|w| format!("after {w}")),
+        _ => None,
+    }
+    .map(|x| format!(" — {x}"))
+    .unwrap_or_default();
+    // ponytail: a terminal line, cut at 80 chars; the app reads --json
+    let title: String = match c.title.char_indices().nth(80) {
+        Some((i, _)) => format!("{}…", &c.title[..i]),
+        None => c.title.clone(),
+    };
+    format!("  {tag:<8} {uid}  {}{label}  {title}{extra}\n", c.plan)
+}
+
+/// Done elsewhere: an open chunk whose linked issue is closed, or whose
+/// brief cites a closed row — the board already knew (`stale`), it just
+/// never said it. One line per chunk, in every view.
+fn stale_rows<'a>(b: &'a Board<'a>) -> Vec<(&'a str, &'a str)> {
+    b.projects
+        .iter()
+        .flat_map(|p| &p.chunks)
+        .filter(|c| !c.stale.is_empty())
+        .map(|c| (c.uid.as_str(), "stale"))
+        .collect()
 }
 
 /// What an empty board prints: a `--plan` cut on a parked or done plan names
