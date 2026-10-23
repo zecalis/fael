@@ -60,6 +60,19 @@ const COMMANDS: &[(&str, &str)] = &[
 /// `fael decision "…"` is `fael add decision "…"`.
 const KINDS: [&str; 3] = ["decision", "issue", "note"];
 
+/// What agents type for a kind → what the ledger keeps (`bug` → `issue`).
+/// Input only, like the rest of this table — never advertised.
+const KIND_ALIASES: &[(&str, &str)] = &[("bug", "issue")];
+
+/// The real kind for a guessed one.
+pub(crate) fn kind(k: &str) -> &str {
+    KIND_ALIASES
+        .iter()
+        .find(|(from, _)| *from == k)
+        .map(|(_, to)| *to)
+        .unwrap_or(k)
+}
+
 /// (tools, guessed property, real property) — the real one wins when both come.
 const PROPS: &[(&str, &str, &str)] = &[
     ("find", "query", "text"),
@@ -87,11 +100,20 @@ pub(crate) fn rewrite(mut argv: Vec<String>) -> Vec<String> {
         None => return argv,
         Some("version") if argv.len() == 1 => return vec!["--version".into()],
         Some(k) if KINDS.contains(&k) => argv.insert(0, "add".into()),
+        Some(k) if kind(k) != k => {
+            argv[0] = kind(k).into();
+            argv.insert(0, "add".into());
+        }
         Some(c) => {
             if let Some((_, to)) = COMMANDS.iter().find(|(from, _)| *from == c) {
                 argv[0] = (*to).into();
             }
         }
+    }
+    if argv.first().map(String::as_str) == Some("add") && argv.get(1).is_some_and(|k| kind(k) != k)
+    {
+        let real = kind(argv[1].as_str()).to_string();
+        argv[1] = real;
     }
     if argv[0].starts_with('-') {
         return argv;
@@ -161,6 +183,25 @@ fn headline(out: &mut Vec<String>) {
 /// MCP `arguments` with guessed property names renamed (`query` → `text`).
 pub(crate) fn mcp(tool: &str, args: &Value) -> Value {
     let mut a = args.clone();
+    // `bug` is an issue the agent hasn't learned the ledger name for.
+    if tool == "add" {
+        if let Some(k) = a.get("kind").and_then(|v| v.as_str()) {
+            let real = kind(k);
+            if real != k {
+                a["kind"] = json!(real);
+            }
+        }
+        if let Some(rows) = a.get_mut("rows").and_then(|v| v.as_array_mut()) {
+            for r in rows {
+                if let Some(k) = r.get("kind").and_then(|v| v.as_str()) {
+                    let real = kind(k);
+                    if real != k {
+                        r["kind"] = json!(real);
+                    }
+                }
+            }
+        }
+    }
     let Some(o) = a.as_object_mut() else {
         return a;
     };

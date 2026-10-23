@@ -78,6 +78,10 @@ fn the_brief_prints_the_plan_sections_once() {
         "plan context once per plan: {t}"
     );
     assert!(t.contains("fael chunk done A"), "{t}");
+    assert!(
+        t.contains("TLDR: do \"brief A\" then `fael chunk done A \"<handoff>\" --pr N`"),
+        "{t}"
+    );
     // what the agent leaves for the owner fits one board line
     assert!(
         t.contains("first sentence = the outcome") && t.contains("first line <= 100 chars"),
@@ -139,7 +143,15 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
     }
     .text();
     assert!(t.contains("## 1. Goal"), "{t}");
-    for gone in ["2. Scope", "3. Done", "5. Risks"] {
+    // a blank Done names its fill command instead of printing nothing;
+    // Scope and Risks stay suppressed
+    assert!(
+        t.contains(
+            "section 3 (3. Done criteria) is still blank — fill it: `fael plan export x --json`"
+        ),
+        "{t}"
+    );
+    for gone in ["2. Scope", "5. Risks"] {
         assert!(!t.contains(gone), "{gone} in {t}");
     }
     c = chunk("B");
@@ -149,9 +161,11 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
         chunks: vec![c],
     }
     .text();
+    // a blank Goal still prints the plan header with its fill pointer
+    assert!(t.contains("<!-- plan x -->"), "{t}");
     assert!(
-        !t.contains("<!-- plan x -->"),
-        "no plan header over nothing: {t}"
+        t.contains("section 1 (1. Goal) is still blank — fill it: `fael plan export x --json`"),
+        "{t}"
     );
 }
 
@@ -183,6 +197,31 @@ fn the_rules_spell_out_the_full_add_form() {
     assert!(
         r.contains("`fael add note \"<state>\" --title \"<≤15 words>\" --files <f>`"),
         "{r}"
+    );
+}
+
+#[test]
+fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![chunk("A")],
+    }
+    .text();
+    assert!(
+        t.contains("TLDR: do \"brief A\" then `fael chunk done A \"<handoff>\" --pr N`"),
+        "{t}"
+    );
+    // a chunk without its own brief falls back to the title
+    let mut bare = chunk("B");
+    bare.brief = bare.title.clone();
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![bare],
+    }
+    .text();
+    assert!(
+        t.contains("TLDR: do \"title B\" then `fael chunk done B \"<handoff>\" --pr N`"),
+        "{t}"
     );
 }
 

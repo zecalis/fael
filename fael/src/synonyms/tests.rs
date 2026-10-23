@@ -83,6 +83,27 @@ fn commands_become_the_real_command() {
 }
 
 #[test]
+fn bug_is_an_issue() {
+    assert_eq!(rw("bug x --files a.rs"), "add issue x --files a.rs");
+    assert_eq!(rw("add bug x --files a.rs"), "add issue x --files a.rs");
+    let a = |tool, v: Value| mcp(tool, &v);
+    assert_eq!(
+        a("add", json!({"kind": "bug", "text": "x"})),
+        json!({"kind": "issue", "text": "x"})
+    );
+    assert_eq!(
+        a("add", json!({"rows": [{"kind": "bug", "text": "x"}]})),
+        json!({"rows": [{"kind": "issue", "text": "x"}]})
+    );
+    // other kinds pass through untouched
+    assert_eq!(rw("add note x --files a.rs"), "add note x --files a.rs");
+    assert_eq!(
+        a("add", json!({"kind": "note", "text": "x"})),
+        json!({"kind": "note", "text": "x"})
+    );
+}
+
+#[test]
 fn real_names_and_text_are_left_alone() {
     for same in [
         "find --text x --files a.rs",

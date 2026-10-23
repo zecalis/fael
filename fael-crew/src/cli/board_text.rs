@@ -123,12 +123,17 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
 }
 
 /// What an empty board prints: a `--plan` cut on a parked or done plan names
-/// the hidden work, anything else keeps the old nothing-here line.
+/// the hidden work; a cut on an active plan keeps the old nothing-here line;
+/// no cut with repos but no chunks names this repo's empty state and its next
+/// command before the other repos' rows.
 fn empty_msg(b: &Board, plan_cut: bool) -> String {
     if plan_cut && let Some(msg) = parked_done_msg(b) {
         return msg;
     }
-    "nothing on the board — `fael chunk add` or `fael plan new` in a repo\n".into()
+    if plan_cut || b.projects.is_empty() {
+        return "nothing on the board — `fael chunk add` or `fael plan new` in a repo\n".into();
+    }
+    "this repo has no chunks — start one: `fael plan new <name> \"<title>\"` then `fael chunk add \"<title>\" --plan <plan>`\n".into()
 }
 
 /// A `--plan` cut on a parked or done plan lists no chunks (the board only

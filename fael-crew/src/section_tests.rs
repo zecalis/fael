@@ -68,6 +68,21 @@ fn a_heading_keys_on_its_number_else_its_slug() {
 }
 
 #[test]
+fn new_plan_skeleton_points_goal_and_done_at_the_fill_command() {
+    let (s, id) = plan();
+    let secs = list(&s.conn, id).unwrap();
+    for r in secs.iter().filter(|r| r.key == "1" || r.key == "3") {
+        assert!(
+            r.body.contains("`fael plan export <plan> --json`")
+                && r.body.contains("`fael plan apply`"),
+            "{r:?}"
+        );
+        // still blank: the brief prints the fill pointer, not the body
+        assert!(super::blank(r), "{r:?}");
+    }
+}
+
+#[test]
 fn a_bill_adds_edits_and_drops_sections_by_key_and_leaves_the_rest() {
     let (mut s, id) = plan();
     assert_eq!(keys(&s, id), ["1", "2", "3", "4"]);

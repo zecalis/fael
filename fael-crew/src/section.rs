@@ -7,11 +7,21 @@ use super::store::err;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Deserialize;
 
-/// What `fael plan new` writes: `(key, title, body)`.
+/// What `fael plan new` writes: `(key, title, body)`. Goal and Done carry
+/// their fill pointer — `blank` still treats them as empty, and the brief
+/// prints the pointer instead of silence.
 pub(super) const SKELETON: [(&str, &str, &str); 4] = [
-    ("1", "1. Goal (why)", ""),
+    (
+        "1",
+        "1. Goal (why)",
+        "TODO: why this plan exists — fill via `fael plan export <plan> --json`, edit sections, `fael plan apply`",
+    ),
     ("2", "2. Scope", "**Do:**\n**Don't:**"),
-    ("3", "3. Done criteria", ""),
+    (
+        "3",
+        "3. Done criteria",
+        "TODO: how done is checked — fill via `fael plan export <plan> --json`, edit sections, `fael plan apply`",
+    ),
     ("4", "4. Constraints", ""),
 ];
 

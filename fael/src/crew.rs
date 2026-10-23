@@ -12,7 +12,7 @@ const VERBS: [&str; 5] = ["plan", "chunk", "board", "sweep", "run"];
 
 /// Not found: say how to get it (one line, exit 1).
 const MISSING: &str =
-    "fael: plan/chunk/board are fael crew — install it: cargo install --path fael-crew";
+    "fael: plan/chunk/board are fael crew — install it: `cargo install --path fael-crew`";
 
 /// The binary: next to this one (a `cargo install`, a test build), else on PATH.
 fn locate() -> Option<PathBuf> {
