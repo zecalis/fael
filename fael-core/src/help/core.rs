@@ -35,6 +35,7 @@ const CORE: &[(&str, &str)] = &[
      convention (plan:<name>:handoff; chunk-<n> only for a chunk run in parallel) is
      rejected before the write, as is a path that looks like a typo;
      batch: fael add --json - < rows.json (a JSON array; a bad row reports alone, the rest save);
+     text mode prints `<id> → <path>` on stdout first (first word is the id); warns go to stderr `warn:`-prefixed;
      text that starts with - goes after --: fael add note --files a.rs -- \"-h\")",
     ),
     (
@@ -50,7 +51,8 @@ const CORE: &[(&str, &str)] = &[
       never type one from memory;
       an empty search counts each word, --files and filter on its own, so the
       one that matched nothing shows;
-      text finds rows holding every word, in any order; on a busy file add
+      text finds rows holding every word, in any order (literal AND, not regex -
+     a query with regex metachars prints a hint suggesting --key glob or two finds); on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*' (a bare key also matches its k:* children);
       a cut list prints the exact next call — rerun it with the new --offset)",
     ),

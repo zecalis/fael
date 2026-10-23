@@ -4,8 +4,7 @@ use crate::{Row, anchor};
 /// show titles and keys, so they count — in any order: `login timeout` finds "timeout on
 /// the login page", `schema-silent` finds the row keyed `board:schema-silent`. A blank `q`
 /// holds no word and matches every row.
-pub(super) fn all_words(q: &str, r: &Row) -> bool {
-    let low = |s: Option<&str>| s.map(str::to_lowercase).unwrap_or_default();
+pub(super) fn all_words(q: &str, r: &Row) -> bool {    let low = |s: Option<&str>| s.map(str::to_lowercase).unwrap_or_default();
     let (text, title, key) = (
         r.text.to_lowercase(),
         low(r.title.as_deref()),
@@ -135,4 +134,20 @@ pub fn glob(pattern: &str, s: &str) -> bool {
     let s: Vec<char> = s.chars().collect();
     let mut dead = vec![false; (p.len() + 1) * (s.len() + 1)];
     m(&p, &s, 0, 0, &mut dead)
+}
+
+/// True when `q` contains regex metachars that [`all_words`] treats literally.
+/// `find` is literal AND, not regex — the caller hints `--key` glob or two finds.
+pub fn has_regex_chars(q: &str) -> bool {
+    q.chars()
+        .any(|c| matches!(c, '|' | '\\' | '(' | ')' | '[' | ']' | '*' | '?' | '+' | '^' | '$'))
+}
+
+/// The machine hint for a regex-like text query, or None when `q` has no
+/// metachars. Same text for CLI (`--key`) and MCP (`key`).
+pub fn regex_hint(q: Option<&str>) -> Option<String> {
+    let q = q?;
+    has_regex_chars(q).then(|| {
+        "hint: text search is literal AND, not regex — for patterns use --key 'glob*' (MCP: key) or run two finds".to_string()
+    })
 }

@@ -69,7 +69,7 @@ pub use query::{
     push_tiered, query, ranked, ref_state, render, render_full, render_full_page, render_page,
     resolve, resolve_row, resolve_urgent, restored, reverted, row_due, row_waiting, select,
     select_with, stale_close_refs, stale_refs, successors, superseded, today, waiting,
-    waiting_line, warnings, why_empty, with_due,
+    waiting_line, warnings, why_empty, with_due, has_regex_chars, regex_hint,
 };
 pub use repo::{Repo, git, git_output, read as read_repo, repo, repo_at, sibling_suggest};
 pub use row::{Row, Stamp};

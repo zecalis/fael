@@ -254,7 +254,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     // nothing — same `prepare` as the real add, so the two can never disagree
     if a.has("dry-run") {
         let (p, _, log) = write::prepare(&r, kind, text, &files, opts)?;
-        p.warns.iter().for_each(|w| eprintln!("{w}"));
+        batch::emit_warns(&p.warns);
         println!(
             "{}",
             crate::selfheal::verdict_text(&p.evaluated, a.has("json"), (&log, &p.row))
@@ -262,7 +262,7 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         return Ok(());
     }
     let (row, path, warns) = write::add_row(&r, kind, text, &files, opts)?;
-    warns.iter().for_each(|w| eprintln!("{w}"));
+    batch::emit_warns(&warns);
     hook::record_row_asks("cli", "add", &r.root, &row, &warns);
     batch::written(a, &r, &row, &path);
     // c2: open held rows on the new row's files, verdicts ready — human
@@ -293,7 +293,7 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
     )?;
     let r = repo()?;
     let (row, path, warns) = write::bump(&r, a, id)?;
-    warns.iter().for_each(|w| eprintln!("{w}"));
+    batch::emit_warns(&warns);
     hook::record_asks("cli", hook::ASK_WARN, "bump", Some(&r.root), &warns);
     batch::moved(a, &r, &row, &path, a.has("to"));
     Ok(())
@@ -304,7 +304,7 @@ fn claim(a: &Args, id: &str) -> Result<(), String> {
     a.only("claim", &["json", "force"])?;
     let r = repo()?;
     let (row, path, warns) = claim::claim(&r, id, a.has("force"))?;
-    warns.iter().for_each(|w| eprintln!("{w}"));
+    batch::emit_warns(&warns);
     hook::record_asks("cli", hook::ASK_WARN, "claim", Some(&r.root), &warns);
     batch::moved(a, &r, &row, &path, false);
     Ok(())
@@ -316,7 +316,7 @@ fn next(a: &Args) -> Result<(), String> {
     a.only("next", &["json"])?;
     let r = repo()?;
     let (row, path, warns) = claim::next(&r, &writer(&r))?;
-    warns.iter().for_each(|w| eprintln!("{w}"));
+    batch::emit_warns(&warns);
     hook::record_asks("cli", hook::ASK_WARN, "next", Some(&r.root), &warns);
     batch::moved(a, &r, &row, &path, false);
     if !a.has("json") {

@@ -101,6 +101,13 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         nearest(a, &r.root, &log, &f, budget, &branch_of);
         return Ok(());
     }
+    // regex metachars are literal AND here: hint `--key` glob or two finds.
+    // Stderr only, so `--json` stdout stays exact.
+    if !a.has("json")
+        && let Some(h) = core::regex_hint(f.text.as_deref())
+    {
+        eprintln!("fael: {h}");
+    }
     // a list of one or two shows its bodies: the next call would be `find <id>`
     let full = a.has("full") || core::expands(&rows, total, &f, budget);
     // the cut line reprints this call with the next offset — same flags, no
@@ -164,8 +171,21 @@ fn nearest(
     branch_of: &crate::journal::BranchMap,
 ) {
     let (head, near) = misses::explain(root, "cli", log, f, "--files");
+    // regex metachars are literal here (`all_words` is AND): hint `--key` glob
+    // or two finds, same text as MCP. Stays out of `--json` stdout — that path
+    // returns early with only `fael: {head}` on stderr.
+    let head = match core::regex_hint(f.text.as_deref()) {
+        Some(h) if !a.has("json") => format!("{head}\n{h}"),
+        _ => head,
+    };
     if near.is_empty() || a.has("json") {
         eprintln!("fael: {head}");
+        // `--json` keeps stdout exact: the hint rides stderr only.
+        if a.has("json")
+            && let Some(h) = core::regex_hint(f.text.as_deref())
+        {
+            eprintln!("fael: {h}");
+        }
         return;
     }
     let full = a.has("full") || core::expands(&near, near.len(), f, budget);

@@ -37,7 +37,7 @@ pub use lookup::{
     KeyUse, NO_ROW_WITH_ID, chunk_stem, fat_reasons, keys, levenshtein, query, resolve,
     resolve_row, warnings,
 };
-pub use matching::glob;
+pub use matching::{glob, has_regex_chars, regex_hint};
 pub use md::{MdRef, phantom_md_refs};
 pub use push::{push, push_tiered};
 pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};
