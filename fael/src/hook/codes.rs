@@ -155,6 +155,7 @@ const WARNINGS: &[(&str, &str)] = &[
     ("warning: brief names", "chunk_brief_path"),
     ("warning: brief cites", "chunk_closed_ref"),
     ("warning: linked issue", "chunk_closed_ref"),
+    ("warning: chunk ", "chunk_still_linked"),
     ("is from a report, unchecked", "chunk_report_ref"),
     (" named by chunk ", "chunk_path_gone"),
     ("warning: commit ", "unmerged"),

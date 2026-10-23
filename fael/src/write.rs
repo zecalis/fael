@@ -296,6 +296,9 @@ pub(crate) fn close_row_as(
     }
     let mut warns = phantom_lines(r, &log, None, why, &[id]);
     warns.extend(crate::unmerged::lines(&r.root, why));
+    // chunks that linked this issue stay open after the close — name them so
+    // the board never grows another ghost (fail-open when no crew.db)
+    warns.extend(crate::chunks::lines(r, &target.id));
     let mut stamp = crate::session::retire_stamp(r, &log, id);
     if let Some(by) = by {
         stamp.by = by.into();

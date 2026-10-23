@@ -6,6 +6,7 @@
 mod aliases;
 mod amend;
 mod batch;
+mod chunks;
 mod claim;
 mod close_key;
 mod crew;
