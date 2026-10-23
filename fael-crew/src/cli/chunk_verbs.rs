@@ -23,10 +23,12 @@ fn failed(r: &Repo, e: String) -> String {
 }
 
 /// The uid `key` names: with `--plan` plan-scoped (`uid_in` answers a label two
-/// plans share and checks a uid it is given), else the key as `Store` resolves
-/// it. Called once per key by every loop below, so one bad key never stops the
-/// rest — its own line words the failure.
-fn resolve(s: &Store, plan: Option<&str>, key: &str) -> Result<String, String> {
+/// plans share and checks a uid it is given; a `plan/label` key resolves
+/// through its own plan), else the key as `Store` resolves it. Called once per
+/// key by every loop below, so one bad key never stops the rest — its own line
+/// words the failure. `chunk after`/`unafter` reuse it for both keys in
+/// `chunk::in_plan`.
+pub(crate) fn resolve(s: &Store, plan: Option<&str>, key: &str) -> Result<String, String> {
     match plan {
         Some(p) => s.uid_in(key, p),
         None => Ok(key.to_string()),

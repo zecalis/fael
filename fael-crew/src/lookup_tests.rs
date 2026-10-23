@@ -76,6 +76,14 @@ fn a_label_in_two_plans_asks_for_the_uid() {
     let waits = "SELECT d.uid FROM edge e JOIN chunk s ON s.id = e.src
                  JOIN chunk d ON d.id = e.dst WHERE s.uid = ?1 AND e.kind = 'after'";
     assert_eq!(get(&s, waits, &next).as_deref(), Some(a.as_str()));
+    // a `plan/label` after names the other plan's chunk (issue 01M5KTQY8DTT8APQ2BFGSCSAZY):
+    // cross-plan without a hand-found uid, and `--plan` with a `plan/label`
+    // key resolves through the key's own plan
+    let b2 = labeled(&mut s, "p2", "b2").unwrap();
+    let cross = s.add("inbox", &f, &["p2/b2".into()], NOW).unwrap();
+    assert_eq!(get(&s, waits, &cross).as_deref(), Some(b2.as_str()));
+    assert_eq!(s.uid_in("p2/b2", "inbox").unwrap(), b2);
+    assert_eq!(s.uid_in("p2/b2", "p2").unwrap(), b2);
 }
 
 #[test]

@@ -36,7 +36,11 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
 
 /// `chunk note b1 --plan p`: on a verb that names one chunk and its text (not
 /// `add`/`move`/`apply`, where `--plan` is where it goes), the plan picks the
-/// key — it becomes its uid, the flag goes. The verbs that take several keys
+/// key — it becomes its uid, the flag goes. `after`/`unafter` name two chunks
+/// (`uid` and `other`): the plan picks both, so `after b2 b1 --plan p1` answers
+/// a label two plans share — a `plan/label` key always resolves through its
+/// own plan, so cross-plan is `after <uid> p2/b1` with no flag (issue
+/// 01M5KTQY8DTT8APQ2BFGSCSAZY). The verbs that take several keys
 /// (`show`, `approve`, `unapprove`, `accept`) keep `--plan` and resolve each key
 /// in `chunk_verbs`, so one bad key never stops the rest.
 fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<String>)>, String> {
@@ -48,6 +52,16 @@ fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<Stri
         "add" | "move" | "apply" | "show" | "approve" | "unapprove" | "accept"
     ) {
         return Ok(None);
+    }
+    if matches!(verb.as_str(), "after" | "unafter") {
+        let [_, uid, other, ..] = rest else {
+            return Ok(None);
+        };
+        let s = Store::open(&db(r))?;
+        let mut mapped = rest.to_vec();
+        mapped[1] = crate::chunk_verbs::resolve(&s, Some(&plan), uid)?;
+        mapped[2] = crate::chunk_verbs::resolve(&s, Some(&plan), other)?;
+        return Ok(Some((a.without("plan"), mapped)));
     }
     let uid = Store::open(&db(r))?.uid_in(key, &plan)?;
     let mut mapped = rest.to_vec();
