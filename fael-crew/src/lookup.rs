@@ -7,10 +7,50 @@ use rusqlite::{OptionalExtension, Transaction, params};
 
 pub(super) type Hit = (i64, String, String);
 
-/// `(id, uid, state)` of the chunk `key` names: its uid, else a label
-/// only one chunk carries (a label is unique in its plan, not across plans), else the one
-/// uid that starts with it (8+ chars, any case). None = no chunk.
+/// Split a `plan/label` ref at the last `/`: the plan is `name` or `app/name`,
+/// the label is the chunk's label (or uid) in that plan. Labels never contain
+/// `/` in practice (`show` already reads `p/label` this way); uids never do.
+pub(super) fn split_ref(key: &str) -> Option<(&str, &str)> {
+    let (p, l) = key.rsplit_once('/')?;
+    (!p.is_empty() && !l.is_empty()).then_some((p, l))
+}
+
+/// The plans holding `label`, for the ambiguous-label hint.
+fn plans_of(tx: &Transaction, label: &str) -> Vec<String> {
+    tx.prepare(
+        "SELECT DISTINCT CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END
+         FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.label = ?1 ORDER BY 1",
+    )
+    .and_then(|mut q| {
+        q.query_map([label], |r| r.get(0))?
+            .collect::<Result<Vec<String>, _>>()
+    })
+    .unwrap_or_default()
+}
+
+/// The hint an ambiguous or misplaced label carries: how to retype it plus the
+/// export that lists the uids. Keeps the `try --plan` and `plan export` needles.
+fn retype_hint(plans: &[String], label: &str) -> String {
+    match plans.first() {
+        Some(p) => format!(
+            " — try --plan {p} {label} or {p}/{label} (`fael plan export {p}` lists its uids)"
+        ),
+        None => format!(
+            " — try --plan <plan> {label} or <plan>/{label} (`fael plan export <plan>` lists its uids)"
+        ),
+    }
+}
+
+/// `(id, uid, state)` of the chunk `key` names: a `plan/label` through its plan,
+/// else its uid, else a label only one chunk carries (a label is unique in its
+/// plan, not across plans), else the one uid that starts with it (8+ chars, any
+/// case). None = no chunk.
 pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String> {
+    if let Some((p, l)) = split_ref(key) {
+        let uid = uid_in_tx(tx, l, p)?;
+        let h = hits(tx, "c.uid = ?1", &uid)?;
+        return Ok(h.into_iter().next());
+    }
     let exact = hits(
         tx,
         "c.uid = ?1 OR c.label = ?1 ORDER BY c.uid = ?1 DESC LIMIT 2",
@@ -21,8 +61,9 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
         [h] => return Ok(Some(h.clone())),
         [] => {}
         _ => {
+            let hint = retype_hint(&plans_of(tx, key), key);
             return Err(format!(
-                "rejected: label {key} names more than one chunk — use the uid"
+                "rejected: label {key} names more than one chunk — use the uid{hint}"
             ));
         }
     }
@@ -60,44 +101,59 @@ pub(super) fn no_chunk(key: &str) -> String {
     )
 }
 
+/// The uid `key` names inside `plan` (`name` or `app/name`): a label in that plan,
+/// else what `lookup` finds — refused when that chunk sits in another plan. A key
+/// that is already `plan/label` resolves through its own plan, so `apply --plan`
+/// keeps working when an op already names one. So `--plan` answers a label two
+/// plans share, and checks a uid it is given.
+fn uid_in_tx(tx: &Transaction, key: &str, plan: &str) -> Result<String, String> {
+    if let Some((p, l)) = split_ref(key) {
+        return uid_in_tx(tx, l, p);
+    }
+    let of = "CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END";
+    let named = format!("(p.name = ?2 OR {of} = ?2)");
+    let here: Option<String> = tx
+        .query_row(
+            &format!(
+                "SELECT c.uid FROM chunk c JOIN plan p ON p.id = c.plan
+                     WHERE c.label = ?1 AND {named}"
+            ),
+            params![key, plan],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(err)?;
+    if let Some(u) = here {
+        return Ok(u);
+    }
+    let (id, uid, _) = lookup(tx, key)?.ok_or(format!(
+        "rejected: no chunk {key} in plan {plan} — try --plan {plan} <label> or {plan}/<label> (`fael plan export {plan}` lists its uids)"
+    ))?;
+    let (inside, at): (bool, String) = tx
+        .query_row(
+            &format!(
+                "SELECT {named}, {of} FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1"
+            ),
+            params![id, plan],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(err)?;
+    match inside {
+        true => Ok(uid),
+        false => Err(format!(
+            "rejected: chunk {uid} is in plan {at}, not {plan} — try --plan {at} or {at}/{key} (`fael plan export {at}` lists its uids)"
+        )),
+    }
+}
+
 impl super::Store {
     /// The uid `key` names inside `plan` (`name` or `app/name`): a label in that plan,
     /// else what `lookup` finds — refused when that chunk sits in another plan. So
     /// `--plan` answers a label two plans share, and checks a uid it is given.
+    /// A `plan/label` key resolves through its own plan (issue 01M5KTQY8DTT8APQ2BFGSCSAZY).
     pub fn uid_in(&self, key: &str, plan: &str) -> Result<String, String> {
         let tx = self.conn.unchecked_transaction().map_err(err)?;
-        let of = "CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END";
-        let named = format!("(p.name = ?2 OR {of} = ?2)");
-        let here: Option<String> = tx
-            .query_row(
-                &format!(
-                    "SELECT c.uid FROM chunk c JOIN plan p ON p.id = c.plan
-                     WHERE c.label = ?1 AND {named}"
-                ),
-                params![key, plan],
-                |r| r.get(0),
-            )
-            .optional()
-            .map_err(err)?;
-        if let Some(u) = here {
-            return Ok(u);
-        }
-        let (id, uid, _) = lookup(&tx, key)?.ok_or(format!(
-            "rejected: no chunk {key} in plan {plan} — `fael plan export {plan}` lists its uids"
-        ))?;
-        let (inside, at): (bool, String) = tx
-            .query_row(
-                &format!(
-                    "SELECT {named}, {of} FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1"
-                ),
-                params![id, plan],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .map_err(err)?;
-        match inside {
-            true => Ok(uid),
-            false => Err(format!("rejected: chunk {uid} is in plan {at}, not {plan}")),
-        }
+        uid_in_tx(&tx, key, plan)
     }
 }
 
