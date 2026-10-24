@@ -6,6 +6,7 @@ use super::board_math::under;
 use super::ready::{Ready, ready_in};
 use super::shared::unshared;
 use super::store::err;
+use fael_core::OverlapClass;
 use rusqlite::{OptionalExtension, Transaction};
 
 /// The chunk and every chunk a `pair` edge joins to it, in plan order.
@@ -101,16 +102,27 @@ pub(super) fn ready_paired(
     })
 }
 
+/// One live-run clash: who holds the files, what hit, and the pair-level
+/// class (`Exact` = same file, else `Prefix` = dir covers file).
+struct Clash {
+    uid: String,
+    label: String,
+    plan: String,
+    hits: Vec<String>,
+    class: OverlapClass,
+    started: String,
+    seen: Option<String>,
+    stalled: bool,
+}
+
 /// Live-run chunks of the same app, outside the pair `ms`, whose scope (less `shared`) shares
-/// a path prefix with a member's (the board's `overlap` rule): one `uid (plan/label): path, … —
-/// since T · last seen T` line each, plus `· stalled` when the run is older than `stale` (the
-/// board's rule). Judges nothing.
-pub(super) fn clashes(
+/// a path prefix with a member's (the board's `overlap` rule).
+fn clashes_in(
     tx: &Transaction,
     ms: &[String],
     shared: &[String],
     stale: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<Clash>, String> {
     let paths = |s: Option<String>| -> Vec<String> {
         let v: Vec<String> = s.iter().flat_map(|s| s.lines()).map(String::from).collect();
         unshared(&v, shared)
@@ -165,15 +177,113 @@ pub(super) fn clashes(
             .filter(|x| theirs.iter().any(|y| under(x, y) || under(y, x)))
             .cloned()
             .collect();
-        if !hit.is_empty() {
-            let stalled = seen.as_deref().unwrap_or(&started) < stale;
-            out.push(format!(
-                "{uid} ({plan}/{label}): {} — since {started} · last seen {}{}",
-                hit.join(", "),
-                seen.as_deref().unwrap_or("never"),
-                if stalled { " · stalled" } else { "" }
-            ));
+        if hit.is_empty() {
+            continue;
         }
+        // hits prove the overlap, so the class is always Some
+        let class = fael_core::overlap_class(&mine, &theirs).unwrap_or(OverlapClass::Prefix);
+        let stalled = seen.as_deref().unwrap_or(&started) < stale;
+        out.push(Clash {
+            uid,
+            label,
+            plan,
+            hits: hit,
+            class,
+            started,
+            seen,
+            stalled,
+        });
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::chunk::tests::{add, here, start};
+    use super::super::{Start, Store};
+    use super::*;
+    use rusqlite::params;
+
+    fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
+        let c = add(s, title, Some(title));
+        s.conn
+            .execute("UPDATE chunk SET scope = ?2 WHERE uid = ?1", params![c, scope])
+            .unwrap();
+        c
+    }
+
+    #[test]
+    fn clash_lines_name_exact_and_prefix() {
+        let mut s = Store::open_in_memory().unwrap();
+        let a = scoped(&mut s, "a", "src/");
+        let b = scoped(&mut s, "b", "src/x.rs");
+        let c = scoped(&mut s, "c", "src/x.rs");
+        start(&mut s, &a, "/w1").unwrap();
+        let stale = "2026-10-11T09:00:00Z";
+        // b sits under running a's dir: prefix, and the line says so
+        {
+            let tx = s.conn.unchecked_transaction().unwrap();
+            let lines = clashes(&tx, &[b.clone()], &[], stale).unwrap();
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            assert!(
+                lines[0].contains("[prefix]") && lines[0].contains("src/x.rs"),
+                "{}",
+                lines[0]
+            );
+            assert_eq!(
+                clash_classes(&tx, &[b.clone()], &[], stale).unwrap(),
+                vec![(a.clone(), OverlapClass::Prefix)]
+            );
+            // shared paths are nobody's claim: the same check stays silent
+            assert!(clashes(&tx, &[b.clone()], &["src/".into()], stale).unwrap().is_empty());
+        }
+        // c names the exact file b names: exact, alongside a's prefix
+        s.start(&c, &Start { force: true, ..Start::default() }, &here("/w2")).unwrap();
+        let tx = s.conn.unchecked_transaction().unwrap();
+        let mut classes = clash_classes(&tx, &[b], &[], stale).unwrap();
+        classes.sort_by(|x, y| x.0.cmp(&y.0));
+        assert_eq!(classes, vec![(a, OverlapClass::Prefix), (c, OverlapClass::Exact)]);
+    }
+}
+
+/// The class of each live-run clash, by chunk uid — what o2's joint command
+/// reads to offer pair (exact) vs lane (prefix). Judges nothing.
+pub(super) fn clash_classes(
+    tx: &Transaction,
+    ms: &[String],
+    shared: &[String],
+    stale: &str,
+) -> Result<Vec<(String, OverlapClass)>, String> {
+    Ok(clashes_in(tx, ms, shared, stale)?
+        .into_iter()
+        .map(|c| (c.uid, c.class))
+        .collect())
+}
+
+/// Live-run chunks of the same app, outside the pair `ms`, whose scope (less `shared`) shares
+/// a path prefix with a member's (the board's `overlap` rule): one `uid (plan/label) [class]: path, … —
+/// since T · last seen T` line each, plus `· stalled` when the run is older than `stale` (the
+/// board's rule). Judges nothing.
+pub(super) fn clashes(
+    tx: &Transaction,
+    ms: &[String],
+    shared: &[String],
+    stale: &str,
+) -> Result<Vec<String>, String> {
+    Ok(clashes_in(tx, ms, shared, stale)?
+        .into_iter()
+        .map(|c| {
+            format!(
+                "{} ({}/{}): [{}] {} — since {} · last seen {}{}",
+                c.uid,
+                c.plan,
+                c.label,
+                c.class.as_str(),
+                c.hits.join(", "),
+                c.started,
+                c.seen.as_deref().unwrap_or("never"),
+                if c.stalled { " · stalled" } else { "" }
+            )
+        })
+        .collect())
 }
