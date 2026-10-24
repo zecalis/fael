@@ -1,6 +1,7 @@
 //! Hand-offs by file: a done chunk that touched files under this scope speaks in the
 //! brief of a chunk written before it (issue 01M5FMHQX).
 
+use super::super::chunk::Here;
 use super::super::chunk::tests::{NOW, add, here, start};
 use super::super::{Fields, Start, Store};
 use rusqlite::params;
@@ -280,4 +281,35 @@ fn touch_unions_never_infers_and_only_running_counts() {
         e.contains("taken over") || e.contains("no longer holds"),
         "{e}"
     );
+}
+
+/// The `--run R` seat: names the live run, like wait/after/done — a foreign R is
+/// fenced off, an ended R is no live run.
+#[test]
+fn touch_with_run_names_the_live_run() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("b"));
+    let r = start(&mut s, &a, "/wa").unwrap();
+    let live = Here {
+        worktree: "/elsewhere",
+        branch: Some("b"),
+        now: NOW,
+        run: Some(&r),
+    };
+    // another worktree with --run R answers: the seat rule is the run, not the cwd
+    s.touch(&a, &["src/a.rs".to_string()], &live).unwrap();
+    assert_eq!(s.show(&a).unwrap().live, vec![]);
+    // a foreign R is fenced off before anything is stored
+    let bad = Here {
+        worktree: "/wa",
+        branch: Some("b"),
+        now: NOW,
+        run: Some("R-BAD"),
+    };
+    let e = s.touch(&a, &["src/b.rs".to_string()], &bad).unwrap_err();
+    assert!(e.contains("no longer holds"), "{e}");
+    // an ended R names no live run
+    s.run_end(&r, None, NOW).unwrap();
+    let e = s.touch(&a, &["src/c.rs".to_string()], &live).unwrap_err();
+    assert!(e.contains("live run"), "{e}");
 }

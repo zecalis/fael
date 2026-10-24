@@ -2,8 +2,8 @@
 //! a running chunk publishes the files it has touched so far. Stored on the live
 //! run row (`run.touched`), never inferred from git — only what the agent reports
 //! is kept (product:mission, same rule as run-telemetry model/cost), so a waiter
-//! sees live files, not the whole declared scope. Split out of `agent.rs`
-//! (file-size ratchet).
+//! sees live files, not the whole declared scope. A new module (not a split:
+//! `agent.rs` sits at the 400-line ratchet, so the method lives here instead).
 
 use super::State;
 use super::chunk::{Here, fence, row, scope, tx};
