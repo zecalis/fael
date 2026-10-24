@@ -94,7 +94,13 @@ mod tests {
         for (id, start, session, worktree, ended) in [
             (1, "R1", Some("ses_abc"), "/wt", None),
             (2, "R1", None, "/wt", None),
-            (3, "R9", Some("ses_abc"), "/wt", Some("2026-10-24T00:00:00Z")),
+            (
+                3,
+                "R9",
+                Some("ses_abc"),
+                "/wt",
+                Some("2026-10-24T00:00:00Z"),
+            ),
             (4, "R1", Some("ses_abc"), "/other", None),
         ] {
             c.execute(
@@ -108,10 +114,7 @@ mod tests {
         (d, db)
     }
 
-    fn reported(
-        db: &std::path::Path,
-        id: i64,
-    ) -> (Option<String>, Option<f64>, Option<String>) {
+    fn reported(db: &std::path::Path, id: i64) -> (Option<String>, Option<f64>, Option<String>) {
         let c = rusqlite::Connection::open(db).unwrap();
         c.query_row(
             "SELECT model, cost, session FROM run WHERE id = ?1",

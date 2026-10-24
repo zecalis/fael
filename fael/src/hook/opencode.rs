@@ -284,7 +284,11 @@ mod tests {
     #[test]
     fn normalize_keeps_reported_model_and_cost() {
         for (ev, model, cost) in [
-            ("stop", Some("opencode-go/muse-spark-1.3-contributor"), Some(0.062652)),
+            (
+                "stop",
+                Some("opencode-go/muse-spark-1.3-contributor"),
+                Some(0.062652),
+            ),
             ("session-start", Some("opencode-go/deepseek-v1-flash"), None),
             ("edit", Some("opencode-go/muse-spark-1.3-contributor"), None),
         ] {
