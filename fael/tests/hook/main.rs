@@ -33,6 +33,7 @@ mod focus;
 mod from_user;
 mod handoff;
 mod held;
+mod model;
 mod notify;
 mod opencode;
 mod outcomes;
