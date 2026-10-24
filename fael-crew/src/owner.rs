@@ -242,7 +242,7 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael plan park|unpark|done|undone <plan>`: the owner moves `plan.state`.
+    /// `fael plan park|unpark|done|undone|drop <plan>`: the owner moves `plan.state`.
     /// Refused while a chunk runs. `done` is refused while a child plan is not done —
     /// a done umbrella must not orphan live children. `undone` (done → active) brings
     /// a finished plan back. Returns the state it left.
@@ -299,6 +299,59 @@ impl Store {
             params![format!("plan:{app}/{name}"), now, state, to, id],
         )
         .map_err(err)?;
+        tx.commit().map_err(err)?;
+        Ok(state)
+    }
+
+    /// `fael plan drop <plan>`: delete a mistaken plan. Refused on inbox, while it
+    /// holds any chunk (move them first), or while a child plan lives (drop it first).
+    /// Writes a dropped event before the delete so the feed keeps the trail, then
+    /// removes its sections and the plan row. Returns the state it left.
+    pub fn plan_drop(&mut self, id: i64, now: &str) -> Result<String, String> {
+        let tx = tx(self)?;
+        let (app, name, state): (String, String, String) = tx
+            .query_row(
+                "SELECT app, name, state FROM plan WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .map_err(err)?;
+        if app.is_empty() && name == "inbox" {
+            return Err(
+                "rejected: plan inbox stays active — it holds every unplanned chunk".into(),
+            );
+        }
+        let n: i64 = tx
+            .query_row("SELECT COUNT(*) FROM chunk WHERE plan = ?1", [id], |r| {
+                r.get(0)
+            })
+            .map_err(err)?;
+        if n > 0 {
+            return Err(format!(
+                "rejected: {name} has {n} chunk(s) — `fael chunk move <uid> --plan <other>` first"
+            ));
+        }
+        let kids: String = tx
+            .query_row(
+                "SELECT COALESCE(GROUP_CONCAT(name, ', '), '') FROM plan WHERE app = ?1 AND parent = ?2",
+                params![app, name],
+                |r| r.get(0),
+            )
+            .map_err(err)?;
+        if !kids.is_empty() {
+            return Err(format!(
+                "rejected: {name} has child plan(s) ({kids}) — `fael plan drop <child>` first"
+            ));
+        }
+        tx.execute(
+            "INSERT INTO event(chunk_uid, at, by, from_state, to_state, plan) VALUES (?1, ?2, 'owner', ?3, 'dropped', ?4)",
+            params![format!("plan:{app}/{name}"), now, state, id],
+        )
+        .map_err(err)?;
+        tx.execute("DELETE FROM section WHERE plan = ?1", [id])
+            .map_err(err)?;
+        tx.execute("DELETE FROM plan WHERE id = ?1", [id])
+            .map_err(err)?;
         tx.commit().map_err(err)?;
         Ok(state)
     }

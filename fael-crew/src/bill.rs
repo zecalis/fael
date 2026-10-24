@@ -26,7 +26,7 @@ pub struct Bill {
     area: Option<String>,
     /// the umbrella plan's name (same app, one level); `""` clears it
     parent: Option<String>,
-    /// read back, never set: `fael plan park|unpark|done|undone` moves it
+    /// read back, never set: `fael plan park|unpark|done|undone|drop` moves it
     state: Option<String>,
     /// by key: one left out is left alone
     #[serde(default)]
@@ -74,7 +74,7 @@ fn header(tx: &Transaction, pid: i64, b: &Bill, now: &str) -> Result<Option<Stri
     if b.state.as_deref().is_some_and(|s| s != state) {
         let back = if state == "done" { "undone" } else { "unpark" };
         return Err(format!(
-            "rejected: plan {name} is {state} — `fael plan park|unpark|done|undone` moves it, a bill does not; try `fael plan {back} {name}`"
+            "rejected: plan {name} is {state} — `fael plan park|unpark|done|undone|drop` moves it, a bill does not; try `fael plan {back} {name}`"
         ));
     }
     let mut what = Vec::new();

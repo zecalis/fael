@@ -155,6 +155,8 @@ const APP_CONTRACT: &[&str] = &[
     "doctor --fix",
     "plan export",
     "plan done",
+    "plan undone",
+    "plan drop",
     "plan park",
     "plan unpark",
     "chunk start",
@@ -187,6 +189,8 @@ const FAEL_SWIFT_CALLS: &[&str] = &[
     "doctor --fix",   // Fael.swift:25
     "plan export",    // Fael.swift:33
     "plan done",      // Fael.swift:38
+    "plan undone",    // Fael.swift:38
+    "plan drop",      // Fael.swift:38
     "plan park",      // Fael.swift:38
     "plan unpark",    // Fael.swift:38
     "chunk start",    // Fael.swift:44

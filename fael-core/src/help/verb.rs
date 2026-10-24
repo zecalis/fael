@@ -185,6 +185,7 @@ fn example(cmd: &str, verb: &str) -> Option<&'static str> {
         ("plan", "unpark") => Some("fael plan unpark my-plan"),
         ("plan", "done") => Some("fael plan done my-plan"),
         ("plan", "undone") => Some("fael plan undone my-plan"),
+        ("plan", "drop") => Some("fael plan drop my-plan"),
         ("plan", "lint") => Some("fael plan lint my-plan"),
         ("run", "end") => Some("fael run end R123"),
         ("run", "beat") => Some("fael run beat R123"),

@@ -24,6 +24,32 @@ pub struct Plan {
     pub parent: Option<String>,
     /// state → chunks in it; an archived (done/parked) plan lists only this
     pub counts: BTreeMap<String, usize>,
+    /// the owner verbs fael takes for this plan now (park/unpark/done/undone/drop)
+    pub owner_actions: Vec<&'static str>,
+}
+
+/// The owner verbs a plan in `state` takes: state moves the CLI accepts, plus
+/// `drop` only when the plan holds no chunk and no child plan (the CLI still
+/// guards running chunks and live children with a named reject).
+pub fn plan_actions(
+    state: &str,
+    inbox: bool,
+    has_chunks: bool,
+    has_children: bool,
+) -> Vec<&'static str> {
+    if inbox {
+        return Vec::new();
+    }
+    let mut out = match state {
+        "active" | "blocked" => vec!["park", "done"],
+        "parked" => vec!["unpark"],
+        "done" => vec!["undone"],
+        _ => Vec::new(),
+    };
+    if !has_chunks && !has_children {
+        out.push("drop");
+    }
+    out
 }
 
 #[derive(Debug, Serialize)]
@@ -277,6 +303,7 @@ impl Store {
     }
 
     fn board_plans(&self) -> Result<Vec<Plan>, String> {
+        type PlanRow = (i64, String, String, String, String, String, Option<String>);
         let mut counts: HashMap<i64, BTreeMap<String, usize>> = HashMap::new();
         let mut q = self
             .conn
@@ -296,23 +323,46 @@ impl Store {
                  FROM plan ORDER BY state IN ('done', 'parked'), app, name",
             )
             .map_err(err)?;
-        q.query_map([], |r| {
-            let name: String = r.get(2)?;
-            let title: String = r.get(3)?;
-            Ok(Plan {
-                counts: counts.remove(&r.get(0)?).unwrap_or_default(),
-                app: r.get(1)?,
-                title: plan_title(&title, &name),
-                name,
-                area: r.get(4)?,
-                state: r.get(5)?,
-                parent: r.get(6)?,
-                truth: "db",
+        let rows: Vec<PlanRow> = q
+            .query_map([], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                ))
             })
-        })
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        let parents: std::collections::HashSet<(String, String)> = rows
+            .iter()
+            .filter_map(|(_, app, _, _, _, _, parent)| parent.clone().map(|u| (app.clone(), u)))
+            .collect();
+        rows.into_iter()
+            .map(|(id, app, name, title, area, state, parent)| {
+                let has_chunks = counts
+                    .get(&id)
+                    .is_some_and(|c| c.values().sum::<usize>() > 0);
+                let has_children = parents.contains(&(app.clone(), name.clone()));
+                let inbox = app.is_empty() && name == "inbox";
+                Ok(Plan {
+                    counts: counts.remove(&id).unwrap_or_default(),
+                    owner_actions: plan_actions(&state, inbox, has_chunks, has_children),
+                    app,
+                    title: plan_title(&title, &name),
+                    name,
+                    area,
+                    state,
+                    parent,
+                    truth: "db",
+                })
+            })
+            .collect::<Result<_, _>>()
+            .map_err(err)
     }
 
     fn latest_runs(&self) -> Result<HashMap<i64, Run>, String> {

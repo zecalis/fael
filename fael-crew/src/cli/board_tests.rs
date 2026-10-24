@@ -153,6 +153,7 @@ fn archived(plan: &str, state: &str, counts: &[(&str, usize)]) -> BoardPlan {
         truth: "db",
         parent: None,
         counts: counts.iter().map(|(s, n)| (s.to_string(), *n)).collect(),
+        owner_actions: Vec::new(),
     }
 }
 

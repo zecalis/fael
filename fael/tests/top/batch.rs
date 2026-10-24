@@ -154,7 +154,7 @@ fn thai_title_warns_once_and_files() {
     assert_eq!(
         warns,
         [
-            "warn: row not in English — write rows in English from now on; cite a foreign term in `backticks`"
+            "warn: row not in English — chat in any language, but write rows in English from now on; cite a foreign term in `backticks`"
         ],
         "{err}"
     );

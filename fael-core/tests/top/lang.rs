@@ -166,11 +166,11 @@ fn default_rows_warn_byte_identical() {
     let c = cfg(&["english"]);
     assert_eq!(
         row_language_check(&c, Some("หัวข้อไทย"), "stale notes"),
-        Some("row not in English — write rows in English from now on; cite a foreign term in `backticks`".into())
+        Some("row not in English — chat in any language, but write rows in English from now on; cite a foreign term in `backticks`".into())
     );
     assert_eq!(
         row_language_check(&c, None, "stale notes หัวข้อไทย"),
-        Some("row not in English — write rows in English from now on; cite a foreign term in `backticks`".into())
+        Some("row not in English — chat in any language, but write rows in English from now on; cite a foreign term in `backticks`".into())
     );
     assert_eq!(
         row_language_check(&c, None, "stale notes after merge"),

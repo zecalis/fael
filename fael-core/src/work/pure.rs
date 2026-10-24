@@ -29,7 +29,8 @@ pub const CHUNK_VERBS: &[&str] = &[
 
 /// The verbs `plan` takes — `show` is `export` by another name.
 pub const PLAN_VERBS: &[&str] = &[
-    "new", "export", "show", "apply", "edit", "park", "unpark", "done", "undone", "list", "lint",
+    "new", "export", "show", "apply", "edit", "park", "unpark", "done", "undone", "drop", "list",
+    "lint",
 ];
 
 /// Under the temp dir — canonical (`/private/var/…` on macOS) through the

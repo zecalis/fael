@@ -119,6 +119,56 @@ fn undone_brings_a_done_plan_back_and_done_refuses_live_children() {
 }
 
 #[test]
+fn drop_deletes_an_empty_plan_and_refuses_chunks_or_children() {
+    let d = repo();
+    assert!(fael(&d, &["plan", "new", "junk", "Junk"]).0);
+    // empty drops, naming the state it left
+    let (ok, out, err) = fael(&d, &["plan", "drop", "junk"]);
+    assert!(
+        ok && out
+            == "plan junk active → dropped
+",
+        "{err}{out}"
+    );
+    let (ok, _, err) = fael(&d, &["plan", "export", "junk"]);
+    assert!(!ok && err.contains("no plan 'junk'"), "{err}");
+    // inbox never drops (create it first with an unplanned chunk)
+    assert!(fael(&d, &["chunk", "add", "loose", "--brief", "b"]).0);
+    let (ok, _, err) = fael(&d, &["plan", "drop", "inbox"]);
+    assert!(!ok && err.contains("inbox stays active"), "{err}");
+    // a plan with chunks refuses: move them first
+    assert!(fael(&d, &["plan", "new", "full", "Full"]).0);
+    let (ok, uid, err) = fael(
+        &d,
+        &["chunk", "add", "c1", "--plan", "full", "--brief", "b"],
+    );
+    assert!(ok, "{err}");
+    let uid = uid.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = fael(&d, &["plan", "drop", "full"]);
+    assert!(
+        !ok && err.contains("has 1 chunk(s)") && err.contains("chunk move"),
+        "{err}"
+    );
+    assert!(fael(&d, &["plan", "new", "elsewhere", "Else"]).0);
+    assert!(fael(&d, &["chunk", "move", &uid, "--plan", "elsewhere"]).0);
+    let (ok, out, err) = fael(&d, &["plan", "drop", "full"]);
+    assert!(
+        ok && out
+            == "plan full active → dropped
+",
+        "{err}{out}"
+    );
+    // a parent with a live child refuses: drop the child first
+    assert!(fael(&d, &["plan", "new", "up", "Up"]).0);
+    assert!(fael(&d, &["plan", "new", "kid", "Kid", "--parent", "up"]).0);
+    let (ok, _, err) = fael(&d, &["plan", "drop", "up"]);
+    assert!(!ok && err.contains("child plan(s) (kid)"), "{err}");
+    assert!(fael(&d, &["plan", "drop", "kid"]).0);
+    assert!(fael(&d, &["plan", "drop", "up"]).0);
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
 fn plan_new_keeps_its_sections_in_the_db_and_a_bill_edits_the_plan() {
     let d = repo();
     let (ok, out, err) = fael(&d, &["plan", "new", "n", "New work"]);
