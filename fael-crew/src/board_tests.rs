@@ -1,6 +1,6 @@
 //! One project's board (SPEC §2, §10): derived fields and the md title clean-up.
 
-use super::super::board_math::{clean, overlap, plan_title};
+use super::super::board_math::{OverlapClass, clean, overlap, plan_title};
 use super::super::chunk::tests::{NOW, add, here, start};
 use super::super::{ALL, Fields, Owner, Store};
 use rusqlite::params;
@@ -82,6 +82,32 @@ fn scopes_overlap_on_a_segment() {
     assert!(overlap(&v(&["a.rs"]), &v(&["a.rs"])));
     assert!(!overlap(&v(&["src/a"]), &v(&["src/ab.rs"])));
     assert!(!overlap(&v(&[]), &v(&["src/"])));
+}
+
+#[test]
+fn overlap_classes_name_exact_and_prefix() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", &["src/"], &[]);
+    let b = scoped(&mut s, "b", &["src/x.rs"], &[]);
+    let e = scoped(&mut s, "e", &["src/x.rs"], &[]);
+    start(&mut s, &a, "/wt/1").unwrap();
+    let bd = s.board("2026-10-11", NOW).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|c| c.uid == u).unwrap();
+    use OverlapClass::{Exact, Prefix};
+    // uids stay as they were; the class rides alongside, same order
+    assert_eq!(by(&a).overlaps, vec![b.clone(), e.clone()]);
+    assert_eq!(
+        by(&a).overlap_classes,
+        vec![(b.clone(), Prefix), (e.clone(), Prefix)]
+    );
+    assert_eq!(
+        by(&b).overlap_classes,
+        vec![(a.clone(), Prefix), (e.clone(), Exact)]
+    );
+    assert_eq!(
+        by(&e).overlap_classes,
+        vec![(a.clone(), Prefix), (b.clone(), Exact)]
+    );
 }
 
 #[test]

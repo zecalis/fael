@@ -19,6 +19,7 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         blocked_by: Vec::new(),
         unblocks,
         overlaps: Vec::new(),
+        overlap_classes: Vec::new(),
         pair: Vec::new(),
         stalled: false,
         ended: false,

@@ -73,6 +73,11 @@ pub struct Chunk {
     pub blocked_by: Vec<Blocker>,
     pub unblocks: usize,
     pub overlaps: Vec<String>,
+    /// o1: the class per overlap pair, same order as `overlaps` (exact = same
+    /// file, prefix = dir covers file); skipped from JSON until o4 serializes
+    /// it — the golden pins chunk keys, so the shape stays byte-identical.
+    #[serde(skip)]
+    pub overlap_classes: Vec<(String, fael_core::OverlapClass)>,
     pub pair: Vec<String>,
     pub stalled: bool,
     pub ended: bool,
@@ -214,6 +219,7 @@ impl Store {
                         blocked_by: Vec::new(),
                         unblocks: 0,
                         overlaps: Vec::new(),
+                        overlap_classes: Vec::new(),
                         pair: Vec::new(),
                         stalled: false,
                         ended: false,
