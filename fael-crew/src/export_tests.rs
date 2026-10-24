@@ -109,6 +109,25 @@ fn export_prints_the_label_and_the_notes_the_next_brief_will() {
     );
 }
 
+/// The markdown keeps a dropped chunk's reason: without it the export reads
+/// bare `dropped` and the reason lives only in the event feed.
+#[test]
+fn export_prints_the_drop_reason() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("do a"));
+    s.owner(&a, super::super::Owner::Drop, Some("out of scope"), NOW)
+        .unwrap();
+    let plan: i64 = s
+        .conn
+        .query_row("SELECT plan FROM chunk WHERE uid = ?1", [&a], |r| r.get(0))
+        .unwrap();
+    let md = super::export(&s, plan).unwrap();
+    assert!(
+        md.contains("  > dropped 2026-10-11: out of scope\n"),
+        "{md}"
+    );
+}
+
 #[test]
 fn an_after_cycle_still_exports_every_chunk_once() {
     let mut s = Store::open_in_memory().unwrap();
