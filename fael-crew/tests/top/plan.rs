@@ -100,6 +100,25 @@ fn park_unpark_done_move_a_plan_and_unknown_names_are_refused() {
 }
 
 #[test]
+fn undone_brings_a_done_plan_back_and_done_refuses_live_children() {
+    let d = repo();
+    assert!(fael(&d, &["plan", "new", "up", "Umbrella"]).0);
+    assert!(fael(&d, &["plan", "new", "kid", "Kid", "--parent", "up"]).0);
+    // the parent cannot finish while the child lives
+    let (ok, _, err) = fael(&d, &["plan", "done", "up"]);
+    assert!(!ok && err.contains("child plan(s) not done (kid)"), "{err}");
+    assert!(fael(&d, &["plan", "done", "kid"]).0);
+    let (ok, out, err) = fael(&d, &["plan", "done", "up"]);
+    assert!(ok && out == "plan up active → done\n", "{err}{out}");
+    // a done plan comes back with undone (unpark is a forgiving alias)
+    let (ok, out, err) = fael(&d, &["plan", "undone", "up"]);
+    assert!(ok && out == "plan up done → active\n", "{err}{out}");
+    let (ok, _, err) = fael(&d, &["plan", "undone", "up"]);
+    assert!(!ok && err.contains("up is active"), "{err}");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
 fn plan_new_keeps_its_sections_in_the_db_and_a_bill_edits_the_plan() {
     let d = repo();
     let (ok, out, err) = fael(&d, &["plan", "new", "n", "New work"]);

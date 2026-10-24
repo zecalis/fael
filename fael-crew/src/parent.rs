@@ -142,6 +142,36 @@ mod tests {
     }
 
     #[test]
+    fn done_refuses_a_live_child_and_undone_brings_the_parent_back() {
+        let mut s = store();
+        let up = plan(&s, "umbrella");
+        // an active child blocks the parent's done, naming it
+        let e = s.plan_state(up, "done", NOW).unwrap_err();
+        assert!(e.contains("child plan(s) not done (page-a)"), "{e}");
+        // a parked child is still not done — still refused
+        let kid = plan(&s, "page-a");
+        s.plan_state(kid, "parked", NOW).unwrap();
+        let e = s.plan_state(up, "done", NOW).unwrap_err();
+        assert!(e.contains("page-a"), "{e}");
+        // child done first, then the parent follows
+        s.plan_state(kid, "done", NOW).unwrap();
+        assert_eq!(s.plan_state(up, "done", NOW).unwrap(), "active");
+        // undone brings the done parent back; the child stays done
+        assert_eq!(s.plan_state(up, "active", NOW).unwrap(), "done");
+        let states: Vec<_> = s
+            .plans()
+            .unwrap()
+            .into_iter()
+            .map(|p| (p.name, p.state))
+            .collect();
+        assert!(states.contains(&("umbrella".to_string(), "active".to_string())));
+        assert!(states.contains(&("page-a".to_string(), "done".to_string())));
+        // undone on an active plan is a reject, naming its state
+        let e = s.plan_state(up, "active", NOW).unwrap_err();
+        assert!(e.contains("umbrella is active"), "{e}");
+    }
+
+    #[test]
     fn a_bill_sets_moves_and_clears_it() {
         let mut s = store();
         s.new_plan("", "other", "O", "dev", None, NOW).unwrap();
