@@ -102,7 +102,7 @@ fn stats_json_matches_golden_values() {
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     // its own json! call: one literal with every kind passes the macro's recursion limit
-    let said = serde_json::json!({"row": {"said": 2, "earned": 0}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "check": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}});
+    let said = serde_json::json!({"row": {"said": 2, "earned": 0}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "check": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}});
     assert_eq!(
         v,
         serde_json::json!({

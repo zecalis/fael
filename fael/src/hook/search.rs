@@ -134,6 +134,29 @@ fn holds_chunk(repo: &crate::Repo) -> bool {
     crate::core::work::has_held(&db, &repo.root.to_string_lossy())
 }
 
+/// The checkpoint ask of a step commit: the held chunk's uid, unless its last
+/// note since the run started is `finished:`. Keyed on that note's event id, so
+/// it is asked once per gap between notes. No crew.db, no run = nothing.
+fn checkpoint(repo: &crate::Repo) -> Option<super::say::Line> {
+    let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
+    let (uid, last) = crate::core::work::last_note(&db, &repo.root.to_string_lossy())?;
+    if last
+        .as_ref()
+        .is_some_and(|(_, t)| t.starts_with("finished:"))
+    {
+        return None;
+    }
+    let id = last.map_or(0, |(id, _)| id);
+    Some(super::say::Line {
+        kind: super::say::Kind::Checkpoint {
+            key: format!("~checkpoint:{uid}:{id}"),
+        },
+        text: format!(
+            "fael: checkpoint — after this commit: fael chunk note {uid} \"<done; next>\" — the next chunk start resumes from it\n"
+        ),
+    })
+}
+
 /// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):
 /// one line per cited id with its ready `fael close`, each id once per
 /// session. A `fix:` commit naming no row in a session that closed none,
@@ -190,6 +213,9 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
             kind: super::say::Kind::FixCommit,
             text: fix_commit(&super::state::edited_files(&c.session, &c.repo.root, 3)),
         });
+    }
+    if let Some(line) = checkpoint(&c.repo) {
+        out.say(line);
     }
     let r = out.reply();
     if let Some(context) = r.context() {

@@ -68,6 +68,12 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael: a.rs outside chunk 01C's scope, inside open chunk p/x's — coordinate: fael chunk note 01D \"<text>\", or go on\n",
         ),
+        line(
+            Kind::Checkpoint {
+                key: "~checkpoint:01C:0".into(),
+            },
+            "fael: checkpoint — after this commit: fael chunk note 01C \"<done; next>\" — the next chunk start resumes from it\n",
+        ),
     ]
 }
 
@@ -84,6 +90,7 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Fixed => 8,
         Kind::FixCommit => 9,
         Kind::Overlap { .. } => 10,
+        Kind::Checkpoint { .. } => 11,
     }
 }
 
@@ -349,7 +356,8 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "notice",
             "fixed",
             "fixcommit",
-            "overlap"
+            "overlap",
+            "checkpoint"
         ]
     );
 }

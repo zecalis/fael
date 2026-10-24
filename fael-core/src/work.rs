@@ -8,6 +8,7 @@
 //! and the migrations; this keeps its own read-only SQL so `fael-core` never
 //! depends on `fael-crew`).
 
+mod checkpoint;
 mod db;
 pub(crate) mod elsewhere;
 mod pure;
@@ -53,6 +54,7 @@ pub struct EndedRun {
     pub ended: String,
 }
 
+pub use checkpoint::last_note;
 pub use db::{
     all_plans, brief_row, chunk_brief, db_at, db_for, ended_runs, flow_runs, has_held, held,
     is_chunk, linked_open_chunks, mark_model, mark_model_session, mark_seen, mark_seen_session,
