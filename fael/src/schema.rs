@@ -76,6 +76,9 @@ pub(crate) fn tools() -> Value {
                 "other": str_("waits on"),
                 "on": str_("owner|data"),
                 "run": str_("run R"),
+                "client": str_("start client"),
+                "model": str_("start model"),
+                "session": str_("start session"),
                 "force": {"type": "boolean", "description": "take over"},
                 "pr": str_("PR number for done"),
                 "left": str_("leftover ids for done, or none"),
@@ -129,6 +132,15 @@ mod tests {
     /// trimming the chunk description (the `verb` field lists the verbs) and
     /// add.rows.
     ///
+    /// Chunk `client` + `model` + `session` (2026-10-24, run-telemetry t1):
+    /// `start` through MCP alone — an MCP `start` naming them was silently
+    /// dropping them (unknown-arg notes), so agent runs recorded NULLs. +168 B
+    /// (schema 3878 → 4046), once per session, for complete client/model on
+    /// every agent run.
+    /// The 7% bar becomes 5%: the contract now carries the full run identity
+    /// (client/model/session for cost joins), which earns its bytes — one
+    /// `start` with identity beats a follow-up lookup round.
+    ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
     /// content growing. The ceiling guards content, so measure canonical LF.
@@ -153,12 +165,12 @@ mod tests {
     fn constants_stay_small() {
         let total = SKILL.replace("\r\n", "\n").len() + super::schema_json().len();
         assert!(
-            total <= 7300,
-            "constants {total} B exceed the 7300 B ceiling — trim, don't grow"
+            total <= 7400,
+            "constants {total} B exceed the 7400 B ceiling — trim, don't grow"
         );
         assert!(
-            total * 100 <= BASELINE * 93,
-            "constants {total} B kept less than 7% off the {BASELINE} B baseline"
+            total * 100 <= BASELINE * 95,
+            "constants {total} B kept less than 5% off the {BASELINE} B baseline"
         );
     }
 
@@ -212,7 +224,8 @@ mod tests {
         assert_eq!(
             props("chunk"),
             set(&[
-                "verb", "uid", "text", "other", "on", "run", "force", "pr", "left", "review"
+                "verb", "uid", "text", "other", "on", "run", "client", "model", "session", "force",
+                "pr", "left", "review"
             ])
         );
     }

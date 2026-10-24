@@ -13,7 +13,8 @@ use serde_json::Value;
 pub(crate) const HIDDEN: &[&str] = &[];
 /// Every key `chunk` reads.
 pub(crate) const KNOWN: &[&str] = &[
-    "verb", "uid", "text", "other", "on", "run", "force", "pr", "left", "review",
+    "verb", "uid", "text", "other", "on", "run", "client", "model", "session", "force", "pr",
+    "left", "review",
 ];
 
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
@@ -29,6 +30,18 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
     let verb = need(a, "verb")?;
     let uid = need(a, "uid")?;
+    let args = build_args(&verb, &uid, a)?;
+    match crate::crew::capture(&args, &r.root) {
+        Ok(t) => Ok(t),
+        Err(e) if verb == "show" => show_elsewhere(&r, &uid, e),
+        Err(e) => Err(with_cwd_hint(e)),
+    }
+}
+
+/// The argv `chunk_checked` runs — pure, so unit tests pin the contract without
+/// a repo or a `fael-crew` binary: unknown keys ride along (forward-compat
+/// notes, never a reject here).
+fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
     let text = s(a, "text").unwrap_or_default();
     let need_text = |what: &str| match text.is_empty() {
         true => Err(format!(
@@ -36,8 +49,8 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
         )),
         false => Ok(()),
     };
-    let mut args: Vec<String> = vec!["chunk".into(), verb.clone(), uid.clone()];
-    match verb.as_str() {
+    let mut args: Vec<String> = vec!["chunk".into(), verb.to_string(), uid.to_string()];
+    match verb {
         "show" | "start" => {}
         "note" => {
             if text.is_empty() {
@@ -82,14 +95,26 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
     if let Some(run) = s(a, "run").filter(|_| verb != "show" && verb != "note") {
         args.extend(["--run".into(), run]);
     }
+    if verb == "start" {
+        // explicit wins (COALESCE explicit→approval→hint); forward what the agent said
+        if let Some(c) = s(a, "client") {
+            args.extend(["--client".into(), c]);
+        }
+        if let Some(m) = s(a, "model") {
+            args.extend(["--model".into(), m]);
+        }
+        // no launcher (--run): the caller session binds the run, native ids only —
+        // an RFC3339 hook session is never stored (seen() writes last_seen-only)
+        if s(a, "run").is_none()
+            && let Some(sess) = s(a, "session").filter(|v| fael_core::ts_ms(v).is_none())
+        {
+            args.extend(["--session".into(), sess]);
+        }
+    }
     if verb == "start" && a["force"].as_bool().unwrap_or(false) {
         args.push("--force".into());
     }
-    match crate::crew::capture(&args, &r.root) {
-        Ok(t) => Ok(t),
-        Err(e) if verb == "show" => show_elsewhere(&r, &uid, e),
-        Err(e) => Err(with_cwd_hint(e)),
-    }
+    Ok(args)
 }
 
 /// `done --pr N`: a number or its string; anything else rides through for the
@@ -141,9 +166,6 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             if has_run {
                 fell.push("`run` (show takes none)".into());
             }
-            if has_force {
-                fell.push("`force` (only start takes it)".into());
-            }
             for k in ["other", "on", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
@@ -164,9 +186,6 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             if has_run {
                 fell.push("`run` (note takes none)".into());
             }
-            if has_force {
-                fell.push("`force` (only start takes it)".into());
-            }
             for k in ["other", "on", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
@@ -179,18 +198,12 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
             }
-            if has_force {
-                fell.push("`force` (only start takes it)".into());
-            }
         }
         "wait" => {
             for k in ["other", "pr", "left", "review"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
-            }
-            if has_force {
-                fell.push("`force` (only start takes it)".into());
             }
         }
         "after" => {
@@ -199,11 +212,19 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
             }
-            if has_force {
-                fell.push("`force` (only start takes it)".into());
-            }
         }
         _ => return None,
+    }
+    if verb != "start" {
+        // `force`+identity ride only on `start`
+        if has_force {
+            fell.push("`force` (only start takes it)".into());
+        }
+        for k in ["client", "model", "session"] {
+            if has(k) {
+                fell.push(format!("`{k}` (only start takes it)"));
+            }
+        }
     }
     match fell.as_slice() {
         [] => None,
@@ -240,5 +261,64 @@ fn with_cwd_hint(e: String) -> String {
     match e.contains("lives in") {
         true => format!("{e}\nMCP: re-run this call with \"cwd\" set to that repo root"),
         false => e,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{KNOWN, build_args, misplaced_note, unknown_note};
+    use serde_json::json;
+
+    #[test]
+    fn start_forwards_client_and_model() {
+        let a = json!({"verb": "start", "uid": "U1", "client": "opencode", "model": "deepseek-v1-flash"});
+        let args = build_args("start", "U1", &a).unwrap();
+        assert!(args.contains(&"--client".to_string()), "{args:?}");
+        assert!(args.contains(&"opencode".to_string()), "{args:?}");
+        assert!(args.contains(&"--model".to_string()), "{args:?}");
+        assert!(args.contains(&"deepseek-v1-flash".to_string()), "{args:?}");
+    }
+
+    #[test]
+    fn start_without_identity_forwards_nothing_new() {
+        let a = json!({"verb": "start", "uid": "U1"});
+        let args = build_args("start", "U1", &a).unwrap();
+        assert_eq!(args, vec!["chunk", "start", "U1"], "{args:?}");
+    }
+
+    #[test]
+    fn start_session_only_when_native_and_no_run() {
+        // native id without launcher rides through
+        let a = json!({"verb": "start", "uid": "U1", "session": "ses_abc123"});
+        let args = build_args("start", "U1", &a).unwrap();
+        assert!(args.contains(&"--session".to_string()), "{args:?}");
+        // an RFC3339 hook session never rides (seen() writes last_seen-only)
+        let a = json!({"verb": "start", "uid": "U1", "session": "2026-10-24T00:00:00.000Z"});
+        let args = build_args("start", "U1", &a).unwrap();
+        assert!(!args.contains(&"--session".to_string()), "{args:?}");
+        // a launcher run never takes a session
+        let a = json!({"verb": "start", "uid": "U1", "run": "R1", "session": "ses_abc123"});
+        let args = build_args("start", "U1", &a).unwrap();
+        assert!(args.contains(&"R1".to_string()), "{args:?}");
+        assert!(!args.contains(&"--session".to_string()), "{args:?}");
+    }
+
+    #[test]
+    fn unknown_keys_stay_notes_never_rejects() {
+        // a future client field still builds — the note says it fell away
+        let a = json!({"verb": "start", "uid": "U1", "future": "x"});
+        assert!(build_args("start", "U1", &a).is_ok());
+        let note = unknown_note(&a, KNOWN).unwrap();
+        assert!(note.contains("future"), "{note}");
+        // client/model/session are known now, so no unknown note for them
+        let a = json!({"verb": "start", "uid": "U1", "client": "c", "model": "m", "session": "s"});
+        assert!(unknown_note(&a, KNOWN).is_none());
+        // but on done they fell off start — said, not dropped
+        let a = json!({"verb": "done", "uid": "U1", "text": "h", "client": "c", "model": "m"});
+        let note = misplaced_note(&a, "done").unwrap();
+        assert!(
+            note.contains("`client`") && note.contains("only start"),
+            "{note}"
+        );
     }
 }
