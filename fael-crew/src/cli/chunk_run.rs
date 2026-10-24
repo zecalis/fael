@@ -105,7 +105,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     // (th.ts spreads start.ts): warn now, not only at done's outside report.
     if let Ok(s) = Store::open(&db(r)) {
         for c in &st.chunks {
-            crate::chunk_scope::warn(&s, r, &c.uid);
+            crate::chunk_scope::warn(&s, r, &c.uid, true);
         }
     }
     Ok(())

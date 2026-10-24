@@ -137,7 +137,7 @@ fn apply(r: &Repo, from: &str, dry: bool) -> Result<(), String> {
         (false, true) => println!("no change (rev {rev})"),
         (false, false) => {
             for uid in changed_uids(&lines) {
-                crate::chunk_scope::warn(&s, r, &uid);
+                crate::chunk_scope::warn(&s, r, &uid, false);
             }
             crate::board::register(r);
             println!("applied (rev {rev})");
