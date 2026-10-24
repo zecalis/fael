@@ -151,6 +151,7 @@ fn example(cmd: &str, verb: &str) -> Option<&'static str> {
         ("chunk", "note") => {
             Some("fael chunk note 01M582E4V1RQR033P5V00B4WVV \"finished: verbs; next examples\"")
         }
+        ("chunk", "touch") => Some("fael chunk touch 01M582E4V1RQR033P5V00B4WVV src/a.rs"),
         ("chunk", "wait") => Some(
             "fael chunk wait 01M582E4V1RQR033P5V00B4WVV \"which API?\" --on owner --option \"A\" --option \"B\"",
         ),

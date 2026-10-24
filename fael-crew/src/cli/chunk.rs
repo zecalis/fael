@@ -11,7 +11,7 @@ use std::process::ExitCode;
 /// Canonical in `fael-core::work` (the read seam owns the closed vocabulary);
 /// the command reuses it so the two cannot drift.
 pub(crate) const VERBS: &[&str] = fael_core::work::CHUNK_VERBS;
-pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
+pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|touch|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     if rest.is_empty() {
@@ -202,7 +202,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
 /// queue mark (`approve`, `unapprove`, `accept`) lives in `chunk_verbs`, which takes
 /// several uids; this keeps only the stdin batch.
 fn touch(a: &Args, s: &mut Store, uid: &str, files: &[&str], here: &Here) -> Result<(), String> {
-    // `chunk touch` (issue 01M5PB7Z, hidden): publish touched-so-far — one or more
+    // `chunk touch` (issue 01M5PB7Z, CLI-only, not MCP): publish touched-so-far — one or more
     // repo-relative paths. `--run R` answers from another checkout, like wait/after.
     a.only("chunk touch", &["run"])?;
     let paths: Vec<String> = files.iter().map(|s| s.to_string()).collect();
