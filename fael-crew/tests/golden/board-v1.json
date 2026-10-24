@@ -43,6 +43,17 @@
     "01M4M0BRD000000000000000B2",
     "01M4M0BRD000000000000000B3"
   ],
+  "queue_exclusive": [
+    "01M4M0BRD000000000000000P4"
+  ],
+  "queue_joint": [
+    {
+      "uid": "01M4M0BRD000000000000000V4",
+      "with": "01M4M0BRD000000000000000V5",
+      "as": "lane"
+    }
+  ],
+  "blocked_on_overlap": [],
   "projects": [
     {
       "name": "fael",

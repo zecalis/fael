@@ -22,7 +22,27 @@ struct Board<'a> {
     queue: Vec<String>,
     running: Vec<String>,
     blocked: Vec<String>,
+    /// o4: the queue split by overlap class (additive, `v` stays 1 — the app
+    /// keeps reading `queue`; a rename would need v2 per 01M581CX).
+    /// `queue_exclusive` = ready with no clash vs a live run: solo-startable.
+    queue_exclusive: Vec<String>,
+    /// `queue_joint` = ready with a prefix-only clash vs a live run: startable
+    /// beside it — `with` names the holder, `as` the ready joint mode (lane).
+    queue_joint: Vec<JointSpot>,
+    /// `blocked_on_overlap` = ready with an exact-file clash vs a live run:
+    /// a solo (or lane) start still refuses — `with` names the holder, `as`
+    /// the joint mode that unblocks it (pair; follow also works).
+    blocked_on_overlap: Vec<JointSpot>,
     projects: Vec<&'a Project>,
+}
+
+/// One ready chunk's joint slot: what `chunk start` would take beside the holder.
+#[derive(Serialize)]
+struct JointSpot {
+    uid: String,
+    with: String,
+    #[serde(rename = "as")]
+    mode: String,
 }
 
 #[derive(Serialize)]
@@ -309,11 +329,58 @@ fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
         .flat_map(|(kind, f)| uids(f).into_iter().map(|uid| Need { kind, uid }))
         .collect();
     // unblocks most first — stable, so plan order breaks ties
-    let mut queue: Vec<&&BoardChunk> = all.iter().filter(|c| c.ready).collect();
-    queue.sort_by_key(|c| Reverse(c.unblocks));
-    let queue = queue.iter().map(|c| c.uid.clone()).collect();
+    let mut ordered: Vec<&&BoardChunk> = all.iter().filter(|c| c.ready).collect();
+    ordered.sort_by_key(|c| Reverse(c.unblocks));
+    let queue: Vec<String> = ordered.iter().map(|c| c.uid.clone()).collect();
     let running = uids(&|c| c.state == "running" && !c.ended);
     let blocked = uids(&|c| c.state == "open" && !c.blocked_by.is_empty());
+    // o4: split the queue by clash vs a live run (the start gate's rule, via
+    // o1's per-pair classes): exclusive = no running holder in its classes,
+    // joint = prefix-only (lane), blocked_on_overlap = exact (pair). Each
+    // bucket keeps queue order; `queue` itself stays for the app (v stays 1).
+    // A `--open`/`--plan` cut drops the running chunks, but an open chunk's
+    // classes still name the cut-away holder — so a partner absent from this
+    // cut counts as a holder too (it can only be running or review).
+    let live: std::collections::HashSet<&str> = running.iter().map(String::as_str).collect();
+    let by_uid: HashMap<&str, &BoardChunk> = all.iter().map(|c| (c.uid.as_str(), *c)).collect();
+    let mut queue_exclusive = Vec::new();
+    let mut queue_joint = Vec::new();
+    let mut blocked_on_overlap = Vec::new();
+    for uid in &queue {
+        let Some(c) = by_uid.get(uid.as_str()) else {
+            continue;
+        };
+        let mut exact: Option<&str> = None;
+        let mut prefix: Option<&str> = None;
+        for (partner, class) in &c.overlap_classes {
+            let holder = live.contains(partner.as_str()) || !by_uid.contains_key(partner.as_str());
+            if !holder {
+                continue;
+            }
+            if *class == fael_core::OverlapClass::Exact {
+                if exact.is_none() {
+                    exact = Some(partner);
+                }
+            } else if prefix.is_none() {
+                prefix = Some(partner);
+            }
+        }
+        if let Some(holder) = exact {
+            blocked_on_overlap.push(JointSpot {
+                uid: uid.clone(),
+                with: holder.to_string(),
+                mode: "pair".to_string(),
+            });
+        } else if let Some(holder) = prefix {
+            queue_joint.push(JointSpot {
+                uid: uid.clone(),
+                with: holder.to_string(),
+                mode: "lane".to_string(),
+            });
+        } else {
+            queue_exclusive.push(uid.clone());
+        }
+    }
     Board {
         v: 1,
         at,
@@ -321,6 +388,9 @@ fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
         queue,
         running,
         blocked,
+        queue_exclusive,
+        queue_joint,
+        blocked_on_overlap,
         projects,
     }
 }
