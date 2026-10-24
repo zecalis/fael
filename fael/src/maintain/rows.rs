@@ -275,7 +275,7 @@ fn not_english_note(log: &core::Log, cfg: &core::Config) -> Option<core::Problem
         core::Problem::info(
             core::ProblemKind::NotEnglish,
             format!(
-                "{} open row(s) are not in {langs} — translate and re-file with \
+                "{} open row(s) are not in {langs} — chat in any language, rows stay in English — translate and re-file with \
                  `fael add --supersedes <id>` (e.g. {})",
                 hits.len(),
                 eg.join("; ")

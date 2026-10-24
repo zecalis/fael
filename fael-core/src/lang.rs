@@ -175,7 +175,7 @@ pub fn row_language_check(cfg: &Config, title: Option<&str>, text: &str) -> Opti
         &langs
     };
     Some(format!(
-        "row not in {langs} — write rows in {langs} from now on; cite a foreign term in `backticks`"
+        "row not in {langs} — chat in any language, but write rows in {langs} from now on; cite a foreign term in `backticks`"
     ))
 }
 

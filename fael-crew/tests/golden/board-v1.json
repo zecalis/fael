@@ -106,7 +106,11 @@
             "review": 1,
             "running": 1,
             "waiting": 1
-          }
+          },
+          "owner_actions": [
+            "park",
+            "done"
+          ]
         },
         {
           "app": "",
@@ -119,7 +123,11 @@
             "open": 1,
             "review": 1,
             "waiting": 2
-          }
+          },
+          "owner_actions": [
+            "park",
+            "done"
+          ]
         },
         {
           "app": "",
@@ -131,7 +139,11 @@
           "parent": "launch-posts",
           "counts": {
             "done": 2
-          }
+          },
+          "owner_actions": [
+            "park",
+            "done"
+          ]
         },
         {
           "app": "",
@@ -143,7 +155,8 @@
           "counts": {
             "done": 1,
             "draft": 1
-          }
+          },
+          "owner_actions": []
         },
         {
           "app": "",
@@ -155,7 +168,10 @@
           "counts": {
             "done": 12,
             "dropped": 1
-          }
+          },
+          "owner_actions": [
+            "undone"
+          ]
         }
       ],
       "chunks": [
@@ -751,7 +767,11 @@
           "counts": {
             "open": 1,
             "running": 2
-          }
+          },
+          "owner_actions": [
+            "park",
+            "done"
+          ]
         }
       ],
       "chunks": [

@@ -44,7 +44,7 @@ one verb: fael chunk <verb> --help · all verbs: fael chunk --help",
   export <plan>             read it (--section <key>; --json is the bill)
   apply <file|-> --dry-run  change it through the bill
   new <name> \"<title>\"      a new plan
-  park|unpark|done|undone <plan>
+  park|unpark|done|undone|drop <plan>
 one verb: fael plan <verb> --help · all verbs: fael plan --help",
         ),
         _ => None,

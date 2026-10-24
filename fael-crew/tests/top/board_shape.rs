@@ -39,7 +39,16 @@ const WAIT_KEYS: &[&str] = &["on", "text", "until", "options"];
 /// `truth` is always `db` (epoch v8): the app gates `chunk add --plan` on it. `parent`
 /// (issue 01M51KW0) is the one optional key: an umbrella plan of the same app, one level,
 /// absent = top level.
-const PLAN_KEYS: &[&str] = &["app", "name", "title", "area", "state", "truth", "counts"];
+const PLAN_KEYS: &[&str] = &[
+    "app",
+    "name",
+    "title",
+    "area",
+    "state",
+    "truth",
+    "counts",
+    "owner_actions",
+];
 const RUN_KEYS: &[&str] = &[
     "id",
     "client",

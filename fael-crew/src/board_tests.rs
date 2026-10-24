@@ -201,3 +201,35 @@ fn add_heals_a_done_inbox() {
         "inbox back on the board"
     );
 }
+
+/// Plan `owner_actions` the board serves: state moves plus `drop` only when
+/// the plan holds no chunk and no child (the app's undone/drop buttons).
+#[test]
+fn plan_actions_name_state_moves_and_drop_only_when_empty() {
+    use super::super::board::plan_actions;
+    assert_eq!(
+        plan_actions("active", false, false, false),
+        vec!["park", "done", "drop"]
+    );
+    assert_eq!(
+        plan_actions("active", false, true, false),
+        vec!["park", "done"]
+    );
+    assert_eq!(
+        plan_actions("active", false, false, true),
+        vec!["park", "done"]
+    );
+    assert_eq!(
+        plan_actions("parked", false, false, false),
+        vec!["unpark", "drop"]
+    );
+    assert_eq!(
+        plan_actions("done", false, false, false),
+        vec!["undone", "drop"]
+    );
+    assert_eq!(plan_actions("done", false, true, false), vec!["undone"]);
+    assert!(
+        plan_actions("active", true, false, false).is_empty(),
+        "inbox never moves"
+    );
+}

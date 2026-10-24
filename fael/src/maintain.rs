@@ -91,13 +91,40 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     })
 }
 
-/// Where a `local` repo's rows live.
+/// Where a `local` repo's rows live, and which crew.db the board reads.
+/// The 0-byte `.fael/crew.db` stub confuses (the real db is
+/// `<git-common-dir>/fael/crew.db`): name the resolved path so the next
+/// reader stops hunting.
 fn local_note(r: &crate::Repo) -> String {
     let at = r
         .journal
         .as_deref()
         .map_or_else(|| r.fael.display().to_string(), |j| j.display().to_string());
-    format!("rows live in {at}, shared by every worktree of this clone")
+    let dir = r.journal.as_deref().unwrap_or(&r.fael);
+    let db = dir.join("crew.db");
+    let old = dir.join("fael.db");
+    let resolved = if db.exists() {
+        db.display().to_string()
+    } else if old.exists() {
+        format!("{} (pre-rename fael.db)", old.display())
+    } else {
+        format!("{} (missing - run plan new to create it)", db.display())
+    };
+    let mut note = format!(
+        "rows live in {at}, shared by every worktree of this clone; crew.db resolves to {resolved}"
+    );
+    if r.journal.is_some() {
+        let stray = r.fael.join("crew.db");
+        if stray.exists() {
+            let n = std::fs::metadata(&stray).map(|m| m.len()).unwrap_or(0);
+            note.push_str(&format!(
+                "; stray {} ({} bytes) is not read while the journal lives — remove it",
+                stray.display(),
+                n
+            ));
+        }
+    }
+    note
 }
 
 /// The adapter half of `doctor --fix`: close the confirmed `[Shipped]` notes,
