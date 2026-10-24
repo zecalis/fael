@@ -137,11 +137,13 @@ pub(super) fn put(
 ) -> Result<Option<String>, String> {
     if key.is_empty() || key.chars().any(char::is_whitespace) {
         return Err(format!(
-            "rejected: section key {key:?} — one word, no spaces"
+            "rejected: section key {key:?} — one word, no spaces; try a key like goal"
         ));
     }
     if title.is_some_and(|t| t.trim().is_empty()) {
-        return Err(format!("rejected: section {key} needs a title"));
+        return Err(format!(
+            "rejected: section {key} needs a title; try with `\"title\": \"<headline>\"`"
+        ));
     }
     let cur: Option<(String, String)> = tx
         .query_row(
@@ -153,7 +155,9 @@ pub(super) fn put(
         .map_err(err)?;
     let (title, what) = match cur {
         None => {
-            let t = title.ok_or(format!("rejected: section {key} is new — it needs a title"))?;
+            let t = title.ok_or(format!(
+                "rejected: section {key} is new — it needs a title; try with `\"title\": \"<headline>\"`"
+            ))?;
             tx.execute(
                 "INSERT INTO section(plan, key, title, body, seq)
                  SELECT ?1, ?2, ?3, ?4, COALESCE(MAX(seq), 0) + 1024 FROM section WHERE plan = ?1",
@@ -237,7 +241,7 @@ pub(super) fn reads(refs: &[String]) -> Result<Option<String>, String> {
         .find(|r| r.ends_with('/') || r.chars().any(char::is_whitespace))
     {
         return Err(format!(
-            "rejected: reads {r:?} — a section key, or <plan>/<key> for another plan's"
+            "rejected: reads {r:?} — a section key, or <plan>/<key> for another plan's; try a key like goal, or <plan>/<key>"
         ));
     }
     Ok((!refs.is_empty()).then(|| refs.join("\n")))

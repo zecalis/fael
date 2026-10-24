@@ -207,11 +207,13 @@ impl Store {
         let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
         if name.is_empty() || !name.chars().all(ok) || name == "inbox" {
             return Err(format!(
-                "rejected: plan name '{name}' — lowercase letters, digits and '-' (not inbox)"
+                "rejected: plan name '{name}' — lowercase letters, digits and '-' (not inbox); try a name like my-plan"
             ));
         }
         if !matches!(area, "dev" | "marketing") {
-            return Err(format!("rejected: --area {area} — dev or marketing"));
+            return Err(format!(
+                "rejected: --area {area} — dev or marketing; try --area dev"
+            ));
         }
         let tx = tx(self)?;
         let n = tx
@@ -223,7 +225,7 @@ impl Store {
             .map_err(err)?;
         if n == 0 {
             return Err(format!(
-                "rejected: plan {name} already exists — see `fael plan export {name}`"
+                "rejected: plan {name} already exists — try `fael plan export {name}` to see it"
             ));
         }
         let pid = tx.last_insert_rowid();
@@ -259,7 +261,7 @@ impl Store {
             .map_err(err)?;
         if app.is_empty() && name == "inbox" {
             return Err(
-                "rejected: plan inbox stays active — it holds every unplanned chunk".into(),
+                "rejected: plan inbox stays active — it holds every unplanned chunk; try `fael board` to see its chunks".into(),
             );
         }
         let from_ok = match to {
@@ -268,7 +270,9 @@ impl Store {
             _ => state != "done",
         };
         if !from_ok {
-            return Err(format!("rejected: {name} is {state}"));
+            return Err(format!(
+                "rejected: {name} is {state}; try `fael board` to see it"
+            ));
         }
         if to == "done" {
             let live: String = tx
@@ -281,13 +285,13 @@ impl Store {
                 .map_err(err)?;
             if !live.is_empty() {
                 return Err(format!(
-                    "rejected: {name} has child plan(s) not done ({live}) — `fael plan done <child>` first"
+                    "rejected: {name} has child plan(s) not done ({live}) — try `fael plan done <child>` first"
                 ));
             }
         }
         if running > 0 && to != "active" {
             return Err(format!(
-                "rejected: {name} has {running} running chunk(s) — finish or park them first"
+                "rejected: {name} has {running} running chunk(s) — try `fael board` to see them; finish or park them first"
             ));
         }
         tx.execute("UPDATE plan SET state = ?1 WHERE id = ?2", params![to, id])
@@ -318,7 +322,7 @@ impl Store {
             .map_err(err)?;
         if app.is_empty() && name == "inbox" {
             return Err(
-                "rejected: plan inbox stays active — it holds every unplanned chunk".into(),
+                "rejected: plan inbox stays active — it holds every unplanned chunk; try `fael board` to see its chunks".into(),
             );
         }
         let n: i64 = tx
@@ -328,7 +332,7 @@ impl Store {
             .map_err(err)?;
         if n > 0 {
             return Err(format!(
-                "rejected: {name} has {n} chunk(s) — `fael chunk move <uid> --plan <other>` first"
+                "rejected: {name} has {n} chunk(s) — try `fael chunk move <uid> --plan <other>` first"
             ));
         }
         let kids: String = tx
@@ -340,7 +344,7 @@ impl Store {
             .map_err(err)?;
         if !kids.is_empty() {
             return Err(format!(
-                "rejected: {name} has child plan(s) ({kids}) — `fael plan drop <child>` first"
+                "rejected: {name} has child plan(s) ({kids}) — try `fael plan drop <child>` first"
             ));
         }
         tx.execute(

@@ -74,7 +74,7 @@ pub fn export_section(s: &Store, plan: i64, key: &str) -> Result<String, String>
     section::resolve(&secs, key).map(one).ok_or_else(|| {
         let keys: Vec<&str> = secs.iter().map(|r| r.key.as_str()).collect();
         format!(
-            "rejected: no section {key} — the plan has: {}",
+            "rejected: no section {key} — the plan has: {}; try `fael plan export <plan> --section <one of these>`",
             keys.join(", ")
         )
     })

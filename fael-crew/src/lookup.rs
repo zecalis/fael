@@ -72,7 +72,7 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
     }
     if key.len() < 8 {
         return Err(format!(
-            "rejected: uid prefix {key} is too short — use 8+ chars of the uid"
+            "rejected: uid prefix {key} is too short — use 8+ chars of the uid; try `fael board` to copy one"
         ));
     }
     let p = hits(
@@ -84,7 +84,7 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
         [] => Ok(None),
         [h] => Ok(Some(h.clone())),
         many => Err(format!(
-            "rejected: uid prefix {key} names {} chunks — use more of the uid: {}",
+            "rejected: uid prefix {key} names {} chunks — use more of the uid; try `fael chunk show <more of the uid>`: {}",
             many.len(),
             many.iter()
                 .map(|h| h.1.as_str())
@@ -97,7 +97,7 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
 /// The reject for a key that names no chunk: it says what to retype, never a guess.
 pub(super) fn no_chunk(key: &str) -> String {
     format!(
-        "rejected: no chunk {key} — copy a uid from `fael board`, or a label with `--plan <plan>`"
+        "rejected: no chunk {key} — try `fael board` to copy a uid, or `--plan <plan> <label>` for a label (`fael plan export <plan>` lists its uids)"
     )
 }
 
@@ -170,7 +170,7 @@ fn hits(tx: &Transaction, cond: &str, key: &str) -> Result<Vec<Hit>, String> {
 pub(super) fn label(tx: &Transaction, plan: i64, id: i64, l: &str) -> Result<(), String> {
     if l.is_empty() || l.contains(char::is_whitespace) || fael_core::looks_like_id(l) {
         return Err(format!(
-            "rejected: --label {l:?} — one short word like b10, not uid-shaped"
+            "rejected: --label {l:?} — one short word like b10, not uid-shaped; try --label b10"
         ));
     }
     let taken: Option<String> = tx
@@ -183,7 +183,7 @@ pub(super) fn label(tx: &Transaction, plan: i64, id: i64, l: &str) -> Result<(),
         .map_err(err)?;
     match taken {
         Some(u) => Err(format!(
-            "rejected: label {l} is taken by chunk {u} in this plan"
+            "rejected: label {l} is taken by chunk {u} in this plan; try --label <another-word>"
         )),
         None => Ok(()),
     }

@@ -25,7 +25,9 @@ impl Joint {
             "pair" => Ok(Self::Pair),
             "lane" => Ok(Self::Lane),
             "follow" => Ok(Self::Follow),
-            _ => Err(format!("rejected: --as {s} is not pair, lane or follow")),
+            _ => Err(format!(
+                "rejected: --as {s} is not pair, lane or follow; try --as pair"
+            )),
         }
     }
 
@@ -70,18 +72,20 @@ fn partner(
     let (with, mode) = match (&o.with, o.joint) {
         (None, None) => return Ok(None),
         (Some(w), Some(m)) => (w, m),
-        _ => return Err("rejected: --with and --as go together".into()),
+        _ => return Err(
+            "rejected: --with and --as go together; try `fael chunk start <uid> --with <partner> --as pair`".into(),
+        ),
     };
     let p = super::lookup::lookup(tx, with)?.ok_or_else(|| super::lookup::no_chunk(with))?;
     let uid = p.1.clone();
     if p.0 == first.id || ms.contains(&uid) {
         return Err(format!(
-            "rejected: --with {with} is this chunk (or its pair) — name another"
+            "rejected: --with {with} is this chunk (or its pair) — name another; try --with <another-chunk> --as pair"
         ));
     }
     let Some((run, _)) = holder_detail(tx, p.0)? else {
         return Err(format!(
-            "rejected: --with {with} has no live run — start {with} first, or start this one alone"
+            "rejected: --with {with} has no live run — try `fael chunk start {with}` first, or start this one alone"
         ));
     };
     let (worktree, branch, base) = tx

@@ -58,17 +58,21 @@ impl Store {
         here: &Here,
     ) -> Result<(), String> {
         if !matches!(on, "owner" | "data") {
-            return Err(format!("rejected: --on {on} — owner or data"));
+            return Err(format!(
+                "rejected: --on {on} — owner or data; try --on owner"
+            ));
         }
         if !options.is_empty() && on != "owner" {
-            return Err("rejected: --option needs --on owner".into());
+            return Err("rejected: --option needs --on owner; try --on owner".into());
         }
         let options = (!options.is_empty())
             .then(|| serde_json::to_string(options))
             .transpose()
             .map_err(|e| e.to_string())?;
         if until.is_some_and(|u| !is_date(u)) {
-            return Err("rejected: --until takes a date YYYY-MM-DD".into());
+            return Err(
+                "rejected: --until takes a date YYYY-MM-DD; try --until <YYYY-MM-DD>".into(),
+            );
         }
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
@@ -95,7 +99,9 @@ impl Store {
             .map_err(err)?;
         let dst = uid_id(&tx, pid, other)?;
         if dst == r.id {
-            return Err("rejected: a chunk cannot wait on itself".into());
+            return Err(format!(
+                "rejected: a chunk cannot wait on itself; try `fael chunk show {uid}` to pick another `on`"
+            ));
         }
         add_after(&tx, r.id, dst)?;
         let to = if r.state == State::Running {
@@ -103,7 +109,7 @@ impl Store {
             State::Open
         } else if r.state.terminal() || r.state == State::Review {
             return Err(format!(
-                "rejected: chunk {uid} is {} — an `after` only holds back work not yet done",
+                "rejected: chunk {uid} is {} — an `after` only holds back work not yet done; try `fael board` to pick a chunk still to run",
                 r.state.as_str()
             ));
         } else {
@@ -147,7 +153,10 @@ impl Store {
         here: &Here,
     ) -> Result<(), String> {
         if review.is_some_and(|v| !REVIEWS.contains(&v)) {
-            return Err(format!("rejected: --review is {}", REVIEWS.join("|")));
+            return Err(format!(
+                "rejected: --review is {}; try --review clean",
+                REVIEWS.join("|")
+            ));
         }
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
@@ -338,7 +347,7 @@ impl Store {
         let r = row(&tx, uid)?;
         if r.state.terminal() {
             return Err(format!(
-                "rejected: chunk {uid} is {} — a note reaches only a chunk still to run; `fael add note` keeps it in the ledger",
+                "rejected: chunk {uid} is {} — a note reaches only a chunk still to run; try `fael board` to pick one (`fael add note` keeps it in the ledger)",
                 r.state.as_str()
             ));
         }

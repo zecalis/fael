@@ -137,7 +137,7 @@ pub fn check(from: State, to: State) -> Result<(), String> {
         .map(State::as_str)
         .collect();
     Err(format!(
-        "rejected: a {} chunk cannot become {} — {} sets it, from {}",
+        "rejected: a {} chunk cannot become {} — try {} to set it, from {}",
         from.as_str(),
         to.as_str(),
         to.command(),

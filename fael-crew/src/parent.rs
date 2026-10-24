@@ -19,7 +19,9 @@ pub(super) fn set(
         return Ok(());
     }
     if parent == name {
-        return Err(format!("rejected: plan {name} cannot be its own parent"));
+        return Err(format!(
+            "rejected: plan {name} cannot be its own parent; try `fael plan list` to pick another"
+        ));
     }
     let up: Option<Option<String>> = tx
         .query_row(
@@ -35,10 +37,10 @@ pub(super) fn set(
         .map_err(err)?;
     match up {
         None => Err(format!(
-            "rejected: no plan '{parent}' to be the parent of {name} — a parent is a plan of the same app (`fael plan list`)"
+            "rejected: no plan '{parent}' to be the parent of {name} — a parent is a plan of the same app; try `fael plan list` to pick one"
         )),
         Some(Some(up)) => Err(format!(
-            "rejected: plan {parent} is itself a child of {up} — one level only"
+            "rejected: plan {parent} is itself a child of {up} — one level only; try `fael plan list` to pick a top-level plan"
         )),
         Some(None) => {
             let kids: i64 = tx
@@ -50,7 +52,7 @@ pub(super) fn set(
                 .map_err(err)?;
             if kids > 0 {
                 return Err(format!(
-                    "rejected: plan {name} has {kids} child plan(s) — one level only"
+                    "rejected: plan {name} has {kids} child plan(s) — one level only; try `fael plan drop <child>` for its children first"
                 ));
             }
             tx.execute(

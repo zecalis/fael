@@ -188,7 +188,9 @@ fn edit_line(
         )
         .map_err(err)?;
     if plan != pid {
-        return Err(format!("rejected: chunk {uid} is in another plan"));
+        return Err(format!(
+            "rejected: chunk {uid} is in another plan; try `fael plan export <plan>` to list this plan's chunks"
+        ));
     }
     let f = Fields {
         title: changed(&l.title, &cur[0]),
@@ -221,7 +223,7 @@ fn edit_line(
     let dropped_again = l.drop && r.state == State::Dropped;
     if changes && (r.state == State::Running || (r.state.terminal() && !dropped_again)) {
         return Err(format!(
-            "rejected: chunk {uid} is {} — a bill changes nothing that runs or is finished",
+            "rejected: chunk {uid} is {} — a bill changes nothing that runs or is finished; try `fael plan export <plan> --json` again without that chunk's line",
             r.state.as_str()
         ));
     }
@@ -269,7 +271,10 @@ impl Store {
     /// lines and the plan's rev now.
     pub fn bill(&mut self, b: Bill, now: &str, dry: bool) -> Result<(Vec<String>, i64), String> {
         if b.v != 1 {
-            return Err(format!("rejected: bill v {} — this fael reads v 1", b.v));
+            return Err(format!(
+                "rejected: bill v {} — this fael reads v 1; try `\"v\": 1`",
+                b.v
+            ));
         }
         let tx = tx(self)?;
         let pid: i64 = tx
@@ -282,11 +287,14 @@ impl Store {
             )
             .optional()
             .map_err(err)?
-            .ok_or(format!("rejected: no plan '{}' in the bill", b.plan))?;
+            .ok_or(format!(
+                "rejected: no plan '{}' in the bill; try `fael plan list` to pick one",
+                b.plan
+            ))?;
         let now_rev = rev(&tx, pid)?;
         if now_rev != b.rev {
             return Err(format!(
-                "rejected: stale rev — the bill has {}, the plan is at {now_rev}; `fael plan export {} --json` again",
+                "rejected: stale rev — the bill has {}, the plan is at {now_rev}; try `fael plan export {} --json` again",
                 b.rev, b.plan
             ));
         }
@@ -294,7 +302,10 @@ impl Store {
         let mut out: Vec<String> = header(&tx, pid, &b, now)?.into_iter().collect();
         for (i, p) in b.sections.iter().enumerate() {
             if b.sections[..i].iter().any(|q| q.key == p.key) {
-                return Err(format!("rejected: the bill names section {} twice", p.key));
+                return Err(format!(
+                    "rejected: the bill names section {} twice; try listing it once",
+                    p.key
+                ));
             }
             out.extend(section::apply(&tx, pid, p, now)?);
         }
@@ -305,7 +316,9 @@ impl Store {
                 Some(uid) => {
                     let id = row(&tx, uid)?.id;
                     if seen.contains(&id) {
-                        return Err(format!("rejected: the bill names chunk {uid} twice"));
+                        return Err(format!(
+                            "rejected: the bill names chunk {uid} twice; try listing it once"
+                        ));
                     }
                     seen.push(id);
                     edit_line(&tx, pid, uid, l, now)?
@@ -326,7 +339,7 @@ impl Store {
             .map_err(err)?;
         if strays > 0 {
             return Err(
-                "rejected: an op touches a chunk of another plan — a bill edits one plan".into(),
+                "rejected: an op touches a chunk of another plan — a bill edits one plan; try `fael plan export <plan>` to keep ops in one plan".into(),
             );
         }
         batch(&tx, since)?;

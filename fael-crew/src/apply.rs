@@ -80,12 +80,12 @@ fn src(tx: &Transaction, uid: &str) -> Result<Src, String> {
     let r = row(tx, uid)?;
     if r.state == State::Running {
         return Err(format!(
-            "rejected: chunk {uid} is running — its agent ends it first (done, wait or after)"
+            "rejected: chunk {uid} is running — its agent ends it first (done, wait or after); try `fael chunk show {uid}` to see its run"
         ));
     }
     if r.state.terminal() {
         return Err(format!(
-            "rejected: chunk {uid} is {} — history, not planned",
+            "rejected: chunk {uid} is {} — history, not planned; try `fael chunk add \"<title>\" --plan <plan>` for new work",
             r.state.as_str()
         ));
     }
@@ -127,10 +127,14 @@ fn src(tx: &Transaction, uid: &str) -> Result<Src, String> {
 /// `uids` resolved, each named once.
 fn srcs(tx: &Transaction, uids: &[String], min: usize, what: &str) -> Result<Vec<Src>, String> {
     if uids.len() < min {
-        return Err(format!("rejected: {what} takes at least {min} chunks"));
+        return Err(format!(
+            "rejected: {what} takes at least {min} chunks; try with {min}+ chunks in `chunks`"
+        ));
     }
     if (1..uids.len()).any(|i| uids[..i].contains(&uids[i])) {
-        return Err(format!("rejected: {what} names a chunk twice"));
+        return Err(format!(
+            "rejected: {what} names a chunk twice; try listing each chunk once"
+        ));
     }
     uids.iter().map(|u| src(tx, u)).collect()
 }
@@ -179,7 +183,7 @@ pub(super) fn insert(
 ) -> Result<(i64, String), String> {
     let title = f.title.as_deref().map(str::trim).unwrap_or_default();
     if title.is_empty() {
-        return Err("rejected: a chunk needs a title".into());
+        return Err("rejected: a chunk needs a title — try --title \"<headline>\"".into());
     }
     let brief = f.brief.as_deref().map(str::trim).filter(|b| !b.is_empty());
     let state = brief.map_or(State::Draft, |_| State::Open).as_str();
@@ -221,7 +225,9 @@ pub(super) fn insert(
 fn merge(tx: &Transaction, uids: &[String], f: Fields, now: &str) -> Result<String, String> {
     let old = srcs(tx, uids, 2, "merge")?;
     if old.iter().any(|o| o.plan != old[0].plan) {
-        return Err("rejected: merge joins chunks of one plan".into());
+        return Err(
+            "rejected: merge joins chunks of one plan; try `fael plan export <plan>` to pick chunks of one plan".into(),
+        );
     }
     let join = |g: &dyn Fn(&Src) -> &str, sep| old.iter().map(g).collect::<Vec<_>>().join(sep);
     let union = |g: &dyn Fn(&Src) -> &Vec<String>| {
@@ -253,7 +259,7 @@ fn split(tx: &Transaction, uid: &str, into: Vec<Part>, now: &str) -> Result<Stri
     let old = src(tx, uid)?;
     if into.len() < 2 {
         return Err(
-            "rejected: split makes at least 2 chunks — `fael chunk edit` changes one".into(),
+            "rejected: split makes at least 2 chunks; try `fael chunk edit <uid> --title \"<new title>\"` to change one".into(),
         );
     }
     let seqs = slots(tx, old.plan, old.row.id, into.len() as i64)?;
@@ -322,7 +328,9 @@ fn after(tx: &Transaction, uid: &str, on: &str, why: &str, now: &str) -> Result<
     let a = src(tx, uid)?;
     let b = row(tx, on)?;
     if a.row.id == b.id {
-        return Err("rejected: a chunk cannot wait on itself".into());
+        return Err(format!(
+            "rejected: a chunk cannot wait on itself; try `fael chunk show {uid}` to pick another `on`"
+        ));
     }
     add_after(tx, a.row.id, b.id)?;
     set(
@@ -371,7 +379,9 @@ impl Store {
     /// `fael chunk apply --json -`: every op or none. Returns one line per op.
     pub fn apply(&mut self, ops: Vec<Op>, now: &str) -> Result<Vec<String>, String> {
         if ops.is_empty() {
-            return Err("rejected: nothing to apply — stdin held an empty array".into());
+            return Err(
+                "rejected: nothing to apply — stdin held an empty array; try with one merge, split, pair or after op".into(),
+            );
         }
         let tx = tx(self)?;
         let since = last_event(&tx)?;
