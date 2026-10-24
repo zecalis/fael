@@ -12,7 +12,16 @@ use std::path::Path;
 pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
     a.only(
         "chunk start",
-        &["client", "model", "run", "force", "no-worktree", "session"],
+        &[
+            "client",
+            "model",
+            "run",
+            "force",
+            "no-worktree",
+            "session",
+            "with",
+            "as",
+        ],
     )?;
     // the agent's own start: an agent that ends with `chunk done` in the same turn never
     // reaches a Stop that could stamp it (issue 01M4NXDQ). Not a launcher (`--run R`): it
@@ -45,6 +54,11 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         base: crate::git(&r.root, &["rev-parse", "HEAD"]),
         shared: fael_crew::shared(&r.root).unwrap_or_default(),
         stale: crate::board::clock().1,
+        with: a.one("with"),
+        joint: a
+            .one("as")
+            .map(|m| fael_crew::Joint::parse(&m))
+            .transpose()?,
     };
     let mut store = Store::open(&db(r))?;
     if !o.force {
@@ -74,6 +88,15 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         }
     }
     print!("{}", st.text());
+    if let (Some(w), Some(j)) = (&o.with, o.joint) {
+        println!("joint {} with {w} (run {})", j.as_str(), st.run);
+        if j == fael_crew::Joint::Pair {
+            println!(
+                "pair: work in {w}'s worktree and branch; pass --run {} to done",
+                st.run
+            );
+        }
+    }
     // plan fael-row-retire c3: contracts and open decisions and notes on files under the
     // chunk's scope, verdicts ready — the agent judges, start never blocks. `fael` words them
     // (its session state and said-once outbox), so this asks it.
