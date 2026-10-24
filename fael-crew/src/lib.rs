@@ -31,6 +31,7 @@ mod shared;
 mod start;
 mod start_brief;
 mod store;
+mod touch;
 
 pub use agent::{Copy, Outside, RunRow};
 pub use apply::Op;

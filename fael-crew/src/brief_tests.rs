@@ -37,6 +37,8 @@ fn chunk(uid: &str) -> Brief {
         after: vec![],
         by_file: vec![],
         by_file_more: 0,
+        live: vec![],
+        live_more: 0,
         resume: None,
         issues: vec![],
     }

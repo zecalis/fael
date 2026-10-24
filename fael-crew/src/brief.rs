@@ -60,6 +60,32 @@ fn handoffs(o: &mut String, how: &str, all: &[(String, String, String)]) {
     }
 }
 
+/// Live touches (`chunk touch`, issue 01M5PB7Z): running chunks, newest run first —
+/// no hand-off text yet, so a section of its own, never merged with the done-claimed
+/// one above. Only what the agent reported is shown.
+fn live(o: &mut String, all: &[(String, String)], more: usize) {
+    let (full, rest) = all.split_at(all.len().min(FULL));
+    for (who, files) in full {
+        let _ = writeln!(o, "\n{who}, live touching files in this scope:");
+        let f: Vec<&str> = files.lines().filter(|l| !l.is_empty()).collect();
+        if !f.is_empty() {
+            let _ = writeln!(o, "files it is touching now: {}", f.join(", "));
+        }
+    }
+    for (who, files) in rest {
+        let f: Vec<&str> = files.lines().filter(|l| !l.is_empty()).collect();
+        let tail = if f.len() > 5 { ", …" } else { "" };
+        let _ = writeln!(
+            o,
+            "- {who} (live) — {}{tail}",
+            f[..f.len().min(5)].join(", ")
+        );
+    }
+    if more > 0 {
+        let _ = writeln!(o, "({more} more live chunks not shown)");
+    }
+}
+
 impl Started {
     pub fn text(&self) -> String {
         let mut o = String::new();
@@ -148,6 +174,9 @@ impl Started {
             if c.by_file_more > 0 {
                 let _ = writeln!(o, "({} more such chunks not shown)", c.by_file_more);
             }
+            // live touches (`chunk touch`, issue 01M5PB7Z): a section of its own, never
+            // merged with the done-claimed one above.
+            live(&mut o, &c.live, c.live_more);
         }
         self.plan_context(&mut o);
         o.push('\n');

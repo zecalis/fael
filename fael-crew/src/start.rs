@@ -72,6 +72,10 @@ pub struct Brief {
     /// (newest first, capped), and how many more there were
     pub by_file: Vec<(String, String, String)>,
     pub by_file_more: usize,
+    /// live touches of running chunks under this scope (`chunk touch`, newest run first,
+    /// capped): `(title, touched)` — no hand-off text yet, printed distinct from `by_file`
+    pub live: Vec<(String, String)>,
+    pub live_more: usize,
     /// the run this start took over or restarted — where the last agent stopped
     pub resume: Option<Prev>,
     /// the ledger issue ids it fixes (`add --issue`); the CLI swaps each for its row's text

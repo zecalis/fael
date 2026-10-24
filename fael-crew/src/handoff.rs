@@ -104,6 +104,60 @@ pub(super) fn by_file(
     Ok((hit.into_iter().take(CAP).map(|(_, w)| w).collect(), more))
 }
 
+/// Live touches: running chunks (any plan of this db) whose live `run.touched`
+/// meets `scope` — what `chunk touch` reported so far, not what `done` claimed.
+/// Newest run first (highest run id), capped like [`by_file`]: the rest are counted,
+/// not printed. `(title, touched)`: no hand-off text yet — the chunk still runs —
+/// so the brief prints this section distinct from the done-claimed one above.
+/// Self is left out; nothing else is filtered (an `after` edge only hides done
+/// hand-offs, and a lane partner's live files are what the waiter must avoid).
+pub(super) fn live(
+    tx: &Transaction,
+    id: i64,
+    scope: Option<&str>,
+) -> Result<(Vec<(String, String)>, usize), String> {
+    let mine: Vec<String> = scope
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    if mine.is_empty() {
+        return Ok((vec![], 0));
+    }
+    let mut q = tx
+        .prepare(
+            "SELECT c.title, COALESCE(r.touched, ''), r.id
+             FROM chunk c JOIN run r ON r.chunk = c.id
+             WHERE c.state = 'running' AND c.id != ?1 AND r.ended IS NULL
+               AND r.touched IS NOT NULL
+             ORDER BY r.id DESC",
+        )
+        .map_err(err)?;
+    let all: Vec<(String, String)> = q
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    let mut hit: Vec<(String, String)> = all
+        .into_iter()
+        .filter(|(_, t)| {
+            let files: Vec<String> = t
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(String::from)
+                .collect();
+            !files.is_empty() && overlap(&mine, &files)
+        })
+        .collect();
+    // newest first already (r.id DESC); trim each chunk's files to those under the scope?
+    // No: show exactly what the agent reported (never infer, never trim) — the overlap
+    // check above already gated on meeting the scope.
+    let more = hit.len().saturating_sub(CAP);
+    hit.truncate(CAP);
+    Ok((hit, more))
+}
+
 #[cfg(test)]
 #[path = "handoff_tests.rs"]
 mod tests;

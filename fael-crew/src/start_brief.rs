@@ -50,6 +50,8 @@ pub(super) fn brief(
                     after: vec![],
                     by_file: vec![],
                     by_file_more: 0,
+                    live: vec![],
+                    live_more: 0,
                     resume: None,
                     issues: vec![],
                 };
@@ -103,6 +105,7 @@ pub(super) fn brief(
     b.issues = super::issue::of(tx, id)?;
     b.after = super::handoff::after(tx, id)?;
     (b.by_file, b.by_file_more) = super::handoff::by_file(tx, id, b.scope.as_deref())?;
+    (b.live, b.live_more) = super::handoff::live(tx, id, b.scope.as_deref())?;
     Ok(b)
 }
 
