@@ -300,10 +300,11 @@ mod tests {
         let tx = s.conn.unchecked_transaction().unwrap();
         let mut classes = clash_classes(&tx, std::slice::from_ref(&b), &[], stale).unwrap();
         classes.sort_by(|x, y| x.0.cmp(&y.0));
-        assert_eq!(
-            classes,
-            vec![(a, OverlapClass::Prefix), (c, OverlapClass::Exact)]
-        );
+        // uids sort randomly when two rows share one ms (Windows clock), so
+        // the expectation sorts too — creation order is not uid order.
+        let mut expected = vec![(a, OverlapClass::Prefix), (c, OverlapClass::Exact)];
+        expected.sort_by(|x, y| x.0.cmp(&y.0));
+        assert_eq!(classes, expected);
         let lines = clashes(&tx, std::slice::from_ref(&b), &[], stale).unwrap();
         assert_eq!(lines.len(), 2, "{lines:?}");
         assert!(lines.iter().any(|l| l.contains("[exact]")), "{lines:?}");
