@@ -2,7 +2,7 @@
 //! brief of a chunk written before it (issue 01M5FMHQX).
 
 use super::super::chunk::tests::{NOW, add, here, start};
-use super::super::{Fields, Store};
+use super::super::{Fields, Start, Store};
 use rusqlite::params;
 
 /// A chunk that is done having touched `file`, its hand-off `text`.
@@ -137,5 +137,147 @@ fn entries_after_the_second_are_one_line_without_handoff_text() {
     assert!(
         t.contains("- c1 — src/f1.rs") && t.contains("- c0 — src/f0.rs"),
         "{t}"
+    );
+}
+
+/// Live touch (issue 01M5PB7Z): a running chunk's `touch` shows in the brief of a
+/// chunk whose scope it meets — exactly what the agent reported, newest run first,
+/// distinct from the done-claimed section.
+#[test]
+fn a_running_chunks_touch_shows_live_in_a_scope_overlapping_brief() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    let a = add(&mut s, "a", Some("b"));
+    let f = Fields {
+        scope: Some(vec!["src/".into()]),
+        ..Fields::default()
+    };
+    s.edit(&a, &f, NOW).unwrap();
+    start(&mut s, &a, "/wa").unwrap();
+    s.touch(
+        &a,
+        &["src/a.rs".to_string(), "src/b.rs".to_string()],
+        &here("/wa"),
+    )
+    .unwrap();
+    let b = s.show(&me).unwrap();
+    assert_eq!(b.live.len(), 1, "{:?}", b.live);
+    assert_eq!(b.live[0].0, "a");
+    let files: Vec<&str> = b.live[0].1.lines().collect();
+    assert_eq!(files, vec!["src/a.rs", "src/b.rs"], "{:?}", b.live);
+    assert!(b.by_file.is_empty(), "done-claimed stays empty: {b:?}");
+    let t = super::super::start::Started {
+        run: "R".into(),
+        chunks: vec![b],
+    }
+    .text();
+    assert!(
+        t.contains("live touching files in this scope:"),
+        "live section distinct from done-claimed: {t}"
+    );
+    assert!(
+        t.contains("files it is touching now: src/a.rs, src/b.rs"),
+        "{t}"
+    );
+    assert!(
+        !t.contains("touched files in this scope, handed off"),
+        "no done hand-off for a running chunk: {t}"
+    );
+}
+
+#[test]
+fn touch_unions_never_infers_and_only_running_counts() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    let a = add(&mut s, "a", Some("b"));
+    let f = Fields {
+        scope: Some(vec!["src/".into()]),
+        ..Fields::default()
+    };
+    s.edit(&a, &f, NOW).unwrap();
+    start(&mut s, &a, "/wa").unwrap();
+    // a bad path rejects the whole call: nothing stored
+    let e = s
+        .touch(&a, &["../etc/passwd".to_string()], &here("/wa"))
+        .unwrap_err();
+    assert!(e.contains("scope"), "{e}");
+    assert!(s.show(&me).unwrap().live.is_empty());
+    // two calls union; a file outside my scope is stored but never shown to me
+    s.touch(&a, &["src/a.rs".to_string()], &here("/wa"))
+        .unwrap();
+    s.touch(
+        &a,
+        &["src/a.rs".to_string(), "other/z.rs".to_string()],
+        &here("/wa"),
+    )
+    .unwrap();
+    let b = s.show(&me).unwrap();
+    assert_eq!(b.live.len(), 1);
+    assert_eq!(
+        b.live[0].1.lines().collect::<Vec<_>>(),
+        vec!["src/a.rs", "other/z.rs"],
+        "stored whole, shown because one meets my scope: {b:?}"
+    );
+    // done chunks never show as live, even with a live row left behind
+    let d = add(&mut s, "d", Some("b"));
+    s.edit(
+        &d,
+        &Fields {
+            scope: Some(vec!["src/".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    s.start(
+        &d,
+        &Start {
+            force: true,
+            ..Start::default()
+        },
+        &here("/wd"),
+    )
+    .unwrap();
+    s.touch(&d, &["src/d.rs".to_string()], &here("/wd"))
+        .unwrap();
+    s.done(&d, "d done", Some(1), None, &here("/wd")).unwrap();
+    let b = s.show(&me).unwrap();
+    assert!(
+        b.live.iter().all(|(t, _)| t != "d"),
+        "done chunk is no live entry: {b:?}"
+    );
+    // newest run first
+    let c = add(&mut s, "c", Some("b"));
+    s.edit(
+        &c,
+        &Fields {
+            scope: Some(vec!["src/".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    s.start(
+        &c,
+        &Start {
+            force: true,
+            ..Start::default()
+        },
+        &here("/wc"),
+    )
+    .unwrap();
+    s.touch(&c, &["src/c.rs".to_string()], &here("/wc"))
+        .unwrap();
+    let b = s.show(&me).unwrap();
+    assert_eq!(b.live.len(), 2);
+    assert_eq!(b.live[0].0, "c", "newest first: {b:?}");
+    assert_eq!(b.live[1].0, "a");
+    // a fenced touch (another worktree without --run) changes nothing
+    let e = s
+        .touch(&a, &["src/nope.rs".to_string()], &here("/elsewhere"))
+        .unwrap_err();
+    assert!(
+        e.contains("taken over") || e.contains("no longer holds"),
+        "{e}"
     );
 }

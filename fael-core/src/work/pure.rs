@@ -11,6 +11,7 @@ pub const CHUNK_VERBS: &[&str] = &[
     "edit",
     "move",
     "note",
+    "touch",
     "wait",
     "after",
     "unafter",

@@ -149,6 +149,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             s()?.note(uid, text, &now)?;
             say(uid, "noted for the next start");
         }
+        ["touch", uid, files @ ..] => touch(a, &mut s()?, uid, files, &here)?,
         ["wait", uid, text] => {
             // `--run R`: a start in another checkout's worktree (`start --worktree`) answers here
             a.only("chunk wait", &["on", "until", "option", "run"])?;
@@ -200,6 +201,15 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
 /// The planner's batch: `apply` reads merge/split/pair/after ops off stdin. The owner's
 /// queue mark (`approve`, `unapprove`, `accept`) lives in `chunk_verbs`, which takes
 /// several uids; this keeps only the stdin batch.
+fn touch(a: &Args, s: &mut Store, uid: &str, files: &[&str], here: &Here) -> Result<(), String> {
+    // `chunk touch` (issue 01M5PB7Z, hidden): publish touched-so-far — one or more
+    // repo-relative paths. `--run R` answers from another checkout, like wait/after.
+    a.only("chunk touch", &["run"])?;
+    let paths: Vec<String> = files.iter().map(|s| s.to_string()).collect();
+    s.touch(uid, &paths, here)?;
+    println!("chunk {uid} → touched {}", paths.join(", "));
+    Ok(())
+}
 fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String> {
     match rest {
         ["apply", "-"] if a.has("json") => {
