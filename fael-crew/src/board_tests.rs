@@ -111,6 +111,58 @@ fn overlap_classes_name_exact_and_prefix() {
 }
 
 #[test]
+fn a_static_pair_and_a_live_joint_name_no_overlap() {
+    use super::super::{Joint, Start};
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", &["src/x.rs"], &[]);
+    let b = scoped(&mut s, "b", &["src/x.rs"], &[]);
+    let c = scoped(&mut s, "c", &["src/"], &[]);
+    let d = scoped(&mut s, "d", &["src/y.rs"], &[]);
+    s.conn
+        .execute(
+            "INSERT INTO edge(src, dst, kind) SELECT x.id, y.id, 'pair'
+             FROM chunk x, chunk y WHERE x.uid = ?1 AND y.uid = ?2",
+            params![a, b],
+        )
+        .unwrap();
+    start(&mut s, &c, "/wt/2").unwrap();
+    // the pair shares c's dir: no agreement, so the overlap stays —
+    // force the pair in beside the running dir
+    s.start(
+        &a,
+        &Start {
+            force: true,
+            stale: NOW.into(),
+            ..Start::default()
+        },
+        &here("/wt/1"),
+    )
+    .unwrap();
+    // d agrees with c as a lane; a and b never agreed with c
+    s.start(
+        &d,
+        &Start {
+            with: Some(c.clone()),
+            joint: Some(Joint::Lane),
+            stale: NOW.into(),
+            ..Start::default()
+        },
+        &here("/wt/3"),
+    )
+    .unwrap();
+    let bd = s.board("2026-10-11", NOW).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|c| c.uid == u).unwrap();
+    // one run's work shares files on purpose: the pair (exact) and the
+    // lane partner (prefix) never name each other …
+    assert!(!by(&a).overlaps.contains(&b), "{:?}", by(&a).overlaps);
+    assert!(!by(&b).overlaps.contains(&a), "{:?}", by(&b).overlaps);
+    assert!(!by(&c).overlaps.contains(&d), "{:?}", by(&c).overlaps);
+    assert!(!by(&d).overlaps.contains(&c), "{:?}", by(&d).overlaps);
+    // … but an overlap with no agreement is still named
+    assert!(by(&a).overlaps.contains(&c), "{:?}", by(&a).overlaps);
+}
+
+#[test]
 fn md_titles_come_clean() {
     assert_eq!(
         plan_title("PLAN-fael-board — fael runs the chunk", "fael-board"),

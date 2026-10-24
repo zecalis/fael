@@ -8,7 +8,7 @@ use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
 use super::holder::{
-    end_in_worktree, holder, holder_detail, holder_worktree, members, ready_paired,
+    end_caller_seat, end_in_worktree, holder, holder_detail, holder_worktree, members, ready_paired,
 };
 use super::joint::{self, Joint};
 use super::ready::Ready;
@@ -258,6 +258,7 @@ impl Store {
         let partner = joint::gate(&tx, &first, &ms, o)?;
         // a pair is one R in the partner's worktree and branch; any other start is its own R
         let seat = partner.as_ref().filter(|p| p.mode == Joint::Pair);
+        let caller_wt = wt;
         let (mut branch, mut base) = (here.branch.map(String::from), o.base.clone());
         if let Some(p) = seat {
             joint::no_rejoin(&tx, &first, p)?;
@@ -335,6 +336,7 @@ impl Store {
         if let (Some(w), None) = (wt, seat) {
             end_in_worktree(&tx, w, here.now)?;
         }
+        end_caller_seat(&tx, seat.is_some(), caller_wt, wt, here.now)?;
         let mut chunks = Vec::new();
         for (r, was) in claim {
             let loc = (wt, wt.and(branch.as_deref()), wt.and(base.as_deref()));

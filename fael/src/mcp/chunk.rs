@@ -14,7 +14,7 @@ pub(crate) const HIDDEN: &[&str] = &[];
 /// Every key `chunk` reads.
 pub(crate) const KNOWN: &[&str] = &[
     "verb", "uid", "text", "other", "on", "run", "client", "model", "session", "force", "pr",
-    "left", "review",
+    "left", "review", "with", "as",
 ];
 
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
@@ -110,6 +110,13 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
         {
             args.extend(["--session".into(), sess]);
         }
+        // joint start (01M5PE238): --with/--as ride the CLI contract as is
+        if let Some(w) = s(a, "with") {
+            args.extend(["--with".into(), w]);
+        }
+        if let Some(m) = s(a, "as") {
+            args.extend(["--as".into(), m]);
+        }
     }
     if verb == "start" && a["force"].as_bool().unwrap_or(false) {
         args.push("--force".into());
@@ -166,7 +173,7 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             if has_run {
                 fell.push("`run` (show takes none)".into());
             }
-            for k in ["other", "on", "pr", "left", "review"] {
+            for k in ["other", "on", "pr", "left", "review", "with", "as"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
@@ -186,28 +193,28 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
             if has_run {
                 fell.push("`run` (note takes none)".into());
             }
-            for k in ["other", "on", "pr", "left", "review"] {
+            for k in ["other", "on", "pr", "left", "review", "with", "as"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
             }
         }
         "done" => {
-            for k in ["other", "on"] {
+            for k in ["other", "on", "with", "as"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
             }
         }
         "wait" => {
-            for k in ["other", "pr", "left", "review"] {
+            for k in ["other", "pr", "left", "review", "with", "as"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
             }
         }
         "after" => {
-            for k in ["on", "pr", "left", "review"] {
+            for k in ["on", "pr", "left", "review", "with", "as"] {
                 if has(k) {
                     fell.push(format!("`{k}` (only its verb takes it)"));
                 }
@@ -216,11 +223,11 @@ fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
         _ => return None,
     }
     if verb != "start" {
-        // `force`+identity ride only on `start`
+        // `force`+identity+joint ride only on `start`
         if has_force {
             fell.push("`force` (only start takes it)".into());
         }
-        for k in ["client", "model", "session"] {
+        for k in ["client", "model", "session", "with", "as"] {
             if has(k) {
                 fell.push(format!("`{k}` (only start takes it)"));
             }
@@ -301,6 +308,21 @@ mod tests {
         let args = build_args("start", "U1", &a).unwrap();
         assert!(args.contains(&"R1".to_string()), "{args:?}");
         assert!(!args.contains(&"--session".to_string()), "{args:?}");
+    }
+
+    #[test]
+    fn start_forwards_joint_with_and_as() {
+        let a = json!({"verb": "start", "uid": "U1", "with": "U2", "as": "lane"});
+        let args = build_args("start", "U1", &a).unwrap();
+        assert!(args.contains(&"--with".to_string()), "{args:?}");
+        assert!(args.contains(&"U2".to_string()), "{args:?}");
+        assert!(args.contains(&"--as".to_string()), "{args:?}");
+        assert!(args.contains(&"lane".to_string()), "{args:?}");
+        // joint keys are known now, and misplaced off start
+        assert!(unknown_note(&a, KNOWN).is_none());
+        let d = json!({"verb": "done", "uid": "U1", "text": "h", "with": "U2", "as": "lane"});
+        let note = misplaced_note(&d, "done").unwrap();
+        assert!(note.contains("`with`") && note.contains("`as`"), "{note}");
     }
 
     #[test]

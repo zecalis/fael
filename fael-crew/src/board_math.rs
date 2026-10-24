@@ -51,9 +51,27 @@ pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Res
 /// Ready, live running, review and `open_pr` chunks (a done chunk whose PR is not on the
 /// base yet: the CLI reads git) whose scopes share a path prefix — their files are taken.
 /// A `shared` path (`.fael/shared`) is nobody's: it never makes an overlap.
+/// A static `pair` is one run's work, and a live joint run (`run.joint/partner`,
+/// 01M5PE238) agreed to work beside its partner — neither names an overlap.
 pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[String]) {
     for c in chunks.iter_mut() {
         c.overlaps.clear();
+        c.overlap_classes.clear();
+    }
+    // a live joint run's partner uid, both directions: agreeing to share files
+    // is no clash. Ended runs are gone — their overlap comes back.
+    let mut joint: HashSet<(String, String)> = HashSet::new();
+    for c in chunks.iter() {
+        let live = c.run.as_ref().is_some_and(|r| r.ended.is_none());
+        if live
+            && let (Some(p), Some(_)) = (
+                c.run.as_ref().and_then(|r| r.partner.clone()),
+                c.run.as_ref().and_then(|r| r.joint.clone()),
+            )
+        {
+            joint.insert((c.uid.clone(), p.clone()));
+            joint.insert((p, c.uid.clone()));
+        }
     }
     let hot: Vec<usize> = (0..chunks.len())
         .filter(|&i| {
@@ -68,6 +86,14 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
     for &a in &hot {
         for &b in &hot {
             if a == b {
+                continue;
+            }
+            // one run's work shares files on purpose: static pairs and live
+            // joint partners never name each other
+            if chunks[a].pair.contains(&chunks[b].uid) {
+                continue;
+            }
+            if joint.contains(&(chunks[a].uid.clone(), chunks[b].uid.clone())) {
                 continue;
             }
             // the class is Some exactly when the scopes overlap, so one call
