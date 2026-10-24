@@ -17,6 +17,7 @@ pub(crate) fn stop(e: &Event) -> Reply {
     let mut r = decide(e);
     super::autosync::start(e);
     seen(e);
+    report(e);
     r.notice = receipt(e);
     r
 }
@@ -54,6 +55,36 @@ pub(super) fn seen(e: &Event) {
     }
 }
 
+/// PLAN-run-telemetry t3: report what the client says its session runs as and
+/// costs so far. The session's live runs get the reported model (the actual —
+/// it wins over the start-time approval/hint) and cost (last writer wins =
+/// session total, from the server's per-session tally). Never ends a run, so
+/// never `run end` from here: the run is still live. Fails open: no report is
+/// a NULL that stays NULL, never a guess. Called from `stop` (fresh cost) and
+/// `session-start` (first-turn model, for runs killed before any stop).
+pub(super) fn report(e: &Event) {
+    let model = e.model.as_deref().filter(|m| !m.is_empty());
+    let cost = e.cost.filter(|c| c.is_finite() && *c >= 0.0);
+    if model.is_none() && cost.is_none() {
+        return;
+    }
+    let Some(session) = e.session.as_deref().filter(|s| !s.is_empty()) else {
+        return;
+    };
+    // the id `chunk start` read from $CLAUDE_CODE_SESSION_ID, not the transcript path
+    let session = super::state::session_id(session);
+    report_held(session, model, cost);
+    let Some(r) = e
+        .cwd
+        .as_deref()
+        .and_then(|c| crate::repo_at(Path::new(c)).ok())
+    else {
+        return;
+    };
+    let db = core::work::db_for(r.journal.as_deref(), &r.fael);
+    let _ = core::work::mark_report(&db, &r.root.to_string_lossy(), session, model, cost);
+}
+
 /// The run this session's `chunk start` bound, wherever the session works now: a
 /// `--no-worktree` run has no worktree for [`seen`] to match (issue 01M4N4CVC). The marker
 /// goes once no live run is left.
@@ -77,6 +108,22 @@ fn seen_held(session: &str, model: Option<&str>) {
     if n == 0 {
         let _ = std::fs::remove_file(m);
     }
+}
+
+/// [`seen_held`]'s db for model/cost: the same held-session file, but the
+/// marker stays — a reported cost never ends the run, so it never retires
+/// the file (that is `seen_held`'s call when no live run is left).
+fn report_held(session: &str, model: Option<&str>, cost: Option<f64>) {
+    let Some(m) = core::work::held_session_file(session) else {
+        return;
+    };
+    let Some(db) = std::fs::read_to_string(&m)
+        .ok()
+        .filter(|d| Path::new(d).exists())
+    else {
+        return;
+    };
+    let _ = core::work::mark_report_session(Path::new(&db), session, model, cost);
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the turn's receipt for the user —

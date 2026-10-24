@@ -133,25 +133,70 @@ const epoch = (v) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+// The running model as `providerID/id`, and the session's total cost in USD —
+// both client-reported from `session.get` (V1 wraps the session in `data`, V2
+// unwraps it), never guessed: anything missing or misshapen is null, and Rust
+// keeps the NULL. Cost only matters on stop (the server's running total);
+// model is cached per session (it rarely changes mid-session) and refreshed
+// on stop alongside cost.
+const model_of = (s) => {
+  const m = s?.model ?? s?.data?.model ?? s?.info?.model ?? null;
+  if (typeof m === "string") return m || null;
+  if (m && typeof m === "object") {
+    const id = typeof m.id === "string" ? m.id : "";
+    const p =
+      typeof m.providerID === "string" ? m.providerID
+      : typeof m.provider === "string" ? m.provider
+      : "";
+    if (id && p) return `${p}/${id}`;
+    return id || null;
+  }
+  return null;
+};
+const cost_of = (s) => {
+  const c = s?.cost ?? s?.data?.cost ?? s?.info?.cost ?? null;
+  return typeof c === "number" && Number.isFinite(c) && c >= 0 ? c : null;
+};
+
 // OpenCode 1: a function returning hooks, one object with a key per event.
 export const Fael = async ({ client, directory }) => {
   // session start as RFC 3339 — the `session` string stop needs, and the same
   // string edit sends so both key one edit list
   const starts = new Map();
   const parents = new Map();
+  const models = new Map();
   const start = async (id) => {
     if (!starts.has(id)) {
       let t = Date.now();
       let p = null;
+      let m = null;
       try {
         const s = await client.session.get({ path: { id } });
         t = s.data?.time?.created ?? t;
         p = parent_of(s.data) ?? null;
+        m = model_of(s);
       } catch {}
       starts.set(id, new Date(t).toISOString());
       parents.set(id, p);
+      models.set(id, m);
     }
     return starts.get(id);
+  };
+  // the cached model for tool/session hooks (no fetch on the hot path); stop
+  // refreshes both model and cost from the server (fresh totals)
+  const model = async (id) => {
+    await start(id);
+    return models.get(id) ?? null;
+  };
+  const fresh = async (id) => {
+    try {
+      const s = await client.session.get({ path: { id } });
+      const m = model_of(s);
+      if (m) models.set(id, m);
+      return { model: models.get(id) ?? null, cost: cost_of(s) };
+    } catch {
+      return { model: models.get(id) ?? null, cost: null };
+    }
   };
   const briefs = new Map();
   // the user line (Reply.notice) goes to a toast, never into the agent's
@@ -168,7 +213,7 @@ export const Fael = async ({ client, directory }) => {
       const id = input?.sessionID;
       if (!id) return;
       if (!briefs.has(id)) {
-        const r = hook("session-start", { cwd: directory, session: await start(id) });
+        const r = hook("session-start", { cwd: directory, session: await start(id), model: await model(id) });
         say(r);
         briefs.set(id, r.context ?? "");
       }
@@ -195,6 +240,7 @@ export const Fael = async ({ client, directory }) => {
         const r = hook("search", {
           cwd: directory,
           session,
+          model: await model(input.sessionID),
           tool: input.tool,
           tool_input: input.args ?? {},
           tool_response: output?.output ?? output ?? {},
@@ -206,7 +252,7 @@ export const Fael = async ({ client, directory }) => {
       const event = input.tool === "read" ? "read" : EDIT.has(input.tool) ? "edit" : null;
       const files = paths(input.tool, input.args);
       if (!event || files.length === 0) return;
-      const r = hook(event, { cwd: directory, session, files });
+      const r = hook(event, { cwd: directory, session, model: await model(input.sessionID), files });
       if (r.context) output.output += `\n\n${r.context}`;
       say(r);
     },
@@ -224,7 +270,7 @@ export const Fael = async ({ client, directory }) => {
       if (event.type === "session.compacted") {
         const root = await root_of(id, starts, parents, (x) => client.session.get({ path: { id: x } }));
         if (!root) return;
-        const e = { cwd: directory, session: await start(id), source: "compact" };
+        const e = { cwd: directory, session: await start(id), model: await model(id), source: "compact" };
         briefs.set(id, hook("session-start", e).context ?? "");
         return;
       }
@@ -237,9 +283,12 @@ export const Fael = async ({ client, directory }) => {
         const m = await client.session.messages({ path: { id } });
         ({ text, reply } = stop_texts(m.data, true));
       } catch {}
+      const { model: m, cost: c } = await fresh(id);
       const r = hook("stop", {
         cwd: directory,
         session: await start(id),
+        model: m,
+        cost: c,
         text,
         reply,
         ...(root !== id ? { agent: root } : {}),
@@ -261,20 +310,40 @@ export default {
     // need, and the same string edit sends so both key one edit list
     const starts = new Map();
     const parents = new Map();
+    const models = new Map();
     const start = async (id) => {
       if (!starts.has(id)) {
         let t = Date.now();
         let p = null;
+        let m = null;
         try {
           const s = await ctx.session.get({ sessionID: id });
           const created = epoch(s?.time?.created);
           if (created) t = created;
           p = parent_of(s) ?? null;
+          m = model_of(s);
         } catch {}
         starts.set(id, new Date(t).toISOString());
         parents.set(id, p);
+        models.set(id, m);
       }
       return starts.get(id);
+    };
+    // the cached model for tool/session hooks (no fetch on the hot path); stop
+    // refreshes both model and cost from the server (fresh totals)
+    const model = async (id) => {
+      await start(id);
+      return models.get(id) ?? null;
+    };
+    const fresh = async (id) => {
+      try {
+        const s = await ctx.session.get({ sessionID: id });
+        const m = model_of(s);
+        if (m) models.set(id, m);
+        return { model: models.get(id) ?? null, cost: cost_of(s) };
+      } catch {
+        return { model: models.get(id) ?? null, cost: null };
+      }
     };
     const briefs = new Map();
 
@@ -296,7 +365,7 @@ export default {
       const id = event.sessionID;
       if (!id) return;
       if (!briefs.has(id)) {
-        const r = hook("session-start", { cwd: directory, session: await start(id) });
+        const r = hook("session-start", { cwd: directory, session: await start(id), model: await model(id) });
         say(id, r);
         briefs.set(id, r.context ?? "");
       }
@@ -313,7 +382,7 @@ export default {
       const id = event.sessionID;
       const text = event.prompt?.text;
       if (!id || !text) return;
-      const r = hook("prompt", { cwd: directory, session: await start(id), text });
+      const r = hook("prompt", { cwd: directory, session: await start(id), model: await model(id), text });
       if (r.context) event.prompt.text += `\n\n${r.context}`;
     });
 
@@ -372,6 +441,7 @@ export default {
         const r = hook("search", {
           cwd: directory,
           session,
+          model: await model(event.sessionID),
           tool: event.tool,
           tool_input: event.input ?? {},
           tool_response: event.status === "completed" ? (event.result ?? {}) : (event.error ?? {}),
@@ -383,7 +453,7 @@ export default {
       const name = event.tool === "read" ? "read" : EDIT.has(event.tool) ? "edit" : null;
       const files = paths(event.tool, event.input);
       if (!name || files.length === 0) return;
-      const r = hook(name, { cwd: directory, session, files });
+      const r = hook(name, { cwd: directory, session, model: await model(event.sessionID), files });
       append(event, r.context);
       say(event.sessionID, r);
     });
@@ -409,7 +479,7 @@ export default {
         // compaction dropped the pushed rows from context: `source: "compact"`
         // makes fael forget what it said there, so the next read tells them again
         if (event.type === "session.compacted") {
-          const e = { cwd: directory, session: await start(id), source: "compact" };
+          const e = { cwd: directory, session: await start(id), model: await model(id), source: "compact" };
           briefs.set(id, hook("session-start", e).context ?? "");
           continue;
         }
@@ -418,9 +488,12 @@ export default {
         try {
           ({ text, reply } = stop_texts(await ctx.session.context({ sessionID: id }), false));
         } catch {}
+        const { model: m, cost: c } = await fresh(id);
         say(id, hook("stop", {
           cwd: directory,
           session: await start(id),
+          model: m,
+          cost: c,
           text,
           reply,
           ...(root !== id ? { agent: root } : {}),

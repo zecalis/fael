@@ -12,6 +12,7 @@ mod db;
 pub(crate) mod elsewhere;
 mod pure;
 mod ready;
+mod report;
 mod scopes;
 
 /// A chunk's brief, as `chunk show` prints the fields core reads.
@@ -65,4 +66,5 @@ pub use pure::{
     overlap, registered, rules, shared,
 };
 pub use ready::{first_ready, kickoff_text, ready_in};
+pub use report::{mark_report, mark_report_session};
 pub use scopes::{Other, Scopes, scopes};
