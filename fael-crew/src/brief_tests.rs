@@ -105,8 +105,10 @@ fn the_brief_prints_the_plan_sections_once() {
             && t2.contains(
                 "\nb3b, before this, handed off:\n> board ships\nfiles it touched: a/x.rs, b/y.rs\n"
             )
-            && t2.contains("\nb3c, before this, handed off:\n> no files\n")
-            && t2.matches("files it touched").count() == 1,
+            && t2.contains(
+                "\nb3c, before this, handed off:\n> no files\nfiles it touched: none claimed\n"
+            )
+            && t2.matches("files it touched").count() == 2,
         "{t2}"
     );
     // a plan with no sections (inbox): the brief still prints

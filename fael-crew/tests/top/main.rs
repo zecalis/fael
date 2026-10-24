@@ -24,6 +24,7 @@ mod chunk_model;
 mod chunk_show_forms;
 mod chunk_verbs;
 mod dispatch;
+mod done_merged_pr;
 mod done_pr;
 mod done_scope;
 mod help_reach;

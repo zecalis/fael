@@ -200,13 +200,26 @@ pub(crate) fn done(
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
-    let diff = kept.or_else(|| touched(&r.root, &st, uid, branch.as_deref().or(here.branch)));
+    let mut diff = kept.or_else(|| touched(&r.root, &st, uid, branch.as_deref().or(here.branch)));
+    // issue 01M5QF7Q: no branch diff, a PR: the squash commit on the trunk is the work
+    let named = trunk.clone().or(head.clone());
+    let empty = |d: &Option<Vec<String>>| d.as_ref().is_none_or(|d| d.is_empty());
+    if empty(&diff)
+        && let (Some(t), Some(n)) = (&named, pr)
+    {
+        diff = crate::chunk_pr_files::merged_files(&r.root, t, n).or(diff);
+    }
+    let unclaimed = empty(&diff);
     let outside = diff.as_ref().map(|d| outside_text(r, &st, uid, d));
     if let Some(d) = &diff {
         let _ = st.claim(uid, d);
     }
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
+    if unclaimed && src.is_none() {
+        let t = named.as_deref().unwrap_or("the trunk");
+        print!("{}", crate::chunk_pr_files::none_claimed(t, pr));
+    }
     print!("{}", outside.unwrap_or_default());
     // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
     // ready — the agent judges, done never closes or bumps
