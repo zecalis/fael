@@ -27,19 +27,33 @@ pub fn overlap(a: &[String], b: &[String]) -> bool {
 /// The class of the overlap, if any: `Exact` wins as soon as one path names
 /// the same file on both sides, else `Prefix` for a dir covering a file.
 pub fn overlap_class(a: &[String], b: &[String]) -> Option<OverlapClass> {
-    let mut prefix = false;
+    overlap_how(a, b).map(|(c, _)| c)
+}
+
+/// The overlap with its witness path, if any: `Exact` returns the shared
+/// path (the `a` side), else `Prefix` returns the deeper path (the file the
+/// dir covers) — what the board shows as `overlaps_how[].path`.
+pub fn overlap_how(a: &[String], b: &[String]) -> Option<(OverlapClass, String)> {
     for x in a {
         for y in b {
             let (xt, yt) = (x.trim_end_matches('/'), y.trim_end_matches('/'));
             if xt == yt {
-                return Some(OverlapClass::Exact);
-            }
-            if under(x, y) || under(y, x) {
-                prefix = true;
+                return Some((OverlapClass::Exact, x.clone()));
             }
         }
     }
-    prefix.then_some(OverlapClass::Prefix)
+    let mut witness: Option<String> = None;
+    for x in a {
+        for y in b {
+            if under(x, y) || under(y, x) {
+                let deeper = if x.len() >= y.len() { x } else { y };
+                if witness.is_none() {
+                    witness = Some(deeper.clone());
+                }
+            }
+        }
+    }
+    witness.map(|p| (OverlapClass::Prefix, p))
 }
 
 /// `x` is `y` or below it on a `/` boundary.
@@ -77,6 +91,26 @@ mod tests {
         assert_eq!(overlap_class(&v(&["src/a.rs"]), &v(&["src/b.rs"])), None);
         assert_eq!(overlap_class(&v(&["src/a"]), &v(&["src/ab.rs"])), None);
         assert_eq!(overlap_class(&v(&[]), &v(&["src/"])), None);
+    }
+
+    #[test]
+    fn how_names_the_witness_path() {
+        use OverlapClass::{Exact, Prefix};
+        let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            overlap_how(&v(&["src/a.rs"]), &v(&["src/a.rs"])),
+            Some((Exact, "src/a.rs".to_string()))
+        );
+        // prefix: the deeper path (the file), whichever side holds it
+        assert_eq!(
+            overlap_how(&v(&["src/"]), &v(&["src/a.rs"])),
+            Some((Prefix, "src/a.rs".to_string()))
+        );
+        assert_eq!(
+            overlap_how(&v(&["src/a.rs"]), &v(&["src/"])),
+            Some((Prefix, "src/a.rs".to_string()))
+        );
+        assert_eq!(overlap_how(&v(&["src/a.rs"]), &v(&["src/b.rs"])), None);
     }
 
     #[test]

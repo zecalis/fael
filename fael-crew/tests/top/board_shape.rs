@@ -22,6 +22,7 @@ const CHUNK_KEYS: &[&str] = &[
     "blocked_by",
     "unblocks",
     "overlaps",
+    "overlaps_how",
     "pair",
     "stalled",
     "ended",
@@ -31,6 +32,7 @@ const CHUNK_KEYS: &[&str] = &[
     "handoff",
     "issues",
     "left",
+    "left_open",
     "stale",
     "owner_actions",
 ];
@@ -310,6 +312,8 @@ fn board_v1_shape() {
             "inbox" => c["state"] == "draft" && c["plan"] == "inbox",
             // a done chunk whose linked issue is still open: the issue names it
             "issue-open" => c["state"] == "done" && fixes_open(&b, &n["uid"]),
+            // a running chunk whose branch merged while it still runs
+            "merged" => c["state"] == "running",
             _ => true, // ponytail: an unknown kind is ignored by the app (b7 adds `ledger`)
         };
         assert!(ok, "needs_you {n}");

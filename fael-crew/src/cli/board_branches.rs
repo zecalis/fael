@@ -11,11 +11,11 @@ use std::path::Path;
 
 #[derive(Serialize)]
 pub(super) struct Branch {
-    name: String,
+    pub(super) name: String,
     /// `local` never pushed · `pushed` a live upstream of its own name · `merged` its content is on the base,
     /// or its upstream is gone (a merged PR the remote deleted)
-    state: &'static str,
-    chunks: Vec<String>,
+    pub(super) state: &'static str,
+    pub(super) chunks: Vec<String>,
 }
 
 /// Empty for a repo with no `origin/HEAD`: nothing to push to, nothing said.

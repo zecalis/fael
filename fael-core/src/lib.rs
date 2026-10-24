@@ -57,7 +57,7 @@ pub use log::{
     decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, read_imported,
     restore_row,
 };
-pub use overlap::{OverlapClass, overlap, overlap_class, under};
+pub use overlap::{OverlapClass, overlap, overlap_class, overlap_how, under};
 pub use query::{
     Abbrev, Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_HUB_PEEK, Cut, EXPAND_MAX, Filter, Focus,
     Hidden, KeyUse, MdRef, NO_ROW_WITH_ID, PLAN_KICKOFF_ROWS, PUSH_BACKGROUND, PUSH_HUB_PEEK,

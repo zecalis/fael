@@ -19,6 +19,7 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         blocked_by: Vec::new(),
         unblocks,
         overlaps: Vec::new(),
+        overlaps_how: Vec::new(),
         overlap_classes: Vec::new(),
         pair: Vec::new(),
         stalled: false,
@@ -29,6 +30,7 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         handoff: None,
         issues: vec![],
         left: vec![],
+        left_open: vec![],
         stale: vec![],
         owner_actions: Vec::new(),
         conflicts: None,
@@ -217,4 +219,88 @@ fn empty_repo_names_its_next_command_before_other_repos_rows() {
         "{t}"
     );
     assert!(t.contains("repos:"), "{t}");
+}
+
+#[test]
+fn merged_branch_puts_running_chunk_in_needs_you() {
+    use fael_crew::BoardRun;
+    let mut c = ready("r1", 0);
+    c.ready = false;
+    c.state = "running".into();
+    c.run = Some(BoardRun {
+        id: "R1".into(),
+        client: None,
+        session: None,
+        model: None,
+        worktree: None,
+        branch: Some("feat/x".into()),
+        pr: None,
+        out: None,
+        started: "2026-10-10T08:00:00Z".into(),
+        last_seen: None,
+        ended: None,
+        cost: None,
+        review: None,
+        joint: None,
+        partner: None,
+    });
+    let p = Project {
+        branches: vec![super::branches::Branch {
+            name: "feat/x".into(),
+            state: "merged",
+            chunks: Vec::new(),
+        }],
+        chunks: vec![c],
+        ..Project::named(Path::new(""))
+    };
+    let b = lists(String::new(), vec![&p]);
+    assert!(
+        b.needs_you
+            .iter()
+            .any(|n| n.kind == "merged" && n.uid == "r1"),
+        "{:?}",
+        b.needs_you
+            .iter()
+            .map(|n| (n.kind, &n.uid))
+            .collect::<Vec<_>>()
+    );
+    // a running chunk on a live branch is not merged
+    let mut c = ready("r2", 0);
+    c.ready = false;
+    c.state = "running".into();
+    c.run = Some(BoardRun {
+        id: "R2".into(),
+        client: None,
+        session: None,
+        model: None,
+        worktree: None,
+        branch: Some("feat/live".into()),
+        pr: None,
+        out: None,
+        started: "2026-10-10T08:00:00Z".into(),
+        last_seen: None,
+        ended: None,
+        cost: None,
+        review: None,
+        joint: None,
+        partner: None,
+    });
+    let p = Project {
+        branches: vec![super::branches::Branch {
+            name: "feat/live".into(),
+            state: "local",
+            chunks: Vec::new(),
+        }],
+        chunks: vec![c],
+        ..Project::named(Path::new(""))
+    };
+    let b = lists(String::new(), vec![&p]);
+    assert!(
+        b.needs_you.iter().all(|n| n.kind != "merged"),
+        "{:?}",
+        b.needs_you
+            .iter()
+            .map(|n| (n.kind, &n.uid))
+            .collect::<Vec<_>>()
+    );
 }
