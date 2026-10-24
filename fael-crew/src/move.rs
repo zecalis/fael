@@ -16,8 +16,8 @@ impl Store {
         let r = row(&tx, uid)?;
         if r.state == State::Running {
             return Err(format!(
-                "rejected: chunk {} is running — it moves once its run waits, is done or parked",
-                r.uid
+                "rejected: chunk {} is running — it moves once its run waits, is done or parked; try `fael chunk move {} --plan <plan>` then",
+                r.uid, r.uid
             ));
         }
         let key = "CASE WHEN app = '' THEN name ELSE app || '/' || name END";
@@ -44,10 +44,13 @@ impl Store {
             .optional()
             .map_err(err)?
             .ok_or(format!(
-                "rejected: no plan '{plan}' in this repo's crew.db — a chunk moves only between plans of one db"
+                "rejected: no plan '{plan}' in this repo's crew.db — a chunk moves only between plans of one db; try `fael plan list` to pick one"
             ))?;
         if pid == old {
-            return Err(format!("rejected: chunk {} is already in {to_key}", r.uid));
+            return Err(format!(
+                "rejected: chunk {} is already in {to_key}; try --plan <another-plan>",
+                r.uid
+            ));
         }
         if matches!(state.as_str(), "parked" | "done") {
             let back = if state == "parked" {
@@ -56,7 +59,7 @@ impl Store {
                 "undone"
             };
             return Err(format!(
-                "rejected: plan {to_key} is {state} — `fael plan {back} {to_key}` first, or pick an active plan"
+                "rejected: plan {to_key} is {state} — try `fael plan {back} {to_key}` first, or pick an active plan"
             ));
         }
         if let Some(l) = &label {
@@ -70,7 +73,7 @@ impl Store {
                 .map_err(err)?;
             if let Some(t) = taken {
                 return Err(format!(
-                    "rejected: label {l} is taken by chunk {t} in {to_key} — rename it first: `fael chunk edit {} --label <new>`",
+                    "rejected: label {l} is taken by chunk {t} in {to_key} — try `fael chunk edit {} --label <new>` first",
                     r.uid
                 ));
             }

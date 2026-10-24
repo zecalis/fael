@@ -98,8 +98,8 @@ fn show_prints_what_the_next_start_will() {
     assert_eq!(s.show(&a).unwrap().brief, "the brief");
     let e = s.show("nope").unwrap_err();
     assert!(e.contains("no chunk nope"), "{e}");
-    assert!(e.contains("copy a uid from `fael board`"), "{e}");
-    assert!(e.contains("`--plan <plan>`"), "{e}");
+    assert!(e.contains("try `fael board`"), "{e}");
+    assert!(e.contains("`fael plan export <plan>`"), "{e}");
 }
 
 #[test]

@@ -48,7 +48,7 @@ impl Store {
                 )
                 .map_err(|_| {
                     format!(
-                        "rejected: run {run} is not {uid}'s live run — it ended or never ran it"
+                        "rejected: run {run} is not {uid}'s live run — it ended or never ran it; try `fael chunk show {uid}` to find its live run"
                     )
                 })?,
             None => tx

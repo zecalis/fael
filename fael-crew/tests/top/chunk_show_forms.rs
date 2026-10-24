@@ -153,7 +153,7 @@ fn show_elsewhere_names_the_repo_that_holds_the_uid() {
     // an unknown uid still rejects as before, with no elsewhere line
     let (ok, _, err) = fael_in(&a, &state, &["chunk", "show", "01M9999999999999999999999"]);
     assert!(!ok && err.contains("no chunk"), "{err}");
-    assert!(err.contains("copy a uid from `fael board`"), "{err}");
+    assert!(err.contains("try `fael board`"), "{err}");
     assert!(!err.contains("lives in"), "{err}");
 
     // a dropped chunk says dropped

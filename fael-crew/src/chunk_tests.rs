@@ -230,7 +230,7 @@ fn a_data_wait_turns_ready_on_its_date_and_after_blocks() {
     assert!(s.wait(&m, "boss", "x", None, &[], &here("/b")).is_err());
     let ab = ["A".to_string(), "B".to_string()];
     let e = s.wait(&m, "data", "x", None, &ab, &here("/b")).unwrap_err();
-    assert_eq!(e, "rejected: --option needs --on owner");
+    assert_eq!(e, "rejected: --option needs --on owner; try --on owner");
 }
 
 #[test]

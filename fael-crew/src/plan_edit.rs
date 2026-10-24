@@ -21,7 +21,7 @@ impl Store {
     ) -> Result<(Vec<String>, i64), String> {
         if old.is_empty() {
             return Err(
-                "rejected: --replace needs the text to replace, not an empty string".into(),
+                "rejected: --replace needs the text to replace, not an empty string; try --replace \"<old>\" --with \"<new>\"".into(),
             );
         }
         // rev first: a writer between the two reads makes the bill's rev check reject as stale
@@ -32,7 +32,7 @@ impl Store {
         let Some(sec) = section::resolve(&secs, key) else {
             let keys: Vec<&str> = secs.iter().map(|r| r.key.as_str()).collect();
             return Err(format!(
-                "rejected: no section {key} — the plan has: {}",
+                "rejected: no section {key} — the plan has: {}; try --section <one of these>",
                 keys.join(", ")
             ));
         };
@@ -41,13 +41,13 @@ impl Store {
             1 => {}
             0 => {
                 return Err(format!(
-                    "rejected: {old:?} is not in {at} (0 matches) — copy it exactly from fael plan export {} --section {}",
+                    "rejected: {old:?} is not in {at} (0 matches) — try copying it exactly: `fael plan export {} --section {}`",
                     plan.name, sec.key
                 ));
             }
             n => {
                 return Err(format!(
-                    "rejected: {old:?} occurs {n} times in {at} — lengthen it until it matches once"
+                    "rejected: {old:?} occurs {n} times in {at} — try a longer passage until it matches once"
                 ));
             }
         }

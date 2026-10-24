@@ -19,7 +19,7 @@ pub(super) fn add_in(
 ) -> Result<(i64, String), String> {
     let title = f.title.as_deref().map(str::trim).unwrap_or_default();
     if title.is_empty() {
-        return Err("rejected: a chunk needs a title".into());
+        return Err("rejected: a chunk needs a title — try --title \"<headline>\"".into());
     }
     let scope = scope(f.scope.as_deref().unwrap_or_default())?;
     let reads = super::section::reads(f.reads.as_deref().unwrap_or_default())?;
@@ -50,7 +50,7 @@ pub(super) fn add_in(
         .optional()
         .map_err(err)?
         .ok_or(format!(
-            "rejected: no plan '{plan}' — `fael chunk add --plan inbox` takes new work"
+            "rejected: no plan '{plan}' — try `fael chunk add --plan inbox \"<title>\"` for new work"
         ))?;
     let brief = f.brief.as_deref().map(str::trim).filter(|b| !b.is_empty());
     let state = if brief.is_some() {
