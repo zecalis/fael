@@ -12,7 +12,7 @@ use std::path::Path;
 pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
     a.only(
         "chunk start",
-        &["client", "model", "run", "force", "no-worktree"],
+        &["client", "model", "run", "force", "no-worktree", "session"],
     )?;
     // the agent's own start: an agent that ends with `chunk done` in the same turn never
     // reaches a Stop that could stamp it (issue 01M4NXDQ). Not a launcher (`--run R`): it
@@ -20,11 +20,21 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     // ponytail: Claude Code's session env only; another client's when it has one
     // `FAEL_SESSION` first (the OpenCode shell.env hook sets it per command, fresher
     // than an inherited client var — session.rs `env_session` order).
-    let session = ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"]
-        .iter()
-        .filter_map(|k| std::env::var(k).ok())
-        .map(|s| s.trim().to_string())
-        .find(|s| !s.is_empty() && a.one("run").is_none());
+    // `--session` (MCP `chunk start`, hidden): the caller session when the MCP
+    // server's inherited env cannot name it — explicit wins, native ids only
+    // (an RFC3339 hook session is never stored; seen() writes last_seen-only).
+    let no_run = a.one("run").is_none();
+    let explicit = a
+        .one("session")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty() && no_run && fael_core::ts_ms(v).is_none());
+    let session = explicit.or_else(|| {
+        ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"]
+            .iter()
+            .filter_map(|k| std::env::var(k).ok())
+            .map(|s| s.trim().to_string())
+            .find(|s| !s.is_empty() && no_run)
+    });
     let o = Start {
         run: a.one("run"),
         client: a.one("client"),
