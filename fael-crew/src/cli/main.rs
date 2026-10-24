@@ -17,6 +17,7 @@ mod chunk_show;
 mod chunk_verbs;
 mod fael_bin;
 mod plan;
+mod start_session;
 mod sweep;
 
 use fael_core::help;
