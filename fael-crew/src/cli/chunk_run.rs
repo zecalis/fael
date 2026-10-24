@@ -90,6 +90,12 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     print!("{}", st.text());
     if let (Some(w), Some(j)) = (&o.with, o.joint) {
         println!("joint {} with {w} (run {})", j.as_str(), st.run);
+        if j == fael_crew::Joint::Pair {
+            println!(
+                "pair: work in {w}'s worktree and branch; pass --run {} to done",
+                st.run
+            );
+        }
     }
     // plan fael-row-retire c3: contracts and open decisions and notes on files under the
     // chunk's scope, verdicts ready — the agent judges, start never blocks. `fael` words them

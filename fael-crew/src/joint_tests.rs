@@ -80,6 +80,11 @@ fn pair_joins_the_partners_run_and_seat() {
     let st = s.start(&b, &with(&a, Joint::Pair), &here("/w2")).unwrap();
     assert_eq!(st.run, r);
     assert_eq!(col(&s, &b, "worktree").as_deref(), Some("/w1"));
+    // a second pair start under the same R is a clear refusal, not a sqlite error
+    let e = s
+        .start(&b, &with(&a, Joint::Pair), &here("/w2"))
+        .unwrap_err();
+    assert!(e.contains("already ran under run"), "{e}");
     assert_eq!(s.run_end(&r, None, "2026-10-11T10:00:00Z").unwrap(), 2);
 }
 

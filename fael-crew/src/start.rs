@@ -255,6 +255,9 @@ impl Store {
         // a pair is one R in the partner's worktree and branch; any other start is its own R
         let seat = partner.as_ref().filter(|p| p.mode == Joint::Pair);
         let (mut branch, mut base) = (here.branch.map(String::from), o.base.clone());
+        if let Some(p) = seat {
+            joint::no_rejoin(&tx, &first, p)?;
+        }
         match seat {
             Some(p) => {
                 (run, wt, branch, base) = (

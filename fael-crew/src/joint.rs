@@ -142,6 +142,25 @@ pub(super) fn gate(
     ))
 }
 
+/// One run row per (R, chunk): a chunk that already ran under the partner's R cannot join it
+/// again — it starts alone, or in a lane.
+pub(super) fn no_rejoin(tx: &Transaction, first: &Row, p: &Partner) -> Result<(), String> {
+    let had: bool = tx
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM run WHERE start = ?1 AND chunk = ?2)",
+            rusqlite::params![p.run, first.id],
+            |r| r.get(0),
+        )
+        .map_err(err)?;
+    if had {
+        return Err(format!(
+            "rejected: chunk {} already ran under run {} — try `fael chunk start {} --with {} --as lane`",
+            first.uid, p.run, first.uid, p.uid
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 #[path = "joint_tests.rs"]
 mod tests;
