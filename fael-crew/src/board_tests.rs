@@ -202,6 +202,29 @@ fn add_heals_a_done_inbox() {
     );
 }
 
+/// A dropped or parked chunk's `handoff` carries the owner's close reason, not
+/// null — the reason used to live only in the event feed, so board JSON and
+/// `chunk show --json` read `handoff: null` on exactly the chunks that had one.
+#[test]
+fn a_closed_chunk_hands_off_its_close_reason() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("b"));
+    let b = add(&mut s, "b", Some("b"));
+    let c = add(&mut s, "c", Some("b"));
+    s.owner(&a, Owner::Drop, Some("out of scope"), NOW).unwrap();
+    s.owner(&b, Owner::Park, Some("later"), NOW).unwrap();
+    let bd = s.board("2026-10-11", NOW).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|c| c.uid == u).unwrap();
+    assert_eq!(by(&a).state, "dropped");
+    assert_eq!(by(&a).handoff.as_ref().unwrap().text, "out of scope");
+    assert_eq!(by(&b).state, "parked");
+    assert_eq!(by(&b).handoff.as_ref().unwrap().text, "later");
+    assert!(
+        by(&c).handoff.is_none(),
+        "an open chunk gains no close text"
+    );
+}
+
 /// Plan `owner_actions` the board serves: state moves plus `drop` only when
 /// the plan holds no chunk and no child (the app's undone/drop buttons).
 #[test]

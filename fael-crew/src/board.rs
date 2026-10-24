@@ -145,7 +145,9 @@ pub struct Run {
     pub review: Option<String>,
 }
 
-/// The agent's last word on the chunk: its `done` / `wait` / `after` text.
+/// The last word on the chunk: the agent's `done` / `wait` / `after` text,
+/// or — when the chunk is dropped or parked — the owner's close text
+/// (`chunk drop|park "<reason>"`), so the reason survives in JSON.
 #[derive(Debug, Serialize)]
 pub struct Handoff {
     pub at: String,
@@ -170,7 +172,7 @@ impl Store {
     pub fn board(&self, today: &str, stale: &str) -> Result<Board, String> {
         let plans = self.board_plans()?;
         let runs = self.latest_runs()?;
-        let handoffs = self.handoffs()?;
+        let (handoffs, closes) = (self.handoffs()?, self.closes()?);
         let mut q = self
             .conn
             .prepare(
@@ -255,10 +257,11 @@ impl Store {
             .collect::<Result<Vec<_>, _>>()
             .map_err(err)?;
         let mut handoffs = handoffs;
+        let mut closes = closes;
         let mut chunks = Vec::with_capacity(rows.len());
         let mut ids = Vec::with_capacity(rows.len());
         for (id, mut c) in rows {
-            c.handoff = handoffs.remove(&c.uid);
+            c.handoff = handoff_for(&mut handoffs, &mut closes, &c);
             c.issues = super::issue::of(&self.conn, id)?;
             self.derive(id, &mut c, today, stale)?;
             ids.push(id);
@@ -423,6 +426,50 @@ impl Store {
         .collect::<Result<_, _>>()
         .map_err(err)
     }
+
+    /// uid → the owner's latest `drop` / `park` reason. Read beside `handoffs` so a
+    /// dropped or parked chunk's `handoff` carries its reason instead of null.
+    fn closes(&self) -> Result<HashMap<String, Handoff>, String> {
+        let mut q = self
+            .conn
+            .prepare(
+                "SELECT chunk_uid, at, text FROM event WHERE id IN (
+                   SELECT MAX(id) FROM event
+                   WHERE by = 'owner' AND to_state IN ('dropped', 'parked')
+                     AND text IS NOT NULL AND text != ''
+                   GROUP BY chunk_uid)",
+            )
+            .map_err(err)?;
+        q.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                Handoff {
+                    at: r.get(1)?,
+                    text: r.get(2)?,
+                },
+            ))
+        })
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)
+    }
+}
+
+/// The `handoff` a chunk shows: a dropped or parked chunk's reason is the
+/// owner's close text, not the agent's older word — so `handoff` never reads
+/// null on exactly the chunks that have a reason. Anything else keeps the
+/// agent's last word.
+fn handoff_for(
+    handoffs: &mut HashMap<String, Handoff>,
+    closes: &mut HashMap<String, Handoff>,
+    c: &Chunk,
+) -> Option<Handoff> {
+    if matches!(c.state.as_str(), "dropped" | "parked")
+        && let Some(close) = closes.remove(&c.uid)
+    {
+        return Some(close);
+    }
+    handoffs.remove(&c.uid)
 }
 
 #[cfg(test)]

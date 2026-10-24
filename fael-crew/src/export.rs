@@ -178,6 +178,18 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
              ORDER BY id",
         )
         .map_err(err)?;
+    // the owner's close reason on a dropped or parked chunk: without it the
+    // reason lives only in the event feed, and the markdown reads bare `dropped`
+    let mut closed = s
+        .conn
+        .prepare(
+            "SELECT substr(at, 1, 10), text FROM event
+              WHERE chunk_uid = ?1 AND by = 'owner'
+                AND to_state IN ('dropped', 'parked')
+                AND text IS NOT NULL AND text != ''
+              ORDER BY id DESC LIMIT 1",
+        )
+        .map_err(err)?;
     let mut rows: Vec<[String; 15]> = q
         .query_map([plan], cols::<15>)
         .map_err(err)?
@@ -216,6 +228,13 @@ fn chunks(s: &Store, plan: i64, o: &mut String) -> Result<(), String> {
         if brief != title {
             for l in brief.lines() {
                 let _ = writeln!(o, "  > {l}");
+            }
+        }
+        if matches!(state.as_str(), "dropped" | "parked") {
+            let mut q = closed.query_map([uid.as_str()], cols::<2>).map_err(err)?;
+            if let Some(n) = q.next() {
+                let [day, text] = n.map_err(err)?;
+                let _ = writeln!(o, "  > {state} {day}: {}", text.replace('\n', " "));
             }
         }
         for n in notes.query_map([uid.as_str()], cols::<2>).map_err(err)? {
