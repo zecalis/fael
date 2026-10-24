@@ -50,6 +50,8 @@ pub(crate) fn add_wait(
         base: None,
         shared: Vec::new(),
         stale: String::new(),
+        with: None,
+        joint: None,
     };
     let here = || Here {
         worktree: wt,

@@ -307,7 +307,10 @@ impl Store {
             .prepare(
                 "SELECT p.name || '/' || COALESCE(c.label, c.uid), c.scope FROM chunk c
                  JOIN plan p ON p.id = c.plan WHERE c.uid != ?1 AND c.scope IS NOT NULL
-                 AND c.state NOT IN ('done', 'replaced', 'dropped') ORDER BY c.seq",
+                 AND c.state NOT IN ('done', 'replaced', 'dropped')
+                 AND c.uid NOT IN (SELECT r.partner FROM run r JOIN chunk m ON m.id = r.chunk
+                   WHERE m.uid = ?1 AND r.partner IS NOT NULL UNION SELECT c2.uid FROM run r
+                   JOIN chunk c2 ON c2.id = r.chunk WHERE r.partner = ?1) ORDER BY c.seq",
             )
             .map_err(err)?
             .query_map([uid], |q| Ok((q.get(0)?, q.get(1)?)))

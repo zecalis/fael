@@ -57,11 +57,16 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// (issue 01M4TVDGG: a lane stacked on another's branch).
 /// `run.review`: the fresh review's outcome on the run's work, `chunk done --review
 /// clean|fixed|failed` — apart from the old `verdict` column, unused now (issue 01M4XN3S).
+/// `run.joint` / `run.partner`: `chunk start --with <partner> --as pair|lane|follow` (issue
+/// 01M5PB7Z) — the mode and the partner chunk's uid; NULL = a solo start. A column, since
+/// `edge.kind`'s CHECK cannot change in place.
 /// `chunk.client_hint`: the client the planner picked (`chunk add|edit --client`), which
 /// `approve` falls back to; epoch v8 dropped an unwired one (issue 01M4XM98).
 /// `plan.parent`: the name of the umbrella plan of the same app, one level (issue 01M51KW0).
 pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("plan", "parent", "TEXT"),
+    ("run", "joint", "TEXT"),
+    ("run", "partner", "TEXT"),
     ("chunk", "client_hint", "TEXT"),
     ("chunk", "reads", "TEXT"),
     ("chunk", "wait_options", "TEXT"),

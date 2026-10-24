@@ -8,11 +8,12 @@ use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
 use super::holder::{
-    clashes, end_in_worktree, holder, holder_detail, holder_worktree, members, ready_paired,
+    end_in_worktree, holder, holder_detail, holder_worktree, members, ready_paired,
 };
-use super::lookup::{lookup, no_chunk};
+use super::joint::{self, Joint};
 use super::ready::Ready;
-use super::section::{self, Row as Section};
+use super::section::Row as Section;
+use super::start_brief::brief;
 use super::store::{Store, err};
 use rusqlite::{OptionalExtension, Transaction, params};
 
@@ -37,6 +38,9 @@ pub struct Start {
     /// `.fael/shared` paths: nobody's claim, never an overlap (as on the board)
     pub shared: Vec<String>,
     pub stale: String, // a live run last seen before this is `stalled` in a clash line
+    /// `--with`: the chunk whose live run this start joins as `joint` (issue 01M5PB7Z)
+    pub with: Option<String>,
+    pub joint: Option<Joint>,
 }
 
 /// One claimed chunk, with what its brief needs.
@@ -176,14 +180,68 @@ fn reuse_live(
     Ok(Some(Started { run: live, chunks }))
 }
 
+/// The event text of a start past an unmet after (`--force` only); `None` = it was ready.
+fn skipped(
+    tx: &Transaction,
+    id: i64,
+    m: &str,
+    pair: &str,
+    ms: &[String],
+    today: &str,
+    force: bool,
+) -> Result<Option<String>, String> {
+    Ok(match ready_paired(tx, id, today, ms)? {
+        Ready::Yes => None,
+        Ready::Blocked(u) => {
+            let w: Vec<_> = u.into_iter().map(|u| u.uid.unwrap_or(u.what)).collect();
+            if !force {
+                return Err(format!(
+                    "rejected: chunk {m}{pair} is blocked — after {} first, or try `fael chunk start {m} --force` to start it anyway",
+                    w.join(", ")
+                ));
+            }
+            Some(format!("started by --force past after {}", w.join(", ")))
+        }
+        Ready::No(why) => {
+            return Err(format!(
+                "rejected: chunk {m}{pair} is not ready: {why} — try `fael chunk show {m}`"
+            ));
+        }
+    })
+}
+
+/// One run row. `loc` = (worktree, branch, base); `with` = (joint mode, partner uid).
+fn insert_run(
+    tx: &Transaction,
+    run: &str,
+    chunk: i64,
+    o: &Start,
+    loc: (Option<&str>, Option<&str>, Option<&str>),
+    with: Option<(&str, &str)>,
+    now: &str,
+) -> Result<(), String> {
+    // issue 01M4XN3S: no --client/--model = the approval's, else the chunk's hint
+    tx.execute(
+        "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base, joint, partner)
+         SELECT ?1, id, COALESCE(?3, approved_client, client_hint),
+                COALESCE(?4, approved_model, model_hint), ?5, ?6, ?7, ?8, ?9, ?10, ?11
+         FROM chunk WHERE id = ?2",
+        params![
+            run, chunk, o.client, o.model, loc.0, loc.1, now, o.session, loc.2,
+            with.map(|w| w.0), with.map(|w| w.1)
+        ],
+    )
+    .map_err(err)?;
+    Ok(())
+}
+
 impl Store {
     pub fn start(&mut self, uid: &str, o: &Start, here: &Here) -> Result<Started, String> {
-        let run = o.run.clone().unwrap_or_else(fael_core::ulid);
+        let mut run = o.run.clone().unwrap_or_else(fael_core::ulid);
         let today = &here.now[..here.now.len().min(10)];
-        let wt = (!o.no_worktree).then_some(here.worktree);
+        let mut wt = (!o.no_worktree).then_some(here.worktree);
         let tx = tx(self)?;
         let first = row(&tx, uid)?;
-        check_fresh(&tx, &run)?;
         let mut claim = Vec::new();
         let ms = members(&tx, first.id)?;
         // a retry from the session that already holds it is success, not a
@@ -193,13 +251,27 @@ impl Store {
             tx.commit().map_err(err)?;
             return Ok(reused);
         }
-        let clash = clashes(&tx, &ms, &o.shared, &o.stale)?;
-        if !clash.is_empty() && !o.force {
-            return Err(format!(
-                "rejected: chunk {uid} shares files with a running chunk — {}; try `fael chunk start {uid} --force` to start it anyway",
-                clash.join("; ")
-            ));
+        let partner = joint::gate(&tx, &first, &ms, o)?;
+        // a pair is one R in the partner's worktree and branch; any other start is its own R
+        let seat = partner.as_ref().filter(|p| p.mode == Joint::Pair);
+        let (mut branch, mut base) = (here.branch.map(String::from), o.base.clone());
+        match seat {
+            Some(p) => {
+                (run, wt, branch, base) = (
+                    p.run.clone(),
+                    p.worktree.as_deref(),
+                    p.branch.clone(),
+                    p.base.clone(),
+                )
+            }
+            None => check_fresh(&tx, &run)?,
         }
+        let joined = partner.as_ref().map(joint::Partner::text);
+        // the handshake rides on the first member's start event
+        let said = |m: &str, t: Option<String>| match (&joined, m == first.uid) {
+            (Some(j), true) => Some(t.map_or_else(|| j.clone(), |t| format!("{t}; {j}"))),
+            _ => t,
+        };
         for m in ms.iter().cloned() {
             let r = row(&tx, &m)?;
             let pair = if m == first.uid {
@@ -229,57 +301,38 @@ impl Store {
                     }
                     None => format!("started again by run {run}: the last run ended"),
                 };
-                set(&tx, &r, State::Running, "agent", Some(&text), here.now)?;
+                set(
+                    &tx,
+                    &r,
+                    State::Running,
+                    "agent",
+                    said(&m, Some(text)).as_deref(),
+                    here.now,
+                )?;
             } else {
                 // a chunk whose work shipped before its after was met still needs a run
                 // to reach done: `--force` starts it, and the event says what it skipped
-                let text = match ready_paired(&tx, r.id, today, &ms)? {
-                    Ready::Yes => None,
-                    Ready::Blocked(u) => {
-                        let w: Vec<_> = u.into_iter().map(|u| u.uid.unwrap_or(u.what)).collect();
-                        if !o.force {
-                            return Err(format!(
-                                "rejected: chunk {m}{pair} is blocked — after {} first, or try `fael chunk start {m} --force` to start it anyway",
-                                w.join(", ")
-                            ));
-                        }
-                        Some(format!("started by --force past after {}", w.join(", ")))
-                    }
-                    Ready::No(why) => {
-                        return Err(format!(
-                            "rejected: chunk {m}{pair} is not ready: {why} — try `fael chunk show {m}`"
-                        ));
-                    }
-                };
-                set(&tx, &r, State::Running, "agent", text.as_deref(), here.now)?;
+                let text = skipped(&tx, r.id, &m, &pair, &ms, today, o.force)?;
+                set(
+                    &tx,
+                    &r,
+                    State::Running,
+                    "agent",
+                    said(&m, text).as_deref(),
+                    here.now,
+                )?;
             }
             claim.push((r, was));
         }
         // one start per worktree: a run of another chunk still live here is an agent that left
-        if let Some(w) = wt {
+        if let (Some(w), None) = (wt, seat) {
             end_in_worktree(&tx, w, here.now)?;
         }
         let mut chunks = Vec::new();
         for (r, was) in claim {
-            // issue 01M4XN3S: no --client/--model = the approval's, else the chunk's hint
-            tx.execute(
-                "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base)
-                 SELECT ?1, id, COALESCE(?3, approved_client, client_hint),
-                        COALESCE(?4, approved_model, model_hint), ?5, ?6, ?7, ?8, ?9
-                 FROM chunk WHERE id = ?2",
-                params![
-                    run,
-                    r.id,
-                    o.client,
-                    o.model,
-                    wt,
-                    wt.and(here.branch),
-                    here.now,
-                    o.session,
-                    wt.and(o.base.as_deref())
-                ],
-            )
-            .map_err(err)?;
+            let loc = (wt, wt.and(branch.as_deref()), wt.and(base.as_deref()));
+            let with = partner.as_ref().map(|p| (p.mode.as_str(), p.uid.as_str()));
+            insert_run(&tx, &run, r.id, o, loc, with, here.now)?;
             unwait(&tx, r.id)?;
             let mut b = brief(&tx, r.id, 1, Some(&run))?;
             b.resume = was;
@@ -288,110 +341,6 @@ impl Store {
         tx.commit().map_err(err)?;
         Ok(Started { run, chunks })
     }
-}
-
-impl Store {
-    /// `fael chunk show <uid|label>`: the brief, owner answers and notes the next start
-    /// prints — for a running chunk, the ones its start printed. Read-only, md plans too.
-    pub fn show(&self, key: &str) -> Result<Brief, String> {
-        let tx = self.conn.unchecked_transaction().map_err(err)?;
-        let (id, _, state, ..) = lookup(&tx, key)?.ok_or_else(|| no_chunk(key))?;
-        brief(&tx, id, u32::from(state == "running"), None)
-    }
-}
-
-/// `skip` = how many starts back the answers and notes count from: 1 inside a start (its
-/// own event is the newest), 0 for the start still to come. `start` = this start's R:
-/// the brief names the model it runs; None = the next start's (latest run, approval, hint).
-fn brief(tx: &Transaction, id: i64, skip: u32, start: Option<&str>) -> Result<Brief, String> {
-    let (mut b, pid, reads) = tx
-        .query_row(
-            "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope,
-                    CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END,
-                    p.title, p.id, COALESCE(c.reads, '')
-             FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
-            [id],
-            |r| {
-                let b = Brief {
-                    uid: r.get(0)?,
-                    label: r.get(1)?,
-                    title: r.get(2)?,
-                    brief: r.get(3)?,
-                    size: r.get(4)?,
-                    model: r.get(5)?,
-                    scope: r.get(6)?,
-                    plan: r.get(7)?,
-                    plan_title: r.get(8)?,
-                    sections: vec![],
-                    reads: vec![],
-                    said: vec![],
-                    notes: vec![],
-                    after: vec![],
-                    by_file: vec![],
-                    by_file_more: 0,
-                    resume: None,
-                    issues: vec![],
-                };
-                Ok((b, r.get::<_, i64>(9)?, r.get::<_, String>(10)?))
-            },
-        )
-        .map_err(err)?;
-    // the model the agent runs: this start's run row, else the latest run's, the
-    // approval's, the hint — a `--model` override or approval never prints stale
-    b.model = match start {
-        Some(r) => tx
-            .query_row(
-                "SELECT model FROM run WHERE start = ?1 AND chunk = ?2",
-                rusqlite::params![r, id],
-                |row| row.get(0),
-            )
-            .map_err(err)?,
-        None => tx
-            .query_row(
-                "SELECT COALESCE((SELECT model FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1),
-                                approved_model, model_hint)
-                 FROM chunk WHERE id = ?1",
-                [id],
-                |row| row.get(0),
-            )
-            .map_err(err)?,
-    };
-    b.sections = section::list(tx, pid)?;
-    b.reads = reads
-        .lines()
-        .map(|r| Ok((r.to_string(), section::read(tx, pid, r)?)))
-        .collect::<Result<_, String>>()?;
-    // answers and notes after the start before this one (this start's own event is the
-    // newest; a note on a running chunk is not a start)
-    let since = |who: &str| {
-        format!(
-            "SELECT text FROM event
-             WHERE chunk_uid = ?1 AND {who} AND text IS NOT NULL
-               AND id > COALESCE((SELECT id FROM event WHERE chunk_uid = ?1
-                                    AND to_state = 'running' AND by != 'note'
-                                  ORDER BY id DESC LIMIT 1 OFFSET {skip}), 0)
-             ORDER BY id"
-        )
-    };
-    b.said = texts(
-        tx,
-        &since("by = 'owner' AND to_state = 'open' AND from_state IN ('waiting', 'review')"),
-        &b.uid,
-    )?;
-    b.notes = texts(tx, &since("by = 'note'"), &b.uid)?;
-    b.issues = super::issue::of(tx, id)?;
-    b.after = super::handoff::after(tx, id)?;
-    (b.by_file, b.by_file_more) = super::handoff::by_file(tx, id, b.scope.as_deref())?;
-    Ok(b)
-}
-
-fn texts(tx: &Transaction, sql: &str, uid: &str) -> Result<Vec<String>, String> {
-    tx.prepare(sql)
-        .map_err(err)?
-        .query_map([uid], |r| r.get(0))
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)
 }
 
 #[cfg(test)]

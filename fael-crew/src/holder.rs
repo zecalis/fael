@@ -197,35 +197,21 @@ fn clashes_in(
     Ok(out)
 }
 
-/// The class of each live-run clash, by chunk uid — what o2's joint command
-/// reads to offer pair (exact) vs lane (prefix). Judges nothing.
-#[allow(dead_code)] // o2 reads this; o1's tests pin it meanwhile
-pub(super) fn clash_classes(
-    tx: &Transaction,
-    ms: &[String],
-    shared: &[String],
-    stale: &str,
-) -> Result<Vec<(String, OverlapClass)>, String> {
-    Ok(clashes_in(tx, ms, shared, stale)?
-        .into_iter()
-        .map(|c| (c.uid, c.class))
-        .collect())
-}
-
 /// Live-run chunks of the same app, outside the pair `ms`, whose scope (less `shared`) shares
-/// a path prefix with a member's (the board's `overlap` rule): one `uid (plan/label) [class]: path, … —
-/// since T · last seen T` line each, plus `· stalled` when the run is older than `stale` (the
-/// board's rule). Judges nothing.
-pub(super) fn clashes(
+/// a path prefix with a member's (the board's `overlap` rule): `(uid, class, line)` each, the
+/// line `uid (plan/label): [class] path, … — since T · last seen T` plus `· stalled` when the
+/// run is older than `stale` (the board's rule); the class lets o2's joint start offer pair
+/// (exact) vs lane (prefix). Judges nothing.
+pub(super) fn clash_report(
     tx: &Transaction,
     ms: &[String],
     shared: &[String],
     stale: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<(String, OverlapClass, String)>, String> {
     Ok(clashes_in(tx, ms, shared, stale)?
         .into_iter()
         .map(|c| {
-            format!(
+            let line = format!(
                 "{} ({}/{}): [{}] {} — since {} · last seen {}{}",
                 c.uid,
                 c.plan,
@@ -235,7 +221,8 @@ pub(super) fn clashes(
                 c.started,
                 c.seen.as_deref().unwrap_or("never"),
                 if c.stalled { " · stalled" } else { "" }
-            )
+            );
+            (c.uid, c.class, line)
         })
         .collect())
 }
@@ -258,6 +245,26 @@ mod tests {
         c
     }
 
+    fn clashes(
+        tx: &Transaction,
+        ms: &[String],
+        shared: &[String],
+        stale: &str,
+    ) -> Result<Vec<String>, String> {
+        Ok(clash_report(tx, ms, shared, stale)?
+            .into_iter()
+            .map(|c| c.2)
+            .collect())
+    }
+
+    fn classes(tx: &Transaction, b: &str, stale: &str) -> Vec<(String, OverlapClass)> {
+        clash_report(tx, &[b.to_string()], &[], stale)
+            .unwrap()
+            .into_iter()
+            .map(|(u, c, _)| (u, c))
+            .collect()
+    }
+
     #[test]
     fn clash_lines_name_exact_and_prefix() {
         let mut s = Store::open_in_memory().unwrap();
@@ -277,7 +284,7 @@ mod tests {
                 lines[0]
             );
             assert_eq!(
-                clash_classes(&tx, std::slice::from_ref(&b), &[], stale).unwrap(),
+                classes(&tx, &b, stale),
                 vec![(a.clone(), OverlapClass::Prefix)]
             );
             // shared paths are nobody's claim: the same check stays silent
@@ -298,7 +305,7 @@ mod tests {
         )
         .unwrap();
         let tx = s.conn.unchecked_transaction().unwrap();
-        let mut classes = clash_classes(&tx, std::slice::from_ref(&b), &[], stale).unwrap();
+        let mut classes = classes(&tx, &b, stale);
         classes.sort_by(|x, y| x.0.cmp(&y.0));
         // uids sort randomly when two rows share one ms (Windows clock), so
         // the expectation sorts too — creation order is not uid order.
