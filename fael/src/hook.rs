@@ -22,6 +22,7 @@
 //! turn through) — a memory tool must never break the agent's tool call.
 
 mod also;
+mod asked;
 mod asks;
 mod askstats;
 mod autosync;

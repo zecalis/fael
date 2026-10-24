@@ -23,7 +23,7 @@ fn edit(d: &Path, session: &str, file: &str) -> String {
 }
 
 /// The full id `add` just filed (its stdout starts with it).
-fn add(d: &Path, kind: &str, text: &str, files: &str) -> String {
+pub(super) fn add(d: &Path, kind: &str, text: &str, files: &str) -> String {
     let (ok, out, err) = fael(d, &["add", kind, text, "--files", files, "--force"], "");
     assert!(ok, "{err}");
     out.split_whitespace().next().unwrap().to_string()
@@ -39,7 +39,7 @@ fn named(out: &str) -> Vec<&str> {
 }
 
 /// An edit that may say nothing: the hook's context, empty when it was silent.
-fn edit_or_silent(d: &Path, session: &str, file: &str) -> String {
+pub(super) fn edit_or_silent(d: &Path, session: &str, file: &str) -> String {
     let input = format!(
         r#"{{"cwd":{},"session_id":"{session}","tool_input":{{"file_path":{}}}}}"#,
         json(d),
@@ -263,7 +263,8 @@ fn recreated_path_is_read_as_itself() {
 }
 
 /// An edit hint names a row once per session: the next edit of the same file
-/// would only repeat the ask. A new session asks again.
+/// would only repeat the ask. A new session stays silent until the row changes
+/// (`ask_sessions.rs`).
 #[test]
 fn a_named_row_is_not_named_twice_in_a_session() {
     let d = repo();
@@ -274,7 +275,8 @@ fn a_named_row_is_not_named_twice_in_a_session() {
     std::fs::write(d.join("src/a.rs"), "// v3\n").unwrap();
     let again = edit_or_silent(&d, "s1", "src/a.rs");
     assert!(!again.contains("changed since"), "{again}");
-    assert!(edit_or_silent(&d, "s2", "src/a.rs").contains("changed since"));
+    let later = edit_or_silent(&d, "s2", "src/a.rs");
+    assert!(!later.contains("changed since"), "{later}");
 }
 
 /// An open issue with no verdict gets its ready close once per session too.

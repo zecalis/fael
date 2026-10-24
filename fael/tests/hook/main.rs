@@ -17,6 +17,7 @@
 //! a fix phrase or a `fix:` commit with nothing filed).
 
 mod adopted;
+mod ask_sessions;
 mod autosync;
 mod autoupdate;
 mod changed_hint;

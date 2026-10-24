@@ -63,7 +63,6 @@ fael: this turn — reminded 10 (01K00000000000000000AAA002, 01K0000000000000000
 context:
 fael mem for src/b.rs (1 of 15):
 - [01K00000000000000000B] issue b leaks a handle
-fael: done with one? fael close 01K00000000000000000B "<why>"
 fael note: this session mentioned a possible problem ("out of sync") — file an issue if it holds up: fael add issue "<what is at risk>" --files src/b.rs
 
 ## 27 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001'"}}
@@ -88,5 +87,5 @@ bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-15 lines · ~653 tokens
+15 lines · ~632 tokens
 silent-start edit in-context edit in-context edit in-context edit silent-start shell-edit outcome search silent-start silent-start edit
