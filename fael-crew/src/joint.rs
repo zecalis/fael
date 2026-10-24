@@ -142,6 +142,39 @@ pub(super) fn gate(
     ))
 }
 
+impl super::store::Store {
+    /// `--as follow` output: the read-only contract (advice — fael blocks no edit) and the
+    /// partner's handoff so far: its checkpoint notes since its last start, else its last
+    /// done / review word. Empty handoff is said, never guessed.
+    pub fn follow_text(&self, partner: &str) -> Result<String, String> {
+        let notes: Vec<String> = self
+            .conn
+            .prepare(
+                "SELECT text FROM event WHERE chunk_uid = ?1 AND by = 'note' AND text IS NOT NULL
+                   AND id > COALESCE((SELECT MAX(id) FROM event WHERE chunk_uid = ?1
+                                        AND to_state = 'running' AND by != 'note'), 0)
+                 UNION ALL
+                 SELECT text FROM event WHERE id = (SELECT MAX(id) FROM event WHERE chunk_uid = ?1
+                   AND by = 'agent' AND to_state IN ('done', 'review')) AND text != ''
+                 ORDER BY 1",
+            )
+            .and_then(|mut q| q.query_map([partner], |r| r.get(0))?.collect())
+            .map_err(err)?;
+        let mut o = format!(
+            "follow: read-only — read {partner}'s work, edit nothing in its scope (advice; fael blocks no edit)\n"
+        );
+        if notes.is_empty() {
+            o += &format!("{partner} has handed off nothing yet\n");
+        } else {
+            o += &format!("{partner} handed off:\n");
+            for n in notes {
+                o += &format!("> {n}\n");
+            }
+        }
+        Ok(o)
+    }
+}
+
 /// One run row per (R, chunk): a chunk that already ran under the partner's R cannot join it
 /// again — it starts alone, or in a lane.
 pub(super) fn no_rejoin(tx: &Transaction, first: &Row, p: &Partner) -> Result<(), String> {

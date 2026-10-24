@@ -84,6 +84,9 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
                 st.run
             );
         }
+        if j == fael_crew::Joint::Follow {
+            print!("{}", store.follow_text(w)?);
+        }
     }
     // plan fael-row-retire c3: contracts and open decisions and notes on files under the
     // chunk's scope, verdicts ready — the agent judges, start never blocks. `fael` words them
