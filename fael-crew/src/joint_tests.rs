@@ -104,3 +104,21 @@ fn with_needs_a_live_partner_and_a_mode() {
     let e = s.start(&b, &only, &here("/w2")).unwrap_err();
     assert!(e.contains("--with and --as go together"), "{e}");
 }
+
+#[test]
+fn follow_prints_the_read_only_contract_and_the_partner_handoff() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    start(&mut s, &a, "/w1").unwrap();
+    let t = s.follow_text(&a).unwrap();
+    assert!(
+        t.contains("read-only") && t.contains("handed off nothing yet"),
+        "{t}"
+    );
+    s.note(&a, "api shape is frozen", "2026-10-11T09:30:00Z")
+        .unwrap();
+    s.start(&b, &with(&a, Joint::Follow), &here("/w2")).unwrap();
+    let t = s.follow_text(&a).unwrap();
+    assert!(t.contains("> api shape is frozen"), "{t}");
+}
