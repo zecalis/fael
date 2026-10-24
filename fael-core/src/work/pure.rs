@@ -149,6 +149,8 @@ pub fn rules(uid: &str, model: Option<&str>) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
+         - lane (joint `--as lane`): one scope per worktree, own branch each — land in plan order, first-listed chunk first, as a suggestion only; the owner merges every PR, fael never enforces an order or guards git flow\n\
+         - lane: end your run (`fael run end <R>`) before rebasing onto a lane that already landed, so its own diff is claimed first; `chunk done` and `run end` still say `outside declared scope` (+ `(overlaps open chunk …)`) as a fact, never a refusal\n\
          - leftovers are rows, not PR prose: file each first (`fael add issue \"<one topic, no ; list>\" --title \"<≤15 words>\" --files <f>` or `fael chunk add …`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…`; a `finished:` note says it as its own `left: none|<id|uid>,…` line — done refuses without it\n\
          - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
          - the context was compacted, or the chunk will not finish this session? stop at the last passing step: a part that passes Done on its own ships as this chunk's PR, the rest `fael chunk add`ed and named in `--left`; otherwise a step commit + checkpoint note and end the session — the next `chunk start` resumes it\n\
