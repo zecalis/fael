@@ -242,9 +242,10 @@ impl Store {
         tx.commit().map_err(err)
     }
 
-    /// `fael plan park|unpark|done <plan>`: the owner moves `plan.state`. Refused while a
-    /// chunk runs — a parked or done plan leaves the board and its agent with it. Returns
-    /// the state it left.
+    /// `fael plan park|unpark|done|undone <plan>`: the owner moves `plan.state`.
+    /// Refused while a chunk runs. `done` is refused while a child plan is not done —
+    /// a done umbrella must not orphan live children. `undone` (done → active) brings
+    /// a finished plan back. Returns the state it left.
     pub fn plan_state(&mut self, id: i64, to: &str, now: &str) -> Result<String, String> {
         let tx = tx(self)?;
         let (app, name, state, running): (String, String, String, i64) = tx
@@ -262,12 +263,27 @@ impl Store {
             );
         }
         let from_ok = match to {
-            "active" => state == "parked",
+            "active" => matches!(state.as_str(), "parked" | "done"),
             "parked" => matches!(state.as_str(), "active" | "blocked"),
             _ => state != "done",
         };
         if !from_ok {
             return Err(format!("rejected: {name} is {state}"));
+        }
+        if to == "done" {
+            let live: String = tx
+                .query_row(
+                    "SELECT COALESCE(GROUP_CONCAT(name, ', '), '') FROM plan
+                     WHERE app = ?1 AND parent = ?2 AND state != 'done'",
+                    params![app, name],
+                    |r| r.get(0),
+                )
+                .map_err(err)?;
+            if !live.is_empty() {
+                return Err(format!(
+                    "rejected: {name} has child plan(s) not done ({live}) — `fael plan done <child>` first"
+                ));
+            }
         }
         if running > 0 && to != "active" {
             return Err(format!(

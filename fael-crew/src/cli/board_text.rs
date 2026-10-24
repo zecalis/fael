@@ -192,7 +192,7 @@ fn parked_done_msg(b: &Board) -> Option<String> {
             ));
         } else {
             out.push_str(&format!(
-                "plan {key} is done — {chunks} hidden; `fael plan export {key}` lists its uids\n"
+                "plan {key} is done — {chunks} hidden; `fael plan undone {key}` first, or `fael plan export {key}` lists its uids\n"
             ));
         }
     }

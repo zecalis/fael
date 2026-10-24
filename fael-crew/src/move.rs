@@ -50,8 +50,13 @@ impl Store {
             return Err(format!("rejected: chunk {} is already in {to_key}", r.uid));
         }
         if matches!(state.as_str(), "parked" | "done") {
+            let back = if state == "parked" {
+                "unpark"
+            } else {
+                "undone"
+            };
             return Err(format!(
-                "rejected: plan {to_key} is {state} — `fael plan unpark {to_key}` first, or pick an active plan"
+                "rejected: plan {to_key} is {state} — `fael plan {back} {to_key}` first, or pick an active plan"
             ));
         }
         if let Some(l) = &label {

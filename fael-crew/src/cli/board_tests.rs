@@ -178,7 +178,7 @@ fn plan_cut_on_parked_plan_names_hidden_chunks() {
 }
 
 #[test]
-fn plan_cut_on_done_plan_names_hidden_chunks_without_unpark() {
+fn plan_cut_on_done_plan_names_hidden_chunks_with_undone() {
     let p = Project {
         plans: vec![archived("old", "done", &[("open", 1), ("done", 4)])],
         chunks: vec![],
@@ -186,6 +186,7 @@ fn plan_cut_on_done_plan_names_hidden_chunks_without_unpark() {
     };
     let t = text::text(&lists(String::new(), vec![&p]), true);
     assert!(t.contains("plan old is done — 1 open chunk hidden"), "{t}");
+    assert!(t.contains("`fael plan undone old` first"), "{t}");
     assert!(!t.contains("unpark"), "{t}");
 }
 

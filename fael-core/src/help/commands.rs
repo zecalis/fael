@@ -204,7 +204,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
         "plan",
         "create a plan, export or edit its sections and chunks, park or finish it",
         "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
-     | fael plan park|unpark|done <plan> | fael plan lint <plan>
+     | fael plan park|unpark|done|undone <plan> | fael plan lint <plan>
     (a plan is sections and chunks in <git-common-dir>/fael/crew.db, no file;
      new: a plan whose chunks live in the db from the start (`fael chunk add --plan`),
      its text four skeleton sections (1 Goal, 2 Scope, 3 Done criteria, 4 Constraints);
@@ -229,8 +229,8 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      any change to a running or finished chunk rejects the bill; an optional \"ops\" array
      takes the `chunk apply` ops; every row shares one event batch; --dry-run prints what
      it would write and rolls back;
-     park|unpark|done: the plan's state — parked or done leaves the board; refused while
-     one of its chunks runs)",
+     park|unpark|done|undone: the plan's state — parked or done leaves the board; `undone` brings a done plan back to active;
+     refused while one of its chunks runs or one of its child plans is not done yet)",
     ),
     (
         "run",

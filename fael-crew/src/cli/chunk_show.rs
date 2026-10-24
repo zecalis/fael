@@ -80,14 +80,14 @@ fn missing(s: &Store, uid: &str) -> String {
             `fael plan export {plan}` lists its uid"
         ),
         Ok(Some((_, plan, plan_state))) if matches!(plan_state.as_str(), "parked" | "done") => {
-            let unpark = if plan_state == "parked" {
+            let reopen = if plan_state == "parked" {
                 format!("`fael plan unpark {plan}` first, or ")
             } else {
-                String::new()
+                format!("`fael plan undone {plan}` first, or ")
             };
             format!(
                 "rejected: chunk {uid} is not on the board — its plan {plan} is {plan_state} — \
-                {unpark}`fael plan export {plan}` lists its uids"
+                {reopen}`fael plan export {plan}` lists its uids"
             )
         }
         _ => {

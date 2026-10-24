@@ -1,4 +1,4 @@
-//! `fael plan new` · `export` · `apply` · `park|unpark|done` · `repo`: a plan is sections
+//! `fael plan new` · `export` · `apply` · `park|unpark|done|undone` · `repo`: a plan is sections
 //! plus chunks in `crew.db`; `export --json` writes the bill `apply` takes back.
 
 use crate::{Args, Repo, repo};
@@ -6,7 +6,7 @@ use fael_crew::{Bill, PlanRow, Store};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done <plan> | fael plan lint <plan> — try 'fael plan --help'";
+const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done|undone <plan> | fael plan lint <plan> — try 'fael plan --help'";
 
 /// The verbs `plan` answers — `show` is `export` by another name.
 /// Canonical in `fael-core::work`; the command reuses it.
@@ -46,7 +46,9 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         }
         Some("apply") if rest.len() == 2 => apply(&r, &rest[1], a.has("dry-run")),
         Some("edit") if rest.len() == 2 => edit(a, &r, &rest[1]),
-        Some(v @ ("park" | "unpark" | "done")) if rest.len() == 2 => state(&r, v, &rest[1]),
+        Some(v @ ("park" | "unpark" | "done" | "undone")) if rest.len() == 2 => {
+            state(&r, v, &rest[1])
+        }
         Some("list") if rest.len() == 1 => list(&r),
         Some("lint") if rest.len() == 2 => return lint(&r, &rest[1]),
         _ => Err(fael_core::help::wrong_args(
@@ -167,11 +169,11 @@ fn changed_uids(lines: &[String]) -> Vec<String> {
     out
 }
 
-/// `park` · `unpark` · `done`: the owner's word on `plan.state`.
+/// `park` · `unpark` · `done` · `undone`: the owner's word on `plan.state`.
 fn state(r: &Repo, verb: &str, want: &str) -> Result<(), String> {
     let to = match verb {
         "park" => "parked",
-        "unpark" => "active",
+        "unpark" | "undone" => "active",
         _ => "done",
     };
     let mut s = open(r)?;
