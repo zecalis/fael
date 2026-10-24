@@ -100,7 +100,7 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 14] = [
+pub const KINDS: [&str; 15] = [
     "row",
     "note",
     "brief",
@@ -114,6 +114,7 @@ pub const KINDS: [&str; 14] = [
     "fixed",
     "fixcommit",
     "overlap",
+    "checkpoint",
     "held",
 ];
 
@@ -233,6 +234,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 "fixed" | "fixcommit" => (kind, filed_after(log, s, ms, |r| r.kind == "issue")),
                 // a chunk note is no ledger row: nothing to join it to, said only
                 "overlap" => ("overlap", false),
+                "checkpoint" => ("checkpoint", false),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
                 "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
                 "notice" => ("notice", filed_after(log, s, ms, |_| true)),

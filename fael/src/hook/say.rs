@@ -96,6 +96,10 @@ pub(crate) enum Kind {
     /// An edit outside the held chunk's scope, inside another open chunk's
     /// (issues 01M5D9GB, 01M5QF1Q): said once per owner chunk and session.
     Overlap { owner: String },
+    /// A step commit in a worktree holding a chunk whose last note (if any)
+    /// is not `finished:`: ask for the checkpoint note a resume reads. The key
+    /// names the last note's event id, so it is asked once per gap between notes.
+    Checkpoint { key: String },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -135,6 +139,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
         Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close"), false),
         Kind::Overlap { .. } => (Once::Key, Some("fael chunk note"), false),
+        Kind::Checkpoint { .. } => (Once::Key, Some("fael chunk note"), false),
         Kind::Brief { .. } => (Once::Key, None, false),
         Kind::Notice => (Once::Event, None, false),
     };
@@ -162,6 +167,7 @@ impl Kind {
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Overlap { owner } => vec![format!("~overlap:{owner}")],
+            Kind::Checkpoint { key } => vec![key.clone()],
             Kind::Brief { keys } => keys.clone(),
             Kind::Notice => vec![],
         }
@@ -191,6 +197,7 @@ impl Kind {
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
             Kind::Overlap { owner } => ("overlap", vec![owner.clone()]),
+            Kind::Checkpoint { key } => ("checkpoint", vec![key.clone()]),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {
