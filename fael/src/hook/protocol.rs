@@ -48,8 +48,11 @@ pub(crate) struct Event {
     /// seen list, and its stop only notes the ids its reply cites.
     #[serde(default)]
     pub(crate) agent: Option<String>,
-    /// opencode tool/session/stop: the running model as `providerID/id`
-    /// (client-reported, never guessed — absent stays NULL downstream).
+    /// tool/session/stop: the model the client reports (opencode:
+    /// `providerID/id`; Claude/Codex: hook stdin, else the transcript tail).
+    /// Never guessed — absent stays NULL downstream. Never lands in usage
+    /// rows (usage.jsonl stays model-free); `stop::seen` stamps it onto the
+    /// run row while that row's model is still NULL.
     #[serde(default)]
     pub(crate) model: Option<String>,
     /// opencode stop: the session's total cost in USD, as the server reports
@@ -61,13 +64,6 @@ pub(crate) struct Event {
     /// the rows pushed into it are gone, so the seen list starts over.
     #[serde(default)]
     pub(crate) source: Option<String>,
-    /// stop/session-start: the model the client reports for this turn
-    /// (Claude/Codex: hook stdin, else the transcript tail; OpenCode: t3).
-    /// Absent stays absent — fael never infers one. Never lands in usage
-    /// rows (run-telemetry t4: usage.jsonl stays model-free); `stop::seen`
-    /// stamps it onto the run row while that row's model is still NULL.
-    #[serde(default)]
-    pub(crate) model: Option<String>,
 }
 
 pub(crate) fn cmd(event: &str, client: Option<String>) -> ExitCode {
