@@ -80,8 +80,8 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         println!("joint {} with {w} (run {})", j.as_str(), st.run);
         if j == fael_crew::Joint::Pair {
             println!(
-                "pair: work in {w}'s worktree and branch; pass --run {} to done",
-                st.run
+                "pair: work in {w}'s worktree and branch (your seat {} freed); pass --run {} to done",
+                here.worktree, st.run
             );
         }
         if j == fael_crew::Joint::Follow {

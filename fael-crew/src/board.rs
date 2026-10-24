@@ -148,6 +148,14 @@ pub struct Run {
     /// `chunk done --review clean|fixed|failed`; absent = none given
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review: Option<String>,
+    /// joint start (01M5PE238): the live run's mode and partner chunk uid.
+    /// Skipped from JSON — the board's overlap math reads it, the app's
+    /// contract stays byte-identical (overlap_classes is skipped the same way).
+    #[serde(skip)]
+    pub joint: Option<String>,
+    /// joint start partner (see `joint`); skipped from JSON likewise.
+    #[serde(skip)]
+    pub partner: Option<String>,
 }
 
 /// The last word on the chunk: the agent's `done` / `wait` / `after` text,
@@ -476,7 +484,7 @@ impl Store {
             .conn
             .prepare(
                 "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
-                        started, last_seen, ended, cost, review
+                        started, last_seen, ended, cost, review, joint, partner
                  FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)",
             )
             .map_err(err)?;
@@ -497,6 +505,8 @@ impl Store {
                     ended: r.get(11)?,
                     cost: r.get(12)?,
                     review: r.get(13)?,
+                    joint: r.get(14)?,
+                    partner: r.get(15)?,
                 },
             ))
         })

@@ -79,6 +79,25 @@ pub(super) fn end_in_worktree(
     .map_err(err)
 }
 
+/// A pair joins the partner's seat (01M5PE238): the caller's own seat is an
+/// agent that left, so its live runs end. Same seat both sides: nothing to
+/// free — ending it would kill the partner run just joined.
+pub(super) fn end_caller_seat(
+    tx: &Transaction,
+    pair: bool,
+    caller: Option<&str>,
+    seat: Option<&str>,
+    now: &str,
+) -> Result<(), String> {
+    if pair
+        && let Some(cw) = caller
+        && Some(cw) != seat
+    {
+        end_in_worktree(tx, cw, now)?;
+    }
+    Ok(())
+}
+
 /// `ready_in`, but an after on a chunk of its own pair is met by plan order: one run does both.
 pub(super) fn ready_paired(
     tx: &Transaction,

@@ -15,7 +15,7 @@ pub(crate) fn tools() -> Value {
     let str_ = |d: &str| json!({"type": "string", "description": d});
     let files = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
     // chunk 6d: one short sentence — it repeats on every tool, so every word is paid three times
-    let cwd = str_("repo if not session cwd");
+    let cwd = str_("repo if not cwd");
     let mut t = json!([
         {
             "name": "find",
@@ -71,18 +71,20 @@ pub(crate) fn tools() -> Value {
             "description": "Chunk lifecycle.",
             "inputSchema": {"type": "object", "required": ["verb", "uid"], "properties": {
                 "verb": str_("show|start|note|done|wait|after"),
-                "uid": str_("chunk uid"),
+                "uid": str_("uid"),
                 "text": str_("note|handoff|why"),
                 "other": str_("waits on"),
                 "on": str_("owner|data"),
-                "run": str_("run R"),
-                "client": str_("start client"),
-                "model": str_("start model"),
-                "session": str_("start session"),
+                "run": str_("R"),
+                "client": str_("client"),
+                "model": str_("model"),
+                "session": str_("session"),
                 "force": {"type": "boolean", "description": "take over"},
-                "pr": str_("PR number for done"),
-                "left": str_("leftover ids for done, or none"),
-                "review": str_("done: clean|fixed|failed"),
+                "with": str_("partner"),
+                "as": str_("pair|lane|follow"),
+                "pr": str_("PR number"),
+                "left": str_("leftovers"),
+                "review": str_("clean|fixed|failed"),
             }},
         },
     ]);
@@ -140,6 +142,12 @@ mod tests {
     /// The 7% bar becomes 5%: the contract now carries the full run identity
     /// (client/model/session for cost joins), which earns its bytes — one
     /// `start` with identity beats a follow-up lookup round.
+    ///
+    /// Chunk `with` + `as` (2026-10-24, issue 01M5PE238): joint `start`
+    /// through MCP alone — an MCP `start` naming them was silently dropping
+    /// them, so MCP agents could never joint-start. Paid by trimming the
+    /// chunk prop sentences (client/model/session/pr/left/review/uid/run)
+    /// and the 4×-repeated cwd sentence.
     ///
     /// Line endings are normalized first: `include_str!` reads the checkout,
     /// and a CRLF checkout (Windows) would add one byte per line without any
@@ -225,7 +233,7 @@ mod tests {
             props("chunk"),
             set(&[
                 "verb", "uid", "text", "other", "on", "run", "client", "model", "session", "force",
-                "pr", "left", "review"
+                "with", "as", "pr", "left", "review"
             ])
         );
     }

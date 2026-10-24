@@ -122,3 +122,24 @@ fn follow_prints_the_read_only_contract_and_the_partner_handoff() {
     let t = s.follow_text(&a).unwrap();
     assert!(t.contains("> api shape is frozen"), "{t}");
 }
+
+#[test]
+fn pair_frees_the_callers_seat_but_keeps_a_shared_one() {
+    use super::super::chunk::tests::live;
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    let c = scoped(&mut s, "c", "other/");
+    start(&mut s, &a, "/w1").unwrap();
+    start(&mut s, &c, "/w2").unwrap();
+    // b joins a's run in /w1; the caller leaves /w2, so its live run ends
+    s.start(&b, &with(&a, Joint::Pair), &here("/w2")).unwrap();
+    assert_eq!(live(&s, &c), 0, "caller seat /w2 freed");
+    assert_eq!(live(&s, &a), 1, "partner run stays live");
+    // same worktree both sides: nothing to free, the joined run stays live
+    // (an unconditional free would kill the partner run just joined)
+    let d = scoped(&mut s, "d", "unrelated/");
+    s.start(&d, &with(&a, Joint::Pair), &here("/w1")).unwrap();
+    assert_eq!(live(&s, &a), 1, "shared seat keeps the run");
+    assert_eq!(live(&s, &d), 1, "joiner runs");
+}
