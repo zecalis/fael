@@ -94,8 +94,8 @@ pub(crate) enum Kind {
     /// (chunk 5b): said once per session.
     FixCommit,
     /// An edit outside the held chunk's scope, inside another open chunk's
-    /// (issue 01M5D9GB): said once per file and session.
-    Overlap { file: String },
+    /// (issues 01M5D9GB, 01M5QF1Q): said once per owner chunk and session.
+    Overlap { owner: String },
     /// A line fael raises on its own: a stashed risk or capture reject, a
     /// session-start rule or warning.
     Notice,
@@ -161,7 +161,7 @@ impl Kind {
             Kind::Check { id } => vec![format!("~check:{id}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
-            Kind::Overlap { file } => vec![format!("~overlap:{file}")],
+            Kind::Overlap { owner } => vec![format!("~overlap:{owner}")],
             Kind::Brief { keys } => keys.clone(),
             Kind::Notice => vec![],
         }
@@ -190,7 +190,7 @@ impl Kind {
             Kind::Check { id } => ("check", vec![id.clone()]),
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
-            Kind::Overlap { file } => ("overlap", vec![file.clone()]),
+            Kind::Overlap { owner } => ("overlap", vec![owner.clone()]),
             Kind::Notice => ("notice", vec![]),
         };
         match keys.is_empty() {

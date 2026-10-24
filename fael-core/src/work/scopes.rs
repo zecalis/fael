@@ -14,6 +14,8 @@ pub struct Other {
     pub uid: String,
     /// `plan/label` (the uid when it has no label), as `chunk done` names it.
     pub name: String,
+    /// The chunk's `state` as stored (`running`, `open`, `draft`, `review`...).
+    pub state: String,
     pub scope: Vec<String>,
 }
 
@@ -56,7 +58,7 @@ pub fn scopes(db: &Path, worktree: &str, shared: &[String]) -> Option<Scopes> {
     let uid = rows.iter().find(|r| r.2)?.0.clone();
     let declared = rows.into_iter().flat_map(|r| lines(r.1)).collect();
     let rest = format!(
-        "{TEAM} SELECT c.uid, p.name || '/' || COALESCE(c.label, c.uid), c.scope
+        "{TEAM} SELECT c.uid, p.name || '/' || COALESCE(c.label, c.uid), c.state, c.scope
          FROM chunk c JOIN plan p ON p.id = c.plan
          WHERE c.scope IS NOT NULL AND c.state NOT IN ('done', 'replaced', 'dropped')
          AND c.id NOT IN (SELECT id FROM team) ORDER BY c.seq"
@@ -68,16 +70,18 @@ pub fn scopes(db: &Path, worktree: &str, shared: &[String]) -> Option<Scopes> {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get(1)?,
-                r.get::<_, Option<String>>(2)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<String>>(3)?,
             ))
         })
         .ok()?
         .collect::<Result<Vec<_>, _>>()
         .ok()?
         .into_iter()
-        .map(|(uid, name, s)| Other {
+        .map(|(uid, name, state, s)| Other {
             uid,
             name,
+            state,
             scope: lines(s)
                 .into_iter()
                 .filter(|p| !shared.iter().any(|s| under(p, s)))
@@ -148,6 +152,7 @@ mod tests {
             "done, own and pair partner left out"
         );
         assert_eq!(s.others[0].scope, ["src/b/"], "shared path dropped");
+        assert_eq!(s.others[0].state, "ready", "state as stored");
         assert!(scopes(&p, "/other", &[]).is_none());
         let _ = std::fs::remove_file(p);
     }
@@ -160,6 +165,7 @@ mod tests {
             others: vec![Other {
                 uid: "U2".into(),
                 name: "p/b".into(),
+                state: "open".into(),
                 scope: vec!["src/b/".into()],
             }],
         };
