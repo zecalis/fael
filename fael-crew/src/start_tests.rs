@@ -232,6 +232,7 @@ fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
         e.contains(&a) && e.contains("src/x.rs") && e.contains("--force"),
         "{e}"
     );
+    assert!(e.contains("[prefix]"), "the reject names the class: {e}");
     assert_eq!(state(&s, &b), "open");
     assert!(
         e.contains("last seen never") && !e.contains("stalled"),

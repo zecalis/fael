@@ -59,9 +59,15 @@ mod tests {
     #[test]
     fn class_names_exact_prefix_or_none() {
         use OverlapClass::{Exact, Prefix};
-        assert_eq!(overlap_class(&v(&["src/a.rs"]), &v(&["src/a.rs"])), Some(Exact));
+        assert_eq!(
+            overlap_class(&v(&["src/a.rs"]), &v(&["src/a.rs"])),
+            Some(Exact)
+        );
         assert_eq!(overlap_class(&v(&["src/"]), &v(&["src/"])), Some(Exact));
-        assert_eq!(overlap_class(&v(&["src/"]), &v(&["src/a.rs"])), Some(Prefix));
+        assert_eq!(
+            overlap_class(&v(&["src/"]), &v(&["src/a.rs"])),
+            Some(Prefix)
+        );
         assert_eq!(overlap_class(&v(&["src/a.rs"]), &v(&["src"])), Some(Prefix));
         // an exact path anywhere wins over a prefix elsewhere
         assert_eq!(

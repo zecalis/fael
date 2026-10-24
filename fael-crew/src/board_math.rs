@@ -67,16 +67,23 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
     let own: Vec<Vec<String>> = chunks.iter().map(|c| unshared(&c.scope, shared)).collect();
     for &a in &hot {
         for &b in &hot {
-            if a != b && overlap(&own[a], &own[b]) {
+            if a == b {
+                continue;
+            }
+            // the class is Some exactly when the scopes overlap, so one call
+            // fills both the uid list (today's shape) and the per-pair class
+            let class: Option<OverlapClass> = fael_core::overlap_class(&own[a], &own[b]);
+            if let Some(class) = class {
                 let u = chunks[b].uid.clone();
-                chunks[a].overlaps.push(u);
+                chunks[a].overlaps.push(u.clone());
+                chunks[a].overlap_classes.push((u, class));
             }
         }
     }
 }
 
-pub use fael_core::overlap;
 pub(super) use fael_core::under;
+pub use fael_core::{OverlapClass, overlap};
 
 /// `# PLAN-x — title` as imported → `title` (also `PLAN-x: title`, `PLAN-x (v1): title`).
 pub(super) fn plan_title(title: &str, name: &str) -> String {

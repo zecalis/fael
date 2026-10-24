@@ -197,57 +197,9 @@ fn clashes_in(
     Ok(out)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::super::chunk::tests::{add, here, start};
-    use super::super::{Start, Store};
-    use super::*;
-    use rusqlite::params;
-
-    fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
-        let c = add(s, title, Some(title));
-        s.conn
-            .execute("UPDATE chunk SET scope = ?2 WHERE uid = ?1", params![c, scope])
-            .unwrap();
-        c
-    }
-
-    #[test]
-    fn clash_lines_name_exact_and_prefix() {
-        let mut s = Store::open_in_memory().unwrap();
-        let a = scoped(&mut s, "a", "src/");
-        let b = scoped(&mut s, "b", "src/x.rs");
-        let c = scoped(&mut s, "c", "src/x.rs");
-        start(&mut s, &a, "/w1").unwrap();
-        let stale = "2026-10-11T09:00:00Z";
-        // b sits under running a's dir: prefix, and the line says so
-        {
-            let tx = s.conn.unchecked_transaction().unwrap();
-            let lines = clashes(&tx, &[b.clone()], &[], stale).unwrap();
-            assert_eq!(lines.len(), 1, "{lines:?}");
-            assert!(
-                lines[0].contains("[prefix]") && lines[0].contains("src/x.rs"),
-                "{}",
-                lines[0]
-            );
-            assert_eq!(
-                clash_classes(&tx, &[b.clone()], &[], stale).unwrap(),
-                vec![(a.clone(), OverlapClass::Prefix)]
-            );
-            // shared paths are nobody's claim: the same check stays silent
-            assert!(clashes(&tx, &[b.clone()], &["src/".into()], stale).unwrap().is_empty());
-        }
-        // c names the exact file b names: exact, alongside a's prefix
-        s.start(&c, &Start { force: true, ..Start::default() }, &here("/w2")).unwrap();
-        let tx = s.conn.unchecked_transaction().unwrap();
-        let mut classes = clash_classes(&tx, &[b], &[], stale).unwrap();
-        classes.sort_by(|x, y| x.0.cmp(&y.0));
-        assert_eq!(classes, vec![(a, OverlapClass::Prefix), (c, OverlapClass::Exact)]);
-    }
-}
-
 /// The class of each live-run clash, by chunk uid — what o2's joint command
 /// reads to offer pair (exact) vs lane (prefix). Judges nothing.
+#[allow(dead_code)] // o2 reads this; o1's tests pin it meanwhile
 pub(super) fn clash_classes(
     tx: &Transaction,
     ms: &[String],
@@ -286,4 +238,74 @@ pub(super) fn clashes(
             )
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::chunk::tests::{add, here, start};
+    use super::super::{Start, Store};
+    use super::*;
+    use rusqlite::params;
+
+    fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
+        let c = add(s, title, Some(title));
+        s.conn
+            .execute(
+                "UPDATE chunk SET scope = ?2 WHERE uid = ?1",
+                params![c, scope],
+            )
+            .unwrap();
+        c
+    }
+
+    #[test]
+    fn clash_lines_name_exact_and_prefix() {
+        let mut s = Store::open_in_memory().unwrap();
+        let a = scoped(&mut s, "a", "src/");
+        let b = scoped(&mut s, "b", "src/x.rs");
+        let c = scoped(&mut s, "c", "src/x.rs");
+        start(&mut s, &a, "/w1").unwrap();
+        let stale = "2026-10-11T09:00:00Z";
+        // b sits under running a's dir: prefix, and the line says so
+        {
+            let tx = s.conn.unchecked_transaction().unwrap();
+            let lines = clashes(&tx, std::slice::from_ref(&b), &[], stale).unwrap();
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            assert!(
+                lines[0].contains("[prefix]") && lines[0].contains("src/x.rs"),
+                "{}",
+                lines[0]
+            );
+            assert_eq!(
+                clash_classes(&tx, std::slice::from_ref(&b), &[], stale).unwrap(),
+                vec![(a.clone(), OverlapClass::Prefix)]
+            );
+            // shared paths are nobody's claim: the same check stays silent
+            assert!(
+                clashes(&tx, std::slice::from_ref(&b), &["src/".into()], stale)
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        // c names the exact file b names: exact, alongside a's prefix
+        s.start(
+            &c,
+            &Start {
+                force: true,
+                ..Start::default()
+            },
+            &here("/w2"),
+        )
+        .unwrap();
+        let tx = s.conn.unchecked_transaction().unwrap();
+        let mut classes = clash_classes(&tx, std::slice::from_ref(&b), &[], stale).unwrap();
+        classes.sort_by(|x, y| x.0.cmp(&y.0));
+        assert_eq!(
+            classes,
+            vec![(a, OverlapClass::Prefix), (c, OverlapClass::Exact)]
+        );
+        let lines = clashes(&tx, std::slice::from_ref(&b), &[], stale).unwrap();
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("[exact]")), "{lines:?}");
+    }
 }
