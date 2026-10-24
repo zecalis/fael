@@ -147,12 +147,14 @@ unchanged, only slower:
 
 | Layer | Lives in | Holds |
 |---|---|---|
-| contract | `rules()` in `fael-crew/src/brief.rs`, printed by every `fael chunk start` | habits every chunk needs, any area or client: checkpoint, ask the owner, hand-off, a fresh-session check against Done before done |
+| contract | `rules()` in `fael-crew/src/brief.rs` (pure seam `fael-core/src/work/pure.rs`), printed by every `fael chunk start` | habits every chunk needs, any area or client: checkpoint, ask the owner, hand-off, a fresh-session check against Done before done, the lane contract below |
 | bar | the plan's Done and Constraints sections, printed in every brief | what "good" means for this plan: dev gates and criteria, marketing VOICE.md and source rules |
 | judgment skills | fael-plan, fael-review, fael-content | how to cut, check, plan posts |
 | overlap | `fael chunk start` | claim plus an overlap check, so two agents do not take the same chunk or files |
 
 No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Constraints.
+
+Lane contract (overlap-broker, info only — the owner merges every PR, fael never guards git flow): lanes are one scope per worktree on their own branch — land in plan order, first-listed chunk first, as a suggestion only; fael never enforces an order. A lane ends its run (`fael run end R`) before rebasing onto a lane that already landed, so its own diff is claimed first. `chunk done` and `run end` still say `outside declared scope` (with `(overlaps open chunk …)` when another chunk holds the path) as a fact, never a refusal — the same two lines `rules()` prints in every brief.
 
 ## 2. Storage
 

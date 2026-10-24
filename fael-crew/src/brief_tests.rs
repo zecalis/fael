@@ -228,6 +228,21 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
 }
 
 #[test]
+fn the_rules_state_the_lane_contract_info_only() {
+    let r = rules("U1", None);
+    assert!(
+        r.contains("land in plan order, first-listed chunk first"),
+        "{r}"
+    );
+    assert!(r.contains("the owner merges every PR"), "{r}");
+    assert!(r.contains("fael never enforces an order"), "{r}");
+    assert!(r.contains("fael run end"), "{r}");
+    assert!(r.contains("outside declared scope"), "{r}");
+    assert!(r.contains("overlaps open chunk"), "{r}");
+    assert!(r.contains("never a refusal"), "{r}");
+}
+
+#[test]
 fn only_a_mixed_chunk_gets_the_delegate_line() {
     let mixed = rules("U1", Some("mixed"));
     assert!(mixed.contains("`model: sonnet`"), "{mixed}");
