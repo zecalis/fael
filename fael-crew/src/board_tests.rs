@@ -100,6 +100,22 @@ fn overlap_classes_name_exact_and_prefix() {
         by(&a).overlap_classes,
         vec![(b.clone(), Prefix), (e.clone(), Prefix)]
     );
+    let how = |u: &str| {
+        by(&a)
+            .overlaps_how
+            .iter()
+            .find(|h| h.uid == u)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(
+        (how(&b).class, how(&b).path.as_str()),
+        ("prefix", "src/x.rs")
+    );
+    assert_eq!(
+        (how(&e).class, how(&e).path.as_str()),
+        ("prefix", "src/x.rs")
+    );
     assert_eq!(
         by(&b).overlap_classes,
         vec![(a.clone(), Prefix), (e.clone(), Exact)]

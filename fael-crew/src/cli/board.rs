@@ -250,12 +250,41 @@ fn project(
     }))
 }
 
-/// `left` from the latest hand-off, `stale` from the brief against the ledger (read once).
+/// `left` from the latest hand-off, `left_open` the still-open subset, `stale`
+/// from the brief against the ledger (read once).
 fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
     let log = crate::read(r);
+    let shut = fael_core::closed(&log);
+    let gone = fael_core::superseded(&log);
+    let states = s.chunk_states().unwrap_or_default();
+    let open_tok = |tok: &str| -> bool {
+        let up = tok.to_uppercase();
+        let mut seen_chunk = false;
+        let mut chunk_open = false;
+        for (uid, st) in &states {
+            if uid.starts_with(&up) || up.starts_with(uid.as_str()) {
+                seen_chunk = true;
+                if !matches!(st.as_str(), "done" | "dropped" | "replaced") {
+                    chunk_open = true;
+                }
+            }
+        }
+        if seen_chunk {
+            return chunk_open;
+        }
+        match fael_core::ref_state(&log, tok) {
+            fael_core::Ref::One(row) => {
+                !shut.contains(row.id.as_str()) && !gone.contains(row.id.as_str())
+            }
+            // ambiguous: surface it — the owner decides
+            fael_core::Ref::Many(_) => true,
+            fael_core::Ref::Missing => false,
+        }
+    };
     for c in chunks {
         if let Some(h) = &c.handoff {
             c.left = crate::chunk_left::listed(&h.text);
+            c.left_open = c.left.iter().filter(|t| open_tok(t)).cloned().collect();
         }
         if matches!(c.state.as_str(), "done" | "dropped" | "replaced") {
             continue;
@@ -307,6 +336,33 @@ fn worktrees(root: &Path, prefix: Option<&str>, live: &HashMap<&str, &str>) -> V
 
 type Pick<'a> = &'a dyn Fn(&BoardChunk) -> bool;
 
+/// A running chunk whose branch already merged: the owner landed it while the
+/// agent still runs — stop or rebase. Git answers it offline via
+/// `project.branches[]` (merged = content on the base); fires on merge, never
+/// closes the chunk. Per project: a branch name can repeat repos.
+fn merged_running(projects: &[&Project]) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    for p in projects {
+        let m: std::collections::HashSet<&str> = p
+            .branches
+            .iter()
+            .filter(|b| b.state == "merged")
+            .map(|b| b.name.as_str())
+            .collect();
+        for c in &p.chunks {
+            let on_merged = c.state == "running"
+                && c.run
+                    .as_ref()
+                    .and_then(|r| r.branch.as_deref())
+                    .is_some_and(|b| m.contains(b));
+            if on_merged {
+                out.insert(c.uid.clone());
+            }
+        }
+    }
+    out
+}
+
 /// The four lists, in display order across every project.
 fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
     let all: Vec<&BoardChunk> = projects.iter().flat_map(|p| &p.chunks).collect();
@@ -317,8 +373,9 @@ fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
         .iter()
         .flat_map(|p| p.ledger.iter().flat_map(|l| l.open_done()))
         .collect();
+    let merged = merged_running(&projects);
     // SPEC §5 order: the owner's questions, then review, ended runs, inbox drafts
-    let kinds: [(&'static str, Pick); 5] = [
+    let kinds: [(&'static str, Pick); 6] = [
         // an md plan's `(wait …)` names no `on`: the owner is the one who can move it
         ("waiting", &|c| {
             c.state == "waiting"
@@ -328,6 +385,7 @@ fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
         }),
         ("review", &|c| c.state == "review"),
         ("ended", &|c| c.state == "running" && c.ended),
+        ("merged", &|c| merged.contains(&c.uid)),
         ("inbox", &|c| c.state == "draft" && c.plan == "inbox"),
         ("issue-open", &|c| fixed.contains(&c.uid)),
     ];

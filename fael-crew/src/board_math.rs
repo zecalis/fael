@@ -56,6 +56,7 @@ pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Res
 pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[String]) {
     for c in chunks.iter_mut() {
         c.overlaps.clear();
+        c.overlaps_how.clear();
         c.overlap_classes.clear();
     }
     // a live joint run's partner uid, both directions: agreeing to share files
@@ -97,11 +98,17 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
                 continue;
             }
             // the class is Some exactly when the scopes overlap, so one call
-            // fills both the uid list (today's shape) and the per-pair class
-            let class: Option<OverlapClass> = fael_core::overlap_class(&own[a], &own[b]);
-            if let Some(class) = class {
+            // fills the uid list (today's shape), the per-pair class and the
+            // app's `overlaps_how` (who + class + witness path)
+            let how: Option<(OverlapClass, String)> = overlap_how(&own[a], &own[b]);
+            if let Some((class, path)) = how {
                 let u = chunks[b].uid.clone();
                 chunks[a].overlaps.push(u.clone());
+                chunks[a].overlaps_how.push(super::board::OverlapHow {
+                    uid: u.clone(),
+                    class: class.as_str(),
+                    path,
+                });
                 chunks[a].overlap_classes.push((u, class));
             }
         }
@@ -109,7 +116,7 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
 }
 
 pub(super) use fael_core::under;
-pub use fael_core::{OverlapClass, overlap};
+pub use fael_core::{OverlapClass, overlap, overlap_how};
 
 /// `# PLAN-x — title` as imported → `title` (also `PLAN-x: title`, `PLAN-x (v1): title`).
 pub(super) fn plan_title(title: &str, name: &str) -> String {

@@ -234,6 +234,7 @@
           "blocked_by": [],
           "unblocks": 2,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -256,6 +257,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",
@@ -285,6 +287,7 @@
           ],
           "unblocks": 1,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -294,6 +297,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",
@@ -326,6 +330,7 @@
           ],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -335,6 +340,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",
@@ -358,6 +364,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -384,6 +391,7 @@
           },
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "answer",
@@ -413,6 +421,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -427,6 +436,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "answer",
@@ -449,6 +459,7 @@
           "blocked_by": [],
           "unblocks": 1,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -474,6 +485,7 @@
           },
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "answer",
@@ -496,6 +508,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -529,6 +542,7 @@
           },
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "answer",
@@ -551,6 +565,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -565,6 +580,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "answer",
@@ -588,6 +604,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -601,6 +618,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",
@@ -622,6 +640,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -631,6 +650,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",
@@ -652,6 +672,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -679,6 +700,7 @@
             "01M4NA00000000000000000001"
           ],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": []
         }
@@ -860,6 +882,7 @@
           "blocked_by": [],
           "unblocks": 0,
           "overlaps": [],
+          "overlaps_how": [],
           "pair": [],
           "stalled": false,
           "ended": true,
@@ -882,6 +905,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",
@@ -907,6 +931,13 @@
           "overlaps": [
             "01M4M0BRD000000000000000V5"
           ],
+          "overlaps_how": [
+            {
+              "uid": "01M4M0BRD000000000000000V5",
+              "class": "prefix",
+              "path": "apps/vela/src/feed/refresh.ts"
+            }
+          ],
           "pair": [],
           "stalled": false,
           "ended": false,
@@ -916,6 +947,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",
@@ -941,6 +973,13 @@
           "overlaps": [
             "01M4M0BRD000000000000000V4"
           ],
+          "overlaps_how": [
+            {
+              "uid": "01M4M0BRD000000000000000V4",
+              "class": "prefix",
+              "path": "apps/vela/src/feed/refresh.ts"
+            }
+          ],
           "pair": [],
           "stalled": true,
           "ended": false,
@@ -963,6 +1002,7 @@
           "handoff": null,
           "issues": [],
           "left": [],
+          "left_open": [],
           "stale": [],
           "owner_actions": [
             "park",

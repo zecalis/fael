@@ -24,6 +24,16 @@ fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&o.stdout).trim().to_string()
 }
 
+fn chunk(v: &Value, u: &str) -> Value {
+    v["projects"][0]["chunks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["uid"] == u)
+        .unwrap()
+        .clone()
+}
+
 #[test]
 fn left_and_stale_ride_the_board() {
     let tmp = std::env::temp_dir().join(format!("fael-board-ls-{}", fael_core::ulid()));
@@ -79,25 +89,37 @@ fn left_and_stale_ride_the_board() {
     ]);
 
     let v: Value = serde_json::from_str(&f(&["board", "--json"])).unwrap();
-    let get = |u: &str| {
-        v["projects"][0]["chunks"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|c| c["uid"] == u)
-            .unwrap()
-            .clone()
-    };
-    assert_eq!(get(&both)["left"], json!([open, live]));
+    assert_eq!(chunk(&v, &both)["left"], json!([open, live]));
     assert_eq!(
-        get(&both)["stale"],
+        chunk(&v, &both)["left_open"],
+        json!([open, live]),
+        "both ids are still open"
+    );
+    f(&[
+        "close",
+        &open,
+        "still broken → fixed; guard `src/a_test.rs`",
+    ]);
+    let v: Value = serde_json::from_str(&f(&["board", "--json"])).unwrap();
+    assert_eq!(
+        chunk(&v, &both)["left"],
+        json!([open, live]),
+        "left keeps history"
+    );
+    assert_eq!(
+        chunk(&v, &both)["left_open"],
+        json!([live]),
+        "a closed row leaves left_open"
+    );
+    assert_eq!(
+        chunk(&v, &both)["stale"],
         json!([]),
         "a done chunk is not checked"
     );
-    assert_eq!(get(&none)["left"], json!([]));
-    assert_eq!(get(&clean)["left"], json!([]), "no hand-off");
-    assert_eq!(get(&clean)["stale"], json!([]));
-    let stale = get(&live)["stale"].clone();
+    assert_eq!(chunk(&v, &none)["left"], json!([]));
+    assert_eq!(chunk(&v, &clean)["left"], json!([]), "no hand-off");
+    assert_eq!(chunk(&v, &clean)["stale"], json!([]));
+    let stale = chunk(&v, &live)["stale"].clone();
     assert_eq!(stale.as_array().unwrap().len(), 1, "{stale}");
     assert!(stale[0].as_str().unwrap().contains(&shut), "{stale}");
 }

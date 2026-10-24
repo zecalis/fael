@@ -52,6 +52,13 @@ pub fn plan_actions(
     out
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub struct OverlapHow {
+    pub uid: String,
+    pub class: &'static str,
+    pub path: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct Chunk {
     pub uid: String,
@@ -73,6 +80,10 @@ pub struct Chunk {
     pub blocked_by: Vec<Blocker>,
     pub unblocks: usize,
     pub overlaps: Vec<String>,
+    /// o1's per-pair detail for the app: who the clash is with, its class
+    /// (`exact` = same file, `prefix` = dir covers file) and the witness path.
+    /// Same order as `overlaps`; `[]` = no clash.
+    pub overlaps_how: Vec<OverlapHow>,
     /// o1: the class per overlap pair, same order as `overlaps` (exact = same
     /// file, prefix = dir covers file); skipped from JSON until o4 serializes
     /// it — the golden pins chunk keys, so the shape stays byte-identical.
@@ -89,6 +100,10 @@ pub struct Chunk {
     pub issues: Vec<String>,
     /// ids/uids on the `left:` line of the latest hand-off (`chunk done --left`); `[]` = none
     pub left: Vec<String>,
+    /// the `left` ids still open (a closed ledger row or a terminal chunk is
+    /// gone); `[]` = nothing left. Hangs on the row id/chunk uid, fires on
+    /// `fael close` and chunk transitions.
+    pub left_open: Vec<String>,
     /// closed-row warning lines for the title+brief (`chunk start` would refuse); `[]` = none.
     /// Filled by the CLI, only for chunks not done/dropped/replaced
     pub stale: Vec<String>,
@@ -307,6 +322,7 @@ impl Store {
                         blocked_by: Vec::new(),
                         unblocks: 0,
                         overlaps: Vec::new(),
+                        overlaps_how: Vec::new(),
                         overlap_classes: Vec::new(),
                         pair: Vec::new(),
                         stalled: false,
@@ -334,6 +350,7 @@ impl Store {
                         handoff: None,
                         issues: Vec::new(),
                         left: Vec::new(),
+                        left_open: Vec::new(),
                         stale: Vec::new(),
                         owner_actions: Owner::actions(&state),
                         conflicts: None,
@@ -513,6 +530,19 @@ impl Store {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)
+    }
+
+    /// uid → state for every chunk in this db (the board lists only live
+    /// plans; a `left:` id can point at a done chunk in an archived plan).
+    pub fn chunk_states(&self) -> Result<std::collections::HashMap<String, String>, String> {
+        let mut q = self
+            .conn
+            .prepare("SELECT uid, state FROM chunk")
+            .map_err(err)?;
+        q.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)
     }
 
     /// Cost-per-feature read (t5): aggregate every run row (oldest first)
