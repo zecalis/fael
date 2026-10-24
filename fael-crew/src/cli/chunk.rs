@@ -125,7 +125,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             let mut st = s()?;
             let uid = st.add(&plan, &f, &list(a, "after"), &now)?;
             println!("{uid}");
-            crate::chunk_scope::warn(&st, r, &uid);
+            crate::chunk_scope::warn(&st, r, &uid, false);
             crate::chunk_ask::add_wait(a, &mut st, &uid, &now, &wt, &branch)?;
         }
         ["start", uid] => crate::chunk_run::start(a, r, uid, &here)?,
@@ -140,7 +140,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             st.edit(uid, &fields(a), &now)?;
             say(uid, "edited");
             if a.has("scope") || a.has("brief") {
-                crate::chunk_scope::warn(&st, r, uid);
+                crate::chunk_scope::warn(&st, r, uid, false);
             }
         }
         ["move", uid] => crate::chunk_run::move_to(a, &mut s()?, uid, &now)?,

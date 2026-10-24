@@ -14,17 +14,21 @@ use super::chunk_scope_skip as skip;
 /// directory under an existing one passes silently.
 /// Then each path the stored brief names that exists under the repo but outside the scope,
 /// and each id/key the brief names whose row is closed.
-pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str) {
+/// `at_start`: the agent starting the chunk reads it — it gets `chunk note`, never `chunk edit`
+/// (which clears the owner's approval; issue 01M5QF1R).
+pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str, at_start: bool) {
     let Ok(b) = s.show(key) else { return };
     let root = &r.root;
-    brief_paths(s, root, &b);
+    brief_paths(s, root, &b, at_start);
     for p in b.scope.as_deref().unwrap_or_default().lines() {
         if let Some(why) = missing(root, p) {
-            eprintln!(
-                "warning: scope {p:?} {why} in {} — a typo? fael chunk edit {key} --scope …",
-                root.display()
-            );
-        } else if let Some(w) = gone::warning(root, &b.uid, p) {
+            let ask = if at_start {
+                "go on; tell the owner in the done text".to_string()
+            } else {
+                format!("a typo? fael chunk edit {key} --scope …")
+            };
+            eprintln!("warning: scope {p:?} {why} in {} — {ask}", root.display());
+        } else if let Some(w) = gone::warning(root, &b.uid, p, at_start) {
             eprintln!("{w}");
         }
     }
@@ -206,7 +210,7 @@ fn missing(at: &Path, p: &str) -> Option<String> {
 /// deliberately scoped it out (a `drop?` brief naming what not to touch).
 /// A path on a `Check:`/`Run:`/`Verify:` clause never warns either: the clause
 /// names a command to run, not a file to edit; it only warns when git removed the path.
-fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
+fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief, at_start: bool) {
     let scope: Vec<String> = b
         .scope
         .as_deref()
@@ -231,7 +235,7 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
             // on a check clause the removed/renamed word is the only one said
             if is_check_line(clause) {
                 for p in paths(clause) {
-                    if let Some(w) = gone::warning(root, &b.uid, &p) {
+                    if let Some(w) = gone::warning(root, &b.uid, &p, at_start) {
                         eprintln!("{w}");
                     }
                 }
@@ -239,7 +243,7 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
             }
             for sentence in skip::sentences(clause) {
                 for p in paths(sentence) {
-                    if let Some(w) = gone::warning(root, &b.uid, &p) {
+                    if let Some(w) = gone::warning(root, &b.uid, &p, at_start) {
                         eprintln!("{w}");
                     }
                     let hit = [p.clone()];
@@ -256,20 +260,41 @@ fn brief_paths(s: &Store, root: &Path, b: &fael_crew::Brief) {
                             && !["done", "replaced", "dropped"].contains(&c.state.as_str())
                             && overlap(&hit, &c.scope)
                     });
-                    let by = holder.map_or(String::new(), |c| {
-                        format!(
-                            " (in {}/{}'s scope)",
-                            c.plan,
-                            c.label.as_deref().unwrap_or(&c.uid)
-                        )
-                    });
-                    eprintln!(
-                        "warning: brief names {p}, not in scope{by} — fael chunk edit {} --scope … · only read? write \"read {p}\"",
-                        b.uid
-                    );
+                    eprintln!("{}", outside_line(&b.uid, &p, holder, at_start));
                 }
             }
         }
+    }
+}
+
+/// One brief-path warning. The planner may widen the scope; the starter may not, so it is
+/// told to coordinate with the chunk holding the path (`chunk note`) or go on.
+fn outside_line(
+    uid: &str,
+    p: &str,
+    holder: Option<&fael_crew::BoardChunk>,
+    at_start: bool,
+) -> String {
+    let label =
+        |c: &fael_crew::BoardChunk| format!("{}/{}", c.plan, c.label.as_deref().unwrap_or(&c.uid));
+    match (at_start, holder) {
+        (true, Some(c)) => format!(
+            "warning: brief names {p}, in {}'s scope ({}) — editing it? coordinate: fael chunk note {} \"<text>\" · only reading? go on",
+            label(c),
+            c.state,
+            c.uid
+        ),
+        (true, None) => format!(
+            "warning: brief names {p}, not in scope — go on; chunk done lists it as outside"
+        ),
+        (false, h) => format!(
+            "warning: brief names {p}, not in scope{} — fael chunk edit {uid} --scope … · only read? write \"read {p}\"{}",
+            h.map_or(String::new(), |c| format!(" (in {}'s scope)", label(c))),
+            h.map_or(String::new(), |c| format!(
+                " · or coordinate: fael chunk note {} \"<text>\"",
+                c.uid
+            ))
+        ),
     }
 }
 

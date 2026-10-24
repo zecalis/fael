@@ -115,3 +115,28 @@ fn a_check_line_path_is_run_not_edit_so_it_never_warns() {
         "{err}"
     );
 }
+
+#[test]
+fn start_never_offers_chunk_edit_and_names_the_holder_to_note() {
+    let d = repo();
+    let (holder, _) = add(&d, "inbox", "do it", "e2e/", "holder");
+    let (uid, err) = add(&d, "inbox", BRIEF, "src/", "a1");
+    // the planner's line also offers the coordinate step
+    assert!(
+        err.contains(&format!("or coordinate: fael chunk note {holder} ")),
+        "{err}"
+    );
+    let (ok, _, err) = fael(&d, &["chunk", "start", &uid]);
+    assert!(ok, "{err}");
+    assert!(
+        err.contains("brief names e2e/y.ts, in inbox/holder's scope ("),
+        "{err}"
+    );
+    assert!(
+        err.contains(&format!(
+            "editing it? coordinate: fael chunk note {holder} "
+        )),
+        "{err}"
+    );
+    assert!(!err.contains("fael chunk edit"), "{err}");
+}

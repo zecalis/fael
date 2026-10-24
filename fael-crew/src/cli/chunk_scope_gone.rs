@@ -5,7 +5,8 @@
 use std::path::Path;
 
 /// The warning for `p` named by chunk `uid`, or `None` when it exists or git never had it.
-pub(crate) fn warning(root: &Path, uid: &str, p: &str) -> Option<String> {
+/// `at_start`: the agent starting the chunk reads it, so it never offers `chunk edit`.
+pub(crate) fn warning(root: &Path, uid: &str, p: &str, at_start: bool) -> Option<String> {
     let p = p.trim_end_matches('/');
     if p.is_empty() || root.join(p).exists() {
         return None;
@@ -16,18 +17,27 @@ pub(crate) fn warning(root: &Path, uid: &str, p: &str) -> Option<String> {
         &["log", "-1", "--diff-filter=DR", "--format=%h", "--", p],
     )?;
     let changes = crate::git(root, &["show", "-M", "--name-status", "--format=", &sha])?;
-    let what = changes.lines().find_map(|l| {
+    let (what, now) = changes.lines().find_map(|l| {
         let mut f = l.split('\t');
         match (f.next()?, f.next()?, f.next()) {
-            ("D", old, _) if old == p => Some("removed".to_string()),
+            ("D", old, _) if old == p => {
+                Some(("removed".to_string(), "what replaced it".to_string()))
+            }
             (s, old, Some(new)) if s.starts_with('R') && old == p => {
-                Some(format!("renamed to {new}"))
+                Some((format!("renamed to {new}"), new.to_string()))
             }
             _ => None,
         }
     })?;
+    let ask = if at_start {
+        format!(
+            "the brief is older than the code: work from {now}; tell the owner in the done text"
+        )
+    } else {
+        format!("fael chunk edit {uid} --brief … (or --scope …)")
+    };
     Some(format!(
-        "warning: {p} named by chunk {uid} was {what} in {sha} — fael chunk edit {uid} --brief … (or --scope …)"
+        "warning: {p} named by chunk {uid} was {what} in {sha} — {ask}"
     ))
 }
 
@@ -63,16 +73,23 @@ mod tests {
         git(&d, &["commit", "-qm", "drop and move"]);
         let sha = crate::git(&d, &["rev-parse", "--short", "HEAD"]).unwrap();
 
-        let rm = warning(&d, "W1", "e2e/gone.ts").unwrap();
+        let rm = warning(&d, "W1", "e2e/gone.ts", false).unwrap();
         assert!(rm.contains("removed in") && rm.contains(&sha), "{rm}");
-        let mv = warning(&d, "W1", "e2e/old.ts").unwrap();
+        let mv = warning(&d, "W1", "e2e/old.ts", false).unwrap();
         assert!(
             mv.contains("renamed to e2e/new.ts in") && mv.contains(&sha),
             "{mv}"
         );
         assert!(mv.contains("fael chunk edit W1"), "{mv}");
-        assert_eq!(warning(&d, "W1", "e2e/never.ts"), None);
-        assert_eq!(warning(&d, "W1", "e2e/kept.ts"), None);
+        let st = warning(&d, "W1", "e2e/old.ts", true).unwrap();
+        assert!(
+            st.contains("work from e2e/new.ts") && !st.contains("chunk edit"),
+            "{st}"
+        );
+        let st = warning(&d, "W1", "e2e/gone.ts", true).unwrap();
+        assert!(st.contains("work from what replaced it"), "{st}");
+        assert_eq!(warning(&d, "W1", "e2e/never.ts", false), None);
+        assert_eq!(warning(&d, "W1", "e2e/kept.ts", false), None);
         std::fs::remove_dir_all(&d).ok();
     }
 }
