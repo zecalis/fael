@@ -48,6 +48,15 @@ pub(crate) struct Event {
     /// seen list, and its stop only notes the ids its reply cites.
     #[serde(default)]
     pub(crate) agent: Option<String>,
+    /// opencode tool/session/stop: the running model as `providerID/id`
+    /// (client-reported, never guessed — absent stays NULL downstream).
+    #[serde(default)]
+    pub(crate) model: Option<String>,
+    /// opencode stop: the session's total cost in USD, as the server reports
+    /// it (`session.get` cost — last writer wins = session total). Absent on
+    /// every other event; never priced here.
+    #[serde(default)]
+    pub(crate) cost: Option<f64>,
     /// session-start: `"compact"` when the client just compacted its context —
     /// the rows pushed into it are gone, so the seen list starts over.
     #[serde(default)]

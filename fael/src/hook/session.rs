@@ -19,6 +19,8 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     crate::hook::mark_dormant(&c.repo, &mut c.log);
     // a run killed mid-turn never reaches Stop: its session is kept from the first turn
     super::stop::seen(e);
+    // and its model is reported from the first turn (cost follows on Stop)
+    super::stop::report(e);
     prune_sessions(&state_dir().join("sessions"));
     prune_sessions(&state_dir().join("sessions").join("edits"));
     prune_sessions(&state_dir().join("held"));

@@ -162,6 +162,11 @@ pub(crate) fn paths(tool: &str, input: &Value) -> Vec<String> {
 /// `chat.message` is deliberately unwired: its payload shape is unverified
 /// against a V1 runtime, this machine runs V2, and V1 never fired prompt —
 /// no regression. Revisit only with a V1 host in hand.)
+///
+/// `model`/`cost` ride through untouched on every event: the plugin reports
+/// what the server said (`session.get` model + cost), and fael never prices
+/// or guesses one — `stop.rs` filters (finite, >= 0) before it lands on the
+/// run row, so the adapter validates nothing here.
 pub(crate) fn normalize(event: &str, e: &Event) -> Event {
     let mut out = e.clone();
     out.client = Some("opencode".into());
@@ -271,6 +276,30 @@ mod tests {
         assert_eq!(n.text.as_deref(), Some("is there credit ledger code yet?"));
         assert_eq!(n.session.as_deref(), Some("2026-01-02T00:00:00Z"));
         assert!(n.files.is_empty());
+    }
+
+    /// PLAN-run-telemetry t3: the plugin's reported model and cost ride the
+    /// adapter untouched — V1 and V2 shapes both. The adapter never prices or
+    /// guesses: absent stays absent, and `stop.rs` owns the landing filters.
+    #[test]
+    fn normalize_keeps_reported_model_and_cost() {
+        for (ev, model, cost) in [
+            ("stop", Some("opencode-go/muse-spark-1.3-contributor"), Some(0.062652)),
+            ("session-start", Some("opencode-go/deepseek-v1-flash"), None),
+            ("edit", Some("opencode-go/muse-spark-1.3-contributor"), None),
+        ] {
+            let mut e = event();
+            e.model = model.map(str::to_string);
+            e.cost = cost;
+            let n = normalize(ev, &e);
+            assert_eq!(n.client.as_deref(), Some("opencode"), "{ev}");
+            assert_eq!(n.model.as_deref(), model, "{ev}");
+            assert_eq!(n.cost, cost, "{ev}");
+        }
+        // nothing reported: nothing carried, never a guess
+        let n = normalize("stop", &event());
+        assert_eq!(n.model, None);
+        assert_eq!(n.cost, None);
     }
 
     /// Two turns: `text` carries both, `reply` only the last — the split
