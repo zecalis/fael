@@ -49,13 +49,16 @@ fn resume(o: &mut String, p: &Prev) {
 const FULL: usize = 2;
 
 /// Each chunk's hand-off (its `left:` line is part of it) and the files its done claimed.
-fn handoffs(o: &mut String, how: &str, all: &[(String, String, String)]) {
+fn handoffs(o: &mut String, how: &str, all: &[(String, String, String)], none: bool) {
     for (who, text, scope) in all {
         let _ = writeln!(o, "\n{who}, {how}:");
         let _ = writeln!(o, "> {}", text.replace('\n', "\n> "));
         let files: Vec<&str> = scope.lines().filter(|l| !l.is_empty()).collect();
         if !files.is_empty() {
             let _ = writeln!(o, "files it touched: {}", files.join(", "));
+        } else if none {
+            // issue 01M5QF7Q: the paths in this brief are the planner's, not the code's
+            let _ = writeln!(o, "files it touched: none claimed");
         }
     }
 }
@@ -163,9 +166,14 @@ impl Started {
             );
             quote(&mut o, "owner said", &c.said);
             quote(&mut o, "notes left for this chunk", &c.notes);
-            handoffs(&mut o, "before this, handed off", &c.after);
+            handoffs(&mut o, "before this, handed off", &c.after, true);
             let (full, rest) = c.by_file.split_at(c.by_file.len().min(FULL));
-            handoffs(&mut o, "touched files in this scope, handed off", full);
+            handoffs(
+                &mut o,
+                "touched files in this scope, handed off",
+                full,
+                false,
+            );
             for (who, _, files) in rest {
                 let f: Vec<&str> = files.lines().filter(|l| !l.is_empty()).collect();
                 let tail = if f.len() > 5 { ", …" } else { "" };

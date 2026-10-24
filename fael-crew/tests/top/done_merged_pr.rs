@@ -1,0 +1,102 @@
+//! Issue 01M5QF7Q: `done --pr N` for a run with no branch claims the files of the squash
+//! commit on the trunk titled `… (#N)`; with no such commit it says nothing was claimed.
+
+use serde_json::Value;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
+    let o = Command::new(crate::common::fael_bin())
+        .args(args)
+        .current_dir(dir)
+        .env("FAEL_STATE_DIR", state)
+        .env_remove("FAEL_DIR")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "{args:?}: {err}");
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+fn git(dir: &Path, args: &[&str]) {
+    let id = ["-c", "user.name=t", "-c", "user.email=t@t"];
+    let ok = Command::new("git")
+        .args(id)
+        .args(args)
+        .current_dir(dir)
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok, "git {args:?}");
+}
+
+/// A repo on `main` (origin/HEAD set) whose last commit is `title`, touching `file`.
+fn init(title: &str, file: &str) -> (PathBuf, PathBuf) {
+    let tmp = std::env::temp_dir().join(format!("fael-done-merged-{}", fael_core::ulid()));
+    let (d, state) = (tmp.join("repo"), tmp.join("state"));
+    std::fs::create_dir_all(&d).unwrap();
+    git(&d, &["init", "-q", "-b", "main"]);
+    std::fs::write(d.join("README"), "base").unwrap();
+    git(&d, &["add", "README"]);
+    git(&d, &["commit", "-qm", "init"]);
+    let p = d.join(file);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(&p, "x").unwrap();
+    git(&d, &["add", file]);
+    git(&d, &["commit", "-qm", title]);
+    git(&d, &["update-ref", "refs/remotes/origin/main", "main"]);
+    let head = "refs/remotes/origin/HEAD";
+    git(&d, &["symbolic-ref", head, "refs/remotes/origin/main"]);
+    (d, state)
+}
+
+fn started(d: &Path, state: &Path) -> String {
+    let args = ["--brief", "b", "--scope", "features/duties/"];
+    let uid = fael(d, state, &[&["chunk", "add", "a"], &args[..]].concat());
+    let start = ["chunk", "start", &uid, "--run", "R1", "--no-worktree"];
+    fael(d, state, &start);
+    uid
+}
+
+#[test]
+fn a_run_without_a_branch_claims_the_merged_prs_files() {
+    let (d, state) = init("feat: duty (#42)", "features/tax/duty.rs");
+    let uid = started(&d, &state);
+    let done = ["chunk", "done", &uid, "h", "--left", "none", "--pr", "42"];
+    let out = fael(&d, &state, &done);
+    assert!(!out.contains("no diff claimed"), "{out}");
+    let show = fael(&d, &state, &["chunk", "show", &uid, "--json"]);
+    let c: Value = serde_json::from_str(&show).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["features/tax/duty.rs"]));
+}
+
+#[test]
+fn a_later_commit_naming_the_pr_in_its_body_is_not_the_merge() {
+    let (d, state) = init("feat: duty (#42)", "features/tax/duty.rs");
+    std::fs::write(d.join("other.rs"), "x").unwrap();
+    git(&d, &["add", "other.rs"]);
+    git(
+        &d,
+        &["commit", "-qm", "chore: x", "-m", "follow-up to (#42)"],
+    );
+    git(&d, &["update-ref", "refs/remotes/origin/main", "main"]);
+    let uid = started(&d, &state);
+    let done = ["chunk", "done", &uid, "h", "--left", "none", "--pr", "42"];
+    fael(&d, &state, &done);
+    let show = fael(&d, &state, &["chunk", "show", &uid, "--json"]);
+    let c: Value = serde_json::from_str(&show).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["features/tax/duty.rs"]));
+}
+
+#[test]
+fn no_branch_and_no_pr_commit_says_nothing_was_claimed() {
+    let (d, state) = init("feat: duty (#41)", "features/tax/duty.rs");
+    let uid = started(&d, &state);
+    let done = ["chunk", "done", &uid, "h", "--left", "none", "--pr", "42"];
+    let out = fael(&d, &state, &done);
+    let want = "no diff claimed: no run branch and no commit on origin/main names (#42) — the next brief prints no touched files; name the paths in the handoff";
+    assert!(out.lines().any(|l| l == want), "{out}");
+}
