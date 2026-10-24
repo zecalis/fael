@@ -17,5 +17,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 default = ["bundled-sqlite"]
 bundled-sqlite = ["fael-core/bundled-sqlite"]
 
+[dev-dependencies]
+rusqlite = "0.40"
+
 [lints]
 workspace = true

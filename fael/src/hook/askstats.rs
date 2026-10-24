@@ -43,6 +43,51 @@ fn usage_in_line(line: &str) -> Option<RealTokens> {
     })
 }
 
+/// The latest model id in a Claude Code or Codex transcript: the model that
+/// wrote the last round (run-telemetry t4). Tail-read like
+/// `transcript_usage`, fail-open — a missing file, a non-transcript session
+/// (opencode's RFC3339 hook session) or no model yet all read as `None`,
+/// never an error. Both sources are client-reported (Anthropic/Codex write
+/// their own transcripts); free text is never parsed.
+pub(crate) fn transcript_model(session: &str) -> Option<String> {
+    if session.is_empty() {
+        return None;
+    }
+    let tail = tail_bytes(Path::new(session), 65536)?;
+    tail.lines().rev().take(300).find_map(model_in_line)
+}
+
+/// One transcript line → its model id, Claude-shaped (`message.model`, else
+/// `requestedModel`) or Codex-shaped (`payload.model` on `turn_context`,
+/// else `collaboration_mode.settings.model`). Only an exact non-empty string —
+/// a missing key reads as `None`, never a guess.
+fn model_in_line(line: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    let t = v.get("type")?.as_str()?;
+    if t == "assistant" {
+        let m = v
+            .get("message")?
+            .get("model")
+            .and_then(serde_json::Value::as_str)
+            .or_else(|| v.get("requestedModel").and_then(serde_json::Value::as_str));
+        return m.filter(|m| !m.is_empty()).map(str::to_string);
+    }
+    if t == "turn_context" {
+        let p = v.get("payload")?;
+        let m = p
+            .get("model")
+            .and_then(serde_json::Value::as_str)
+            .or_else(|| {
+                p.get("collaboration_mode")?
+                    .get("settings")?
+                    .get("model")?
+                    .as_str()
+            });
+        return m.filter(|m| !m.is_empty()).map(str::to_string);
+    }
+    None
+}
+
 fn usage_part(u: &serde_json::Value, k: &str) -> u64 {
     u.get(k).and_then(serde_json::Value::as_u64).unwrap_or(0)
 }
@@ -64,7 +109,7 @@ fn tail_bytes(path: &Path, n: u64) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RealTokens, transcript_usage, usage_in_line};
+    use super::{RealTokens, model_in_line, transcript_model, transcript_usage, usage_in_line};
 
     fn usage_line(input: u64, create: u64, read: u64, output: u64) -> String {
         serde_json::json!({
@@ -129,5 +174,76 @@ mod tests {
             transcript_usage(p.to_str().unwrap()).map(|t| t.input_tokens),
             Some(7)
         );
+    }
+
+    fn claude_model_line(model: &str) -> String {
+        serde_json::json!({"type": "assistant", "message": {"model": model}}).to_string()
+    }
+
+    #[test]
+    fn model_reads_claude_message_model_latest_wins() {
+        assert_eq!(
+            model_in_line(&claude_model_line("claude-opus-5-5")).as_deref(),
+            Some("claude-opus-5-5")
+        );
+        // requestedModel is the fallback when the message names none
+        let l = serde_json::json!({"type": "assistant", "message": {}, "requestedModel": "r1"})
+            .to_string();
+        assert_eq!(model_in_line(&l).as_deref(), Some("r1"));
+        // message.model wins over requestedModel
+        let l = serde_json::json!({
+            "type": "assistant",
+            "message": {"model": "m1"},
+            "requestedModel": "r1",
+        })
+        .to_string();
+        assert_eq!(model_in_line(&l).as_deref(), Some("m1"));
+        // usage lines name no model; junk never parses to one
+        assert!(model_in_line(&usage_line(1, 0, 0, 1)).is_none());
+        assert!(model_in_line(r#"{"type":"assistant"}"#).is_none());
+        assert!(model_in_line("not json").is_none());
+    }
+
+    #[test]
+    fn model_reads_codex_turn_context() {
+        let l = serde_json::json!({
+            "type": "turn_context",
+            "payload": {"model": "gpt-6-luna"},
+        })
+        .to_string();
+        assert_eq!(model_in_line(&l).as_deref(), Some("gpt-6-luna"));
+        // nested collaboration setting is the fallback
+        let l = serde_json::json!({
+            "type": "turn_context",
+            "payload": {"collaboration_mode": {"settings": {"model": "gpt-x"}}},
+        })
+        .to_string();
+        assert_eq!(model_in_line(&l).as_deref(), Some("gpt-x"));
+        assert!(model_in_line(r#"{"type":"turn_context","payload":{}}"#).is_none());
+    }
+
+    #[test]
+    fn transcript_model_takes_the_latest_and_fails_open() {
+        let dir = std::env::temp_dir().join(format!("fael-asks-{}", crate::core::ulid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("transcript.jsonl");
+        std::fs::write(
+            &p,
+            format!(
+                "{}\n{}\n{}\n",
+                claude_model_line("first"),
+                serde_json::json!({"type": "user"}),
+                claude_model_line("last"),
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            transcript_model(p.to_str().unwrap()).as_deref(),
+            Some("last")
+        );
+        assert!(transcript_model(dir.join("missing.jsonl").to_str().unwrap()).is_none());
+        assert!(transcript_model("").is_none());
+        // an RFC3339 hook session (opencode) is never a transcript
+        assert!(transcript_model("2026-10-24T00:00:00.000Z").is_none());
     }
 }

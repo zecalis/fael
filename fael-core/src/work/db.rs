@@ -85,6 +85,43 @@ pub fn mark_seen_session(db: &Path, session: &str, now: &str) -> usize {
     .unwrap_or(0)
 }
 
+/// Stamp the model the client reported onto this worktree's live runs still
+/// missing one (run-telemetry t4: Claude/Codex transcript tail via the Stop
+/// hook). NULL fills only — a start-time `--model`, approval or hint
+/// (start.rs COALESCE) always wins, never overwritten here.
+pub fn mark_model(db: &Path, worktree: &str, session: &str, model: &str) -> usize {
+    if !db.exists() || session.is_empty() || model.is_empty() {
+        return 0;
+    }
+    let Ok(c) = rusqlite::Connection::open(db) else {
+        return 0;
+    };
+    c.execute(
+        "UPDATE run SET model = COALESCE(model, ?3)
+          WHERE worktree = ?1 AND ended IS NULL AND model IS NULL
+            AND (session IS NULL OR session = ?2)",
+        rusqlite::params![worktree, session, model],
+    )
+    .unwrap_or(0)
+}
+
+/// Stamp the model onto every live run a session's `chunk start` bound,
+/// wherever it works now — the `--no-worktree` half of `mark_model`.
+pub fn mark_model_session(db: &Path, session: &str, model: &str) -> usize {
+    if !db.exists() || session.is_empty() || model.is_empty() {
+        return 0;
+    }
+    let Ok(c) = rusqlite::Connection::open(db) else {
+        return 0;
+    };
+    c.execute(
+        "UPDATE run SET model = COALESCE(model, ?2)
+          WHERE session = ?1 AND ended IS NULL AND model IS NULL",
+        rusqlite::params![session, model],
+    )
+    .unwrap_or(0)
+}
+
 /// Runs `chunk done` ended on a chunk now in review or done. Empty when no db.
 pub fn ended_runs(db: &Path) -> Vec<EndedRun> {
     let Some(c) = readonly(db) else {

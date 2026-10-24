@@ -85,6 +85,7 @@ name = "fael"
 version = "0.88.0"
 dependencies = [
  "fael-core",
+ "rusqlite",
  "serde",
  "serde_json",
 ]

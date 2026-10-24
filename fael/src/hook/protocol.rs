@@ -52,6 +52,13 @@ pub(crate) struct Event {
     /// the rows pushed into it are gone, so the seen list starts over.
     #[serde(default)]
     pub(crate) source: Option<String>,
+    /// stop/session-start: the model the client reports for this turn
+    /// (Claude/Codex: hook stdin, else the transcript tail; OpenCode: t3).
+    /// Absent stays absent — fael never infers one. Never lands in usage
+    /// rows (run-telemetry t4: usage.jsonl stays model-free); `stop::seen`
+    /// stamps it onto the run row while that row's model is still NULL.
+    #[serde(default)]
+    pub(crate) model: Option<String>,
 }
 
 pub(crate) fn cmd(event: &str, client: Option<String>) -> ExitCode {

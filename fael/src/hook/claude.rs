@@ -21,6 +21,10 @@ struct ClaudeBase {
     /// SessionStart: startup | resume | clear | compact
     #[serde(default)]
     source: Option<String>,
+    /// The model the client ran this turn on, when the client names one —
+    /// else the transcript tail says it (askstats::transcript_model).
+    #[serde(default)]
+    model: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -118,6 +122,7 @@ fn prompt_reply(stdin: &str, client: Option<String>) -> super::protocol::Reply {
         session: p.base.transcript_path.or(p.base.session_id),
         text: Some(p.prompt),
         client,
+        model: p.base.model,
         ..Event::default()
     };
     super::prompt::prompt(&e)
@@ -146,6 +151,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 // SubagentStop runs this arm too
                 agent: p.base.agent_id,
                 client,
+                model: p.base.model,
                 ..Event::default()
             };
             let r = stop(&e);
@@ -163,6 +169,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 session: p.transcript_path.or(p.session_id),
                 source: p.source,
                 client,
+                model: p.model,
                 ..Event::default()
             };
             print_reply("SessionStart", session_start(&e), codex);
@@ -194,6 +201,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 files,
                 agent: p.base.agent_id,
                 client,
+                model: p.base.model,
                 ..Event::default()
             };
             super::cited::note_tool(&e, input);
@@ -214,6 +222,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 session: p.base.transcript_path.or(p.base.session_id),
                 agent: p.base.agent_id,
                 client,
+                model: p.base.model,
                 ..Event::default()
             };
             print_reply(

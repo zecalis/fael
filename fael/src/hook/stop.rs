@@ -30,7 +30,15 @@ pub(super) fn seen(e: &Event) {
     };
     // the id `chunk start` read from $CLAUDE_CODE_SESSION_ID, not the transcript path
     let session = super::state::session_id(session);
-    seen_held(session);
+    // the model this turn ran: stdin first (explicit), else the transcript
+    // tail — both client-reported, never inferred. Stamps live runs whose
+    // model is still NULL, so a start-time --model/approval/hint always wins.
+    let model = e.model.clone().filter(|m| !m.is_empty()).or_else(|| {
+        e.session
+            .as_deref()
+            .and_then(super::askstats::transcript_model)
+    });
+    seen_held(session, model.as_deref());
     let Some(r) = e
         .cwd
         .as_deref()
@@ -41,12 +49,15 @@ pub(super) fn seen(e: &Event) {
     let now = core::rfc3339(core::now_ms());
     let db = core::work::db_for(r.journal.as_deref(), &r.fael);
     let _ = core::work::mark_seen(&db, &r.root.to_string_lossy(), session, &now);
+    if let Some(m) = model.as_deref() {
+        let _ = core::work::mark_model(&db, &r.root.to_string_lossy(), session, m);
+    }
 }
 
 /// The run this session's `chunk start` bound, wherever the session works now: a
 /// `--no-worktree` run has no worktree for [`seen`] to match (issue 01M4N4CVC). The marker
 /// goes once no live run is left.
-fn seen_held(session: &str) {
+fn seen_held(session: &str, model: Option<&str>) {
     let Some(m) = core::work::held_session_file(session) else {
         return;
     };
@@ -60,6 +71,9 @@ fn seen_held(session: &str) {
     };
     let now = core::rfc3339(core::now_ms());
     let n = core::work::mark_seen_session(Path::new(&db), session, &now);
+    if let Some(m) = model {
+        let _ = core::work::mark_model_session(Path::new(&db), session, m);
+    }
     if n == 0 {
         let _ = std::fs::remove_file(m);
     }
