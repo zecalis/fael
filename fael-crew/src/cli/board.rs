@@ -7,7 +7,7 @@
 
 use crate::plan::db;
 use crate::{Args, git, repo, repo_at};
-use fael_crew::{BoardChunk, BoardPlan, Store};
+use fael_crew::{BoardChunk, BoardPlan, Models, Store};
 use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::HashMap;
@@ -33,6 +33,8 @@ struct Board<'a> {
     /// a solo (or lane) start still refuses — `with` names the holder, `as`
     /// the joint mode that unblocks it (pair; follow also works).
     blocked_on_overlap: Vec<JointSpot>,
+    /// cost-per-feature read (run-telemetry t5): merged over every project
+    models: Models,
     projects: Vec<&'a Project>,
 }
 
@@ -65,6 +67,9 @@ struct Project {
     shared: Vec<String>,
     plans: Vec<BoardPlan>,
     chunks: Vec<BoardChunk>,
+    /// cost-per-feature read (run-telemetry t5): this repo's runs; the outer
+    /// board merges every project into one Models card
+    models: Models,
     /// absent in an agent's cut (`--open`, `--plan`): the app reads the whole board
     #[serde(skip_serializing_if = "Option::is_none")]
     ledger: Option<ledger::Ledger>,
@@ -176,6 +181,7 @@ impl Project {
             shared: Vec::new(),
             plans: Vec::new(),
             chunks: Vec::new(),
+            models: Models::default(),
             ledger: None,
             error: None,
         }
@@ -234,6 +240,7 @@ fn project(
         shared,
         plans: b.plans,
         chunks: b.chunks,
+        models: b.models,
         ledger: if cut {
             None
         } else {
@@ -391,6 +398,12 @@ fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
         queue_exclusive,
         queue_joint,
         blocked_on_overlap,
+        models: Models::merge(
+            &projects
+                .iter()
+                .map(|p| p.models.clone())
+                .collect::<Vec<_>>(),
+        ),
         projects,
     }
 }

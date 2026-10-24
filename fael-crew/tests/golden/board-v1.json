@@ -54,6 +54,37 @@
     }
   ],
   "blocked_on_overlap": [],
+  "models": {
+    "total": 4,
+    "with_client_model": 2,
+    "with_cost": 2,
+    "unknown_model_pct": 50.0,
+    "unknown_cost_pct": 50.0,
+    "by_model": {
+      "claude/haiku": {
+        "runs": 1,
+        "cost": 0.43,
+        "unknown_cost_pct": 0.0
+      },
+      "claude/opus": {
+        "runs": 1,
+        "cost": 2.17,
+        "unknown_cost_pct": 0.0
+      },
+      "unknown/unknown": {
+        "runs": 2,
+        "cost": 0.0,
+        "unknown_cost_pct": 100.0
+      }
+    },
+    "window": {
+      "n": 0,
+      "need": 30,
+      "model_pct": null,
+      "cost_pct": null,
+      "pass": null
+    }
+  },
   "projects": [
     {
       "name": "fael",
@@ -652,6 +683,32 @@
           "owner_actions": []
         }
       ],
+      "models": {
+        "total": 2,
+        "with_client_model": 1,
+        "with_cost": 1,
+        "unknown_model_pct": 50.0,
+        "unknown_cost_pct": 50.0,
+        "by_model": {
+          "claude/opus": {
+            "runs": 1,
+            "cost": 2.17,
+            "unknown_cost_pct": 0.0
+          },
+          "unknown/unknown": {
+            "runs": 1,
+            "cost": 0.0,
+            "unknown_cost_pct": 100.0
+          }
+        },
+        "window": {
+          "n": 0,
+          "need": 30,
+          "model_pct": null,
+          "cost_pct": null,
+          "pass": null
+        }
+      },
       "ledger": {
         "issues": [
           {
@@ -913,6 +970,32 @@
           ]
         }
       ],
+      "models": {
+        "total": 2,
+        "with_client_model": 1,
+        "with_cost": 1,
+        "unknown_model_pct": 50.0,
+        "unknown_cost_pct": 50.0,
+        "by_model": {
+          "claude/haiku": {
+            "runs": 1,
+            "cost": 0.43,
+            "unknown_cost_pct": 0.0
+          },
+          "unknown/unknown": {
+            "runs": 1,
+            "cost": 0.0,
+            "unknown_cost_pct": 100.0
+          }
+        },
+        "window": {
+          "n": 0,
+          "need": 30,
+          "model_pct": null,
+          "cost_pct": null,
+          "pass": null
+        }
+      },
       "ledger": {
         "issues": [],
         "decisions": [],

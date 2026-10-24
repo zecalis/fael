@@ -168,6 +168,8 @@ newest-first across repos.
 
 Newest first.
 
+- `5` (2026-10-24): board gains a Models read (run-telemetry t5): `Board.models` joins crew.db run rows (client/model/cost/started, worktree as the agent-started gate, session as the usage join key) with unknown-% beside every cost number — new key only, so no bump (`STATS_SCHEMA` frozen for this plan; old NULL rows never backfilled).
+
 - `5` (2026-10-19): throughput dedupes restarts by chunk uid (latest `ended` wins), so the series sums to the distinct done-chunk count; no bump.
 
 - `5` (2026-10-19): added `usage` (calls per command and flag, agent and human, ok/help/reject; PLAN cli-tiers chunk measure) — a new key only, so no bump (`STATS_SCHEMA` bumps only on a removed or redefined field). `ok` call lines now carry `verb`/`flags`/`npos`, and a call outside an agent session writes a `who: "human"` line that `friction` skips.

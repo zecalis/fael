@@ -93,7 +93,58 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
     if out.is_empty() {
         out.push_str(&empty_msg(b, plan_cut));
     }
+    out.push_str(&models_card(b));
     out.push_str(&repos_line(b));
+    out
+}
+
+/// Cost-per-feature read (run-telemetry t5): totals with unknown-% beside
+/// every cost number, per-model sums, and the 30-run verdict window.
+/// Old NULL rows stay NULL — the unknown-% is the point, not a gap to fill.
+fn models_card(b: &Board) -> String {
+    let m = &b.models;
+    if m.total == 0 {
+        return String::new();
+    }
+    let mut out = String::from("models\n");
+    out.push_str(&format!(
+        "  runs {} · with model {} (unknown {:.1}%) · with cost {} (unknown {:.1}%)\n",
+        m.total, m.with_client_model, m.unknown_model_pct, m.with_cost, m.unknown_cost_pct
+    ));
+    let mut by: Vec<(&String, &fael_crew::ModelRow)> = m.by_model.iter().collect();
+    by.sort_by_key(|(_, r)| std::cmp::Reverse(r.runs));
+    let shown = 5;
+    let parts: Vec<String> = by
+        .iter()
+        .take(shown)
+        .map(|(k, r)| {
+            format!(
+                "{k} {} runs ${:.6} (unknown {:.1}%)",
+                r.runs, r.cost, r.unknown_cost_pct
+            )
+        })
+        .collect();
+    if !parts.is_empty() {
+        let more = by.len().saturating_sub(parts.len());
+        let tail = if more > 0 {
+            format!(" (+{more} more)")
+        } else {
+            String::new()
+        };
+        out.push_str(&format!("  by model: {}{tail}\n", parts.join(" · ")));
+    }
+    let w = &m.window;
+    let verdict = match w.pass {
+        Some(true) => "pass",
+        Some(false) => "fail",
+        None => "pending",
+    };
+    let mp = w.model_pct.map_or("—".into(), |v| format!("{v:.1}%"));
+    let cp = w.cost_pct.map_or("—".into(), |v| format!("{v:.1}%"));
+    out.push_str(&format!(
+        "  window {}/{}: {verdict} (model {mp}, cost {cp})\n",
+        w.n, w.need
+    ));
     out
 }
 

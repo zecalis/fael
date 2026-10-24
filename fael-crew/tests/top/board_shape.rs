@@ -232,6 +232,7 @@ fn subkeys(c: &Value, uid: &str) {
 fn board_v1_shape() {
     let b = board();
     assert_eq!(b["v"], 1);
+    models_coherent(&b);
     for p in b["projects"].as_array().unwrap() {
         ledger(&p["ledger"]);
         // `.fael/shared` (PLAN-fael-parallel shared-files): absent = none, never empty
@@ -327,4 +328,38 @@ fn board_v1_shape() {
         let c = by_uid(u);
         assert!(c["state"] == "open" && !c["blocked_by"].as_array().unwrap().is_empty());
     }
+}
+
+/// Models read (run-telemetry t5): every block's totals equal the sum of its
+/// groups, and the outer block is the merge of the projects' — so the golden
+/// cannot teach totals ≠ groups or outer ≠ merge.
+fn models_coherent(b: &Value) {
+    let sum_runs = |m: &Value| {
+        m["by_model"]
+            .as_object()
+            .unwrap()
+            .values()
+            .map(|r| r["runs"].as_u64().unwrap())
+            .sum::<u64>()
+    };
+    let projects = b["projects"].as_array().unwrap();
+    for p in projects {
+        let m = &p["models"];
+        assert_eq!(m["total"].as_u64().unwrap(), sum_runs(m), "{}", p["name"]);
+    }
+    let outer = &b["models"];
+    let total: u64 = projects
+        .iter()
+        .map(|p| p["models"]["total"].as_u64().unwrap())
+        .sum();
+    assert_eq!(
+        outer["total"].as_u64().unwrap(),
+        total,
+        "outer is the merge"
+    );
+    assert_eq!(
+        outer["total"].as_u64().unwrap(),
+        sum_runs(outer),
+        "outer groups sum"
+    );
 }
