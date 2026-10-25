@@ -77,6 +77,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "capture",
             "constants",
             "context_loop",
+            "days",
             "est_tokens",
             "events",
             "experience",
@@ -181,6 +182,7 @@ fn json_shape_flow_and_throughput_are_frozen() {
         "{v}"
     );
     assert!(v["throughput"].is_array(), "{v}");
+    assert_eq!(v["days"][0]["day"], "2026-09-26", "{v}");
 }
 
 #[test]
