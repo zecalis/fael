@@ -16,6 +16,22 @@ impl Store {
     }
 }
 
+impl Store {
+    /// What `stale_warnings` reads of a chunk — `(title, brief, issues)` — without the rest of
+    /// `show` (sections, hand-offs, live overlaps): the board asks it once per open chunk.
+    pub fn stale_input(&self, uid: &str) -> Result<(String, String, Vec<String>), String> {
+        let tx = self.conn.unchecked_transaction().map_err(err)?;
+        let (id, title, brief) = tx
+            .query_row(
+                "SELECT id, title, brief FROM chunk WHERE uid = ?1",
+                [uid],
+                |r| Ok((r.get::<_, i64>(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .map_err(err)?;
+        Ok((title, brief, super::issue::of(&tx, id)?))
+    }
+}
+
 /// `skip` = how many starts back the answers and notes count from: 1 inside a start (its
 /// own event is the newest), 0 for the start still to come. `start` = this start's R:
 /// the brief names the model it runs; None = the next start's (latest run, approval, hint).

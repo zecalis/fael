@@ -103,10 +103,17 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         return watch::run(a);
     }
     let (at, stale) = clock();
-    let mut projects: Vec<Project> = registered()
-        .iter()
-        .filter_map(|root| read(root, &at, &stale, a))
-        .collect();
+    // one thread per repo: each read waits mostly on its own git/gh children
+    let roots = registered();
+    let mut projects: Vec<Project> = std::thread::scope(|sc| {
+        let jobs: Vec<_> = roots
+            .iter()
+            .map(|root| sc.spawn(|| read(root, &at, &stale, a)))
+            .collect();
+        jobs.into_iter()
+            .filter_map(|j| j.join().expect("board read panicked"))
+            .collect()
+    });
     prs::live_branches(&mut projects);
     let broken = projects.iter().any(|p| p.error.is_some());
     let b = lists(at, projects.iter().collect());
@@ -289,9 +296,8 @@ fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
         if matches!(c.state.as_str(), "done" | "dropped" | "replaced") {
             continue;
         }
-        if let Ok(b) = s.show(&c.uid) {
-            c.stale =
-                crate::chunk_scope::stale_warnings(&b.title, &b.brief, &b.issues, &log, &b.uid);
+        if let Ok((title, brief, issues)) = s.stale_input(&c.uid) {
+            c.stale = crate::chunk_scope::stale_warnings(&title, &brief, &issues, &log, &c.uid);
         }
     }
 }
