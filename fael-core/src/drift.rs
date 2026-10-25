@@ -60,17 +60,7 @@ fn drifted<'a>(log: &'a core::Log, root: &Path) -> Vec<(usize, &'a core::Row)> {
         return vec![];
     };
     let since = format!("@{}", oldest / 1000);
-    let Some(out) = crate::repo::git(
-        root,
-        &[
-            "log",
-            "--format=%x01%ct",
-            "--name-only",
-            "--since",
-            &since,
-            "HEAD",
-        ],
-    ) else {
+    let Some(out) = log_out(root, &since) else {
         return vec![];
     };
     let commits = parse(&out);
@@ -78,6 +68,37 @@ fn drifted<'a>(log: &'a core::Log, root: &Path) -> Vec<(usize, &'a core::Row)> {
         .map(|(r, ms)| (moved(r, ms, &commits), r))
         .filter(|(n, _)| *n >= DRIFT_COMMITS)
         .collect()
+}
+
+/// The `git log` text for `since`, kept in the state dir while HEAD and `since`
+/// stay put: the walk is most of a board read (~70 ms a repo) and the answer
+/// only moves with a commit. ponytail: one file per clone, never pruned; a
+/// failed write costs the next call a re-run.
+fn log_out(root: &Path, since: &str) -> Option<String> {
+    use std::hash::{Hash, Hasher};
+    let head = crate::repo::git(root, &["rev-parse", "HEAD"])?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    root.hash(&mut h);
+    let file = crate::stats::state_dir().join(format!("drift-{:x}.txt", h.finish()));
+    let key = format!("{head} {since}\n");
+    if let Ok(cached) = std::fs::read_to_string(&file)
+        && let Some(body) = cached.strip_prefix(&key)
+    {
+        return Some(body.to_string());
+    }
+    let out = crate::repo::git(
+        root,
+        &[
+            "log",
+            "--format=%x01%ct",
+            "--name-only",
+            "--since",
+            since,
+            "HEAD",
+        ],
+    )?;
+    let _ = std::fs::write(&file, format!("{key}{out}"));
+    Some(out)
 }
 
 /// `git log --format=%x01%ct --name-only` → (commit seconds, paths).
@@ -181,17 +202,7 @@ pub fn detail(log: &core::Log, root: &Path) -> Vec<(core::Row, String, usize, us
         return vec![];
     };
     let since = format!("@{}", oldest / 1000);
-    let Some(out) = crate::repo::git(
-        root,
-        &[
-            "log",
-            "--format=%x01%ct",
-            "--name-only",
-            "--since",
-            &since,
-            "HEAD",
-        ],
-    ) else {
+    let Some(out) = log_out(root, &since) else {
         return vec![];
     };
     let commits = parse(&out);
