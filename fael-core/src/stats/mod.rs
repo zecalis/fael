@@ -14,6 +14,7 @@ mod by_flag;
 mod capture;
 mod cross;
 mod day;
+mod days;
 mod experience;
 #[cfg(test)]
 mod experience_tests;

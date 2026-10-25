@@ -84,7 +84,7 @@ fn monday_days(ms: i64) -> i64 {
     days - (days + 3).rem_euclid(7)
 }
 
-fn monday_string(days: i64) -> String {
+pub(super) fn day_string(days: i64) -> String {
     rfc3339((days * 86_400_000).max(0) as u64)
         .get(..10)
         .unwrap_or("")
@@ -207,7 +207,7 @@ pub fn throughput(parsed: &Parsed, runs: &[FlowRun]) -> Vec<WeekCount> {
     let mut d = first;
     while d <= last {
         out.push(WeekCount {
-            week: monday_string(d),
+            week: day_string(d),
             done: per_week.get(&d).copied().unwrap_or(0),
         });
         d += 7;
