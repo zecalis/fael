@@ -155,10 +155,11 @@ pub(crate) fn done(
     uid: &str,
     handoff: &str,
     here: &Here,
+    pr_default: Option<String>,
 ) -> Result<(), String> {
     a.only("chunk done", &["pr", "out", "run", "review", "left"])?;
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
-    let raw = a.one("pr");
+    let raw = a.one("pr").or(pr_default);
     let pr = raw
         .as_deref()
         .map(|n| {

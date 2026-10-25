@@ -1,10 +1,10 @@
 //! `chunk done --left none|<id|uid>,…` (issue 01M5FMHQX): what the chunk leaves undone is a
-//! row the next session finds, not prose in a PR body. `git ship` closes a chunk with its
-//! `finished:` note, so a `left:` line in the hand-off says the same and counts as the flag.
+//! row the next session finds, not prose in a PR body. a `left:` line in the hand-off
+//! says the same and counts as the flag.
 
 use fael_crew::Store;
 
-const HOW: &str = "file the leftover first: `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` or `fael add issue \"<text>\" --files <f>`; `--left none` when nothing is left (git ship: a `left: none|<ids>` line in the `finished:` note)";
+const HOW: &str = "file the leftover first: `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` or `fael add issue \"<text>\" --files <f>`; `--left none` when nothing is left";
 
 /// The value of the hand-off's `left:` line.
 fn line(handoff: &str) -> Option<String> {

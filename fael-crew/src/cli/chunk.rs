@@ -169,7 +169,8 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             s()?.unafter(uid, other, why, &now)?;
             say(uid, &format!("no longer after {other}"));
         }
-        ["done", uid, handoff] => crate::chunk_run::done(a, r, uid, handoff, &here)?,
+        ["done", uid, handoff] => crate::chunk_run::done(a, r, uid, handoff, &here, None)?,
+        ["done", handoff] => crate::chunk_here::done(a, r, handoff, &here)?,
         [verb @ ("answer" | "drop" | "park"), uid, text] => {
             a.only(&format!("chunk {verb}"), &[])?;
             let (cmd, to) = crate::chunk_ask::owner(verb);
