@@ -188,7 +188,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         return;
     }
     record(
-        "cli",
+        crate::session::env_client(),
         cmd,
         Some(&root),
         &session,
@@ -287,6 +287,16 @@ pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
         by.iter()
             .map(|(k, t)| format!("    {k} ({} calls): {}", t.calls, tally_text(t))),
     );
+    // the client is only known for calls from a shell with a session env; MCP and plain CLI read `mcp` / `cli`
+    let mut cl: Vec<_> = f.by_client.iter().collect();
+    cl.sort_by_key(|(k, t)| (std::cmp::Reverse(t.calls), *k));
+    if cl.len() > 1 {
+        out.push("  friction by client:".into());
+        out.extend(
+            cl.iter()
+                .map(|(k, t)| format!("    {k} ({} calls): {}", t.calls, tally_text(t))),
+        );
+    }
     out
 }
 
@@ -348,6 +358,7 @@ mod tests {
             by_command: [("find".to_string(), t)].into(),
             shape_gate: 2,
             shape_gate_rules: [("untitled".to_string(), 2)].into(),
+            ..Friction::default()
         };
         let l = lines(&f);
         assert_eq!(

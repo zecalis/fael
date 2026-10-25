@@ -142,7 +142,7 @@ fn stats_json_matches_golden_values() {
             "unused_rows": [],
             "flow": {"filed_to_close": {"median": 0, "p90": 0, "n": 0}, "start_to_done": {"median": 0, "p90": 0, "n": 0}, "done_to_merge": {"median": 0, "p90": 0, "n": 0}, "runs_with_pr": 0, "runs_total": 0},
             "throughput": [],
-            "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "shape_gate": 0, "shape_gate_rules": {}},
+            "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "by_client": {}, "shape_gate": 0, "shape_gate_rules": {}},
             "usage": {"since": "", "by_flag": []},
             "said": said,
             "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}},

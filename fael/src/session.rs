@@ -50,6 +50,24 @@ fn env_session() -> String {
     String::new()
 }
 
+/// The client behind a CLI call, by the same env keys `env_session` reads and
+/// nothing else: `FAEL_SESSION` is OpenCode's, then Claude's, then Codex's;
+/// none = a plain `cli`.
+pub(crate) fn env_client() -> &'static str {
+    client_of(|k| std::env::var(k).unwrap_or_default())
+}
+
+fn client_of(get: impl Fn(&str) -> String) -> &'static str {
+    [
+        ("FAEL_SESSION", "opencode"),
+        ("CLAUDE_CODE_SESSION_ID", "claude"),
+        ("CODEX_THREAD_ID", "codex"),
+    ]
+    .into_iter()
+    .find(|(k, _)| !get(k).is_empty())
+    .map_or("cli", |(_, c)| c)
+}
+
 pub(crate) fn hook_session(root: &Path) -> String {
     let env = env_session();
     if env.is_empty() {
@@ -288,4 +306,31 @@ pub(crate) fn derive(root: &Path, log: &core::Log) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod client_tests {
+    use super::client_of;
+
+    #[test]
+    fn client_follows_the_env_key() {
+        let env = |set: &'static [&'static str]| {
+            move |k: &str| {
+                if set.contains(&k) {
+                    "x".to_string()
+                } else {
+                    String::new()
+                }
+            }
+        };
+        assert_eq!(client_of(env(&["FAEL_SESSION"])), "opencode");
+        assert_eq!(client_of(env(&["CLAUDE_CODE_SESSION_ID"])), "claude");
+        assert_eq!(client_of(env(&["CODEX_THREAD_ID"])), "codex");
+        assert_eq!(client_of(env(&[])), "cli");
+        // opencode inside a Claude shell: the fresher signal wins, as in env_session
+        assert_eq!(
+            client_of(env(&["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID"])),
+            "opencode"
+        );
+    }
 }
