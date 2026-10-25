@@ -260,16 +260,26 @@ fn project(
     }))
 }
 
-/// `--lean` (hidden): a finished chunk keeps its row but not `handoff`, `run` or
-/// `touched` — 0.5 of the 1.7 MB board is those. The app loads them on open with
-/// `fael chunk show <uid> --json`, which prints the same chunk object in full.
+/// `--lean` (hidden): a finished chunk keeps its row and a small summary — `handoff.at`
+/// (text emptied), `run` id/client/model/branch/pr/started/cost — but not `touched`;
+/// 0.5 of the 1.7 MB board is the rest. The app loads the full chunk on open with
+/// `fael chunk show <uid> --json` (issue 01M5SX3T).
 fn lean(chunks: &mut [BoardChunk]) {
     for c in chunks
         .iter_mut()
         .filter(|c| matches!(c.state.as_str(), "done" | "dropped" | "replaced"))
     {
-        c.handoff = None;
-        c.run = None;
+        if let Some(h) = c.handoff.as_mut() {
+            h.text.clear();
+        }
+        if let Some(r) = c.run.as_mut() {
+            r.session = None;
+            r.worktree = None;
+            r.out = None;
+            r.last_seen = None;
+            r.ended = None;
+            r.review = None;
+        }
         c.touched = None;
     }
 }

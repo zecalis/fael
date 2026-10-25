@@ -39,8 +39,8 @@ pub use agent::{Copy, Outside, RunRow};
 pub use apply::Op;
 pub use bill::Bill;
 pub use board::{
-    Blocker, Board, Chunk as BoardChunk, CostWindow, ModelRow, Models, OverlapHow,
-    Plan as BoardPlan, Run as BoardRun,
+    Blocker, Board, Chunk as BoardChunk, CostWindow, Handoff as BoardHandoff, ModelRow, Models,
+    OverlapHow, Plan as BoardPlan, Run as BoardRun,
 };
 pub use board_math::{overlap, overlap_how, overlaps};
 pub use brief::rules;
