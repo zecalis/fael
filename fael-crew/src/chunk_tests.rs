@@ -15,6 +15,14 @@ pub(crate) fn here(wt: &str) -> Here<'_> {
     }
 }
 
+/// Same as `here`, on another branch (a different branch is a different work).
+pub(crate) fn here_on<'a>(wt: &'a str, branch: &'a str) -> Here<'a> {
+    Here {
+        branch: Some(branch),
+        ..here(wt)
+    }
+}
+
 pub(crate) fn add(s: &mut Store, title: &str, brief: Option<&str>) -> String {
     let f = Fields {
         title: Some(title.into()),
@@ -119,7 +127,7 @@ fn run_end_forced_takeover_and_fencing() {
     let r3 = s.start(&c, &force, &here("/c")).unwrap().run;
     assert_eq!(live(&s, &c), 1);
     let e = s
-        .wait(&c, "owner", "q?", None, &[], &here("/b"))
+        .wait(&c, "owner", "q?", None, &[], &here_on("/b", "x"))
         .unwrap_err();
     assert!(
         e.contains(&format!(
@@ -131,13 +139,15 @@ fn run_end_forced_takeover_and_fencing() {
         e.contains(&format!("try the same command with --run {r3}")),
         "the reject names the flag: {e}"
     );
-    assert!(s.done(&c, "h", Some(1), None, &here("/b")).is_err());
+    assert!(s.done(&c, "h", Some(1), None, &here_on("/b", "x")).is_err());
+    // the run's own branch from another worktree is the same work: passes
+    s.touch(&c, &["src/z.rs".to_string()], &here("/z")).unwrap();
     // the old shell's cleanup never ends the new start
     assert_eq!(s.run_end(&r2, None, NOW).unwrap(), 0);
     assert_eq!(live(&s, &c), 1);
     // one start per worktree
     let other = add(&mut s, "other", Some("b"));
-    let e = s.after(&c, &other, "why", &here("/b")).unwrap_err();
+    let e = s.after(&c, &other, "why", &here_on("/b", "x")).unwrap_err();
     assert!(e.contains("was started in"), "after is fenced too: {e}");
     assert_eq!(live(&s, &c), 1, "a fenced after ends no run");
     // one worktree is one seat: another chunk's live run there ends, the start goes through

@@ -105,13 +105,16 @@ pub(super) fn end_live(tx: &Transaction, chunk: i64, now: &str) -> Result<usize,
     .map_err(err)
 }
 
-/// A running chunk answers only to the worktree of its latest run, or to `--run R` naming it.
+/// (start, worktree, client, branch) of a chunk's latest run.
+type RunSeat = (String, Option<String>, Option<String>, Option<String>);
+
+/// A running chunk answers only to the worktree of its latest run, its branch, or `--run R` naming it.
 pub(super) fn fence(tx: &Transaction, r: &Row, here: &Here) -> Result<(), String> {
-    let Some((start, wt, client)): Option<(String, Option<String>, Option<String>)> = tx
+    let Some((start, wt, client, branch)): Option<RunSeat> = tx
         .query_row(
-            "SELECT start, worktree, client FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1",
+            "SELECT start, worktree, client, branch FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1",
             [r.id],
-            |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?)),
+            |q| Ok((q.get(0)?, q.get(1)?, q.get(2)?, q.get(3)?)),
         )
         .optional()
         .map_err(err)?
@@ -126,6 +129,8 @@ pub(super) fn fence(tx: &Transaction, r: &Row, here: &Here) -> Result<(), String
         )),
         (Some(_), _) => Ok(()),
         _ if r.state != State::Running => Ok(()),
+        // git allows a branch in one worktree only: the run's branch here is the same work
+        (None, Some(_)) if branch.is_some() && branch.as_deref() == here.branch => Ok(()),
         (None, Some(w)) if w != here.worktree => Err(format!(
             "rejected: chunk {}'s run {start} ({who}) was started in {w}, not here ({}) — if {start} is yours, try the same command with --run {start}; else `fael chunk show {}`",
             r.uid, here.worktree, r.uid

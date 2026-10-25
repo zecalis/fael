@@ -2,7 +2,7 @@
 //! brief of a chunk written before it (issue 01M5FMHQX).
 
 use super::super::chunk::Here;
-use super::super::chunk::tests::{NOW, add, here, start};
+use super::super::chunk::tests::{NOW, add, here, here_on, start};
 use super::super::{Fields, Start, Store};
 use rusqlite::params;
 
@@ -279,7 +279,11 @@ fn touch_unions_never_infers_and_only_running_counts() {
     assert_eq!(b.live[1].0, "a");
     // a fenced touch (another worktree without --run) changes nothing
     let e = s
-        .touch(&a, &["src/nope.rs".to_string()], &here("/elsewhere"))
+        .touch(
+            &a,
+            &["src/nope.rs".to_string()],
+            &here_on("/elsewhere", "x"),
+        )
         .unwrap_err();
     assert!(
         e.contains("was started in /wa, not here (/elsewhere)"),

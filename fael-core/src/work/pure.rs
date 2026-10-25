@@ -149,6 +149,7 @@ pub fn rules(uid: &str, model: Option<&str>) -> String {
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
+         - via MCP, pass `cwd` (your working directory) on every chunk call, or the client's launch dir is recorded as your seat\n\
          - lane (joint `--as lane`): one scope per worktree, own branch each — land in plan order, first-listed chunk first, as a suggestion only; the owner merges every PR, fael never enforces an order or guards git flow\n\
          - lane: end your run (`fael run end <R>`) before rebasing onto a lane that already landed, so its own diff is claimed first; `chunk done` and `run end` still say `outside declared scope` (+ `(overlaps open chunk …)`) as a fact, never a refusal\n\
          - leftovers are rows, not PR prose: file each first (`fael add issue \"<one topic, no ; list>\" --title \"<≤15 words>\" --files <f>` or `fael chunk add …`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…`; a `finished:` note says it as its own `left: none|<id|uid>,…` line — done refuses without it\n\
