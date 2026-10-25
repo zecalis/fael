@@ -100,6 +100,22 @@ fn rejects_read_as_their_family() {
 }
 
 #[test]
+fn start_refusals_read_apart_from_state_moves() {
+    for (msg, want) in [
+        (
+            "rejected: chunk 01M5AAAA shares files with a running chunk — 01M5BBBB (p/x): [prefix] a.rs; try `fael chunk start 01M5AAAA --with 01M5BBBB --as lane` to start beside it, or `fael chunk start 01M5AAAA --force` to start it anyway",
+            "scope_overlap",
+        ),
+        (
+            "rejected: chunk 01M5AAAA is held by run 01M5RRRR — try `fael chunk start 01M5AAAA --force` to take it over",
+            "held",
+        ),
+    ] {
+        assert_eq!(reject(msg), want, "{msg}");
+    }
+}
+
+#[test]
 fn a_gate_names_each_rule_once() {
     let m = "rejected: nothing written — text has 4 topic separators (; / ·) — one topic per row · \
 text is 131 words with no title — add --title · decision has no --key — add --key — try `fael add decision \"<one topic>\" --files a`";

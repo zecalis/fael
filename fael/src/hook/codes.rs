@@ -13,6 +13,9 @@ use crate::core;
 const REJECTS: &[(&str, &str)] = &[
     // the gate quotes other faults in its reasons: first, before any of them
     ("nothing written", core::stats::SHAPE_GATE),
+    // chunk start refusals (fael-crew joint.rs / start.rs): apart from state moves
+    ("shares files with a running chunk", "scope_overlap"),
+    ("is held by run", "held"),
     ("unknown command", "unknown_command"),
     ("unknown tool", "unknown_command"),
     ("unknown chunk verb", "unknown_command"),
