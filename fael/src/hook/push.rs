@@ -210,9 +210,11 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         .filter(|(r, t)| out.has(&r.id) && core::bucket(r, *t, &focus) == core::Bucket::File)
         .count();
     tiered.retain(|(r, _)| !out.has(&r.id));
+    let share = c.repo.journal.as_deref().unwrap_or(&c.repo.root);
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
+        share,
         files: &files,
         al: &al,
         session: &c.session,
@@ -252,6 +254,13 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         clear_stash(&c.session, &c.repo.root);
     }
     let mut r = out.reply();
+    // remember the state of the issues actually asked (a budget-cut ask is not)
+    let asked: Vec<&core::Row> = t0
+        .iter()
+        .map(|(row, _)| *row)
+        .filter(|row| r.said().iter().any(|s| s.ask_id() == Some(&row.id)))
+        .collect();
+    super::asked::record(&c.log, share, &asked);
     if let Some(context) = r.context() {
         let decision = decision::record(trigger, &sel, n, &focus);
         let meta = UsageMeta {

@@ -184,6 +184,13 @@ pub(crate) struct Said {
     key: Option<String>,
 }
 
+impl Said {
+    /// The issue id of a said edit ask, `None` for any other line.
+    pub(crate) fn ask_id(&self) -> Option<&str> {
+        self.key.as_deref().filter(|_| self.kind == "ask")
+    }
+}
+
 impl Kind {
     fn said(&self) -> Vec<Said> {
         let (kind, keys) = match self {

@@ -90,6 +90,7 @@ mod tests {
         let ask = Ask {
             log,
             root: std::path::Path::new("."),
+            share: std::path::Path::new("."),
             files: &files,
             al: &al,
             session: "",

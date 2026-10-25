@@ -224,6 +224,9 @@ fn blob_at(root: &Path, target: &str, cap: u64) -> Option<String> {
 pub(crate) struct Ask<'a> {
     pub log: &'a core::Log,
     pub root: &'a Path,
+    /// Clone-shared dir (the journal, else `root`): what every worktree of
+    /// one clone keys shared hook state by (`asked`).
+    pub share: &'a Path,
     pub files: &'a [String],
     pub al: &'a core::Aliases,
     pub session: &'a str,
@@ -304,7 +307,14 @@ pub(super) fn own_row(r: &core::Row, session: &str) -> bool {
 fn stale_hint(ask: &Ask, rows: &[&core::Row], blobs: &mut Blobs) -> Option<Hint> {
     let mut changed_rows: Vec<(&core::Row, String)> = vec![];
     let mut unknown_rows: Vec<&core::Row> = vec![];
-    for r in rows.iter().filter(|r| !ask.hinted.contains(&r.id)) {
+    // an earlier session already asked and the row has not changed since
+    let fresh: Vec<&core::Row> = rows
+        .iter()
+        .copied()
+        .filter(|r| !ask.hinted.contains(&r.id))
+        .collect();
+    let before = super::asked::already_asked(&fresh, ask.log, ask.share);
+    for r in fresh.iter().filter(|r| !before.contains(&r.id)) {
         match verdict(r, ask.root, ask.al, blobs, ask.files, PUSH_MAX_BYTES) {
             Verdict::Changed(f) => changed_rows.push((r, f)),
             Verdict::Same => {}
