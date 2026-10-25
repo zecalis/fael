@@ -105,7 +105,8 @@ pub(crate) fn capture(args: &[String], dir: &std::path::Path) -> Result<String, 
     let bin = locate().ok_or(MISSING)?;
     let mut cmd = Command::new(&bin);
     cmd.args(args).current_dir(dir);
-    if let Ok(me) = std::env::current_exe() {
+    // a replaced MCP server hands the write to the installed fael, not its own old exe
+    if let Some(me) = crate::mcp::installed_exe().or_else(|| std::env::current_exe().ok()) {
         cmd.env("FAEL_BIN", me);
     }
     let out = cmd
