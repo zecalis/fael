@@ -99,8 +99,8 @@ pub(crate) enum Kind {
     /// The held chunk's brief, scope or title was edited after its run started; the key
     /// names the edit event, so a later edit says again.
     BriefDrift { key: String },
-    /// A step commit in a worktree holding a chunk whose last note (if any)
-    /// is not `finished:`: ask for the checkpoint note a resume reads. The key
+    /// A step commit in a worktree holding a chunk: ask for the checkpoint
+    /// note a resume reads. The key
     /// names the last note's event id, so it is asked once per gap between notes.
     Checkpoint { key: String },
     /// A note said in its last session (`spent_notes`): file it as a decision, or let it go.

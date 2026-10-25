@@ -134,18 +134,12 @@ fn holds_chunk(repo: &crate::Repo) -> bool {
     crate::core::work::has_held(&db, &repo.root.to_string_lossy())
 }
 
-/// The checkpoint ask of a step commit: the held chunk's uid, unless its last
-/// note since the run started is `finished:`. Keyed on that note's event id, so
-/// it is asked once per gap between notes. No crew.db, no run = nothing.
+/// The checkpoint ask of a step commit: the held chunk's uid. Keyed on its last
+/// note's event id, so it is asked once per gap between notes. No crew.db, no
+/// run = nothing.
 fn checkpoint(repo: &crate::Repo) -> Option<super::say::Line> {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
     let (uid, last) = crate::core::work::last_note(&db, &repo.root.to_string_lossy())?;
-    if last
-        .as_ref()
-        .is_some_and(|(_, t)| t.starts_with("finished:"))
-    {
-        return None;
-    }
     let id = last.map_or(0, |(id, _)| id);
     Some(super::say::Line {
         kind: super::say::Kind::Checkpoint {

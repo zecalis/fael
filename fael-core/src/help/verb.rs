@@ -149,7 +149,7 @@ fn example(cmd: &str, verb: &str) -> Option<&'static str> {
         }
         ("chunk", "move") => Some("fael chunk move 01M582E4V1RQR033P5V00B4WVV --plan other-plan"),
         ("chunk", "note") => {
-            Some("fael chunk note 01M582E4V1RQR033P5V00B4WVV \"finished: verbs; next examples\"")
+            Some("fael chunk note 01M582E4V1RQR033P5V00B4WVV \"verbs done; next examples\"")
         }
         ("chunk", "touch") => Some("fael chunk touch 01M582E4V1RQR033P5V00B4WVV src/a.rs"),
         ("chunk", "wait") => Some(
@@ -161,9 +161,7 @@ fn example(cmd: &str, verb: &str) -> Option<&'static str> {
         ("chunk", "unafter") => Some(
             "fael chunk unafter 01M582E4V1RQR033P5V00B4WVV 01M582E4V1RQR033P5V00B4WVV \"no longer blocked\"",
         ),
-        ("chunk", "done") => Some(
-            "fael chunk done 01M582E4V1RQR033P5V00B4WVV \"finished: verbs ship\" --left none --pr 12",
-        ),
+        ("chunk", "done") => Some("fael chunk done \"verbs ship\" --left none"),
         ("chunk", "answer") => {
             Some("fael chunk answer 01M582E4V1RQR033P5V00B4WVV \"the count is 210\"")
         }
