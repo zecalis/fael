@@ -317,3 +317,40 @@ fn lean_cuts_only_finished_chunks() {
     assert!(cs[0].touched.is_none());
     assert!(cs[1].touched.is_some());
 }
+
+#[test]
+fn lean_keeps_the_summary_of_a_finished_chunk() {
+    let mut done = ready("d", 0);
+    done.state = "done".into();
+    done.handoff = Some(fael_crew::BoardHandoff {
+        at: "t".into(),
+        text: "long".into(),
+    });
+    done.run = Some(fael_crew::BoardRun {
+        id: "R".into(),
+        client: None,
+        session: Some("s".into()),
+        model: Some("m".into()),
+        worktree: None,
+        branch: None,
+        pr: Some(7),
+        out: None,
+        started: "t".into(),
+        last_seen: None,
+        ended: None,
+        cost: Some(1.5),
+        review: None,
+        joint: None,
+        partner: None,
+    });
+    let mut cs = vec![done];
+    lean(&mut cs);
+    let h = cs[0].handoff.as_ref().unwrap();
+    assert_eq!((h.at.as_str(), h.text.as_str()), ("t", ""));
+    let r = cs[0].run.as_ref().unwrap();
+    assert_eq!(
+        (r.pr, r.cost, r.model.as_deref()),
+        (Some(7), Some(1.5), Some("m"))
+    );
+    assert!(r.session.is_none());
+}
