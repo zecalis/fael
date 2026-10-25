@@ -132,8 +132,10 @@ pub(super) fn merged_prs(root: &Path) -> Option<BTreeMap<String, Vec<Merge>>> {
 pub(super) fn gh_prs(root: &Path) -> Option<String> {
     static ALL: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     ALL.get_or_init(|| {
-        let out = std::process::Command::new("gh")
-            .args([
+        let out = crate::hook::flow::gh_raw(
+            root,
+            "gh-prs.json",
+            &[
                 "pr",
                 "list",
                 "--state",
@@ -142,13 +144,9 @@ pub(super) fn gh_prs(root: &Path) -> Option<String> {
                 "headRefName,state,mergedAt,number",
                 "--limit",
                 "200",
-            ])
-            .current_dir(root)
-            .output()
-            .ok()?;
-        out.status
-            .success()
-            .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+            ],
+        )?;
+        Some(String::from_utf8_lossy(&out).into_owned())
     })
     .clone()
 }
