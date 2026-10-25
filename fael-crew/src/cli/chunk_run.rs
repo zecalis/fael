@@ -75,6 +75,11 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             }
         }
     }
+    for (u, t) in &st.orphaned {
+        println!(
+            "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --pr N --left none|<ids>"
+        );
+    }
     print!("{}", st.text());
     if let (Some(w), Some(j)) = (&o.with, o.joint) {
         println!("joint {} with {w} (run {})", j.as_str(), st.run);

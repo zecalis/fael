@@ -39,6 +39,7 @@ fn a_done_chunk_on_my_files_is_handed_over_with_its_left_ids() {
     let t = super::super::start::Started {
         run: "R".into(),
         chunks: vec![b],
+        orphaned: vec![],
     }
     .text();
     assert!(
@@ -95,6 +96,7 @@ fn by_file_is_newest_first_and_capped_with_the_rest_counted() {
     let t = super::super::start::Started {
         run: "R".into(),
         chunks: vec![b],
+        orphaned: vec![],
     }
     .text();
     assert!(t.contains("(2 more such chunks not shown)"), "{t}");
@@ -131,6 +133,7 @@ fn entries_after_the_second_are_one_line_without_handoff_text() {
     let t = super::super::start::Started {
         run: "R".into(),
         chunks: vec![s.show(&me).unwrap()],
+        orphaned: vec![],
     }
     .text();
     assert!(t.contains("> text-3") && t.contains("> text-2"), "{t}");
@@ -170,6 +173,7 @@ fn a_running_chunks_touch_shows_live_in_a_scope_overlapping_brief() {
     let t = super::super::start::Started {
         run: "R".into(),
         chunks: vec![b],
+        orphaned: vec![],
     }
     .text();
     assert!(

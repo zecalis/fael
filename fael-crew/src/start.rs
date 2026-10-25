@@ -8,7 +8,7 @@ use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, end_live, row, set, tx};
 use super::holder::{
-    end_caller_seat, end_in_worktree, holder, holder_detail, holder_worktree, members, ready_paired,
+    end_caller_seat, end_here, holder, holder_detail, holder_worktree, members, ready_paired,
 };
 use super::joint::{self, Joint};
 use super::ready::Ready;
@@ -98,6 +98,9 @@ pub struct Prev {
 pub struct Started {
     pub run: String,
     pub chunks: Vec<Brief>,
+    /// `(uid, title)` of other chunks still `running` whose live run this start ended in the
+    /// worktree — informed, never blocked, their state untouched.
+    pub orphaned: Vec<(String, String)>,
 }
 
 fn prev(tx: &Transaction, id: i64) -> Result<Option<Prev>, String> {
@@ -181,7 +184,11 @@ fn reuse_live(
         b.resume = prev(tx, r.id)?;
         chunks.push(b);
     }
-    Ok(Some(Started { run: live, chunks }))
+    Ok(Some(Started {
+        run: live,
+        chunks,
+        orphaned: Vec::new(),
+    }))
 }
 
 /// The event text of a start past an unmet after (`--force` only); `None` = it was ready.
@@ -333,9 +340,7 @@ impl Store {
             claim.push((r, was));
         }
         // one start per worktree: a run of another chunk still live here is an agent that left
-        if let (Some(w), None) = (wt, seat) {
-            end_in_worktree(&tx, w, here.now)?;
-        }
+        let orphaned = end_here(&tx, wt.filter(|_| seat.is_none()), &ms, here.now)?;
         end_caller_seat(&tx, seat.is_some(), caller_wt, wt, here.now)?;
         let mut chunks = Vec::new();
         for (r, was) in claim {
@@ -348,7 +353,11 @@ impl Store {
             chunks.push(b);
         }
         tx.commit().map_err(err)?;
-        Ok(Started { run, chunks })
+        Ok(Started {
+            run,
+            chunks,
+            orphaned,
+        })
     }
 }
 
