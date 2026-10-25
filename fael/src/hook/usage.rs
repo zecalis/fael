@@ -250,6 +250,14 @@ fn commits(root: &Path, since_ms: i64) -> Vec<(i64, core::stats::Commit)> {
 
 pub fn stats(a: &crate::Args) -> Result<(), String> {
     let (json, rows, day_view) = (a.has("json"), a.has("rows"), a.has("day"));
+    // `--days --json`: the per-day series alone, from the parse — no repo logs,
+    // git or gh (issue 01M5S63N follow-up: a board refresh paid ~4 s for it)
+    if a.has("days") && json {
+        let u = load_where(crate::report::since(a)?, &|_| false);
+        let days = core::stats::days(&u.parsed);
+        println!("{}", serde_json::json!({ "days": days }));
+        return Ok(());
+    }
     let u = load(crate::report::since(a)?);
     if day_view {
         return day(json, &u);

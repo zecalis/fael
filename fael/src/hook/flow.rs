@@ -84,23 +84,10 @@ fn gh_merged(root: &std::path::Path) -> Vec<(i64, i64)> {
     // run, so the first root wins — same single-clone assumption as `runs`.
     CACHE
         .get_or_init(|| {
-            let out = std::process::Command::new("gh")
-                .args([
-                    "pr",
-                    "list",
-                    "--state",
-                    "merged",
-                    "--json",
-                    "mergedAt,number",
-                    "--limit",
-                    "500",
-                ])
-                .current_dir(root)
-                .output()
-                .ok()
-                .filter(|o| o.status.success());
-            let Some(out) = out else { return vec![] };
-            let Ok(list) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else {
+            let Some(stdout) = gh_raw(root) else {
+                return vec![];
+            };
+            let Ok(list) = serde_json::from_slice::<Vec<serde_json::Value>>(&stdout) else {
                 return vec![];
             };
             let mut merged = vec![];
@@ -117,4 +104,42 @@ fn gh_merged(root: &std::path::Path) -> Vec<(i64, i64)> {
             merged
         })
         .clone()
+}
+
+/// `gh`'s raw merged list, kept on disk next to `usage.jsonl` for `GH_TTL`:
+/// the network call is most of `stats --json` (~3 s of ~7 s) and a board
+/// refreshes it every few seconds. First line = the clone it was read for.
+fn gh_raw(root: &std::path::Path) -> Option<Vec<u8>> {
+    const GH_TTL: std::time::Duration = std::time::Duration::from_secs(600);
+    let file = super::usage_files::live().with_file_name("gh-merged.json");
+    let head = format!("{}\n", root.display());
+    let fresh = std::fs::metadata(&file)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < GH_TTL);
+    if fresh
+        && let Ok(cached) = std::fs::read(&file)
+        && let Some(body) = cached.strip_prefix(head.as_bytes())
+    {
+        return Some(body.to_vec());
+    }
+    let out = std::process::Command::new("gh")
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "merged",
+            "--json",
+            "mergedAt,number",
+            "--limit",
+            "500",
+        ])
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    // a failed write only costs the next call a refetch
+    let _ = std::fs::write(&file, [head.as_bytes(), &out.stdout].concat());
+    Some(out.stdout)
 }

@@ -93,6 +93,19 @@ fn stats_rows_matches_golden() {
 }
 
 #[test]
+fn stats_days_json_is_the_series_alone() {
+    let state = golden_state();
+    let dir = &std::env::temp_dir();
+    let (ok, out, err) = fael_at(&state, dir, &["stats", "--days", "--json"], "");
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(
+        v,
+        serde_json::json!({"days": [{"day": "2026-09-26", "events": 3, "est_tokens": 15}]})
+    );
+}
+
+#[test]
 fn stats_json_matches_golden_values() {
     // Maps (by_event/by_client) iterate a HashMap — compare values, not bytes.
     let state = golden_state();
