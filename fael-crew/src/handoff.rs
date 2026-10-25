@@ -8,6 +8,7 @@ use fael_core::under;
 use rusqlite::{Transaction, params};
 
 /// `(title, handoff, touched)`: one done / review word and the files its done claimed.
+/// From [`by_file`] the title is `<uid> <title>`: the brief prints it as one line.
 pub type Word = (String, String, String);
 
 /// At most this many chunks by file; the rest are counted, not printed.
@@ -51,7 +52,7 @@ pub(super) fn by_file(
     }
     let mut q = tx
         .prepare(
-            "SELECT c.title, e.text, COALESCE(c.touched, ''), e.id,
+            "SELECT c.uid || ' ' || c.title, e.text, COALESCE(c.touched, ''), e.id,
                     c.plan IS (SELECT plan FROM chunk WHERE id = ?1)
              FROM chunk c
              JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid

@@ -167,17 +167,10 @@ impl Started {
             quote(&mut o, "owner said", &c.said);
             quote(&mut o, "notes left for this chunk", &c.notes);
             handoffs(&mut o, "before this, handed off", &c.after, true);
-            let (full, rest) = c.by_file.split_at(c.by_file.len().min(FULL));
-            handoffs(
-                &mut o,
-                "touched files in this scope, handed off",
-                full,
-                false,
-            );
-            for (who, _, files) in rest {
-                let f: Vec<&str> = files.lines().filter(|l| !l.is_empty()).collect();
-                let tail = if f.len() > 5 { ", …" } else { "" };
-                let _ = writeln!(o, "- {who} — {}{tail}", f[..f.len().min(5)].join(", "));
+            // one line per chunk (issue 01M5SWWY): the hand-off is one `chunk show` away
+            for (who, _, _) in &c.by_file {
+                let (uid, title) = who.split_once(' ').unwrap_or((who, ""));
+                let _ = writeln!(o, "- {uid} {title} — fael chunk show {uid}");
             }
             if c.by_file_more > 0 {
                 let _ = writeln!(o, "({} more such chunks not shown)", c.by_file_more);

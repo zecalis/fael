@@ -26,6 +26,19 @@ fn scoped(s: &mut Store, scope: &str) -> String {
     u
 }
 
+/// The uid on the one by-file line.
+fn b_uid(t: &str) -> String {
+    let l = t
+        .lines()
+        .find(|l| l.ends_with(" x — fael chunk show ") || l.contains(" x — fael chunk show "))
+        .unwrap();
+    l.trim_start_matches("- ")
+        .split(' ')
+        .next()
+        .unwrap()
+        .to_string()
+}
+
 #[test]
 fn a_done_chunk_on_my_files_is_handed_over_with_its_left_ids() {
     let mut s = Store::open_in_memory().unwrap();
@@ -42,11 +55,15 @@ fn a_done_chunk_on_my_files_is_handed_over_with_its_left_ids() {
         orphaned: vec![],
     }
     .text();
+    let uid = b_uid(&t);
     assert!(
-        t.contains("x, touched files in this scope, handed off:"),
+        t.contains(&format!("- {uid} x — fael chunk show {uid}")),
         "{t}"
     );
-    assert!(t.contains("> left: 01ABC"), "{t}");
+    assert!(
+        !t.contains("left: 01ABC"),
+        "by-file is one line, not the hand-off: {t}"
+    );
 }
 
 #[test]
@@ -92,7 +109,7 @@ fn by_file_is_newest_first_and_capped_with_the_rest_counted() {
     }
     let b = s.show(&me).unwrap();
     assert_eq!((b.by_file.len(), b.by_file_more), (5, 2));
-    assert_eq!(b.by_file[0].0, "c6", "newest first");
+    assert!(b.by_file[0].0.ends_with(" c6"), "newest first");
     let t = super::super::start::Started {
         run: "R".into(),
         chunks: vec![b],
@@ -114,12 +131,12 @@ fn more_touched_files_under_the_scope_beats_newer() {
         .unwrap();
     finish(&mut s, "narrow", "src/n.rs", "narrow done");
     let b = s.show(&me).unwrap();
-    assert_eq!(b.by_file[0].0, "wide", "{:?}", b.by_file);
-    assert_eq!(b.by_file[1].0, "narrow");
+    assert!(b.by_file[0].0.ends_with(" wide"), "{:?}", b.by_file);
+    assert!(b.by_file[1].0.ends_with(" narrow"));
 }
 
 #[test]
-fn entries_after_the_second_are_one_line_without_handoff_text() {
+fn by_file_entries_are_one_line_without_handoff_text() {
     let mut s = Store::open_in_memory().unwrap();
     let me = scoped(&mut s, "src/");
     for i in 0..4 {
@@ -136,12 +153,14 @@ fn entries_after_the_second_are_one_line_without_handoff_text() {
         orphaned: vec![],
     }
     .text();
-    assert!(t.contains("> text-3") && t.contains("> text-2"), "{t}");
-    assert!(!t.contains("text-1") && !t.contains("text-0"), "{t}");
-    assert!(
-        t.contains("- c1 — src/f1.rs") && t.contains("- c0 — src/f0.rs"),
-        "{t}"
-    );
+    assert!(!t.contains("text-"), "{t}");
+    for i in 0..4 {
+        let l = t
+            .lines()
+            .find(|l| l.contains(&format!(" c{i} — fael chunk show ")))
+            .unwrap();
+        assert!(l.starts_with("- "), "{l}");
+    }
 }
 
 /// Live touch (issue 01M5PB7Z): a running chunk's `touch` shows in the brief of a
