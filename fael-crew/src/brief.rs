@@ -161,7 +161,7 @@ impl Started {
             quote(
                 &mut o,
                 "ledger issues this chunk fixes — once the fix holds, close each with \
-                 `fael close <id> \"<why>\"` (done never closes them)",
+                 `fael close <id> \"<cause> → <fix>; guard \\`<test path>\\`\"` (done never closes them)",
                 &c.issues,
             );
             quote(&mut o, "owner said", &c.said);

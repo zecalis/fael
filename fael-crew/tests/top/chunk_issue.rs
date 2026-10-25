@@ -100,7 +100,7 @@ fn a_chunk_fixes_open_issues_and_the_board_follows_it() {
         brief.contains(&format!("> {lag} The count lags one refresh")),
         "{brief}"
     );
-    assert!(brief.contains("`fael close <id> \"<why>\"` (done never closes them)"));
+    assert!(brief.contains("<cause> → <fix>; guard \\`<test path>\\`\"` (done never"));
 
     let b = board(&d);
     let p = &b["projects"][0];
