@@ -146,8 +146,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
         ["move", uid] => crate::chunk_run::move_to(a, &mut s()?, uid, &now)?,
         ["note", uid, text] => {
             a.only("chunk note", &[])?;
-            s()?.note(uid, text, &now)?;
-            say(uid, "noted for the next start");
+            crate::chunk_run::note(&mut s()?, uid, text, &now)?;
         }
         ["touch", uid, files @ ..] => touch(a, &mut s()?, uid, files, &here)?,
         ["wait", uid, text] => {

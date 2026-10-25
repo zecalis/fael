@@ -15,6 +15,17 @@ pub struct Drift {
     pub fields: Vec<String>,
 }
 
+impl Drift {
+    /// The one line the hook and `chunk note|done` say, so they cannot differ.
+    pub fn text(&self) -> String {
+        format!(
+            "fael: chunk {0} brief changed since you started ({1}) — read it: fael chunk show {0}\n",
+            self.uid,
+            self.fields.join(", ")
+        )
+    }
+}
+
 /// `uid`'s drift since its latest start event (`by = 'agent'`, `to_state = 'running'`),
 /// from the `edited <fields>` events `chunk edit` writes. `None` when none touches
 /// brief, scope or title.

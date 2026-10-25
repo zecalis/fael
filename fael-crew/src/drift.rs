@@ -9,6 +9,11 @@ impl Store {
     pub fn drift(&self, uid: &str) -> Option<Drift> {
         fael_core::work::drift_in(&self.conn, uid)
     }
+
+    /// `drift` as the line `chunk note|done` print; empty without drift.
+    pub fn drift_line(&self, uid: &str) -> String {
+        self.drift(uid).map(|d| d.text()).unwrap_or_default()
+    }
 }
 
 #[cfg(test)]
