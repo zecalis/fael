@@ -180,13 +180,13 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
 }
 
 #[test]
-fn the_rules_tell_a_git_ship_agent_to_leave_the_handoff_as_a_finished_note() {
+fn the_rules_close_with_one_done_form_from_the_worktree() {
     let r = rules("U1", None);
     assert!(
-        r.contains("`fael chunk note U1 \"finished: <handoff>\"`"),
+        r.contains("`fael chunk done \"<result>\" --left none|<ids>`"),
         "{r}"
     );
-    assert!(r.contains("`Fael-Chunk: U1`"), "{r}");
+    assert!(!r.contains("Fael-Chunk"), "{r}");
 }
 
 /// The add lines carry the full form, the gate's title and one-topic rules in

@@ -413,3 +413,15 @@ fn accept_takes_only_a_review_chunk() {
     s.owner(&r, Owner::Accept, None, NOW).unwrap();
     assert_eq!(state(&s, &r), "done");
 }
+
+/// `chunk done` with no uid finds the chunk by the worktree's live run: held there only.
+#[test]
+fn held_names_the_chunk_of_this_worktree_only() {
+    let mut s = Store::open_in_memory().unwrap();
+    let u = add(&mut s, "t", Some("do it"));
+    start(&mut s, &u, "/w").unwrap();
+    let held = s.held("/w").unwrap();
+    assert_eq!(held.len(), 1);
+    assert_eq!(held[0].0, u);
+    assert!(s.held("/elsewhere").unwrap().is_empty());
+}
