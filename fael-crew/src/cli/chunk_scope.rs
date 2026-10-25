@@ -52,7 +52,20 @@ pub(crate) fn stale_warnings(
     log: &fael_core::Log,
     uid: &str,
 ) -> Vec<String> {
-    let shut = fael_core::closed(log);
+    let (shut, keys) = (fael_core::closed(log), fael_core::keys(log, None));
+    stale_warnings_in(title, brief, issues, log, uid, (&shut, &keys))
+}
+
+/// `stale_warnings` with the log's closed set and key list passed in: the board asks it
+/// once per open chunk, and both are the same for all of them.
+pub(crate) fn stale_warnings_in(
+    title: &str,
+    brief: &str,
+    issues: &[String],
+    log: &fael_core::Log,
+    uid: &str,
+    (shut, keys): (&HashSet<&str>, &[fael_core::KeyUse]),
+) -> Vec<String> {
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut out = Vec::new();
     for id in issues {
@@ -61,7 +74,7 @@ pub(crate) fn stale_warnings(
         }
         out.push(linked_line(id, &close_first_line(log, id), uid));
     }
-    for (cite, first, id) in closed_cites_ids(title, brief, log) {
+    for (cite, first, id) in closed_cites_ids(title, brief, log, (shut, keys)) {
         if !seen.insert(id) {
             continue;
         }
@@ -102,7 +115,12 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
             close_first_line(&log, id)
         ));
     }
-    for (cite, first, id) in closed_cites_ids(&b.title, &b.brief, &log) {
+    for (cite, first, id) in closed_cites_ids(
+        &b.title,
+        &b.brief,
+        &log,
+        (&fael_core::closed(&log), &fael_core::keys(&log, None)),
+    ) {
         if !seen.insert(id) {
             continue;
         }
@@ -125,9 +143,9 @@ fn closed_cites_ids(
     title: &str,
     brief: &str,
     log: &fael_core::Log,
+    (shut, keys): (&HashSet<&str>, &[fael_core::KeyUse]),
 ) -> Vec<(String, String, String)> {
     let text = format!("{title} {brief}");
-    let shut = fael_core::closed(log);
     let mut seen: HashSet<&str> = HashSet::new();
     let mut out = Vec::new();
     for tok in fael_core::id_tokens(&text) {
@@ -143,7 +161,7 @@ fn closed_cites_ids(
             row.id.clone(),
         ));
     }
-    for k in fael_core::keys(log, None) {
+    for k in keys {
         if !fael_core::names_key(&text, &k.key) {
             continue;
         }

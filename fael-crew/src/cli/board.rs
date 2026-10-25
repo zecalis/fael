@@ -263,6 +263,7 @@ fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
     let log = crate::read(r);
     let shut = fael_core::closed(&log);
     let gone = fael_core::superseded(&log);
+    let keys = fael_core::keys(&log, None);
     let states = s.chunk_states().unwrap_or_default();
     let open_tok = |tok: &str| -> bool {
         let up = tok.to_uppercase();
@@ -297,7 +298,14 @@ fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
             continue;
         }
         if let Ok((title, brief, issues)) = s.stale_input(&c.uid) {
-            c.stale = crate::chunk_scope::stale_warnings(&title, &brief, &issues, &log, &c.uid);
+            c.stale = crate::chunk_scope::stale_warnings_in(
+                &title,
+                &brief,
+                &issues,
+                &log,
+                &c.uid,
+                (&shut, &keys),
+            );
         }
     }
 }
