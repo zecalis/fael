@@ -62,7 +62,7 @@ impl Args {
             match name.as_str() {
                 "all" | "force" | "json" | "dry-run" | "yes" | "fix" | "prune" | "urgent"
                 | "not-urgent" | "full" | "rows" | "fat" | "day" | "pin" | "open" | "misses"
-                | "days" | "wiring" | "auto" | "no-worktree" | "watch" | "input" => {
+                | "days" | "wiring" | "auto" | "no-worktree" | "watch" | "input" | "lean" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "kind" | "since" | "by" | "client" | "writer"

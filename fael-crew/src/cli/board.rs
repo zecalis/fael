@@ -1,4 +1,4 @@
-//! `fael board [--json] [--open] [--watch]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
+//! `fael board [--json] [--open] [--watch] [--lean]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
 //! plans and chunks, and four lists of uids across them — needs you (§5), the queue (§3),
 //! running, blocked. The app's only read; `"v": 1` is the contract
 //! (`tests/golden/board-v1.json`). Live git: one worktree list and one base per project.
@@ -87,7 +87,7 @@ struct Worktree {
 }
 
 pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
-    a.only("board", &["json", "open", "plan", "drop", "watch"])?;
+    a.only("board", &["json", "open", "plan", "drop", "watch", "lean"])?;
     if let Some(root) = a.one("drop") {
         return registry::unregister(&root);
     }
@@ -163,6 +163,9 @@ fn read(root: &Path, at: &str, stale: &str, a: &Args) -> Option<Project> {
         if p.plans.is_empty() && p.error.is_none() {
             return None;
         }
+    }
+    if a.has("lean") {
+        lean(&mut p.chunks);
     }
     Some(p)
 }
@@ -255,6 +258,20 @@ fn project(
         },
         ..Project::named(root)
     }))
+}
+
+/// `--lean` (hidden): a finished chunk keeps its row but not `handoff`, `run` or
+/// `touched` — 0.5 of the 1.7 MB board is those. The app loads them on open with
+/// `fael chunk show <uid> --json`, which prints the same chunk object in full.
+fn lean(chunks: &mut [BoardChunk]) {
+    for c in chunks
+        .iter_mut()
+        .filter(|c| matches!(c.state.as_str(), "done" | "dropped" | "replaced"))
+    {
+        c.handoff = None;
+        c.run = None;
+        c.touched = None;
+    }
 }
 
 /// `left` from the latest hand-off, `left_open` the still-open subset, `stale`

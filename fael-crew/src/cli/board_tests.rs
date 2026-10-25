@@ -304,3 +304,16 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
             .collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn lean_cuts_only_finished_chunks() {
+    let mut done = ready("d", 0);
+    done.state = "done".into();
+    done.touched = Some(vec!["a".into()]);
+    let mut live = ready("l", 0);
+    live.touched = Some(vec!["a".into()]);
+    let mut cs = vec![done, live];
+    lean(&mut cs);
+    assert!(cs[0].touched.is_none());
+    assert!(cs[1].touched.is_some());
+}
