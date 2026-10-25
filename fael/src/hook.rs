@@ -32,6 +32,7 @@ mod cited;
 mod claude;
 mod codes;
 mod decision;
+mod drift;
 mod experience_text;
 mod flag_usage;
 pub(crate) mod flow;

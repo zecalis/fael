@@ -10,6 +10,7 @@
 
 mod checkpoint;
 mod db;
+mod drift;
 pub(crate) mod elsewhere;
 mod pure;
 mod ready;
@@ -60,6 +61,7 @@ pub use db::{
     is_chunk, linked_open_chunks, mark_model, mark_model_session, mark_seen, mark_seen_session,
     plan_by_name,
 };
+pub use drift::{Drift, drift, in_conn as drift_in};
 pub use elsewhere::{
     Elsewhere, chunk_elsewhere, register_repo, repos as elsewhere_repos, row_elsewhere,
 };
