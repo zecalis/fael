@@ -122,7 +122,9 @@ fn run_end_forced_takeover_and_fencing() {
         .wait(&c, "owner", "q?", None, &[], &here("/b"))
         .unwrap_err();
     assert!(
-        e.contains(&format!("taken over by run {r3} (codex) in /c")),
+        e.contains(&format!(
+            "run {r3} (codex) was started in /c, not here (/b)"
+        )),
         "{e}"
     );
     assert!(
@@ -136,7 +138,7 @@ fn run_end_forced_takeover_and_fencing() {
     // one start per worktree
     let other = add(&mut s, "other", Some("b"));
     let e = s.after(&c, &other, "why", &here("/b")).unwrap_err();
-    assert!(e.contains("taken over"), "after is fenced too: {e}");
+    assert!(e.contains("was started in"), "after is fenced too: {e}");
     assert_eq!(live(&s, &c), 1, "a fenced after ends no run");
     // one worktree is one seat: another chunk's live run there ends, the start goes through
     start(&mut s, &other, "/c").unwrap();

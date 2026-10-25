@@ -278,7 +278,7 @@ fn touch_unions_never_infers_and_only_running_counts() {
         .touch(&a, &["src/nope.rs".to_string()], &here("/elsewhere"))
         .unwrap_err();
     assert!(
-        e.contains("taken over") || e.contains("no longer holds"),
+        e.contains("was started in /wa, not here (/elsewhere)"),
         "{e}"
     );
 }
