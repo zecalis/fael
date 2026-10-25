@@ -76,14 +76,6 @@ fn rejects_read_as_their_family() {
             "rejected: chunk 01M4AAAA is done — history, not edited",
             "chunk_state",
         ),
-        (
-            "rejected: chunk 01M5AAAA shares files with a running chunk — 01M5BBBB (p/x): [prefix] a.rs; try `fael chunk start 01M5AAAA --with 01M5BBBB --as lane` to start beside it, or `fael chunk start 01M5AAAA --force` to start it anyway",
-            "scope_overlap",
-        ),
-        (
-            "rejected: chunk 01M5AAAA is held by run 01M5RRRR — try `fael chunk start 01M5AAAA --force` to take it over",
-            "held",
-        ),
         ("rejected: chunk move needs --plan <p>", "missing_value"),
         (
             "rejected: no plan 'x' in crew.db — `fael board` lists them",
@@ -101,6 +93,22 @@ fn rejects_read_as_their_family() {
         (
             "rejected: nothing written — text is 131 words with no title — add --title \"<h>\" — try `fael add note \"<one topic>\" --title \"<≤15-word headline>\" --files <paths>`",
             "shape_gate",
+        ),
+    ] {
+        assert_eq!(reject(msg), want, "{msg}");
+    }
+}
+
+#[test]
+fn start_refusals_read_apart_from_state_moves() {
+    for (msg, want) in [
+        (
+            "rejected: chunk 01M5AAAA shares files with a running chunk — 01M5BBBB (p/x): [prefix] a.rs; try `fael chunk start 01M5AAAA --with 01M5BBBB --as lane` to start beside it, or `fael chunk start 01M5AAAA --force` to start it anyway",
+            "scope_overlap",
+        ),
+        (
+            "rejected: chunk 01M5AAAA is held by run 01M5RRRR — try `fael chunk start 01M5AAAA --force` to take it over",
+            "held",
         ),
     ] {
         assert_eq!(reject(msg), want, "{msg}");
