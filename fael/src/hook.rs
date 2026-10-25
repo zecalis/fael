@@ -58,6 +58,7 @@ mod say_contract;
 mod search;
 mod session;
 mod shape;
+mod spent_notes;
 mod state;
 mod stats_text;
 mod stop;

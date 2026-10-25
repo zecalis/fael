@@ -51,6 +51,7 @@ mod search;
 mod seen;
 mod session;
 mod shadow;
+mod spent_notes;
 mod stats;
 mod stats_golden;
 mod stop;
