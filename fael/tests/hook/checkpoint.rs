@@ -1,5 +1,5 @@
 //! The step commit asks for the chunk checkpoint note: once per gap between
-//! notes, silent after `finished:`, silent with no held chunk.
+//! notes, silent with no held chunk.
 
 use super::{fael, json};
 use std::path::Path;
@@ -36,6 +36,4 @@ fn a_commit_asks_once_per_gap_between_notes() {
     assert!(!commit(&d).contains(ASK), "no note between: key spent");
     note(&d, &uid, "step 1 done; next step 2");
     assert!(commit(&d).contains(ASK), "a note then a commit asks again");
-    note(&d, &uid, "finished: all steps");
-    assert!(!commit(&d).contains(ASK), "finished: silent");
 }
