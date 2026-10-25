@@ -50,6 +50,8 @@ pub struct Friction {
     pub total: Tally,
     /// Per command, `chunk`/`plan` per verb (`chunk start`).
     pub by_command: BTreeMap<String, Tally>,
+    /// Per `client` the call row carries (`opencode`, `claude`, `codex`, `cli`, `mcp`).
+    pub by_client: BTreeMap<String, Tally>,
     /// `SHAPE_GATE` rejects — in no count above.
     pub shape_gate: usize,
     /// The faults those gates named (untitled, topic_list, …; one gate can name several).
@@ -68,6 +70,7 @@ struct Call<'a> {
     cmd: &'a str,
     /// `cmd`, or `cmd sub` for a verb — the `by_command` key
     by: String,
+    client: &'a str,
     reason: &'a str,
     outcome: Outcome,
     empty: bool,
@@ -130,6 +133,7 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
                 Some(s) => format!("{cmd} {s}"),
                 None => cmd.to_string(),
             },
+            client: v["client"].as_str().unwrap_or("?"),
             reason,
             outcome,
             empty: v["empty"].as_bool().unwrap_or(false),
@@ -144,7 +148,8 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
             let first_ok = c.outcome == Outcome::Ok
                 && (i..calls.len().min(i + 1 + FIRST_CALL_WINDOW)).all(|j| !bad(j));
             let by = out.by_command.entry(c.by.clone()).or_default();
-            for t in [&mut out.total, by] {
+            let cl = out.by_client.entry(c.client.to_string()).or_default();
+            for t in [&mut out.total, by, cl] {
                 t.calls += 1;
                 if c.outcome == Outcome::Reject {
                     t.rejects += 1;
@@ -241,6 +246,17 @@ mod tests {
             line(1, "", "cli", "find", "ok", false, "b"),
         ]);
         assert_eq!(f.total.find_repeat, 0, "{f:?}");
+    }
+
+    #[test]
+    fn friction_splits_by_client() {
+        let f = of(&[
+            line(0, "a", "opencode", "find", "reject", false, "a"),
+            line(1, "b", "claude", "find", "ok", false, "b"),
+            line(2, "b", "claude", "add", "ok", false, "c"),
+        ]);
+        assert_eq!(f.by_client["opencode"].rejects, 1, "{f:?}");
+        assert_eq!(f.by_client["claude"].calls, 2, "{f:?}");
     }
 
     #[test]
