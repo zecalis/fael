@@ -84,7 +84,20 @@ fn gh_merged(root: &std::path::Path) -> Vec<(i64, i64)> {
     // run, so the first root wins — same single-clone assumption as `runs`.
     CACHE
         .get_or_init(|| {
-            let Some(stdout) = gh_raw(root) else {
+            let Some(stdout) = gh_raw(
+                root,
+                "gh-merged.json",
+                &[
+                    "pr",
+                    "list",
+                    "--state",
+                    "merged",
+                    "--json",
+                    "mergedAt,number",
+                    "--limit",
+                    "500",
+                ],
+            ) else {
                 return vec![];
             };
             let Ok(list) = serde_json::from_slice::<Vec<serde_json::Value>>(&stdout) else {
@@ -106,12 +119,12 @@ fn gh_merged(root: &std::path::Path) -> Vec<(i64, i64)> {
         .clone()
 }
 
-/// `gh`'s raw merged list, kept on disk next to `usage.jsonl` for `GH_TTL`:
+/// `gh`'s raw list for `args`, kept on disk next to `usage.jsonl` for `GH_TTL`:
 /// the network call is most of `stats --json` (~3 s of ~7 s) and a board
 /// refreshes it every few seconds. First line = the clone it was read for.
-fn gh_raw(root: &std::path::Path) -> Option<Vec<u8>> {
+pub(crate) fn gh_raw(root: &std::path::Path, name: &str, args: &[&str]) -> Option<Vec<u8>> {
     const GH_TTL: std::time::Duration = std::time::Duration::from_secs(600);
-    let file = super::usage_files::live().with_file_name("gh-merged.json");
+    let file = super::usage_files::live().with_file_name(name);
     let head = format!("{}\n", root.display());
     let fresh = std::fs::metadata(&file)
         .and_then(|m| m.modified())
@@ -125,16 +138,7 @@ fn gh_raw(root: &std::path::Path) -> Option<Vec<u8>> {
         return Some(body.to_vec());
     }
     let out = std::process::Command::new("gh")
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "merged",
-            "--json",
-            "mergedAt,number",
-            "--limit",
-            "500",
-        ])
+        .args(args)
         .current_dir(root)
         .output()
         .ok()

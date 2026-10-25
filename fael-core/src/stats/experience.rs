@@ -124,6 +124,32 @@ pub fn cites_fix(message: &str, close: &str, is_id: impl Fn(&str) -> bool) -> bo
     fael_cites(message).any(is_id) || pr_cites(close).any(|pr| pr_cites(message).any(|m| m == pr))
 }
 
+/// Each commit's `(fael:…)` prefixes and `(#N)` tokens, scanned once.
+fn commit_cites(commits: &[Commit]) -> Vec<(Vec<&str>, Vec<&str>)> {
+    commits
+        .iter()
+        .map(|c| {
+            (
+                fael_cites(&c.message).collect(),
+                pr_cites(&c.message).collect(),
+            )
+        })
+        .collect()
+}
+
+/// `cites_fix` over many commits whose cites were scanned once: rows x commits
+/// is the hot loop of `experience`.
+fn any_cites_fix(
+    cites: &[(Vec<&str>, Vec<&str>)],
+    close: &str,
+    is_id: impl Fn(&str) -> bool,
+) -> bool {
+    let closed_prs: Vec<&str> = pr_cites(close).collect();
+    cites.iter().any(|(ids, prs)| {
+        ids.iter().any(|p| is_id(p)) || closed_prs.iter().any(|pr| prs.contains(pr))
+    })
+}
+
 /// The shas a close names when it names no `(#N)` — the fix evidence a reader
 /// must find in git (fael:01M4GQVP). A `(#N)` survives a squash, so a close
 /// naming one yields none.
@@ -206,6 +232,7 @@ pub(super) fn experience(
             .iter()
             .flat_map(|c| cited(&by_prefix, &c.message))
             .collect();
+        let cites = commit_cites(repo_commits);
         let closed = closed_issues(log);
         with_check.insert(
             repo,
@@ -226,10 +253,10 @@ pub(super) fn experience(
                 checked.insert(id);
             }
             let evidence = match crate::fix_close(log, r) {
-                Some((close, true)) => repo_commits.iter().any(|c| {
+                Some((close, true)) => {
                     let is_id = |p: &str| resolve(p, ids_by(&by_prefix, p)) == Some(id);
-                    cites_fix(&c.message, close, is_id)
-                }),
+                    any_cites_fix(&cites, close, is_id)
+                }
                 _ => said.iter().any(|t| names_fix(t)) || in_commit.contains(id),
             };
             if !evidence {
