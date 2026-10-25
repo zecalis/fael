@@ -75,6 +75,12 @@ pub(super) fn all() -> Vec<Line> {
             "fael: checkpoint — after this commit: fael chunk note 01C \"<done; next>\" — the next chunk start resumes from it\n",
         ),
         line(
+            Kind::BriefDrift {
+                key: "~drift:01C@7".into(),
+            },
+            "fael: chunk 01C brief changed since you started (brief) — read it: fael chunk show 01C\n",
+        ),
+        line(
             Kind::Retired { id: "01N".into() },
             "fael: note 01N retired from the push after 5 sessions — a standing rule? re-file it: `fael add decision \"...\" --files a.rs --supersedes 01N`\n",
         ),
@@ -95,7 +101,8 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::FixCommit => 9,
         Kind::Overlap { .. } => 10,
         Kind::Checkpoint { .. } => 11,
-        Kind::Retired { .. } => 12,
+        Kind::Retired { .. } => 13,
+        Kind::BriefDrift { .. } => 12,
     }
 }
 
@@ -363,6 +370,7 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "fixcommit",
             "overlap",
             "checkpoint",
+            "briefdrift",
             "retired"
         ]
     );

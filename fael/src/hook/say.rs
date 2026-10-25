@@ -96,6 +96,9 @@ pub(crate) enum Kind {
     /// An edit outside the held chunk's scope, inside another open chunk's
     /// (issues 01M5D9GB, 01M5QF1Q): said once per owner chunk and session.
     Overlap { owner: String },
+    /// The held chunk's brief, scope or title was edited after its run started; the key
+    /// names the edit event, so a later edit says again.
+    BriefDrift { key: String },
     /// A step commit in a worktree holding a chunk whose last note (if any)
     /// is not `finished:`: ask for the checkpoint note a resume reads. The key
     /// names the last note's event id, so it is asked once per gap between notes.
@@ -142,6 +145,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close"), false),
         Kind::Overlap { .. } => (Once::Key, Some("fael chunk note"), false),
         Kind::Checkpoint { .. } => (Once::Key, Some("fael chunk note"), false),
+        Kind::BriefDrift { .. } => (Once::Key, Some("fael chunk show"), false),
         Kind::Retired { .. } => (Once::Key, Some("fael add decision"), false),
         Kind::Brief { .. } => (Once::Key, None, false),
         Kind::Notice => (Once::Event, None, false),
@@ -170,7 +174,7 @@ impl Kind {
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Overlap { owner } => vec![format!("~overlap:{owner}")],
-            Kind::Checkpoint { key } => vec![key.clone()],
+            Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![format!("~retired:{id}")],
             Kind::Brief { keys } => keys.clone(),
             Kind::Notice => vec![],
@@ -209,6 +213,7 @@ impl Kind {
             Kind::FixCommit => ("fixcommit", vec![]),
             Kind::Overlap { owner } => ("overlap", vec![owner.clone()]),
             Kind::Checkpoint { key } => ("checkpoint", vec![key.clone()]),
+            Kind::BriefDrift { key } => ("briefdrift", vec![key.clone()]),
             Kind::Retired { id } => ("retired", vec![id.clone()]),
             Kind::Notice => ("notice", vec![]),
         };

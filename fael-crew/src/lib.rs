@@ -11,6 +11,7 @@ mod board_math;
 mod brief;
 mod chunk;
 mod chunk_add;
+mod drift;
 mod ended;
 mod export;
 mod handoff;
@@ -43,6 +44,7 @@ pub use board::{
 pub use board_math::{overlap, overlap_how, overlaps};
 pub use brief::rules;
 pub use chunk::{Fields, Here};
+pub use drift::Drift;
 pub use ended::EndedRun;
 pub use export::{export, export_json, export_section, feed};
 pub use issue::Fixer;
