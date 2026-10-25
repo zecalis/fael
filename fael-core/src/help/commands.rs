@@ -276,7 +276,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
     (
         "stats",
         "tokens fael has put into context",
-        "fael stats [--json] [--rows] [--day] [--misses] [--since d]
+        "fael stats [--json] [--rows] [--day] [--days] [--misses] [--since d]
     (tokens fael has put into context, per machine;
      --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on,
      all = every month; default = this and last month;
@@ -284,6 +284,8 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      what followed (shown, cut by reason, cited, pulled, acted, retrieved after cut);
      --misses = the newest empty text searches (machine-local), each with the
      per-word counts — the data a vector index would be judged by;
+     --days --json = only the per-day events and tokens series, no repo logs or
+     git (fast; what a board refreshes on);
      --day = today's panels per repo and summed (local day: FAEL_TZ_OFFSET
      like +07:00 wins, else the machine zone); --day --json prints DayView)",
     ),

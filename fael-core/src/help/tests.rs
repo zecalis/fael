@@ -152,7 +152,10 @@ fn core_is_a_strict_subset_of_full() {
             .as_slice(),
         ),
         ("doctor", ["--fat"].as_slice()),
-        ("stats", ["--rows", "--day", "--misses"].as_slice()),
+        (
+            "stats",
+            ["--rows", "--day", "--days", "--misses"].as_slice(),
+        ),
     ] {
         let core = super::for_command(cmd).unwrap();
         let full = super::for_command_full(cmd).unwrap();

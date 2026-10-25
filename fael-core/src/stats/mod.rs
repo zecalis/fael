@@ -45,6 +45,7 @@ pub use day::{
     BUCKET_MIN, BUCKETS, Context, DAY_SCHEMA, DayPanels, DayView, Delivered, ForYou, Health,
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
+pub use days::{DayCount, days};
 pub(crate) use experience::names_fix;
 pub use experience::{
     CLOSE_TEMPLATE, Commit, Commits, Experience, FIX_CUTOFF_MS, Shape, bare_shas, cites_fix,
