@@ -66,17 +66,25 @@ fn replaced_line() -> Option<String> {
 }
 
 /// A write through a replaced binary would use an older schema than the CLI
-/// and hooks; refuse it and point at the CLI (01M5C556). `find` and `chunk show` still read.
-fn refuse_stale_write(name: &str, args: &Value, stale: bool) -> Option<String> {
-    let write = match name {
-        "add" | "close" | "bump" => true,
-        "chunk" => args["verb"].as_str() != Some("show"),
-        _ => false,
-    };
+/// and hooks; refuse it and point at the CLI (01M5C556). `find` and `chunk` still go
+/// through: chunk runs the installed fael-crew, with `installed_exe` as its FAEL_BIN.
+fn refuse_stale_write(name: &str, stale: bool) -> Option<String> {
+    let write = matches!(name, "add" | "close" | "bump");
     (stale && write).then(|| {
         format!(
             "refused: this MCP server runs an older fael than the installed one, so {name} would write with a stale schema — run the CLI instead (`fael {name} …`) or restart the fael MCP server"
         )
+    })
+}
+
+/// The installed fael when this server's binary was replaced: the stamped path if the
+/// file is still there (rewritten in place), else `fael` on PATH. None while current.
+pub(crate) fn installed_exe() -> Option<PathBuf> {
+    let (p, _) = EXE.get()?.as_ref().filter(|s| replaced(s))?;
+    Some(if p.is_file() {
+        p.clone()
+    } else {
+        "fael".into()
     })
 }
 
@@ -137,7 +145,7 @@ fn call(p: &Value) -> Value {
     crate::find::forget_refs();
     let name = p["name"].as_str().unwrap_or("");
     let args = &crate::synonyms::mcp(name, &p["arguments"]);
-    let refused = refuse_stale_write(name, args, stale());
+    let refused = refuse_stale_write(name, stale());
     let res = match name {
         _ if refused.is_some() => Err(refused.unwrap_or_default()),
         "find" => find::find(args),
@@ -197,14 +205,23 @@ mod tests {
     }
 
     #[test]
-    fn a_stale_server_refuses_writes_and_still_reads() {
-        let w = |n, v| refuse_stale_write(n, &serde_json::json!({"verb": v}), true);
+    fn a_stale_server_refuses_add_but_not_chunk() {
         for n in ["add", "close", "bump"] {
-            assert!(w(n, "").unwrap().contains("fael"), "{n}");
+            assert!(refuse_stale_write(n, true).unwrap().contains("fael"), "{n}");
         }
-        assert!(w("chunk", "done").is_some());
-        assert!(w("find", "").is_none());
-        assert!(w("chunk", "show").is_none());
-        assert!(refuse_stale_write("add", &serde_json::json!({}), false).is_none());
+        assert!(refuse_stale_write("chunk", true).is_none());
+        assert!(refuse_stale_write("find", true).is_none());
+        assert!(refuse_stale_write("add", false).is_none());
+    }
+
+    #[test]
+    fn a_replaced_stamp_hands_chunk_the_installed_exe() {
+        let p = std::env::temp_dir().join(format!("fael-exe2-{}", std::process::id()));
+        std::fs::write(&p, "v1").unwrap();
+        let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+        super::EXE.get_or_init(|| Some((p.clone(), old)));
+        assert_eq!(super::installed_exe(), Some(p.clone()));
+        std::fs::remove_file(&p).unwrap();
+        assert_eq!(super::installed_exe(), Some("fael".into()));
     }
 }
