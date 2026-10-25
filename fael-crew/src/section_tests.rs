@@ -302,10 +302,10 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
     let reads = ["§5", "q/§1", "p/1", "gone", "q/nope", "x/1"];
     let uid = s.add("p", &f(Some(&reads)), &[], NOW).unwrap();
     let text = |s: &Store, uid: &str| {
-        let b = s.show(uid).unwrap();
         Started {
             run: "R".into(),
-            chunks: vec![b],
+            chunks: vec![s.show(uid).unwrap()],
+            orphaned: vec![],
         }
         .text()
     };

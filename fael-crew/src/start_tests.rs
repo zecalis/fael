@@ -350,3 +350,20 @@ fn another_chunks_live_run_in_the_worktree_ends_on_start() {
     assert_eq!((live(&s, &a), live(&s, &b)), (0, 1));
     assert_eq!(state(&s, &a), "running", "run end keeps the state");
 }
+
+#[test]
+fn start_reports_the_chunk_it_orphaned_in_the_worktree() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    let b = add(&mut s, "b", Some("b"));
+    let go = |s: &mut Store, u: &str| s.start(u, &Start::default(), &here("/w")).unwrap();
+    assert!(go(&mut s, &a).orphaned.is_empty());
+    let again = go(&mut s, &a);
+    assert!(
+        again.orphaned.is_empty(),
+        "same chunk restarted: nothing orphaned"
+    );
+    let st = go(&mut s, &b);
+    assert_eq!(st.orphaned, vec![(a.clone(), "a".to_string())]);
+    assert_eq!(state(&s, &a), "running", "informs only: state untouched");
+}

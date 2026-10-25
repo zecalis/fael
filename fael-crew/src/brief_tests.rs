@@ -49,6 +49,7 @@ fn the_brief_prints_the_plan_sections_once() {
     let st = Started {
         run: "R".into(),
         chunks: vec![chunk("A"), chunk("B")],
+        orphaned: vec![],
     };
     let t = st.text();
     assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
@@ -71,6 +72,7 @@ fn the_brief_prints_the_plan_sections_once() {
     let one = Started {
         run: "R".into(),
         chunks: vec![labelled],
+        orphaned: vec![],
     };
     assert!(one.text().contains("\n# 1 — titled with its label (C)\n"));
     assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
@@ -98,6 +100,7 @@ fn the_brief_prints_the_plan_sections_once() {
     let t2 = Started {
         run: "R".into(),
         chunks: vec![noted],
+        orphaned: vec![],
     }
     .text();
     assert!(
@@ -117,6 +120,7 @@ fn the_brief_prints_the_plan_sections_once() {
     let t = Started {
         run: "R".into(),
         chunks: vec![bare],
+        orphaned: vec![],
     }
     .text();
     assert!(!t.contains("Goal") && t.contains("brief E"), "{t}");
@@ -144,6 +148,7 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
     let t = Started {
         run: "R".into(),
         chunks: vec![c],
+        orphaned: vec![],
     }
     .text();
     assert!(t.contains("## 1. Goal"), "{t}");
@@ -163,6 +168,7 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
     let t = Started {
         run: "R".into(),
         chunks: vec![c],
+        orphaned: vec![],
     }
     .text();
     // a blank Goal still prints the plan header with its fill pointer
@@ -209,6 +215,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
     let t = Started {
         run: "R".into(),
         chunks: vec![chunk("A")],
+        orphaned: vec![],
     }
     .text();
     assert!(
@@ -221,6 +228,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
     let t = Started {
         run: "R".into(),
         chunks: vec![bare],
+        orphaned: vec![],
     }
     .text();
     assert!(
@@ -257,6 +265,7 @@ fn only_a_mixed_chunk_gets_the_delegate_line() {
     let t = Started {
         run: "R".into(),
         chunks: vec![c],
+        orphaned: vec![],
     }
     .text();
     assert!(t.contains("small-model subagents"), "{t}");

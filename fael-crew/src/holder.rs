@@ -79,6 +79,46 @@ pub(super) fn end_in_worktree(
     .map_err(err)
 }
 
+/// `(uid, title)` of the `running` chunks, outside `except`, whose run is live in a worktree —
+/// the ones `end_in_worktree` is about to orphan. Read before the UPDATE, same transaction.
+pub(super) fn orphans_in_worktree(
+    tx: &Transaction,
+    worktree: &str,
+    except: &[String],
+) -> Result<Vec<(String, String)>, String> {
+    let mut q = tx
+        .prepare(
+            "SELECT DISTINCT c.uid, c.title FROM run r JOIN chunk c ON c.id = r.chunk
+             WHERE r.worktree = ?1 AND r.ended IS NULL AND c.state = 'running' ORDER BY r.id",
+        )
+        .map_err(err)?;
+    let rows = q
+        .query_map([worktree], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })
+        .map_err(err)?;
+    let all = rows.collect::<Result<Vec<_>, _>>().map_err(err)?;
+    Ok(all
+        .into_iter()
+        .filter(|(u, _)| !except.contains(u))
+        .collect())
+}
+
+/// Start's worktree step: name the chunks about to be orphaned, then end every live run there.
+pub(super) fn end_here(
+    tx: &Transaction,
+    worktree: Option<&str>,
+    ms: &[String],
+    now: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let Some(w) = worktree else {
+        return Ok(Vec::new());
+    };
+    let orphaned = orphans_in_worktree(tx, w, ms)?;
+    end_in_worktree(tx, w, now)?;
+    Ok(orphaned)
+}
+
 /// A pair joins the partner's seat (01M5PE238): the caller's own seat is an
 /// agent that left, so its live runs end. Same seat both sides: nothing to
 /// free — ending it would kill the partner run just joined.
