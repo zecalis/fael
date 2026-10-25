@@ -8,6 +8,7 @@ use super::check;
 use super::decision;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
+use super::spent_notes::{self, Count};
 use super::state::{
     clear_stash, edited_files, edits_path, lock_seen, peek_stash, read_turn, record_edits,
     seen_path,
@@ -15,6 +16,7 @@ use super::state::{
 use super::usage::record_usage;
 use crate::{aliases, core};
 use fael_core::is_anchor;
+use std::collections::HashSet;
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
 fn risk_line(marker: &str, files: &[String]) -> String {
@@ -185,7 +187,10 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     // on push — the safe side (one extra row, never a wrong hide), and rare.
     let mut blobs = Blobs::new();
     // retired notes (chunk done) likewise; the merged-branch proof spawns git, so not here
-    let retired = super::retired::ids(&c.repo, &c.log, false);
+    let share = c.repo.journal.as_deref().unwrap_or(&c.repo.root);
+    let sid = super::state::session_id(&c.session);
+    let spent = Count::load(share);
+    let retired = hidden_notes(&c, &spent, sid);
     tiered.retain(|(r, _)| {
         !retired.contains(&r.id)
             && !changed::dormant(r, &c.repo.root, &al, &mut blobs, changed::PUSH_MAX_BYTES)
@@ -210,7 +215,6 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         .filter(|(r, t)| out.has(&r.id) && core::bucket(r, *t, &focus) == core::Bucket::File)
         .count();
     tiered.retain(|(r, _)| !out.has(&r.id));
-    let share = c.repo.journal.as_deref().unwrap_or(&c.repo.root);
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
@@ -244,6 +248,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         kind: Kind::Ask { ids: h.spent },
         text: format!("{}\n", h.text),
     }));
+    lines.extend(retired_lines(&c, &spent, sid, &shown));
     lines.extend(check::check_line(&ask, edit));
     if edit {
         lines.extend(super::overlap::lines(&c, &files));
@@ -255,13 +260,9 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     }
     let mut r = out.reply();
     // remember the state of the issues actually asked (a budget-cut ask is not)
-    let asked: Vec<&core::Row> = t0
-        .iter()
-        .map(|(row, _)| *row)
-        .filter(|row| r.said().iter().any(|s| s.ask_id() == Some(&row.id)))
-        .collect();
-    super::asked::record(&c.log, share, &asked);
+    super::asked::record(&c.log, share, &asked_rows(&t0, &r));
     if let Some(context) = r.context() {
+        spent_notes::record(&c.log, share, sid, &note_ids(&c.log, &shown));
         let decision = decision::record(trigger, &sel, n, &focus);
         let meta = UsageMeta {
             said: r.said(),
@@ -273,6 +274,54 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     }
     r.notice = super::tally::whisper(&c, said, &files);
     r
+}
+
+/// Notes the push skips: retired by chunk done (no git here), or said in five sessions.
+fn hidden_notes(c: &super::protocol::Ctx, spent: &Count, sid: &str) -> HashSet<String> {
+    let mut out = super::retired::ids(&c.repo, &c.log, false);
+    out.extend(spent.retired(sid));
+    out
+}
+
+/// The tier-0 issues whose edit ask was actually said.
+fn asked_rows<'a>(t0: &[(&'a core::Row, usize)], r: &Reply) -> Vec<&'a core::Row> {
+    let said = |row: &&core::Row| r.said().iter().any(|s| s.ask_id() == Some(&row.id));
+    t0.iter().map(|(row, _)| *row).filter(said).collect()
+}
+
+/// The notes among the rows said.
+fn note_ids<'a>(log: &core::Log, shown: &'a [String]) -> Vec<&'a str> {
+    let is_note = |i: &&String| log.rows.iter().any(|r| r.kind == "note" && r.id == **i);
+    shown.iter().filter(is_note).map(String::as_str).collect()
+}
+
+/// The one-time line of a note this session makes the last to be told it.
+fn retired_lines(
+    c: &super::protocol::Ctx,
+    spent: &Count,
+    sid: &str,
+    shown: &[String],
+) -> Vec<Line> {
+    if sid.is_empty() {
+        return vec![];
+    }
+    let abbrev = core::abbrev(&c.log);
+    spent
+        .crossing(sid, &note_ids(&c.log, shown))
+        .into_iter()
+        .filter_map(|id| {
+            let row = c.log.rows.iter().find(|r| r.id == id)?;
+            let short = abbrev.short(id);
+            let file = row.files.first()?;
+            Some(Line {
+                kind: Kind::Retired { id: id.into() },
+                text: format!(
+                    "fael: note {short} retired from the push after {} sessions — a standing rule? re-file it: `fael add decision \"...\" --files {file} --supersedes {short}`\n",
+                    spent_notes::SESSIONS
+                ),
+            })
+        })
+        .collect()
 }
 
 /// `select` with the session's hub record: a hub peeks once per file per
