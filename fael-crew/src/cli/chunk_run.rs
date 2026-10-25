@@ -136,6 +136,14 @@ fn with_retype(
     format!("{e}\nretype: {cmd} --run {run}")
 }
 
+/// `chunk note`: the word is kept; a brief edited since the start is said too.
+pub(crate) fn note(st: &mut Store, uid: &str, text: &str, now: &str) -> Result<(), String> {
+    st.note(uid, text, now)?;
+    println!("chunk {uid} → noted for the next start");
+    print!("{}", st.drift_line(uid));
+    Ok(())
+}
+
 pub(crate) fn done(
     a: &Args,
     r: &Repo,
@@ -183,6 +191,12 @@ pub(crate) fn done(
     let mut st = Store::open(&db(r))?;
     // issue 01M5FMHQX: leftovers are rows; the statement rides in the hand-off the next brief prints
     let handoff = &crate::chunk_left::resolve(a.one("left"), handoff, &st, &crate::read(r))?;
+    // a done chunk's done again only amends its hand-off: no run, pr or touched change
+    if pr.is_none() && src.is_none() && st.amend(uid, handoff, here.now)? {
+        println!("handoff amended for {uid}");
+        print!("{}", st.drift_line(uid));
+        return Ok(());
+    }
     // issue 01M4TFB5: the run's branch, not the cwd's — a lead's done per lane from the wave
     // branch diffs that lane only. Read before done: ending the run from its own worktree
     // stamps the cwd's branch on it, and a lead merges there on the wave branch
@@ -216,6 +230,7 @@ pub(crate) fn done(
     }
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
+    print!("{}", st.drift_line(uid));
     if unclaimed && src.is_none() {
         let t = named.as_deref().unwrap_or("the trunk");
         print!("{}", crate::chunk_pr_files::none_claimed(t, pr));

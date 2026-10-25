@@ -2,6 +2,7 @@
 //! chunk state table. A state changes only by a command or by live git — never guessed.
 
 mod agent;
+mod amend;
 mod apply;
 mod apply_graph;
 mod backup;

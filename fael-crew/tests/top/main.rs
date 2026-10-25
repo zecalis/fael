@@ -16,6 +16,7 @@ mod board_read;
 mod board_shape;
 mod board_watch;
 mod chunk;
+mod chunk_amend;
 mod chunk_apply_plan;
 mod chunk_brief_paths;
 mod chunk_contract;

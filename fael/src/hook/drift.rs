@@ -17,11 +17,7 @@ fn about(d: &Drift) -> Line {
         kind: Kind::BriefDrift {
             key: format!("~drift:{}@{}", d.uid, d.event),
         },
-        text: format!(
-            "fael: chunk {0} brief changed since you started ({1}) — read it: fael chunk show {0}\n",
-            d.uid,
-            d.fields.join(", ")
-        ),
+        text: d.text(),
     }
 }
 
