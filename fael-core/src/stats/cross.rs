@@ -4,6 +4,7 @@
 //! parsed usage and loaded logs in.
 
 use super::parse::Parsed;
+use super::parse::session_stem as stem;
 use crate::{Log, Row, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -41,13 +42,6 @@ pub struct CrossAgent {
     /// Sessions that edited one file within `OVERLAP_WINDOW_MS` of each other,
     /// from the `files` on edit usage lines (see `SameFile`).
     pub same_file: super::overlap::SameFile,
-}
-
-/// Usage lines name a Claude session by its transcript path, rows by that
-/// file's stem; other clients use one string for both.
-pub(super) fn stem(s: &str) -> &str {
-    let f = s.rsplit(['/', '\\']).next().unwrap_or(s);
-    f.strip_suffix(".jsonl").unwrap_or(f)
 }
 
 /// Lines of the fael CLI and MCP server carry the caller's session but not

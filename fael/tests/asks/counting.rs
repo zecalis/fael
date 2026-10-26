@@ -187,10 +187,8 @@ fn silent_session_start_is_counted_apart_from_injections() {
     assert!(ok && out.is_empty(), "{out}");
     let u = usage(&d);
     assert_eq!(u.len(), 1, "{u:?}");
-    assert_eq!(
-        (&u[0]["event"], &u[0]["bytes"]),
-        (&"silent-start".into(), &0.into()),
-        "{u:?}"
-    );
+    // zero bytes are left out of the row
+    assert_eq!(u[0]["event"], "silent-start", "{u:?}");
+    assert!(u[0].get("bytes").is_none(), "{u:?}");
     assert!(stats_json(&d)["by_event"].get("silent-start").is_none());
 }

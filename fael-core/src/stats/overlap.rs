@@ -4,8 +4,8 @@
 //! than `OVERLAP_WINDOW_MS`. Never a verdict that anyone collided, and never a guess at
 //! a session whose lines name no file. Pure: parsed usage in.
 
-use super::cross::stem;
 use super::parse::Parsed;
+use super::parse::session_stem as stem;
 use crate::ts_ms;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
