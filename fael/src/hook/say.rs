@@ -73,7 +73,7 @@ pub(crate) enum Kind {
     /// id — the next read of a briefed file may push its rows again.
     Brief { keys: Vec<String> },
     /// The edit hint: re-check open issues already in context, each named.
-    /// Free of the per-turn limit: it names only open issues on the edited
+    /// It names only open issues on the edited
     /// file (a vela edit's issue went unasked behind another ask in the turn).
     Ask { ids: Vec<String> },
     /// `bodies: fael find <id> …` under a push whose rows have bodies.
@@ -84,9 +84,6 @@ pub(crate) enum Kind {
     /// A review finding (PLAN-fael-experience-loop chunk 2): the ready
     /// `fael add issue` for a ReportFindings entry, once per file and line.
     Finding { file: String, line: i64 },
-    /// A closed issue whose close named a path that is gone (PLAN-fael-
-    /// experience-loop chunk 3): asked once per issue and session.
-    Check { id: String },
     /// The agent said it fixed a bug and filed nothing after (PLAN-fael-
     /// experience-loop chunk 5a): stashed by stop, said once per session.
     Fixed,
@@ -125,36 +122,27 @@ pub(crate) struct Policy {
     /// The command the line must offer, found in its text, or it is dropped.
     /// Set here, never by the caller that writes the text.
     pub(crate) command: Option<&'static str>,
-    /// At most one line of it per user turn (prompt to prompt): a task that
-    /// edits ten files would otherwise ask after ten edits. A row not asked
-    /// keeps its key, so a later turn's edit may ask it.
-    pub(crate) per_turn: bool,
 }
 
 /// The noise policy, in one place. A new `Kind` does not compile until it
 /// has an arm here; `say_contract::every_kind_has_a_fixture` fails until it
 /// has a fixture there.
 pub(crate) fn policy(k: &Kind) -> Policy {
-    let (once, command, per_turn) = match k {
-        Kind::Row { .. } => (Once::Key, None, false),
-        Kind::Ask { .. } => (Once::Key, Some("fael close"), false),
-        Kind::Bodies => (Once::Key, Some("fael find <id>"), false),
-        Kind::Cited { .. } => (Once::Key, Some("fael close"), false),
-        Kind::Finding { .. } => (Once::Key, Some("fael add issue"), false),
-        Kind::Check { .. } => (Once::Key, Some("fael add issue"), true),
-        Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close"), false),
-        Kind::Overlap { .. } => (Once::Key, Some("fael chunk note"), false),
-        Kind::Checkpoint { .. } => (Once::Key, Some("fael chunk note"), false),
-        Kind::BriefDrift { .. } => (Once::Key, Some("fael chunk show"), false),
-        Kind::Retired { .. } => (Once::Key, Some("fael add decision"), false),
-        Kind::Brief { .. } => (Once::Key, None, false),
-        Kind::Notice => (Once::Event, None, false),
+    let (once, command) = match k {
+        Kind::Row { .. } => (Once::Key, None),
+        Kind::Ask { .. } => (Once::Key, Some("fael close")),
+        Kind::Bodies => (Once::Key, Some("fael find <id>")),
+        Kind::Cited { .. } => (Once::Key, Some("fael close")),
+        Kind::Finding { .. } => (Once::Key, Some("fael add issue")),
+        Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close")),
+        Kind::Overlap { .. } => (Once::Key, Some("fael chunk note")),
+        Kind::Checkpoint { .. } => (Once::Key, Some("fael chunk note")),
+        Kind::BriefDrift { .. } => (Once::Key, Some("fael chunk show")),
+        Kind::Retired { .. } => (Once::Key, Some("fael add decision")),
+        Kind::Brief { .. } => (Once::Key, None),
+        Kind::Notice => (Once::Event, None),
     };
-    Policy {
-        once,
-        command,
-        per_turn,
-    }
+    Policy { once, command }
 }
 
 /// The seen-list line of the session's one fix line — stop reads it too, so
@@ -170,7 +158,6 @@ impl Kind {
             Kind::Bodies => vec!["~bodies".into()],
             Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
             Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
-            Kind::Check { id } => vec![format!("~check:{id}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Overlap { owner } => vec![format!("~overlap:{owner}")],
@@ -208,7 +195,6 @@ impl Kind {
             Kind::Bodies => ("bodies", vec![]),
             Kind::Cited { ids } => ("cited", ids.clone()),
             Kind::Finding { file, .. } => ("finding", vec![file.clone()]),
-            Kind::Check { id } => ("check", vec![id.clone()]),
             Kind::Fixed => ("fixed", vec![]),
             Kind::FixCommit => ("fixcommit", vec![]),
             Kind::Overlap { owner } => ("overlap", vec![owner.clone()]),
@@ -256,9 +242,6 @@ pub(crate) struct Outbox {
     spent: Vec<String>,
     text: String,
     said: Vec<Said>,
-    /// `~turn:<id>`, the once-mark of a `per_turn` kind for the user's turn
-    /// (`turn`); `None` when no prompt hook marked one — no per-turn limit.
-    turn: Option<String>,
 }
 
 impl Outbox {
@@ -276,20 +259,7 @@ impl Outbox {
             spent: vec![],
             text: String::new(),
             said: vec![],
-            turn: None,
         }
-    }
-
-    /// The user turn this push runs in (`state::read_turn`): a `per_turn`
-    /// kind is said once in it.
-    pub(crate) fn in_turn(mut self, turn: Option<String>) -> Self {
-        self.turn = turn.map(|t| format!("~turn:{t}"));
-        self
-    }
-
-    /// The turn mark `kind` would spend: `None` when it has no per-turn limit.
-    fn turn_key(&self, kind: &Kind) -> Option<&String> {
-        self.turn.as_ref().filter(|_| policy(kind).per_turn)
     }
 
     /// The seen list as it was at `open`.
@@ -319,7 +289,7 @@ impl Outbox {
 
     /// False when a line of `kind` would be dropped for its spent keys.
     pub(crate) fn fresh(&self, kind: &Kind) -> bool {
-        self.fresh_keys(kind).is_some() && self.turn_key(kind).is_none_or(|t| !self.is_spent(t))
+        self.fresh_keys(kind).is_some()
     }
 
     /// False for a line `say` would drop: empty, without the command its kind
@@ -337,16 +307,13 @@ impl Outbox {
         }
         self.spent
             .extend(self.fresh_keys(&l.kind).unwrap_or_default());
-        if let Some(t) = self.turn_key(&l.kind).cloned() {
-            self.spent.push(t);
-        }
         self.text.push_str(&l.text);
         self.said.extend(l.kind.said());
     }
 
     /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
     /// Over budget the stashed notice goes first, then the stashed fix or held line, then the
-    /// gone-check ask, then the edit hint, then the commit-cite hint, each whole. A cut line
+    /// edit hint, then the commit-cite hint, each whole. A cut line
     /// keeps its keys for a later push. True when a stashed line was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
@@ -355,7 +322,6 @@ impl Outbox {
             let first = |f: fn(&Kind) -> bool| keep.iter().position(|l| f(&l.kind));
             let cut = first(|k| matches!(k, Kind::Notice))
                 .or_else(|| first(|k| matches!(k, Kind::Fixed)))
-                .or_else(|| first(|k| matches!(k, Kind::Check { .. })))
                 .or_else(|| {
                     keep.iter()
                         .rposition(|l| matches!(l.kind, Kind::Ask { .. }))

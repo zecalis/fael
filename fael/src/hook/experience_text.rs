@@ -1,6 +1,6 @@
 //! The `experience` block of `fael stats` (PLAN-fael-experience-loop chunk
 //! 4): capture → acted → outcome, plus capture recall. It reads numbers other
-//! blocks already hold (`said.finding`, `said.check`, `capture`,
+//! blocks already hold (`said.finding`, `capture`,
 //! `context_loop`) beside `experience`'s own, so nothing is counted twice.
 
 use crate::core;
@@ -9,9 +9,8 @@ use crate::core;
 pub(super) fn experience_lines(s: &core::stats::Stats) -> Vec<String> {
     let (e, c, l) = (&s.experience, &s.capture, &s.context_loop);
     let said = |k: &str| s.said.get(k).cloned().unwrap_or_default();
-    let (finding, check) = (said("finding"), said("check"));
+    let finding = said("finding");
     let none = finding.said
-        + check.said
         + c.edit_session_issues
         + e.fixed
         + e.closed_with_check
@@ -33,12 +32,11 @@ pub(super) fn experience_lines(s: &core::stats::Stats) -> Vec<String> {
             e.fixed, e.fixed_from_review, e.closed_with_check
         ),
         format!(
-            "    outcome: repeats {} of {} edits after close with a check · {} of {} without · gone checks said {}",
+            "    outcome: repeats {} of {} edits after close with a check · {} of {} without",
             e.repeats_with_check,
             e.edits_after_close_with_check,
             l.confirmed_repeats - e.repeats_with_check,
-            l.edits_after_close - e.edits_after_close_with_check,
-            check.said
+            l.edits_after_close - e.edits_after_close_with_check
         ),
         format!(
             "    recall: fix commits linked to fael {} of {}",

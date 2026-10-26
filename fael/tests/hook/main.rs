@@ -21,7 +21,6 @@ mod ask_sessions;
 mod autosync;
 mod autoupdate;
 mod changed_hint;
-mod check;
 mod checkpoint;
 mod clients;
 mod close_hint;

@@ -9,12 +9,12 @@
 //!   superseded or bumped within a day, like `ask`: the line already names
 //!   the close, so earning is the close itself
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
-//! - `check` (PLAN-fael-experience-loop chunk 3) — a row superseding or
-//!   bumping the (already closed) issue landed within a day after the line
 //! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
 //!   issue naming the finding's file after it
 //! - `fixed` / `fixcommit` (experience-loop chunk 5) — the session filed an issue after it
 //! - `notice` — the session filed a row after it
+//! - `overlap` / `checkpoint` — the session ran `fael chunk note` after it (a
+//!   chunk note is no ledger row; its `call` usage line is the evidence)
 //!
 //! The push no longer says `count`, `merge`, `carry` or `promote` (#247,
 //! #338): their old usage entries are skipped, not tallied.
@@ -100,7 +100,7 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
 
-pub const KINDS: [&str; 15] = [
+pub const KINDS: [&str; 14] = [
     "row",
     "note",
     "brief",
@@ -110,23 +110,12 @@ pub const KINDS: [&str; 15] = [
     "notice",
     "cited",
     "finding",
-    "check",
     "fixed",
     "fixcommit",
     "overlap",
     "checkpoint",
     "held",
 ];
-
-/// Whether a row superseding or bumping `id` landed within a day after `ms`.
-fn reopened(log: Option<&Log>, id: &str, ms: i64) -> bool {
-    log.is_some_and(|l| {
-        l.rows.iter().any(|r| {
-            let names = [r.supersedes.as_deref(), r.bumps.as_deref()].contains(&Some(id));
-            names && ts_ms(&r.ts).is_some_and(|t| t >= ms && t - ms <= RETIRE_WINDOW_MS)
-        })
-    })
-}
 
 /// Whether the session filed a row `pick` takes after `ms`.
 fn filed_after(
@@ -152,13 +141,38 @@ fn tally(out: &mut BTreeMap<String, KindYield>, bucket: &str, earned: bool) {
     y.earned += earned as usize;
 }
 
-pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
+/// When a usage line is an accepted `fael chunk note` call.
+fn chunk_note_ms(v: &serde_json::Value) -> Option<i64> {
+    let is = v["event"] == "call" && v["cmd"] == "chunk" && v["sub"] == "note";
+    (is && v["outcome"] == "ok")
+        .then(|| v["ts"].as_str().and_then(ts_ms))
+        .flatten()
+}
+
+/// What each session did, read off its usage lines: ids in context at an
+/// edit, pulls, and the time of its last accepted `fael chunk note`.
+#[allow(clippy::type_complexity)]
+fn index(
+    parsed: &Parsed,
+) -> (
+    HashSet<(Session<'_>, &str)>,
+    HashMap<Session<'_>, Vec<Pull<'_>>>,
+    HashMap<Session<'_>, i64>,
+) {
     let mut in_ctx: HashSet<(Session, &str)> = HashSet::new();
     let mut pulls: HashMap<Session, Vec<Pull>> = HashMap::new();
+    // the latest accepted chunk note per session
+    let mut last_note: HashMap<Session, i64> = HashMap::new();
     for v in &parsed.kept {
         let (Some(repo), Some(s)) = (v["repo"].as_str(), session(v)) else {
             continue;
         };
+        if let Some(ms) = chunk_note_ms(v) {
+            last_note
+                .entry((repo, s))
+                .and_modify(|m| *m = (*m).max(ms))
+                .or_insert(ms);
+        }
         if v["event"] == "in-context" {
             let ids = strs(v, "in_context").chain(strs(v, "in_context_notes"));
             in_ctx.extend(ids.map(|id| ((repo, s), id)));
@@ -174,6 +188,11 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
             });
         }
     }
+    (in_ctx, pulls, last_note)
+}
+
+pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
+    let (in_ctx, pulls, last_note) = index(parsed);
     let gone: HashMap<&str, HashMap<&str, i64>> = logs
         .iter()
         .map(|(repo, log)| (repo.as_str(), retire_times(log)))
@@ -197,6 +216,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 .and_then(|t| t.get(id))
                 .is_some_and(|g| *g >= ms && *g - ms <= RETIRE_WINDOW_MS)
         };
+        let noted = s.and_then(|s| last_note.get(&s)).is_some_and(|n| *n >= ms);
         let pulled = |hit: &dyn Fn(&Pull) -> bool| {
             s.and_then(|s| pulls.get(&s))
                 .is_some_and(|ps| ps.iter().any(|p| p.ms >= ms && hit(p)))
@@ -221,9 +241,6 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 // the generic clause names no row: nothing to join it to
                 "ask" if key == "*" => continue,
                 "ask" | "cited" | "held" => (kind, retired(key)),
-                // the issue was closed before the line, so `retired` (the
-                // earliest event) never lands after it: look for a later one
-                "check" => ("check", reopened(log, key, ms)),
                 // an issue the session filed on the finding's file after it
                 "finding" => (
                     "finding",
@@ -232,9 +249,8 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                     }),
                 ),
                 "fixed" | "fixcommit" => (kind, filed_after(log, s, ms, |r| r.kind == "issue")),
-                // a chunk note is no ledger row: nothing to join it to, said only
-                "overlap" => ("overlap", false),
-                "checkpoint" => ("checkpoint", false),
+                // a chunk note is no ledger row: its `call` usage line is the act
+                "overlap" | "checkpoint" => (kind, noted),
                 "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
                 "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
                 "notice" => ("notice", filed_after(log, s, ms, |_| true)),
