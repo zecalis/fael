@@ -4,12 +4,18 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
 
 /// The `fael` binary built beside `fael-crew`, with a freshness guard.
 /// A partial build (`cargo test -p fael-crew`) leaves a stale `target/debug/fael`
 /// whose `plan --help` prints the old verbs while `fael-crew` is fresh —
 /// the dispatch mismatch wastes a debug session. Fail fast here instead.
 pub fn fael_bin() -> PathBuf {
+    static BIN: OnceLock<PathBuf> = OnceLock::new();
+    BIN.get_or_init(probe_fael).clone()
+}
+
+fn probe_fael() -> PathBuf {
     let crew = PathBuf::from(env!("CARGO_BIN_EXE_fael-crew"));
     let fael = crew.with_file_name(format!("fael{}", std::env::consts::EXE_SUFFIX));
     assert!(
@@ -20,7 +26,13 @@ pub fn fael_bin() -> PathBuf {
     // Freshness by content, not mtime: the test links the current
     // `fael-core`, so every verb it knows must appear in the `fael`
     // binary's help. A stale `fael` prints the old list — rebuild both.
+    // The probe is a fael run like any other: scratch state dir, so it never
+    // lands in the developer's real usage.jsonl (fael:01M4F3G0).
     let out = Command::new(&fael)
+        .env(
+            "FAEL_STATE_DIR",
+            std::env::temp_dir().join("fael-crew-probe"),
+        )
         .args(["plan", "--help"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())

@@ -19,7 +19,11 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 fn every_suite_spawning_fael_sets_a_state_dir() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut files = Vec::new();
-    for d in [root.join("tests"), root.join("../fael-core/tests")] {
+    for d in [
+        root.join("tests"),
+        root.join("../fael-core/tests"),
+        root.join("../fael-crew/tests"),
+    ] {
         if d.is_dir() {
             rs_files(&d, &mut files);
         }
@@ -30,7 +34,7 @@ fn every_suite_spawning_fael_sets_a_state_dir() {
         .filter(|p| !p.ends_with(me))
         .filter(|p| {
             let s = std::fs::read_to_string(p).unwrap();
-            s.contains("CARGO_BIN_EXE_fael")
+            (s.contains("CARGO_BIN_EXE_fael") || s.contains("fael_bin()"))
                 && !s.contains("FAEL_STATE_DIR")
                 && !s.contains("state_env(")
         })
