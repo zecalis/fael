@@ -246,6 +246,12 @@ fn print_warnings(s: &core::stats::Stats) {
             super::friction::counts(&w.codes)
         );
     }
+    for l in s.test_leaks.iter().take(3) {
+        println!(
+            "  warning: `{}` called ×{} within a minute from one stream — looks like a test leak; set FAEL_STATE_DIR",
+            l.cmd, l.calls
+        );
+    }
 }
 
 pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {

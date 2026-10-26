@@ -120,6 +120,10 @@ pub struct Stats {
     /// Calls per command and flag, agent and human, ok/help/reject
     /// (`by_flag.rs`) — which flags are really used.
     pub usage: super::by_flag::FlagUsage,
+    /// Call shapes repeated like a test run that forgot `FAEL_STATE_DIR`
+    /// (`leak.rs`); absent from the JSON when none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub test_leaks: Vec<super::Leak>,
     /// Confirmed repeats, the edits they read against, and useful shows
     /// per token (`repeat.rs`, PLAN-fael-context-loop §3).
     pub context_loop: super::repeat::ContextLoop,
@@ -200,6 +204,7 @@ pub fn aggregate(
         said: yields(parsed, logs),
         friction: friction(parsed),
         usage: super::by_flag::usage(parsed),
+        test_leaks: super::leak::leaks(parsed),
         context_loop: super::repeat::context_loop(parsed, logs),
         experience: experience(parsed, logs, commits),
         lifecycle: Default::default(),

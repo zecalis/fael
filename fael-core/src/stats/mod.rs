@@ -20,6 +20,7 @@ mod experience;
 mod experience_tests;
 mod flow;
 mod friction;
+mod leak;
 mod lifecycle;
 mod metrics;
 mod outcomes;
@@ -53,6 +54,7 @@ pub use experience::{
 };
 pub use flow::{Flow, FlowMerge, FlowRun, Span, WeekCount};
 pub use friction::{FIRST_CALL_WINDOW, Friction, SHAPE_GATE, Tally};
+pub use leak::{LEAK_CALLS, LEAK_WINDOW_MS, Leak};
 pub use lifecycle::{Lifecycle, States, lifecycle};
 pub use metrics::ASK_ORDER;
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};

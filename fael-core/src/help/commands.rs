@@ -282,7 +282,7 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      all = every month; default = this and last month;
      --rows = per-row pushes against open/closed/superseded, flagging noise?, plus
      what followed (shown, cut by reason, cited, pulled, acted, retrieved after cut);
-     --misses = the newest empty text searches (machine-local), each with the
+     --misses = the newest text searches that matched no rows (machine-local), each with the
      per-word counts — the data a vector index would be judged by;
      --days --json = only the per-day events and tokens series, no repo logs or
      git (fast; what a board refreshes on);
