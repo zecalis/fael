@@ -25,19 +25,32 @@ fn summary_path(month: &str) -> std::path::PathBuf {
 }
 
 /// Write `month`'s summary (temp + rename) unless it is already there.
-// ponytail: runs the full aggregate (git log, gh merges) once per month at the
-// daily prune; a backlog of months pays it in that one session-start.
+// ponytail: a summary holds what the month's usage rows say; repo logs, git
+// and gh are not read (they describe the clone today, not that month), so the
+// fields joined from them read empty.
 fn summarise(raw: &Path, month: &str) -> Option<()> {
     let sum = summary_path(month);
     if sum.is_file() {
         return Some(());
     }
-    let u = usage::load_text(std::fs::read_to_string(raw).ok()?, None, &|_| true);
-    let mut s = usage::aggregate(&u, &core::Config::default(), false);
-    s.lifecycle = Default::default(); // this clone's rows now, not that month's
+    let parsed = usage::parse_text(&std::fs::read_to_string(raw).ok()?);
+    let s = core::stats::aggregate(
+        &parsed,
+        &Default::default(),
+        &Default::default(),
+        &[],
+        &[],
+        &core::Config::default(),
+        super::asks::constants().into(),
+        false,
+    );
     let tmp = sum.with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec(&s).ok()?).ok()?;
-    std::fs::rename(&tmp, &sum).ok()
+    let done = std::fs::write(&tmp, serde_json::to_vec(&s).ok()?)
+        .and_then(|()| std::fs::rename(&tmp, &sum));
+    if done.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    done.ok()
 }
 
 /// Delete raw archives older than the window, each only after its summary.
@@ -150,6 +163,8 @@ mod tests {
             ["2020-01"]
         );
         assert_eq!(s[0].1["events"], 1);
+        // no repo log, git or gh: the repo-joined rows read empty, not read from disk
+        assert_eq!(s[0].1["capture"]["manual_adds"], 0);
         assert!(summaries(None).is_empty());
         let _ = std::fs::remove_dir_all(&d);
     }

@@ -65,7 +65,7 @@ Every number comes from two inputs, joined as pure functions in
   `capture` then all read as that window. `fael report` renders this same
   `Stats` (with `--rows`) as one offline HTML page.
   Raw archives keep 3 months before the current one. The daily `prune_state` pass
-  writes `usage/<YYYY-MM>.sum.json` (that month's `Stats`, atomically) for each older
+  writes `usage/<YYYY-MM>.sum.json` (that month's `Stats` from its usage rows alone — no repo log, git or `gh` is read, so fields joined from those read empty; written atomically) for each older
   archive and only then deletes the raw file; a failed summary keeps the raw. A
   `--since` reaching past the raw files adds `summaries` (month → `Stats`) to `--json`
   and one `<month> (summary)` line per month to the text — additive counters only, never
