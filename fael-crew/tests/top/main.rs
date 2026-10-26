@@ -11,6 +11,7 @@ mod board;
 mod board_branches;
 mod board_lean;
 mod board_left_stale;
+mod board_merged;
 mod board_prs;
 mod board_read;
 mod board_shape;

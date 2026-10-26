@@ -158,6 +158,12 @@ fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
                 .all(Value::is_string)
         );
     }
+    // `merged: true` (a review chunk on a branch git says is on the base); absent = not known
+    if let Some(i) = k.iter().position(|k| *k == "merged") {
+        k.remove(i);
+        assert_eq!(c["state"], "review", "{uid}");
+        assert_eq!(c["merged"], true, "{uid}");
+    }
     if let Some(i) = k.iter().position(|k| *k == "client_hint") {
         k.remove(i);
         assert!(c["client_hint"].is_string(), "{uid}");

@@ -108,8 +108,23 @@ pub(crate) fn unapprove(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<
     Ok(())
 }
 
-/// `fael chunk accept <uid>…`: every uid in review lands as done.
+/// `fael chunk accept <uid>…`: every uid in review lands as done. `--merged` (hidden, no
+/// uids) takes every review chunk whose run branch git says is on the base: the merge is
+/// the owner's own act, so this only records it.
 pub(crate) fn accept(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(), String> {
+    if a.has("merged") {
+        a.only("chunk accept", &["merged"])?;
+        if !uids.is_empty() {
+            return Err(bad(Some("accept")));
+        }
+        let found = crate::board::branches::merged_reviews(r)?;
+        if found.is_empty() {
+            println!("no review chunk on a merged branch");
+            return Ok(());
+        }
+        let keys: Vec<&str> = found.iter().map(String::as_str).collect();
+        return accept(&a.without("merged"), r, &keys, now);
+    }
     if uids.is_empty() {
         return Err(bad(Some("accept")));
     }

@@ -84,6 +84,35 @@ fn state(
     }
 }
 
+/// A review chunk whose run branch is a merged branch (content on the base) says `merged`.
+/// A run that handed in a file (`--out`) names a branch it may never have committed to:
+/// ahead 0 would read as merged, so it is left alone.
+pub(super) fn mark_merged(chunks: &mut [BoardChunk], branches: &[Branch]) {
+    for c in chunks.iter_mut().filter(|c| c.state == "review") {
+        let Some(run) = c.run.as_ref().filter(|r| r.out.is_none()) else {
+            continue;
+        };
+        c.merged = run
+            .branch
+            .as_deref()
+            .is_some_and(|b| branches.iter().any(|x| x.state == "merged" && x.name == b));
+    }
+}
+
+/// The uids `fael chunk accept --merged` takes: this repo's review chunks on a merged branch.
+pub(crate) fn merged_reviews(r: &crate::Repo) -> Result<Vec<String>, String> {
+    let (today, stale) = super::clock();
+    let mut b = fael_crew::Store::open(&crate::plan::db(r))?.board(&today, &stale)?;
+    let base = git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+    let branches = branches(&r.root, base.as_deref(), &b.chunks);
+    mark_merged(&mut b.chunks, &branches);
+    Ok(b.chunks
+        .into_iter()
+        .filter(|c| c.merged)
+        .map(|c| c.uid)
+        .collect())
+}
+
 /// `branch` holds run branch `run`: it is that branch, or `run`'s tip is in its history.
 fn holds(root: &Path, branch: &str, run: &str) -> bool {
     run == branch
