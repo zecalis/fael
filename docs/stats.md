@@ -18,7 +18,9 @@ Every number comes from two inputs, joined as pure functions in
   whose context the push landed in — absent on the session's own thread),
   `real_tokens` on some rows, and `row` on an add's `warning` (the id just
   filed — not in `ids`, which count pushes; `session` there is its writer).
-  An edit writes one 0-byte `event: "in-context"` row when decisions or issues
+  A line leaves out a zero or empty `bytes`, `est_tokens`, `ids` and `npos`:
+  absent = 0 / empty (`flags` stays on a call line — its presence is the window
+  `usage.by_flag` counts over). An edit writes one 0-byte `event: "in-context"` row when decisions or issues
   about that very file were already in the session's context — their ids go
   under `in_context`, never `ids` (nothing was pushed), each id once per
   session. Notes in context at that edit ride the same row under

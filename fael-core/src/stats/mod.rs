@@ -59,7 +59,7 @@ pub use lifecycle::{Lifecycle, States, lifecycle};
 pub use metrics::ASK_ORDER;
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
-pub use parse::{Parsed, UsageRow, parse, since, since_arg};
+pub use parse::{Parsed, UsageRow, parse, session_stem, since, since_arg};
 pub use repeat::ContextLoop;
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{ASK_SPLIT, KINDS, KindYield};

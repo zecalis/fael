@@ -56,6 +56,14 @@ impl Parsed {
     }
 }
 
+/// A session's stable key: Claude's transcript path (older usage lines) and
+/// its file stem (what rows and new usage lines carry) both give the stem;
+/// other clients use one string for both.
+pub fn session_stem(s: &str) -> &str {
+    let f = s.rsplit(['/', '\\']).next().unwrap_or(s);
+    f.strip_suffix(".jsonl").unwrap_or(f)
+}
+
 /// Parse one `usage.jsonl` file's text. Torn lines are skipped, never an error.
 pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
     let mut p = Parsed {
@@ -78,10 +86,14 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
     };
     let keep_tmp = in_tmp(state_path);
     for line in text.lines() {
-        let v: serde_json::Value = match serde_json::from_str(line) {
+        let mut v: serde_json::Value = match serde_json::from_str(line) {
             Ok(v) => v,
             Err(_) => continue,
         };
+        // old lines hold the transcript path, new ones its stem: group by stem
+        if let Some(s) = v["session"].as_str().map(session_stem).map(String::from) {
+            v["session"] = s.into();
+        }
         if !keep_tmp && v["repo"].as_str().is_some_and(|r| in_tmp(Path::new(r))) {
             p.skipped += 1;
             continue;
@@ -241,5 +253,18 @@ mod tests {
         assert_eq!((real.n, real.skipped), (1, 1));
         let scratch = parse(text.as_str(), Path::new("/tmp/scratch/usage.jsonl"), &tmp());
         assert_eq!((scratch.n, scratch.skipped), (2, 0));
+    }
+
+    #[test]
+    fn an_old_path_session_and_a_new_stem_group_as_one_and_slim_rows_read_as_zero() {
+        let text = concat!(
+            "{\"ts\":\"2026-10-26T00:00:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"event\":\"read\",\"bytes\":9,\"est_tokens\":2,\"ids\":[\"A\"],\"session\":\"/h/.claude/projects/p/abc.jsonl\"}\n",
+            // a slim row: stem session, no bytes, tokens or ids
+            "{\"ts\":\"2026-10-26T00:00:01.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"event\":\"edit\",\"session\":\"abc\"}\n",
+        );
+        let p = parse(text, Path::new("/work/state/usage.jsonl"), &tmp());
+        assert_eq!((p.n, p.bytes, p.toks), (2, 9, 2));
+        assert_eq!(p.kept[0]["session"], p.kept[1]["session"]);
+        assert_eq!(p.kept[0]["session"], "abc");
     }
 }

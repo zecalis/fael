@@ -5,8 +5,8 @@
 //! issue, fael never decides two bugs are one. Pure: kept usage rows and
 //! loaded logs in.
 
-use super::cross::stem;
 use super::parse::Parsed;
+use super::parse::session_stem as stem;
 use crate::{Log, reverted, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};

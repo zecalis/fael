@@ -37,7 +37,8 @@ pub(crate) struct UsageMeta<'a> {
 /// repo (a smoke test or benchmark without `FAEL_STATE_DIR`) never lands in
 /// the machine's usage: it is not real work, and its `repo` only bloats
 /// stats and the find owner index (issue 01M56WGH).
-pub(crate) fn append_row(row: serde_json::Value) {
+pub(crate) fn append_row(mut row: serde_json::Value) {
+    slim(&mut row);
     if row
         .get("repo")
         .and_then(|r| r.as_str())
@@ -61,6 +62,28 @@ pub(crate) fn append_row(row: serde_json::Value) {
             .append(true)
             .open(&path)
             .and_then(|mut f| f.write_all(line.as_bytes()));
+    }
+}
+
+/// Smaller rows at write (decision 01M5WC02 B1): `session` as the transcript's
+/// stem, and the zero/empty defaults left out — every reader defaults on
+/// absence. `flags` stays: a call line carrying the list marks the window
+/// `by_flag` counts over.
+fn slim(row: &mut serde_json::Value) {
+    let Some(o) = row.as_object_mut() else { return };
+    if let Some(s) = o.get("session").and_then(|s| s.as_str()) {
+        let stem = crate::core::stats::session_stem(s).to_string();
+        o.insert("session".into(), stem.into());
+    }
+    for k in ["bytes", "est_tokens", "npos"] {
+        if o.get(k).is_some_and(|v| v.as_u64() == Some(0)) {
+            o.remove(k);
+        }
+    }
+    if o.get("ids")
+        .is_some_and(|v| v.as_array().is_some_and(|a| a.is_empty()))
+    {
+        o.remove("ids");
     }
 }
 

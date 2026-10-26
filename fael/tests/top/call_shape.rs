@@ -132,7 +132,8 @@ fn a_help_row_carries_shape() {
     assert_eq!(rows[0]["outcome"], "help");
     assert_eq!(rows[0]["verb"], "approve");
     assert_eq!(rows[0]["flags"], serde_json::json!(["help"]));
-    assert_eq!(rows[0]["npos"], 0);
+    // a zero count is left out of the row
+    assert!(rows[0].get("npos").is_none(), "{rows:?}");
 }
 
 #[test]
