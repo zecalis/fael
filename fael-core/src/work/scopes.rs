@@ -29,7 +29,7 @@ pub struct Scopes {
 }
 
 const TEAM: &str = "WITH mine(id) AS (SELECT c.id FROM run r JOIN chunk c ON c.id = r.chunk
-      WHERE r.worktree = ?1 AND r.ended IS NULL),
+      WHERE (r.worktree = ?1 OR (?2 <> '' AND r.session = ?2)) AND r.ended IS NULL),
     team(id) AS (SELECT id FROM mine
       UNION SELECT e.dst FROM edge e JOIN mine ON mine.id = e.src WHERE e.kind = 'pair'
       UNION SELECT e.src FROM edge e JOIN mine ON mine.id = e.dst WHERE e.kind = 'pair')";
@@ -40,7 +40,7 @@ fn lines(s: Option<String>) -> Vec<String> {
 
 /// The worktree's held chunk and the scopes around it, with `shared` paths
 /// left out of the others'. `None` when no db, no tables or no live run.
-pub fn scopes(db: &Path, worktree: &str, shared: &[String]) -> Option<Scopes> {
+pub fn scopes(db: &Path, worktree: &str, session: &str, shared: &[String]) -> Option<Scopes> {
     let c = readonly(db)?;
     let mine = format!(
         "{TEAM} SELECT c.uid, c.scope, c.id IN (SELECT id FROM mine) FROM chunk c
@@ -49,7 +49,7 @@ pub fn scopes(db: &Path, worktree: &str, shared: &[String]) -> Option<Scopes> {
     let rows = c
         .prepare(&mine)
         .ok()?
-        .query_map([worktree], |r| {
+        .query_map([worktree, session], |r| {
             Ok((r.get::<_, String>(0)?, r.get(1)?, r.get::<_, bool>(2)?))
         })
         .ok()?
@@ -66,7 +66,7 @@ pub fn scopes(db: &Path, worktree: &str, shared: &[String]) -> Option<Scopes> {
     let others = c
         .prepare(&rest)
         .ok()?
-        .query_map([worktree], |r| {
+        .query_map([worktree, session], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get(1)?,
@@ -123,7 +123,7 @@ mod tests {
             "CREATE TABLE plan(id INTEGER PRIMARY KEY, name TEXT);
              CREATE TABLE chunk(id INTEGER PRIMARY KEY, uid TEXT, label TEXT, plan INTEGER,
                seq INTEGER, scope TEXT, state TEXT);
-             CREATE TABLE run(chunk INTEGER, worktree TEXT, ended TEXT);
+             CREATE TABLE run(chunk INTEGER, worktree TEXT, ended TEXT, session TEXT);
              CREATE TABLE edge(src INTEGER, dst INTEGER, kind TEXT);
              INSERT INTO plan VALUES (1, 'p');
              {rows}"
@@ -140,10 +140,10 @@ mod tests {
               (3,'U3','c',1,3,'src/c/','done'),
               (4,'U4',NULL,1,4,'src/d/','ready'),
               (5,'U5','e',1,5,'src/e/','review');
-             INSERT INTO run VALUES (1,'/wt',NULL),(3,'/wt','2026-01-01');
+             INSERT INTO run VALUES (1,'/wt',NULL,'S'),(3,'/wt','2026-01-01',NULL);
              INSERT INTO edge VALUES (1,5,'pair');",
         );
-        let s = scopes(&p, "/wt", &["shared/".into()]).unwrap();
+        let s = scopes(&p, "/wt", "", &["shared/".into()]).unwrap();
         assert_eq!((s.uid.as_str(), s.declared.len()), ("U1", 2));
         let names: Vec<&str> = s.others.iter().map(|o| o.name.as_str()).collect();
         assert_eq!(
@@ -153,7 +153,13 @@ mod tests {
         );
         assert_eq!(s.others[0].scope, ["src/b/"], "shared path dropped");
         assert_eq!(s.others[0].state, "ready", "state as stored");
-        assert!(scopes(&p, "/other", &[]).is_none());
+        assert!(scopes(&p, "/other", "", &[]).is_none());
+        assert!(scopes(&p, "/other", "T", &[]).is_none(), "another session");
+        assert_eq!(
+            scopes(&p, "/other", "S", &[]).map(|s| s.uid),
+            Some("U1".into()),
+            "same session, other worktree"
+        );
         let _ = std::fs::remove_file(p);
     }
 

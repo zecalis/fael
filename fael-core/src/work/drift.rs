@@ -66,14 +66,14 @@ pub fn in_conn(c: &Connection, uid: &str) -> Option<Drift> {
     (d.event > 0).then_some(d)
 }
 
-/// The drift of the first live chunk run in `worktree`.
-pub fn drift(db: &Path, worktree: &str) -> Option<Drift> {
+/// The drift of the first live chunk run in `worktree` or bound to `session`.
+pub fn drift(db: &Path, worktree: &str, session: &str) -> Option<Drift> {
     let c = super::db::readonly(db)?;
     let uid: String = c
         .query_row(
             "SELECT c.uid FROM run r JOIN chunk c ON c.id = r.chunk
-             WHERE r.worktree = ?1 AND r.ended IS NULL ORDER BY c.seq LIMIT 1",
-            [worktree],
+             WHERE (r.worktree = ?1 OR (?2 <> '' AND r.session = ?2)) AND r.ended IS NULL ORDER BY c.seq LIMIT 1",
+            [worktree, session],
             |r| r.get(0),
         )
         .ok()?;
@@ -83,6 +83,36 @@ pub fn drift(db: &Path, worktree: &str) -> Option<Drift> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_run_is_found_by_worktree_or_by_its_session() {
+        let d = std::env::temp_dir().join(format!("fael-drift-{}", crate::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let db = d.join("crew.db");
+        let c = Connection::open(&db).unwrap();
+        c.execute_batch(
+            "CREATE TABLE chunk(id INTEGER PRIMARY KEY, uid TEXT, seq INTEGER);
+             CREATE TABLE run(id INTEGER PRIMARY KEY, chunk INTEGER, worktree TEXT,
+                              ended TEXT, session TEXT);
+             CREATE TABLE event(id INTEGER PRIMARY KEY, chunk_uid TEXT, by TEXT, to_state TEXT, text TEXT);
+             INSERT INTO chunk VALUES (1, 'U', 1);
+             INSERT INTO run VALUES (1, 1, '/a', NULL, 'S');
+             INSERT INTO event VALUES (1, 'U', 'agent', 'running', 'started'),
+                                      (2, 'U', 'owner', 'running', 'edited brief');",
+        )
+        .unwrap();
+        assert!(drift(&db, "/a", "").is_some(), "worktree");
+        assert!(
+            drift(&db, "/b", "S").is_some(),
+            "same session, other worktree"
+        );
+        assert!(drift(&db, "/b", "T").is_none(), "another session");
+        assert!(
+            drift(&db, "/b", "").is_none(),
+            "empty session: worktree only"
+        );
+        let _ = std::fs::remove_dir_all(d);
+    }
 
     #[test]
     fn only_an_owner_edit_of_brief_scope_or_title_after_the_start_drifts() {

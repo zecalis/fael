@@ -28,26 +28,30 @@ pub(super) fn readonly(db: &Path) -> Option<rusqlite::Connection> {
     Some(c)
 }
 
-/// Live chunk runs in a worktree, `(uid, title, R)` — empty when no db/tables.
-pub fn held(db: &Path, worktree: &str) -> Vec<(String, String, String)> {
+/// Live chunk runs in a worktree, or bound to `session` wherever it works now (an MCP
+/// start without `cwd`, `--no-worktree`): `(uid, title, R)` — empty when no db/tables.
+/// An empty `session` matches the worktree only.
+pub fn held(db: &Path, worktree: &str, session: &str) -> Vec<(String, String, String)> {
     let Some(c) = readonly(db) else {
         return Vec::new();
     };
     let mut q = match c.prepare(
         "SELECT c.uid, c.title, r.start FROM run r JOIN chunk c ON c.id = r.chunk
-         WHERE r.worktree = ?1 AND r.ended IS NULL ORDER BY c.seq",
+         WHERE (r.worktree = ?1 OR (?2 <> '' AND r.session = ?2)) AND r.ended IS NULL ORDER BY c.seq",
     ) {
         Ok(q) => q,
         Err(_) => return Vec::new(),
     };
-    q.query_map([worktree], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-        .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
-        .unwrap_or_default()
+    q.query_map([worktree, session], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+    })
+    .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
+    .unwrap_or_default()
 }
 
 /// True when the worktree holds a live chunk run.
-pub fn has_held(db: &Path, worktree: &str) -> bool {
-    !held(db, worktree).is_empty()
+pub fn has_held(db: &Path, worktree: &str, session: &str) -> bool {
+    !held(db, worktree, session).is_empty()
 }
 
 /// Stamp the live run of this worktree (Stop hook): fail-open, never migrates.
