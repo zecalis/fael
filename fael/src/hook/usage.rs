@@ -149,13 +149,8 @@ pub(crate) fn load_where(since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usa
     load_text(super::usage_files::read(since), since, keep)
 }
 
-/// `load_where` over usage text the caller already read.
-pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
-    let path = super::usage_files::live();
-    // `--since all` (0) cuts nothing: skip the second parse of every line
-    if let Some(ms) = since.filter(|&ms| ms > 0) {
-        s = core::stats::since(&s, ms);
-    }
+/// Usage text → `Parsed`, touching no repo log, git or gh.
+pub(crate) fn parse_text(s: &str) -> core::stats::Parsed {
     // benchmark/test repos live in the OS temp dir (01M3CRR6A) — the boundary
     // rides in as a parameter, so core stays pure. `/tmp` too: on macOS the
     // OS temp dir is under /var/folders, but agent scratchpads use /tmp
@@ -165,7 +160,17 @@ pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -
         PathBuf::from("/tmp"),
         Path::new("/tmp").canonicalize().unwrap_or_default(),
     ];
-    let mut parsed = core::stats::parse(&s, &path, &tmp);
+    core::stats::parse(s, &super::usage_files::live(), &tmp)
+}
+
+/// `load_where` over usage text the caller already read.
+pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
+    let path = super::usage_files::live();
+    // `--since all` (0) cuts nothing: skip the second parse of every line
+    if let Some(ms) = since.filter(|&ms| ms > 0) {
+        s = core::stats::since(&s, ms);
+    }
+    let mut parsed = parse_text(&s);
     parsed.kept.retain(|v| v["repo"].as_str().is_some_and(keep));
     let mut logs: HashMap<String, core::Log> = HashMap::new();
     // a removed worktree's path no longer leads to its journal: leave it out,
