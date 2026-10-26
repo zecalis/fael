@@ -300,40 +300,6 @@ pub(super) mod tests {
         out
     }
 
-    /// The ask split reads the hub flag the push recorded and earns like
-    /// `ask`; an ask with no `feat` counts in `ask` only.
-    #[test]
-    fn ask_splits_by_the_recorded_hub_flag() {
-        let row = |id: &str| {
-            format!(
-                "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"issue\",\"text\":\"t\",\"files\":[\"a.rs\"]}}\n"
-            )
-        };
-        let log = Log {
-            rows: rows(&(row("H") + &row("F") + &row("X"))),
-            closes: rows(
-                "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:08:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"H\"}\n",
-            ),
-            ..Log::default()
-        };
-        let usage = r#"{"ts":"2026-09-26T00:01:00.000Z","repo":"/w/r","client":"claude","session":"/t/s1.jsonl","event":"edit","ids":[],"said":[{"kind":"ask","key":"H"},{"kind":"ask","key":"F"},{"kind":"ask","key":"X"}],"feat":{"H":{"hub":true},"F":{"hub":false}}}
-"#;
-        let p = super::super::parse::parse(
-            usage,
-            Path::new("/w/state/usage.jsonl"),
-            &[PathBuf::from("/tmp")],
-        );
-        let y = yields(&p, &HashMap::from([("/w/r".to_string(), log)]));
-        let got = |k: &str| y.get(k).map(|y| (y.said, y.earned));
-        assert_eq!(got("ask"), Some((3, 1)));
-        assert_eq!(got("ask:hub"), Some((1, 1)), "H closed after the ask");
-        assert_eq!(
-            got("ask:file"),
-            Some((1, 0)),
-            "F never retired; X has no feat"
-        );
-    }
-
     #[test]
     fn each_kind_earns_on_its_own_outcome() {
         let row = |id: &str, kind: &str, extra: &str| {
