@@ -194,9 +194,11 @@ fn index(
 
 /// Each repo's note ids, so a `row` said entry joins by lookup, not by scan.
 fn note_ids(logs: &HashMap<String, Log>) -> HashMap<&str, HashSet<&str>> {
-    let notes = |l: &'_ Log| l.rows.iter().filter(|r| r.kind == "note");
     logs.iter()
-        .map(|(repo, l)| (repo.as_str(), notes(l).map(|r| r.id.as_str()).collect()))
+        .map(|(repo, l)| {
+            let notes = l.rows.iter().filter(|r| r.kind == "note");
+            (repo.as_str(), notes.map(|r| r.id.as_str()).collect())
+        })
         .collect()
 }
 
