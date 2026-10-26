@@ -198,3 +198,18 @@ fn a_near_miss_verb_suggests_the_closest_one() {
     assert!(!ok, "a near-miss verb stays a reject");
     assert!(err.contains("did you mean show?"), "{err}");
 }
+
+/// `chunk start --plan p <uid>` with a uid that sits in plan q starts it (a uid is unique
+/// across plans); a label is never widened.
+#[test]
+fn start_takes_a_uid_from_the_plan_it_sits_in() {
+    let d = repo();
+    plan(&d, "p");
+    plan(&d, "q");
+    let q = labeled(&d, "q", "z");
+    let (ok, out, err) = fael(&d, &["chunk", "start", "--plan", "p", &q]);
+    assert!(ok, "{out}{err}");
+    assert!(err.contains("is not in plan p"), "{err}");
+    let (ok, _, err) = fael(&d, &["chunk", "start", "--plan", "p", "z"]);
+    assert!(!ok && err.contains("is in plan q, not p"), "{err}");
+}

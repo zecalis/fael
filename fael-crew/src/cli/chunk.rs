@@ -63,7 +63,17 @@ fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<Stri
         mapped[2] = crate::chunk_verbs::resolve(&s, Some(&plan), other)?;
         return Ok(Some((a.without("plan"), mapped)));
     }
-    let uid = Store::open(&db(r))?.uid_in(key, &plan)?;
+    let s = Store::open(&db(r))?;
+    let uid = match s.uid_in(key, &plan) {
+        // `start` runs the one chunk the uid names: a uid is unique across plans, so the
+        // plan it sits in is a fact fael holds, not a guess — say so and start it
+        Err(e) if verb == "start" && core::looks_like_id(key) && e.contains("is in plan") => {
+            let uid = s.uid_any(key).map_err(|_| e)?;
+            eprintln!("note: chunk {uid} is not in plan {plan} — started from the plan it sits in");
+            uid
+        }
+        r => r?,
+    };
     let mut mapped = rest.to_vec();
     mapped[1] = uid;
     Ok(Some((a.without("plan"), mapped)))

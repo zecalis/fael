@@ -64,6 +64,14 @@ pub fn reject(argv: &[String], e: String) -> String {
         if let Some(n) = close {
             return format!("rejected: unknown command {cmd:?} — did you mean {n}?");
         }
+        // no name is near: give the whole closed list, once, in the same line
+        if !cmd.is_empty() && !cmd.starts_with('-') {
+            let all: Vec<&str> = super::names().collect();
+            return format!(
+                "rejected: unknown command {cmd:?} — commands: {} — try 'fael --help'",
+                all.join(", ")
+            );
+        }
     }
     e
 }
@@ -219,9 +227,15 @@ mod tests {
         assert_eq!(reject(&[], flag_first.into()), flag_first);
         let other = "rejected: --limit 0 shows nothing";
         assert_eq!(reject(&argv("find --limit 0"), other.into()), other);
-        // an unknown command far from every name has no "did you mean"
+        // an unknown command far from every name has no "did you mean": it lists them all
         let far = "rejected: unknown command \"qqqqqqq\" — try 'fael --help'";
-        assert_eq!(reject(&argv("qqqqqqq"), far.into()), far);
+        let said = reject(&argv("qqqqqqq"), far.into());
+        assert!(!said.contains("did you mean"), "{said}");
+        assert!(
+            said.contains("commands: ") && said.contains("find, "),
+            "{said}"
+        );
+        assert_eq!(said.lines().count(), 1, "one line");
         // same input, same answer
         let a = reject(&argv("find --group"), flag_first.into());
         assert_eq!(a, reject(&argv("find --group"), flag_first.into()));

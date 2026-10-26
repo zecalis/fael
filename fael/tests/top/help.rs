@@ -102,7 +102,9 @@ fn per_command_help_and_short_errors() {
     // never a full usage dump on stderr
     let (ok, _, err) = fael(&d, &["frobnicate"]);
     assert!(!ok && err.contains("unknown command"), "{err}");
-    assert!(!err.contains("commands:"), "{err}");
+    // far from every name: the closed list, in the same one line
+    assert!(err.contains("commands: add, close"), "{err}");
+    assert_eq!(err.trim().lines().count(), 1, "{err}");
     let (ok, _, err) = fael(&d, &["find", "--nope"]);
     assert!(!ok && err.contains("unknown flag"), "{err}");
     assert!(!err.contains("commands:"), "{err}");
