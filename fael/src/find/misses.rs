@@ -75,16 +75,18 @@ fn read() -> Vec<serde_json::Value> {
 pub(crate) fn stats_line() -> Option<String> {
     let n = read().len();
     (n > 0).then(|| {
-        format!("  find misses: ×{n} empty text searches (fael stats --misses lists them)")
+        format!(
+            "  find misses: ×{n} text searches matched no rows (fael stats --misses lists them)"
+        )
     })
 }
 
-/// `fael stats --misses`: the newest empty text searches, one per line, with
+/// `fael stats --misses`: the newest text searches that matched no rows, one per line, with
 /// the per-word counts that said which word the rows never use.
 pub(crate) fn print_recent(limit: usize) {
     let all = read();
     if all.is_empty() {
-        println!("fael: no empty text searches recorded");
+        println!("fael: no text searches that matched no rows recorded");
         return;
     }
     for m in all.iter().rev().take(limit) {
