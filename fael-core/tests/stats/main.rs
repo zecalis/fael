@@ -103,7 +103,7 @@ fn json_shape_keys_and_types_are_frozen() {
     // every kind listed, zeros included
     assert_eq!(
         keys(&v["said"]).join(" "),
-        "ask bodies brief check checkpoint cited finding fixcommit fixed held note notice overlap pointer row",
+        "ask bodies brief checkpoint cited finding fixcommit fixed held note notice overlap pointer row",
         "{v}"
     );
     assert_eq!(

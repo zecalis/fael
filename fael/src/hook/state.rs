@@ -60,33 +60,6 @@ pub(crate) fn seen_path(session: &str, agent: &str, root: &Path) -> PathBuf {
     state_dir().join("sessions").join(format!("{key}.seen"))
 }
 
-/// `<main seen file>.turn` — the id of the user's current turn, rewritten by
-/// every prompt. Keyed without the sub-agent, so a sub-agent's edits share
-/// the turn of the prompt that started them.
-pub(crate) fn turn_path(session: &str, root: &Path) -> PathBuf {
-    seen_path(session, "", root).with_extension("turn")
-}
-
-/// Mark a new user turn: a fresh id, so `per_turn` kinds may speak again.
-/// Fails open: unwritable = no new turn, the old mark stands.
-pub(crate) fn new_turn(session: &str, root: &Path) {
-    let p = turn_path(session, root);
-    if let Some(d) = p.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-    let _ = std::fs::write(p, crate::core::ulid());
-}
-
-/// The current turn's id; `None` before any prompt marked one (a client
-/// without a prompt hook keeps no per-turn limit).
-pub(crate) fn read_turn(session: &str, root: &Path) -> Option<String> {
-    (!session.is_empty())
-        .then(|| std::fs::read_to_string(turn_path(session, root)).ok())
-        .flatten()
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
-}
-
 /// Chunk 6e: ids this session already holds in context — just filed by `add`
 /// or just shown by `find --files`. The next push skips them instead of
 /// repeating them. Empty session or ids = no-op (MCP outside a hook session).

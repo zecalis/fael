@@ -4,14 +4,12 @@
 
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{self, Ask, Blobs, edit_hint, read_seen};
-use super::check;
 use super::decision;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
 use super::spent_notes::{self, Count};
 use super::state::{
-    clear_stash, edited_files, edits_path, lock_seen, peek_stash, read_turn, record_edits,
-    seen_path,
+    clear_stash, edited_files, edits_path, lock_seen, peek_stash, record_edits, seen_path,
 };
 use super::usage::record_usage;
 use crate::{aliases, core};
@@ -202,8 +200,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         (!c.session.is_empty())
             .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
             .flatten(),
-    )
-    .in_turn(read_turn(&c.session, &c.repo.root));
+    );
     if edit {
         out.record_in_context(&c, &tiered, &files);
     }
@@ -249,7 +246,6 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
         text: format!("{}\n", h.text),
     }));
     lines.extend(retired_lines(&c, &spent, sid, &shown));
-    lines.extend(check::check_line(&ask, edit));
     if edit {
         lines.extend(super::overlap::lines(&c, &files));
         lines.extend(super::drift::line(&c));

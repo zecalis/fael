@@ -27,7 +27,6 @@ mod asks;
 mod askstats;
 mod autosync;
 mod changed;
-mod check;
 mod cited;
 mod claude;
 mod codes;

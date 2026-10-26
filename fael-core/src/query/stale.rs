@@ -73,22 +73,6 @@ pub fn stale_refs(root: &Path, row: &Row, al: &Aliases) -> Vec<String> {
     gone_refs(root, &row.text, &row.files, al)
 }
 
-/// The backticked paths in the text `row` was closed with (its close record,
-/// not the row — PLAN-fael-experience-loop chunk 3) that resolve nowhere: a
-/// check the agent pointed the close at, gone since. The newest close wins.
-/// Only a span holding a `/` is a check: a close's cause → fix prose names
-/// bare files (`a.rs`) that live under some dir, never at the root.
-pub fn stale_close_refs(root: &Path, log: &Log, row: &Row, al: &Aliases) -> Vec<String> {
-    let close = log
-        .closes
-        .iter()
-        .filter(|c| c.reference.as_deref() == Some(row.id.as_str()))
-        .max_by(|a, b| a.ts.cmp(&b.ts));
-    let mut gone = close.map_or(vec![], |c| gone_refs(root, &c.text, &row.files, al));
-    gone.retain(|p| p.contains('/'));
-    gone
-}
-
 /// The text `row` was closed with, and whether that close is new
 /// (`stats::new_close`): the newest close record, else the close `fael
 /// compact` folded in. An old close only when it names its fix — a sha or

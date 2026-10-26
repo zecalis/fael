@@ -151,3 +151,29 @@ fn held_acted_splits_supersede_and_other_sources() {
         "pre-window close never counts"
     );
 }
+
+/// `overlap` / `checkpoint` earn on a later `fael chunk note` call of the same
+/// session (no ledger row exists for it): not before the line, not by another
+/// session, not a rejected call.
+#[test]
+fn overlap_and_checkpoint_earn_on_a_later_chunk_note_call() {
+    let call = |min: u8, session: &str, outcome: &str| {
+        format!(
+            "{{\"ts\":\"2026-09-26T00:0{min}:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"event\":\"call\",\"session\":\"{session}\",\"cmd\":\"chunk\",\"sub\":\"note\",\"outcome\":\"{outcome}\"}}\n"
+        )
+    };
+    let said = "{\"ts\":\"2026-09-26T00:02:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",\"event\":\"edit\",\"ids\":[],\"said\":[{\"kind\":\"overlap\",\"key\":\"U\"},{\"kind\":\"checkpoint\",\"key\":\"~checkpoint:U:0\"}]}\n";
+    let earned = |extra: String| {
+        let p = super::parse::parse(
+            &(said.to_string() + &extra),
+            Path::new("/w/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        let y = yields(&p, &HashMap::new());
+        (y["overlap"].earned, y["checkpoint"].earned)
+    };
+    assert_eq!(earned(call(3, "s1", "ok")), (1, 1));
+    assert_eq!(earned(call(1, "s1", "ok")), (0, 0), "before the line");
+    assert_eq!(earned(call(3, "s2", "ok")), (0, 0), "another session");
+    assert_eq!(earned(call(3, "s1", "reject")), (0, 0), "rejected");
+}

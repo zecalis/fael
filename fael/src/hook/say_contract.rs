@@ -49,10 +49,6 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael: review finding on a.rs — file it: `fael add issue 'x' --files a.rs`\n",
         ),
-        line(
-            Kind::Check { id: "01CHK".into() },
-            "fael: 01CHK was closed pointing at `t/a.sh`, now gone — fael add issue \"<what is unguarded>\" --files a.rs --supersedes 01CHK\n",
-        ),
         Line::notice("fael: a stashed line\n".into()),
         line(
             Kind::Fixed,
@@ -95,14 +91,13 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Bodies => 3,
         Kind::Cited { .. } => 4,
         Kind::Finding { .. } => 5,
-        Kind::Check { .. } => 6,
-        Kind::Notice => 7,
-        Kind::Fixed => 8,
-        Kind::FixCommit => 9,
-        Kind::Overlap { .. } => 10,
-        Kind::Checkpoint { .. } => 11,
-        Kind::Retired { .. } => 13,
-        Kind::BriefDrift { .. } => 12,
+        Kind::Notice => 6,
+        Kind::Fixed => 7,
+        Kind::FixCommit => 8,
+        Kind::Overlap { .. } => 9,
+        Kind::Checkpoint { .. } => 10,
+        Kind::Retired { .. } => 12,
+        Kind::BriefDrift { .. } => 11,
     }
 }
 
@@ -179,38 +174,6 @@ fn a_spent_mark_says_nothing_and_is_seen_next_time() {
     assert!(out.reply().context().is_none());
     assert!(Outbox::open(lock_seen(&p)).has("~peek:x"));
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
-}
-
-/// A `per_turn` kind speaks once per user turn even on a key not yet spent;
-/// the next turn may say it again. No turn marked = no limit.
-#[test]
-fn a_per_turn_kind_is_said_once_per_turn() {
-    for l in all().into_iter().filter(|l| policy(&l.kind).per_turn) {
-        let p = seen("s.seen");
-        // turns share one mark across per-turn kinds: a check on a fresh issue
-        let other = |id: &str| Line {
-            kind: Kind::Check { id: id.into() },
-            text: format!("fael add issue --supersedes {id}\n"),
-        };
-        let in_turn = |t: &str, l: Line| {
-            let mut out = Outbox::open(lock_seen(&p)).in_turn(Some(t.into()));
-            out.say(l);
-            out.reply().context().map(String::from)
-        };
-        assert!(in_turn("t1", other("01A")).is_some());
-        assert_eq!(
-            in_turn("t1", other("01B")),
-            None,
-            "{:?} twice in a turn",
-            l.kind
-        );
-        assert!(in_turn("t2", other("01B")).is_some());
-        // the held-back line spent nothing: 01B is asked once, in t2
-        let (_, hinted) = read_seen(&std::fs::read_to_string(&p).unwrap());
-        assert!(hinted.contains("check:01A") && hinted.contains("check:01B"));
-        assert!(said(lock_seen(&p), other("01C")).is_some());
-        let _ = std::fs::remove_dir_all(p.parent().unwrap());
-    }
 }
 
 #[test]
@@ -364,7 +327,6 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "bodies",
             "cited",
             "finding",
-            "check",
             "notice",
             "fixed",
             "fixcommit",
