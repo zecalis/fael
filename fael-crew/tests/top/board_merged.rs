@@ -54,8 +54,21 @@ fn accept_merged_lands_only_the_review_chunks_on_the_base() {
     let f = |args: &[&str]| fael(&d, &state, args);
     let add = |t: &str, scope: &str| f(&["chunk", "add", t, "--brief", "b", "--scope", scope]);
     let (landed, waiting) = (add("landed", "x.txt"), add("waiting", "y.txt"));
+    let closed = add("closed", "z.txt");
     ship(&d, &state, &landed, "feat/landed", "x.txt");
     ship(&d, &state, &waiting, "feat/waiting", "y.txt");
+    ship(&d, &state, &closed, "feat/closed", "z.txt");
+    // a PR closed unmerged: its upstream is gone, its content is not on the base
+    git(&d, &["remote", "add", "origin", "/nonexistent"]);
+    git(&d, &["config", "branch.feat/closed.remote", "origin"]);
+    git(
+        &d,
+        &[
+            "config",
+            "branch.feat/closed.merge",
+            "refs/heads/feat/closed",
+        ],
+    );
     // the owner squash-merges feat/landed
     git(&d, &["merge", "-q", "--squash", "feat/landed"]);
     git(&d, &["commit", "-qm", "landed (#1)"]);
@@ -82,6 +95,19 @@ fn accept_merged_lands_only_the_review_chunks_on_the_base() {
     );
     assert_eq!(chunk(&v, &landed)["merged"], true);
     assert!(chunk(&v, &waiting).get("merged").is_none());
+    assert!(
+        chunk(&v, &closed).get("merged").is_none(),
+        "a gone upstream alone is not merged"
+    );
+    let branch = |n: &str| {
+        let all = v["projects"][0]["branches"].as_array().unwrap();
+        all.iter().find(|b| b["name"] == n).unwrap().clone()
+    };
+    assert_eq!(
+        branch("feat/closed")["state"],
+        "merged",
+        "display unchanged"
+    );
 
     assert_eq!(
         f(&["chunk", "accept", "--merged"]),
@@ -90,6 +116,7 @@ fn accept_merged_lands_only_the_review_chunks_on_the_base() {
     let v = board();
     assert_eq!(chunk(&v, &landed)["state"], "done");
     assert_eq!(chunk(&v, &waiting)["state"], "review");
+    assert_eq!(chunk(&v, &closed)["state"], "review");
     assert_eq!(
         f(&["chunk", "accept", "--merged"]),
         "no review chunk on a merged branch"

@@ -15,6 +15,10 @@ pub(super) struct Branch {
     /// `local` never pushed · `pushed` a live upstream of its own name · `merged` its content is on the base,
     /// or its upstream is gone (a merged PR the remote deleted)
     pub(super) state: &'static str,
+    /// content on the base: ahead 0 or merge-tree == base tree. A gone upstream alone is not
+    /// (a PR closed unmerged loses its branch too); `accept --merged` reads this, not `state`
+    #[serde(skip)]
+    pub(super) on_base: bool,
     pub(super) chunks: Vec<String>,
 }
 
@@ -43,7 +47,7 @@ pub(super) fn branches(root: &Path, base: Option<&str>, chunks: &[BoardChunk]) -
             if Some(name) == base.strip_prefix("origin/") {
                 return None;
             }
-            let state = state(root, base, tree.as_deref(), name, up, track);
+            let (state, on_base) = state(root, base, tree.as_deref(), name, up, track);
             let chunks = live
                 .iter()
                 .filter(|(_, b)| state != "merged" && holds(root, name, b))
@@ -52,6 +56,7 @@ pub(super) fn branches(root: &Path, base: Option<&str>, chunks: &[BoardChunk]) -
             Some(Branch {
                 name: name.into(),
                 state,
+                on_base,
                 chunks,
             })
         })
@@ -65,22 +70,28 @@ fn state(
     b: &str,
     up: &str,
     track: &str,
-) -> &'static str {
+) -> (&'static str, bool) {
     let ahead = git(root, &["rev-list", "--count", &format!("{base}..{b}")]);
-    if track == "[gone]" || ahead.as_deref() == Some("0") {
-        return "merged";
+    if ahead.as_deref() == Some("0") {
+        return ("merged", true);
+    }
+    // merging it changes nothing: every change is on the base already (a squash merge)
+    let squashed = || {
+        let merged = git_output(root, &["merge-tree", "--write-tree", base, b])
+            .and_then(|(_, out)| out.lines().next().map(String::from));
+        merged.is_some() && merged.as_deref() == tree
+    };
+    if track == "[gone]" {
+        return ("merged", squashed());
     }
     // its own name on a remote: `git branch x origin/main` tracks main, x is not pushed
     if up.ends_with(&format!("/{b}")) {
-        return "pushed";
+        return ("pushed", false);
     }
-    // merging it changes nothing: every change is on the base already (a squash merge)
-    let merged = git_output(root, &["merge-tree", "--write-tree", base, b])
-        .and_then(|(_, out)| out.lines().next().map(String::from));
-    if merged.is_some() && merged.as_deref() == tree {
-        "merged"
+    if squashed() {
+        ("merged", true)
     } else {
-        "local"
+        ("local", false)
     }
 }
 
@@ -95,7 +106,7 @@ pub(super) fn mark_merged(chunks: &mut [BoardChunk], branches: &[Branch]) {
         c.merged = run
             .branch
             .as_deref()
-            .is_some_and(|b| branches.iter().any(|x| x.state == "merged" && x.name == b));
+            .is_some_and(|b| branches.iter().any(|x| x.on_base && x.name == b));
     }
 }
 
