@@ -47,6 +47,7 @@ mod opencode;
 mod overlap;
 mod prompt;
 mod protocol;
+mod prune;
 mod push;
 mod retired;
 mod review;

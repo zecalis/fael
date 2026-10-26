@@ -72,7 +72,7 @@ fn drifted<'a>(log: &'a core::Log, root: &Path) -> Vec<(usize, &'a core::Row)> {
 
 /// The `git log` text for `since`, kept in the state dir while HEAD and `since`
 /// stay put: the walk is most of a board read (~70 ms a repo) and the answer
-/// only moves with a commit. ponytail: one file per clone, never pruned; a
+/// only moves with a commit. ponytail: one file per clone, pruned after 7 idle days by session-start; a
 /// failed write costs the next call a re-run.
 fn log_out(root: &Path, since: &str) -> Option<String> {
     use std::hash::{Hash, Hasher};
