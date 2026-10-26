@@ -81,7 +81,7 @@ pub fn kickoff_text(db: &Path, plan_name: &str, worktree: &str, today: &str) -> 
     let c = readonly(db)?;
     let p = all_plans(&c)?.into_iter().find(|p| p.name == plan_name)?;
     let mut out = String::new();
-    let h = held(db, worktree);
+    let h = held(db, worktree, "");
     if !h.is_empty() {
         for (uid, title, run) in &h {
             out.push_str(&format!("you hold chunk {uid} — {title} (run {run})\n"));
@@ -123,8 +123,8 @@ mod tests {
     fn missing_db_reads_empty_and_writes_zero() {
         let db = std::env::temp_dir().join(format!("fael-work-{}.db", crate::ulid()));
         let _ = std::fs::remove_file(&db);
-        assert!(held(&db, "/tmp/wt").is_empty());
-        assert!(!has_held(&db, "/tmp/wt"));
+        assert!(held(&db, "/tmp/wt", "").is_empty());
+        assert!(!has_held(&db, "/tmp/wt", ""));
         assert!(!is_chunk(&db, "01M5AF5WHVBRJ9629ZYA2HF9XY"));
         assert!(chunk_brief(&db, "01M5AF5WHVBRJ9629ZYA2HF9XY").is_none());
         assert!(ended_runs(&db).is_empty());
@@ -145,5 +145,36 @@ mod tests {
         let has = |m| rules("U1", m).contains("small-model subagents");
         assert!(has(Some("mixed")));
         assert!(!has(Some("opus")) && !has(None));
+    }
+
+    #[test]
+    fn held_finds_a_run_by_worktree_or_by_its_session() {
+        let d = std::env::temp_dir().join(format!("fael-held-{}", crate::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        let db = d.join("crew.db");
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute_batch(
+            "CREATE TABLE chunk(id INTEGER PRIMARY KEY, uid TEXT, title TEXT, seq INTEGER);
+             CREATE TABLE run(id INTEGER PRIMARY KEY, start TEXT, chunk INTEGER, worktree TEXT,
+                              ended TEXT, session TEXT);
+             INSERT INTO chunk VALUES (1, 'U', 't', 1);
+             INSERT INTO run VALUES (1, 'R', 1, '/a', NULL, 'S');",
+        )
+        .unwrap();
+        assert_eq!(held(&db, "/a", "").len(), 1, "worktree");
+        assert_eq!(
+            held(&db, "/b", "S").len(),
+            1,
+            "same session, other worktree"
+        );
+        assert!(has_held(&db, "/b", "S"));
+        assert!(held(&db, "/b", "T").is_empty(), "another session");
+        assert!(
+            held(&db, "/b", "").is_empty(),
+            "empty session: worktree only"
+        );
+        c.execute("UPDATE run SET ended = 'x'", []).unwrap();
+        assert!(held(&db, "/b", "S").is_empty(), "ended");
+        let _ = std::fs::remove_dir_all(d);
     }
 }

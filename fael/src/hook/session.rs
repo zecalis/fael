@@ -58,7 +58,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let said = &shown[..n.min(shown.len())];
     let mut ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
     let mut keys: Vec<String> = ids.iter().map(|i| format!("~start:{i}")).collect();
-    if let Some((uid, line)) = chunk_line(&c.repo) {
+    if let Some((uid, line)) = chunk_line(&c.repo, &c.session) {
         keys.push(format!("~start:chunk:{uid}"));
         body.push_str(&line);
     }
@@ -140,9 +140,9 @@ fn start_rows<'a>(
 /// The live chunk run this worktree holds (`fael chunk start` here, maybe in
 /// another session): its uid and the line that points at its brief. No
 /// crew.db, no run = `None`.
-fn chunk_line(repo: &crate::Repo) -> Option<(String, String)> {
+fn chunk_line(repo: &crate::Repo, session: &str) -> Option<(String, String)> {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
-    let held = crate::core::work::held(&db, &repo.root.to_string_lossy());
+    let held = crate::core::work::held(&db, &repo.root.to_string_lossy(), session);
     let (uid, title, _) = held.into_iter().next()?;
     Some((
         uid.clone(),

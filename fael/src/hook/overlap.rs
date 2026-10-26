@@ -18,15 +18,15 @@ use std::path::Path;
 /// crew.db, no live run, no declared scope or no overlapping chunk.
 pub(crate) fn lines(c: &Ctx, files: &[String]) -> Vec<Line> {
     let db = work::db_for(c.repo.journal.as_deref(), &c.repo.fael);
-    at(&db, &c.repo.root, files)
+    at(&db, &c.repo.root, &c.session, files)
 }
 
-fn at(db: &Path, root: &Path, files: &[String]) -> Vec<Line> {
+fn at(db: &Path, root: &Path, session: &str, files: &[String]) -> Vec<Line> {
     if files.is_empty() || !db.exists() {
         return vec![];
     }
     let shared = work::shared(root).unwrap_or_default();
-    match work::scopes(db, &root.to_string_lossy(), &shared) {
+    match work::scopes(db, &root.to_string_lossy(), session, &shared) {
         Some(s) => about(&s, &shared, files),
         None => vec![],
     }
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn no_crew_db_is_silent() {
         let none = std::env::temp_dir().join(format!("fael-overlap-{}", crate::core::ulid()));
-        assert!(at(&none.join("crew.db"), &none, &["src/b/x.rs".into()]).is_empty());
+        assert!(at(&none.join("crew.db"), &none, "", &["src/b/x.rs".into()]).is_empty());
     }
 
     #[test]

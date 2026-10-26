@@ -9,7 +9,7 @@ use crate::core::work::{self, Drift};
 /// The line for the worktree's held chunk, empty with no crew.db, no live run or no drift.
 pub(crate) fn line(c: &Ctx) -> Option<Line> {
     let db = work::db_for(c.repo.journal.as_deref(), &c.repo.fael);
-    work::drift(&db, &c.repo.root.to_string_lossy()).map(|d| about(&d))
+    work::drift(&db, &c.repo.root.to_string_lossy(), &c.session).map(|d| about(&d))
 }
 
 fn about(d: &Drift) -> Line {

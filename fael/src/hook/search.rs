@@ -129,17 +129,17 @@ fn fix_commit(files: &[String]) -> String {
 /// True when this worktree holds a live chunk run (`fael chunk start` here):
 /// the same cheap SQLite read session start uses (`Store::held`), no git
 /// spawn, no board read. No crew.db, no run = false.
-fn holds_chunk(repo: &crate::Repo) -> bool {
+fn holds_chunk(repo: &crate::Repo, session: &str) -> bool {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
-    crate::core::work::has_held(&db, &repo.root.to_string_lossy())
+    crate::core::work::has_held(&db, &repo.root.to_string_lossy(), session)
 }
 
 /// The checkpoint ask of a step commit: the held chunk's uid. Keyed on its last
 /// note's event id, so it is asked once per gap between notes. No crew.db, no
 /// run = nothing.
-fn checkpoint(repo: &crate::Repo) -> Option<super::say::Line> {
+fn checkpoint(repo: &crate::Repo, session: &str) -> Option<super::say::Line> {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
-    let (uid, last) = crate::core::work::last_note(&db, &repo.root.to_string_lossy())?;
+    let (uid, last) = crate::core::work::last_note(&db, &repo.root.to_string_lossy(), session)?;
     let id = last.map_or(0, |(id, _)| id);
     Some(super::say::Line {
         kind: super::say::Kind::Checkpoint {
@@ -201,14 +201,14 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
     });
     if super::cited::fix_uncited(&c.log, input)
         && !super::tally::closed_any(&c.session, &c.repo.root)
-        && holds_chunk(&c.repo)
+        && holds_chunk(&c.repo, &c.session)
     {
         out.say(super::say::Line {
             kind: super::say::Kind::FixCommit,
             text: fix_commit(&super::state::edited_files(&c.session, &c.repo.root, 3)),
         });
     }
-    if let Some(line) = checkpoint(&c.repo) {
+    if let Some(line) = checkpoint(&c.repo, &c.session) {
         out.say(line);
     }
     let r = out.reply();
@@ -332,7 +332,7 @@ mod tests {
             cfg: crate::core::Config::default(),
             journal: None,
         };
-        assert!(!holds_chunk(&repo));
+        assert!(!holds_chunk(&repo, ""));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
