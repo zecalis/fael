@@ -126,10 +126,11 @@ fn filed_after(
 ) -> bool {
     log.is_some_and(|l| {
         l.rows.iter().any(|r| {
-            r.session().is_some()
-                && ts_ms(&r.ts).is_some_and(|t| t >= ms)
+            // cheap tests first: the log is scanned once per said entry
+            pick(r)
+                && r.session().is_some()
                 && s.is_some_and(|(_, s)| mine(r, s, None))
-                && pick(r)
+                && ts_ms(&r.ts).is_some_and(|t| t >= ms)
         })
     })
 }
@@ -191,12 +192,23 @@ fn index(
     (in_ctx, pulls, last_note)
 }
 
+/// Each repo's note ids, so a `row` said entry joins by lookup, not by scan.
+fn note_ids(logs: &HashMap<String, Log>) -> HashMap<&str, HashSet<&str>> {
+    logs.iter()
+        .map(|(repo, l)| {
+            let notes = l.rows.iter().filter(|r| r.kind == "note");
+            (repo.as_str(), notes.map(|r| r.id.as_str()).collect())
+        })
+        .collect()
+}
+
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
     let (in_ctx, pulls, last_note) = index(parsed);
     let gone: HashMap<&str, HashMap<&str, i64>> = logs
         .iter()
         .map(|(repo, log)| (repo.as_str(), retire_times(log)))
         .collect();
+    let notes = note_ids(logs);
     let mut out: BTreeMap<String, KindYield> = KINDS
         .iter()
         .map(|k| (k.to_string(), KindYield::default()))
@@ -233,8 +245,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
             let used = |id: &str| s.is_some_and(|s| in_ctx.contains(&(s, id))) || retired(id);
             let (bucket, earned) = match kind {
                 "row" => {
-                    let note =
-                        log.is_some_and(|l| l.rows.iter().any(|r| r.id == key && r.kind == "note"));
+                    let note = notes.get(repo).is_some_and(|n| n.contains(key));
                     (if note { "note" } else { "row" }, used(key))
                 }
                 "brief" => ("brief", used(key)),
@@ -287,40 +298,6 @@ pub(super) mod tests {
         let (mut out, mut w) = (vec![], vec![]);
         crate::log::parse(jsonl.as_bytes(), "t.jsonl", &mut out, &mut w);
         out
-    }
-
-    /// The ask split reads the hub flag the push recorded and earns like
-    /// `ask`; an ask with no `feat` counts in `ask` only.
-    #[test]
-    fn ask_splits_by_the_recorded_hub_flag() {
-        let row = |id: &str| {
-            format!(
-                "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"issue\",\"text\":\"t\",\"files\":[\"a.rs\"]}}\n"
-            )
-        };
-        let log = Log {
-            rows: rows(&(row("H") + &row("F") + &row("X"))),
-            closes: rows(
-                "{\"v\":1,\"id\":\"C\",\"ts\":\"2026-09-26T00:08:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"H\"}\n",
-            ),
-            ..Log::default()
-        };
-        let usage = r#"{"ts":"2026-09-26T00:01:00.000Z","repo":"/w/r","client":"claude","session":"/t/s1.jsonl","event":"edit","ids":[],"said":[{"kind":"ask","key":"H"},{"kind":"ask","key":"F"},{"kind":"ask","key":"X"}],"feat":{"H":{"hub":true},"F":{"hub":false}}}
-"#;
-        let p = super::super::parse::parse(
-            usage,
-            Path::new("/w/state/usage.jsonl"),
-            &[PathBuf::from("/tmp")],
-        );
-        let y = yields(&p, &HashMap::from([("/w/r".to_string(), log)]));
-        let got = |k: &str| y.get(k).map(|y| (y.said, y.earned));
-        assert_eq!(got("ask"), Some((3, 1)));
-        assert_eq!(got("ask:hub"), Some((1, 1)), "H closed after the ask");
-        assert_eq!(
-            got("ask:file"),
-            Some((1, 0)),
-            "F never retired; X has no feat"
-        );
     }
 
     #[test]

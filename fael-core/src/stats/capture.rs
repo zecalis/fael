@@ -87,15 +87,34 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         .iter()
         .filter(|((repo, _), _)| !logs.contains_key(*repo))
         .count();
-    let issues: HashSet<&str> = edited
+    // Each repo's rows by time, parsed once; each session slices its window.
+    let by_ms: HashMap<&str, Vec<(i64, &Row)>> = logs
         .iter()
-        .flat_map(|(k, s)| filed(logs, k, s))
+        .map(|(repo, l)| {
+            let mut v: Vec<_> = l
+                .rows
+                .iter()
+                .filter(|r| !r.kind.is_empty())
+                .filter_map(|r| Some((ts_ms(&r.ts)?, r)))
+                .collect();
+            v.sort_by_key(|(ms, _)| *ms);
+            (repo.as_str(), v)
+        })
+        .collect();
+    let filed_by: Vec<_> = edited
+        .iter()
+        .map(|&(k, s)| (k, s, by_ms.get(k.0).map(|v| filed(v, k.1, s))))
+        .collect();
+    let issues: HashSet<&str> = filed_by
+        .iter()
+        .flat_map(|(_, _, f)| f.iter().flatten())
         .filter(|r| r.kind == "issue")
         .map(|r| r.id.as_str())
         .collect();
-    let mut no_row: Vec<_> = edited
+    let mut no_row: Vec<_> = filed_by
         .iter()
-        .filter(|(k, s)| logs.contains_key(k.0) && filed(logs, k, s).is_empty())
+        .filter(|(_, _, f)| f.as_ref().is_some_and(|f| f.is_empty()))
+        .map(|(k, s, _)| (*k, *s))
         .collect();
     no_row.sort_by_key(|(k, s)| (std::cmp::Reverse(s.1), *k));
     let at = |ms: i64| rfc3339(ms.max(0) as u64);
@@ -118,22 +137,19 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
     }
 }
 
-/// The rows a session filed: in its window (+10 min) and its own.
+/// The rows a session filed: in its window (+10 min) and its own. `rows` is
+/// one repo's kept rows sorted by time.
 fn filed<'a>(
-    logs: &'a HashMap<String, Log>,
-    (repo, session): &(&str, &str),
+    rows: &[(i64, &'a Row)],
+    session: &str,
     (first, last, _, branch): &(i64, i64, bool, Option<&str>),
 ) -> Vec<&'a Row> {
-    let Some(l) = logs.get(*repo) else {
-        return vec![];
-    };
-    l.rows
+    let lo = rows.partition_point(|(ms, _)| ms < first);
+    let hi = rows.partition_point(|(ms, _)| *ms <= last + SLACK_MS);
+    rows[lo..hi.max(lo)]
         .iter()
-        .filter(|r| {
-            !r.kind.is_empty()
-                && ts_ms(&r.ts).is_some_and(|t| t >= *first && t <= last + SLACK_MS)
-                && mine(r, session, *branch)
-        })
+        .map(|(_, r)| *r)
+        .filter(|r| mine(r, session, *branch))
         .collect()
 }
 
