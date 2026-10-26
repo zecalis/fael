@@ -46,23 +46,11 @@ pub(crate) fn append_row(mut row: serde_json::Value) {
     {
         return;
     }
-    super::usage_files::rotate();
-    let path = super::usage_files::live();
-    if let Some(parent) = path.parent()
-        && std::fs::create_dir_all(parent).is_ok()
-    {
-        use std::io::Write;
-        // one write per row: concurrent writers can no longer splice bytes
-        // mid-line the way writeln!'s chunked Display writes did — O_APPEND
-        // lands the whole buffer at the then-current end.
-        let mut line = row.to_string();
-        line.push('\n');
-        let _ = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .and_then(|mut f| f.write_all(line.as_bytes()));
-    }
+    // one write per row: concurrent writers can no longer splice bytes
+    // mid-line the way writeln!'s chunked Display writes did.
+    let mut line = row.to_string();
+    line.push('\n');
+    super::usage_files::append(line.as_bytes());
 }
 
 /// Smaller rows at write (decision 01M5WC02 B1): `session` as the transcript's

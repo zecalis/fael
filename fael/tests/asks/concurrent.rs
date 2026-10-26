@@ -47,7 +47,7 @@ fn parallel_rejects_keep_every_line_parseable() {
 }
 
 /// The month's first writers race to archive the live file (`usage_files`):
-/// exactly one moves it, and no row — the old month's or a racer's — is lost.
+/// exactly one moves it, no row is lost, and none lands in the archive but the old one.
 #[test]
 fn parallel_first_writes_of_a_month_archive_once_and_lose_no_row() {
     let d = repo();
@@ -89,8 +89,10 @@ fn parallel_first_writes_of_a_month_archive_once_and_lose_no_row() {
         .map(|e| e.unwrap().file_name().into_string().unwrap())
         .collect();
     assert_eq!(archives, ["2020-03.jsonl"]);
-    let body = std::fs::read_to_string(state.join("usage/2020-03.jsonl")).unwrap()
-        + &std::fs::read_to_string(&live).unwrap_or_default();
+    // a row lands in the file of its own month: the archive holds the old row only
+    let old = std::fs::read_to_string(state.join("usage/2020-03.jsonl")).unwrap();
+    assert_eq!(old.lines().count(), 1, "misfiled into the archive: {old}");
+    let body = old + &std::fs::read_to_string(&live).unwrap_or_default();
     let lines: Vec<&str> = body.lines().collect();
     assert_eq!(lines.len(), 1 + THREADS * PER_THREAD, "{body}");
     assert_eq!(lines.iter().filter(|l| l.contains("\"old\"")).count(), 1);

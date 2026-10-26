@@ -2,7 +2,9 @@
 //! and at the first write of a new month it moves to `usage/<YYYY-MM>.jsonl`,
 //! named by the month of its last write. An archive therefore holds rows up to
 //! its month and after the previous archive's — a read from a month on opens
-//! only the archives named from it. A read with no `since` opens the newest
+//! only the archives named from it. A row lands in the file of its own month:
+//! `append` holds one lock across rotate+open+write, so no writer holds a
+//! pre-rotation fd. A read with no `since` opens the newest
 //! archive and the live file: this month and the last, never the whole history.
 
 use super::state::state_dir;
@@ -27,12 +29,38 @@ fn mtime_ms(p: &Path) -> Option<u64> {
     Some(t.duration_since(SystemTime::UNIX_EPOCH).ok()?.as_millis() as u64)
 }
 
-/// Before an append: archive a live file last written in an earlier month.
-/// `hard_link` refuses an archive that exists, so of racing writers exactly one
-/// moves it; a writer still holding the old fd lands its row in the archive.
+/// Append one row to the live file, rotating first. Writers serialise on
+/// `usage.lock` (a flock, released on drop or process death), so a writer never
+/// opens the live name before another's rotation and appends after it.
+// ponytail: one machine-wide lock per row, held for a single small write.
+pub(crate) fn append(line: &[u8]) {
+    use std::io::Write;
+    let dir = state_dir();
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join("usage.lock"));
+    // fail-open: without the lock the row still lands, at worst misfiled
+    if let Ok(l) = &lock {
+        let _ = l.lock();
+    }
+    rotate();
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(live())
+        .and_then(|mut f| f.write_all(line));
+}
+
+/// Archive a live file last written in an earlier month. Called under
+/// `append`'s lock; `hard_link` still refuses an archive that exists.
 // ponytail: a crash between link and unlink leaves live and archive one inode
 // and rotation stuck for that month; same-inode check + unlink if it happens.
-pub(crate) fn rotate() {
+fn rotate() {
     let live = live();
     let Some(last) = mtime_ms(&live).map(month) else {
         return;
