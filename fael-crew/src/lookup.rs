@@ -147,6 +147,13 @@ fn uid_in_tx(tx: &Transaction, key: &str, plan: &str) -> Result<String, String> 
 }
 
 impl super::Store {
+    /// The uid `key` (a uid or 8+-char prefix) names in any plan; no plan check.
+    pub fn uid_any(&self, key: &str) -> Result<String, String> {
+        let tx = self.conn.unchecked_transaction().map_err(err)?;
+        let (_, uid, _) = lookup(&tx, key)?.ok_or_else(|| no_chunk(key))?;
+        Ok(uid)
+    }
+
     /// The uid `key` names inside `plan` (`name` or `app/name`): a label in that plan,
     /// else what `lookup` finds — refused when that chunk sits in another plan. So
     /// `--plan` answers a label two plans share, and checks a uid it is given.

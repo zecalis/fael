@@ -86,11 +86,7 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
                 ))?;
             args.extend([other, text.clone()]);
         }
-        v => {
-            return Err(format!(
-                "rejected: unknown chunk verb {v} — show|start|note|done|wait|after; try chunk {{verb: \"show\", uid: \"{uid}\"}}"
-            ));
-        }
+        v => return Err(unknown_verb(v, uid)),
     }
     if let Some(run) = s(a, "run").filter(|_| verb != "show" && verb != "note") {
         args.extend(["--run".into(), run]);
@@ -271,9 +267,29 @@ fn with_cwd_hint(e: String) -> String {
     }
 }
 
+/// An MCP verb outside `show|start|note|done|wait|after`: the closed list, and for a real
+/// `fael chunk` verb the MCP lacks, the CLI line to run instead (a fact, never a guess).
+fn unknown_verb(v: &str, uid: &str) -> String {
+    let tail = if crate::core::work::CHUNK_VERBS.contains(&v) {
+        format!("`{v}` is a CLI verb — run: fael chunk {v} {uid} (fael chunk --help)")
+    } else {
+        format!("try chunk {{verb: \"show\", uid: \"{uid}\"}}")
+    };
+    format!("rejected: unknown chunk verb {v} — show|start|note|done|wait|after; {tail}")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{KNOWN, build_args, misplaced_note, unknown_note};
+    use super::{KNOWN, build_args, misplaced_note, unknown_note, unknown_verb};
+
+    #[test]
+    fn an_unknown_verb_names_the_cli_when_it_is_one_there() {
+        let e = unknown_verb("accept", "U1");
+        assert!(e.contains("fael chunk accept U1"), "{e}");
+        let e = unknown_verb("zzz", "U1");
+        assert!(e.contains("try chunk {verb: \"show\""), "{e}");
+        assert!(e.starts_with("rejected: unknown chunk verb zzz"), "{e}");
+    }
     use serde_json::json;
 
     #[test]
