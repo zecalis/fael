@@ -66,6 +66,7 @@ mod stop;
 mod tally;
 mod usage;
 pub(crate) mod usage_files;
+mod usage_retain;
 
 pub(crate) use asks::{ASK_WARN, record_asks, record_row_asks};
 pub(crate) use friction::{note_empty, record_cli, record_mcp_call};
