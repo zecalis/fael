@@ -64,6 +64,13 @@ Every number comes from two inputs, joined as pure functions in
   on and keeps only the lines stamped at or after it, before anything is counted — first use per repo, rows added and
   `capture` then all read as that window. `fael report` renders this same
   `Stats` (with `--rows`) as one offline HTML page.
+  Raw archives keep 3 months before the current one. The daily `prune_state` pass
+  writes `usage/<YYYY-MM>.sum.json` (that month's `Stats`, atomically) for each older
+  archive and only then deletes the raw file; a failed summary keeps the raw. A
+  `--since` reaching past the raw files adds `summaries` (month → `Stats`) to `--json`
+  and one `<month> (summary)` line per month to the text — additive counters only, never
+  merged across months, since sessions and other distinct counts do not add. A gate that
+  counts with `fael stats --json --since` reads `.summaries` for the months raw no longer holds.
 - the repos' logs (tree + journal union) — for row statuses, rows added
   and language share. A repo that no longer resolves reads empty
   (its rows resolve `unknown`).

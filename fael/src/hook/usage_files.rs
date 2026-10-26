@@ -16,11 +16,11 @@ pub(crate) fn live() -> PathBuf {
     state_dir().join("usage.jsonl")
 }
 
-fn archive_dir() -> PathBuf {
+pub(super) fn archive_dir() -> PathBuf {
     state_dir().join("usage")
 }
 
-fn month(ms: u64) -> String {
+pub(super) fn month(ms: u64) -> String {
     core::rfc3339(ms)[..7].to_string()
 }
 
@@ -99,7 +99,7 @@ fn archives(since: Option<i64>) -> Vec<PathBuf> {
     a
 }
 
-fn all_archives() -> Vec<PathBuf> {
+pub(super) fn all_archives() -> Vec<PathBuf> {
     let mut a: Vec<PathBuf> = std::fs::read_dir(archive_dir())
         .into_iter()
         .flatten()

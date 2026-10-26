@@ -61,6 +61,8 @@ pub(crate) fn prune_state() {
     prune_dir(&dir, |n| {
         n.starts_with("auto-sync-") || n.starts_with("drift-")
     });
+    // class B2: raw usage past 3 months, after its monthly summary is written
+    super::usage_retain::retain();
 }
 
 #[cfg(test)]

@@ -252,13 +252,14 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
     let (json, rows, day_view) = (a.has("json"), a.has("rows"), a.has("day"));
     // `--days --json`: the per-day series alone, from the parse — no repo logs,
     // git or gh (issue 01M5S63N follow-up: a board refresh paid ~4 s for it)
+    let since = crate::report::since(a)?;
     if a.has("days") && json {
-        let u = load_where(crate::report::since(a)?, &|_| false);
+        let u = load_where(since, &|_| false);
         let days = core::stats::days(&u.parsed);
         println!("{}", serde_json::json!({ "days": days }));
         return Ok(());
     }
-    let u = load(crate::report::since(a)?);
+    let u = load(since);
     if day_view {
         return day(json, &u);
     }
@@ -269,6 +270,12 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
             println!("{l}");
         }
     };
+    let sums = super::usage_retain::summaries(since);
+    if !json && !sums.is_empty() && (u.empty || u.parsed.n == 0) {
+        super::usage_retain::print(&sums);
+        misses();
+        return Ok(());
+    }
     // without `--json` an empty log is one friendly line, not a table of zeros
     if u.empty && !json {
         println!("fael: no usage recorded yet");
@@ -286,13 +293,11 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
     let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
     let stats = aggregate(&u, &cfg, rows);
     if json {
-        println!(
-            "{}",
-            serde_json::to_string(&stats).map_err(|e| e.to_string())?
-        );
+        println!("{}", super::usage_retain::json(&stats, sums)?);
         return Ok(());
     }
     print_text(&stats, &u.path, &cfg.lang_rows);
+    super::usage_retain::print(&sums);
     misses();
     Ok(())
 }
