@@ -117,6 +117,11 @@ pub struct Chunk {
     /// A wave PR's diff sliced per chunk, and what lanes started together really shared
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touched: Option<Vec<String>>,
+    /// a review chunk whose run branch is already on the base (`git`, offline; the CLI fills
+    /// it): the owner merged it, so `fael chunk accept --merged` lands it. Absent = not known
+    /// merged. Never a state change on read (decision 01M4V3A0D)
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub merged: bool,
     #[serde(skip)]
     pub seq: i64,
 }
@@ -357,6 +362,7 @@ impl Store {
                         touched: r
                             .get::<_, Option<String>>(18)?
                             .map(|t| t.lines().map(String::from).collect()),
+                        merged: false,
                         seq: r.get(16)?,
                         label,
                         state,

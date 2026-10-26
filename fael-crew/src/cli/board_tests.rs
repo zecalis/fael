@@ -35,6 +35,7 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         owner_actions: Vec::new(),
         conflicts: None,
         touched: None,
+        merged: false,
         seq: 0,
     }
 }
@@ -248,6 +249,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         branches: vec![super::branches::Branch {
             name: "feat/x".into(),
             state: "merged",
+            on_base: true,
             chunks: Vec::new(),
         }],
         chunks: vec![c],
@@ -289,6 +291,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         branches: vec![super::branches::Branch {
             name: "feat/live".into(),
             state: "local",
+            on_base: false,
             chunks: Vec::new(),
         }],
         chunks: vec![c],

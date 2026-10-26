@@ -31,6 +31,10 @@ struct Issue {
     from: Option<String>,
     to: Option<String>,
     commits: Vec<String>,
+    /// `fix landed: <sha>`: a naming commit is on the base branch (`origin/HEAD`, offline),
+    /// so the sweeper may close the issue in one call. Fael never closes it; absent = none
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fix_landed: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -118,8 +122,12 @@ fn untriaged(r: &Repo, log: &core::Log, open: &[&core::Row]) -> Vec<Issue> {
         .collect();
     let ids: Vec<String> = live.iter().map(|x| x.id.clone()).collect();
     let commits = issue_commits(r, &ids);
+    let base = crate::git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
     live.iter()
         .map(|x| Issue {
+            fix_landed: commits
+                .get(&x.id)
+                .and_then(|c| landed(&r.root, base.as_deref()?, c)),
             id: x.id.clone(),
             title: x.title.clone(),
             text: x.text.clone(),
@@ -132,6 +140,16 @@ fn untriaged(r: &Repo, log: &core::Log, open: &[&core::Row]) -> Vec<Issue> {
             commits: commits.get(&x.id).cloned().unwrap_or_default(),
         })
         .collect()
+}
+
+/// The newest naming commit (`sha subject`, newest first) that is an ancestor of `base`.
+fn landed(root: &std::path::Path, base: &str, commits: &[String]) -> Option<String> {
+    commits.iter().find_map(|c| {
+        let sha = c.split(' ').next()?;
+        let (code, _) =
+            crate::board::git_output(root, &["merge-base", "--is-ancestor", sha, base])?;
+        (code == Some(0)).then(|| format!("fix landed: {}", &sha[..sha.len().min(12)]))
+    })
 }
 
 /// Open issues somebody holds (`fael claim`) — claimed work a new chunk avoids.
@@ -235,4 +253,39 @@ fn issue_commits(r: &Repo, ids: &[String]) -> HashMap<String, Vec<String>> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::landed;
+    use std::process::Command;
+
+    fn git(d: &std::path::Path, a: &[&str]) -> String {
+        let o = Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(a)
+            .current_dir(d)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {a:?}");
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    }
+
+    #[test]
+    fn a_fix_landed_only_when_a_naming_commit_is_on_the_base() {
+        let d = std::env::temp_dir().join(format!("fael-sweep-landed-{}", fael_core::ulid()));
+        std::fs::create_dir_all(&d).unwrap();
+        git(&d, &["init", "-q", "-b", "main"]);
+        git(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        git(&d, &["switch", "-q", "-c", "fix"]);
+        git(&d, &["commit", "-q", "--allow-empty", "-m", "fix 01ABC"]);
+        let off = git(&d, &["rev-parse", "HEAD"]);
+        git(&d, &["switch", "-q", "main"]);
+        git(&d, &["commit", "-q", "--allow-empty", "-m", "fix 01DEF"]);
+        let on = git(&d, &["rev-parse", "HEAD"]);
+        let (off, on) = (format!("{off} fix 01ABC"), format!("{on} fix 01DEF"));
+        assert_eq!(landed(&d, "main", std::slice::from_ref(&off)), None);
+        let got = landed(&d, "main", &[off, on.clone()]).unwrap();
+        assert_eq!(got, format!("fix landed: {}", &on[..12]));
+    }
 }

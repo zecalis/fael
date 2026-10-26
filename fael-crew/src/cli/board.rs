@@ -229,6 +229,7 @@ fn project(
     fill_left_stale(&s, &r, &mut b.chunks);
     let shared = prs::open_prs(&mut b.chunks, &r.root, base.as_deref());
     let branches = branches::branches(&r.root, base.as_deref(), &b.chunks);
+    branches::mark_merged(&mut b.chunks, &branches);
     // before `--open` drops the running chunks: their live runs hold worktrees (a lead picks
     // a free one from this read)
     let live: HashMap<&str, &str> = b
@@ -508,7 +509,7 @@ fn lists(at: String, projects: Vec<&Project>) -> Board<'_> {
 }
 
 #[path = "board_branches.rs"]
-mod branches;
+pub(crate) mod branches;
 #[path = "board_ledger.rs"]
 mod ledger;
 #[path = "board_git.rs"]
