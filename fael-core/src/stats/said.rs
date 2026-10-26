@@ -126,10 +126,11 @@ fn filed_after(
 ) -> bool {
     log.is_some_and(|l| {
         l.rows.iter().any(|r| {
-            r.session().is_some()
-                && ts_ms(&r.ts).is_some_and(|t| t >= ms)
+            // cheap tests first: the log is scanned once per said entry
+            pick(r)
+                && r.session().is_some()
                 && s.is_some_and(|(_, s)| mine(r, s, None))
-                && pick(r)
+                && ts_ms(&r.ts).is_some_and(|t| t >= ms)
         })
     })
 }
@@ -191,12 +192,21 @@ fn index(
     (in_ctx, pulls, last_note)
 }
 
+/// Each repo's note ids, so a `row` said entry joins by lookup, not by scan.
+fn note_ids(logs: &HashMap<String, Log>) -> HashMap<&str, HashSet<&str>> {
+    let notes = |l: &'_ Log| l.rows.iter().filter(|r| r.kind == "note");
+    logs.iter()
+        .map(|(repo, l)| (repo.as_str(), notes(l).map(|r| r.id.as_str()).collect()))
+        .collect()
+}
+
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
     let (in_ctx, pulls, last_note) = index(parsed);
     let gone: HashMap<&str, HashMap<&str, i64>> = logs
         .iter()
         .map(|(repo, log)| (repo.as_str(), retire_times(log)))
         .collect();
+    let notes = note_ids(logs);
     let mut out: BTreeMap<String, KindYield> = KINDS
         .iter()
         .map(|k| (k.to_string(), KindYield::default()))
@@ -233,8 +243,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
             let used = |id: &str| s.is_some_and(|s| in_ctx.contains(&(s, id))) || retired(id);
             let (bucket, earned) = match kind {
                 "row" => {
-                    let note =
-                        log.is_some_and(|l| l.rows.iter().any(|r| r.id == key && r.kind == "note"));
+                    let note = notes.get(repo).is_some_and(|n| n.contains(key));
                     (if note { "note" } else { "row" }, used(key))
                 }
                 "brief" => ("brief", used(key)),
