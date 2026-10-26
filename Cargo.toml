@@ -5,6 +5,10 @@ resolver = "3"
 [profile.release]
 strip = true
 lto = true
+# Smaller binary: one codegen unit, abort on panic (no unwinding tables), size-tuned opt level.
+codegen-units = 1
+panic = "abort"
+opt-level = "s"
 
 # cargo-dist builds with this profile
 [profile.dist]
