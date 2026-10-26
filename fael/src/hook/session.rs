@@ -7,7 +7,7 @@ use super::asks::{UsageMeta, hook_meta};
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
-use super::state::{mark_started, prune_sessions, seen_path, state_dir};
+use super::state::{mark_started, seen_path, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core};
 use std::path::Path;
@@ -21,10 +21,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     super::stop::seen(e);
     // and its model is reported from the first turn (cost follows on Stop)
     super::stop::report(e);
-    prune_sessions(&state_dir().join("sessions"));
-    prune_sessions(&state_dir().join("sessions").join("edits"));
-    prune_sessions(&state_dir().join("held"));
-    prune_sessions(&state_dir().join("sync-seen"));
+    super::prune::prune_state();
     // one line, every start, fail-open: the Stop-block mode was removed
     // 2026-10-03 and its dir is garbage (issue 01M56WGH)
     let _ = std::fs::remove_dir_all(state_dir().join("stop-block"));

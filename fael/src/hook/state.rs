@@ -157,30 +157,6 @@ pub(crate) fn mark_started(session: &str, root: &Path) {
 /// drift.
 pub(crate) use crate::journal::head_branch;
 
-/// Per-session files untouched this long are dead: a resumed session only
-/// loses its seen ids (rows push again) — it fails quiet.
-const STALE_SECS: u64 = 30 * 24 * 60 * 60;
-
-/// Drop per-session files older than `STALE_SECS` — without this `sessions/`
-/// grows by a few files per session forever. Called once per session-start;
-/// every error is ignored (the next session tries again).
-pub(crate) fn prune_sessions(dir: &Path) {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for e in rd.flatten() {
-        let stale = e
-            .metadata()
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.elapsed().ok())
-            .is_some_and(|age| age.as_secs() > STALE_SECS);
-        if stale {
-            let _ = std::fs::remove_file(e.path());
-        }
-    }
-}
-
 /// The stashed risk note and fix phrase, if any — left
 /// on disk until `clear_stash`, so a push that had no budget for them leaves
 /// them for the next.
@@ -282,33 +258,13 @@ fn systemtime_to_rfc3339(st: SystemTime) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{STALE_SECS, head_branch, prune_sessions};
-    use std::time::{Duration, SystemTime};
+    use super::head_branch;
 
     #[test]
     fn edit_logs_live_in_their_own_dir() {
         let p = super::edits_path("s", std::path::Path::new("/w"));
         assert_eq!(p.parent().unwrap().file_name().unwrap(), "edits");
         assert_eq!(p.extension().unwrap(), "jsonl");
-    }
-
-    #[test]
-    fn prune_drops_only_stale_session_files() {
-        let d = std::env::temp_dir().join(format!("fael-prune-{}", fael_core::ulid()));
-        std::fs::create_dir_all(&d).unwrap();
-        let (old, new) = (d.join("a.seen"), d.join("b.seen"));
-        std::fs::write(&old, "x").unwrap();
-        std::fs::write(&new, "x").unwrap();
-        let past = SystemTime::now() - Duration::from_secs(STALE_SECS + 60);
-        std::fs::File::options()
-            .write(true)
-            .open(&old)
-            .unwrap()
-            .set_modified(past)
-            .unwrap();
-        prune_sessions(&d);
-        assert!(!old.exists() && new.exists());
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// CI runs this on Windows too: a worktree's `.git` file with an absolute
