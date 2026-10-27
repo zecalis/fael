@@ -31,6 +31,7 @@ mod cited;
 mod claude;
 mod codes;
 mod decision;
+mod done_loop;
 mod drift;
 mod experience_text;
 mod flag_usage;
@@ -69,6 +70,7 @@ pub(crate) mod usage_files;
 mod usage_retain;
 
 pub(crate) use asks::{ASK_WARN, record_asks, record_row_asks};
+pub(crate) use done_loop::line as done_loop_line;
 pub(crate) use friction::{note_empty, record_cli, record_mcp_call};
 pub(crate) use held::{
     add_text as held_add_text, done_text as held_text, shown_for as held_shown,
