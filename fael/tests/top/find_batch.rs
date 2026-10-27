@@ -90,30 +90,23 @@ fn several_ids_print_every_body_and_a_bad_one_fails_alone() {
     let (ok, out, err) = fael(&d, &["find", "--files", "src/a.rs", "src/b.rs", "src/c.rs"]);
     assert!(ok, "{out}{err}");
     assert!(
-        out.contains("first body words") && out.contains("second body words"),
+        out.contains("first headline") && out.contains("second headline"),
         "{out}"
     );
 }
 
 #[test]
-fn a_short_list_shows_bodies_and_a_long_one_stays_titles() {
+fn a_short_list_stays_one_line_per_row_and_full_asks_for_bodies() {
     let d = repo();
     add(&d, "a.rs", "alpha headline", "alpha body words");
     add(&d, "b.rs", "beta headline", "beta body words");
     let (_, out, _) = fael(&d, &["find", "--kind", "note"]);
     assert!(
-        out.contains("alpha body words") && out.contains("beta body words"),
+        out.contains("alpha headline") && !out.contains("body words"),
         "{out}"
     );
-    add(&d, "c.rs", "gamma headline", "gamma body words");
-    let (_, out, _) = fael(&d, &["find", "--kind", "note"]);
-    assert!(
-        out.contains("gamma headline") && !out.contains("gamma body words"),
-        "{out}"
-    );
-    // an explicit limit asked for the list shape
-    let (_, out, _) = fael(&d, &["find", "--kind", "note", "--limit", "2"]);
-    assert!(!out.contains("body words"), "{out}");
+    let (_, out, _) = fael(&d, &["find", "--kind", "note", "--full"]);
+    assert!(out.contains("alpha body words"), "{out}");
 }
 
 /// A fat body would cost more than the `find <id>` it saves, so a short list

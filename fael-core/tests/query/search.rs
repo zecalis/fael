@@ -244,39 +244,6 @@ fn an_empty_find_retries_a_closed_key_as_hidden() {
     );
 }
 
-/// Two rows or fewer from the first page show their bodies when the bodies
-/// fit the budget; a paged, limited, longer or fat list stays titles.
-#[test]
-fn a_short_first_page_shows_bodies_that_fit() {
-    let (a, b, c) = (
-        note(1, &["src/a.rs"], None, "short body"),
-        note(2, &["src/a.rs"], None, "another short body"),
-        note(3, &["src/a.rs"], None, "third short body"),
-    );
-    let q = Filter {
-        key: Some("k:a".into()),
-        ..Filter::default()
-    };
-    assert!(expands(&[&a], 1, &q, 800) && expands(&[&a, &b], 2, &q, 800));
-    assert!(!expands(&[], 0, &q, 800));
-    assert!(!expands(&[&a, &b, &c], 3, &q, 800));
-    let paged = Filter {
-        offset: 1,
-        ..q.clone()
-    };
-    assert!(!expands(&[&a], 1, &paged, 800));
-    let limited = Filter {
-        limit: Some(5),
-        ..q.clone()
-    };
-    assert!(!expands(&[&a], 1, &limited, 800));
-    // a fat body would cost more than the `find <id>` it saves: stays a title
-    let fat = note(4, &["src/a.rs"], None, &"word ".repeat(1000));
-    assert!(!expands(&[&fat], 1, &q, 800));
-    // the brief (no narrowing) stays a map of titles
-    assert!(!expands(&[&a], 1, &Filter::default(), 800));
-}
-
 /// An empty find answers in the same call: the closed rows the same call
 /// would match, else the rows with the most words (at least half) — never a
 /// guess off the first page or from a lone word.

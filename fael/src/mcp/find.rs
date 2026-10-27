@@ -124,11 +124,10 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         next: &next,
     };
     // only what fit the budget was said — like the push, count the shown lines
-    // a list of one or two shows its bodies: the next call would be `find id=<id>`
-    let full = a["full"].as_bool().unwrap_or(false) || core::expands(&rows, total, &f, budget);
+    // one line per row; bodies only by `find id=<id>` or full=true
+    let full = a["full"].as_bool().unwrap_or(false);
     let text = if rows.is_empty() {
         let (head, near) = crate::find::misses::explain(&r.root, "mcp", &log, &f, "files");
-        let full = full || core::expands(&near, near.len(), &f, budget);
         let body = match (near.is_empty(), full) {
             (true, _) => String::new(),
             (false, true) => core::render_full(&log, &near, budget),
