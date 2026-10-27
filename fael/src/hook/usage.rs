@@ -25,7 +25,7 @@ pub(crate) fn record_usage(
 }
 
 /// A pull that showed rows (`find`, `mcp-find`, `kickoff`; PLAN-fael-say-gate
-/// chunk 3): the outcome a Pointer, Count or Bodies line earns on. The shown
+/// chunk 3): the outcome a Pointer, Count or Bodies line (lines no hook says now) earned on. The shown
 /// ids go under `found`, never `ids` (those count as pushes), and stats keeps
 /// the line out of the injection totals. The query's key, files and id only —
 /// free text is never stored (`find-misses.jsonl` holds the misses). `text`

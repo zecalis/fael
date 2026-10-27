@@ -10,6 +10,11 @@
 //! compact) holds a row id per row said, `~<id>` per edit-hint ask (`~*`, the old generic clause, in older lists) and
 //! `@<id>` per in-context mark and `^<id>` per cited id (`cited`), `~start:<id>` per row session start said.
 //! No session = no file: every line is said, nothing remembered.
+//!
+//! Lines cut for low yield have no `Kind` any more (the `fix:` commit line and
+//! the `bodies:` pointer; the edit ask is said at an edit only) — their
+//! `SayKind` names stay in `fael-core` so old usage rows still tally
+//! (decision `product:push-noise-bar`).
 
 use super::say_card::{At, Once, next_cut, policy};
 use crate::core::{self, SayKind};
@@ -79,8 +84,6 @@ pub(crate) enum Kind {
     /// It names only open issues on the edited
     /// file (a vela edit's issue went unasked behind another ask in the turn).
     Ask { ids: Vec<String> },
-    /// `bodies: fael find <id> …` under a push whose rows have bodies.
-    Bodies,
     /// A `git commit` that named open issues (PLAN-fael-agent-ergonomics
     /// chunk 5): each named once per session with its ready `fael close`.
     Cited { ids: Vec<String> },
@@ -90,9 +93,6 @@ pub(crate) enum Kind {
     /// The agent said it fixed a bug and filed nothing after (PLAN-fael-
     /// experience-loop chunk 5a): stashed by stop, said once per session.
     Fixed,
-    /// A `fix:` commit naming no fael row in a session that closed none
-    /// (chunk 5b): said once per session.
-    FixCommit,
     /// An edit outside the held chunk's scope, inside another open chunk's
     /// (issues 01M5D9GB, 01M5QF1Q): said once per owner chunk and session.
     Overlap { owner: String },
@@ -120,11 +120,9 @@ impl Kind {
         match self {
             Kind::Row { ids } => ids.clone(),
             Kind::Ask { ids, .. } => ids.iter().map(|i| format!("~{i}")).collect(),
-            Kind::Bodies => vec!["~bodies".into()],
             Kind::Cited { ids } => ids.iter().map(|i| format!("~cited:{i}")).collect(),
             Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
-            Kind::FixCommit => vec!["~fixcommit".into()],
             Kind::Overlap { owner } => vec![format!("~overlap:{owner}")],
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![format!("~retired:{id}")],
@@ -135,8 +133,7 @@ impl Kind {
 }
 
 /// One `said` entry: the kind's name and the id, key or count key it names.
-/// `Brief` names none (stats reads the line's `ids`), nor do `Bodies` and
-/// `Notice`. `t` is the entry's share of its line's `est_tokens`: the entries
+/// `Brief` names none (stats reads the line's `ids`), nor does `Notice`. `t` is the entry's share of its line's `est_tokens`: the entries
 /// of one line sum to exactly that line's tokens. Usage lines from before it
 /// existed have none, and stats counts them as 0.
 #[derive(Debug, Clone, Serialize)]
@@ -168,9 +165,7 @@ impl Kind {
             Kind::Overlap { owner } => vec![owner.clone()],
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![id.clone()],
-            Kind::Brief { .. } | Kind::Bodies | Kind::Fixed | Kind::FixCommit | Kind::Notice => {
-                vec![]
-            }
+            Kind::Brief { .. } | Kind::Fixed | Kind::Notice => vec![],
         }
     }
 
@@ -312,7 +307,7 @@ impl Outbox {
     }
 
     /// Say `lines` in order within `budget` tokens; a kind whose card says
-    /// `Cut::Never` (rows, bodies) is never cut. Over budget the lines go
+    /// `Cut::Never` (rows) is never cut. Over budget the lines go
     /// whole, lowest cut rank first (the stashed notice, then the stashed fix,
     /// then the edit hint, then the commit-cite hint). A cut line keeps its
     /// keys for a later push. True when a stashed line was said (caller unstashes).

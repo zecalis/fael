@@ -2,6 +2,7 @@
 //! `Ctx` every event resolves before doing anything else.
 
 pub(crate) use super::say::Reply;
+use super::say_card::At;
 use super::{push::push, session::session_start, stop::stop};
 use crate::{Repo, core, repo_at};
 use serde::Deserialize;
@@ -104,7 +105,7 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
     let reply = match event {
         "stop" => stop(&e),
         "session-start" => session_start(&e),
-        "edit" => push(&e, event, event),
+        "edit" => push(&e, At::Edit),
         "search" if e.files.is_empty() => super::search::push_call(
             &e,
             e.tool.as_deref().unwrap_or(""),

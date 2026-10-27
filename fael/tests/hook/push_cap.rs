@@ -281,27 +281,17 @@ fn titled(d: &Path, file: &str) {
     assert!(ok, "{err}");
 }
 
-/// PLAN-fael-say-gate chunk 2: rows with no body earn no `bodies:` line.
+/// The `bodies: fael find <id>` pointer under a push was cut (pulled 26 of 282,
+/// decision `product:push-noise-bar`): rows with a body push exactly as before,
+/// without the pointer line.
 #[test]
-fn bodies_line_says_nothing_without_a_body() {
-    let d = repo();
-    seed(&d, 1);
-    let (ok, out) = edit(&d, Some("b0"));
-    assert!(ok && shown(&out) == 2, "{out}");
-    assert!(!out.contains("bodies:"), "{out}");
-}
-
-/// PLAN-fael-say-gate chunk 2 (01M42F5B): the `bodies:` line is said once per
-/// session, whatever file the next row with a body sits on.
-#[test]
-fn bodies_line_is_said_once_per_session() {
+fn a_push_says_its_rows_and_no_bodies_pointer() {
     let d = repo();
     titled(&d, "src/a.rs");
-    titled(&d, "src/b.rs");
     let (_, a) = edit_file(&d, Some("b1"), "src/a.rs");
-    assert!(a.contains("bodies: fael find <id>"), "{a}");
-    let (_, b) = edit_file(&d, Some("b1"), "src/b.rs");
-    assert!(shown(&b) == 1 && !b.contains("bodies:"), "{b}");
-    let (_, b) = edit_file(&d, Some("b2"), "src/b.rs");
-    assert!(b.contains("bodies: fael find <id>"), "{b}");
+    assert!(
+        shown(&a) == 1 && a.contains("cache keys include the tenant"),
+        "{a}"
+    );
+    assert!(!a.contains("bodies:"), "{a}");
 }

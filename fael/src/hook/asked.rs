@@ -8,7 +8,7 @@
 //! journal, so every worktree of one clone shares it, like the log); a later
 //! session asks again only
 //! when the issue has a newer one (`fael bump`, a claim) or is a new version of
-//! the row (a new id). Closure stays with the fix-commit / Fixed lines.
+//! the row (a new id). Closure stays with the Fixed line.
 //! Per-machine state, never in `.fael/`. Fails open everywhere: an unreadable
 //! file is "never asked" (the ask is said as before), an unwritable one drops
 //! the record.

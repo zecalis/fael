@@ -69,9 +69,10 @@ fn a_shell_write_pushes_as_an_edit() {
     // edit's same-directory tier, never as an edited file
     assert!(out.contains(r"fael mem for src/a.rs (1 of 2):\n"), "{out}");
     assert!(out.contains("login loops"), "{out}");
+    // the stale-row ask is said at an edit only: 6 of 95 earned at a shell edit
     assert!(
-        out.contains("fael close"),
-        "an edit carries the stale hint: {out}"
+        !out.contains("fael close"),
+        "a shell edit carries no ask: {out}"
     );
     let usage = std::fs::read_to_string(state(&d).join("usage.jsonl")).unwrap();
     assert!(usage.contains(r#""event":"shell-edit""#), "{usage}");
@@ -92,9 +93,8 @@ fn a_shell_write_and_read_push_only_the_write() {
     let (ok, _, err) = fael(&d, &["add", "issue", "cache misses", "--files", "c.rs"], "");
     assert!(ok, "{err}");
     let out = bash(&d, "wr", "sed -i '' s/x/y/ src/a.rs && cat c.rs", "");
-    let edit = out.find(r"fael mem for src/a.rs (1 of 2):\n").expect(&out);
-    let hint = out.find("fael close").expect(&out);
-    assert!(edit < hint, "the edit block, then its hint: {out}");
+    assert!(out.contains(r"fael mem for src/a.rs (1 of 2):\n"), "{out}");
+    assert!(!out.contains("fael close"), "no ask at a shell edit: {out}");
     assert!(
         !out.contains("cache misses"),
         "the read says nothing: {out}"

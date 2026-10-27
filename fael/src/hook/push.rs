@@ -1,6 +1,7 @@
-//! The read/edit push: resolve renames through the L1 cache only (no git
-//! spawn on this path), record the edit, cap the push at `budget.push_rows`,
-//! and say each row once per session.
+//! The edit push: resolve renames through the L1 cache only (no git spawn on
+//! this path), record the edit, cap the push at `budget.push_rows`, and say
+//! each row once per session. A push is an `edit` or a `shell-edit` (a shell
+//! call that wrote a file); no client sends a read push.
 
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{self, Ask, Blobs, edit_hint, read_seen};
@@ -60,23 +61,22 @@ fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
 /// Render the selected rows with the token budget — the hard cap after the
 /// row cap — dropping render's budget cut line, the header names the cut
 /// (render itself is untouched, so find keeps its own cut line). Returns the
-/// tagged rows, how many rows were actually said (usage counts only those),
-/// and render's `bodies:` line, said on its own.
+/// tagged rows and how many rows were actually said (usage counts only those).
+/// Render's `bodies:` pointer line is dropped: pulled by id 26 of 282 (9%),
+/// decision `product:push-noise-bar`.
 fn cut_body(
     body: String,
     sel: &core::Selection,
     files: &[String],
     tags: &crate::journal::BranchMap,
-) -> (String, usize, Option<String>) {
+) -> (String, usize) {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let mut row = 0; // render keeps `sel.shown` order: the k-th row line is shown[k]
-    let mut bodies = None;
     let mut out = String::new();
-    for l in body.lines().filter(|l| !l.starts_with("… +")) {
-        if l.starts_with("bodies: ") {
-            bodies = Some(format!("{l}\n"));
-            continue;
-        }
+    for l in body
+        .lines()
+        .filter(|l| !l.starts_with("… +") && !l.starts_with("bodies: "))
+    {
         let l = super::also::drop_touched(l, files);
         let l = if l.starts_with("- [") {
             row += 1;
@@ -87,7 +87,7 @@ fn cut_body(
         out.push_str(&l);
         out.push('\n');
     }
-    (crate::journal::tag(out, tags), n, bodies)
+    (crate::journal::tag(out, tags), n)
 }
 
 /// The pushed paths as repo-relative files. Outside the repo falls away,
@@ -141,43 +141,50 @@ fn note_edit(c: &super::protocol::Ctx, files: &[String]) {
     }
 }
 
-pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
+/// The push of one hook event, `At::Edit` or `At::ShellEdit` (a shell call that
+/// wrote a file is an edit; only its usage label and its ask differ). Any
+/// other event is no push: it says nothing.
+pub(crate) fn push(e: &Event, at: At) -> Reply {
     let no = Reply::default;
+    let Some(event) = at.push_label() else {
+        return no();
+    };
     let c = match ctx(e) {
         Some(c) => c,
         None => return no(),
     };
-    // a shell call that wrote a file is an edit; only its usage label differs
-    let edit = event == "edit" || event == super::search::SHELL_EDIT;
     let files = repo_files(&c, &e.files);
     if files.is_empty() {
         return no();
     }
-    if edit {
-        note_edit(&c, &files);
-    }
+    note_edit(&c, &files);
     // L1 gather (renames resolve through the L1 cache only), then L3/L4 rank
     // + select against the session Focus: one small file read, no git spawn
     // on this path (one spawn is ~9 ms against a 5 ms ceiling) — session-start
     // builds the Focus file and refreshes that cache once per session. No
     // session, no file, a bad file: `Focus::default()` is today's order,
     // capped.
-    // reads skip the same-directory tier (chunk 2: the noisiest tier — rows
-    // about neighbouring files); edits keep it, a module decision matters
-    // most while changing that module.
+    // edits keep the same-directory tier: a module decision matters most
+    // while changing that module.
     let policy = core::PushPolicy {
         max_rows: c.repo.cfg.push_rows,
         budget: c.repo.cfg.push_tokens,
         background: core::PUSH_BACKGROUND,
     };
     let al = aliases::load(&c.repo, &c.log, false);
-    let mut tiered = core::push_tiered(&c.log, &files, &al, !edit);
+    let mut tiered = core::push_tiered(&c.log, &files, &al, false);
     // an edit is where a row goes stale: the agent is changing the code the
     // row describes, with both in front of it — the one moment to retire it.
     // The candidates are the tier-0 rows (an issue about a neighbouring file
-    // is not this edit's to close) taken before the seen filter: a Read before
-    // the Edit already said the row, yet the edit still offers its retire.
-    let t0: Vec<(&core::Row, usize)> = if edit { tiered.clone() } else { vec![] };
+    // is not this edit's to close) taken before the seen filter: a row said at an
+    // earlier push still gets its retire offered at the edit.
+    // The ask is said at an edit only (6% earned at a shell edit, 56% at an
+    // edit): a shell edit has no candidates, so none is built or recorded.
+    let t0: Vec<(&core::Row, usize)> = if at == At::Edit {
+        tiered.clone()
+    } else {
+        vec![]
+    };
     // decision 01M5528X: a dormant row is never pushed — t0 above keeps the one
     // ask an edit earns. ponytail: hashes each candidate's files, short-circuits
     // on the first match; cache per repo if the 5 ms push ceiling says so.
@@ -198,14 +205,12 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     // once. The lock spans read → append, so a batch of parallel reads queues
     // up behind the first instead of each pushing the same row.
     let mut out = Outbox::open(
-        At::of_push(event),
+        at,
         (!c.session.is_empty())
             .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
             .flatten(),
     );
-    if edit {
-        out.record_in_context(&c, &tiered, &files);
-    }
+    out.record_in_context(&c, &tiered, &files);
     let (told, hinted) = read_seen(out.seen());
     let focus = super::focus::current(&c.session, &c.repo.root, &c.log);
     // a told File row still makes its file a hub (issue push:hub-files)
@@ -227,7 +232,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let sel = hub_select(tiered, said, &focus, &policy, &mut out, &files);
     let notes = stashed(&c, &files);
     let has_notes = !notes.is_empty();
-    let (body, n, bodies) = cut_body(
+    let (body, n) = cut_body(
         core::render(&c.log, &sel.shown, policy.budget),
         &sel,
         &files,
@@ -240,18 +245,16 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     let said = &sel.shown[..n.min(sel.shown.len())];
     // a retire for a row already in context, or a stashed line, still gets
     // said with no rows to join
-    // t0 is empty off an edit, so a read or search gets no hint
+    // t0 is empty at a shell edit, so it gets no hint
     let hint = edit_hint(&ask, &t0, said, &mut blobs);
-    let mut lines = row_lines(&sel, &files, (body, n, bodies), &shown);
+    let mut lines = row_lines(&sel, &files, (body, n), &shown);
     lines.extend(hint.map(|h| Line {
         kind: Kind::Ask { ids: h.spent },
         text: format!("{}\n", h.text),
     }));
     lines.extend(retired_lines(&c, &spent, sid, &shown));
-    if edit {
-        lines.extend(super::overlap::lines(&c, &files));
-        lines.extend(super::drift::line(&c));
-    }
+    lines.extend(super::overlap::lines(&c, &files));
+    lines.extend(super::drift::line(&c));
     lines.extend(notes);
     // the hint and the stashed notice share the budget the rows left
     if out.say_within(policy.budget, lines) && has_notes {
@@ -262,7 +265,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     super::asked::record(&c.log, share, &asked_rows(&t0, &r));
     if let Some(context) = r.context() {
         spent_notes::record(&c.log, share, sid, &note_ids(&c.log, &shown));
-        let decision = decision::record(trigger, &sel, n, &focus);
+        let decision = decision::record(event, &sel, n, &focus);
         let meta = UsageMeta {
             said: r.said(),
             files: &files,
@@ -361,7 +364,7 @@ fn peek_key(file: &str) -> String {
     format!("~peek:{file}")
 }
 
-/// The lines of the rows under their header, then the `bodies:` line. Only
+/// The lines of the rows under their header. Only
 /// what fit the budget was said; the cut rows may push on a later read, and
 /// the header names the cut. No row said, nothing said: the `… +N more —
 /// fael find` count lines were dropped, 7 of 336 pulled (PLAN-fael-say-gate
@@ -369,7 +372,7 @@ fn peek_key(file: &str) -> String {
 fn row_lines(
     sel: &core::Selection,
     files: &[String],
-    (body, n, bodies): (String, usize, Option<String>),
+    (body, n): (String, usize),
     shown: &[String],
 ) -> Vec<Line> {
     if n == 0 {
@@ -380,15 +383,10 @@ fn row_lines(
         h => format!(" ({n} of {})", n + h),
     };
     let header = format!("fael mem for {}{more}:\n", files.join(", "));
-    let mut out = vec![Line {
+    vec![Line {
         kind: Kind::Row {
             ids: shown.to_vec(),
         },
         text: format!("{header}{body}"),
-    }];
-    out.extend(bodies.map(|text| Line {
-        kind: Kind::Bodies,
-        text,
-    }));
-    out
+    }]
 }

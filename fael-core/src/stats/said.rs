@@ -9,9 +9,11 @@
 //!   superseded or bumped within a day, like `ask`: the line already names
 //!   the close, so earning is the close itself
 //! - `pointer` / `bodies` — a later pull (`found` line) by that key / an id
+//!   (legacy: no hook says either now; old usage still tallies)
 //! - `finding` (PLAN-fael-experience-loop chunk 2) — the session filed an
 //!   issue naming the finding's file after it
 //! - `fixed` / `fixcommit` (experience-loop chunk 5) — the session filed an issue after it
+//!   (`fixcommit` is legacy: no hook says it now)
 //! - `notice` — the session filed a row after it
 //! - `overlap` / `checkpoint` / `briefdrift` — the session ran `fael chunk
 //!   note` after it (a chunk note is no ledger row; its `call` usage line is

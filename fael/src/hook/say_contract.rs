@@ -36,7 +36,6 @@ pub(super) fn all() -> Vec<Line> {
             },
             "fael: done with one? fael close 01ASK \"<why>\"\n",
         ),
-        line(Kind::Bodies, "bodies: fael find <id> (MCP: find id=<id>)\n"),
         line(
             Kind::Cited {
                 ids: vec!["01CITED".into()],
@@ -54,10 +53,6 @@ pub(super) fn all() -> Vec<Line> {
         line(
             Kind::Fixed,
             "fael: this session said it fixed a bug — fael add issue \"x\" --key a:b then fael close --key a:b \"y\"\n",
-        ),
-        line(
-            Kind::FixCommit,
-            "fael: a fix: commit names no fael row — fael add issue \"x\" --key a:b then fael close --key a:b \"y\"\n",
         ),
         line(
             Kind::Overlap {
@@ -89,16 +84,14 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Row { .. } => 0,
         Kind::Brief { .. } => 1,
         Kind::Ask { .. } => 2,
-        Kind::Bodies => 3,
-        Kind::Cited { .. } => 4,
-        Kind::Finding { .. } => 5,
-        Kind::Notice => 6,
-        Kind::Fixed => 7,
-        Kind::FixCommit => 8,
-        Kind::Overlap { .. } => 9,
-        Kind::Checkpoint { .. } => 10,
-        Kind::Retired { .. } => 12,
-        Kind::BriefDrift { .. } => 11,
+        Kind::Cited { .. } => 3,
+        Kind::Finding { .. } => 4,
+        Kind::Notice => 5,
+        Kind::Fixed => 6,
+        Kind::Overlap { .. } => 7,
+        Kind::Checkpoint { .. } => 8,
+        Kind::BriefDrift { .. } => 9,
+        Kind::Retired { .. } => 10,
     }
 }
 
@@ -213,7 +206,8 @@ fn two_replies_join_in_order_and_the_first_notice_wins() {
 
 /// A seen list written before the say-gate (row ids, `~id`, `~*`, `@id`)
 /// still silences what it did, and the `~count:` (dropped) / `~peek:` /
-/// `~bodies` keys are never read as a row this session was told.
+/// `~bodies` keys (a line no hook says any more) are never read as a row this
+/// session was told.
 #[test]
 fn an_old_seen_list_reads_beside_the_new_keys() {
     let p = seen("s.seen");
@@ -285,7 +279,6 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
             ),
             true,
         ),
-        (line(Kind::Bodies, "bodies: fael find <id>\n"), false),
     ] {
         let before = out.fresh(&l.kind);
         assert_eq!(before, said, "{:?}", l.kind);
@@ -330,12 +323,10 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "row",
             "brief",
             "ask",
-            "bodies",
             "cited",
             "finding",
             "notice",
             "fixed",
-            "fixcommit",
             "overlap",
             "checkpoint",
             "briefdrift",
