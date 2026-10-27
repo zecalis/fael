@@ -102,8 +102,8 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         return Ok(());
     }
     emit_hint(a, &f);
-    // a list of one or two shows its bodies: the next call would be `find <id>`
-    let full = a.has("full") || core::expands(&rows, total, &f, budget);
+    // one line per row; bodies only by `find <id>` or --full
+    let full = a.has("full");
     // the cut line reprints this call with the next offset — same flags, no
     // guessing; under --full (bodies fill the budget in a few rows) it asks
     // for the rest in one call, since an explicit --limit beats the budget
@@ -192,7 +192,7 @@ fn nearest(
         }
         return;
     }
-    let full = a.has("full") || core::expands(&near, near.len(), f, budget);
+    let full = a.has("full");
     let out = match full {
         true => core::render_full(log, &near, budget),
         false => core::render(log, &near, budget),

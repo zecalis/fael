@@ -5,24 +5,6 @@
 use super::{Filter, est_tokens, matching::all_words, select::find};
 use crate::{Log, Row};
 
-/// A list this short, from the first page with no `limit`, shows bodies
-/// without `--full`: the next call would be `find <id>` for each row anyway,
-/// and two bodies cost what that round costs.
-pub const EXPAND_MAX: usize = 2;
-
-/// These `rows` (the whole first page) came back for `f`: show bodies, not
-/// titles? Only when every body fits `budget` — a fat row stays a title, since
-/// a list must never cost more than the `find <id>` it saves. Never for the
-/// session brief (no narrowing at all): that list is a map, not an answer.
-pub fn expands(rows: &[&Row], total: usize, f: &Filter, budget: usize) -> bool {
-    let bodies: usize = rows.iter().map(|r| est_tokens(&r.text)).sum();
-    (1..=EXPAND_MAX).contains(&total)
-        && f.offset == 0
-        && f.limit.is_none()
-        && !(f.is_empty() && !f.all)
-        && bodies <= budget
-}
-
 /// `--json` is the machine shape and is never cut — truncating it would hand a
 /// script fewer rows than it asked for without a word. A caller that did not
 /// name a `limit` and got more than the find budget is told once instead, so an
