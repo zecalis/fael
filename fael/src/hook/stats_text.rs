@@ -282,6 +282,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     if let Some(line) = cross_line(s) {
         println!("{line}");
     }
+    if let Some(line) = super::stats_handoff::handoff_line(&s.handoff_runs) {
+        println!("{line}");
+    }
     let f = &s.value.cross_agent.same_file;
     if f.files > 0 {
         println!(

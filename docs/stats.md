@@ -178,6 +178,8 @@ newest-first across repos.
 
 Newest first.
 
+- `5` (2026-10-27): added `handoff_runs` (`with`/`without`: closed runs started from a brief whose `after` chunk had an agent hand-off before the run started, vs every other run; per group `runs`, `joined`, `done`, `finds`, `refinds`, `rejects`; issue 01M5Y9KQ) — a description of two groups, not a claim about what the hand-off did; new key only, so no bump.
+
 - `5` (2026-10-24): board gains a Models read (run-telemetry t5): `Board.models` joins crew.db run rows (client/model/cost/started, worktree as the agent-started gate, session as the usage join key) with unknown-% beside every cost number — new key only, so no bump (`STATS_SCHEMA` frozen for this plan; old NULL rows never backfilled).
 
 - `5` (2026-10-25): added `days` (events and `est_tokens` per UTC day, issue 01M5S63N); no bump.

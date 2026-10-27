@@ -62,6 +62,7 @@ mod session;
 mod shape;
 mod spent_notes;
 mod state;
+mod stats_handoff;
 mod stats_text;
 mod stop;
 mod tally;

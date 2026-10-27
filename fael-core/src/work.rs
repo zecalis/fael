@@ -10,6 +10,7 @@
 
 mod checkpoint;
 mod db;
+mod db_runs;
 mod drift;
 pub(crate) mod elsewhere;
 mod pure;
@@ -45,6 +46,11 @@ pub struct StatsRun {
     pub pr: Option<i64>,
     pub branch: Option<String>,
     pub chunk: String,
+    pub session: Option<String>,
+    /// The chunk is `after` a chunk with an agent hand-off written before this run started.
+    pub after_handoff: bool,
+    /// An agent done/review event fell inside the run's span.
+    pub done: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,10 +63,10 @@ pub struct EndedRun {
 
 pub use checkpoint::last_note;
 pub use db::{
-    all_plans, brief_row, chunk_brief, db_at, db_for, ended_runs, flow_runs, has_held, held,
-    is_chunk, linked_open_chunks, mark_model, mark_model_session, mark_seen, mark_seen_session,
-    plan_by_name,
+    all_plans, brief_row, chunk_brief, db_at, db_for, ended_runs, has_held, held, is_chunk,
+    linked_open_chunks, mark_model, mark_model_session, mark_seen, mark_seen_session, plan_by_name,
 };
+pub use db_runs::flow_runs;
 pub use drift::{Drift, drift, in_conn as drift_in};
 pub use elsewhere::{
     Elsewhere, chunk_elsewhere, register_repo, repos as elsewhere_repos, row_elsewhere,

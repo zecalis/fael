@@ -137,6 +137,8 @@ pub struct Stats {
     pub flow: Flow,
     /// Chunk dones per calendar week (Monday, UTC) from `Run.ended`.
     pub throughput: Vec<WeekCount>,
+    /// Runs with and without an `after` hand-off in the brief, side by side (`handoff.rs`).
+    pub handoff_runs: super::HandoffRuns,
     /// Push events and fael tokens per UTC day over the window (`days.rs`).
     pub days: Vec<super::days::DayCount>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -210,6 +212,7 @@ pub fn aggregate(
         lifecycle: Default::default(),
         flow: flow_stats(parsed, logs, runs, merges),
         throughput: throughput_stats(parsed, runs),
+        handoff_runs: super::handoff_runs(parsed, runs),
         days: super::days::days(parsed),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
