@@ -21,6 +21,7 @@ mod experience_tests;
 mod flow;
 mod friction;
 mod handoff;
+mod kind;
 mod leak;
 mod lifecycle;
 mod metrics;
@@ -56,6 +57,7 @@ pub use experience::{
 pub use flow::{Flow, FlowMerge, FlowRun, Span, WeekCount};
 pub use friction::{FIRST_CALL_WINDOW, Friction, SHAPE_GATE, Tally};
 pub use handoff::{HandoffRuns, Side, handoff_runs};
+pub use kind::{Earned, SayKind};
 pub use leak::{LEAK_CALLS, LEAK_WINDOW_MS, Leak};
 pub use lifecycle::{Lifecycle, States, lifecycle};
 pub use metrics::ASK_ORDER;
@@ -64,7 +66,7 @@ pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, session_stem, since, since_arg};
 pub use repeat::{ContextLoop, context_loop};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
-pub use said::{ASK_SPLIT, KINDS, KindYield};
+pub use said::{ASK_SPLIT, KindYield};
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
 

@@ -3,6 +3,7 @@
 //! file-size cap; the fixtures and slots live there.
 
 use super::say::{Line, Outbox};
+use super::say_card::At;
 use super::say_contract::{all, seen, slot};
 use super::state::lock_seen;
 
@@ -22,7 +23,7 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
     let keep = cost(&pick(&[0, 3]));
     let run = |budget: usize| {
         let p = seen("s.seen");
-        let mut out = Outbox::open(lock_seen(&p));
+        let mut out = Outbox::open(At::Edit, lock_seen(&p));
         out.say_within(budget, lines.clone());
         let said = out.reply().context().unwrap_or("").to_string();
         let keys = std::fs::read_to_string(&p).unwrap();

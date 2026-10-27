@@ -13,8 +13,15 @@
 //!   issue naming the finding's file after it
 //! - `fixed` / `fixcommit` (experience-loop chunk 5) — the session filed an issue after it
 //! - `notice` — the session filed a row after it
-//! - `overlap` / `checkpoint` — the session ran `fael chunk note` after it (a
-//!   chunk note is no ledger row; its `call` usage line is the evidence)
+//! - `overlap` / `checkpoint` / `briefdrift` — the session ran `fael chunk
+//!   note` after it (a chunk note is no ledger row; its `call` usage line is
+//!   the evidence)
+//! - `retired` — the session filed a decision after it
+//! - `held` — no hook says it now; old entries earn like `ask`
+//!
+//! The kinds are `SayKind` (`kind.rs`), shared with the hook that says them:
+//! the rule per kind is `SayKind::earned`, and the tally below matches on it
+//! with no `_` arm, so a kind cannot be said and silently go untallied.
 //!
 //! The push no longer says `count`, `merge`, `carry` or `promote` (#247,
 //! #338): their old usage entries are skipped, not tallied.
@@ -24,6 +31,7 @@
 
 use super::acted::{ActedCounts, count as acted_count};
 use super::capture::mine;
+use super::kind::{Earned, SayKind};
 use super::parse::Parsed;
 use super::retire::{RETIRE_WINDOW_MS, retire_times};
 use crate::{Log, Row, ts_ms};
@@ -95,27 +103,9 @@ pub(super) fn counted(key: &str, p: &Pull) -> bool {
     }
 }
 
-/// Every kind a hook says, zeros included, so a kind never said still shows.
 /// `ask` split by whether its row sat on a hub file — the same earned, so the
 /// two read against one bar. Only asks whose push recorded `feat` count.
 pub const ASK_SPLIT: [&str; 2] = ["ask:hub", "ask:file"];
-
-pub const KINDS: [&str; 14] = [
-    "row",
-    "note",
-    "brief",
-    "ask",
-    "pointer",
-    "bodies",
-    "notice",
-    "cited",
-    "finding",
-    "fixed",
-    "fixcommit",
-    "overlap",
-    "checkpoint",
-    "held",
-];
 
 /// Whether the session filed a row `pick` takes after `ms`.
 fn filed_after(
@@ -209,8 +199,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
         .map(|(repo, log)| (repo.as_str(), retire_times(log)))
         .collect();
     let notes = note_ids(logs);
-    let mut out: BTreeMap<String, KindYield> = KINDS
-        .iter()
+    let mut out: BTreeMap<String, KindYield> = SayKind::buckets()
         .map(|k| (k.to_string(), KindYield::default()))
         .collect();
     for v in &parsed.kept {
@@ -241,36 +230,36 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 _ => vec![(kind, key.unwrap_or(""))],
             }
         });
-        for (kind, key) in entries {
+        for (name, key) in entries {
+            // a name no hook says any more (count, merge, carry, promote) is skipped
+            let Some(kind) = SayKind::parse(name) else {
+                continue;
+            };
+            // the generic clause names no row: nothing to join it to
+            if kind == SayKind::Ask && key == "*" {
+                continue;
+            }
             let used = |id: &str| s.is_some_and(|s| in_ctx.contains(&(s, id))) || retired(id);
-            let (bucket, earned) = match kind {
-                "row" => {
-                    let note = notes.get(repo).is_some_and(|n| n.contains(key));
-                    (if note { "note" } else { "row" }, used(key))
-                }
-                "brief" => ("brief", used(key)),
-                // the generic clause names no row: nothing to join it to
-                "ask" if key == "*" => continue,
-                "ask" | "cited" | "held" => (kind, retired(key)),
+            let note = kind == SayKind::Row && notes.get(repo).is_some_and(|n| n.contains(key));
+            let bucket = if note { "note" } else { kind.name() };
+            let earned = match kind.earned() {
+                Earned::InContext => used(key),
+                Earned::Retired => retired(key),
                 // an issue the session filed on the finding's file after it
-                "finding" => (
-                    "finding",
-                    filed_after(log, s, ms, |r| {
-                        r.kind == "issue" && r.files.iter().any(|f| f == key)
-                    }),
-                ),
-                "fixed" | "fixcommit" => (kind, filed_after(log, s, ms, |r| r.kind == "issue")),
-                // a chunk note is no ledger row: its `call` usage line is the act
-                "overlap" | "checkpoint" => (kind, noted),
-                "pointer" => ("pointer", pulled(&|p| p.key == Some(key))),
-                "bodies" => ("bodies", pulled(&|p| p.id.is_some())),
-                "notice" => ("notice", filed_after(log, s, ms, |_| true)),
-                _ => continue,
+                Earned::FiledIssueOnFile => filed_after(log, s, ms, |r| {
+                    r.kind == "issue" && r.files.iter().any(|f| f == key)
+                }),
+                Earned::FiledIssue => filed_after(log, s, ms, |r| r.kind == "issue"),
+                Earned::FiledDecision => filed_after(log, s, ms, |r| r.kind == "decision"),
+                Earned::FiledAny => filed_after(log, s, ms, |_| true),
+                Earned::ChunkNote => noted,
+                Earned::Pulled => pulled(&|p| p.key == Some(key)),
+                Earned::PulledId => pulled(&|p| p.id.is_some()),
             };
             tally(&mut out, bucket, earned);
             // the same ask split by the file it sat on: `hub` as the push
             // recorded it (`feat`), so the split never re-derives a hub
-            if let Some(hub) = (kind == "ask")
+            if let Some(hub) = (kind == SayKind::Ask)
                 .then(|| v["feat"][key]["hub"].as_bool())
                 .flatten()
             {

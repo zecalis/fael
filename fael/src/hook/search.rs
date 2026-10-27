@@ -173,6 +173,7 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
         None => return no(),
     };
     let mut out = super::say::Outbox::open(
+        super::say_card::At::Search,
         (!c.session.is_empty())
             .then(|| {
                 super::state::lock_seen(&super::state::seen_path(

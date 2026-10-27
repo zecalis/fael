@@ -55,6 +55,9 @@ mod review;
 mod say;
 #[cfg(test)]
 mod say_budget;
+mod say_card;
+#[cfg(test)]
+mod say_card_tests;
 #[cfg(test)]
 mod say_contract;
 mod search;

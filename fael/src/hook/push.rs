@@ -7,6 +7,7 @@ use super::changed::{self, Ask, Blobs, edit_hint, read_seen};
 use super::decision;
 use super::protocol::{Event, ctx};
 use super::say::{Kind, Line, Outbox, Reply};
+use super::say_card::At;
 use super::spent_notes::{self, Count};
 use super::state::{
     clear_stash, edited_files, edits_path, lock_seen, peek_stash, record_edits, seen_path,
@@ -197,6 +198,7 @@ pub(crate) fn push(e: &Event, event: &str, trigger: &str) -> Reply {
     // once. The lock spans read → append, so a batch of parallel reads queues
     // up behind the first instead of each pushing the same row.
     let mut out = Outbox::open(
+        At::of_push(event),
         (!c.session.is_empty())
             .then(|| lock_seen(&seen_path(&c.session, &c.agent, &c.repo.root)))
             .flatten(),

@@ -62,6 +62,7 @@ fn about(s: &work::Scopes, shared: &[String], files: &[String]) -> Vec<Line> {
 mod tests {
     use super::*;
     use crate::hook::say::Outbox;
+    use crate::hook::say_card::At;
     use crate::hook::state::lock_seen;
 
     fn scopes() -> work::Scopes {
@@ -121,7 +122,7 @@ mod tests {
     fn a_second_edit_of_the_same_owner_is_silent() {
         let seen = crate::hook::say_contract::seen("s.seen");
         let say = |f: &str| {
-            let mut out = Outbox::open(lock_seen(&seen));
+            let mut out = Outbox::open(At::Edit, lock_seen(&seen));
             one(f).into_iter().for_each(|l| out.say(l));
             out.reply().context().map(String::from)
         };

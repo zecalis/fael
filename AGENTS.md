@@ -47,8 +47,9 @@ Full statement: `docs/architecture.md` §0.
 
 ## Push lines — said once, silent when nothing is earned
 
-Every line a hook puts in front of the agent goes through the `Outbox` in `fael/src/hook/say.rs`: its `Kind` and the one `policy()` match decide how it is said once per session and whether it must offer a command.
-A new kind gets a fixture in `fael/src/hook/say_contract.rs` (silent when empty, never twice in a session), and a change to what the agent sees re-blesses `fael/tests/hook/replay.rs` (`FAEL_BLESS=1`) with the diff in the PR.
+Every line a hook puts in front of the agent goes through the `Outbox` in `fael/src/hook/say.rs`, opened for one hook event.
+A new kind gets a card in `fael/src/hook/say_card.rs` (the one exhaustive `policy()` match): its `SayKind` name (`fael-core/src/stats/kind.rs`, the same enum stats tallies by, with its earned rule), how it is said once, the command it must offer, the events it may be said at, and whether an over-budget push cuts it — plus a fixture in `fael/src/hook/say_contract.rs` (silent when empty, never twice in a session).
+A change to what the agent sees re-blesses `fael/tests/hook/replay.rs` (`FAEL_BLESS=1`) with the diff in the PR.
 
 ## Memory — `.fael/log/`
 

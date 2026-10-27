@@ -1,15 +1,18 @@
 //! The one door to the agent's context (PLAN-fael-say-gate). Every line a hook
-//! hands the agent is a `Line` said through an `Outbox`: `policy` decides, in
-//! one exhaustive match, whether the line's keys are spent in a seen list and
-//! whether it must carry a command; `reply` builds the `Reply`. `context` is
-//! private to this module, so no other path can put words in front of the agent.
+//! hands the agent is a `Line` said through an `Outbox` opened for one hook
+//! event (`At`): the kind's card (`say_card::policy`, one exhaustive match)
+//! decides its stats name, whether its keys are spent in a seen list, the
+//! command it must carry, the events it may be said at and whether a push over
+//! budget cuts it; `reply` builds the `Reply`. `context` is private to this
+//! module, so no other path can put words in front of the agent.
 //!
 //! The session's seen list (per session + sub-agent + worktree, gone on
 //! compact) holds a row id per row said, `~<id>` per edit-hint ask (`~*`, the old generic clause, in older lists) and
 //! `@<id>` per in-context mark and `^<id>` per cited id (`cited`), `~start:<id>` per row session start said.
 //! No session = no file: every line is said, nothing remembered.
 
-use crate::core;
+use super::say_card::{At, Once, next_cut, policy};
+use crate::core::{self, SayKind};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs::File;
@@ -107,44 +110,6 @@ pub(crate) enum Kind {
     Notice,
 }
 
-/// How a kind is said only once.
-#[derive(Debug, PartialEq)]
-pub(crate) enum Once {
-    /// Its keys are spent in the seen list; a line whose keys are all spent is dropped.
-    Key,
-    /// Its event fires once: a stashed notice is taken off disk when said.
-    Event,
-}
-
-#[derive(Debug)]
-pub(crate) struct Policy {
-    pub(crate) once: Once,
-    /// The command the line must offer, found in its text, or it is dropped.
-    /// Set here, never by the caller that writes the text.
-    pub(crate) command: Option<&'static str>,
-}
-
-/// The noise policy, in one place. A new `Kind` does not compile until it
-/// has an arm here; `say_contract::every_kind_has_a_fixture` fails until it
-/// has a fixture there.
-pub(crate) fn policy(k: &Kind) -> Policy {
-    let (once, command) = match k {
-        Kind::Row { .. } => (Once::Key, None),
-        Kind::Ask { .. } => (Once::Key, Some("fael close")),
-        Kind::Bodies => (Once::Key, Some("fael find <id>")),
-        Kind::Cited { .. } => (Once::Key, Some("fael close")),
-        Kind::Finding { .. } => (Once::Key, Some("fael add issue")),
-        Kind::Fixed | Kind::FixCommit => (Once::Key, Some("fael close")),
-        Kind::Overlap { .. } => (Once::Key, Some("fael chunk note")),
-        Kind::Checkpoint { .. } => (Once::Key, Some("fael chunk note")),
-        Kind::BriefDrift { .. } => (Once::Key, Some("fael chunk show")),
-        Kind::Retired { .. } => (Once::Key, Some("fael add decision")),
-        Kind::Brief { .. } => (Once::Key, None),
-        Kind::Notice => (Once::Event, None),
-    };
-    Policy { once, command }
-}
-
 /// The seen-list line of the session's one fix line — stop reads it too, so
 /// a session already told stashes no second one.
 pub(crate) const FIXED_KEY: &str = "~fixed";
@@ -174,7 +139,7 @@ impl Kind {
 /// `Notice`.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Said {
-    kind: &'static str,
+    kind: SayKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     key: Option<String>,
 }
@@ -182,30 +147,30 @@ pub(crate) struct Said {
 impl Said {
     /// The issue id of a said edit ask, `None` for any other line.
     pub(crate) fn ask_id(&self) -> Option<&str> {
-        self.key.as_deref().filter(|_| self.kind == "ask")
+        self.key.as_deref().filter(|_| self.kind == SayKind::Ask)
     }
 }
 
 impl Kind {
-    fn said(&self) -> Vec<Said> {
-        let (kind, keys) = match self {
-            Kind::Row { ids } => ("row", ids.clone()),
-            Kind::Brief { .. } => ("brief", vec![]),
-            Kind::Ask { ids, .. } => ("ask", ids.clone()),
-            Kind::Bodies => ("bodies", vec![]),
-            Kind::Cited { ids } => ("cited", ids.clone()),
-            Kind::Finding { file, .. } => ("finding", vec![file.clone()]),
-            Kind::Fixed => ("fixed", vec![]),
-            Kind::FixCommit => ("fixcommit", vec![]),
-            Kind::Overlap { owner } => ("overlap", vec![owner.clone()]),
-            Kind::Checkpoint { key } => ("checkpoint", vec![key.clone()]),
-            Kind::BriefDrift { key } => ("briefdrift", vec![key.clone()]),
-            Kind::Retired { id } => ("retired", vec![id.clone()]),
-            Kind::Notice => ("notice", vec![]),
-        };
-        match keys.is_empty() {
-            true => vec![Said { kind, key: None }],
-            false => keys
+    /// What a `said` entry of this kind names, one entry per key.
+    fn said_keys(&self) -> Vec<String> {
+        match self {
+            Kind::Row { ids } | Kind::Ask { ids } | Kind::Cited { ids } => ids.clone(),
+            Kind::Finding { file, .. } => vec![file.clone()],
+            Kind::Overlap { owner } => vec![owner.clone()],
+            Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
+            Kind::Retired { id } => vec![id.clone()],
+            Kind::Brief { .. } | Kind::Bodies | Kind::Fixed | Kind::FixCommit | Kind::Notice => {
+                vec![]
+            }
+        }
+    }
+
+    fn entries(&self) -> Vec<Said> {
+        let kind = policy(self).said;
+        match self.said_keys() {
+            keys if keys.is_empty() => vec![Said { kind, key: None }],
+            keys => keys
                 .into_iter()
                 .map(|k| Said { kind, key: Some(k) })
                 .collect(),
@@ -235,6 +200,8 @@ impl Line {
 /// seen file stays locked from `open` to `reply`, so parallel pushes queue up
 /// behind each other instead of each saying the same row.
 pub(crate) struct Outbox {
+    /// The hook event this outbox speaks for: a kind not allowed there is dropped.
+    at: At,
     pub(super) file: Option<File>,
     seen: String,
     /// `seen`'s lines, parsed once.
@@ -246,13 +213,14 @@ pub(crate) struct Outbox {
 
 impl Outbox {
     /// `file`: the locked seen list, `None` = no session (say everything,
-    /// remember nothing).
-    pub(crate) fn open(mut file: Option<File>) -> Self {
+    /// remember nothing). `at`: the hook event the lines are said at.
+    pub(crate) fn open(at: At, mut file: Option<File>) -> Self {
         let mut seen = String::new();
         if let Some(f) = &mut file {
             let _ = f.read_to_string(&mut seen);
         }
         Outbox {
+            at,
             file,
             lines: seen.lines().map(String::from).collect(),
             seen,
@@ -293,52 +261,59 @@ impl Outbox {
     }
 
     /// False for a line `say` would drop: empty, without the command its kind
-    /// needs, or with every key it would spend already spent.
-    fn sayable(&self, l: &Line) -> bool {
-        let acted = policy(&l.kind).command.is_none_or(|c| l.text.contains(c));
-        !l.text.is_empty() && acted && self.fresh(&l.kind)
+    /// needs, not allowed at this event, or with every key it would spend
+    /// already spent.
+    pub(super) fn sayable(&self, l: &Line) -> bool {
+        let card = policy(&l.kind);
+        let acted = card.command.is_none_or(|c| l.text.contains(c));
+        let here = card.at.contains(&self.at);
+        !l.text.is_empty() && acted && here && self.fresh(&l.kind)
     }
 
-    /// Add `l`, unless it is empty, lacks the command its kind needs, or every
-    /// key it would spend is already spent.
+    /// `sayable`, after checking the line is one this event may say at all: a
+    /// kind built for another event is a bug in the caller, caught in a debug
+    /// build and dropped in a release one.
+    fn admit(&self, l: &Line) -> bool {
+        debug_assert!(
+            policy(&l.kind).at.contains(&self.at),
+            "{:?} is not said at {:?}",
+            l.kind,
+            self.at
+        );
+        self.sayable(l)
+    }
+
+    /// Add `l`, unless it is empty, lacks the command its kind needs, is not
+    /// allowed at this event, or every key it would spend is already spent.
     pub(crate) fn say(&mut self, l: Line) {
-        if !self.sayable(&l) {
+        if !self.admit(&l) {
             return;
         }
         self.spent
             .extend(self.fresh_keys(&l.kind).unwrap_or_default());
         self.text.push_str(&l.text);
-        self.said.extend(l.kind.said());
+        self.said.extend(l.kind.entries());
     }
 
-    /// Say `lines` in order within `budget` tokens; rows and bodies are never cut.
-    /// Over budget the stashed notice goes first, then the stashed fix or held line, then the
-    /// edit hint, then the commit-cite hint, each whole. A cut line
-    /// keeps its keys for a later push. True when a stashed line was said (caller unstashes).
+    /// Say `lines` in order within `budget` tokens; a kind whose card says
+    /// `Cut::Never` (rows, bodies) is never cut. Over budget the lines go
+    /// whole, lowest cut rank first (the stashed notice, then the stashed fix,
+    /// then the edit hint, then the commit-cite hint). A cut line keeps its
+    /// keys for a later push. True when a stashed line was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
-        let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.sayable(l)).collect();
+        let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.admit(l)).collect();
         let cost = |ls: &[Line]| ls.iter().map(|l| core::est_tokens(&l.text)).sum::<usize>();
         while cost(&keep) > budget {
-            let first = |f: fn(&Kind) -> bool| keep.iter().position(|l| f(&l.kind));
-            let cut = first(|k| matches!(k, Kind::Notice))
-                .or_else(|| first(|k| matches!(k, Kind::Fixed)))
-                .or_else(|| {
-                    keep.iter()
-                        .rposition(|l| matches!(l.kind, Kind::Ask { .. }))
-                })
-                .or_else(|| first(|k| matches!(k, Kind::Cited { .. })));
-            match cut {
+            match next_cut(keep.iter().map(|l| policy(&l.kind).cut)) {
                 Some(i) => keep.remove(i),
                 None => break,
             };
         }
-        let notice = keep
-            .iter()
-            .any(|l| matches!(l.kind, Kind::Notice | Kind::Fixed));
+        let stashed = keep.iter().any(|l| policy(&l.kind).stash);
         for l in keep {
             self.say(l);
         }
-        notice
+        stashed
     }
 
     /// Spend `key` with no line said: a once-mark nothing reads aloud (the
