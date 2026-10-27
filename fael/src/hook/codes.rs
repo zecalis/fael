@@ -13,6 +13,9 @@ use crate::core;
 const REJECTS: &[(&str, &str)] = &[
     // the gate quotes other faults in its reasons: first, before any of them
     ("nothing written", core::stats::SHAPE_GATE),
+    // fael verify: a row without its cmd/result lines, or one another writer filed
+    ("has no 'cmd:'", "invalid_row"),
+    ("not this machine's writer", "row_state"),
     // chunk start refusals (fael-crew joint.rs / start.rs): apart from state moves
     ("shares files with a running chunk", "scope_overlap"),
     ("is held by run", "held"),

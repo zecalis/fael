@@ -69,6 +69,10 @@ What to record:
 * **decision** — an agreed/locked choice not already in code or the plan, including why.
 * **note** — what the next session needs, especially unfinished work or handoff state.
 
+A number in a row (a count, a size, a hit total) carries its observed form: lines `cmd: <shell line that
+prints the number alone>`, `date: YYYY-MM-DD`, `result: <what it printed>`. Before copying one into docs
+or a plan, run `fael verify <id>` — it prints recorded vs now and never edits the row (yours only, 60s).
+
 Rules: every row needs `--files` · write so it stands without this chat · verify ids with
 `fael find`, never from memory · before ending a session that changed files, add a row ·
 read `docs/architecture.md` §1 before deciding where code belongs.
