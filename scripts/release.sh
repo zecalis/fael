@@ -55,8 +55,9 @@ new=$major.$minor.$patch
 
 git rev-parse -q --verify "refs/tags/v$new" >/dev/null && { echo "release: tag v$new already exists" >&2; exit 1; }
 
-# first `version = ` line only — the [package] one
+# first `version = ` line only — the [package] one; fael-crew carries the same number so `fael` can tell a stale build
 perl -0pi -e "s/^version = \"\Q$old\E\"/version = \"$new\"/m" fael/Cargo.toml
+perl -0pi -e 's/^version = "[^"]*"/version = "'"$new"'"/m' fael-crew/Cargo.toml
 cargo metadata --format-version 1 >/dev/null # rewrites Cargo.lock for the new version
 
 git commit -q -am "release v$new"
@@ -68,6 +69,13 @@ echo "v$old -> v$new pushed."
 # owner's machine: pull every fael worktree onto the new main (alias fael-pull); skipped where `repos` is absent
 # a worktree that can't fast-forward is not a release failure — report it and keep going
 if command -v repos >/dev/null 2>&1; then repos fael pull || echo "release: fael pull had failures (above) — continuing" >&2; fi
+
+# fael crew is the owner's layer, not released: rebuild it from this tagged main only where it is already installed
+# (before the release.yml wait — a failed run must not skip it)
+if command -v fael-crew >/dev/null 2>&1; then
+  cargo install -q --path fael-crew --locked && echo "local fael-crew -> $new (cargo)" \
+    || echo "release: fael-crew rebuild failed — run: cargo install --path fael-crew --locked" >&2
+fi
 
 # wait for the tag's release.yml (GitHub Release + npm + brew), then move this machine's npm install onto it
 run=
@@ -97,9 +105,4 @@ if command -v brew >/dev/null 2>&1 && brew list --versions fael >/dev/null 2>&1;
   brew update -q >/dev/null && brew upgrade -q zecalis/tap/fael >/dev/null \
     && echo "local fael -> $(brew list --versions fael | cut -d' ' -f2) (brew)" \
     || echo "release: brew upgrade failed — run: brew update && brew upgrade zecalis/tap/fael" >&2
-fi
-# fael crew is the owner's layer, not released: rebuild it from this tagged main only where it is already installed
-if command -v fael-crew >/dev/null 2>&1; then
-  cargo install -q --path fael-crew --locked && echo "local fael-crew -> $new (cargo)" \
-    || echo "release: fael-crew rebuild failed — run: cargo install --path fael-crew --locked" >&2
 fi
