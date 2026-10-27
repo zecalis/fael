@@ -210,6 +210,7 @@ fn bump_keeps_sets_and_clears_revisit() {
             urgent: UrgentChange::Keep,
             revisit: None,
             fh: None,
+            why: None,
         },
     )
     .unwrap();
@@ -228,6 +229,7 @@ fn bump_keeps_sets_and_clears_revisit() {
             urgent: UrgentChange::Keep,
             revisit: Some(FUTURE.into()),
             fh: None,
+            why: None,
         },
     )
     .unwrap();
@@ -246,6 +248,7 @@ fn bump_keeps_sets_and_clears_revisit() {
             urgent: UrgentChange::Keep,
             revisit: Some("  ".into()),
             fh: None,
+            why: None,
         },
     )
     .unwrap();

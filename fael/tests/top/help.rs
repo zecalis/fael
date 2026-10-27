@@ -196,7 +196,7 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     let (ok, out, err) = fael(&d, &["bump", "--help"]);
     assert!(ok, "{err}");
     assert!(out.contains("fael bump <id>"), "{out}");
-    for hidden in ["--to", "--revisit", "--urgent", "--not-urgent"] {
+    for hidden in ["--to", "--revisit", "--urgent", "--not-urgent", "--why"] {
         assert!(!out.contains(hidden), "{hidden} leaks: {out}");
     }
     let (ok, full, err) = fael(&d, &["bump", "--help", "--all"]);

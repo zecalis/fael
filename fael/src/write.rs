@@ -313,7 +313,8 @@ pub(crate) fn close_row_as(
 /// `fael bump <id>` — new `to`/`urgent`/`revisit` on the same row, under its id (a bump event).
 /// At most one of `--urgent` (back of the queue), `--urgent-before <id>`
 /// (just above that row), `--not-urgent` (leave the queue); none keeps the
-/// old number. Absent `--revisit` keeps the old date/text; a value sets it.
+/// old number. `--why "<short>"` records the agent's answer to a stale ask
+/// ("unrelated edit") in the bump event. Absent `--revisit` keeps the old date/text; a value sets it.
 pub(crate) fn bump(
     r: &crate::Repo,
     a: &crate::Args,
@@ -351,6 +352,7 @@ pub(crate) fn bump(
             revisit,
             held: None,
             fh: Some(fh),
+            why: a.one("why"),
         },
     )?;
     warns.extend(note);

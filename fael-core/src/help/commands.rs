@@ -50,9 +50,9 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "bump",
         "still true after its files changed (restamps), or new to/urgent/revisit",
-        "fael bump <id> [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent]
+        "fael bump <id> [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent] [--why text]
     (same id, text and files — one bump event; text and files never change through bump)
-    a bare bump is the 'still true' verdict on a row whose files changed: restamps it from disk",
+    a bare bump is the 'still true' verdict on a row whose files changed: restamps it from disk; --why \"<short>\" records an 'unrelated edit' answer",
     ),
     (
         "claim",

@@ -148,6 +148,7 @@ fn core_is_a_strict_subset_of_full() {
                 "--urgent",
                 "--urgent-before",
                 "--not-urgent",
+                "--why",
             ]
             .as_slice(),
         ),
