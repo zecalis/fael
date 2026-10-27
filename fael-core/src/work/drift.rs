@@ -28,14 +28,15 @@ impl Drift {
 
 /// `uid`'s drift since its latest start event (`by = 'agent'`, `to_state = 'running'`),
 /// from the `edited <fields>` events `chunk edit` writes. `None` when none touches
-/// brief, scope or title.
+/// brief, scope or title, or when no agent ever started it (issue 01M5Z4C2): a planner's
+/// edit of an unstarted chunk drifts from no one.
 pub fn in_conn(c: &Connection, uid: &str) -> Option<Drift> {
     let mut q = c
         .prepare(
             "SELECT id, text FROM event
              WHERE chunk_uid = ?1 AND by = 'owner' AND text LIKE 'edited %'
-               AND id > COALESCE((SELECT MAX(id) FROM event WHERE chunk_uid = ?1
-                                  AND by = 'agent' AND to_state = 'running'), 0)
+               AND id > (SELECT MAX(id) FROM event WHERE chunk_uid = ?1
+                         AND by = 'agent' AND to_state = 'running')
              ORDER BY id",
         )
         .ok()?;
@@ -112,6 +113,17 @@ mod tests {
             "empty session: worktree only"
         );
         let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn a_chunk_never_started_never_drifts() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE event(id INTEGER PRIMARY KEY, chunk_uid TEXT, by TEXT, to_state TEXT, text TEXT);
+             INSERT INTO event VALUES (1, 'U', 'owner', 'open', 'edited brief');",
+        )
+        .unwrap();
+        assert_eq!(in_conn(&c, "U"), None);
     }
 
     #[test]
