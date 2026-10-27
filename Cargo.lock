@@ -105,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "fael-crew"
-version = "0.0.1"
+version = "0.97.1"
 dependencies = [
  "fael-core",
  "rusqlite",

@@ -45,6 +45,9 @@ pub(crate) fn dispatch(argv: &[String]) -> Option<ExitCode> {
         eprintln!("{MISSING}");
         return Some(ExitCode::FAILURE);
     };
+    if let Some(w) = stale_warning(&bin) {
+        eprintln!("{w}");
+    }
     let (code, err) = match exec(&bin, argv) {
         Ok(done) => done,
         Err(e) => {
@@ -58,6 +61,26 @@ pub(crate) fn dispatch(argv: &[String]) -> Option<ExitCode> {
     };
     hook::record_cli(argv, &res);
     Some(ExitCode::from(code))
+}
+
+/// One line when the installed `fael-crew` is not this `fael`'s version — it is built from
+/// source, so a missed rebuild (a failed release run) leaves it behind with no other sign.
+fn stale_warning(bin: &PathBuf) -> Option<String> {
+    let out = Command::new(bin).arg("--version").output().ok()?;
+    mismatch(
+        env!("CARGO_PKG_VERSION"),
+        &String::from_utf8_lossy(&out.stdout),
+    )
+}
+
+/// `own` is fael's version, `said` the child's `--version` line (`fael-crew X.Y.Z`).
+fn mismatch(own: &str, said: &str) -> Option<String> {
+    let theirs = said.split_whitespace().last()?;
+    (theirs != own).then(|| {
+        format!(
+            "fael: fael-crew is {theirs}, fael is {own} — rebuild it: `cargo install --path fael-crew --locked`"
+        )
+    })
 }
 
 /// Run it: the exit code (a signal is 1) and everything it wrote to stderr.
@@ -116,4 +139,34 @@ pub(crate) fn capture(args: &[String], dir: &std::path::Path) -> Result<String, 
         return Ok(String::from_utf8_lossy(&out.stdout).trim().to_string());
     }
     Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mismatch;
+
+    #[test]
+    fn same_version_is_silent_and_different_names_both() {
+        assert_eq!(mismatch("0.97.1", "fael-crew 0.97.1\n"), None);
+        let w = mismatch("0.97.1", "fael-crew 0.0.1\n").unwrap();
+        assert!(w.contains("0.0.1") && w.contains("0.97.1"));
+        assert_eq!(mismatch("0.97.1", ""), None);
+    }
+
+    /// `scripts/release.sh` bumps both manifests; this fails if they drift apart.
+    #[test]
+    fn crew_manifest_version_matches_fael() {
+        let v = |p: &str| {
+            let t = std::fs::read_to_string(format!(
+                "{}/../{p}/Cargo.toml",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .unwrap();
+            t.lines()
+                .find(|l| l.starts_with("version = "))
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(v("fael"), v("fael-crew"));
+    }
 }
