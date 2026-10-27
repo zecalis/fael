@@ -2,6 +2,7 @@
 //! number comes from `fael-core::stats`. Split out of `usage.rs` (file-size
 //! ratchet); `--json` is the contract, this text is unstable by design.
 
+use super::said_text::{said_events_line, said_line};
 use crate::core;
 use std::path::Path;
 
@@ -46,18 +47,6 @@ fn print_events(s: &core::stats::Stats) {
         let hit = hit_suffix(s, k);
         println!("  {k}: ×{} (~{} tokens){hit}", c.events, c.est_tokens);
     }
-}
-
-/// Yield per line kind (PLAN-fael-say-gate chunk 3), in `SayKind::buckets` order, the
-/// kinds never said left out; nothing said = no line.
-fn said_line(s: &core::stats::Stats) -> Option<String> {
-    let parts: Vec<String> = core::SayKind::buckets()
-        .chain(core::stats::ASK_SPLIT)
-        .filter_map(|k| s.said.get(k).map(|y| (k, y)))
-        .filter(|(_, y)| y.said > 0)
-        .map(|(k, y)| format!("{k} {}/{} ({}%)", y.earned, y.said, y.earned * 100 / y.said))
-        .collect();
-    (!parts.is_empty()).then(|| format!("  acted on after said: {}", parts.join(" · ")))
 }
 
 /// PLAN-fael-context-loop §3, read together: repeats over the edits after
@@ -320,7 +309,10 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             s.retired.at_touch, s.retired.pushed
         );
     }
-    if let Some(line) = said_line(s) {
+    for line in [said_line(&s.said), said_events_line(&s.said)]
+        .into_iter()
+        .flatten()
+    {
         println!("{line}");
     }
     super::friction::lines(&s.friction)

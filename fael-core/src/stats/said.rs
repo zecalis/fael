@@ -27,30 +27,28 @@
 //! #338): their old usage entries are skipped, not tallied.
 //!
 //! An upper bound: the agent may have done it anyway — use it only to cut.
+//!
+//! Cost and event (`said_yield.rs`): an entry may carry `t`, its share of the
+//! line's `est_tokens` (the entries of one line sum to the line's tokens), and
+//! the usage line names its `event`. Each kind keeps `tokens` — the sum of `t`,
+//! 0 for entries written before `t` existed, so tokens are real only from that
+//! change on — and `by_event`: said, earned and tokens per event. Earned by
+//! event uses the kind's own rule, so yield by event is retroactive: it reads
+//! every usage line in the window. Tokens ride on the entry the line names; a
+//! `brief` entry names its rows by the line's `ids`, and its `t` is counted
+//! once, on the first.
+//!
 //! Pure: kept usage rows and loaded logs in.
 
-use super::acted::{ActedCounts, count as acted_count};
+use super::acted::count as acted_count;
 use super::capture::mine;
 use super::kind::{Earned, SayKind};
 use super::parse::Parsed;
 use super::retire::{RETIRE_WINDOW_MS, retire_times};
+use super::said_yield::tally;
+pub use super::said_yield::{EventYield, KindYield};
 use crate::{Log, Row, ts_ms};
-use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
-pub struct KindYield {
-    /// `said` entries of this kind: one per row id, key or file set.
-    pub said: usize,
-    /// Of those, acted on later in the same session.
-    pub earned: usize,
-    /// Stamped retires in the window (r2, `held` only): per `shown` source
-    /// (`held`, `done`, later `add`/`start`) the retire events whose row
-    /// names that source, split close / supersede / bump. Empty on every
-    /// other kind — and on `held` when nothing stamped yet.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub acted: BTreeMap<String, ActedCounts>,
-}
 
 /// A pull's query, from its `found` line.
 pub(super) struct Pull<'a> {
@@ -123,13 +121,6 @@ fn filed_after(
                 && ts_ms(&r.ts).is_some_and(|t| t >= ms)
         })
     })
-}
-
-/// One more `said` entry of `bucket`, earned or not.
-fn tally(out: &mut BTreeMap<String, KindYield>, bucket: &str, earned: bool) {
-    let y = out.entry(bucket.to_string()).or_default();
-    y.said += 1;
-    y.earned += earned as usize;
 }
 
 /// When a usage line is an accepted `fael chunk note` call.
@@ -223,14 +214,20 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 .is_some_and(|ps| ps.iter().any(|p| p.ms >= ms && hit(p)))
         };
         // a brief names no key: its rows are the line's `ids`
+        // the entry's `t` goes on the first of the entries it expands to
+        let event = v["event"].as_str();
         let entries = said.iter().flat_map(|e| {
             let (kind, key) = (e["kind"].as_str().unwrap_or(""), e["key"].as_str());
+            let t = e["t"].as_u64().unwrap_or(0) as usize;
             match (kind, key) {
-                ("brief", None) => strs(v, "ids").map(|id| ("brief", id)).collect(),
-                _ => vec![(kind, key.unwrap_or(""))],
+                ("brief", None) => strs(v, "ids")
+                    .enumerate()
+                    .map(|(i, id)| ("brief", id, if i == 0 { t } else { 0 }))
+                    .collect(),
+                _ => vec![(kind, key.unwrap_or(""), t)],
             }
         });
-        for (name, key) in entries {
+        for (name, key, tokens) in entries {
             // a name no hook says any more (count, merge, carry, promote) is skipped
             let Some(kind) = SayKind::parse(name) else {
                 continue;
@@ -256,14 +253,20 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 Earned::Pulled => pulled(&|p| p.key == Some(key)),
                 Earned::PulledId => pulled(&|p| p.id.is_some()),
             };
-            tally(&mut out, bucket, earned);
+            tally(&mut out, bucket, event, earned, tokens);
             // the same ask split by the file it sat on: `hub` as the push
             // recorded it (`feat`), so the split never re-derives a hub
             if let Some(hub) = (kind == SayKind::Ask)
                 .then(|| v["feat"][key]["hub"].as_bool())
                 .flatten()
             {
-                tally(&mut out, ASK_SPLIT[usize::from(!hub)], earned);
+                tally(
+                    &mut out,
+                    ASK_SPLIT[usize::from(!hub)],
+                    event,
+                    earned,
+                    tokens,
+                );
             }
         }
     }

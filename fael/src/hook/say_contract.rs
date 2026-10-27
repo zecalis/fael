@@ -343,3 +343,42 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
         ]
     );
 }
+
+/// A said line's tokens ride on its entries (`t`): the entries of one line sum
+/// to its `est_tokens`, the remainder on the first, for every kind and for a
+/// line that names several keys.
+#[test]
+fn said_entries_of_one_line_sum_to_its_est_tokens() {
+    let sum = |l: Line| {
+        let want = crate::core::est_tokens(&l.text);
+        let mut out = Outbox::open(at_of(&l), None);
+        out.say(l);
+        let r = out.reply();
+        let v = serde_json::to_value(r.said()).unwrap();
+        let t: Vec<u64> = v
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["t"].as_u64().unwrap_or(0))
+            .collect();
+        (want as u64, t)
+    };
+    for l in all() {
+        let (want, t) = sum(l);
+        assert_eq!(t.iter().sum::<u64>(), want);
+    }
+    let text = "fael mem for a.rs:\n- [A] decision x\n- [B] decision y\n- [C] note z\n";
+    let (want, t) = sum(Line {
+        kind: Kind::Row {
+            ids: vec!["A".into(), "B".into(), "C".into()],
+        },
+        text: text.into(),
+    });
+    assert!(want > 3, "long enough to split: {want}");
+    assert_eq!(t.len(), 3);
+    assert_eq!(t.iter().sum::<u64>(), want);
+    assert!(
+        t[0] >= t[1] && t[1] == t[2],
+        "remainder on the first: {t:?}"
+    );
+}

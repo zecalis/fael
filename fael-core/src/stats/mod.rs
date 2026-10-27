@@ -33,6 +33,7 @@ mod retire;
 mod said;
 #[cfg(test)]
 mod said_tests;
+mod said_yield;
 mod unused;
 mod value;
 
@@ -66,7 +67,7 @@ pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, session_stem, since, since_arg};
 pub use repeat::{ContextLoop, context_loop};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
-pub use said::{ASK_SPLIT, KindYield};
+pub use said::{ASK_SPLIT, EventYield, KindYield};
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
 

@@ -242,3 +242,61 @@ fn briefdrift_and_retired_tally_and_earn() {
     );
     assert_eq!(run(format!("{said}{call}"), decision), [(1, 1), (1, 1)]);
 }
+
+/// Tokens and the event split: `t` sums per kind (an entry with none adds 0),
+/// each event keeps its own said / earned / tokens, a `brief` entry's `t`
+/// counts once however many rows its line names, and an old-format line still
+/// tallies said and earned by event.
+#[test]
+fn tokens_and_events_split_each_kind() {
+    let line = |min: u8, event: &str, rest: &str| {
+        format!(
+            "{{\"ts\":\"2026-09-26T00:0{min}:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",\"event\":\"{event}\",{rest}}}\n"
+        )
+    };
+    let usage = line(
+        0,
+        "session-start",
+        r#""ids":["D","U"],"said":[{"kind":"brief","t":10}]"#,
+    ) + &line(
+        1,
+        "edit",
+        r#""ids":["D","U"],"said":[{"kind":"row","key":"D","t":7},{"kind":"row","key":"U","t":6}]"#,
+    ) + &line(
+        2,
+        "shell-edit",
+        r#""ids":["D"],"said":[{"kind":"row","key":"D","t":5}]"#,
+    ) + &line(
+        3,
+        "shell-edit",
+        r#""ids":["U"],"said":[{"kind":"row","key":"U"}]"#,
+    ) + &line(4, "in-context", r#""ids":[],"in_context":["D"]"#);
+    let p = super::parse::parse(
+        &usage,
+        Path::new("/w/state/usage.jsonl"),
+        &[PathBuf::from("/tmp")],
+    );
+    let y = yields(&p, &HashMap::new());
+    let ev = |k: &str, e: &str| {
+        let v = &y[k].by_event[e];
+        (v.said, v.earned, v.tokens)
+    };
+    assert_eq!(
+        (y["row"].said, y["row"].earned, y["row"].tokens),
+        (4, 2, 18)
+    );
+    assert_eq!(ev("row", "edit"), (2, 1, 13), "D in context, U never");
+    assert_eq!(ev("row", "shell-edit"), (2, 1, 5), "no `t` adds 0");
+    assert_eq!((y["brief"].said, y["brief"].tokens), (2, 10), "t once");
+    assert_eq!(ev("brief", "session-start"), (2, 1, 10));
+    assert!(y["ask"].by_event.is_empty() && y["ask"].tokens == 0);
+    // additive JSON: an untouched kind keeps the old two keys
+    assert_eq!(
+        serde_json::to_value(&y["ask"]).unwrap(),
+        serde_json::json!({"said": 0, "earned": 0})
+    );
+    assert_eq!(
+        serde_json::to_value(&y["row"].by_event["edit"]).unwrap(),
+        serde_json::json!({"said": 2, "earned": 1, "tokens": 13})
+    );
+}
