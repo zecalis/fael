@@ -72,16 +72,19 @@ fn said_notes_and_finds_join_into_yield() {
     let (ok, out, _) = fael(&d, &["stats", "--json"], "");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(ok, "{out}");
-    assert_eq!(
-        v["said"]["row"],
-        serde_json::json!({"said": 1, "earned": 1}),
-        "{out}"
-    );
-    assert_eq!(
-        v["said"]["note"],
-        serde_json::json!({"said": 1, "earned": 1}),
-        "{out}"
-    );
+    // the push says at `edit`: its line's tokens ride on the entries (`t`) and
+    // split by event; the two lines' est_tokens are the edit event's
+    for k in ["row", "note"] {
+        let y = &v["said"][k];
+        assert_eq!((&y["said"], &y["earned"]), (&1.into(), &1.into()), "{out}");
+        let t = y["tokens"].as_u64().unwrap_or(0);
+        assert!(t > 0, "{k} carries its tokens: {out}");
+        assert_eq!(
+            y["by_event"],
+            serde_json::json!({"edit": {"said": 1, "earned": 1, "tokens": t}}),
+            "{out}"
+        );
+    }
     // the pull line is no injection: read + edit only
     assert_eq!(v["events"], 2, "{out}");
 }

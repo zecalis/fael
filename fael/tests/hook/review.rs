@@ -44,7 +44,7 @@ fn each_finding_is_a_ready_add_issue_said_once() {
     let usage = std::fs::read_to_string(d.join("state/usage.jsonl")).unwrap();
     assert!(
         usage.contains(r#""event":"review""#)
-            && usage.contains(r#"{"kind":"finding","key":"src/b.rs"}"#),
+            && usage.contains(r#"{"kind":"finding","key":"src/b.rs","t":"#),
         "{usage}"
     );
 }

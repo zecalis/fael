@@ -136,12 +136,20 @@ impl Kind {
 
 /// One `said` entry: the kind's name and the id, key or count key it names.
 /// `Brief` names none (stats reads the line's `ids`), nor do `Bodies` and
-/// `Notice`.
+/// `Notice`. `t` is the entry's share of its line's `est_tokens`: the entries
+/// of one line sum to exactly that line's tokens. Usage lines from before it
+/// existed have none, and stats counts them as 0.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Said {
     kind: SayKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     key: Option<String>,
+    #[serde(rename = "t", skip_serializing_if = "is_zero")]
+    tokens: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 impl Said {
@@ -166,15 +174,23 @@ impl Kind {
         }
     }
 
-    fn entries(&self) -> Vec<Said> {
+    /// The entries of a line costing `tokens`, split evenly; the remainder
+    /// rides on the first so the entries sum to the line's tokens.
+    fn entries(&self, tokens: usize) -> Vec<Said> {
         let kind = policy(self).said;
-        match self.said_keys() {
-            keys if keys.is_empty() => vec![Said { kind, key: None }],
-            keys => keys
-                .into_iter()
-                .map(|k| Said { kind, key: Some(k) })
-                .collect(),
-        }
+        let keys: Vec<Option<String>> = match self.said_keys() {
+            keys if keys.is_empty() => vec![None],
+            keys => keys.into_iter().map(Some).collect(),
+        };
+        let n = keys.len();
+        keys.into_iter()
+            .enumerate()
+            .map(|(i, key)| Said {
+                kind,
+                key,
+                tokens: tokens / n + if i == 0 { tokens % n } else { 0 },
+            })
+            .collect()
     }
 }
 
@@ -292,7 +308,7 @@ impl Outbox {
         self.spent
             .extend(self.fresh_keys(&l.kind).unwrap_or_default());
         self.text.push_str(&l.text);
-        self.said.extend(l.kind.entries());
+        self.said.extend(l.kind.entries(core::est_tokens(&l.text)));
     }
 
     /// Say `lines` in order within `budget` tokens; a kind whose card says

@@ -52,6 +52,7 @@ mod prune;
 mod push;
 mod retired;
 mod review;
+mod said_text;
 mod say;
 #[cfg(test)]
 mod say_budget;
