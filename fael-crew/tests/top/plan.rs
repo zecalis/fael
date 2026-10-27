@@ -158,6 +158,17 @@ fn drop_deletes_an_empty_plan_and_refuses_chunks_or_children() {
 ",
         "{err}{out}"
     );
+    // a plan whose chunks are all dropped drops too (fael:01M5WMQH)
+    assert!(fael(&d, &["plan", "new", "gone", "Gone"]).0);
+    let (ok, uid, err) = fael(
+        &d,
+        &["chunk", "add", "g1", "--plan", "gone", "--brief", "b"],
+    );
+    assert!(ok, "{err}");
+    let uid = uid.split_whitespace().next().unwrap().to_string();
+    assert!(fael(&d, &["chunk", "drop", &uid, "not needed"]).0);
+    let (ok, out, err) = fael(&d, &["plan", "drop", "gone"]);
+    assert!(ok && out.contains("→ dropped"), "{err}{out}");
     // a parent with a live child refuses: drop the child first
     assert!(fael(&d, &["plan", "new", "up", "Up"]).0);
     assert!(fael(&d, &["plan", "new", "kid", "Kid", "--parent", "up"]).0);

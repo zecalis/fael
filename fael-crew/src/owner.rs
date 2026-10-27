@@ -308,7 +308,8 @@ impl Store {
     }
 
     /// `fael plan drop <plan>`: delete a mistaken plan. Refused on inbox, while it
-    /// holds any chunk (move them first), or while a child plan lives (drop it first).
+    /// holds a chunk that is not dropped (move it first; dropped chunks go with the plan),
+    /// or while a child plan lives (drop it first).
     /// Writes a dropped event before the delete so the feed keeps the trail, then
     /// removes its sections and the plan row. Returns the state it left.
     pub fn plan_drop(&mut self, id: i64, now: &str) -> Result<String, String> {
@@ -326,9 +327,11 @@ impl Store {
             );
         }
         let n: i64 = tx
-            .query_row("SELECT COUNT(*) FROM chunk WHERE plan = ?1", [id], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM chunk WHERE plan = ?1 AND state != 'dropped'",
+                [id],
+                |r| r.get(0),
+            )
             .map_err(err)?;
         if n > 0 {
             return Err(format!(
