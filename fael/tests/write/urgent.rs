@@ -61,7 +61,10 @@ fn bump_why_is_kept_in_the_event() {
     let d = repo();
     let (ok, _, err) = fael(&d, &["add", "note", "gate scope", "--files", "doc:a"], "");
     assert!(ok, "{err}");
-    let id = row_json(&d, "gate scope")["id"].as_str().unwrap().to_string();
+    let id = row_json(&d, "gate scope")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let (ok, _, err) = fael(&d, &["bump", &id, "--why", "unrelated edit"], "");
     assert!(ok, "{err}");
     // the fold hides the event, so read the raw log for the reason
