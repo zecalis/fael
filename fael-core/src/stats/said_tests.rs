@@ -211,3 +211,34 @@ fn overlap_and_checkpoint_earn_on_a_later_chunk_note_call() {
     assert_eq!(earned(call(3, "s2", "ok")), (0, 0), "another session");
     assert_eq!(earned(call(3, "s1", "reject")), (0, 0), "rejected");
 }
+
+/// Issue 01M5ZH6V: `briefdrift` and `retired` entries were said but fell into
+/// the tally's catch-all and vanished. Each now tallies, earns on its own act
+/// (a chunk note / a decision filed after it), and an old `count` entry is
+/// still skipped.
+#[test]
+fn briefdrift_and_retired_tally_and_earn() {
+    let call = "{\"ts\":\"2026-09-26T00:03:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"event\":\"call\",\"session\":\"/t/s1.jsonl\",\"cmd\":\"chunk\",\"sub\":\"note\",\"outcome\":\"ok\"}\n";
+    let said = "{\"ts\":\"2026-09-26T00:02:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",\"event\":\"edit\",\"ids\":[],\"said\":[{\"kind\":\"briefdrift\",\"key\":\"~drift:U@7\"},{\"kind\":\"retired\",\"key\":\"N\"},{\"kind\":\"count\",\"key\":\"x\"}]}\n";
+    let decision = "{\"v\":1,\"id\":\"D\",\"ts\":\"2026-09-26T00:04:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"],\"session\":\"s1\"}\n";
+    let run = |usage: String, body: &str| {
+        let log = Log {
+            rows: rows(body),
+            ..Log::default()
+        };
+        let p = super::parse::parse(
+            &usage,
+            Path::new("/w/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        let y = yields(&p, &HashMap::from([("/w/r".to_string(), log)]));
+        assert!(!y.contains_key("count"), "an old name stays skipped");
+        ["briefdrift", "retired"].map(|k| (y[k].said, y[k].earned))
+    };
+    assert_eq!(
+        run(said.to_string(), ""),
+        [(1, 0), (1, 0)],
+        "said, not acted"
+    );
+    assert_eq!(run(format!("{said}{call}"), decision), [(1, 1), (1, 1)]);
+}

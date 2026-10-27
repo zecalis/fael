@@ -25,6 +25,7 @@ fn about(d: &Drift) -> Line {
 mod tests {
     use super::*;
     use crate::hook::say::Outbox;
+    use crate::hook::say_card::At;
     use crate::hook::state::lock_seen;
 
     fn drift(event: i64) -> Drift {
@@ -39,7 +40,7 @@ mod tests {
     fn says_once_per_edit_and_again_for_a_later_one() {
         let seen = crate::hook::say_contract::seen("s.seen");
         let say = |d: Drift| {
-            let mut out = Outbox::open(lock_seen(&seen));
+            let mut out = Outbox::open(At::Edit, lock_seen(&seen));
             out.say(about(&d));
             out.reply().context().map(String::from)
         };

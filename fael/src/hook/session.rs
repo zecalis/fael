@@ -7,6 +7,7 @@ use super::asks::{UsageMeta, hook_meta};
 use super::focus;
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
+use super::say_card::At;
 use super::state::{mark_started, seen_path, state_dir};
 use super::usage::record_usage;
 use crate::{aliases, core};
@@ -62,6 +63,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let adopted = crate::journal::home(&c.repo).is_some();
     let seen = seen_path(&c.session, &c.agent, &c.repo.root);
     let mut out = Outbox::open(
+        At::SessionStart,
         (!c.session.is_empty())
             .then(|| super::state::lock_seen(&seen))
             .flatten(),

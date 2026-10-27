@@ -6,6 +6,7 @@
 
 use super::protocol::{Event, Reply, ctx};
 use super::say::{Kind, Line, Outbox};
+use super::say_card::At;
 use serde_json::Value;
 
 /// Findings offered per session, so a long review is not a wall of lines.
@@ -84,7 +85,7 @@ pub(crate) fn report_reply(e: &Event, input: &Value) -> Reply {
             super::state::lock_seen(&super::state::seen_path(&c.session, &c.agent, &c.repo.root))
         })
         .flatten();
-    let mut out = Outbox::open(seen);
+    let mut out = Outbox::open(At::Review, seen);
     for l in lines(input, &out) {
         out.say(l);
     }
@@ -121,7 +122,7 @@ mod tests {
 
     #[test]
     fn a_malformed_report_says_nothing() {
-        let out = Outbox::open(None);
+        let out = Outbox::open(At::Review, None);
         for input in [
             json!({}),
             json!({"findings": "x"}),
@@ -134,7 +135,7 @@ mod tests {
     #[test]
     fn a_backtick_widens_the_span_and_an_odd_file_is_quoted() {
         let input = json!({"findings": [{"file": "src/my file.rs", "summary": "`f()` panics"}]});
-        let got = lines(&input, &Outbox::open(None));
+        let got = lines(&input, &Outbox::open(At::Review, None));
         assert!(
             got[0]
                 .text
@@ -149,7 +150,7 @@ mod tests {
         let f = |file: &str, line: i64| json!({"file": file, "summary": "broken", "line": line});
         let findings: Vec<Value> = (0..7).map(|i| f(&format!("a{i}.rs"), 1)).collect();
         let input = json!({ "findings": findings });
-        let out = Outbox::open(None);
+        let out = Outbox::open(At::Review, None);
         let got = lines(&input, &out);
         assert_eq!(got.len(), MAX);
         assert!(

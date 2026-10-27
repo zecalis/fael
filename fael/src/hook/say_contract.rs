@@ -3,7 +3,8 @@
 //! that needs a command is dropped without one, and no session says it all.
 
 use super::changed::read_seen;
-use super::say::{Kind, Line, Once, Outbox, Reply, policy};
+use super::say::{Kind, Line, Outbox, Reply};
+use super::say_card::{At, Once, policy};
 use super::state::lock_seen;
 use std::path::PathBuf;
 
@@ -108,8 +109,13 @@ pub(super) fn seen(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// An event the kind may be said at.
+fn at_of(l: &Line) -> At {
+    policy(&l.kind).at[0]
+}
+
 fn said(file: Option<std::fs::File>, l: Line) -> Option<String> {
-    let mut out = Outbox::open(file);
+    let mut out = Outbox::open(at_of(&l), file);
     out.say(l);
     out.reply().context().map(String::from)
 }
@@ -122,7 +128,7 @@ fn every_kind_has_a_fixture() {
 
 #[test]
 fn nothing_to_say_is_silent() {
-    assert!(Outbox::open(None).reply().context().is_none());
+    assert!(Outbox::open(At::Edit, None).reply().context().is_none());
     for l in all() {
         let empty = Line {
             text: String::new(),
@@ -169,10 +175,10 @@ fn a_line_without_its_command_is_dropped() {
 #[test]
 fn a_spent_mark_says_nothing_and_is_seen_next_time() {
     let p = seen("s.seen");
-    let mut out = Outbox::open(lock_seen(&p));
+    let mut out = Outbox::open(At::Edit, lock_seen(&p));
     out.spend("~peek:x".into());
     assert!(out.reply().context().is_none());
-    assert!(Outbox::open(lock_seen(&p)).has("~peek:x"));
+    assert!(Outbox::open(At::Edit, lock_seen(&p)).has("~peek:x"));
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
 }
 
@@ -189,7 +195,7 @@ fn no_session_says_every_time() {
 #[test]
 fn two_replies_join_in_order_and_the_first_notice_wins() {
     let reply = |text: &str, notice: Option<&str>| {
-        let mut out = Outbox::open(None);
+        let mut out = Outbox::open(At::Edit, None);
         out.say(Line::notice(text.into()));
         let mut r = out.reply();
         r.notice = notice.map(String::from);
@@ -232,7 +238,7 @@ fn an_old_seen_list_reads_beside_the_new_keys() {
         kind,
         text: text.into(),
     };
-    let mut out = Outbox::open(lock_seen(&p));
+    let mut out = Outbox::open(At::Edit, lock_seen(&p));
     for (l, said) in [
         (
             line(
@@ -304,13 +310,13 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
     };
     let (mut both, mut want) = (Reply::default(), vec![]);
     for l in all() {
-        let mut out = Outbox::open(None);
+        let mut out = Outbox::open(at_of(&l), None);
         out.say(Line {
             text: String::new(),
             ..l.clone()
         });
         assert!(out.reply().said().is_empty(), "{:?}", l.kind);
-        let mut out = Outbox::open(None);
+        let mut out = Outbox::open(at_of(&l), None);
         out.say(l);
         let r = out.reply();
         want.extend(kinds(&r));
