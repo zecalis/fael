@@ -29,6 +29,7 @@ mod session;
 mod sync;
 mod synonyms;
 mod unmerged;
+mod verify;
 mod write;
 
 use fael_core::{self as core};
@@ -117,6 +118,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("held", [kind]) => held::cmd(kind, a.one("since")),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
+        ("verify", [id]) => verify::cmd(id),
         ("purge", [id]) => purge::purge(&repo()?, &a, id).map(|()| ExitCode::SUCCESS),
         ("hook", [event]) => Ok(hook::cmd(event, a.one("client"))),
         ("stats", []) if a.has("misses") => {

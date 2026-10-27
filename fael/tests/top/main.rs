@@ -47,3 +47,4 @@ mod state_dir_guard;
 mod store_default;
 mod synonyms;
 mod upgrade_channel;
+mod verify;

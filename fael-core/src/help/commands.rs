@@ -256,6 +256,16 @@ fael chunk approve <uid> [--model M] [--client C] · fael chunk unapprove <uid>
      already-reverted edge is info, never an error)",
     ),
     (
+        "verify",
+        "re-run the command a row recorded beside a number",
+        "fael verify <id>
+    (a row that states a number carries three lines in its text: `cmd: <shell line that
+     prints the number alone>`, `date: YYYY-MM-DD`, `result: <what it printed>`; verify
+     runs cmd in the repo root and prints recorded vs now, `same` or `differs` (exit 0 or 1);
+     it never edits the row or says which is right, so you re-file or close it. Runs only
+     rows this machine's writer filed, 60s limit, no stdin; the network is not blocked)",
+    ),
+    (
         "purge",
         "delete a row for good",
         "fael purge <id>
