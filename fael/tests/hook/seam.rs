@@ -25,7 +25,7 @@ fn hooks_with_no_fael_db_stay_silent() {
     let (ok, out, err) = fael(&d, &["hook", "stop", "--client", "claude"], &input);
     assert!(ok, "{err}");
     assert!(out.is_empty(), "stop with no db says nothing: {out}");
-    // search (shell): a fix commit with no db names no chunk
+    // search (shell): a commit with no db names no chunk
     let payload = format!(
         r#"{{"cwd":{},"session_id":"s1","tool_name":"Bash","tool_input":{{"command":"git commit -m \"fix: x\""}},"tool_response":{{}}}}"#,
         json(&d),

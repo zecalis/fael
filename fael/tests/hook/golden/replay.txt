@@ -80,12 +80,11 @@ fael: 01K00000000000000000B cited in a commit — `(fael:01K00000000000000000B)`
 context:
 fael mem for src/c.rs (1 of 15):
 - [01K00000000000000000C] note c is half migrated
-bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true)
 
 ## 36 search {"session":"2026-01-02T00:00:00Z","client":"opencode","tool":"shell","tool_input":{"command":"true"},"tool_response":{}}
 ## 37 search {"session":"2026-01-02T00:00:00Z","client":"opencode","tool":"bash","tool_input":{"command":"true"},"tool_response":{}}
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-15 lines · ~632 tokens
+15 lines · ~611 tokens
 silent-start edit in-context edit in-context edit in-context edit silent-start shell-edit outcome search silent-start silent-start edit

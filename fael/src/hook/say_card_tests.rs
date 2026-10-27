@@ -22,9 +22,8 @@ fn every_kinds_said_name_round_trips_through_say_kind() {
 }
 
 /// Every hook event, in the order `At` lists them.
-const EVENTS: [At; 6] = [
+const EVENTS: [At; 5] = [
     At::SessionStart,
-    At::Read,
     At::Edit,
     At::ShellEdit,
     At::Search,

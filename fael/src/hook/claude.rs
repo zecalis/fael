@@ -3,6 +3,7 @@
 //! into it. Codex hands stop its last message and edits as apply_patch.
 
 use super::protocol::Event;
+use super::say_card::At;
 use super::{push::push, session::session_start, stop::stop};
 use serde::Deserialize;
 use std::process::ExitCode;
@@ -208,7 +209,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             // a read says nothing: rows reach the agent at the edit, at kickoff and in briefs
             let reply = match event {
                 "search" => super::search::push_call(&e, &p.tool_name, input, &p.tool_response),
-                "edit" => push(&e, event, event),
+                "edit" => push(&e, At::Edit),
                 _ => super::protocol::Reply::default(),
             };
             print_reply("PostToolUse", reply, codex);

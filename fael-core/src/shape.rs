@@ -113,7 +113,7 @@ fn add_try(row: &Row, topics: bool, supersedes: Option<&str>) -> String {
 }
 
 /// The close text a fixed bug is taught to take — one const for every channel
-/// (skill, MCP `close`, fix-net, fix-commit line) so what is taught and what
+/// (skill, MCP `close`, fix-net) so what is taught and what
 /// `close_shape` reads cannot drift. The core `<cause> → <fix>` is
 /// `close_shape`'s; the branch right after it (a test to `guard`, or what not
 /// to do when no test can say it) comes before `tried`, so carry's 160-char

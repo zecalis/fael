@@ -13,11 +13,13 @@ pub enum SayKind {
     Row,
     /// The session-start hand-offs and assigned rows. Names no key: stats reads the line's `ids`.
     Brief,
-    /// The edit hint: re-check an open issue.
+    /// The edit hint: re-check an open issue. Said at an `edit` only; old usage
+    /// holds it at `shell-edit` too.
     Ask,
     /// Legacy: no hook says it now (the prompt pointer went), old usage still holds it.
     Pointer,
-    /// `bodies: fael find <id>` under a push whose rows have bodies.
+    /// Legacy: no hook says it now — the `bodies: fael find <id>` pointer under a
+    /// push was cut at 26 of 282 pulled (9%); old usage still holds it.
     Bodies,
     /// A line fael raises on its own: a stashed risk, a session-start warning.
     Notice,
@@ -27,7 +29,8 @@ pub enum SayKind {
     Finding,
     /// The agent said it fixed a bug and filed nothing after.
     Fixed,
-    /// A `fix:` commit naming no fael row.
+    /// Legacy: no hook says it now — the `fix:` commit line was cut at 2 of 65
+    /// (3%); old usage still holds it.
     FixCommit,
     /// An edit outside the held chunk's scope, inside another open chunk's.
     Overlap,

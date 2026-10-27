@@ -1,7 +1,7 @@
 //! The search/shell hook: a shell call that wrote a file it names (`sed -i`,
 //! `python`, `> f`) pushes that file as an edit — agents that edit through
 //! the shell get the stale-row hint and the edit record like an `Edit` call
-//! does — and a `git commit` gets its cited-row and fix-commit lines. A search
+//! does — and a `git commit` gets its cited-row and checkpoint lines. A search
 //! or a shell read says nothing: rows reach the agent at the edit. Tool names
 //! match case-insensitively: Claude sends `Grep`/`Bash`/`Glob`, OpenCode
 //! `grep`/`bash`/`glob`, and Codex shell calls arrive as `Bash`.
@@ -104,34 +104,10 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, _response: &Value)
                 files: wrote,
                 ..e.clone()
             },
-            SHELL_EDIT,
-            SHELL_EDIT,
+            super::say_card::At::ShellEdit,
         )
     };
     out.and(commit_reply(e, tool, input))
-}
-
-/// The fix commit line; `files` = what the session edited, else a
-/// placeholder — `fael add` rejects a row with no `--files`. One sentence:
-/// the CLI form, then the MCP equivalent once (close by key needs no id).
-fn fix_commit(files: &[String]) -> String {
-    let files = if files.is_empty() {
-        "<files the fix touched>".to_string()
-    } else {
-        files.join(",")
-    };
-    format!(
-        "fael: this `fix:` commit names no fael row — keep it: `fael add issue \"<what broke>\" --files {files} --key <area:topic>` then `fael close --key <area:topic> \"{}\"` (MCP: add {{kind,text,files,key}} then close {{key,text}}).\n",
-        fael_core::stats::CLOSE_TEMPLATE
-    )
-}
-
-/// True when this worktree holds a live chunk run (`fael chunk start` here):
-/// the same cheap SQLite read session start uses (`Store::held`), no git
-/// spawn, no board read. No crew.db, no run = false.
-fn holds_chunk(repo: &crate::Repo, session: &str) -> bool {
-    let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
-    crate::core::work::has_held(&db, &repo.root.to_string_lossy(), session)
 }
 
 /// The checkpoint ask of a step commit: the held chunk's uid. Keyed on its last
@@ -153,10 +129,9 @@ fn checkpoint(repo: &crate::Repo, session: &str) -> Option<super::say::Line> {
 
 /// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):
 /// one line per cited id with its ready `fael close`, each id once per
-/// session. A `fix:` commit naming no row in a session that closed none,
-/// in a worktree holding a live chunk run (h1: the low-yield line —
-/// fixcommit acted 28/168 — stays silent otherwise): the add + close that
-/// keeps it, once per session. Nothing to say = silence. Each line is its
+/// session; in a worktree holding a chunk run, the checkpoint ask. (The
+/// `fix:` commit line was cut at 2 of 65 earned — decision
+/// `product:push-noise-bar`.) Nothing to say = silence. Each line is its
 /// kind through the `Outbox` like every other push line, with a usage row
 /// so `fael stats` reads its yield.
 fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
@@ -200,15 +175,6 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
         kind: super::say::Kind::Cited { ids: fresh.clone() },
         text,
     });
-    if super::cited::fix_uncited(&c.log, input)
-        && !super::tally::closed_any(&c.session, &c.repo.root)
-        && holds_chunk(&c.repo, &c.session)
-    {
-        out.say(super::say::Line {
-            kind: super::say::Kind::FixCommit,
-            text: fix_commit(&super::state::edited_files(&c.session, &c.repo.root, 3)),
-        });
-    }
     if let Some(line) = checkpoint(&c.repo, &c.session) {
         out.say(line);
     }
@@ -301,39 +267,5 @@ mod tests {
         let got = edited_at("Grep", &shell("cat src/a.rs"), &d, now);
         assert!(got.is_empty(), "{got:?}");
         let _ = std::fs::remove_dir_all(&d);
-    }
-
-    #[test]
-    fn fix_commit_is_one_line_with_cli_and_mcp_forms() {
-        let line = fix_commit(&["src/a.rs".into()]);
-        assert_eq!(line.matches('\n').count(), 1, "one line: {line}");
-        for must in [
-            "fael add issue",
-            "fael close",
-            "--files src/a.rs",
-            "--key <area:topic>",
-            "MCP: add {kind,text,files,key}",
-            "close {key,text}",
-        ] {
-            assert!(line.contains(must), "{must} in: {line}");
-        }
-        assert!(
-            fix_commit(&[]).contains("--files <files the fix touched>"),
-            "placeholder, never a rejecting add"
-        );
-    }
-
-    #[test]
-    fn no_db_holds_no_chunk() {
-        let root = std::env::temp_dir().join(format!("fael-fixcommit-{}", crate::core::ulid()));
-        let repo = crate::Repo {
-            root: root.clone(),
-            cwd: root.clone(),
-            fael: root.join(".fael"),
-            cfg: crate::core::Config::default(),
-            journal: None,
-        };
-        assert!(!holds_chunk(&repo, ""));
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

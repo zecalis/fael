@@ -226,7 +226,7 @@ fn show_found(
     Ok(())
 }
 
-/// A body pulled by id: the outcome a `bodies:` line earns on.
+/// A body pulled by id: the outcome the legacy `bodies:` line earned on.
 fn found(root: &std::path::Path, id: &str, text: &str) {
     super::hook::record_found(
         "cli",

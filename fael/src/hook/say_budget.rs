@@ -7,7 +7,7 @@ use super::say_card::At;
 use super::say_contract::{all, seen, slot};
 use super::state::lock_seen;
 
-/// PLAN-fael-say-gate chunk 6: rows and bodies keep their say; over
+/// PLAN-fael-say-gate chunk 6: rows keep their say; over
 /// the budget the stashed notice goes first, then the edit hint, and a cut
 /// line spends no key (a later push may say it).
 #[test]
@@ -19,8 +19,8 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
             .collect()
     };
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| crate::core::est_tokens(&l.text)).sum() };
-    let lines = pick(&[0, 3, 2, 6]); // row, bodies, hint, notice
-    let keep = cost(&pick(&[0, 3]));
+    let lines = pick(&[0, 2, 5]); // row, hint, notice
+    let keep = cost(&pick(&[0]));
     let run = |budget: usize| {
         let p = seen("s.seen");
         let mut out = Outbox::open(At::Edit, lock_seen(&p));
@@ -42,12 +42,12 @@ fn over_the_budget_the_notice_goes_then_the_hint_never_the_rows() {
         !said.contains("fael close 01ASK") && !said.contains("a stashed line"),
         "{said}"
     );
-    assert!(said.contains("bodies:") && said.contains("01ROW"), "{said}");
+    assert!(said.contains("01ROW"), "{said}");
     // the cut hint kept its key
     assert!(
         keys.contains("~01ASK") && !keys_cut.contains("~01ASK"),
         "{keys} / {keys_cut}"
     );
-    // no budget at all still says the rows and the bodies line
-    assert!(run(0).0.contains("bodies:"));
+    // no budget at all still says the rows
+    assert!(run(0).0.contains("01ROW"));
 }

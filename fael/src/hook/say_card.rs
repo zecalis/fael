@@ -22,8 +22,6 @@ use crate::core::SayKind;
 pub(crate) enum At {
     /// `session-start`: the brief and its warnings.
     SessionStart,
-    /// A read push. No client sends one today; `push` still handles it.
-    Read,
     /// The `edit` push (`push.rs`).
     Edit,
     /// A shell call that wrote a file, pushed as an edit (`search.rs`).
@@ -35,19 +33,20 @@ pub(crate) enum At {
 }
 
 impl At {
-    /// The event of `push`, named by its usage label: `edit`, `shell-edit`,
-    /// or else a read.
-    pub(crate) fn of_push(event: &str) -> At {
-        match event {
-            "edit" => At::Edit,
-            SHELL_EDIT => At::ShellEdit,
-            _ => At::Read,
+    /// The usage label of a push at this event: `edit` or `shell-edit`.
+    /// `None` for an event that is no push.
+    pub(crate) fn push_label(self) -> Option<&'static str> {
+        match self {
+            At::Edit => Some("edit"),
+            At::ShellEdit => Some(SHELL_EDIT),
+            At::SessionStart | At::Search | At::Review => None,
         }
     }
 }
 
-/// The events of a push: rows, bodies, a retired note, a stashed line.
-const PUSH: &[At] = &[At::Read, At::Edit, At::ShellEdit];
+/// The events of a push: rows, a retired note, a stashed line. No client
+/// sends a read push (rows come at the edit), so a push is an edit or a shell edit.
+const PUSH: &[At] = &[At::Edit, At::ShellEdit];
 /// The events of an edit: what is only worth saying while the file is changing.
 const EDIT: &[At] = &[At::Edit, At::ShellEdit];
 
@@ -106,11 +105,12 @@ pub(crate) fn policy(k: &Kind) -> Policy {
     match k {
         Kind::Row { .. } => card(SayKind::Row, Key, None, PUSH),
         Kind::Brief { .. } => card(SayKind::Brief, Key, None, &[At::SessionStart]),
+        // edit only: at a shell edit it earned 6 of 95 (6%) against 60 of 107 (56%)
+        // at an edit — decision product:push-noise-bar
         Kind::Ask { .. } => Policy {
             cut: Cut::Last(2),
-            ..card(SayKind::Ask, Key, Some("fael close"), EDIT)
+            ..card(SayKind::Ask, Key, Some("fael close"), &[At::Edit])
         },
-        Kind::Bodies => card(SayKind::Bodies, Key, Some("fael find <id>"), PUSH),
         Kind::Cited { .. } => Policy {
             cut: Cut::First(3),
             ..card(SayKind::Cited, Key, Some("fael close"), &[At::Search])
@@ -121,7 +121,6 @@ pub(crate) fn policy(k: &Kind) -> Policy {
             stash: true,
             ..card(SayKind::Fixed, Key, Some("fael close"), PUSH)
         },
-        Kind::FixCommit => card(SayKind::FixCommit, Key, Some("fael close"), &[At::Search]),
         Kind::Overlap { .. } => card(SayKind::Overlap, Key, Some("fael chunk note"), EDIT),
         Kind::Checkpoint { .. } => card(
             SayKind::Checkpoint,
@@ -139,7 +138,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
                 SayKind::Notice,
                 Event,
                 None,
-                &[At::SessionStart, At::Read, At::Edit, At::ShellEdit],
+                &[At::SessionStart, At::Edit, At::ShellEdit],
             )
         },
     }
