@@ -291,6 +291,7 @@ fn bump(a: &Args, id: &str) -> Result<(), String> {
             "urgent-before",
             "not-urgent",
             "revisit",
+            "why",
             "json",
         ],
     )?;

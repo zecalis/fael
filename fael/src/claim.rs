@@ -143,6 +143,7 @@ fn take(
             held: Some(branch.to_string()),
             // a claim is not a check: carry the row's old hashes, never restamp
             fh: old.file_hashes().cloned(),
+            why: None,
         },
     )?;
     warns.append(&mut more);

@@ -31,6 +31,7 @@ fn keep() -> BumpOpts {
         urgent: UrgentChange::Keep,
         revisit: None,
         fh: None,
+        why: None,
     }
 }
 

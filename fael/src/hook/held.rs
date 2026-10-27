@@ -118,7 +118,7 @@ fn text_with(log: &core::Log, rows: &[(&core::Row, String)], extra: &[String]) -
             .map(|t| format!(" \"{t}\""))
             .unwrap_or_default();
         out.push_str(&format!(
-            "fael: {} {id}{title} — `{f}` changed since it was written · still true? fael bump {id} · the code holds it? fael close {id} \"now in `{f}`\" · wrong now? re-file with --supersedes {id}{user}\n",
+            "fael: {} {id}{title} — `{f}` changed since it was written · still true? fael bump {id} (unrelated edit: --why \"<short>\") · the code holds it? fael close {id} \"now in `{f}`\" · wrong now? re-file with --supersedes {id}{user}\n",
             r.kind
         ));
         out.push_str(extra.get(i).map_or("", String::as_str));

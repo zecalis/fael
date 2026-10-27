@@ -179,6 +179,7 @@ fn bump_keeps_the_title() {
             urgent: UrgentChange::Keep,
             revisit: None,
             fh: None,
+            why: None,
         },
     )
     .unwrap();

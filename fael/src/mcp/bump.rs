@@ -20,6 +20,7 @@ pub(crate) const KNOWN: &[&str] = &[
     "urgent_before",
     "not_urgent",
     "revisit",
+    "why",
 ];
 
 pub(super) fn bump(a: &Value) -> Result<String, String> {
@@ -73,6 +74,7 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             revisit: s(a, "revisit"),
             held: None,
             fh: Some(fh),
+            why: s(a, "why"),
         },
     )?;
     warns.extend(note);

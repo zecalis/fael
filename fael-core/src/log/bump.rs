@@ -24,6 +24,9 @@ pub struct BumpOpts {
     pub revisit: Option<String>,
     pub held: Option<String>,
     pub fh: Option<Map<String, Value>>,
+    /// `fael bump --why`: the agent's short answer ("unrelated edit"), kept in
+    /// the bump event's text so nobody re-reads the row to see why it was dismissed.
+    pub why: Option<String>,
 }
 
 /// The same row under the same id, new `to`/`urgent`/`revisit`: one bump
@@ -67,6 +70,9 @@ pub fn bump_row(
         && ev.id.as_str() <= last
     {
         ev.id = crate::ulid_at(crate::ulid_ms(last).unwrap_or(0) + 1);
+    }
+    if let Some(w) = opts.why.as_deref().map(str::trim).filter(|w| !w.is_empty()) {
+        ev.text = format!("{} bumped: {w}", old.id);
     }
     ev.to = match opts.to {
         None => old.to.clone(),

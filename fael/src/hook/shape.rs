@@ -62,6 +62,7 @@ const VALUE_FLAGS: &[&str] = &[
     "until",
     "urgent-before",
     "verdict",
+    "why",
     "with",
     "worktree",
     "writer",
