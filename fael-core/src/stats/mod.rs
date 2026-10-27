@@ -60,7 +60,7 @@ pub use metrics::ASK_ORDER;
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
 pub use parse::{Parsed, UsageRow, parse, session_stem, since, since_arg};
-pub use repeat::ContextLoop;
+pub use repeat::{ContextLoop, context_loop};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{ASK_SPLIT, KINDS, KindYield};
 pub use unused::{UNUSED_PUSHES, UnusedRow};

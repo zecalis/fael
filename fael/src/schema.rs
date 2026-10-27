@@ -82,7 +82,7 @@ pub(crate) fn tools() -> Value {
                 "force": {"type": "boolean", "description": "take over"},
                 "with": str_("partner"),
                 "as": str_("pair|lane|follow"),
-                "pr": str_("PR number"),
+                "pr": {"type": ["string", "integer"], "description": "PR number"},
                 "left": str_("leftovers"),
                 "review": str_("clean|fixed|failed"),
             }},

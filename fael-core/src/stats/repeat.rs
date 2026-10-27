@@ -77,7 +77,7 @@ pub(super) struct Pairs<'a> {
     pub edits: HashMap<(&'a str, &'a str), &'a str>,
 }
 
-pub(super) fn context_loop(parsed: &Parsed, logs: &HashMap<String, Log>) -> ContextLoop {
+pub fn context_loop(parsed: &Parsed, logs: &HashMap<String, Log>) -> ContextLoop {
     let p = pairs(parsed, logs);
     ContextLoop {
         confirmed_repeats: p.repeats.len(),
