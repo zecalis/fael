@@ -83,6 +83,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "experience",
             "flow",
             "friction",
+            "handoff_runs",
             "lifecycle",
             "non_english_rows",
             "outcomes_v",

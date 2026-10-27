@@ -52,12 +52,16 @@ pub struct WeekCount {
 /// One run for the flow join: times as unix ms, `None` = missing endpoint.
 /// `chunk` is the run's chunk uid — throughput dedupes restarts on it, so one
 /// chunk lands in exactly one week; spans still read every run (each attempt).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FlowRun {
     pub started_ms: Option<i64>,
     pub ended_ms: Option<i64>,
     pub pr: Option<i64>,
     pub chunk: String,
+    /// For `handoff`: the session (path or id), an `after` hand-off at start, a done inside.
+    pub session: Option<String>,
+    pub after_handoff: bool,
+    pub done: bool,
 }
 
 /// One merged PR on the default branch: its number and merge time as unix ms.
@@ -288,6 +292,7 @@ mod tests {
             ended_ms: e.map(t),
             pr,
             chunk: format!("C{}", pr.unwrap_or(0)),
+            ..Default::default()
         };
         let runs = vec![
             run(Some("2026-10-02T00:10:00Z"), Some(1)),
@@ -337,8 +342,8 @@ mod tests {
         let run = |c: &str, e: &str| FlowRun {
             started_ms: Some(t(e)),
             ended_ms: Some(t(e)),
-            pr: None,
             chunk: c.into(),
+            ..Default::default()
         };
         // Mon 2026-10-05 x2, Mon 2026-10-19 x1: the middle week prints zero
         let runs = vec![
@@ -373,8 +378,8 @@ mod tests {
         let run = |c: &str, e: &str| FlowRun {
             started_ms: Some(t(e)),
             ended_ms: Some(t(e)),
-            pr: None,
             chunk: c.into(),
+            ..Default::default()
         };
         // chunk A restarted: first done Mon 2026-10-05, redone Mon 2026-10-12 —
         // one chunk, latest week wins, never double-counted

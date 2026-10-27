@@ -53,6 +53,7 @@ mod shadow;
 mod spent_notes;
 mod stats;
 mod stats_golden;
+mod stats_handoff;
 mod stop;
 mod stop_lang;
 mod stop_risk;

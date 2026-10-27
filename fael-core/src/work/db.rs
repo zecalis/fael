@@ -1,6 +1,6 @@
 //! Read-only crew db access: fail-open when the file or tables are missing.
 
-use super::{Brief, EndedRun, PlanRow, StatsRun};
+use super::{Brief, EndedRun, PlanRow};
 use std::path::{Path, PathBuf};
 
 /// The db for a checkout: beside the journal when there is one, else `.fael`.
@@ -145,31 +145,6 @@ pub fn ended_runs(db: &Path) -> Vec<EndedRun> {
             session: r.get(1)?,
             branch: r.get(2)?,
             ended: r.get(3)?,
-        })
-    })
-    .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
-    .unwrap_or_default()
-}
-
-/// Every run with its chunk's uid, oldest first. Empty when no db or tables.
-pub fn flow_runs(db: &Path) -> Vec<StatsRun> {
-    let Some(c) = readonly(db) else {
-        return Vec::new();
-    };
-    let mut q = match c.prepare(
-        "SELECT r.started, r.ended, r.pr, r.branch, c.uid
-         FROM run r JOIN chunk c ON c.id = r.chunk ORDER BY r.id",
-    ) {
-        Ok(q) => q,
-        Err(_) => return Vec::new(),
-    };
-    q.query_map([], |r| {
-        Ok(StatsRun {
-            started: r.get(0)?,
-            ended: r.get(1)?,
-            pr: r.get(2)?,
-            branch: r.get(3)?,
-            chunk: r.get(4)?,
         })
     })
     .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())

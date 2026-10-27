@@ -121,6 +121,13 @@ fn stats_json_matches_golden_values() {
         days,
         Some(serde_json::json!([{"day": "2026-09-26", "events": 3, "est_tokens": 15}]))
     );
+    // also apart (same recursion limit): no crew runs here, so both groups are empty
+    let side = serde_json::json!({"runs": 0, "joined": 0, "done": 0, "finds": 0, "refinds": 0, "rejects": 0});
+    let handoff = v.as_object_mut().unwrap().remove("handoff_runs");
+    assert_eq!(
+        handoff,
+        Some(serde_json::json!({"with": side, "without": side}))
+    );
     // its own json! call: one literal with every kind passes the macro's recursion limit
     let said = serde_json::json!({"row": {"said": 2, "earned": 0}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}});
     assert_eq!(

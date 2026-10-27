@@ -20,6 +20,9 @@ pub(crate) fn runs() -> Vec<core::stats::FlowRun> {
             ended_ms: r.ended.as_deref().and_then(core::ts_ms),
             pr: r.pr,
             chunk: r.chunk,
+            session: r.session,
+            after_handoff: r.after_handoff,
+            done: r.done,
         })
         .collect()
 }
