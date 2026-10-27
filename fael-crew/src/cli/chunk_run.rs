@@ -21,6 +21,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             "session",
             "with",
             "as",
+            "full",
         ],
     )?;
     // the agent's own start: an agent that ends with `chunk done` in the same turn never
@@ -52,6 +53,11 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     if !o.force {
         crate::chunk_scope::gate(&store, r, uid)?;
     }
+    // a session whose held mark exists already read the chunk rules at its first start
+    let rules_seen = session
+        .as_deref()
+        .and_then(crate::chunk::held)
+        .is_some_and(|m| m.exists());
     let mut st = store.start(uid, &o, here)?;
     if let Some(m) = session.as_deref().and_then(crate::chunk::held) {
         // the Stop hook finds this db from any cwd; a failed write only skips stamps
@@ -80,7 +86,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --pr N --left none|<ids>"
         );
     }
-    print!("{}", st.text());
+    print!("{}", st.render(a.has("full"), a.has("full") || !rules_seen));
     if let (Some(w), Some(j)) = (&o.with, o.joint) {
         println!("joint {} with {w} (run {})", j.as_str(), st.run);
         if j == fael_crew::Joint::Pair {

@@ -4,7 +4,7 @@
 
 use super::export::one;
 use super::section::Row;
-use super::start::{Prev, Started};
+use super::start::{Brief, Prev, Started};
 use std::fmt::Write;
 
 /// How a chunk's state moves — one copy, in fael-core (kickoff prints it too).
@@ -89,8 +89,31 @@ fn live(o: &mut String, all: &[(String, String)], more: usize) {
     }
 }
 
+/// The chunk rules whole, or one pointer line when the session already read them
+/// (issue 01M5Y6H4).
+fn rules_text(o: &mut String, uid: &str, first: Option<&Brief>, whole: bool) {
+    o.push('\n');
+    if whole {
+        o.push_str(&rules(uid, first.and_then(|c| c.model.as_deref())));
+    } else {
+        let _ = writeln!(
+            o,
+            "## chunk rules — printed at this session's first start; `fael chunk start {uid} --full` prints them again\n\
+             - finish: `fael chunk done {uid} \"<result>\" --left none|<ids>`; one chunk = one branch = one PR, never merge"
+        );
+    }
+}
+
 impl Started {
+    /// The whole brief (`chunk start --full`): plan sections and the full chunk rules.
     pub fn text(&self) -> String {
+        self.render(true, true)
+    }
+
+    /// `full` = plan sections §1–4 and the index of the rest; `rules_full` = the chunk rules
+    /// whole, else one pointer line (the session already read them). Lean puts the
+    /// hand-off of the chunk(s) this one is after before the TLDR.
+    pub fn render(&self, full: bool, rules_full: bool) -> String {
         let mut o = String::new();
         let n = self.chunks.len();
         let what = if n == 1 {
@@ -123,6 +146,9 @@ impl Started {
                 .collect();
             if !fields.is_empty() {
                 let _ = writeln!(o, "{}", fields.join(" · "));
+            }
+            if !full {
+                handoffs(&mut o, "before this, handed off", &c.after, true);
             }
             // zero-knowledge first line: what to do, then the exact close verb
             let task = if c.brief == c.title || c.brief.trim().is_empty() {
@@ -166,7 +192,9 @@ impl Started {
             );
             quote(&mut o, "owner said", &c.said);
             quote(&mut o, "notes left for this chunk", &c.notes);
-            handoffs(&mut o, "before this, handed off", &c.after, true);
+            if full {
+                handoffs(&mut o, "before this, handed off", &c.after, true);
+            }
             // one line per chunk (issue 01M5SWWY): the hand-off is one `chunk show` away
             for (who, _, _) in &c.by_file {
                 let (uid, title) = who.split_once(' ').unwrap_or((who, ""));
@@ -179,13 +207,17 @@ impl Started {
             // merged with the done-claimed one above.
             live(&mut o, &c.live, c.live_more);
         }
-        self.plan_context(&mut o);
-        o.push('\n');
         let first = self.chunks.first();
-        o.push_str(&rules(
-            first.map_or("<uid>", |c| &c.uid),
-            first.and_then(|c| c.model.as_deref()),
-        ));
+        let uid = first.map_or("<uid>", |c| &c.uid);
+        if full {
+            self.plan_context(&mut o);
+        } else {
+            let _ = writeln!(
+                o,
+                "\nplan sections (goal, scope, done, constraints): `fael chunk start {uid} --full`"
+            );
+        }
+        rules_text(&mut o, uid, first, rules_full);
         o
     }
 
