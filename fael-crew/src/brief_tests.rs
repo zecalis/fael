@@ -270,3 +270,26 @@ fn only_a_mixed_chunk_gets_the_delegate_line() {
     .text();
     assert!(t.contains("small-model subagents"), "{t}");
 }
+
+#[test]
+fn the_default_brief_is_handoff_and_tldr_with_rules_once() {
+    let mut c = chunk("A");
+    c.after = vec![("P prev".into(), "it works now".into(), String::new())];
+    let st = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+    };
+    let lean = st.render(false, false);
+    assert!(
+        !lean.contains("ship it") && !lean.contains("## chunk rules\n"),
+        "{lean}"
+    );
+    assert!(lean.contains("`fael chunk start A --full`"), "{lean}");
+    let (h, t) = (lean.find("it works now"), lean.find("TLDR:"));
+    assert!(h < t, "hand-off before TLDR: {lean}");
+    assert!(lean.contains("--left none|<ids>"), "{lean}");
+    assert!(st.render(false, true).contains("## chunk rules\n"));
+    assert!(st.render(true, true).contains("ship it"));
+    assert_eq!(st.text(), st.render(true, true));
+}

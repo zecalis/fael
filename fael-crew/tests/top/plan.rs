@@ -212,7 +212,7 @@ fn plan_new_keeps_its_sections_in_the_db_and_a_bill_edits_the_plan() {
     let (_, board, _) = fael(&d, &["board", "--json"]);
     let board: serde_json::Value = serde_json::from_str(&board).unwrap();
     let uid = board["projects"][0]["chunks"][0]["uid"].as_str().unwrap();
-    let (ok, out, err) = fael(&d, &["chunk", "start", uid]);
+    let (ok, out, err) = fael(&d, &["chunk", "start", uid, "--full"]);
     assert!(
         ok && out.contains("<!-- plan n -->\n\n## 1. Goal (why)\n> section 1 · updated ")
             && out.contains("\nship n\n"),
