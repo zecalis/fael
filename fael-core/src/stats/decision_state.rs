@@ -36,7 +36,7 @@ pub fn decision_by_state(
         .collect();
     let mut out = DecisionByState::default();
     let (pushed, in_context) = pairs(parsed, true);
-    for (k @ (_, _, id), _) in &pushed {
+    for k @ (_, _, id) in pushed.keys() {
         let slot = match state.get(id) {
             Some(State::Live) => &mut out.live,
             Some(State::Held) => &mut out.held,
