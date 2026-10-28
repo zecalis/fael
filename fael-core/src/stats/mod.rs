@@ -15,6 +15,7 @@ mod capture;
 mod cross;
 mod day;
 mod days;
+mod decision_state;
 mod experience;
 #[cfg(test)]
 mod experience_tests;
@@ -50,6 +51,7 @@ pub use day::{
     LastRow, Memory, RepoDay, STALE_DAYS, Timeline, day,
 };
 pub use days::{DayCount, days};
+pub use decision_state::{DecisionByState, decision_by_state};
 pub(crate) use experience::names_fix;
 pub use experience::{
     CLOSE_TEMPLATE, Commit, Commits, Experience, FIX_CUTOFF_MS, Shape, bare_shas, cites_fix,

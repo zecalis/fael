@@ -153,7 +153,7 @@ fn stats_json_matches_golden_values() {
             "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "by_client": {}, "shape_gate": 0, "shape_gate_rules": {}},
             "usage": {"since": "", "by_flag": []},
             "said": said,
-            "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}},
+            "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}, "decision_by_state": {"live": {"pushed": 0, "in_context_at_edit": 0}, "held": {"pushed": 0, "in_context_at_edit": 0}, "live_per_file": {"1": 0, "2": 0, "3": 0, ">3": 0}}},
         }),
         "{out}"
     );

@@ -198,6 +198,7 @@ fn json_shape_retired_value_and_verdict_are_frozen() {
     let mut value_keys = value.to_vec();
     value_keys.insert(0, "by_event");
     value_keys.insert(1, "cross_agent");
+    value_keys.insert(2, "decision_by_state");
     assert_eq!(keys(&v["value"]), value_keys, "{v}");
     assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
     assert!(v["value"]["by_event"].is_object(), "{v}");

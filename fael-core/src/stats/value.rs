@@ -27,6 +27,9 @@ pub struct Value {
     pub by_event: BTreeMap<String, EventValue>,
     /// Rows one agent wrote and another was handed (`cross.rs`).
     pub cross_agent: super::cross::CrossAgent,
+    /// Decision rows by lifecycle state; empty from `aggregate`, which never sees the
+    /// disk — the adapter fills it (`decision_state.rs`).
+    pub decision_by_state: super::DecisionByState,
 }
 
 /// One push event's hit rate (`in_context_at_edit / pushed`), over the usage
@@ -91,7 +94,7 @@ pub(super) fn in_window(first: &HashMap<&str, &str>, v: &serde_json::Value) -> b
 /// metric did not exist for.
 // ponytail: window start = the client's first in-context line, a little after
 // the release that added them; a rate read this way is slightly low, never high
-fn pairs(parsed: &Parsed, windowed: bool) -> Pairs<'_> {
+pub(super) fn pairs(parsed: &Parsed, windowed: bool) -> Pairs<'_> {
     // the seen list behind an `in-context` line also holds rows the agent
     // filed or found itself: only a row a push said first counts.
     // ponytail: usage.jsonl is append-only, so file order is time order.
@@ -185,6 +188,7 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
         handoffs_picked_up: handoffs,
         by_event,
         cross_agent,
+        decision_by_state: Default::default(),
     }
 }
 

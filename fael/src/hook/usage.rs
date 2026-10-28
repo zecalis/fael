@@ -200,7 +200,10 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         &u.parsed, &u.logs, &commits, &runs, &merges, cfg, constants, rows,
     );
     if let Ok(r) = crate::repo() {
-        s.lifecycle = super::lifecycle::of(&r);
+        let (log, held) = super::lifecycle::marked(&r);
+        s.lifecycle = core::stats::lifecycle(&log, &held);
+        s.value.decision_by_state =
+            core::stats::decision_by_state(&u.parsed, &log, &held, crate::write::cap::MAX_LIVE);
     }
     s
 }
