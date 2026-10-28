@@ -12,7 +12,7 @@ use paths::root_relative;
 use std::path::PathBuf;
 
 pub(crate) mod arity;
-mod cap;
+pub(crate) mod cap;
 mod flake;
 mod from;
 mod keys;

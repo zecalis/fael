@@ -6,8 +6,9 @@ use super::changed::{Blobs, STAMP_MAX_BYTES, file_verdict, mark_dormant, resolve
 use crate::core;
 use std::collections::HashSet;
 
-/// This repo's rows by state per kind, read now: the log, the disk, `crew.db`.
-pub(crate) fn of(r: &crate::Repo) -> core::stats::Lifecycle {
+/// This repo's log marked dormant/retired now, and the ids of its held rows: the disk half
+/// both the lifecycle panel and the decision yield (`value.decision_by_state`) read.
+pub(crate) fn marked(r: &crate::Repo) -> (core::Log, HashSet<String>) {
     let mut log = crate::read(r);
     mark_dormant(r, &mut log);
     let al = crate::aliases::load(r, &log, false);
@@ -18,7 +19,7 @@ pub(crate) fn of(r: &crate::Repo) -> core::stats::Lifecycle {
         .filter(|w| !log.dormant.contains(&w.id) && is_held(w, r, &al, &mut blobs))
         .map(|w| w.id.clone())
         .collect();
-    core::stats::lifecycle(&log, &held)
+    (log, held)
 }
 
 /// Some stamped file changed and the row is not dormant (not every one did). An issue

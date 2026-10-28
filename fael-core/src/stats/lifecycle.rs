@@ -39,6 +39,32 @@ impl Lifecycle {
     }
 }
 
+/// Where one row sits; the one rule behind `lifecycle` and the decision yield.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum State {
+    Live,
+    Held,
+    Dormant,
+    Retired,
+}
+
+pub(super) fn state_of(
+    r: &crate::Row,
+    gone: &HashSet<&str>,
+    log: &Log,
+    held: &HashSet<String>,
+) -> State {
+    if gone.contains(r.id.as_str()) || log.retired.contains(&r.id) {
+        State::Retired
+    } else if log.dormant.contains(&r.id) {
+        State::Dormant
+    } else if held.contains(&r.id) {
+        State::Held
+    } else {
+        State::Live
+    }
+}
+
 /// `held` = ids of open rows whose stamped files changed in part. A derived-retired
 /// note is in `log.dormant` too; it counts retired, once.
 pub fn lifecycle(log: &Log, held: &HashSet<String>) -> Lifecycle {
@@ -51,14 +77,11 @@ pub fn lifecycle(log: &Log, held: &HashSet<String>) -> Lifecycle {
             "note" => &mut out.note,
             _ => continue,
         };
-        let slot = if gone.contains(r.id.as_str()) || log.retired.contains(&r.id) {
-            &mut t.retired
-        } else if log.dormant.contains(&r.id) {
-            &mut t.dormant
-        } else if held.contains(&r.id) {
-            &mut t.held
-        } else {
-            &mut t.live
+        let slot = match state_of(r, &gone, log, held) {
+            State::Retired => &mut t.retired,
+            State::Dormant => &mut t.dormant,
+            State::Held => &mut t.held,
+            State::Live => &mut t.live,
         };
         *slot += 1;
         if r.kind == "issue" && r.from_report() && gone.contains(r.id.as_str()) {
