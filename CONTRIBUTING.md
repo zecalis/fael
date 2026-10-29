@@ -11,7 +11,7 @@ cargo test --workspace
 ```
 
 Rust 1.89 or newer. The workspace has three crates: `fael-core` (log format, find, rules — no git,
-no cwd; never depends on fael crew), `fael-crew` (plans, chunks, board store and the `fael-crew` binary
+no cwd; never depends on `fael-crew`), `fael-crew` (plans, chunks, board store and the `fael-crew` binary
 `fael` execs for those verbs — depends on `fael-core`; `cargo install --path fael-crew`) and `fael`
 (CLI, MCP server, hooks, install — does not depend on `fael-crew`).
 
