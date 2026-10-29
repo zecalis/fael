@@ -11,6 +11,16 @@ pub(crate) fn mark_dormant(r: &crate::Repo, log: &mut core::Log) {
     mark_dormant_with(r, log, &al);
 }
 
+/// `mark_dormant` for session start: the same dormant set, but the merged-branch
+/// proof runs only for notes a start can hand over (`retired::ids_for_start`).
+pub(crate) fn mark_dormant_start(r: &crate::Repo, log: &mut core::Log) {
+    let al = crate::aliases::load(r, log, false);
+    let ids = dormant_ids(r, log, &al);
+    let retired = crate::hook::retired::ids_for_start(r, log);
+    log.dormant = ids.union(&retired).cloned().collect();
+    log.retired = retired;
+}
+
 /// `mark_dormant` over caller-supplied aliases — the write path (`fael add`)
 /// passes `aliases::cached`, so it fills dormant/retired without building the
 /// rename cache (`mark_dormant` would, and a build there freezes pre-rename

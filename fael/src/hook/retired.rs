@@ -44,7 +44,7 @@ pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
         let b = crate::journal::head_branch(&r.root).unwrap_or_default();
         format!("{h} {} {b}", log.rows.len())
     });
-    let mut out = derive(r, log, git);
+    let mut out = derive(r, log, git, &|_| true);
     if let Some(k) = key {
         if git {
             super::state::write_retired(&r.root, &k, &out);
@@ -55,7 +55,20 @@ pub(crate) fn ids(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
     out
 }
 
-fn derive(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
+/// Session start's retired set: the merged-branch proof is asked only for notes
+/// addressed `--to` someone, the only branch-tied notes a start can hand over
+/// (`session::start_rows`), so the ~40 other ones cost no spawn. Partial by design,
+/// so it never writes the pull cache the push path reads.
+pub(crate) fn ids_for_start(r: &Repo, log: &core::Log) -> HashSet<String> {
+    derive(r, log, true, &|w| w.to_who().is_some())
+}
+
+fn derive(
+    r: &Repo,
+    log: &core::Log,
+    git: bool,
+    want: &dyn Fn(&core::Row) -> bool,
+) -> HashSet<String> {
     let hide: HashSet<&str> = core::closed(log)
         .union(&core::superseded(log))
         .copied()
@@ -79,6 +92,7 @@ fn derive(r: &Repo, log: &core::Log, git: bool) -> HashSet<String> {
         } else if let Some(b) = tied
             // a handoff waits on its chunk, not the merge; a revisit waits on its date
             && git
+            && want(w)
             && w.revisit.is_none()
             && !handoff
             // the branch being worked on and the trunk are not "merged work"
