@@ -17,7 +17,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let no = Reply::default;
     let Some(mut c) = ctx(e) else { return no() };
     // decision 01M5528X: a dormant row is never in the session brief
-    crate::hook::mark_dormant(&c.repo, &mut c.log);
+    crate::hook::mark_dormant_start(&c.repo, &mut c.log);
     // a run killed mid-turn never reaches Stop: its session is kept from the first turn
     super::stop::seen(e);
     // and its model is reported from the first turn (cost follows on Stop)
