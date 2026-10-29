@@ -155,6 +155,8 @@ fn no_change_with_a_pr_is_refused() {
 
 /// Issue 01M62XEX: a uid-less `done --no-change` from a branch that has an open PR is not
 /// refused — the PR `gh` finds is not the work reviewed.
+// a shell `gh` stub: Unix only
+#[cfg(unix)]
 #[test]
 fn no_change_ignores_the_pr_gh_finds_for_the_branch() {
     let (d, state) = init("feat: duty (#41)", "features/tax/duty.rs");
