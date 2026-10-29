@@ -18,7 +18,9 @@ const CAP: usize = 5;
 pub(super) fn after(tx: &Transaction, id: i64) -> Result<Vec<Word>, String> {
     let mut q = tx
         .prepare(
-            "SELECT c.title, e.text, COALESCE(c.touched, '') FROM edge g
+            "SELECT c.title || COALESCE(' (#' || (SELECT pr FROM run WHERE chunk = c.id
+                                                    AND pr IS NOT NULL ORDER BY id DESC LIMIT 1) || ')', ''),
+                    e.text, COALESCE(c.touched, '') FROM edge g
              JOIN chunk c ON c.id = g.dst
              JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid
                                        AND by = 'agent' AND to_state IN ('done', 'review'))

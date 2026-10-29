@@ -19,11 +19,29 @@ pub(crate) const KNOWN: &[&str] = &[
 
 /// `chunk {"verb": ..., "uid": ..., "text": ...}`.
 pub(super) fn chunk(a: &Value) -> Result<String, String> {
+    let a = &text_alias(a);
     let extra = unknown_note(a, KNOWN);
     let verb = s(a, "verb").unwrap_or_default();
     let misplaced = misplaced_note(a, &verb);
     let res = chunk_checked(a);
     with_notes(res, vec![extra, misplaced])
+}
+
+/// The chunk rules say `result` / handoff, the schema says `text`: an alias
+/// fills an empty `text` and is dropped, so it is never an unknown-arg note.
+fn text_alias(a: &Value) -> Value {
+    let mut a = a.clone();
+    let Some(o) = a.as_object_mut() else { return a };
+    let moved: Vec<Value> = ["result", "handoff"]
+        .iter()
+        .filter_map(|k| o.remove(*k))
+        .collect();
+    if o.get("text").and_then(Value::as_str).is_none_or(str::is_empty)
+        && let Some(v) = moved.into_iter().next()
+    {
+        o.insert("text".into(), v);
+    }
+    a
 }
 
 fn chunk_checked(a: &Value) -> Result<String, String> {
@@ -261,6 +279,9 @@ fn show_elsewhere(r: &Repo, uid: &str, e: String) -> Result<String, String> {
 /// A write naming a chunk in another repo keeps pointing there, now with the
 /// MCP routing beside the CLI one — same call, plus `"cwd"`.
 fn with_cwd_hint(e: String) -> String {
+    if e.contains("same command with --run ") {
+        return e.replace("same command with --run ", "same call with run: ");
+    }
     match e.contains("lives in") {
         true => format!("{e}\nMCP: re-run this call with \"cwd\" set to that repo root"),
         false => e,
@@ -339,6 +360,16 @@ mod tests {
         let d = json!({"verb": "done", "uid": "U1", "text": "h", "with": "U2", "as": "lane"});
         let note = misplaced_note(&d, "done").unwrap();
         assert!(note.contains("`with`") && note.contains("`as`"), "{note}");
+    }
+
+    #[test]
+    fn result_and_out_fill_text_and_the_fence_reject_speaks_mcp() {
+        let a = json!({"verb": "done", "uid": "U1", "result": "r", "handoff": "o"});
+        let a = super::text_alias(&a);
+        assert_eq!(a["text"], "r");
+        assert!(unknown_note(&a, KNOWN).is_none());
+        let e = "rejected: x — try the same command with --run R1; else".to_string();
+        assert!(super::with_cwd_hint(e).contains("same call with run: R1"));
     }
 
     #[test]
