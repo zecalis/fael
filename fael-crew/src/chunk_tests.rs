@@ -356,7 +356,7 @@ fn notes_and_the_handoff_before_reach_the_next_brief() {
     assert_eq!(
         br.after,
         [(
-            "a".to_string(),
+            "a (#1)".to_string(),
             "board ships; app reads FAEL_BIN".to_string(),
             String::new()
         )]

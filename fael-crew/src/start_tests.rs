@@ -210,6 +210,23 @@ fn only_a_claimed_diff_reaches_the_next_brief_as_files_touched() {
     assert_eq!(files(&mut s), "z/q.rs");
 }
 
+/// A review chunk's brief names the PR of the chunk it is after — no git-log hunt.
+#[test]
+fn the_after_line_names_the_pr_of_the_chunk_it_follows() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("b"));
+    let f = Fields {
+        title: Some("review a".into()),
+        brief: Some("b".into()),
+        ..Fields::default()
+    };
+    let b = s.add("inbox", &f, std::slice::from_ref(&a), NOW).unwrap();
+    start(&mut s, &a, "/a").unwrap();
+    s.done(&a, "h", Some(1273), None, &here("/a")).unwrap();
+    let st = s.start(&b, &Start::default(), &here("/b")).unwrap();
+    assert_eq!(st.chunks[0].after[0].0, "a (#1273)");
+}
+
 fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
     let c = add(s, title, Some(title));
     s.conn
