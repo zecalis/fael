@@ -43,6 +43,16 @@ const TAKES_NO: &[(&str, &[&str], &str)] = &[
         &["verdict"],
         "--review clean|fixed|failed says how the review went",
     ),
+    (
+        "chunk show",
+        &["full"],
+        "show prints the brief and notes the next start prints; --full is on chunk start (every section plus the rules)",
+    ),
+    (
+        "board",
+        &["all"],
+        "the board already lists every registered repo; --plan p or --open narrows it",
+    ),
 ];
 
 /// Reject with the closest real thing and the command's usage line, instead of
@@ -301,6 +311,16 @@ mod tests {
         let said = reject(&argv("chunk done u x --verdict pass"), no.into());
         assert!(said.contains("--review clean|fixed|failed"), "{said}");
         assert!(!said.contains("try 'fael --help'"), "{said}");
+        // friction since 2026-10-18: `board --all` and `chunk show --full` were retried blind
+        let no = "rejected: board takes no --all — try 'fael --help'";
+        let said = reject(&argv("board --all"), no.into());
+        assert!(
+            said.contains("already lists every registered repo"),
+            "{said}"
+        );
+        let no = "rejected: chunk show takes no --full — try 'fael --help'";
+        let said = reject(&argv("chunk show u --full"), no.into());
+        assert!(said.contains("--full is on chunk start"), "{said}");
     }
 
     /// `--files a.rs b.rs c.md` joins into one comma list up to the next flag or

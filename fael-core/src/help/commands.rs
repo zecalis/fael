@@ -281,7 +281,7 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
         "hook",
         "stdin in, stdout out; always exits 0",
         "fael hook <event> [--client c]
-    (event: stop, session-start, read, edit or search; stdin in, stdout out; always exits 0)",
+    (event: stop, session-start, read, edit, search or prompt; stdin in, stdout out; always exits 0)",
     ),
     (
         "stats",
@@ -351,7 +351,7 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
         "mcp",
         "MCP server on stdio",
         "fael mcp [--pin]
-    (serve find/add/close over stdio for MCP clients)
+    (serve find/add/close/chunk over stdio for MCP clients)
     --pin: every call acts on this cwd only — set it before exposing over HTTP",
     ),
     (
