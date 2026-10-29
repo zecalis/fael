@@ -27,7 +27,7 @@ fael: reminded agent — 01K00000000000000000B "b leaks a handle" (src/b.rs)
 ## 13 edit {"session":"2025-12-01T00:00:00Z","files":["src/b.rs"]}
 ## 14 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 context:
-fael mem for src/hub.rs (5 of 13):
+fael mem for src/hub.rs (5 of 13 · also: 01K00000000000000000HUB006 "hub row 6 says something about the hub", 01K00000000000000000HUB003 "hub row 3 says something about the hub", 01K00000000000000000HUB000 "hub row 0 says something about the hub"):
 - [01K00000000000000000HUB01] issue hub row 10 says something about the hub
 - [01K00000000000000000HUB007] issue hub row 7 says something about the hub
 - [01K00000000000000000HUB004] issue hub row 4 says something about the hub
@@ -39,7 +39,7 @@ notice:
 fael: reminded agent — 01K00000000000000000HUB01 "hub row 10 says something about the hub" (src/hub.rs) +4 more
 ## 15 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 context:
-fael mem for src/hub.rs (5 of 8):
+fael mem for src/hub.rs (5 of 8 · also: 01K00000000000000000HUB002 "hub row 2 says something about the hub"):
 - [01K00000000000000000HUB006] decision #hub:shape hub row 6 says something about the hub
 - [01K00000000000000000HUB003] decision #hub:shape hub row 3 says something about the hub
 - [01K00000000000000000HUB000] decision #hub:shape hub row 0 says something about the hub
@@ -86,5 +86,5 @@ fael mem for src/c.rs (1 of 15):
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-15 lines · ~611 tokens
+15 lines · ~712 tokens
 silent-start edit in-context edit in-context edit in-context edit silent-start shell-edit outcome search silent-start silent-start edit

@@ -41,6 +41,7 @@ mod friction;
 mod held;
 mod held_evidence;
 mod held_rotate;
+mod hidden_titles;
 mod in_context;
 mod lifecycle;
 mod markers;

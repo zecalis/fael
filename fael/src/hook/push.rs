@@ -247,7 +247,7 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
     // said with no rows to join
     // t0 is empty at a shell edit, so it gets no hint
     let hint = edit_hint(&ask, &t0, said, &mut blobs);
-    let mut lines = row_lines(&sel, &files, (body, n), &shown);
+    let mut lines = row_lines(&c.log, &sel, &files, (body, n), &shown);
     lines.extend(hint.map(|h| Line {
         kind: Kind::Ask { ids: h.spent },
         text: format!("{}\n", h.text),
@@ -370,6 +370,7 @@ fn peek_key(file: &str) -> String {
 /// fael find` count lines were dropped, 7 of 336 pulled (PLAN-fael-say-gate
 /// chunk 4).
 fn row_lines(
+    log: &core::Log,
     sel: &core::Selection,
     files: &[String],
     (body, n): (String, usize),
@@ -380,7 +381,11 @@ fn row_lines(
     }
     let more = match sel.hidden(n).total() {
         0 => String::new(),
-        h => format!(" ({n} of {})", n + h),
+        h => format!(
+            " ({n} of {}{})",
+            n + h,
+            super::hidden_titles::also(log, sel, n)
+        ),
     };
     let header = format!("fael mem for {}{more}:\n", files.join(", "));
     vec![Line {

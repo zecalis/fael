@@ -50,5 +50,5 @@ fn shared_keys_outside_focus_are_not_counted() {
     }
     let out = edit(&d, "src/a.rs");
     assert!(footer(&out).is_empty(), "{out}");
-    assert!(out.contains("(5 of 8):"), "{out}");
+    assert!(out.contains("(5 of 8 · also: "), "{out}");
 }
