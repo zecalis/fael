@@ -152,3 +152,38 @@ fn no_change_with_a_pr_is_refused() {
     assert!(!o.status.success());
     assert!(String::from_utf8_lossy(&o.stderr).contains("--no-change says nothing"));
 }
+
+/// Issue 01M62XEX: a uid-less `done --no-change` from a branch that has an open PR is not
+/// refused — the PR `gh` finds is not the work reviewed.
+// a shell `gh` stub: Unix only
+#[cfg(unix)]
+#[test]
+fn no_change_ignores_the_pr_gh_finds_for_the_branch() {
+    let (d, state) = init("feat: duty (#41)", "features/tax/duty.rs");
+    let args = ["--brief", "b", "--scope", "features/duties/"];
+    let uid = fael(&d, &state, &[&["chunk", "add", "a"], &args[..]].concat());
+    fael(&d, &state, &["chunk", "start", &uid, "--run", "R1"]);
+    let bin = d.parent().unwrap().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    std::fs::write(&gh, "#!/bin/sh\necho 5\n").unwrap();
+    std::fs::set_permissions(&gh, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let o = Command::new(crate::common::fael_bin())
+        .args(["chunk", "done", "clean", "--left", "none", "--no-change"])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", &state)
+        .env("PATH", path)
+        .env_remove("FAEL_DIR")
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        o.status.success(),
+        "{out}{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(out.contains("recorded: reviewed, no change"), "{out}");
+    let show = fael(&d, &state, &["chunk", "show", &uid]);
+    assert!(show.contains("reviewed, no change: clean"), "{show}");
+}
