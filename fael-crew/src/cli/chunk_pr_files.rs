@@ -5,6 +5,11 @@
 use std::path::Path;
 use std::process::Command;
 
+/// The files PR `n` changed: its squash commit on `trunk`, else (still open) `gh`'s list.
+pub(crate) fn pr_files(dir: &Path, trunk: &str, n: i64, gh: &str) -> Option<Vec<String>> {
+    merged_files(dir, trunk, n).or_else(|| open_files(dir, n, gh))
+}
+
 /// The files of PR `n` through `gh` (run in `dir`); None = gh missing or failing, or no files.
 pub(crate) fn open_files(dir: &Path, n: i64, gh: &str) -> Option<Vec<String>> {
     let pr = n.to_string();
