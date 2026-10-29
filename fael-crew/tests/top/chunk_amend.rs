@@ -75,3 +75,55 @@ fn a_dropped_chunk_is_not_amended() {
     let o = run(&d, &state, &["chunk", "done", &a, "x", "--left", "none"]);
     assert!(!o.status.success());
 }
+
+/// A real done names the amend and the review flag once; `-` reads the hand-off from stdin.
+#[test]
+fn a_real_done_hints_the_amend_and_review_and_dash_reads_stdin() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let t = std::env::temp_dir().join(format!("fael-amend-{}", fael_core::ulid()));
+    let (d, state) = (repo(&t), t.join("state"));
+    let a = ok(&d, &state, &["chunk", "add", "a", "--brief", "b"]);
+    ok(
+        &d,
+        &state,
+        &["chunk", "start", &a, "--run", "R1", "--no-worktree"],
+    );
+    let piped = |text: &str, args: &[&str]| {
+        let mut c = Command::new(crate::common::fael_bin())
+            .args(args)
+            .current_dir(&d)
+            .env("FAEL_STATE_DIR", &state)
+            .env_remove("FAEL_DIR")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        c.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
+        c.wait_with_output().unwrap()
+    };
+    let empty = piped(
+        "\n",
+        &["chunk", "done", &a, "-", "--left", "none", "--pr", "7"],
+    );
+    assert!(!empty.status.success());
+    assert!(String::from_utf8_lossy(&empty.stderr).contains("rejected"));
+    let text = "it's $HOME \"quoted\"\n";
+    let args = ["chunk", "done", &a, "-", "--left", "none", "--pr", "7"];
+    let o = piped(text, &args);
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        o.status.success(),
+        "{out}{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let amend = format!("fael chunk done {a} \"<new hand-off>\" amends it");
+    assert!(out.contains(&amend), "{out}");
+    assert!(
+        out.contains("--review clean|fixed|failed") || out.contains("(clean|fixed|failed)"),
+        "{out}"
+    );
+    let shown = ok(&d, &state, &["chunk", "show", &a]);
+    assert!(shown.contains("it's $HOME \"quoted\""), "{shown}");
+}

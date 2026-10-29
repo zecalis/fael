@@ -189,6 +189,15 @@ fn the_rules_close_with_one_done_form_from_the_worktree() {
     assert!(!r.contains("Fael-Chunk"), "{r}");
 }
 
+#[test]
+fn the_rules_name_review_flag_stdin_and_amend() {
+    let r = rules("U1", None);
+    assert!(r.contains("`--review clean|fixed|failed`"), "{r}");
+    assert!(!r.contains("verdict in the done text"), "{r}");
+    assert!(r.contains("fael chunk done - --left none <<'EOF'"), "{r}");
+    assert!(r.contains("amends the hand-off"), "{r}");
+}
+
 /// The add lines carry the full form, the gate's title and one-topic rules in
 /// it: an elided `fael add issue …` sent agents to `fael add --help` first.
 #[test]

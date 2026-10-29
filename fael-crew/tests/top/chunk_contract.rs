@@ -18,7 +18,11 @@ fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
         .unwrap();
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(o.status.success(), "{args:?}: {err}");
-    String::from_utf8_lossy(&o.stdout).trim().to_string()
+    // the two one-time hint lines of a real done are not what these tests assert
+    let out = String::from_utf8_lossy(&o.stdout);
+    let hint =
+        |l: &&str| !l.starts_with("hand-off changed after") && !l.starts_with("no --review given");
+    out.lines().filter(hint).collect::<Vec<_>>().join("\n")
 }
 
 fn git(dir: &Path, args: &[&str]) {

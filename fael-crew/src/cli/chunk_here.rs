@@ -20,6 +20,38 @@ pub(crate) fn done(a: &Args, r: &Repo, handoff: &str, here: &Here) -> Result<(),
     crate::chunk_run::done(a, r, &uid, handoff, here, pr)
 }
 
+/// The hand-off text: `-` is read from stdin (trailing newline trimmed, empty refused);
+/// anything else is itself.
+pub(crate) fn handoff_text(arg: &str) -> Result<String, String> {
+    if arg != "-" {
+        return Ok(arg.to_string());
+    }
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+        .map_err(|e| format!("rejected: hand-off `-`: cannot read stdin: {e}"))?;
+    let text = text.trim_end_matches(['\n', '\r']).to_string();
+    match text.trim().is_empty() {
+        true => Err("rejected: hand-off `-` read an empty stdin — pipe the text in".into()),
+        false => Ok(text),
+    }
+}
+
+/// What a real `done` says once about features the agent may not know: the amend, and the
+/// review verdict (an amend takes text only, so `--review` rides on this done).
+pub(crate) fn done_hints(uid: &str, done: bool, reviewed: bool) -> String {
+    // only a chunk in `done` (a PR) is amended; a `review` one re-records on its next done
+    let mut s = String::new();
+    if done {
+        s = format!(
+            "hand-off changed after this (rebase, conflict)? fael chunk done {uid} \"<new hand-off>\" amends it\n"
+        );
+    }
+    if !reviewed {
+        s.push_str("no --review given: it records the fresh review's verdict (clean|fixed|failed); pass it on this done — an amend takes text only\n");
+    }
+    s
+}
+
 /// The uid of the one chunk this worktree holds, or why there is none.
 pub(crate) fn uid(st: &Store, here: &Here) -> Result<String, String> {
     let held = st.held(here.worktree)?;

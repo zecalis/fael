@@ -177,6 +177,8 @@ pub(crate) fn done(
         "chunk done",
         &["pr", "out", "run", "review", "left", "no-change"],
     )?;
+    // `-` reads the hand-off from stdin: a long one never rides a shell argument
+    let handoff = &crate::chunk_here::handoff_text(handoff)?;
     let no_change = a.has("no-change");
     if no_change && (a.has("pr") || pr_default.is_some() || a.has("out")) {
         return Err(
@@ -272,6 +274,10 @@ pub(crate) fn done(
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
     print!("{}", st.drift_line(uid));
+    print!(
+        "{}",
+        crate::chunk_here::done_hints(uid, pr.is_some(), a.one("review").is_some())
+    );
     if no_change {
         match unclaimed {
             true => println!("recorded: reviewed, no change — the next brief reads it as a result"),
