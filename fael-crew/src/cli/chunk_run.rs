@@ -258,7 +258,11 @@ pub(crate) fn done(
     if empty(&diff)
         && let (Some(t), Some(n)) = (&named, pr)
     {
-        diff = crate::chunk_pr_files::merged_files(&r.root, t, n).or(diff);
+        // issue 01M63XC1: not merged yet — the open PR's files, through gh
+        let merged = crate::chunk_pr_files::merged_files(&r.root, t, n);
+        diff = merged
+            .or_else(|| crate::chunk_pr_files::open_files(&r.root, n, "gh"))
+            .or(diff);
     }
     let unclaimed = empty(&diff);
     let outside = diff.as_ref().map(|d| outside_text(r, &st, uid, d));

@@ -1,7 +1,25 @@
 //! Issue 01M5QF7Q: a done whose run has no branch (marked after its PR merged) claims the
-//! merged PR's files, read from the squash commit on the trunk.
+//! merged PR's files, read from the squash commit on the trunk. Issue 01M63XC1: a PR still
+//! open has no such commit — its files are read through `gh`.
 
 use std::path::Path;
+use std::process::Command;
+
+/// The files of PR `n` through `gh` (run in `dir`); None = gh missing or failing, or no files.
+pub(crate) fn open_files(dir: &Path, n: i64, gh: &str) -> Option<Vec<String>> {
+    let pr = n.to_string();
+    let args = ["pr", "view", &pr, "--json", "files", "-q", ".files[].path"];
+    let out = Command::new(gh).args(args).current_dir(dir).output().ok()?;
+    let text = String::from_utf8(out.stdout)
+        .ok()
+        .filter(|_| out.status.success())?;
+    let files: Vec<String> = text
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    (!files.is_empty()).then_some(files)
+}
 
 /// The files of the commit on `trunk` whose subject ends `(#n)` (the squash-merge title);
 /// None = no such commit or no files.
@@ -38,4 +56,13 @@ pub(crate) fn none_claimed(trunk: &str, pr: Option<i64>, uid: &str) -> String {
     format!(
         "no diff claimed: no run branch and no commit on {trunk}{named} — the next brief prints no touched files; name the paths in the handoff{review}\n"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_missing_gh_gives_no_files() {
+        let dir = std::env::temp_dir();
+        assert_eq!(super::open_files(&dir, 8, "fael-no-such-gh-binary"), None);
+    }
 }

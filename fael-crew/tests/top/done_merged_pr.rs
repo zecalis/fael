@@ -187,3 +187,39 @@ fn no_change_ignores_the_pr_gh_finds_for_the_branch() {
     let show = fael(&d, &state, &["chunk", "show", &uid]);
     assert!(show.contains("reviewed, no change: clean"), "{show}");
 }
+
+/// Issue 01M63XC1: `done --pr N` for a PR still open (no squash commit yet) claims the files
+/// `gh pr view N --json files` names.
+// a shell `gh` stub: Unix only
+#[cfg(unix)]
+#[test]
+fn an_open_prs_files_come_from_gh() {
+    let (d, state) = init("feat: duty (#41)", "features/tax/duty.rs");
+    let uid = started(&d, &state);
+    let bin = d.parent().unwrap().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    let script = "#!/bin/sh\necho docs/creature.md\necho src/lib.rs\n";
+    std::fs::write(&gh, script).unwrap();
+    std::fs::set_permissions(&gh, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let o = Command::new(crate::common::fael_bin())
+        .args(["chunk", "done", &uid, "h", "--left", "none", "--pr", "8"])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", &state)
+        .env("PATH", path)
+        .env_remove("FAEL_DIR")
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        o.status.success(),
+        "{out}{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(!out.contains("no diff claimed"), "{out}");
+    let show = fael(&d, &state, &["chunk", "show", &uid, "--json"]);
+    let c: Value = serde_json::from_str(&show).unwrap();
+    let want = serde_json::json!(["docs/creature.md", "src/lib.rs"]);
+    assert_eq!(c["scope"], want);
+}
