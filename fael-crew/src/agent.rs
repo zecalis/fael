@@ -3,7 +3,7 @@
 //! and the Stop hook's stamp on the live run of its own worktree.
 
 use super::State;
-use super::board_math::under;
+use super::board_math::{under, within};
 use super::chunk::{Here, add_after, end_live, fence, is_date, row, scope, set, tx, uid_id};
 use super::shared::unshared;
 use super::store::{Store, err};
@@ -329,7 +329,7 @@ impl Store {
             .map_err(err)?;
         let out = files
             .iter()
-            .filter(|f| !declared.is_empty() && !declared.iter().any(|d| under(f, d)))
+            .filter(|f| !declared.is_empty() && !declared.iter().any(|d| within(f, d)))
             // a doc sync is mandatory (chunk rules), never a scope leak
             .filter(|f| !shared.iter().any(|s| under(f, s)) && !f.starts_with("docs/"))
             .map(|f| {

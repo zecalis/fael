@@ -62,9 +62,41 @@ pub fn under(x: &str, y: &str) -> bool {
     x == y || x.strip_prefix(y).is_some_and(|r| r.starts_with('/'))
 }
 
+/// `x` is `y` or below it, or `y` is a file and `x` is its test beside it in the same
+/// directory (`a.ts` → `a.test.ts` / `a.spec.ts` / `a_test.ts`): a chunk that edits a file
+/// edits its test, so that is no "outside declared scope".
+pub fn within(x: &str, y: &str) -> bool {
+    if under(x, y) {
+        return true;
+    }
+    let (dx, fx) = x.rsplit_once('/').unwrap_or(("", x));
+    let (dy, fy) = y.trim_end_matches('/').rsplit_once('/').unwrap_or(("", y));
+    let (Some((sx, ex)), Some((sy, ey))) = (fx.rsplit_once('.'), fy.rsplit_once('.')) else {
+        return false;
+    };
+    dx == dy
+        && ex == ey
+        && [".test", ".spec", "_test"]
+            .iter()
+            .any(|t| sx.strip_suffix(t) == Some(sy))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn within_takes_a_test_beside_a_scope_file() {
+        assert!(within("src/series.test.ts", "src/series.ts"));
+        assert!(within("src/series.spec.ts", "src/series.ts"));
+        assert!(within("src/series_test.ts", "src/series.ts"));
+        assert!(within("src/a/b.rs", "src/a/"));
+        assert!(!within("src/other.test.ts", "src/series.ts"));
+        assert!(!within("lib/series.test.ts", "src/series.ts"));
+        assert!(!within("src/series.test.js", "src/series.ts"));
+        // a scope dir never pairs; only a file does
+        assert!(!within("src/x.test.ts", "src/x"));
+    }
 
     fn v(x: &[&str]) -> Vec<String> {
         x.iter().map(|s| s.to_string()).collect()

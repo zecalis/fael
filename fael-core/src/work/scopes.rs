@@ -5,7 +5,7 @@
 //! never depends on crew.
 
 use super::db::readonly;
-use crate::under;
+use crate::{under, within};
 use std::path::Path;
 
 /// Another unfinished chunk with a declared scope.
@@ -101,7 +101,7 @@ impl Scopes {
     /// declared scope = nothing to compare. An unowned path is `None`.
     pub fn overlap(&self, file: &str, shared: &[String]) -> Option<&Other> {
         let nobody = file.starts_with("docs/") || shared.iter().any(|s| under(file, s));
-        let mine = self.declared.iter().any(|d| under(file, d));
+        let mine = self.declared.iter().any(|d| within(file, d));
         (!self.declared.is_empty() && !nobody && !mine)
             .then(|| {
                 self.others

@@ -63,15 +63,28 @@ fn text_alias(a: &Value) -> Value {
 }
 
 fn chunk_checked(a: &Value) -> Result<String, String> {
-    let r = repo_for(a)?;
     let verb = need(a, "verb")?;
     let uid = need(a, "uid")?;
+    start_needs_cwd(a, &verb, &uid)?;
+    let r = repo_for(a)?;
     let args = build_args(&verb, &uid, a)?;
     match crate::crew::capture(&args, &r.root) {
         Ok(t) => Ok(t),
         Err(e) if verb == "show" => show_elsewhere(&r, &uid, e),
         Err(e) => Err(with_cwd_hint(e)),
     }
+}
+
+/// A start records the caller's cwd as its seat, and `done` later refuses a run started from
+/// elsewhere: with no `cwd` the client's launch dir becomes the seat. Said at the start, not
+/// at the done. A pinned server has one workspace; a launcher's `run` already has its seat.
+fn start_needs_cwd(a: &Value, verb: &str, uid: &str) -> Result<(), String> {
+    if verb != "start" || super::pinned() || s(a, "cwd").is_some() || s(a, "run").is_some() {
+        return Ok(());
+    }
+    Err(format!(
+        "rejected: cwd is required for chunk start — it records your seat, and chunk done refuses a run started from another directory; try chunk {{verb: \"start\", uid: \"{uid}\", cwd: \"<your working directory>\"}}"
+    ))
 }
 
 /// The argv `chunk_checked` runs — pure, so unit tests pin the contract without
@@ -229,7 +242,7 @@ fn unknown_verb(v: &str, uid: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{KNOWN, build_args, misplaced_note, unknown_note, unknown_verb};
+    use super::{KNOWN, build_args, misplaced_note, start_needs_cwd, unknown_note, unknown_verb};
 
     #[test]
     fn an_unknown_verb_names_the_cli_when_it_is_one_there() {
@@ -240,6 +253,23 @@ mod tests {
         assert!(e.starts_with("rejected: unknown chunk verb zzz"), "{e}");
     }
     use serde_json::json;
+
+    #[test]
+    fn start_without_cwd_is_rejected_unless_a_run_names_the_seat() {
+        let e = start_needs_cwd(&json!({"verb": "start", "uid": "U1"}), "start", "U1").unwrap_err();
+        assert!(
+            e.starts_with("rejected: cwd is required") && e.contains("cwd: \""),
+            "{e}"
+        );
+        for ok in [
+            json!({"verb": "start", "uid": "U1", "cwd": "/w"}),
+            json!({"verb": "start", "uid": "U1", "run": "R1"}),
+            json!({"verb": "done", "uid": "U1"}),
+        ] {
+            let verb = ok["verb"].as_str().unwrap();
+            assert!(start_needs_cwd(&ok, verb, "U1").is_ok(), "{ok}");
+        }
+    }
 
     #[test]
     fn start_forwards_client_and_model() {

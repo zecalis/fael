@@ -115,8 +115,8 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
     }
 }
 
-pub(super) use fael_core::under;
 pub use fael_core::{OverlapClass, overlap, overlap_how};
+pub(super) use fael_core::{under, within};
 
 /// `# PLAN-x — title` as imported → `title` (also `PLAN-x: title`, `PLAN-x (v1): title`).
 pub(super) fn plan_title(title: &str, name: &str) -> String {
