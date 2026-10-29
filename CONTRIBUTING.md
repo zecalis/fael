@@ -11,14 +11,14 @@ cargo test --workspace
 ```
 
 Rust 1.89 or newer. The workspace has three crates: `fael-core` (log format, find, rules — no git,
-no cwd; never depends on crew), `fael-crew` (plans, chunks, board store and the `fael-crew` binary
+no cwd; never depends on `fael-crew`), `fael-crew` (plans, chunks, board store and the `fael-crew` binary
 `fael` execs for those verbs — depends on `fael-core`; `cargo install --path fael-crew`) and `fael`
 (CLI, MCP server, hooks, install — does not depend on `fael-crew`).
 
 ### Fast test loop
 
 `cargo test` runs one test binary at a time. [nextest](https://nexte.st) runs them all in
-parallel, one process per test. The suite is ~1100 tests that spawn the real binary and git, so
+parallel, one process per test. The suite is ~1500 tests that spawn the real binary and git, so
 it is bound by CPU, not by any one test — about 30 s for the whole workspace on 12 cores, slower
 when other worktrees build or test at the same time:
 
@@ -88,7 +88,7 @@ cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc 
 
 ## Project rules
 
-- **Hooks stay fast** — every hook is a process spawn on every tool call (under 10 ms on a repo with ~1,500 rows, `session-start` about 45 ms once per session — measured with `hyperfine -N`).
+- **Hooks stay fast** — every hook is a process spawn on every tool call (under 10 ms on a repo with ~2,000 rows, `session-start` about 90 ms once per session — measured with `hyperfine -N`).
   Measure with `hyperfine` before and after anything that touches the hook path.
 - **Hooks fail open** — `fael hook …` always exits 0 and never blocks an agent because fael itself broke.
 - **The log format is a contract** — [docs/format.md](docs/format.md) is versioned; a change there is

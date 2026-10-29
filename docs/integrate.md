@@ -1,7 +1,7 @@
 # Integrate fael into an agent
 
-fael needs four calls from an agent's lifecycle. Each is one process spawn:
-Event JSON on stdin, Reply JSON on stdout, always exit 0 (under 10 ms each on a repo with ~1,500 rows; `session-start` about 45 ms, once per session,
+fael needs six calls from an agent's lifecycle. Each is one process spawn:
+Event JSON on stdin, Reply JSON on stdout, always exit 0 (under 10 ms each on a repo with ~2,000 rows; `session-start` about 90 ms, once per session,
 most of it process spawns at ~8 ms per git call). Claude Code and Codex use a built-in adapter
 (`--client claude|codex`), and OpenCode gets a generated plugin
 ([`fael/skill/opencode.js`](../fael/skill/opencode.js), the reference implementation of
@@ -72,7 +72,7 @@ hooks know no UserPromptSubmit), so the per-turn edit-ask limit is Claude-only t
 
 Any error, missing field or repo without `.fael/` is `{"block": false}`. Integration cannot break the agent.
 
-Also register `fael mcp` (stdio, tools `find` / `add` / `close`). If the agent can load skills,
+Also register `fael mcp` (stdio, tools `find` / `add` / `close`, plus `chunk` for fael crew). If the agent can load skills,
 use the one `fael install` writes (`~/.claude/skills/fael/SKILL.md`).
 
 ## One worktree per agent
