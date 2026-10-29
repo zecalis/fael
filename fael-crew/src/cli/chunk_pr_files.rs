@@ -11,13 +11,20 @@ pub(crate) fn pr_files(dir: &Path, trunk: &str, n: i64, gh: &str) -> Option<Vec<
 }
 
 /// The files of PR `n` through `gh` (run in `dir`); None = gh missing or failing, or no files.
+/// `FAEL_GH_PR_FILES` (one path per line) stands in for gh's output (tests only: no fake
+/// binary on PATH, cf. `FAEL_GH_JSON`).
 pub(crate) fn open_files(dir: &Path, n: i64, gh: &str) -> Option<Vec<String>> {
-    let pr = n.to_string();
-    let args = ["pr", "view", &pr, "--json", "files", "-q", ".files[].path"];
-    let out = Command::new(gh).args(args).current_dir(dir).output().ok()?;
-    let text = String::from_utf8(out.stdout)
-        .ok()
-        .filter(|_| out.status.success())?;
+    let text = match std::env::var("FAEL_GH_PR_FILES") {
+        Ok(fake) => fake,
+        Err(_) => {
+            let pr = n.to_string();
+            let args = ["pr", "view", &pr, "--json", "files", "-q", ".files[].path"];
+            let out = Command::new(gh).args(args).current_dir(dir).output().ok()?;
+            String::from_utf8(out.stdout)
+                .ok()
+                .filter(|_| out.status.success())?
+        }
+    };
     let files: Vec<String> = text
         .lines()
         .filter(|l| !l.is_empty())
