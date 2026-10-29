@@ -354,7 +354,12 @@ fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
         ],
     );
     assert!(ok, "{err}");
-    assert_eq!(out, format!("chunk {u} → review\n"));
+    // a `review` done is not amended, so only the --review hint follows
+    let want = format!("chunk {u} → review\nno --review given: ");
+    assert!(
+        out.starts_with(&want) && !out.contains("amends it"),
+        "{out}"
+    );
     let (_, json, _) = fael(&d, &["board", "--json"]);
     let b: serde_json::Value = serde_json::from_str(&json).unwrap();
     let c = b["projects"][0]["chunks"]

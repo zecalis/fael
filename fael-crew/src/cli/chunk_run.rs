@@ -165,6 +165,19 @@ pub(crate) fn note(st: &mut Store, uid: &str, text: &str, now: &str) -> Result<(
     Ok(())
 }
 
+/// `--pr`'s number from `12`, `#12`, `owner/repo#12` or a pull URL.
+fn pr_number(raw: Option<&str>) -> Result<Option<i64>, String> {
+    raw.map(|n| {
+        n.trim_end_matches('/')
+            .rsplit(['#', '/'])
+            .next()
+            .unwrap_or("")
+            .parse::<i64>()
+    })
+    .transpose()
+    .map_err(|_| "rejected: --pr takes a PR number, owner/repo#N or its URL".into())
+}
+
 pub(crate) fn done(
     a: &Args,
     r: &Repo,
@@ -177,6 +190,8 @@ pub(crate) fn done(
         "chunk done",
         &["pr", "out", "run", "review", "left", "no-change"],
     )?;
+    // `-` reads the hand-off from stdin: a long one never rides a shell argument
+    let handoff = &crate::chunk_here::handoff_text(handoff)?;
     let no_change = a.has("no-change");
     if no_change && (a.has("pr") || pr_default.is_some() || a.has("out")) {
         return Err(
@@ -186,17 +201,7 @@ pub(crate) fn done(
     }
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
     let raw = a.one("pr").or(pr_default);
-    let pr = raw
-        .as_deref()
-        .map(|n| {
-            n.trim_end_matches('/')
-                .rsplit(['#', '/'])
-                .next()
-                .unwrap_or("")
-                .parse::<i64>()
-        })
-        .transpose()
-        .map_err(|_| "rejected: --pr takes a PR number, owner/repo#N or its URL")?;
+    let pr = pr_number(raw.as_deref())?;
     // issue 01M4QFJ6V: another repo's PR is refused, never dropped; no origin = no check
     if let Some((raw, want)) = raw.as_deref().and_then(|p| Some((p, pr_repo(p)?)))
         && let Some(have) = crate::board::remote(&r.root).filter(|h| !h.eq_ignore_ascii_case(&want))
@@ -258,7 +263,8 @@ pub(crate) fn done(
     if empty(&diff)
         && let (Some(t), Some(n)) = (&named, pr)
     {
-        diff = crate::chunk_pr_files::merged_files(&r.root, t, n).or(diff);
+        // issue 01M63XC1: not merged yet — the open PR's files, through gh
+        diff = crate::chunk_pr_files::pr_files(&r.root, t, n, "gh").or(diff);
     }
     let unclaimed = empty(&diff);
     let outside = diff.as_ref().map(|d| outside_text(r, &st, uid, d));
@@ -268,6 +274,11 @@ pub(crate) fn done(
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
     print!("{}", st.drift_line(uid));
+    let reviewed = a.one("review").is_some();
+    print!(
+        "{}",
+        crate::chunk_here::done_hints(uid, pr.is_some(), reviewed)
+    );
     if no_change {
         match unclaimed {
             true => println!("recorded: reviewed, no change — the next brief reads it as a result"),
