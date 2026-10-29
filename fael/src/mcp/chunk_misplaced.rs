@@ -7,25 +7,17 @@ use serde_json::Value;
 /// key and where it applies, never reject a call that saves.
 pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
     let has = |k: &str| a.get(k).is_some_and(|v| !v.is_null());
-    let has_text = a
-        .get("text")
-        .and_then(Value::as_str)
-        .is_some_and(|t| !t.is_empty());
-    let has_run = a
-        .get("run")
-        .and_then(Value::as_str)
-        .is_some_and(|t| !t.is_empty());
+    let filled = |k: &str| {
+        a.get(k)
+            .and_then(Value::as_str)
+            .is_some_and(|t| !t.is_empty())
+    };
     let has_force = a.get("force").and_then(Value::as_bool).unwrap_or(false);
-    let mut fell: Vec<String> = vec![];
-    match verb {
-        "show" => {
-            if has_text {
-                fell.push("`text` (show takes none)".into());
-            }
-            if has_run {
-                fell.push("`run` (show takes none)".into());
-            }
-            for k in [
+    // (keys the verb takes none of, keys only another verb takes)
+    let (none, foreign): (&[&str], &[&str]) = match verb {
+        "show" => (
+            &["text", "run"],
+            &[
                 "other",
                 "on",
                 "pr",
@@ -34,27 +26,15 @@ pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
                 "no_change",
                 "with",
                 "as",
-            ] {
-                if has(k) {
-                    fell.push(format!("`{k}` (only its verb takes it)"));
-                }
-            }
-        }
-        "start" => {
-            if has_text {
-                fell.push("`text` (start takes none)".into());
-            }
-            for k in ["other", "on", "pr", "left", "review", "no_change"] {
-                if has(k) {
-                    fell.push(format!("`{k}` (only its verb takes it)"));
-                }
-            }
-        }
-        "note" => {
-            if has_run {
-                fell.push("`run` (note takes none)".into());
-            }
-            for k in [
+            ],
+        ),
+        "start" => (
+            &["text"],
+            &["other", "on", "pr", "left", "review", "no_change"],
+        ),
+        "note" => (
+            &["run"],
+            &[
                 "other",
                 "on",
                 "pr",
@@ -63,35 +43,31 @@ pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
                 "no_change",
                 "with",
                 "as",
-            ] {
-                if has(k) {
-                    fell.push(format!("`{k}` (only its verb takes it)"));
-                }
-            }
-        }
-        "done" => {
-            for k in ["other", "on", "with", "as"] {
-                if has(k) {
-                    fell.push(format!("`{k}` (only its verb takes it)"));
-                }
-            }
-        }
-        "wait" => {
-            for k in ["other", "pr", "left", "review", "no_change", "with", "as"] {
-                if has(k) {
-                    fell.push(format!("`{k}` (only its verb takes it)"));
-                }
-            }
-        }
-        "after" => {
-            for k in ["on", "pr", "left", "review", "no_change", "with", "as"] {
-                if has(k) {
-                    fell.push(format!("`{k}` (only its verb takes it)"));
-                }
-            }
-        }
+            ],
+        ),
+        "done" => (&[], &["other", "on", "with", "as"]),
+        "wait" => (
+            &[],
+            &["other", "pr", "left", "review", "no_change", "with", "as"],
+        ),
+        "after" => (
+            &[],
+            &["on", "pr", "left", "review", "no_change", "with", "as"],
+        ),
         _ => return None,
-    }
+    };
+    let mut fell: Vec<String> = vec![];
+    fell.extend(
+        none.iter()
+            .filter(|k| filled(k))
+            .map(|k| format!("`{k}` ({verb} takes none)")),
+    );
+    fell.extend(
+        foreign
+            .iter()
+            .filter(|k| has(k))
+            .map(|k| format!("`{k}` (only its verb takes it)")),
+    );
     if verb != "start" {
         // `force`+identity+joint ride only on `start`
         if has_force {
