@@ -147,7 +147,9 @@ pub(crate) fn same_finding(ev: &Evidence) -> bool {
     ev.text == TextRel::Same && ev.files.shared > 0
 }
 
-/// The one key open rows on these files already use — chunk 3e, and only when
+/// The one key open rows on these files already use — chunk 3e. A row counts
+/// only when it carries every one of the new row's files: one shared file (a
+/// doc or hub many topics touch) is not a shared topic (01M644FNT). Only when
 /// exactly one key exists: zero candidates files the row keyless, several file
 /// it keyless too (§6e), because a guessed key must never pick between topics
 /// and never ask which. Deterministic: the keys are a sorted set. Runs after
@@ -157,7 +159,7 @@ pub(crate) fn same_finding(ev: &Evidence) -> bool {
 pub(crate) fn auto_key(log: &core::Log, files: &[String]) -> Option<String> {
     let keys: BTreeSet<&str> = open_rows(log)
         .iter()
-        .filter(|r| r.files.iter().any(|f| files.contains(f)))
+        .filter(|r| !files.is_empty() && files.iter().all(|f| r.files.contains(f)))
         .filter_map(|r| r.key.as_deref())
         .filter(|k| core::chunk_stem(k).is_none())
         .collect();

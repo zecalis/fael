@@ -129,6 +129,22 @@ fn a_guessed_key_never_closes_a_row() {
     assert!(usage(&d).is_empty());
 }
 
+/// 01M644FNT: one shared file is not one topic. A note on two files, only
+/// one of which an unrelated keyed row also touches, takes no key.
+#[test]
+fn a_single_shared_file_is_not_a_shared_topic() {
+    let d = repo();
+    seed_key(&d, "opencode:v2");
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", "stale verbs", "--files", "src/a.rs,src/b.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    assert!(!err.contains("the only key"), "{err}");
+    assert_eq!(key_of(&d, "stale verbs"), None);
+}
+
 #[test]
 fn mcp_add_auto_keys_too() {
     let d = repo();
