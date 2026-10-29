@@ -19,7 +19,13 @@ pub(super) fn also(log: &core::Log, sel: &core::Selection, rendered: usize) -> S
         .take(SHOWN)
         .map(|r| {
             let t = r.title.as_deref().unwrap_or(&r.text);
-            let t: String = t.chars().take(60).collect();
+            let t: String = t
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .chars()
+                .take(60)
+                .collect();
             format!("{} \"{t}\"", abbrev.short(&r.id))
         })
         .collect();
