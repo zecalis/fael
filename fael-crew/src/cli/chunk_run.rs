@@ -95,6 +95,10 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
                 here.worktree, st.run
             );
         }
+        if j == fael_crew::Joint::Lane {
+            // issue 01M5Y6H4: the lane rules said when a lane is seated, not at first start
+            println!("{}", fael_core::work::LANE_LINE.replace("<R>", &st.run));
+        }
         if j == fael_crew::Joint::Follow {
             print!("{}", store.follow_text(w)?);
         }

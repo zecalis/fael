@@ -72,8 +72,8 @@ pub use elsewhere::{
     Elsewhere, chunk_elsewhere, register_repo, repos as elsewhere_repos, row_elsewhere,
 };
 pub use pure::{
-    CHUNK_VERBS, PLAN_VERBS, held_session_db, held_session_file, in_tmp, is_scratch, main_root_for,
-    overlap, registered, rules, shared,
+    CHUNK_VERBS, LANE_LINE, PLAN_VERBS, held_session_db, held_session_file, in_tmp, is_scratch,
+    main_root_for, overlap, registered, rules, rules_full, shared, wait_hint,
 };
 pub use ready::{first_ready, kickoff_text, ready_in};
 pub use report::{mark_report, mark_report_session};
