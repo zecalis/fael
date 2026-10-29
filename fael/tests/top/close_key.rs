@@ -189,3 +189,13 @@ fn close_names_the_row_it_closed() {
         "{line}"
     );
 }
+
+#[test]
+fn mcp_close_takes_note_as_the_reason() {
+    let d = repo();
+    add(&d, "note", "alias target", "k:alias");
+    // agents reach for `note` before `text` (fael:01M62VMF)
+    let (err, out) = mcp_close(&d, serde_json::json!({"key": "k:alias", "note": "done"}));
+    assert!(!err, "{out}");
+    assert!(!open_titles(&d, "k:alias").contains("alias target"));
+}
