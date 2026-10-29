@@ -338,3 +338,19 @@ fn said_id(out: &str, id: &str) -> Option<String> {
         .find(|w| w.len() >= 8 && id.starts_with(w))
         .map(String::from)
 }
+
+#[test]
+fn a_test_beside_a_scope_file_is_inside_but_another_test_is_not() {
+    let (d, state) = init();
+    let f = |args: &[&str]| fael(&d, &state, args);
+    let args = ["--brief", "b", "--label", "t", "--scope", "t/series.ts"];
+    let t = f(&[&["chunk", "add", "t"], &args[..]].concat());
+    let files = ["t/series.ts", "t/series.test.ts", "t/other.test.ts"];
+    lane(&d, &state, &t, ("lane-t", "main"), "RT", &files);
+    let out = f(&["chunk", "done", &t, "h", "--left", "none", "--run", "RT"]);
+    let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
+    assert_eq!(
+        block,
+        "declared scope: t/series.ts\noutside declared scope: t/other.test.ts"
+    );
+}
