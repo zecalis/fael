@@ -368,7 +368,7 @@ mod tests {
         let a = super::text_alias(&a);
         assert_eq!(a["text"], "r");
         assert!(unknown_note(&a, KNOWN).is_none());
-        let e = "rejected: x — try the same command with --run R1; else".to_string();
+        let e = "x — try the same command with --run R1; else".to_string();
         assert!(super::with_cwd_hint(e).contains("same call with run: R1"));
     }
 
