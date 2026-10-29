@@ -74,9 +74,14 @@ pub(crate) fn uid(st: &Store, here: &Here) -> Result<String, String> {
 }
 
 /// The PR of `branch` through `gh`; None = gh missing, no PR, or no branch (done goes without).
+/// `FAEL_GH_PR` stands in for gh's answer (tests only: no fake binary on PATH, cf. `FAEL_GH_JSON`).
 pub(crate) fn pr_of(dir: &Path, branch: Option<&str>, gh: &str) -> Option<String> {
+    let branch = branch?;
+    if let Ok(fake) = std::env::var("FAEL_GH_PR") {
+        return fake.trim().parse::<i64>().ok().map(|n| n.to_string());
+    }
     let out = Command::new(gh)
-        .args(["pr", "view", branch?, "--json", "number", "-q", ".number"])
+        .args(["pr", "view", branch, "--json", "number", "-q", ".number"])
         .current_dir(dir)
         .output()
         .ok()?;
