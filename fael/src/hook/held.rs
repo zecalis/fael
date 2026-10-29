@@ -18,6 +18,8 @@ const DONE_MAX: usize = 5;
 /// `chunk start` names fewer than done: it comes before the work, when an agent
 /// reads a brief and will not judge five rows it has not touched yet.
 const START_MAX: usize = 3;
+/// Rows `chunk start` already named, machine-local like `held-shown`.
+const START_SHOWN: &str = "start-shown";
 
 /// `fael add` names fewer: the row's own files, not the chunk's diff.
 const ADD_MAX: usize = 3;
@@ -192,6 +194,10 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
         return String::new();
     }
     let mut found = select(&log, &r.root, &al, &edited, "");
+    // said once at start: a row an earlier start named is not named again — the
+    // edit push and `done` still ask, where the touched file is known
+    let said = super::held_rotate::load_in(&r.root, START_SHOWN);
+    found.retain(|(w, _)| !said.contains_key(&w.id));
     super::held_rotate::order(&mut found, &super::held_rotate::load(&r.root));
     let (head, rest) = found.split_at(found.len().min(START_MAX));
     let ev = super::held_evidence::lines(&log, &r.root, &al, head);
@@ -201,6 +207,7 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     // one of these rows carries `shown: ["start", …]` — head only, fail open.
     let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();
     super::held_rotate::stamp(&r.root, &ids);
+    super::held_rotate::stamp_in(&r.root, START_SHOWN, &ids);
     if !head.is_empty()
         && let Some(s) = crate::session::writer_session(&r.root)
     {

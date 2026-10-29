@@ -10,14 +10,19 @@ use crate::core;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-fn path(root: &Path) -> PathBuf {
+fn path(root: &Path, dir: &str) -> PathBuf {
     let key = session_key(&root.to_string_lossy());
-    state_dir().join("held-shown").join(format!("{key}.txt"))
+    state_dir().join(dir).join(format!("{key}.txt"))
 }
 
 /// Row id → ms it was last named by a done or start list.
 pub(crate) fn load(root: &Path) -> HashMap<String, u64> {
-    let s = std::fs::read_to_string(path(root)).unwrap_or_default();
+    load_in(root, "held-shown")
+}
+
+/// `load` over the record of one list (`start-shown`: what `chunk start` named).
+pub(crate) fn load_in(root: &Path, dir: &str) -> HashMap<String, u64> {
+    let s = std::fs::read_to_string(path(root, dir)).unwrap_or_default();
     s.lines()
         .filter_map(|l| l.split_once('\t'))
         .filter_map(|(id, ms)| Some((id.to_string(), ms.parse().ok()?)))
@@ -31,15 +36,20 @@ pub(crate) fn order(found: &mut [(&core::Row, String)], seen: &HashMap<String, u
 
 /// Stamp `ids` shown now. Callers pass the named head only, never the tail.
 pub(crate) fn stamp(root: &Path, ids: &[String]) {
+    stamp_in(root, "held-shown", ids);
+}
+
+/// `stamp` into the record of one list.
+pub(crate) fn stamp_in(root: &Path, dir: &str, ids: &[String]) {
     if ids.is_empty() {
         return;
     }
-    let mut seen = load(root);
+    let mut seen = load_in(root, dir);
     let now = core::now_ms();
     ids.iter().for_each(|id| {
         seen.insert(id.clone(), now);
     });
-    let p = path(root);
+    let p = path(root, dir);
     if p.parent()
         .is_none_or(|d| std::fs::create_dir_all(d).is_err())
     {
