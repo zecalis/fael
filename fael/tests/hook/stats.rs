@@ -76,7 +76,7 @@ fn push_usage_counts_only_rendered_rows() {
     let input = format!(r#"{{"cwd":{},"files":["src/a.rs"]}}"#, json(&d));
     let (ok, out, _) = fael(&d, &["hook", "edit"], &input);
     // the budget cut surfaces in the header, not as render's budget line
-    assert!(ok && out.contains(" of 5):"), "{out}");
+    assert!(ok && out.contains(" of 5 · also: "), "{out}");
     let reply: serde_json::Value = serde_json::from_str(&out).unwrap();
     let context = reply["context"].as_str().unwrap();
     let rendered = context.lines().filter(|l| l.starts_with("- [")).count();

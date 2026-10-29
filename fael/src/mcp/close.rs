@@ -8,11 +8,11 @@ use crate::hook::{ASK_WARN, record_asks};
 use crate::write::close_row;
 use serde_json::Value;
 
-/// No hidden `close` properties — KNOWN is the schema surface plus routing.
+/// `note` is an accepted alias of `text`, kept out of the schema.
 #[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
-pub(crate) const HIDDEN: &[&str] = &[];
+pub(crate) const HIDDEN: &[&str] = &["note"];
 /// Every key `close` reads.
-pub(crate) const KNOWN: &[&str] = &["id", "ids", "key", "text", "force"];
+pub(crate) const KNOWN: &[&str] = &["id", "ids", "key", "text", "note", "force"];
 
 pub(super) fn close(a: &Value) -> Result<String, String> {
     let extra = unknown_note(a, KNOWN);
@@ -22,7 +22,8 @@ pub(super) fn close(a: &Value) -> Result<String, String> {
 
 fn close_checked(a: &Value) -> Result<String, String> {
     let r = repo_for(a)?;
-    let why = need(a, "text")?;
+    // `note` is the name agents reach for first (issue fael:01M62VMF)
+    let why = need(a, "text").or_else(|e| need(a, "note").map_err(|_| e))?;
     // `ids: [...]` closes many in one call, like the CLI's `close a b "why"`:
     // a bad id reports alone, the rest save, any rejection makes the call an error
     let ids: Vec<String> = match (a["key"].as_str(), a["ids"].as_array()) {

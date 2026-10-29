@@ -63,7 +63,10 @@ fn edit_push_caps_at_five_and_names_the_cut() {
     // header (not the budget line)
     assert_eq!(shown(&out), 5, "{out}");
     assert!(out.contains("login loops"), "{out}");
-    assert!(out.contains("fael mem for src/a.rs (5 of 8):"), "{out}");
+    assert!(
+        out.contains("fael mem for src/a.rs (5 of 8 · also: "),
+        "{out}"
+    );
     assert!(
         !out.contains("more about") && !out.contains("narrow the filter"),
         "{out}"
@@ -89,7 +92,7 @@ fn a_full_budget_cuts_the_stashed_notice_not_the_rows_and_a_later_push_says_it()
     let (ok, out) = edit(&d, Some(s));
     assert!(ok, "{out}");
     assert!(shown(&out) > 0 && shown(&out) < 8, "{out}");
-    assert!(out.contains(" of 8):"), "{out}");
+    assert!(out.contains(" of 8 · also: "), "{out}");
     assert!(!out.contains("possible problem"), "{out}");
     // room again: the cut rows and the kept notice come, once
     std::fs::write(&cfg, "[budget]\npush_tokens = 800\n").unwrap();
@@ -127,7 +130,7 @@ fn edit_push_hub_file_peeks_once_beside_now_rows() {
     assert_eq!(shown(&out), 1 + 3, "{out}");
     assert!(out.contains("login loops"), "{out}");
     assert!(
-        out.contains("(4 of 16)") && !out.contains("more about"),
+        out.contains("(4 of 16 · also: ") && !out.contains("more about"),
         "{out}"
     );
     // the peek is once per file per session: a re-edit drips no more rows,
