@@ -8,7 +8,7 @@ use super::start::{Brief, Prev, Started};
 use std::fmt::Write;
 
 /// How a chunk's state moves — one copy, in fael-core (kickoff prints it too).
-pub use fael_core::work::rules;
+pub use fael_core::work::{rules, rules_full};
 
 /// A heading a brief carries by default: Goal, Scope, Done, Constraints (any numbering);
 /// `few` = Goal and Done only, for a chunk that names what else it reads.
@@ -91,10 +91,14 @@ fn live(o: &mut String, all: &[(String, String)], more: usize) {
 
 /// The chunk rules whole, or one pointer line when the session already read them
 /// (issue 01M5Y6H4).
-fn rules_text(o: &mut String, uid: &str, first: Option<&Brief>, whole: bool) {
+fn rules_text(o: &mut String, uid: &str, first: Option<&Brief>, whole: bool, full: bool) {
     o.push('\n');
-    if whole {
-        o.push_str(&rules(uid, first.and_then(|c| c.model.as_deref())));
+    let model = first.and_then(|c| c.model.as_deref());
+    if full {
+        // `--full`: the core plus the situational rules the verbs otherwise say
+        o.push_str(&rules_full(uid, model));
+    } else if whole {
+        o.push_str(&rules(uid, model));
     } else {
         let _ = writeln!(
             o,
@@ -217,7 +221,7 @@ impl Started {
                 "\nplan sections (goal, scope, done, constraints): `fael chunk start {uid} --full`"
             );
         }
-        rules_text(&mut o, uid, first, rules_full);
+        rules_text(&mut o, uid, first, rules_full, full);
         o
     }
 

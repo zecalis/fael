@@ -62,8 +62,16 @@ pub(crate) fn add_wait(
     st.start(uid, &start, &here())?;
     let (until, options) = (a.one("until"), a.many("option"));
     st.wait(uid, &on, &q, until.as_deref(), &options, &here())?;
-    println!("chunk {uid} → waiting on {on}");
+    waiting(uid, &on, &q);
     Ok(())
+}
+
+/// The wait's receipt, then its format line when earned (issue 01M5Y6H4).
+pub(crate) fn waiting(uid: &str, on: &str, text: &str) {
+    println!("chunk {uid} → waiting on {on}");
+    if let Some(h) = fael_core::work::wait_hint(on, text) {
+        println!("{h}");
+    }
 }
 
 /// A `drop?` chunk the owner drops takes its issue with it: the sweep tagged

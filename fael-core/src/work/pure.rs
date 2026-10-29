@@ -134,8 +134,24 @@ pub fn held_session_db(session: &str) -> Option<PathBuf> {
     Path::new(&db).exists().then(|| PathBuf::from(db))
 }
 
-/// The chunk rules said once at the end of every brief and kickoff.
+/// The chunk rules said once at the end of a session's first brief and kickoff: only what
+/// applies to every chunk. Situational rules read at start are forgotten by the moment they
+/// apply (issue 01M5Y6H4), so the verbs say them there; `rules_full` keeps them all.
 pub fn rules(uid: &str, model: Option<&str>) -> String {
+    format!("{}{}", rules_head(uid, model), rules_pointer(uid))
+}
+
+/// Core plus the situational rules: `chunk start --full`.
+pub fn rules_full(uid: &str, model: Option<&str>) -> String {
+    let (head, tail) = (rules_head(uid, model), rules_pointer(uid));
+    format!("{head}{}{tail}", rules_situational())
+}
+
+fn rules_pointer(uid: &str) -> String {
+    format!("- the rest (lane, wait format, plan sections): `fael chunk start {uid} --full`\n")
+}
+
+fn rules_head(uid: &str, model: Option<&str>) -> String {
     // crew decision 01M5FYK7: `mixed` = Opus settles the plan, Sonnet subagents do the plain edits
     let mixed = if model == Some("mixed") {
         "- model mixed: settle the plan yourself, hand the plain edits to small-model subagents (Claude Code: the Agent tool with `model: sonnet`), and review what they return before each step commit\n"
@@ -145,24 +161,44 @@ pub fn rules(uid: &str, model: Option<&str>) -> String {
     format!(
         "## chunk rules\n\
          - state moves only through fael, never by editing a plan file:\n  \
-         finished → from this worktree: `fael chunk done \"<result>\" --left none|<ids>` (PR found from the run's branch; `--pr N` to name it, or `--out <path>` for a file, image or video): done with a PR, review for a file the owner accepts; `-` as the text reads a long hand-off from stdin (`fael chunk done - --left none <<'EOF' … EOF`); after done, `fael chunk done {uid} \"<new>\"` (no `--pr`) amends the hand-off\n  \
+         finished → from this worktree: `fael chunk done \"<result>\" --left none|<ids>` (PR found from the run's branch; `--pr N` to name it, or `--out <path>` for a file, image or video): done with a PR, review for a file the owner accepts; `-` as the text reads a long hand-off from stdin (`fael chunk done - --left none <<'EOF' … EOF`); after done, `fael chunk done {uid} \"<new>\"` (no `--pr`) amends the hand-off; the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks\n  \
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
          - via MCP, pass `cwd` (your working directory) on every chunk call, or the client's launch dir is recorded as your seat\n\
-         - lane (joint `--as lane`): one scope per worktree, own branch each — land in plan order, first-listed chunk first, as a suggestion only; the owner merges every PR, fael never enforces an order or guards git flow\n\
-         - lane: end your run (`fael run end <R>`) before rebasing onto a lane that already landed, so its own diff is claimed first; `chunk done` and `run end` still say `outside declared scope` (+ `(overlaps open chunk …)`) as a fact, never a refusal\n\
-         - leftovers are rows, not PR prose: file each first (`fael add issue \"<one topic, no ; list>\" --title \"<≤15 words>\" --files <f>` or `fael chunk add …`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…` — done refuses without it\n\
-         - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
-         - the context was compacted, or the chunk will not finish this session? stop at the last passing step: a part that passes Done on its own ships as this chunk's PR, the rest `fael chunk add`ed and named in `--left`; otherwise a step commit + checkpoint note and end the session — the next `chunk start` resumes it\n\
-         - you triggered Windows CI (`gh workflow run ci.yml --ref <branch>`)? wait for it (`gh run watch <id> --exit-status`) and write pass, or fail with the failing test, in the done text — never just \"triggered\"\n\
-         - the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks; the brief of every chunk after this one prints it\n\
+         - leftovers are rows, not PR prose: file each first (`fael add issue \"<one topic, no ; list>\" --title \"<≤15 words>\" --files <f>` or `fael chunk add \"<title>\" --plan <plan> --brief \"…\"`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…` — done refuses without it; a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"`; a fact the next session needs → `fael add note \"<state>\" --title \"<≤15 words>\" --files <f>`\n\
          {mixed}\
          - before done: a fresh session (a subagent, not you) checks your output — the diff, or the `--out` file — against this brief's Done and Scope, a Done criterion left undone is a major; fix what it finds and record its verdict with `--review clean|fixed|failed` (size S: check it yourself against Done)\n\
-         - a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read; then one clause per option on what it leads to, and end `Recommend: <option> because <evidence>` — you hold the most context now\n\
-         - a wait --on data names what is measured, the command that measures it and the bar that ends the wait\n\
          - after each step that passes: a step commit (Conventional Commits, says what the step did, e.g. `feat(x): …`; never `WIP:`) + `fael chunk note {uid} \"<done; next>\"` — the checkpoint a resume reads\n\
-         - a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done\n\
-         - a word for a chunk not yet run → `fael chunk note <uid> \"<text>\"` · work left over → `fael chunk add \"<title>\" --plan <plan> --brief \"…\"` · a fact the next session needs → `fael add note \"<state>\" --title \"<≤15 words>\" --files <f>`\n"
+         - the context was compacted, or the chunk will not finish this session? stop at the last passing step: a part that passes Done on its own ships as this chunk's PR, the rest `fael chunk add`ed and named in `--left`; otherwise a step commit + checkpoint note and end the session — the next `chunk start` resumes it\n"
     )
+}
+
+/// The rules the verbs say where they apply (lane start, wait), plus two with no verb
+/// moment, kept for `--full` only.
+fn rules_situational() -> String {
+    format!(
+        "- {LANE_LINE}\n\
+         - {WAIT_OWNER}\n\
+         - {WAIT_DATA}\n\
+         - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
+         - a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done\n"
+    )
+}
+
+/// Said by `chunk start --as lane` once it seats the lane (issue 01M5Y6H4).
+pub const LANE_LINE: &str = "lane: one scope per worktree, own branch each — land in plan order, first-listed chunk first, as a suggestion only; the owner merges every PR, fael never enforces an order or guards git flow. End your run (`fael run end <R>`) before rebasing onto a lane that already landed, so its own diff is claimed first; `chunk done` and `run end` still say `outside declared scope` (+ `(overlaps open chunk …)`) as a fact, never a refusal";
+
+const WAIT_OWNER: &str = "a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read; then one clause per option on what it leads to, and end `Recommend: <option> because <evidence>` — you hold the most context now";
+
+const WAIT_DATA: &str = "a wait --on data names what is measured, the command that measures it and the bar that ends the wait";
+
+/// The format line `chunk wait` prints after it records: an owner question without a
+/// `Recommend:`, or any data wait. A hint, never a refusal (issue 01M5Y6H4).
+pub fn wait_hint(on: &str, text: &str) -> Option<String> {
+    match on {
+        "owner" if !text.contains("Recommend:") => Some(format!("hint: {WAIT_OWNER}")),
+        "data" => Some(format!("hint: {WAIT_DATA}")),
+        _ => None,
+    }
 }

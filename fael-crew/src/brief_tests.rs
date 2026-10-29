@@ -127,13 +127,55 @@ fn the_brief_prints_the_plan_sections_once() {
 }
 
 #[test]
-fn the_rules_ask_for_the_windows_ci_result_not_the_trigger() {
+fn the_rules_keep_only_what_every_chunk_needs() {
+    // issue 01M5Y6H4: the situational rules are said by their verb or in `--full`
     let r = rules("U1", None);
-    assert!(r.contains("gh run watch <id> --exit-status"), "{r}");
-    assert!(
-        r.contains("fail with the failing test, in the done text"),
-        "{r}"
-    );
+    let bullets = r.lines().filter(|l| l.starts_with("- ")).count();
+    assert!(bullets <= 8, "{bullets} bullets: {r}");
+    for gone in [
+        "lane: one scope",
+        "Recommend:",
+        "--on data names",
+        "two lines of Done",
+        "makes untrue",
+        "Windows CI",
+        "gh workflow run",
+    ] {
+        assert!(!r.contains(gone), "{gone} in {r}");
+    }
+    assert!(r.ends_with("`fael chunk start U1 --full`\n"), "{r}");
+    // the Windows CI rule belongs to the fael repo's own AGENTS.md, not to every repo
+    assert!(!rules_full("U1", None).contains("gh workflow run"));
+}
+
+#[test]
+fn full_rules_are_the_core_plus_the_situational_ones() {
+    let f = rules_full("U1", None);
+    let core = rules("U1", None);
+    // everything in core but its closing pointer line opens the full text
+    let (head, _) = core.trim_end().rsplit_once('\n').unwrap();
+    assert!(f.starts_with(head), "{f}");
+    for kept in [
+        "lane: one scope per worktree",
+        "Recommend: <option> because <evidence>",
+        "a wait --on data names what is measured",
+        "serve two lines of Done",
+        "makes untrue",
+    ] {
+        assert!(f.contains(kept), "{kept} in {f}");
+    }
+    assert!(!core.contains("serve two lines of Done"));
+}
+
+#[test]
+fn start_full_prints_the_full_rules_and_the_lean_start_the_core() {
+    let st = Started {
+        run: "R".into(),
+        chunks: vec![chunk("A")],
+        orphaned: vec![],
+    };
+    assert!(st.render(true, true).contains("lane: one scope"));
+    assert!(!st.render(false, true).contains("lane: one scope"));
 }
 
 #[test]
@@ -248,7 +290,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
 
 #[test]
 fn the_rules_state_the_lane_contract_info_only() {
-    let r = rules("U1", None);
+    let r = rules_full("U1", None);
     assert!(
         r.contains("land in plan order, first-listed chunk first"),
         "{r}"

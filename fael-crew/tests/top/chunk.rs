@@ -65,7 +65,11 @@ fn a_lost_start_prints_no_brief_and_its_run_end_ends_nothing() {
     assert!(!ok && err.contains("--on owner|data"), "{err}");
     let (ok, out, err) = fael(&d, &["chunk", "wait", &u, "Which tone?", "--on", "owner"]);
     assert!(ok, "{err}");
-    assert_eq!(out, format!("chunk {u} → waiting on owner\n"));
+    // the format hint follows (this question has no `Recommend:`; chunk_hints.rs)
+    assert!(
+        out.starts_with(&format!("chunk {u} → waiting on owner\nhint: ")),
+        "{out}"
+    );
     let (_, out, _) = fael(&d, &["chunk", "answer", &u, "Warm"]);
     assert_eq!(out, format!("chunk {u} → open\n"));
     let (_, brief, _) = fael(&d, &["chunk", "start", &u]);

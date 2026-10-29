@@ -167,7 +167,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
                 .ok_or("rejected: chunk wait needs --on owner|data")?;
             let (until, options) = (a.one("until"), a.many("option"));
             s()?.wait(uid, &on, text, until.as_deref(), &options, &here)?;
-            say(uid, &format!("waiting on {on}"));
+            crate::chunk_ask::waiting(uid, &on, text);
         }
         ["after", uid, other, why] => {
             a.only("chunk after", &["run"])?;
