@@ -14,6 +14,16 @@ const NO_FLAG: &[(&str, &[&str], &str)] = &[
         &["--status", "--state"],
         "--all adds closed rows, --kind issue lists the open issues",
     ),
+    (
+        "chunk done",
+        &["--amend"],
+        "fael chunk done <uid> \"<new hand-off>\" again, with no --pr, amends it",
+    ),
+    (
+        "chunk done",
+        &["--file", "--stdin", "--handoff-file"],
+        "`-` as the hand-off reads it from stdin: fael chunk done <uid> - < file",
+    ),
 ];
 
 /// (command, flags it takes none of, what to say instead).
@@ -28,6 +38,11 @@ const TAKES_NO: &[(&str, &[&str], &str)] = &[
         &["to"],
         "the reason is the last word: fael close <id> \"<why>\"",
     ),
+    (
+        "chunk done",
+        &["verdict"],
+        "--review clean|fixed|failed says how the review went",
+    ),
 ];
 
 /// Reject with the closest real thing and the command's usage line, instead of
@@ -38,7 +53,14 @@ pub fn reject(argv: &[String], e: String) -> String {
     if let Some(m) = retype(argv, &e) {
         return m;
     }
-    let cmd = argv.first().map_or("", String::as_str);
+    let first = argv.first().map_or("", String::as_str);
+    // `chunk done`, not `chunk`: a crew verb has its own usage line and flags
+    let verb = argv.get(1).map(String::as_str).unwrap_or_default();
+    let named = format!("{first} {verb}");
+    let cmd = match super::verb::synopsis(first, verb).is_some() && is_verb_cmd(first) {
+        true => named.as_str(),
+        false => first,
+    };
     let tail = " — try 'fael --help'";
     if let Some(flag) = e.strip_prefix("rejected: unknown flag ") {
         let flag = flag.split(' ').next().unwrap_or_default();
@@ -55,6 +77,11 @@ pub fn reject(argv: &[String], e: String) -> String {
             .iter()
             .find(|(c, fs, _)| *c == name && fs.contains(&flag))
             .map(|(.., t)| format!("{head} — {t}"));
+        // a verb with no table entry: the nearest real flag, else its own --help
+        let said = said.or_else(|| {
+            name.contains(' ')
+                .then(|| format!("{head} — {}", near(name, &format!("--{flag}"))))
+        });
         return with_usage(name, said.unwrap_or(head.into()), &e);
     }
     if e.starts_with("rejected: unknown command") {
@@ -107,26 +134,48 @@ pub fn join_lists(argv: &[String]) -> Option<Vec<String>> {
 
 /// `msg` plus the command's synopsis line; `old` when the command has none.
 pub fn with_usage(cmd: &str, msg: String, old: &str) -> String {
-    match super::for_command(cmd).and_then(|s| s.lines().next()) {
+    match usage_line(cmd) {
         Some(u) => format!("{msg}\nusage: {u}"),
         None => old.into(),
+    }
+}
+
+/// Crew commands whose verbs each have a synopsis line of their own.
+fn is_verb_cmd(cmd: &str) -> bool {
+    matches!(cmd, "chunk" | "plan" | "run")
+}
+
+/// The synopsis line of `cmd`, or of `cmd verb` (`chunk done`) when it has verbs.
+fn usage_line(cmd: &str) -> Option<String> {
+    match cmd.split_once(' ') {
+        Some((c, v)) => super::verb::synopsis(c, v),
+        None => super::for_command(cmd)
+            .and_then(|s| s.lines().next())
+            .map(String::from),
     }
 }
 
 /// The real flags of `cmd`, hidden ones included: the full synopsis line
 /// names them, plus `--json`. Chunk 3 trims the shown help to the core, so
 /// reading the shown line here would lose the hidden flags.
-fn real_flags(cmd: &str) -> Vec<&'static str> {
-    let line = super::for_command_full(cmd).and_then(|s| s.lines().next());
-    let mut v: Vec<&str> = line
+fn real_flags(cmd: &str) -> Vec<String> {
+    let line = match cmd.split_once(' ') {
+        Some((c, v)) => super::verb::synopsis(c, v),
+        None => super::for_command_full(cmd)
+            .and_then(|s| s.lines().next())
+            .map(String::from),
+    };
+    let mut v: Vec<String> = line
         .unwrap_or_default()
         .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
         .filter(|w| w.starts_with("--") && w.len() > 2)
+        .map(String::from)
         .collect();
     // the synopsis may already name it mid-line (stats does): pushing blind
     // suggests it twice, and dedup only folds neighbours.
-    if !v.contains(&"--json") {
-        v.push("--json");
+    // (a verb line is exact: `chunk done` takes no --json)
+    if !cmd.contains(' ') && !v.iter().any(|f| f == "--json") {
+        v.push("--json".into());
     }
     v
 }
@@ -140,7 +189,7 @@ fn near(cmd: &str, flag: &str) -> String {
         // a typo or a prefix of a real flag (`--ful` → `--full`)
         true => real
             .iter()
-            .copied()
+            .map(String::as_str)
             .filter(|r| {
                 let r = &r[2..];
                 crate::levenshtein(r, name) <= 1
@@ -150,7 +199,7 @@ fn near(cmd: &str, flag: &str) -> String {
         // `-k`: every real flag that letter could start — never picked for them
         false => real
             .iter()
-            .copied()
+            .map(String::as_str)
             .filter(|r| r[2..].starts_with(name))
             .collect(),
     };
@@ -239,6 +288,19 @@ mod tests {
         // same input, same answer
         let a = reject(&argv("find --group"), flag_first.into());
         assert_eq!(a, reject(&argv("find --group"), flag_first.into()));
+    }
+
+    /// A crew verb's reject names that verb's usage and `--help`, never the core `fael --help`.
+    #[test]
+    fn a_chunk_verb_reject_points_at_its_own_usage() {
+        let flag = "rejected: unknown flag --lft — try 'fael --help'";
+        let said = reject(&argv("chunk done u x --lft none"), flag.into());
+        assert!(said.contains("did you mean --left?"), "{said}");
+        assert!(said.contains("usage: fael chunk done <uid>"), "{said}");
+        let no = "rejected: chunk done takes no --verdict — try 'fael --help'";
+        let said = reject(&argv("chunk done u x --verdict pass"), no.into());
+        assert!(said.contains("--review clean|fixed|failed"), "{said}");
+        assert!(!said.contains("try 'fael --help'"), "{said}");
     }
 
     /// `--files a.rs b.rs c.md` joins into one comma list up to the next flag or
