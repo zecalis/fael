@@ -187,7 +187,7 @@ above before relying on them; neither was readable in full when this was written
 curl -s -o /dev/null -w '%{http_code}\n' https://fael.<your-domain>/mcp                       # refused: 302/401/403
 curl -s https://fael.<your-domain>/mcp -H 'CF-Access-Client-Id: …' -H 'CF-Access-Client-Secret: …' \
   -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                                       # find, add, close
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                                       # find, add, close, chunk
 ```
 
 A `find` with `"cwd":"/tmp"` must return `isError` (pinned).

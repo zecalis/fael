@@ -104,6 +104,11 @@ impl Ctx {
     }
 }
 
+/// The reject names the command that was run, not the one that shares the check.
+fn unknown_client(verb: &str, n: &str) -> String {
+    format!("fael {verb}: unknown client {n:?} — want claude|codex|opencode")
+}
+
 /// `fael upgrade`: update the binary by its channel (the new binary then writes
 /// the wiring), else just the wiring. `wiring` = that second call: skip the binary.
 pub fn upgrade(client: Option<String>, dry: bool, yes: bool, wiring: bool) -> Result<(), String> {
@@ -112,9 +117,7 @@ pub fn upgrade(client: Option<String>, dry: bool, yes: bool, wiring: bool) -> Re
     if let Some(n) = client.as_deref()
         && !CLIENTS.contains(&n)
     {
-        return Err(format!(
-            "fael install: unknown client {n:?} — want claude|codex|opencode"
-        ));
+        return Err(unknown_client("upgrade", n));
     }
     if let (false, Some(home)) = (wiring, crate::home()) {
         let mut fwd = vec![];
@@ -148,9 +151,7 @@ pub fn cmd(client: Option<String>, dry: bool, ask: bool) -> Result<(), String> {
     let targets: Vec<&str> = match client.as_deref() {
         Some(n) if CLIENTS.contains(&n) => vec![n],
         Some(n) => {
-            return Err(format!(
-                "fael install: unknown client {n:?} — want claude|codex|opencode"
-            ));
+            return Err(unknown_client("install", n));
         }
         None => detect(&c.home, true),
     };
