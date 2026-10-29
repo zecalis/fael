@@ -10,26 +10,45 @@ fn allowed() -> BTreeMap<String, Vec<String>> {
     let mut out = BTreeMap::<String, Vec<String>>::new();
     for f in std::fs::read_dir(dir).unwrap().flatten() {
         let src = std::fs::read_to_string(f.path()).unwrap_or_default();
-        for call in src.split(".only(").skip(1) {
-            let Some(call) = call.trim_start().strip_prefix("\"chunk ") else {
-                continue;
-            };
-            let Some((verb, rest)) = call.split_once('"') else {
-                continue;
-            };
-            // a `&format!(…)` or a non-literal list is not ours to read
-            let Some(list) = rest
-                .trim_start_matches([',', ' ', '\r', '\n'])
-                .strip_prefix("&[")
-            else {
-                continue;
-            };
-            let list = list.split(']').next().unwrap_or_default();
-            let flags = list.split('"').skip(1).step_by(2).map(String::from);
-            out.entry(verb.into()).or_default().extend(flags);
-        }
+        parse(&src, &mut out);
     }
     out
+}
+
+/// One source file's `.only("chunk <verb>", &[…])` calls, whatever its line endings (a Windows
+/// checkout is CRLF: every gap between tokens may hold `\r`, which is whitespace).
+fn parse(src: &str, out: &mut BTreeMap<String, Vec<String>>) {
+    for call in src.split(".only(").skip(1) {
+        let Some(call) = call.trim_start().strip_prefix("\"chunk ") else {
+            continue;
+        };
+        let Some((verb, rest)) = call.split_once('"') else {
+            continue;
+        };
+        // a `&format!(…)` or a non-literal list is not ours to read
+        let Some(list) = rest
+            .trim_start()
+            .strip_prefix(',')
+            .and_then(|r| r.trim_start().strip_prefix("&["))
+        else {
+            continue;
+        };
+        let list = list.split(']').next().unwrap_or_default();
+        let flags = list.split('"').skip(1).step_by(2).map(String::from);
+        out.entry(verb.into()).or_default().extend(flags);
+    }
+}
+
+/// A multi-line call reads the same under LF and CRLF (the Windows checkout broke on `\r`).
+#[test]
+fn parse_reads_a_multi_line_call_under_crlf() {
+    let lf = "a.only(\n    \"chunk add\",\n    &[\n        \"plan\", \"brief\",\n        \"run\",\n    ],\n)?;\n";
+    let want = vec!["plan".to_string(), "brief".into(), "run".into()];
+    for src in [lf.to_string(), lf.replace('\n', "\r\n")] {
+        let mut out = BTreeMap::new();
+        parse(&src, &mut out);
+        assert_eq!(out.get("add"), Some(&want), "{src:?}");
+    }
 }
 
 /// (verb, flag) kept out of the usage line on purpose: decision 01M5PE234 (tier table 01M59WYN),
