@@ -18,7 +18,10 @@ fn allowed() -> BTreeMap<String, Vec<String>> {
                 continue;
             };
             // a `&format!(…)` or a non-literal list is not ours to read
-            let Some(list) = rest.trim_start_matches([',', ' ', '\n']).strip_prefix("&[") else {
+            let Some(list) = rest
+                .trim_start_matches([',', ' ', '\r', '\n'])
+                .strip_prefix("&[")
+            else {
                 continue;
             };
             let list = list.split(']').next().unwrap_or_default();
