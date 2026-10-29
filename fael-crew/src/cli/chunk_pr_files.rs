@@ -26,9 +26,16 @@ pub(crate) fn merged_files(dir: &Path, trunk: &str, n: i64) -> Option<Vec<String
 }
 
 /// The line `done` prints when nothing was claimed: a fact, never a refusal.
-pub(crate) fn none_claimed(trunk: &str, pr: Option<i64>) -> String {
+pub(crate) fn none_claimed(trunk: &str, pr: Option<i64>, uid: &str) -> String {
     let named = pr.map(|n| format!(" names (#{n})")).unwrap_or_default();
+    // a PR is a change: `--no-change` is for a done with neither PR nor file
+    let review = match pr {
+        None => format!(
+            "; a review that changed nothing: fael chunk done {uid} \"<result>\" --left none --no-change (MCP: no_change: true)"
+        ),
+        Some(_) => String::new(),
+    };
     format!(
-        "no diff claimed: no run branch and no commit on {trunk}{named} — the next brief prints no touched files; name the paths in the handoff\n"
+        "no diff claimed: no run branch and no commit on {trunk}{named} — the next brief prints no touched files; name the paths in the handoff{review}\n"
     )
 }

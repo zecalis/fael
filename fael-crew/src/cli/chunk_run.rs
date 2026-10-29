@@ -139,12 +139,22 @@ fn with_retype(
     };
     let q = |v: &str| format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\""));
     let mut cmd = format!("fael chunk done {uid} {}", q(handoff));
-    for f in ["pr", "out", "review", "left"] {
-        if let Some(v) = flag(f) {
-            cmd += &format!(" --{f} {}", if v.contains(' ') { q(&v) } else { v });
+    for f in ["pr", "out", "review", "left", "no-change"] {
+        match flag(f) {
+            Some(v) if v.is_empty() => cmd += &format!(" --{f}"),
+            Some(v) => cmd += &format!(" --{f} {}", if v.contains(' ') { q(&v) } else { v }),
+            None => {}
         }
     }
     format!("{e}\nretype: {cmd} --run {run}")
+}
+
+/// A flag's value for the retype line; a bare flag (`--no-change`) is the empty string.
+fn flag_of(a: &Args, f: &str) -> Option<String> {
+    match f {
+        "no-change" => a.has(f).then(String::new),
+        _ => a.one(f),
+    }
 }
 
 /// `chunk note`: the word is kept; a brief edited since the start is said too.
@@ -163,7 +173,17 @@ pub(crate) fn done(
     here: &Here,
     pr_default: Option<String>,
 ) -> Result<(), String> {
-    a.only("chunk done", &["pr", "out", "run", "review", "left"])?;
+    a.only(
+        "chunk done",
+        &["pr", "out", "run", "review", "left", "no-change"],
+    )?;
+    let no_change = a.has("no-change");
+    if no_change && (a.has("pr") || pr_default.is_some() || a.has("out")) {
+        return Err(
+            "rejected: --no-change says nothing was changed — drop --pr/--out, or drop --no-change"
+                .into(),
+        );
+    }
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
     let raw = a.one("pr").or(pr_default);
     let pr = raw
@@ -203,6 +223,11 @@ pub(crate) fn done(
     let mut st = Store::open(&db(r))?;
     // issue 01M5FMHQX: leftovers are rows; the statement rides in the hand-off the next brief prints
     let handoff = &crate::chunk_left::resolve(a.one("left"), handoff, &st, &crate::read(r))?;
+    // issue 01M62VY2: a review that changed nothing says so in the hand-off the next brief prints
+    let handoff = &match no_change {
+        true => format!("reviewed, no change: {handoff}"),
+        false => handoff.to_string(),
+    };
     // a done chunk's done again only amends its hand-off: no run, pr or touched change
     if pr.is_none() && src.is_none() && st.amend(uid, handoff, here.now)? {
         println!("handoff amended for {uid}");
@@ -222,7 +247,7 @@ pub(crate) fn done(
     // the run's start, read before done ends it: held rows `start` named after it are not repeated
     let started = st.run_started(uid, here.run);
     st.done_review(uid, handoff, pr, out, a.one("review").as_deref(), here)
-        .map_err(|e| with_retype(e, uid, handoff, |f| a.one(f)))?;
+        .map_err(|e| with_retype(e, uid, handoff, |f| flag_of(a, f)))?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
     // issue 01M4RRD1K: what the branch touched, not what it declared; a failed write only
     // keeps the declared scope
@@ -243,9 +268,16 @@ pub(crate) fn done(
     let to = if pr.is_some() { "done" } else { "review" };
     println!("chunk {uid} → {to}");
     print!("{}", st.drift_line(uid));
-    if unclaimed && src.is_none() {
+    if no_change {
+        match unclaimed {
+            true => println!("recorded: reviewed, no change — the next brief reads it as a result"),
+            false => println!(
+                "note: --no-change given, but the branch touches files — recorded as given"
+            ),
+        }
+    } else if unclaimed && src.is_none() {
         let t = named.as_deref().unwrap_or("the trunk");
-        print!("{}", crate::chunk_pr_files::none_claimed(t, pr));
+        print!("{}", crate::chunk_pr_files::none_claimed(t, pr, uid));
     }
     print!("{}", outside.unwrap_or_default());
     // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
