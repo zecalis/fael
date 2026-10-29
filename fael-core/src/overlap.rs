@@ -70,7 +70,7 @@ pub fn within(x: &str, y: &str) -> bool {
         return true;
     }
     let (dx, fx) = x.rsplit_once('/').unwrap_or(("", x));
-    let (dy, fy) = y.trim_end_matches('/').rsplit_once('/').unwrap_or(("", y));
+    let (dy, fy) = y.rsplit_once('/').unwrap_or(("", y));
     let (Some((sx, ex)), Some((sy, ey))) = (fx.rsplit_once('.'), fy.rsplit_once('.')) else {
         return false;
     };
@@ -96,6 +96,7 @@ mod tests {
         assert!(!within("src/series.test.js", "src/series.ts"));
         // a scope dir never pairs; only a file does
         assert!(!within("src/x.test.ts", "src/x"));
+        assert!(!within("src/a.test.b", "src/a.b/"));
     }
 
     fn v(x: &[&str]) -> Vec<String> {
