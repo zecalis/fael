@@ -36,7 +36,9 @@ fn text_alias(a: &Value) -> Value {
         .iter()
         .filter_map(|k| o.remove(*k))
         .collect();
-    if o.get("text").and_then(Value::as_str).is_none_or(str::is_empty)
+    if o.get("text")
+        .and_then(Value::as_str)
+        .is_none_or(str::is_empty)
         && let Some(v) = moved.into_iter().next()
     {
         o.insert("text".into(), v);
