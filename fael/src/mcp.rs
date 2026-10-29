@@ -11,6 +11,7 @@ pub(crate) mod add;
 pub(crate) mod args;
 pub(crate) mod bump;
 pub(crate) mod chunk;
+mod chunk_misplaced;
 pub(crate) mod close;
 pub(crate) mod find;
 

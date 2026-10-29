@@ -100,3 +100,55 @@ fn no_branch_and_no_pr_commit_says_nothing_was_claimed() {
     let want = "no diff claimed: no run branch and no commit on origin/main names (#42) — the next brief prints no touched files; name the paths in the handoff";
     assert!(out.lines().any(|l| l == want), "{out}");
 }
+
+/// Issue 01M62VY2: a review that changed nothing says so — the hand-off carries it, the
+/// no-diff line names the flag when there is no PR, and a PR with `--no-change` is refused.
+#[test]
+fn no_change_records_a_review_that_changed_nothing() {
+    let (d, state) = init("feat: duty (#41)", "features/tax/duty.rs");
+    let uid = started(&d, &state);
+    let plain = ["chunk", "done", &uid, "clean", "--left", "none"];
+    let out = fael(&d, &state, &plain);
+    assert!(out.contains("--no-change"), "{out}");
+    let (d, state) = init("feat: duty (#41)", "features/tax/duty.rs");
+    let uid = started(&d, &state);
+    let done = [
+        "chunk",
+        "done",
+        &uid,
+        "clean",
+        "--left",
+        "none",
+        "--no-change",
+    ];
+    let out = fael(&d, &state, &done);
+    assert!(out.contains("recorded: reviewed, no change"), "{out}");
+    assert!(!out.contains("no diff claimed"), "{out}");
+    let show = fael(&d, &state, &["chunk", "show", &uid]);
+    assert!(show.contains("reviewed, no change: clean"), "{show}");
+}
+
+#[test]
+fn no_change_with_a_pr_is_refused() {
+    let (d, state) = init("feat: duty (#41)", "features/tax/duty.rs");
+    let uid = started(&d, &state);
+    let bad = [
+        "chunk",
+        "done",
+        &uid,
+        "h",
+        "--left",
+        "none",
+        "--pr",
+        "42",
+        "--no-change",
+    ];
+    let o = Command::new(crate::common::fael_bin())
+        .args(bad)
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", &state)
+        .output()
+        .unwrap();
+    assert!(!o.status.success());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("--no-change says nothing"));
+}
