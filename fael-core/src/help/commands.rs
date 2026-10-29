@@ -123,7 +123,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--option A] [--pr N] [--out path]
 fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…] [--wait owner|data --ask \"<q>\" [--option A …] [--until YYYY-MM-DD] [--run R]]
 fael chunk show <uid|label> [--plan p] [--json]
-fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree] [--full] [--with uid --as pair|lane|follow] [--session id]
+fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree] [--full]
 fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
 fael chunk move <uid> --plan <p>
 fael chunk note <uid> \"<text>\"
@@ -132,7 +132,7 @@ fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--opt
 fael chunk after <uid> <other> \"<why>\" [--plan p] [--run R]
 fael chunk unafter <uid> <other> \"<why>\" [--plan p]
 fael chunk done <uid> \"<handoff>\" --left none|<id|uid>,… [--pr N|owner/repo#N|URL | --out <path> | --no-change] [--review clean|fixed|failed] [--run R]
-fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid> [--plan p] · fael chunk accept --merged
+fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid> [--plan p]
 fael chunk apply --json - [--plan p]   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"label\":…,\"brief\":…,\"size\":…,\"model\":…,\"scope\":…,\"reads\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapprove <uid> [--plan p]
     (inbox or a plan from `fael plan new`; add prints

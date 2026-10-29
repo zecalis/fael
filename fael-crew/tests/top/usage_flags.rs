@@ -29,6 +29,15 @@ fn allowed() -> BTreeMap<String, Vec<String>> {
     out
 }
 
+/// (verb, flag) kept out of the usage line on purpose: decision 01M5PE234 (tier table 01M59WYN),
+/// born hidden, named by the text that sends the agent there (the clash reject, the board app).
+const HIDDEN: &[(&str, &str)] = &[
+    ("start", "with"),
+    ("start", "as"),
+    ("start", "session"),
+    ("accept", "merged"),
+];
+
 /// The invocation lines of `fael chunk <verb> --help`, without the example line.
 fn usage(verb: &str) -> String {
     let argv = ["chunk".into(), verb.to_string(), "--help".into()];
@@ -47,13 +56,19 @@ fn every_flag_a_chunk_verb_takes_is_in_its_usage() {
     for (verb, flags) in &all {
         let u = usage(verb);
         // `--json` and `--plan` are global reads on every verb; the rest must be named
-        for f in flags.iter().filter(|f| *f != "json") {
+        let shown = |f: &&String| *f != "json" && !HIDDEN.contains(&(verb.as_str(), f.as_str()));
+        for f in flags.iter().filter(shown) {
             if !u.contains(&format!("--{f}")) {
                 missing.push(format!("chunk {verb}: --{f} not in `{}`", u.trim()));
             }
         }
     }
     assert!(missing.is_empty(), "{}", missing.join("\n"));
+    // a HIDDEN entry no verb takes any more is stale: drop it
+    for (v, f) in HIDDEN {
+        let live = all.get(*v).is_some_and(|fs| fs.iter().any(|x| x == f));
+        assert!(live, "HIDDEN ({v}, {f}) is in no a.only list: remove it");
+    }
 }
 
 /// What `fael chunk done <uid> "x" <extra…>` says on stderr, run in a scratch dir.
