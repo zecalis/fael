@@ -145,7 +145,7 @@ pub fn rules(uid: &str, model: Option<&str>) -> String {
     format!(
         "## chunk rules\n\
          - state moves only through fael, never by editing a plan file:\n  \
-         finished → from this worktree: `fael chunk done \"<result>\" --left none|<ids>` (PR found from the run's branch; `--pr N` to name it, or `--out <path>` for a file, image or video): done with a PR, review for a file the owner accepts; `-` as the text reads a long hand-off from stdin (`fael chunk done - --left none <<'EOF' … EOF`); `done` again with no `--pr` amends the hand-off\n  \
+         finished → from this worktree: `fael chunk done \"<result>\" --left none|<ids>` (PR found from the run's branch; `--pr N` to name it, or `--out <path>` for a file, image or video): done with a PR, review for a file the owner accepts; `-` as the text reads a long hand-off from stdin (`fael chunk done - --left none <<'EOF' … EOF`); after done, `fael chunk done {uid} \"<new>\"` (no `--pr`) amends the hand-off\n  \
          need the owner → `fael chunk wait {uid} --on owner \"<question>\"` · need data → `--on data \"<what>\" --until YYYY-MM-DD`\n  \
          needs another chunk first → `fael chunk after {uid} <other> \"<why>\"`\n\
          - one chunk = one branch = one PR; never merge, the owner does\n\
