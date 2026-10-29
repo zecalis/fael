@@ -1,4 +1,4 @@
-//! `fael mcp` — MCP over stdio: newline-delimited JSON-RPC 2.0, three listed tools (find · add · close).
+//! `fael mcp` — MCP over stdio: newline-delimited JSON-RPC 2.0, four listed tools (find · add · close · chunk).
 //! `bump` is CLI-first: unlisted to save schema tokens every session, still answered for clients that call it.
 //! Blocking std I/O, one request at a time — no async runtime on this path (PLAN §4).
 //! Tool failures come back as `isError` results so the agent reads the fix; only protocol
