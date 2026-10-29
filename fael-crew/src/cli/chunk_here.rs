@@ -10,7 +10,8 @@ use std::process::Command;
 pub(crate) fn done(a: &Args, r: &Repo, handoff: &str, here: &Here) -> Result<(), String> {
     let st = Store::open(&crate::plan::db(r))?;
     let uid = uid(&st, here)?;
-    let pr = if a.has("pr") || a.has("out") {
+    // `--no-change` names no PR: the branch's own is not the work reviewed (issue 01M62XEX)
+    let pr = if a.has("pr") || a.has("out") || a.has("no-change") {
         None
     } else {
         pr_default(r, &st, &uid, here)
