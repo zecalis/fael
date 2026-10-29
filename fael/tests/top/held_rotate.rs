@@ -171,3 +171,16 @@ fn done_since_leaves_out_what_start_named() {
     let none = run(&d, &s, "S3", &["held", "done"], "src/a.rs\n");
     assert_eq!(named(&none, &ids).len(), 5, "{none}");
 }
+
+#[test]
+fn start_names_a_row_once_then_the_next_rows() {
+    let (d, s, ids) = repo();
+    let mut seen = vec![];
+    for (n, want) in [(1, 3), (2, 3), (3, 1), (4, 0)] {
+        let out = run(&d, &s, &format!("S{n}"), &["held", "start"], "src/\n");
+        let got = named(&out, &ids);
+        assert_eq!(got.len(), want, "start {n}: {out}");
+        assert!(got.iter().all(|i| !seen.contains(*i)), "start {n}: {out}");
+        seen.extend(got.into_iter().cloned());
+    }
+}
