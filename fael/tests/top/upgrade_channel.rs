@@ -155,3 +155,12 @@ fn upgrade_rejects_an_unknown_client_before_the_channel_command() {
         "the channel command ran before validation"
     );
 }
+
+/// The reject names `upgrade`, the command that ran, not `install`, which shares the check.
+#[test]
+fn upgrade_unknown_client_reject_names_upgrade_not_install() {
+    let (o, _) = upgrade_via_fake_brew("", &[".codex"], &["--client", "foo"]);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("fael upgrade: unknown client"), "{err}");
+    assert!(!err.contains("fael install"), "{err}");
+}
