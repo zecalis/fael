@@ -249,7 +249,8 @@ fn missed(r: &Repo, log: &core::Log, id: &str) -> Result<(String, Vec<String>), 
 /// Writes never follow — only this read does.
 fn followed(w: &crate::find::owner::Elsewhere) -> Result<(String, Vec<String>), String> {
     let o = crate::repo_at(&w.at).map_err(|e| format!("rejected: {e}"))?;
-    let (log, tags) = crate::journal::read(&o);
+    let (mut log, tags) = crate::journal::read(&o);
+    crate::hook::mark_dormant(&o, &mut log);
     // Same canonical lookup: the id came from `row_elsewhere`, so it is One
     // content row; anything else is a typed miss, never silent.
     let row = match core::resolve_identity(&log, &w.id) {

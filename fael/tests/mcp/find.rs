@@ -180,6 +180,7 @@ fn find_id_follows_a_row_in_another_repo() {
     git(&["config", "user.name", "Elsewhere"]);
     git(&["config", "user.email", "elsewhere@example.com"]);
     std::fs::create_dir_all(other.join(".fael")).unwrap();
+    std::fs::write(other.join("src/a.rs"), "// before\n").unwrap();
     let other = other.canonicalize().unwrap();
     // file the row there, through this server so `cwd` routing is exercised too
     let added = mcp_tool(
@@ -205,6 +206,22 @@ fn find_id_follows_a_row_in_another_repo() {
         .to_string();
     assert!(body.contains("row over there"), "{body}");
     assert!(body.contains(&other.display().to_string()), "{body}");
+    // A later session must see the owner's derived lifecycle state even
+    // when it finds the row without knowing its repo first.
+    std::fs::write(other.join("src/a.rs"), "// after\n").unwrap();
+    let reads = mcp_tool(
+        &wt,
+        "find",
+        &[
+            serde_json::json!({"id": id, "cwd": other}),
+            serde_json::json!({"id": id}),
+        ],
+    );
+    for read in &reads {
+        assert_eq!(read["result"]["isError"], false, "{read}");
+        let text = read["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("(dormant)"), "{text}");
+    }
     // a token no repo holds stays a miss, now with the MCP routing beside
     // the CLI one
     let r = mcp_tool(&wt, "find", &[serde_json::json!({"id": "01M4ZZZZZZZZ"})]);
