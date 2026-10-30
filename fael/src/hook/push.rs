@@ -2,6 +2,11 @@
 //! this path), record the edit, cap the push at `budget.push_rows`, and say
 //! each row once per session. A push is an `edit` or a `shell-edit` (a shell
 //! call that wrote a file); no client sends a read push.
+//!
+//! The dedupe key is (session_id, row_id): the seen file holds row ids,
+//! never text, file, or query — a new session may surface the same row.
+//! Rows cut by the token budget keep their keys for a later push
+//! (`say_within` drops them before they are said, so nothing is spent).
 
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{self, Ask, Blobs, edit_hint, read_seen};
