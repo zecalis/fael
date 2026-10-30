@@ -1,5 +1,5 @@
 //! UserPromptSubmit says nothing: the key pointer it used to say earned 22%
-//! and was cut (decision 01M5528X). The hook still starts a turn.
+//! and was cut (decision 01M5528X). The adapter is now a silent no-op.
 
 use super::{fael, json, repo};
 
@@ -52,4 +52,22 @@ fn prompt_hook_cries_about_a_missing_prompt_field() {
         ok && out.is_empty() && err.contains("no `prompt` text"),
         "{out} {err}"
     );
+}
+
+// Captured via the CLI /hooks trust UI on 2026-10-31.
+// CLI 0.166.0-alpha.5.1, bundled in Desktop 26.1027.30824.
+// Paths, identifiers and prompt redacted. This proves payload compatibility,
+// not complete Desktop/CLI lifecycle parity.
+#[test]
+fn codex_prompts_remain_silent_across_turns() {
+    let d = repo();
+    for turn in ["turn-1", "turn-2"] {
+        let mut payload: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/codex-prompt.json")).unwrap();
+        payload["cwd"] = serde_json::json!(d);
+        payload["turn_id"] = serde_json::json!(turn);
+        let input = payload.to_string();
+        let (ok, out, err) = fael(&d, &["hook", "prompt", "--client", "codex"], &input);
+        assert!(ok && out.is_empty() && err.is_empty(), "{out} {err}");
+    }
 }

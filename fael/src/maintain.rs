@@ -62,8 +62,7 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             core::ProblemKind::Wiring,
             format!(
                 "{behind} client wiring change(s) pending (hooks, plugin or skill behind this \
-                 binary) — `fael upgrade` applies them; until then a newer hook stays off \
-                 (note: the prompt hint is Claude-only — Codex has no UserPromptSubmit hook)"
+                 binary) — `fael upgrade` applies them; until then a newer hook stays off"
             ),
         ));
     }

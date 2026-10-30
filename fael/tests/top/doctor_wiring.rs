@@ -109,10 +109,24 @@ fn session_start_writes_the_wiring_that_is_behind_and_says_so_once() {
 fn session_start_tells_codex_to_trust_the_hooks_it_wrote() {
     let (home, repo) = scratch();
     std::fs::create_dir_all(home.join(".codex")).unwrap();
+    fael(&home, &repo, &["install", "--client", "codex"]);
+    let hooks = home.join(".codex/hooks.json");
+    let mut old: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&hooks).unwrap()).unwrap();
+    old["hooks"]
+        .as_object_mut()
+        .unwrap()
+        .remove("UserPromptSubmit");
+    std::fs::write(&hooks, serde_json::to_string_pretty(&old).unwrap()).unwrap();
     std::fs::write(repo.join("a.rs"), "").unwrap();
     fael(&home, &repo, &["add", "note", "adopted", "--files", "a.rs"]);
     let out = session_start(&home, &repo);
     assert!(out.contains("Codex first needs /hooks"), "{out}");
+    assert!(
+        std::fs::read_to_string(&hooks)
+            .unwrap()
+            .contains("hook prompt --client codex")
+    );
     assert!(home.join(".codex/hooks.json").is_file());
     let out = session_start(&home, &repo);
     assert!(!out.contains("/hooks"), "said once: {out}");

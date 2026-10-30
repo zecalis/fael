@@ -21,7 +21,7 @@ Reply  {"block": false, "context"?: str, "notice"?: str}
 | a file was read | `read` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was written | `edit` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was found via search or the shell | `search` | `cwd`, `session`, plus `files` — or the raw call as `tool`, `tool_input`, `tool_response` | append `context` to the tool result |
-| the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | nothing: it marks the user turn (the edit ask speaks once per turn) and replies empty — the key pointer line was cut (01M5528X) |
+| the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | nothing: silent no-op; no turn state or context is written |
 | the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text` | nothing to do: fael files the reply's `fael <kind>:` lines and never blocks (`block` is always `false`, kept for old integrations) |
 
 OpenCode 2 replaced its plugin API, so the one file carries two implementations:
@@ -39,10 +39,11 @@ Zero or several matches leave it unset: identical concurrent commands warn each
 candidate's notice file, and `fael add` without `--files` there needs a single
 active session or explicit `--files`.
 
-`fael install` wires every event above on **Claude Code**. **Codex has no prompt hook** (its
-hooks know no UserPromptSubmit), so the per-turn edit-ask limit is Claude-only there — deliberate
-(its Stop/session-start/search/edit hooks are wired). A custom client can still call
-`prompt` from its own lifecycle; the adapter accepts it for both (`--client claude|codex`).
+`fael install` wires **Codex** Stop, SessionStart, UserPromptSubmit and shell/search/edit
+hooks. UserPromptSubmit calls the same silent no-op adapter as Claude Code; it
+adds no context and keeps no per-turn edit-ask counter. New or changed Codex hooks
+require user review and trust through `/hooks`; installation does not trust them.
+See the [Codex hook contract](https://learn.chatgpt.com/docs/hooks).
 
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript
   file whose birthtime is the start. **Send the exact same string to `read`, `edit` and `stop`**: it keys the

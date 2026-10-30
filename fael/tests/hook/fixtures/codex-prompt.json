@@ -1,0 +1,10 @@
+{
+  "session_id": "<redacted-session_id>",
+  "turn_id": "<redacted-turn_id>",
+  "transcript_path": "<redacted-transcript_path>",
+  "cwd": "<redacted-cwd>",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "default",
+  "prompt": "<redacted-prompt>"
+}
