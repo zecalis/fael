@@ -30,12 +30,12 @@ bare "crew". The crew repo is private: never link it from public docs.
 
 Decision `product:mission` (01M5ABTD): a core change ships when it fixes a bug, cuts noise,
 removes code, strengthens lifecycle or stats, or brings work in from the team's other systems
-(intake, 01M4TJTW). A crew change ships when it serves the owner's plan → chunk → agent → ship
+(intake, 01M5ABTD). A crew change ships when it serves the owner's plan → chunk → agent → ship
 loop and adds nothing to core default help. The owner's SwiftUI app
 reads `fael board --json` and starts an agent only on the owner's click or from a queue
 the owner approved; dev chunks are started by the owner, one per session from the board; the project's lead
 (fael crew, 01M4SQ9B) only for multi-chunk work that needs a shared contract, after the owner
-approves its set, on Sonnet (decision 01M5FMHQZ, supersedes 01M5FH2P);
+approves its set, on Sonnet (decision 01M5FMHQZ);
 the owner merges every PR; fael itself
 never starts an agent turn or re-prompts on idle,
 adds no daemon, never guesses, never polices the developer's process (worktree, branch, git flow).

@@ -49,10 +49,10 @@ markdown files into fael's SQLite store (`<git-common-dir>/fael/crew.db`, Englis
 jsonl. Planner skills (fael-plan, fael-content, part of fael crew, decision 01M5AF2H) cut the chunks; the agent
 judges size and model hint, fael stores them, the owner picks. A core change ships when it fixes a
 bug, cuts noise, removes code, strengthens lifecycle or stats, or brings work in
-from the team's other systems (intake, decision 01M4TJTW). The owner's
+from the team's other systems (intake, decision 01M5ABTD). The owner's
 window is a separate SwiftUI app reading `fael board --json`: it watches, notifies, and starts
 an agent only on the owner's click or from a queue of chunks the owner approved (dev chunks:
-the owner, one per session; the project's lead (part of fael crew, decision 01M4SQ9B) only for multi-chunk work that needs a shared contract, after the owner approves its set, decision 01M5FMHQZ superseding 01M5FH2P); the planner
+the owner, one per session; the project's lead (part of fael crew, decision 01M4SQ9B) only for multi-chunk work that needs a shared contract, after the owner approves its set, decision 01M5FMHQZ); the planner
 agent applies merge / split / pair itself, and every git merge is the owner's. `fael stats` still shows what fael handed over and what
 followed (capture → acted → outcome), never the counterfactual, so claims about value say
 only that.
@@ -85,7 +85,7 @@ A change must never:
   between agents, never decides how it is done: an assignment or a claim informs. A claim is race-safe (one winner) but gates only the
   claim: `--force` takes it over, and no edit is ever blocked.
 
-**Intake** (plans `fael-intake`, `ledger-intake`; decisions 01M4V3AD, 01M4TNGS, 01M5CY01). Fael reaches
+**Intake** (plans `fael-intake`, `ledger-intake`; decisions 01M4V3AD, 01M4TNGS, 01M5D68M9). Fael reaches
 the outside world only through an app's adapter — never a user or a user's channel (Facebook, LINE,
 email, a support desk): every channel goes channel → the app (which holds the customer's data, the
 draft and the send button) → its adapter → fael, so a new channel is work in the app. The app commits
@@ -142,7 +142,7 @@ a second row format. `fael sync` is adapter-side transport, not storage: it read
 core and carries it in `refs/fael/<repo-id>/<writer>` ([sync-format.md](sync-format.md)).
 `fael import <path>` stays as the by-hand route.
 
-Where a work habit lives (decision 01M4X4DZ) — deleting fael crew must leave each chunk's quality
+Where a work habit lives (decision 01M5F0XS) — deleting fael crew must leave each chunk's quality
 unchanged, only slower:
 
 | Layer | Lives in | Holds |
@@ -209,7 +209,7 @@ Lane contract (overlap-broker, info only — the owner merges every PR, fael nev
 - Across clones and machines journals travel through `fael sync`: each writer's
   journal is pushed to `refs/fael/<repo-id>/<writer>` on the remote named by
   `git config fael.remote` (never committed, never defaulted — not even to
-  `origin`, decision 01M5D4KX) and every writer's ref is ingested back by
+  `origin`, decision 01M5WGD6S) and every writer's ref is ingested back by
   id-union. The working tree and checked-out branches are never touched; the
   full contract is [sync-format.md](sync-format.md). `fael import <path>`
   copies another clone's log in by hand, by the same id-union.

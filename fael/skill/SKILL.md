@@ -28,7 +28,7 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff`. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
-A reject ends with `try <call>`: run it. Close: ``fael close 01M5ABCD "slow tick → backoff; guard `tests/backoff.rs`"``
+A reject ends with `try <call>`: run it. Close: ``fael close <id> "slow tick → backoff; guard `tests/backoff.rs`"``
 
 Each row is read months later with no chat: one or two standalone sentences, one topic (a `;`/`·` list is rejected),
 with a ≤15-word `--title` (count first: required past 60 words/400 chars).
