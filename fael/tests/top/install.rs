@@ -84,6 +84,8 @@ fn install_all_three_idempotent_and_leaves_what_is_not_fael_alone() {
     assert!(
         h.contains("hook edit --client codex")
             && h.contains("hook search --client codex")
+            && h.contains("hook prompt --client codex")
+            && h.contains("UserPromptSubmit")
             && !h.contains("hook read --client codex")
             && !h.contains("hook review"),
         "{h}"
