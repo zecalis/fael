@@ -12,3 +12,6 @@ publish-jobs = ["homebrew", "npm"]
 install-path = "CARGO_HOME"
 install-updater = true
 allow-dirty = ["ci"]
+
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-15"
