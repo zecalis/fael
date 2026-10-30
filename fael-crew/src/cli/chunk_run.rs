@@ -65,26 +65,18 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         let _ = std::fs::write(m, db(r).to_string_lossy().as_bytes());
     }
     // each linked issue's id → its row, so the agent reads what to fix without a find
-    if st.chunks.iter().any(|c| !c.issues.is_empty()) {
-        let log = crate::read(r);
-        for id in st.chunks.iter_mut().flat_map(|c| &mut c.issues) {
-            if let Ok(row) = core::resolve_row(&log, id) {
-                let title = row.title.as_deref().map(|t| format!("{t}\n"));
-                let tag = row.from_report().then_some("(from report, unchecked)\n");
-                *id = format!(
-                    "{} {}{}{}",
-                    row.id,
-                    tag.unwrap_or_default(),
-                    title.unwrap_or_default(),
-                    row.text
-                );
-            }
-        }
-    }
+    resolve_issue_rows(r, &mut st);
     for (u, t) in &st.orphaned {
         println!(
             "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --pr N --left none|<ids>"
         );
+    }
+    // c5: same-session retry returns the live R short — sections, answers, notes,
+    // hand-offs and held rows stay in the first brief (session invariant); --full
+    // reprints the whole brief from lifecycle truth (crew.db run + plan sections).
+    if st.resumed && !a.has("full") {
+        print!("{}", st.render_short());
+        return Ok(());
     }
     print!("{}", st.render(a.has("full"), a.has("full") || !rules_seen));
     if let (Some(w), Some(j)) = (&o.with, o.joint) {
@@ -124,6 +116,27 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         }
     }
     Ok(())
+}
+
+/// Each linked issue's id → its row, so the agent reads what to fix without a find.
+fn resolve_issue_rows(r: &Repo, st: &mut fael_crew::Started) {
+    if !st.chunks.iter().any(|c| !c.issues.is_empty()) {
+        return;
+    }
+    let log = crate::read(r);
+    for id in st.chunks.iter_mut().flat_map(|c| &mut c.issues) {
+        if let Ok(row) = core::resolve_row(&log, id) {
+            let title = row.title.as_deref().map(|t| format!("{t}\n"));
+            let tag = row.from_report().then_some("(from report, unchecked)\n");
+            *id = format!(
+                "{} {}{}{}",
+                row.id,
+                tag.unwrap_or_default(),
+                title.unwrap_or_default(),
+                row.text
+            );
+        }
+    }
 }
 
 /// issue 01M5H3FGB: a fence rejection that names `--run R` gets the whole retype appended,

@@ -101,6 +101,9 @@ pub struct Started {
     /// `(uid, title)` of other chunks still `running` whose live run this start ended in the
     /// worktree — informed, never blocked, their state untouched.
     pub orphaned: Vec<(String, String)>,
+    /// Same-session retry: `reuse_live` returned the live R without a new run row.
+    /// The caller prints short unless `--full`.
+    pub resumed: bool,
 }
 
 fn prev(tx: &Transaction, id: i64) -> Result<Option<Prev>, String> {
@@ -188,6 +191,7 @@ fn reuse_live(
         run: live,
         chunks,
         orphaned: Vec::new(),
+        resumed: true,
     }))
 }
 
@@ -244,6 +248,21 @@ fn insert_run(
     )
     .map_err(err)?;
     Ok(())
+}
+
+/// One start per worktree: a run of another chunk still live here is an agent
+/// that left (c5 split: keeps `Store::start` at the ratchet).
+fn end_seats(
+    tx: &Transaction,
+    is_pair: bool,
+    caller_wt: Option<&str>,
+    wt: Option<&str>,
+    ms: &[String],
+    now: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let orphaned = end_here(tx, wt.filter(|_| !is_pair), ms, now)?;
+    end_caller_seat(tx, is_pair, caller_wt, wt, now)?;
+    Ok(orphaned)
 }
 
 impl Store {
@@ -339,9 +358,7 @@ impl Store {
             }
             claim.push((r, was));
         }
-        // one start per worktree: a run of another chunk still live here is an agent that left
-        let orphaned = end_here(&tx, wt.filter(|_| seat.is_none()), &ms, here.now)?;
-        end_caller_seat(&tx, seat.is_some(), caller_wt, wt, here.now)?;
+        let orphaned = end_seats(&tx, seat.is_some(), caller_wt, wt, &ms, here.now)?;
         let mut chunks = Vec::new();
         for (r, was) in claim {
             let loc = (wt, wt.and(branch.as_deref()), wt.and(base.as_deref()));
@@ -357,6 +374,7 @@ impl Store {
             run,
             chunks,
             orphaned,
+            resumed: false,
         })
     }
 }

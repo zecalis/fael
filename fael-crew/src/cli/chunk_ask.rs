@@ -37,6 +37,12 @@ pub(crate) fn add_wait(
     {
         return Err("rejected: --until takes a date YYYY-MM-DD".into());
     }
+    // c5: a data wait names its end date — shape-checked before the start commits.
+    if on == "data" && a.one("until").is_none() {
+        return Err(
+            "rejected: --wait data needs --until YYYY-MM-DD — the date that ends the wait".into(),
+        );
+    }
     let run = a
         .one("run")
         .unwrap_or_else(|| format!("wait-{}", &uid[..8.min(uid.len())]));

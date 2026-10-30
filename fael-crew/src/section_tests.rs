@@ -46,6 +46,18 @@ fn keys(s: &Store, id: i64) -> Vec<String> {
         .collect()
 }
 
+/// The brief a start prints for `uid` — the test's `Started` stays one line.
+fn brief_text(s: &Store, uid: &str) -> String {
+    use super::super::Started;
+    Started {
+        run: "R".into(),
+        chunks: vec![s.show(uid).unwrap()],
+        orphaned: vec![],
+        resumed: false,
+    }
+    .text()
+}
+
 #[test]
 fn a_heading_keys_on_its_number_else_its_slug() {
     assert_eq!(key_of("1. Goal (why)"), "1");
@@ -274,7 +286,7 @@ only cli
 
 #[test]
 fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest() {
-    use super::super::{Fields, Started};
+    use super::super::Fields;
     let (mut s, p) = plan();
     s.new_plan("", "q", "Q", "dev", None, NOW).unwrap();
     let q = s
@@ -301,15 +313,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
     };
     let reads = ["§5", "q/§1", "p/1", "gone", "q/nope", "x/1"];
     let uid = s.add("p", &f(Some(&reads)), &[], NOW).unwrap();
-    let text = |s: &Store, uid: &str| {
-        Started {
-            run: "R".into(),
-            chunks: vec![s.show(uid).unwrap()],
-            orphaned: vec![],
-        }
-        .text()
-    };
-    let t = text(&s, &uid);
+    let t = brief_text(&s, &uid);
     // Goal and Done, then what it reads (its own plan's by key, another's by plan/key)
     let later = day(LATER);
     assert!(
@@ -350,7 +354,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
     assert_eq!(b["chunks"][0]["reads"], json!(reads));
     // no reads: Goal, Scope, Done, Constraints, the rest indexed
     let plain = s.add("p", &f(None), &[], NOW).unwrap();
-    let t = text(&s, &plain);
+    let t = brief_text(&s, &plain);
     assert!(
         t.contains("\n## 2. Scope\n")
             && t.contains("\n## 4. Constraints\n")
@@ -369,7 +373,7 @@ fn a_chunk_reads_its_sections_and_another_plans_and_the_brief_indexes_the_rest()
         NOW,
     )
     .unwrap();
-    assert!(text(&s, &plain).contains("\n## §5 Risks\n"));
+    assert!(brief_text(&s, &plain).contains("\n## §5 Risks\n"));
     let bad = Fields {
         reads: Some(vec!["a b".into()]),
         ..Fields::default()

@@ -50,6 +50,7 @@ fn the_brief_prints_the_plan_sections_once() {
         run: "R".into(),
         chunks: vec![chunk("A"), chunk("B")],
         orphaned: vec![],
+        resumed: false,
     };
     let t = st.text();
     assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
@@ -73,6 +74,7 @@ fn the_brief_prints_the_plan_sections_once() {
         run: "R".into(),
         chunks: vec![labelled],
         orphaned: vec![],
+        resumed: false,
     };
     assert!(one.text().contains("\n# 1 — titled with its label (C)\n"));
     assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
@@ -101,6 +103,7 @@ fn the_brief_prints_the_plan_sections_once() {
         run: "R".into(),
         chunks: vec![noted],
         orphaned: vec![],
+        resumed: false,
     }
     .text();
     assert!(
@@ -121,6 +124,7 @@ fn the_brief_prints_the_plan_sections_once() {
         run: "R".into(),
         chunks: vec![bare],
         orphaned: vec![],
+        resumed: false,
     }
     .text();
     assert!(!t.contains("Goal") && t.contains("brief E"), "{t}");
@@ -173,6 +177,7 @@ fn start_full_prints_the_full_rules_and_the_lean_start_the_core() {
         run: "R".into(),
         chunks: vec![chunk("A")],
         orphaned: vec![],
+        resumed: false,
     };
     assert!(st.render(true, true).contains("lane: one scope"));
     assert!(!st.render(false, true).contains("lane: one scope"));
@@ -191,6 +196,7 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
         run: "R".into(),
         chunks: vec![c],
         orphaned: vec![],
+        resumed: false,
     }
     .text();
     assert!(t.contains("## 1. Goal"), "{t}");
@@ -211,6 +217,7 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
         run: "R".into(),
         chunks: vec![c],
         orphaned: vec![],
+        resumed: false,
     }
     .text();
     // a blank Goal still prints the plan header with its fill pointer
@@ -267,6 +274,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
         run: "R".into(),
         chunks: vec![chunk("A")],
         orphaned: vec![],
+        resumed: false,
     }
     .text();
     assert!(
@@ -280,6 +288,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
         run: "R".into(),
         chunks: vec![bare],
         orphaned: vec![],
+        resumed: false,
     }
     .text();
     assert!(
@@ -317,6 +326,7 @@ fn only_a_mixed_chunk_gets_the_delegate_line() {
         run: "R".into(),
         chunks: vec![c],
         orphaned: vec![],
+        resumed: false,
     }
     .text();
     assert!(t.contains("small-model subagents"), "{t}");
@@ -330,6 +340,7 @@ fn the_default_brief_is_handoff_and_tldr_with_rules_once() {
         run: "R".into(),
         chunks: vec![c],
         orphaned: vec![],
+        resumed: false,
     };
     let lean = st.render(false, false);
     assert!(
@@ -343,4 +354,49 @@ fn the_default_brief_is_handoff_and_tldr_with_rules_once() {
     assert!(st.render(false, true).contains("## chunk rules\n"));
     assert!(st.render(true, true).contains("ship it"));
     assert_eq!(st.text(), st.render(true, true));
+}
+
+/// c5 precedence: resumed short renders run → TLDR → resume → `--full`
+/// pointer only. Sections, answers, notes, hand-offs and held rows stay in the
+/// first brief — suppression by the session invariant, never by rank.
+#[test]
+fn start_resume_short_orders_run_tldr_resume_pointer() {
+    let mut c = chunk("A");
+    c.resume = Some(super::super::start::Prev {
+        start: "R".into(),
+        client: Some("claude".into()),
+        session: Some("S1".into()),
+        worktree: Some("/w".into()),
+        branch: Some("main".into()),
+        started: "2026-10-30T00:00:00Z".into(),
+        last_seen: None,
+    });
+    let st = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: true,
+    };
+    let short = st.render_short();
+    let (run, tldr, resume, ptr) = (
+        short.find("fael run R"),
+        short.find("TLDR:"),
+        short.find("resume — run R"),
+        short.find("--full"),
+    );
+    assert!(
+        run < tldr && tldr < resume && resume < ptr,
+        "run → TLDR → resume → pointer: {short}"
+    );
+    for gone in [
+        "## 1. Goal",
+        "## chunk rules",
+        "owner said",
+        "files it touched",
+    ] {
+        assert!(
+            !short.contains(gone),
+            "{gone} stays in the first brief: {short}"
+        );
+    }
 }

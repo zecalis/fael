@@ -71,7 +71,19 @@ fn a_wait_on_the_owner_with_a_recommend_prints_no_hint() {
 fn a_wait_on_data_prints_what_it_must_name() {
     let d = repo();
     let u = started(&d);
-    let (ok, out, err) = fael(&d, &["chunk", "wait", &u, "hits", "--on", "data"]);
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "wait",
+            &u,
+            "hits",
+            "--on",
+            "data",
+            "--until",
+            "2026-12-01",
+        ],
+    );
     assert!(ok, "{err}");
     assert!(
         out.contains("hint: a wait --on data names what is measured"),
