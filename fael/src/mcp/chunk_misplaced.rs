@@ -5,21 +5,19 @@ use serde_json::Value;
 /// A verb's keys that do nothing there — the opencode `pr`/`left` round-trip
 /// (2026-10-22) was this: a `done` naming them silently dropped them. Say the
 /// key and where it applies, never reject a call that saves.
-pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
-    let has = |k: &str| a.get(k).is_some_and(|v| !v.is_null());
-    let filled = |k: &str| {
-        a.get(k)
-            .and_then(Value::as_str)
-            .is_some_and(|t| !t.is_empty())
-    };
-    let has_force = a.get("force").and_then(Value::as_bool).unwrap_or(false);
-    // (keys the verb takes none of, keys only another verb takes)
-    let (none, foreign): (&[&str], &[&str]) = match verb {
+/// (keys the verb takes none of, keys only another verb takes). `until` /
+/// `option` / `options` ride only on `wait` (c5 shape), `full` only on `start`.
+fn tables(verb: &str) -> Option<(&'static [&'static str], &'static [&'static str])> {
+    Some(match verb {
         "show" => (
             &["text", "run"],
             &[
                 "other",
                 "on",
+                "until",
+                "option",
+                "options",
+                "full",
                 "pr",
                 "left",
                 "review",
@@ -30,13 +28,27 @@ pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
         ),
         "start" => (
             &["text"],
-            &["other", "on", "pr", "left", "review", "no_change"],
+            &[
+                "other",
+                "on",
+                "until",
+                "option",
+                "options",
+                "pr",
+                "left",
+                "review",
+                "no_change",
+            ],
         ),
         "note" => (
             &["run"],
             &[
                 "other",
                 "on",
+                "until",
+                "option",
+                "options",
+                "full",
                 "pr",
                 "left",
                 "review",
@@ -45,17 +57,54 @@ pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
                 "as",
             ],
         ),
-        "done" => (&[], &["other", "on", "with", "as"]),
+        "done" => (
+            &[],
+            &[
+                "other", "on", "until", "option", "options", "full", "with", "as",
+            ],
+        ),
         "wait" => (
             &[],
-            &["other", "pr", "left", "review", "no_change", "with", "as"],
+            &[
+                "other",
+                "full",
+                "pr",
+                "left",
+                "review",
+                "no_change",
+                "with",
+                "as",
+            ],
         ),
         "after" => (
             &[],
-            &["on", "pr", "left", "review", "no_change", "with", "as"],
+            &[
+                "on",
+                "until",
+                "option",
+                "options",
+                "full",
+                "pr",
+                "left",
+                "review",
+                "no_change",
+                "with",
+                "as",
+            ],
         ),
         _ => return None,
+    })
+}
+
+pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
+    let has = |k: &str| a.get(k).is_some_and(|v| !v.is_null());
+    let filled = |k: &str| {
+        a.get(k)
+            .and_then(Value::as_str)
+            .is_some_and(|t| !t.is_empty())
     };
+    let has_force = a.get("force").and_then(Value::as_bool).unwrap_or(false);
+    let (none, foreign) = tables(verb)?;
     let mut fell: Vec<String> = vec![];
     fell.extend(
         none.iter()

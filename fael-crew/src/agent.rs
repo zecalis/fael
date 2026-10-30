@@ -74,6 +74,13 @@ impl Store {
                 "rejected: --until takes a date YYYY-MM-DD; try --until <YYYY-MM-DD>".into(),
             );
         }
+        // c5: shape-check `--on data` before record — a data wait names what is
+        // measured and the date that ends it, so the hint prints only on valid shape.
+        if on == "data" && until.is_none() {
+            return Err(
+                "rejected: --on data needs --until YYYY-MM-DD — the date that ends the wait; try --until <YYYY-MM-DD>".into(),
+            );
+        }
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         fence(&tx, &r, here)?;

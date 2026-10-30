@@ -33,5 +33,6 @@ mod done_scope;
 mod help_reach;
 mod plan;
 mod start_gates;
+mod start_resume;
 mod start_scope;
 mod usage_flags;

@@ -384,3 +384,49 @@ fn start_reports_the_chunk_it_orphaned_in_the_worktree() {
     assert_eq!(st.orphaned, vec![(a.clone(), "a".to_string())]);
     assert_eq!(state(&s, &a), "running", "informs only: state untouched");
 }
+
+/// c5: same-session retry reuses the live R (lifecycle truth: the run row),
+/// never mints a new one; a retry without a session is a takeover, not a resume.
+#[test]
+fn start_resume_same_session_reuses_live_r() {
+    let mut s = Store::open_in_memory().unwrap();
+    let c = add(&mut s, "c", Some("brief"));
+    let o = Start {
+        session: Some("s1".into()),
+        ..Start::default()
+    };
+    let first = s.start(&c, &o, &here("/w")).unwrap();
+    assert!(!first.resumed);
+    let second = s.start(&c, &o, &here("/w")).unwrap();
+    assert!(second.resumed, "same session retries the live run");
+    assert_eq!(first.run, second.run, "one live R per session");
+    assert_eq!(live(&s, &c), 1, "no new run row");
+    assert!(
+        second.render_short().contains("(resumed)")
+            && second.render_short().len() < second.render(false, false).len(),
+        "short unless --full"
+    );
+}
+
+/// c5: `--on data` shape-checks before record — no `--until` rejects and writes
+/// nothing, so the hint prints only on valid shape.
+#[test]
+fn start_resume_wait_data_needs_until_before_record() {
+    let mut s = Store::open_in_memory().unwrap();
+    let c = add(&mut s, "c", Some("brief"));
+    start(&mut s, &c, "/w").unwrap();
+    let before: i64 = s
+        .conn
+        .query_row("SELECT COUNT(*) FROM event", [], |r| r.get(0))
+        .unwrap();
+    let e = s
+        .wait(&c, "data", "hits", None, &[], &here("/w"))
+        .unwrap_err();
+    assert!(e.contains("--until"), "{e}");
+    let after: i64 = s
+        .conn
+        .query_row("SELECT COUNT(*) FROM event", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(before, after, "invalid shape writes nothing");
+    assert_eq!(state(&s, &c), "running");
+}

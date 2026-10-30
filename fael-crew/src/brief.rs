@@ -225,6 +225,58 @@ impl Started {
         o
     }
 
+    /// Same-session retry (`reuse_live`): the live R again, short — resume + TLDR
+    /// only. Full returns with `--full`. Short is deterministic rendering, never a
+    /// rank: sections, answers, notes and hand-offs stay in the first brief.
+    pub fn render_short(&self) -> String {
+        let mut o = String::new();
+        let n = self.chunks.len();
+        let what = if n == 1 {
+            "1 chunk".to_string()
+        } else {
+            format!("{n} paired chunks")
+        };
+        let _ = writeln!(o, "fael run {} · {what} (resumed)", self.run);
+        for c in &self.chunks {
+            let label = c
+                .label
+                .as_deref()
+                .filter(|l| !c.title.strip_prefix(l).is_some_and(|r| r.starts_with(" ")))
+                .map(|l| format!("{l} — "))
+                .unwrap_or_default();
+            let _ = writeln!(o, "\n# {label}{} ({})", c.title, c.uid);
+            let task = if c.brief == c.title || c.brief.trim().is_empty() {
+                c.title.clone()
+            } else {
+                c.brief
+                    .lines()
+                    .next()
+                    .unwrap_or(&c.title)
+                    .trim()
+                    .to_string()
+            };
+            let task = match task.char_indices().nth(100) {
+                Some((i, _)) => format!("{}…", &task[..i]),
+                None => task,
+            };
+            let _ = writeln!(
+                o,
+                "TLDR: do \"{task}\" then `fael chunk done {} \"<handoff>\" --pr N`",
+                c.uid
+            );
+            if let Some(p) = &c.resume {
+                resume(&mut o, p);
+            }
+        }
+        let uid = self.chunks.first().map_or("<uid>", |c| &c.uid);
+        let _ = writeln!(
+            o,
+            "\nresumed {0} — full brief: `fael chunk start {uid} --full`",
+            self.run
+        );
+        o
+    }
+
     /// Plan context once per plan, after the chunks.
     fn plan_context(&self, o: &mut String) {
         let mut seen = Vec::new();
