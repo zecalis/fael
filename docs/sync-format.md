@@ -155,7 +155,7 @@ identity; duplicating it invites divergence.
   instead of appending the same ingested rows twice.
 - Empty journal + no remote ref is `nothing to sync`: no ref is created.
 - Remote resolution: `git config fael.remote` and nothing else — no flag, no
-  default, not even `origin` (decision 01M5D4KX). Unset → exit 1 with
+  default, not even `origin` (decision 01M5WGD6S). Unset → exit 1 with
   `fael: no fael.remote — …git config fael.remote <url>…` and nothing is
   pushed. `fael.remote` lives in `.git/config` (per machine, never committed),
   and auth is the user's own Git credential. A remote is any Git URL (private
