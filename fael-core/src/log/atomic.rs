@@ -81,7 +81,7 @@ pub fn append_many(fael: &Path, rows: &[(&Row, bool)]) -> Result<Vec<PathBuf>, S
 pub type AddCloseOut = ((Row, PathBuf), (Row, PathBuf), Vec<String>);
 
 pub fn add_close(
-    fael: &Path,
+    store: (&Path, Option<&Path>),
     log: &crate::Log,
     cfg: &Config,
     stamp: &Stamp,
@@ -89,6 +89,7 @@ pub fn add_close(
     supersedes: Option<&str>,
     close: (&str, &str),
 ) -> Result<AddCloseOut, String> {
+    let (fael, journal) = store;
     let sup_id = match supersedes {
         Some(s) => Some(super::append::resolve_content_id(log, s)?.to_string()),
         None => None,
@@ -109,9 +110,9 @@ pub fn add_close(
     crate::validate(&row, cfg)?;
     crate::validate_close(&close_row, cfg)?;
     let refs: Vec<(&Row, bool)> = vec![(&row, false), (&close_row, true)];
-    let mut paths = append_many(fael, &refs)?;
+    let mut paths = append_many(journal.unwrap_or(fael), &refs)?;
     let cp = paths.pop().expect("two rows");
     let ap = paths.pop().expect("two rows");
-    crate::work::elsewhere::register_store(fael, None);
+    crate::work::elsewhere::register_store(fael, journal);
     Ok(((row, ap), (close_row, cp), vec![]))
 }

@@ -153,7 +153,7 @@ fn write_replay_add_close_gates_before_write() {
     let target = issue(&dir, &cfg, &st, "target", None);
     let before = count(&dir);
     let bad = add_close(
-        &dir,
+        (&dir, None),
         &view(&dir),
         &cfg,
         &st,
@@ -166,7 +166,7 @@ fn write_replay_add_close_gates_before_write() {
     // a good pair lands atomically under one lock
     let add = Row::new("tester-0000", "issue", "hot2", vec!["src/a.rs".into()]);
     let ((ar, _), (cr, _), _) = add_close(
-        &dir,
+        (&dir, None),
         &view(&dir),
         &cfg,
         &st,

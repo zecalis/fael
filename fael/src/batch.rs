@@ -166,7 +166,10 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
 /// so nobody runs `fael find` to check. None when the target can't be read back.
 pub(crate) fn closed_line(r: &crate::Repo, close: &Row) -> Option<String> {
     let log = crate::read(r);
-    let t = core::resolve_row(&log, close.reference.as_deref()?).ok()?;
+    let t = match core::resolve_identity(&log, close.reference.as_deref()?) {
+        core::Ref::One(t) if !core::is_carrier_row(t) => t,
+        _ => return None,
+    };
     let title = t.title.clone().unwrap_or_else(|| {
         t.text
             .lines()
