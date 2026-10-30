@@ -2,7 +2,6 @@
 //! routing/urgency/revisit change, text/files/key never do, and
 //! `fold_bumps` lays the newest event onto the row. Supersede chains (an
 //! `add --supersedes`, or a bump from before events) close as one.
-
 use fael_core::*;
 use std::path::{Path, PathBuf};
 
@@ -114,15 +113,18 @@ fn closing_the_newest_version_closes_the_chain_it_supersedes() {
     for id in [&a.id, &b.id, &c.id] {
         assert!(all.iter().any(|r| &r.id == id), "{id} gone from --all");
     }
-    // closing a version below the open head points at the head instead
+    // closing below the open head is a no-op naming the head (c1 T3)
     let (dir, cfg, st) = setup("close-below");
     let a = issue(&dir, &cfg, &st, "hot", None);
     let b = issue(&dir, &cfg, &st, "hot, v2", Some(&a.id));
-    let e = close_row(&dir, None, &view(&dir), &cfg, &st, &a.id, "done").unwrap_err();
+    let before = view(&dir).closes.len();
+    let (row, _, warns) = close_row(&dir, None, &view(&dir), &cfg, &st, &a.id, "done").unwrap();
+    assert_eq!(row.id, b.id, "{row:?}");
     assert!(
-        e.contains(&format!("close the newest version {}", b.id)),
-        "{e}"
+        warns.iter().any(|w| w.contains("not filed again")),
+        "{warns:?}"
     );
+    assert_eq!(view(&dir).closes.len(), before);
 }
 
 #[test]

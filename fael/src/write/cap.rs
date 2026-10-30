@@ -31,7 +31,11 @@ pub(crate) fn check(
     // the flag may name a unique prefix (the lines below print those): resolve
     // it to the full id, or the row it names stays counted and the advised
     // re-file rejects again
-    let resolved = superseding.and_then(|s| core::resolve_row(log, s).ok().map(|r| r.id.clone()));
+    // c1: the canonical identity resolver (c2, F-IDENT) — never a fallback.
+    let resolved = superseding.and_then(|s| match core::resolve_identity(log, s) {
+        core::Ref::One(t) if !core::is_carrier_row(t) => Some(t.id.clone()),
+        _ => None,
+    });
     let superseding = resolved.as_deref().or(superseding);
     let mut lines = vec![];
     // the first capped file and one of its live ids: the `try` tail names the

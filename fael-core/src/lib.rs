@@ -53,9 +53,9 @@ pub use id::{
 };
 pub use lang::{Hit, Lang, by_name, fixed_hit, marker_hit, row_language_check};
 pub use log::{
-    BumpOpts, Log, MONTH_MAX, Purged, Restored, add, add_row, append, bump_row, close, close_row,
-    decode_text, fold_bumps, is_month, mv_row, needs_seal, parse, purge_row, read, read_imported,
-    restore_row,
+    BumpOpts, Log, MONTH_MAX, NOOP_MARK, Purged, Restored, add, add_close, add_row, append,
+    append_many, bump_row, close, close_row, decode_text, fold_bumps, is_month, mv_row, needs_seal,
+    parse, purge_row, read, read_imported, restore_row,
 };
 pub use overlap::{OverlapClass, overlap, overlap_class, overlap_how, under, within};
 pub use query::{

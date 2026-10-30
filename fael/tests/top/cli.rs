@@ -94,9 +94,14 @@ fn add_find_close_round_trip() {
         ],
     );
     assert!(ok, "{err}");
-    // closing twice writes nothing — the log stays clean
-    let (ok, _, err) = fael(&d, &["close", &id[..12], "again"]);
-    assert!(!ok && err.contains("already closed"), "{err}");
+    // closing twice writes nothing — a no-op naming the same close (c1 T2)
+    let (ok, out2, err) = fael(&d, &["close", &id[..12], "again"]);
+    assert!(ok, "{err}");
+    assert!(
+        err.contains("already closed") && err.contains("not filed again"),
+        "{err}"
+    );
+    let _ = out2;
     let (_, out, _) = fael(&d, &["find", "--json", "--all", "--files", "src/a.rs"]);
     assert_eq!(out.matches("\"ref\":").count(), 1, "{out}");
     // no open row: the closed one answers in the same call, labelled

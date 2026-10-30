@@ -42,6 +42,8 @@ pub(crate) struct Pending {
     pub warns: Vec<String>,
 }
 
+pub(crate) use recall::is_noop;
+
 /// Too many files derived from this session's edits to push the row at every
 /// one of them: the caller names the few it is about (PLAN-fael-context-loop
 /// §5b). The reject's `try` tail spells that retry with the kind and the
@@ -233,8 +235,11 @@ pub(crate) fn add_row(
         warns.push(w);
     }
     // chunk 6e: the id just filed is already in this session's context — mark
-    // it seen so the next push does not repeat it; the turn's receipt counts it
-    hook::note_filed(&r.root, &row);
+    // it seen so the next push does not repeat it; the turn's receipt counts it.
+    // c1: a no-op retry (T5/T6) writes nothing — emit zero new side-effects.
+    if !is_noop(&warns) {
+        hook::note_filed(&r.root, &row);
+    }
     Ok((row, path, warns))
 }
 
@@ -279,26 +284,38 @@ pub(crate) fn close_row_as(
     force: bool,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
     let log = crate::read(r);
-    // the gate needs the target's kind (only an issue owes the template's
-    // arrow and guard); the id names its repo too, so a miss says where fael
-    // looked — copy the id from `fael find` in the repo that holds it, or
-    // pass that repo's `cwd`
-    let target = core::resolve_row(&log, id).map_err(|e| {
-        let mut m = format!("{e} (searched {})", r.root.display());
-        if let Some(o) = crate::find::owner::owner(r, id) {
-            m.push_str(&format!("\n{o}"));
+    // c1: canonical identity (c2 F-IDENT), never a fallback; the gate needs
+    // the kind, a miss names the repo fael searched.
+    let target = match core::resolve_identity(&log, id) {
+        core::Ref::One(t) if !core::is_carrier_row(t) => t,
+        core::Ref::Many(h) => return Err(recall::ambiguous(id, &h)),
+        _ => return Err(recall::missing(r, id)),
+    };
+    let (target_id, target_kind) = (target.id.clone(), target.kind.clone());
+    // c1: a no-op retry (T2 closed, T3 superseded/open head) skips the gate.
+    let mut newest = target_id.as_str();
+    let mut seen = std::collections::HashSet::from([newest]);
+    while let Some(n) = log
+        .rows
+        .iter()
+        .find(|x| x.supersedes.as_deref() == Some(newest))
+    {
+        if !seen.insert(n.id.as_str()) {
+            break;
         }
-        m
-    })?;
-    // an already-closed row says so, whatever the reason's shape
-    if !core::closed(&log).contains(target.id.as_str()) && !force {
-        core::close_gate(&target.id, why, &target.kind)?;
+        newest = n.id.as_str();
+    }
+    let noop = core::closed(&log).contains(target_id.as_str())
+        || (core::superseded(&log).contains(target_id.as_str())
+            && !core::closed(&log).contains(newest));
+    if !noop && !force {
+        core::close_gate(&target_id, why, &target_kind)?;
     }
     let mut warns = phantom_lines(r, &log, None, why, &[id]);
     warns.extend(crate::unmerged::lines(&r.root, why));
     // chunks that linked this issue stay open after the close — name them so
     // the board never grows another ghost (fail-open when no crew.db)
-    warns.extend(crate::chunks::lines(r, &target.id));
+    warns.extend(crate::chunks::lines(r, &target_id));
     let mut stamp = crate::session::retire_stamp(r, &log, id);
     if let Some(by) = by {
         stamp.by = by.into();
@@ -306,7 +323,10 @@ pub(crate) fn close_row_as(
     let (row, path, mut core_warns) =
         core::close_row(&r.fael, r.journal.as_deref(), &log, &r.cfg, &stamp, id, why)?;
     warns.append(&mut core_warns);
-    hook::note_closed(&r.root, &row);
+    // c1: a no-op retry writes nothing — emit zero new side-effects.
+    if !is_noop(&warns) {
+        hook::note_closed(&r.root, &row);
+    }
     Ok((row, path, warns))
 }
 

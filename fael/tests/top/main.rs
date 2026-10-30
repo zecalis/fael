@@ -48,3 +48,4 @@ mod store_default;
 mod synonyms;
 mod upgrade_channel;
 mod verify;
+mod write_replay;

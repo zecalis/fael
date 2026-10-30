@@ -193,9 +193,9 @@ fn drop_closes_the_linked_issue_through_the_shape_gate() {
     let (ok, out, err) = fael(&d, &["chunk", "drop", &uid, "not our bug"]);
     assert!(ok, "{err}");
     assert!(out.contains(&format!("closed {iid}")), "{out}");
-    // the issue really closed — a second close says so
+    // the issue really closed — a second close is a no-op naming it (c1 T2)
     let (ok, _, err) = fael(&d, &["close", &iid, "already closed"]);
-    assert!(!ok && err.contains("already closed"), "{err}");
+    assert!(ok && err.contains("already closed"), "{err}");
 }
 
 #[test]

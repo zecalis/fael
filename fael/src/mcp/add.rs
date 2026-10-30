@@ -79,7 +79,10 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             by: None,
         },
     )?;
-    record_row_asks("mcp", "mcp-add", &r.root, &row, &warns);
+    // c1: a no-op retry writes nothing — same id back, zero new events.
+    if !crate::write::is_noop(&warns) {
+        record_row_asks("mcp", "mcp-add", &r.root, &row, &warns);
+    }
     // the id stays alone on the first line, callers read it from there
     let mut text = done(&row.id, &[]);
     let routed = [
@@ -165,7 +168,10 @@ fn add_rows(a: &Value, rows: &[Value], r: &Repo) -> Result<(String, Vec<String>)
             }
             Ok(b) => match add_row(r, &b.kind, &b.text, &b.files, b.opts) {
                 Ok((row, _, w)) => {
-                    record_row_asks("mcp", "mcp-add", &r.root, &row, &w);
+                    // c1: a no-op retry writes nothing — same id back, zero new events.
+                    if !crate::write::is_noop(&w) {
+                        record_row_asks("mcp", "mcp-add", &r.root, &row, &w);
+                    }
                     out.push(format!("recorded {}", row.id));
                     out.extend(crate::batch::paste_line(&row));
                     out.extend(crate::batch::launch_line(&row));
