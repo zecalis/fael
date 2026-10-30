@@ -433,3 +433,25 @@ The local tool never needs a daemon or a server. A hosted server (MCP over HTTP 
 - **A repo, when there is one, is the truth** — the hosted side is a git client that commits rows into it; it is canonical storage only for workspaces with no repo. Syncing is a union of lines deduped by `id` (append-only + ULID), so there is nothing to resolve.
 - **It calls the same core entry points as the CLI** — `Stamp.by` from the signed-in user, no branch/sha. Hook session state (`~/.local/state/fael`) is CLI-only: HTTP clients have no edit or stop events, so there is nothing to carry to a phone.
 - **Export and import go through this public format without loss of semantic memory** — no data stays locked in the hosted side.
+
+## 8. Secretary invariants (plan fael-secretary, c0)
+
+The contract chunks c1–c7 obey; the executable form is `fael-core/tests/spec/secretary.rs` (a reference model and fixtures, no production logic). A chunk that changes a rule below changes the fixture in the same PR.
+
+- **Identity (F-IDENT).** One input → one resolver → one row id or a typed miss/ambiguity. Order: full id, unique id prefix (≥ 8 chars), key, text. An id-shaped input never falls through to text silently. CLI and MCP call the same function.
+- **Lifecycle transitions.** A retired row is never un-retired and never retired twice; a retry writes zero events and names the existing id; nothing is rejected silently (a typed no-op, not `nothing written`).
+
+  | id | op on A | state of A | outcome | A after |
+  |----|---------|-----------|---------|---------|
+  | T1 | close | open | one retire event | closed |
+  | T2 | close (retry) | closed | no-op, names A | closed |
+  | T3 | close (stale) | superseded by B | no-op, names B | superseded by B |
+  | T4 | supersede A→B | open | B filed, one retire event | superseded by B |
+  | T5 | supersede A→B (retry) / A→C | superseded by B | no-op, names B | superseded by B |
+  | T6 | supersede | closed | no-op, names A | closed |
+
+- **F-RACE.** close(A) vs supersede(A→B) vs a duplicate add, in either lock order: exactly one retire event for A, the loser a typed no-op naming the winner's result, one active successor. A retry after a timeout (hook or MCP) emits zero new events.
+- **Delivery.** Dedupe key is `(session_id, row_id)` only, held in usage/outbox bookkeeping — never a field on the ledger row, never text/file/query matching. **F-RESTART**: a restart inside a session reloads the bookkeeping, so a pushed row stays pushed. **F-XSESSION**: two sessions on the same row each get it once.
+- **No inference.** fael never picks between candidates or rejects on a guess; ambiguity is returned as the list.
+- **Time (F-TIME).** Timestamps are stored UTC (`…Z`) and rendered local with the offset; `--since DATE` is local midnight (Bangkok: `2026-10-29T17:00:00Z` = `2026-10-30T00:00:00+07:00`).
+- **Stats.** `fael stats` derives only from `usage.jsonl`; no figure claims tokens, rounds or time saved.

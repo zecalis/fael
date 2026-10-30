@@ -8,4 +8,5 @@ mod append;
 mod common;
 mod ids;
 mod parse;
+mod secretary;
 mod validate;
