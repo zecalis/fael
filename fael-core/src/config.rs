@@ -15,7 +15,7 @@ pub enum CrossKey {
 }
 
 /// Per-repo settings from `.fael/config.toml` (every field has a default; see `Config::from_toml`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     /// Extra kinds this repo declares on top of `CORE_KINDS`.
     pub kinds: Vec<String>,

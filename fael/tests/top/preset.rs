@@ -1,20 +1,24 @@
 //! c7 preset (plan fael-secretary): `fael install --preset multi-agent`
-//! writes the repo's `.fael/config.toml` from proven primitives only, and a
-//! fresh clone with that file passes the 5-workflow smoke (kickoff, add,
-//! close, supersede, doctor) plus duplicate/retry idempotence with zero
-//! config edits. Cross-session visibility itself is c3's contract
-//! (`hook/push_once.rs::two_sessions_both_get_the_row`); the preset pins the
-//! budgets that carry it, so this file asserts the preset parses to defaults.
+//! writes the repo's `.fael/config.toml` from proven primitives only.
+//! The acceptance matrix lives in `preset_matrix.rs` on these helpers.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
-fn fael(home: &Path, repo: &Path, args: &[&str]) -> (bool, String, String) {
+pub(crate) fn fael(home: &Path, repo: &Path, args: &[&str]) -> (bool, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_fael"))
         .args(args)
         .current_dir(repo)
         .env("HOME", home)
         .env("FAEL_STATE_DIR", home.join("state"))
+        // hook-session ids never inherit from the test runner's own shell
+        .env_remove("FAEL_SESSION")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("OPENCODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("FAEL_BURST_MS")
+        .env("FAEL_NO_AUTO_UPDATE", "1")
         // no claude CLI on this PATH: client wiring is skipped, the preset
         // lands alone — the fresh-clone shape this chunk is about
         .env(
@@ -32,15 +36,51 @@ fn fael(home: &Path, repo: &Path, args: &[&str]) -> (bool, String, String) {
     (o.status.success(), s(&o.stdout), s(&o.stderr))
 }
 
-fn scratch() -> (PathBuf, PathBuf) {
+/// A hook call with piped stdin — the edit push behind F-XSESSION.
+pub(crate) fn hook(home: &Path, repo: &Path, args: &[&str], stdin: &str) -> (bool, String) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(args)
+        .current_dir(repo)
+        .env("HOME", home)
+        .env("FAEL_STATE_DIR", home.join("state"))
+        .env_remove("FAEL_SESSION")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("OPENCODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("FAEL_BURST_MS")
+        .env("FAEL_NO_AUTO_UPDATE", "1")
+        .env(
+            "PATH",
+            std::env::join_paths([
+                Path::new(env!("CARGO_BIN_EXE_fael")).parent().unwrap(),
+                Path::new("/usr/bin"),
+                Path::new("/bin"),
+            ])
+            .unwrap(),
+        )
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    c.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    let o = c.wait_with_output().unwrap();
+    (
+        o.status.success(),
+        String::from_utf8_lossy(&o.stdout).into_owned(),
+    )
+}
+
+pub(crate) fn scratch() -> (PathBuf, PathBuf) {
     let base = std::env::temp_dir().join(format!("fael-preset-{}", fael_core::ulid()));
     let (home, repo) = (base.join("home"), base.join("repo"));
     std::fs::create_dir_all(&home).unwrap();
     std::fs::create_dir_all(&repo).unwrap();
     for args in [
-        &["init", "-q"][..],
+        &["init", "-q", "-b", "main"][..],
         &["config", "user.name", "Test User"],
         &["config", "user.email", "t@example.com"],
+        &["commit", "-q", "--allow-empty", "-m", "init"],
     ] {
         assert!(
             Command::new("git")
@@ -54,29 +94,14 @@ fn scratch() -> (PathBuf, PathBuf) {
     (home, repo)
 }
 
-fn id_of(out: &str) -> &str {
+pub(crate) fn id_of(out: &str) -> &str {
     out.split_whitespace().next().unwrap()
 }
 
 #[test]
 fn preset_body_is_defaults_no_hidden_semantics() {
     let cfg = fael_core::Config::from_toml(fael_core::PRESET_MULTI_AGENT_TOML).unwrap();
-    let d = fael_core::Config::default();
-    assert_eq!(cfg.kickoff_tokens, d.kickoff_tokens);
-    assert_eq!(cfg.find_tokens, d.find_tokens);
-    assert_eq!(cfg.push_tokens, d.push_tokens);
-    assert_eq!(cfg.push_rows, d.push_rows);
-    assert_eq!(cfg.session_decisions, d.session_decisions);
-    assert_eq!(cfg.warn_row_tokens, d.warn_row_tokens);
-    assert_eq!(cfg.warn_row_chars, d.warn_row_chars);
-    assert_eq!(cfg.resolve, d.resolve);
-    assert_eq!(cfg.row_bytes, d.row_bytes);
-    assert_eq!(cfg.sync_auto, d.sync_auto);
-    assert_eq!(cfg.notify_user, d.notify_user);
-    assert_eq!(cfg.lang_marker, d.lang_marker);
-    assert_eq!(cfg.lang_rows, d.lang_rows);
-    assert_eq!(cfg.hint_stop, d.hint_stop);
-    assert_eq!(cfg.anchor_prefixes, d.anchor_prefixes);
+    assert_eq!(cfg, fael_core::Config::default());
 }
 
 #[test]
@@ -120,90 +145,5 @@ fn preset_writes_once_leaves_a_hand_tuned_config_alone() {
         std::fs::read_to_string(&path).unwrap(),
         "[budget]\npush_rows = 2\n",
         "{out}"
-    );
-}
-
-#[test]
-fn preset_clone_passes_the_five_workflow_smoke_with_no_config_edit() {
-    let (home, repo) = scratch();
-    let (ok, out, err) = fael(&home, &repo, &["install", "--preset", "multi-agent"]);
-    assert!(ok, "{out} {err}");
-    let cfg_before = std::fs::read_to_string(repo.join(".fael/config.toml")).unwrap();
-
-    // 1. kickoff on an empty repo: the brief, not an error
-    let (ok, _, err) = fael(&home, &repo, &["kickoff"]);
-    assert!(ok, "{err}");
-    // 2. add a row
-    std::fs::create_dir_all(repo.join("src")).unwrap();
-    std::fs::write(repo.join("src/a.rs"), "// x\n").unwrap();
-    let (ok, out, err) = fael(
-        &home,
-        &repo,
-        &[
-            "add",
-            "issue",
-            "smoke hot path",
-            "--title",
-            "smoke",
-            "--files",
-            "src/a.rs",
-        ],
-    );
-    assert!(ok, "{err}");
-    let a = id_of(&out).to_string();
-    // 3. duplicate add (retry lifecycle): same id, zero new rows
-    let (ok, out2, _) = fael(
-        &home,
-        &repo,
-        &[
-            "add",
-            "issue",
-            "smoke hot path",
-            "--title",
-            "smoke",
-            "--files",
-            "src/a.rs",
-        ],
-    );
-    assert!(ok, "{out2}");
-    assert_eq!(id_of(&out2), a.as_str(), "retry names the existing row");
-    // 4. supersede A -> B
-    let (ok, out, err) = fael(
-        &home,
-        &repo,
-        &[
-            "add",
-            "issue",
-            "smoke hot path v2",
-            "--title",
-            "smoke v2",
-            "--files",
-            "src/a.rs",
-            "--supersedes",
-            &a,
-        ],
-    );
-    assert!(ok, "{err}");
-    let b = id_of(&out).to_string();
-    // 5. close the head; kickoff and doctor stay green with the preset in place
-    let (ok, _, err) = fael(
-        &home,
-        &repo,
-        &[
-            "close",
-            &b,
-            "smoke broke → smoke fixed; guard `src/a_test.rs`",
-        ],
-    );
-    assert!(ok, "{err}");
-    let (ok, _, err) = fael(&home, &repo, &["kickoff"]);
-    assert!(ok, "{err}");
-    let (ok, out, err) = fael(&home, &repo, &["doctor"]);
-    assert!(ok, "{out} {err}");
-
-    assert_eq!(
-        std::fs::read_to_string(repo.join(".fael/config.toml")).unwrap(),
-        cfg_before,
-        "smoke passes with zero config edits"
     );
 }

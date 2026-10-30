@@ -16,7 +16,8 @@ An existing config is left alone; deleting lines you never changed is safe.
 ## The 5-workflow smoke
 
 A fresh clone with the preset passes these with zero config edits (locked by
-`fael/tests/top/preset.rs`):
+`fael/tests/top/preset.rs` for the preset itself and `fael/tests/top/preset_matrix.rs`
+for the matrix — final ledger and emitted pushes asserted, not just exit 0):
 
 1. **fresh start** — `fael kickoff` prints the session brief on an empty repo.
 2. **add + close** — `fael add issue … --files src/a.rs`, then

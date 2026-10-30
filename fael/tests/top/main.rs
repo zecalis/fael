@@ -38,6 +38,7 @@ mod mcp_pin;
 mod mcp_unstamped;
 mod paging;
 mod preset;
+mod preset_matrix;
 mod purge;
 mod report;
 mod restore;
