@@ -96,6 +96,28 @@ fn several_ids_print_every_body_and_a_bad_one_fails_alone() {
 }
 
 #[test]
+fn batch_reads_preserve_lifecycle_state_after_file_changes_and_verification() {
+    let d = repo();
+    let a = add(&d, "a.rs", "first headline", "first body words");
+    let b = add(&d, "b.rs", "second headline", "second body words");
+    std::fs::write(d.join("src/a.rs"), "// changed\n").unwrap();
+    let (ok, single, err) = fael(&d, &["find", &a]);
+    assert!(ok && single.contains("(dormant)"), "{single}{err}");
+    let (ok, batch, err) = fael(&d, &["find", &a, &b]);
+    assert!(ok && batch.contains("(dormant)"), "{batch}{err}");
+    assert!(batch.contains("second headline →"), "{batch}");
+    // A checked row becomes current under the same id in the next process.
+    let (ok, _, err) = fael(&d, &["bump", &a]);
+    assert!(ok, "{err}");
+    let (ok, batch, err) = fael(&d, &["find", &a, &b]);
+    assert!(ok && !batch.contains("(dormant)"), "{batch}{err}");
+    let (ok, _, err) = fael(&d, &["close", &b, "now in src/b.rs", "--force"]);
+    assert!(ok, "{err}");
+    let (ok, batch, err) = fael(&d, &["find", &a, &b]);
+    assert!(ok && batch.contains("(closed)"), "{batch}{err}");
+}
+
+#[test]
 fn a_short_list_stays_one_line_per_row_and_full_asks_for_bodies() {
     let d = repo();
     add(&d, "a.rs", "alpha headline", "alpha body words");

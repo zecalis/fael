@@ -83,7 +83,8 @@ pub(crate) fn pull(
 /// `fael find <id> <id> …`
 pub(crate) fn find_many(a: &Args, ids: &[String]) -> Result<(), String> {
     let r = crate::repo()?;
-    let (base, jtags) = journal::read(&r);
+    let (mut base, jtags) = journal::read(&r);
+    crate::hook::mark_dormant(&r, &mut base);
     let spell = |left: &[String]| format!("fael find {}", left.join(" "));
     let p = pull(&r, base, jtags, ids, a.has("json"), &spell);
     print!("{}", p.text);
