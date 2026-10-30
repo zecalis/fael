@@ -57,6 +57,8 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
 /// Shell calls match as `Bash`, so the search hook fires there like on Claude.
 /// UserPromptSubmit uses the shared silent prompt adapter.
 const CODEX_HOOKS: &[(&str, Option<&str>, &str)] = &[
+    ("SubagentStart", None, "session-start"),
+    ("SubagentStop", None, "stop"),
     ("UserPromptSubmit", None, "prompt"),
     ("Stop", None, "stop"),
     ("SessionStart", None, "session-start"),

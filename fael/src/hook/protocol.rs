@@ -20,6 +20,10 @@ pub(crate) struct Event {
     /// edit list · read: unused (reuse suppression is the client's job)
     #[serde(default)]
     pub(crate) session: Option<String>,
+    /// Adapter-only transcript for Codex's Stop start-time evidence. Identity
+    /// stays the thread id. Not a field in the neutral wire protocol.
+    #[serde(skip)]
+    pub(crate) transcript: Option<String>,
     #[serde(default)]
     pub(crate) client: Option<String>,
     #[serde(default)]

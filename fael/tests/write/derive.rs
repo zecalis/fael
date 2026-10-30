@@ -51,7 +51,7 @@ fn edits_from_another_worktree_do_not_derive() {
 }
 
 #[test]
-fn mcp_add_without_files_derives_too() {
+fn mcp_add_without_files_requires_explicit_files() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     edit(&d, "s1", &[d.join("src/a.rs")]);
@@ -83,8 +83,8 @@ fn mcp_add_without_files_derives_too() {
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
     assert_eq!(r.len(), 2, "{out}");
-    // first call derives src/a.rs; the second finds no new edits and fails
-    assert_eq!(r[0]["result"]["isError"], false, "{out}");
+    // Neither call identifies the editor: both need explicit files.
+    assert_eq!(r[0]["result"]["isError"], true, "{out}");
     assert!(
         r[1]["result"]["content"][0]["text"]
             .as_str()
@@ -92,7 +92,7 @@ fn mcp_add_without_files_derives_too() {
             .contains("files is required"),
         "{out}"
     );
-    assert_eq!(row_files(&d, "via mcp"), ["src/a.rs"]);
+    assert_eq!(r[1]["result"]["isError"], true, "{out}");
 }
 
 #[test]

@@ -96,8 +96,8 @@ fn stale() -> bool {
 pub fn serve(pin: bool) -> Result<(), String> {
     PIN.store(pin, Ordering::Relaxed);
     EXE.get_or_init(stamp);
-    // this process's env is inherited at spawn, never per call: a row stamp
-    // must come from a recorded session, not whatever id it was born with
+    // This process's env is inherited at spawn, never per call. No request
+    // binding exists: do not attribute writes, seen state or files to it.
     crate::session::mark_mcp_server();
     let mut out = std::io::stdout().lock();
     for line in std::io::stdin().lock().lines() {

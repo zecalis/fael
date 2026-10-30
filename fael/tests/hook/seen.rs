@@ -239,3 +239,119 @@ fn a_bumped_row_is_not_pushed_again() {
     assert!(out.contains("fresh login loops"), "{out}");
     assert!(!out.contains("bumped login loops"), "{out}");
 }
+
+/// Codex resume keeps said-once state, compact resets just this thread, and
+/// shell find joins it even while another chat remains open in the same repo.
+#[test]
+fn codex_seen_state_joins_shell_and_resets_only_the_compacted_chat() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    assert!(
+        fael(
+            &d,
+            &[
+                "add",
+                "decision",
+                "codex context choice",
+                "--files",
+                "src/a.rs"
+            ],
+            ""
+        )
+        .0
+    );
+    let event = |id: &str, source: &str| {
+        serde_json::json!({"cwd":d,"session_id":id,
+        "transcript_path":d.join(format!("rollout-2026-10-31T04-54-13-{id}.jsonl")),
+        "source":source,"tool_input":{"command":"*** Update File: src/a.rs"}})
+        .to_string()
+    };
+    let edit = |id: &str| fael(&d, &["hook", "edit", "--client", "codex"], &event(id, "")).1;
+    let start = |id: &str, source: &str| {
+        assert!(
+            fael(
+                &d,
+                &["hook", "session-start", "--client", "codex"],
+                &event(id, source)
+            )
+            .0
+        );
+    };
+    start("chat-a", "startup");
+    start("chat-b", "startup");
+    let (ok, out, err) = fael_env(
+        &d,
+        &["find", "--files", "src/a.rs"],
+        "",
+        &[("CODEX_THREAD_ID", "chat-a")],
+    );
+    assert!(ok && out.contains("codex context choice"), "{out}{err}");
+    assert!(!edit("chat-a").contains("codex context choice"));
+    assert!(edit("chat-b").contains("codex context choice"));
+    start("chat-a", "resume");
+    assert!(!edit("chat-a").contains("codex context choice"));
+    start("chat-a", "compact");
+    assert!(edit("chat-a").contains("codex context choice"));
+    assert!(!edit("chat-b").contains("codex context choice"));
+}
+
+/// An inherited server env must not mark a different chat's context as seen.
+#[test]
+fn mcp_find_and_add_do_not_consume_the_recorded_editors_seen_list() {
+    let d = repo();
+    for f in ["src/a.rs", "src/b.rs"] {
+        std::fs::write(d.join(f), "// file\n").unwrap();
+    }
+    assert!(
+        fael(
+            &d,
+            &[
+                "add",
+                "decision",
+                "unseen mcp result",
+                "--files",
+                "src/a.rs"
+            ],
+            ""
+        )
+        .0
+    );
+    let edit = |file: &str| {
+        let input = serde_json::json!({"cwd":d,"session_id":"editor", "tool_input":{"command":format!("*** Update File: {file}")}}).to_string();
+        fael(&d, &["hook", "edit", "--client", "codex"], &input).1
+    };
+    edit("src/b.rs"); // Vouches for the inherited id under the old MCP rule.
+    let rpc = |name: &str, args: serde_json::Value| {
+        serde_json::json!({"jsonrpc":"2.0","id":1,
+        "method":"tools/call","params":{"name":name,"arguments":args}})
+        .to_string()
+            + "\n"
+    };
+    let env = [("CODEX_THREAD_ID", "editor")];
+    let find = rpc("find", serde_json::json!({"files":["src/a.rs"]}));
+    let (ok, out, err) = fael_env(&d, &["mcp"], &find, &env);
+    assert!(ok && out.contains("unseen mcp result"), "{out}{err}");
+    assert!(edit("src/a.rs").contains("unseen mcp result"));
+    let add = rpc(
+        "add",
+        serde_json::json!({"kind":"note","text":"unbound mcp row","files":["src/b.rs"]}),
+    );
+    let (ok, out, err) = fael_env(&d, &["mcp"], &add, &env);
+    assert!(ok, "{out}{err}");
+    let response: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let id = response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        .unwrap();
+    assert!(edit("src/b.rs").contains("unbound mcp row"));
+    let close = rpc(
+        "close",
+        serde_json::json!({"id":id,"text":"probe completed → closed; guard `test.rs`"}),
+    );
+    let (ok, out, err) = fael_env(&d, &["mcp"], &close, &env);
+    assert!(ok && out.contains("recorded"), "{out}{err}");
+    let log = super::writer::log_text(&d);
+    assert!(!log.contains(r#""session":"editor""#), "{log}");
+}

@@ -33,3 +33,37 @@ fn ask_is_said_once_until_the_row_is_bumped() {
     let e = edit_or_silent(&d, "sD", "src/a.rs");
     assert!(!asked(&e), "{e}");
 }
+
+/// A Codex shell row and its later edit use one identity despite the rollout
+/// filename: the chat is never asked to revalidate the issue it just filed.
+#[test]
+fn codex_edit_does_not_ask_about_its_own_shell_row() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// before\n").unwrap();
+    let base = serde_json::json!({"cwd":d,"session_id":"chat-a",
+        "transcript_path":d.join("rollout-2026-10-31T04-54-13-chat-a.jsonl"),"source":"startup"});
+    assert!(
+        fael(
+            &d,
+            &["hook", "session-start", "--client", "codex"],
+            &base.to_string()
+        )
+        .0
+    );
+    let (ok, _, err) = super::fael_env(
+        &d,
+        &["add", "issue", "my current issue", "--files", "src/a.rs"],
+        "",
+        &[("CODEX_THREAD_ID", "chat-a")],
+    );
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// after fix\n").unwrap();
+    let mut edit = base;
+    edit["tool_input"] = serde_json::json!({"command":"*** Update File: src/a.rs"});
+    let (ok, out, err) = fael(
+        &d,
+        &["hook", "edit", "--client", "codex"],
+        &edit.to_string(),
+    );
+    assert!(ok && !out.contains("changed since"), "{out}{err}");
+}
