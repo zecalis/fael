@@ -13,7 +13,7 @@ use super::retire::{Retired, retired};
 use super::said::{KindYield, yields};
 use super::unused::{UnusedRow, unused};
 use super::value::{Value, value};
-use crate::{Config, Log, closed, rfc3339, superseded};
+use crate::{Config, Log, closed, rfc3339, rfc3339_in, superseded, tz_offset_string};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -67,6 +67,12 @@ impl From<(usize, usize, usize, usize)> for Constants {
 pub struct Rounds {
     pub rows_added: usize,
     pub since: String,
+    /// Canonical UTC instant of the first usage (`""` when there is no
+    /// usage) — `since` above is its UTC calendar day, `since_local` the
+    /// same instant in `tz_offset`, so evidence reconstructs cross-timezone.
+    pub since_utc: String,
+    pub since_local: String,
+    pub tz_offset: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -148,7 +154,8 @@ pub struct Stats {
 /// Join parsed usage with pre-loaded logs. `logs` must cover `parsed.repos()`;
 /// a repo with no entry reads as empty (its rows resolve `unknown`). A repo
 /// with no `commits` entry has no fix commits. `runs`/`merges` feed the flow
-/// spans; empty when the clone has no crew.db or git.
+/// spans; empty when the clone has no crew.db or git. `tz_min` is minutes
+/// east of UTC for the `since_local` render — storage stays UTC.
 #[allow(clippy::too_many_arguments)]
 pub fn aggregate(
     parsed: &Parsed,
@@ -159,6 +166,7 @@ pub fn aggregate(
     cfg: &Config,
     constants: Constants,
     with_rows: bool,
+    tz_min: i32,
 ) -> Stats {
     let rows_added = count_rows_added(logs, &parsed.first_seen);
     let since = parsed
@@ -194,6 +202,9 @@ pub fn aggregate(
         rounds: Rounds {
             rows_added,
             since: since_day(since),
+            since_utc: since_stamp(since),
+            since_local: since_stamp_local(since, tz_min),
+            tz_offset: tz_offset_string(tz_min),
         },
         non_english_rows: NonEnglish {
             rows: row_total,
@@ -227,6 +238,24 @@ fn since_day(since: i64) -> String {
             .get(..10)
             .unwrap_or("")
             .to_string()
+    }
+}
+
+/// The first-usage instant in canonical UTC; empty when there is no usage.
+fn since_stamp(since: i64) -> String {
+    if since == i64::MAX {
+        String::new()
+    } else {
+        rfc3339(since.max(0) as u64)
+    }
+}
+
+/// The same instant in the viewer's zone; empty when there is no usage.
+fn since_stamp_local(since: i64, tz_min: i32) -> String {
+    if since == i64::MAX {
+        String::new()
+    } else {
+        rfc3339_in(since.max(0) as u64, tz_min)
     }
 }
 
@@ -326,6 +355,7 @@ mod tests {
             &Config::default(),
             (1, 2, 3, 4).into(),
             true,
+            420,
         );
         assert_eq!(
             (s.events, s.bytes, s.est_tokens, s.skipped_temp),
@@ -340,6 +370,9 @@ mod tests {
         );
         assert_eq!(s.top_rows.len(), 2);
         assert_eq!(s.rounds.since, "2026-09-26");
+        assert_eq!(s.rounds.since_utc, "2026-09-26T00:00:00.000Z");
+        assert_eq!(s.rounds.since_local, "2026-09-26T07:00:00.000+07:00");
+        assert_eq!(s.rounds.tz_offset, "+07:00");
         let rows = s.rows.unwrap();
         assert!(rows.iter().all(|r| r.status == "unknown"));
     }

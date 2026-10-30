@@ -20,12 +20,14 @@ pub(crate) struct Info {
 
 /// `--since` for `stats` and `report`: `None` when absent (this and
 /// last month's usage, `usage_files`), `Some(0)` for `all`, an error naming the
-/// accepted forms when unreadable.
+/// accepted forms when unreadable. A bare `YYYY-MM-DD` is local midnight
+/// (`FAEL_TZ_OFFSET`, else the machine zone); a full RFC 3339 time keeps its
+/// own zone.
 pub(crate) fn since(a: &Args) -> Result<Option<i64>, String> {
     a.one("since")
         .map(|s| match s.as_str() {
             "all" => Ok(0),
-            _ => core::stats::since_arg(&s).ok_or(format!(
+            _ => core::stats::since_arg(&s, hook::local_tz_offset_min()).ok_or(format!(
                 "rejected: --since {s:?} — use YYYY-MM-DD, an RFC 3339 time or all"
             )),
         })
@@ -34,7 +36,8 @@ pub(crate) fn since(a: &Args) -> Result<Option<i64>, String> {
 
 pub(crate) fn report(a: &Args) -> Result<(), String> {
     a.only("report", &["out", "open", "since"])?;
-    let u = hook::load(since(a)?);
+    let since_ms = since(a)?;
+    let u = hook::load(since_ms);
     let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
     let s = hook::aggregate(&u, &cfg, true);
     let mut info = HashMap::new();
@@ -66,6 +69,15 @@ pub(crate) fn report(a: &Args) -> Result<(), String> {
     }
     let window = match a.one("since") {
         Some(d) if d == "all" => "all recorded usage".into(),
+        // a bare date is local midnight: name the zone and the canonical UTC
+        // instant, so the window reconstructs cross-timezone
+        Some(d) if d.len() == 10 => {
+            let tz = hook::local_tz_offset_min();
+            let from = since_ms
+                .map(|ms| core::rfc3339(ms.max(0) as u64))
+                .unwrap_or_default();
+            format!("since {d} ({}; from {from})", core::tz_offset_string(tz))
+        }
         Some(d) => format!("since {d}"),
         None if s.rounds.since.is_empty() => "this and last month".into(),
         None => format!("since {} (this and last month)", s.rounds.since),
@@ -305,6 +317,7 @@ mod tests {
             &core::Config::default(),
             (0, 0, 0, 0).into(),
             true,
+            420,
         );
         // statuses come from logs this fixture has none of — set them by hand
         for r in s.rows.iter_mut().flatten() {

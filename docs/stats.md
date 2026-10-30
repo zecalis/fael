@@ -62,7 +62,8 @@ Every number comes from two inputs, joined as pure functions in
   archive and the live file — this and last month; `--since all` reads every
   month. `--since <YYYY-MM-DD | RFC 3339>` opens the archives from that month
   on and keeps only the lines stamped at or after it, before anything is counted — first use per repo, rows added and
-  `capture` then all read as that window. `fael report` renders this same
+  `capture` then all read as that window. A bare date is that day's local midnight (`FAEL_TZ_OFFSET` like `+07:00`
+  wins, else the machine zone): a BKK `--since 2026-10-30` starts at `2026-10-29T17:00:00Z`. `fael report` renders this same
   `Stats` (with `--rows`) as one offline HTML page.
   Raw archives keep 3 months before the current one. The daily `prune_state` pass
   writes `usage/<YYYY-MM>.sum.json` (that month's `Stats` from its usage rows alone — no repo log, git or `gh` is read, so fields joined from those read empty; written atomically) for each older
@@ -96,7 +97,7 @@ shape is a breaking change: ship the reader first.
 | `top_rows` | `[{id, pushes}]` × ≤10 | most-pushed row ids, pushes desc then id asc |
 | `asks` | `{warning}` → `{events, bytes, codes}` | warning lines fael put in front of the agent, `codes` by warning code (`untitled`, `long_text`, `no_key`, `similar_key`, …; `uncoded` = a line from before codes); plain pushes never count. Rejects are in `friction` |
 | `constants` | `{skill_bytes, skill_est, mcp_schema_bytes, mcp_schema_est}` | bytes the agent pays every session before saying anything; SKILL.md is LF-normalised before measuring so the count is checkout-independent |
-| `rounds` | `{rows_added, since}` | `rows_added` = rows filed at or after each repo's first usage · `since` = the first-usage day (`YYYY-MM-DD`), empty when no rows |
+| `rounds` | `{rows_added, since, since_utc, since_local, tz_offset}` | `rows_added` = rows filed at or after each repo's first usage · `since` = the first-usage day (`YYYY-MM-DD`), empty when no rows · `since_utc` = the first-usage instant in canonical UTC, `since_local` = the same instant in `tz_offset` (the viewer's zone, `±hh:mm`), both empty when no rows — the window reconstructs cross-timezone |
 | `non_english_rows` | `{rows, non_english}` | rows outside the running repo's accepted `[lang] rows` scripts (deduped by id) |
 | `capture` | object | adds and silent sessions (fields below) |
 | `retired` | object | `pushed` = distinct rows a `read`/`edit` push handed over · `at_touch` = of those, closed, superseded or bumped within a day after one of those pushes — how many rows the edit-push ask retires where they went stale |
@@ -179,6 +180,8 @@ newest-first across repos.
 ## Changelog
 
 Newest first.
+
+- `5` (2026-10-30): `rounds` gained `since_utc` (first-usage instant, canonical Z), `since_local` (same instant in the viewer's zone) and `tz_offset` (`±hh:mm`); a bare `--since YYYY-MM-DD` is that day's local midnight, no longer UTC midnight — new keys only, so no bump.
 
 - `5` (2026-10-27): added `handoff_runs` (`with`/`without`: closed runs started from a brief whose `after` chunk had an agent hand-off before the run started, vs every other run; per group `runs`, `joined`, `done`, `finds`, `refinds`, `rejects`; issue 01M5Y9KQ) — a description of two groups, not a claim about what the hand-off did; new key only, so no bump.
 

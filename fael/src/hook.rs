@@ -83,7 +83,7 @@ pub(crate) use held::{
     start_text as held_start,
 };
 pub(crate) use protocol::cmd;
-pub(crate) use usage::{aggregate, load, record_found, stats};
+pub(crate) use usage::{aggregate, load, local_tz_offset_min, record_found, stats};
 
 // What the binary shares: `write` reads session edits and checks anchors,
 // `maintain` asks where the gitignore rule comes from.
