@@ -78,10 +78,13 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
         &r.cfg,
         a.has("fat"),
     ));
-    // `--fix` also closes the confirmed `[Shipped]` notes — the adapter half
-    // (core never runs `gh`, so it can never take this action itself).
+    // `--fix` also applies the mechanical closes the report carries
+    // (confirmed `[Shipped]` notes, stuck `[Superseded]` chains, `[Gone]`
+    // rows) — the adapter half (core never runs `gh`, so it can never take
+    // this action itself). Anything else stays report-only with its ready
+    // `fael close` command.
     if a.has("fix") {
-        fix_shipped(&r, &mut rep, a.has("json"));
+        fix_closes(&r, &mut rep, a.has("json"));
     }
     show(&rep, a.has("json"));
     Ok(if rep.errors().count() > 0 {
@@ -127,18 +130,29 @@ fn local_note(r: &crate::Repo) -> String {
     note
 }
 
-/// The adapter half of `doctor --fix`: close the confirmed `[Shipped]` notes,
-/// then drop them from the report so a second `doctor` reads clean. `[Shipped?]`
-/// never carries close actions (its merge time is unknown), and a close that
-/// fails (a concurrent close, a bump) leaves its row in place.
-fn fix_shipped(r: &crate::Repo, rep: &mut core::DoctorReport, json: bool) {
-    for p in rep
+/// The adapter half of `doctor --fix`: apply every mechanical close the report
+/// carries (`[Shipped]` notes, stuck `[Superseded]` chains, `[Gone]` rows),
+/// then drop the emptied problems so a second `doctor` reads clean. Only
+/// problems with close actions are touched — every other kind is report-only
+/// by construction (its `closes` are empty). `[Shipped?]` never carries close
+/// actions (its merge time is unknown), and a close that fails (a concurrent
+/// close, a bump) leaves its row in place. A row named by two tiers in one
+/// pass (both Gone and Superseded-stuck) closes once: the second close would
+/// be a no-op retry, so it is skipped without a second `fixed:` line.
+fn fix_closes(r: &crate::Repo, rep: &mut core::DoctorReport, json: bool) {
+    let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut emptied: Vec<usize> = vec![];
+    for (i, p) in rep
         .problems
         .iter_mut()
-        .filter(|p| p.kind == core::ProblemKind::Shipped)
+        .enumerate()
+        .filter(|(_, p)| !p.closes.is_empty())
     {
         let mut left = vec![];
         for (id, text) in p.closes.drain(..) {
+            if !done.insert(id.clone()) {
+                continue;
+            }
             match crate::write::close_row(r, &id, &text, true) {
                 Ok((row, _, _)) => say(json, &format!("fixed: closed {} — {text}", row.id)),
                 Err(e) => {
@@ -149,9 +163,13 @@ fn fix_shipped(r: &crate::Repo, rep: &mut core::DoctorReport, json: bool) {
         }
         p.closes = left;
         p.ids = p.closes.iter().map(|(id, _)| id.clone()).collect();
+        if p.closes.is_empty() {
+            emptied.push(i);
+        }
     }
-    rep.problems
-        .retain(|p| p.kind != core::ProblemKind::Shipped || !p.closes.is_empty());
+    for i in emptied.into_iter().rev() {
+        rep.problems.remove(i);
+    }
 }
 
 /// A `--fix` action line. `--json` must stay pure JSON on stdout, so the

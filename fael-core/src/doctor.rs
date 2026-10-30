@@ -10,6 +10,16 @@
 //! Thin entry only — the report types live here, the verbs in `doctor/`:
 //! `scan` (read-only check), `fix` (repairs under the lock) and `precision`
 //! (per-rule self-heal precision from restore labels, over a `Log`).
+//!
+//! Tiers: content damage (`Broken`, `Torn`, `Conflict`, `Encoding`) is repaired
+//! by `fix` (bytes move to `quarantine/`, never deleted). Mechanical row state
+//! — a `[Superseded]` chain whose head is already closed, `[Gone]` rows whose
+//! files exist nowhere — is closed by the binary adapter (`doctor --fix`
+//! applies each problem's `closes`, force, through the same identity rule as
+//! `fael close`). Everything else is report-only: the problem names its full
+//! ids and the ready `fael close` command, and the adapter never touches it
+//! (ambiguous dupes are never canon-picked, `Unstamped`/`NoVerdict` never
+//! auto-bumped, torn storage never repaired by guessing).
 
 mod fix;
 mod precision;
@@ -151,8 +161,11 @@ pub struct Problem {
     /// re-deriving the detector outside fael (01M3M2ZV).
     pub ids: Vec<String>,
     /// `--fix` close actions for the adapter: `(row id, close text)`. Only the
-    /// confirmed `[Shipped]` notes fill this — `[Shipped?]` never does, and
-    /// core never closes a row itself (the adapter owns the `gh` evidence).
+    /// mechanically provable tiers fill this — confirmed `[Shipped]` notes,
+    /// stuck `[Superseded]` chains, `[Gone]` rows — and core never closes a
+    /// row itself (the adapter owns the `gh` evidence and the write path).
+    /// A problem with close actions is by definition `fixable` (the adapter
+    /// applies them), and its `ids` are the rows being closed.
     pub closes: Vec<(String, String)>,
 }
 

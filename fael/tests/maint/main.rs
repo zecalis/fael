@@ -9,6 +9,7 @@
 mod branches;
 mod compact;
 mod doctor;
+mod doctor_fix_tiers;
 mod import;
 mod journal_only;
 mod notenglish;

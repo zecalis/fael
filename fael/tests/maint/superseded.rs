@@ -53,7 +53,9 @@ fn doctor_flags_a_chain_hidden_by_a_closed_head() {
         ),
     )
     .unwrap();
-    let (ok, out, _) = fael(&d, &["doctor", "--fix"]);
+    // the legacy trap is visible report-only: --fix would close it (see
+    // doctor_fix_tiers), here the plain report plus the manual close below
+    let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(ok, "{out}");
     let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(ok, "{out}");
