@@ -9,7 +9,7 @@ description = "fael crew — plan/chunk/board store and math (dispatched from fa
 
 [dependencies]
 fael-core = { path = "../fael-core", default-features = false }
-rusqlite = { version = "0.40", features = ["functions"] }
+rusqlite = { version = "0.41", features = ["functions"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 
