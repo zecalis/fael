@@ -3,10 +3,8 @@
 //! each row once per session. A push is an `edit` or a `shell-edit` (a shell
 //! call that wrote a file); no client sends a read push.
 //!
-//! The dedupe key is (session_id, row_id): the seen file holds row ids,
-//! never text, file, or query — a new session may surface the same row.
-//! Rows cut by the token budget keep their keys for a later push
-//! (`say_within` drops them before they are said, so nothing is spent).
+//! Dedupe key is (session_id, row_id) — row ids, never text/file/query —
+//! and budget-cut rows keep their keys (`say_within` drops them unsaid).
 
 use super::asks::{UsageMeta, hook_meta};
 use super::changed::{self, Ask, Blobs, edit_hint, read_seen};

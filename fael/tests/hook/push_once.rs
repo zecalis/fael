@@ -51,14 +51,20 @@ fn three_edits_push_the_body_once() {
         .enumerate()
     {
         assert!(out.0, "edit {}: {}", i + 2, out.1);
-        assert!(!out.1.contains("kept login loops"), "edit {}: {}", i + 2, out.1);
+        assert!(
+            !out.1.contains("kept login loops"),
+            "edit {}: {}",
+            i + 2,
+            out.1
+        );
     }
     // one push carried the id; the later edits only marked it in context
     let pushed: Vec<_> = usage_events(&d, "edit")
         .into_iter()
         .filter(|v| {
             v["ids"].as_array().is_some_and(|ids| {
-                ids.iter().any(|id| id.as_str().is_some_and(|s| !s.is_empty()))
+                ids.iter()
+                    .any(|id| id.as_str().is_some_and(|s| !s.is_empty()))
             })
         })
         .collect();
