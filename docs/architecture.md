@@ -193,6 +193,9 @@ Lane contract (overlap-broker, info only — the owner merges every PR, fael nev
 **Write safety:**
 - A line is committed once its trailing `\n` is written.
 - Local writers are serialised by `File::lock` on `.fael/.lock`.
+- Lifecycle add/close checks reload the tree/journal union while holding the destination
+  store's lock and keep it through append, so a stale caller snapshot cannot retire a row twice
+  or file an identical supersede retry again.
 - Files are rewritten only with tmp-then-rename, and only when no one writes to them any more.
 - Durability comes from the journal, not the tree: `add` writes
   `<git-common-dir>/fael/log/` only, so PRs carry no log lines and

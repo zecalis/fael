@@ -176,10 +176,16 @@ fn walk_jsonl(dir: &Path) -> impl Iterator<Item = PathBuf> {
 /// Tree + journal union (the tree wins on duplicate ids), plus the ids only
 /// the journal holds. Spawn-free — the hot paths (`crate::read`) stop here.
 fn union(r: &crate::repo::Repo) -> (crate::Log, HashSet<String>) {
-    let mut log = crate::read(&r.fael);
+    union_paths(&r.fael, r.journal.as_deref())
+}
+
+/// The same tree-first union for lifecycle writers already holding the
+/// journal lock. Paths are supplied by the adapter, without repo discovery.
+pub(crate) fn union_paths(fael: &Path, journal: Option<&Path>) -> (crate::Log, HashSet<String>) {
+    let mut log = crate::read(fael);
     warn(&log);
     let mut only = HashSet::new();
-    let Some(j) = r.journal.as_deref() else {
+    let Some(j) = journal else {
         return (log, only);
     };
     let extra = crate::read(j);

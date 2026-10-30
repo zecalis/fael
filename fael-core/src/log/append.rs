@@ -154,15 +154,19 @@ pub const NOOP_MARK: &str = "— not filed again";
 /// and hands back the live survivor with a `NOOP_MARK` warn, so a retry after
 /// a timeout emits zero new events. Superseding a closed-but-open-headed row
 /// still files (an explicit reopen, counted as a confirmed repeat).
+/// The caller's log is a compatibility snapshot: lifecycle checks reload the
+/// tree/journal union under the append lock so concurrent retries see the winner.
 pub fn add_row(
     fael: &Path,
     journal: Option<&Path>,
-    log: &Log,
+    _log: &Log,
     cfg: &Config,
     stamp: &Stamp,
     mut row: Row,
     supersedes: Option<&str>,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
+    let tx = super::transaction::Transaction::open(fael, journal)?;
+    let log = &tx.log;
     if let Some(s) = supersedes {
         let target = resolve_content(log, s)?.id.clone();
         // T5: already superseded -> a retry (same content as the survivor)
@@ -193,7 +197,8 @@ pub fn add_row(
         row.supersedes = Some(target);
     }
     stamp.apply(&mut row);
-    let path = write_both(fael, journal, |d| add(d, &row, cfg))?;
+    validate(&row, cfg)?;
+    let path = tx.append(&[(&row, false)])?.remove(0);
     let warns = warnings(&row, log, cfg);
     Ok((row, path, warns))
 }
@@ -226,6 +231,7 @@ pub(crate) fn write_both(
 /// supersede marker hides a row for good (format.md §Readers), so without the
 /// chain-close the older versions would stay hidden with no close row while the
 /// newest one is closed: the whole chain unreachable through `fael close`.
+/// The caller's snapshot is reloaded under the append lock before any check.
 ///
 /// The reverse guard is relaxed to match: a superseded `id` is closable when
 /// its newest version is already closed (the old "close the newest version"
@@ -234,12 +240,14 @@ pub(crate) fn write_both(
 pub fn close_row(
     fael: &Path,
     journal: Option<&Path>,
-    log: &Log,
+    _log: &Log,
     cfg: &Config,
     stamp: &Stamp,
     id: &str,
     why: &str,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
+    let tx = super::transaction::Transaction::open(fael, journal)?;
+    let log = &tx.log;
     let target = resolve_content(log, id)?.id.clone();
     // T2: a second close writes nothing but names the existing close row
     if closed(log).contains(target.as_str()) {
@@ -297,10 +305,8 @@ pub fn close_row(
     };
     // one .lock across the chain: an interrupt never leaves a half-closed
     // chain behind, so a retry is always a clean T2 no-op above
-    let dir = journal.unwrap_or(fael);
     let refs: Vec<(&Row, bool)> = pending.iter().map(|r| (r, true)).collect();
-    let mut paths = super::atomic::append_many(dir, &refs)?;
-    crate::work::elsewhere::register_store(fael, journal);
+    let mut paths = tx.append(&refs)?;
     Ok((
         last,
         paths.pop().expect("at least one close row lands"),

@@ -146,6 +146,109 @@ fn write_replay_race_close_vs_supersede_deterministic() {
 }
 
 #[test]
+fn stale_close_retry_returns_the_existing_close_without_writing() {
+    let (dir, cfg, st) = setup("stale-close");
+    let a = issue(&dir, &cfg, &st, "hot", None);
+    let snapshot = view(&dir);
+    let (first, _, _) = close_row(&dir, None, &snapshot, &cfg, &st, &a.id, "first").unwrap();
+    let before = count(&dir);
+    let (retry, _, warns) = close_row(&dir, None, &snapshot, &cfg, &st, &a.id, "retry").unwrap();
+    assert_eq!(retry.id, first.id);
+    assert!(warns.iter().any(|w| w.contains(NOOP_MARK)), "{warns:?}");
+    assert_eq!(count(&dir), before);
+}
+
+#[test]
+fn stale_supersede_retry_returns_the_existing_successor_without_writing() {
+    let (dir, cfg, st) = setup("stale-supersede");
+    let a = issue(&dir, &cfg, &st, "hot", None);
+    let snapshot = view(&dir);
+    let next = || Row::new("tester-0000", "issue", "hot v2", vec!["src/a.rs".into()]);
+    let (first, _, _) = add_row(&dir, None, &snapshot, &cfg, &st, next(), Some(&a.id)).unwrap();
+    let before = count(&dir);
+    let (retry, _, warns) = add_row(&dir, None, &snapshot, &cfg, &st, next(), Some(&a.id)).unwrap();
+    assert_eq!(retry.id, first.id);
+    assert!(warns.iter().any(|w| w.contains(NOOP_MARK)), "{warns:?}");
+    assert_eq!(count(&dir), before);
+}
+
+#[test]
+fn stale_close_after_supersede_names_the_survivor() {
+    let (dir, cfg, st) = setup("stale-close-supersede");
+    let a = issue(&dir, &cfg, &st, "hot", None);
+    let snapshot = view(&dir);
+    let b = issue(&dir, &cfg, &st, "hot v2", Some(&a.id));
+    let before = count(&dir);
+    let (got, _, warns) = close_row(&dir, None, &snapshot, &cfg, &st, &a.id, "stale").unwrap();
+    assert_eq!(got.id, b.id);
+    assert!(warns.iter().any(|w| w.contains(NOOP_MARK)), "{warns:?}");
+    assert_eq!(count(&dir), before);
+}
+
+#[test]
+fn stale_close_refreshes_the_tree_and_shared_journal_union() {
+    let (dir, cfg, st) = setup("stale-union");
+    // A frozen tree row stays resolvable, while retirement lives only in
+    // the shared journal. Neither store alone has the current state.
+    let a = issue(&dir, &cfg, &st, "hot", None);
+    let snapshot = view(&dir);
+    let journal = dir.join("journal");
+    let (first, _, _) =
+        close_row(&dir, Some(&journal), &snapshot, &cfg, &st, &a.id, "first").unwrap();
+    let (retry, _, warns) =
+        close_row(&dir, Some(&journal), &snapshot, &cfg, &st, &a.id, "retry").unwrap();
+    assert_eq!(retry.id, first.id);
+    assert!(warns.iter().any(|w| w.contains(NOOP_MARK)), "{warns:?}");
+    assert!(read(&dir).closes.is_empty(), "the tree remains frozen");
+    assert_eq!(read(&journal).closes.len(), 1);
+}
+
+#[test]
+fn simultaneous_close_retries_write_one_event() {
+    let (dir, cfg, st) = setup("parallel-close");
+    let a = issue(&dir, &cfg, &st, "hot", None);
+    let snapshot = view(&dir);
+    let barrier = std::sync::Barrier::new(2);
+    let results = std::thread::scope(|s| {
+        let call = || {
+            barrier.wait();
+            close_row(&dir, None, &snapshot, &cfg, &st, &a.id, "fixed")
+                .unwrap()
+                .0
+                .id
+        };
+        let first = s.spawn(call);
+        let second = s.spawn(call);
+        (first.join().unwrap(), second.join().unwrap())
+    });
+    assert_eq!(results.0, results.1);
+    assert_eq!(read(&dir).closes.len(), 1);
+}
+
+#[test]
+fn simultaneous_supersede_retries_write_one_successor() {
+    let (dir, cfg, st) = setup("parallel-supersede");
+    let a = issue(&dir, &cfg, &st, "hot", None);
+    let snapshot = view(&dir);
+    let barrier = std::sync::Barrier::new(2);
+    let results = std::thread::scope(|s| {
+        let call = || {
+            let next = Row::new("tester-0000", "issue", "hot v2", vec!["src/a.rs".into()]);
+            barrier.wait();
+            add_row(&dir, None, &snapshot, &cfg, &st, next, Some(&a.id))
+                .unwrap()
+                .0
+                .id
+        };
+        let first = s.spawn(call);
+        let second = s.spawn(call);
+        (first.join().unwrap(), second.join().unwrap())
+    });
+    assert_eq!(results.0, results.1);
+    assert_eq!(read(&dir).rows.len(), 2);
+}
+
+#[test]
 fn write_replay_add_close_gates_before_write() {
     // Both gates run before any write: a bad close reason saves neither row.
     let (dir, cfg, st) = setup("gates");
