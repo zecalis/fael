@@ -130,7 +130,7 @@ fn codex_rollouts_join_shell_threads_without_crossing_chats() {
 }
 
 /// The vendor lifecycle contract names the parent session and the child agent.
-/// A child tool event instead names its own session. Both must reach one context.
+/// Child tools carry the same parent/agent pair; the shell uses the child id.
 #[test]
 fn codex_subagent_start_and_stop_use_the_child_context() {
     let d = repo();

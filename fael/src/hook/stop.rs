@@ -139,9 +139,8 @@ fn receipt(e: &Event) -> Option<String> {
 }
 
 /// A sub-agent's stop only notes the ids its own reply cites: the bug rule
-/// belongs to the session's stop. No
-/// transcript fallback — `session` is the parent's transcript, never this
-/// agent's reply.
+/// belongs to the session's stop. No transcript fallback: only the explicit
+/// reply identifies this child's closing words.
 pub(super) fn subagent_stop(e: &Event) -> Reply {
     if let (Some(c), Some(reply)) = (ctx(e), &e.reply)
         && adopted(&c)
