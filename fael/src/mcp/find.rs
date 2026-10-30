@@ -48,32 +48,24 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     if let Some(ids) = a["ids"].as_array() {
         return ids_call(ids, r, log, branch_of);
     }
-    // `find {"id": ...}` pulls that row's body — an id-shaped query is an id
-    // lookup, never text (same messages as the CLI); pass it as `text` for a
-    // text search
-    if let Some(id) = s(a, "id")
-        && core::looks_like_id(&id)
-    {
-        return match crate::refs::resolve_wide(&log, &id) {
-            crate::refs::Wide::One(row) => {
-                let shown = row.id.clone();
-                let text = crate::journal::tag(
-                    core::render_full(&log, &[row.as_ref()], 10_000),
-                    &branch_of,
-                );
-                Ok((with_mentioned(&log, row.as_ref(), text), vec![shown]))
-            }
-            crate::refs::Wide::Many(rows) => Err(crate::find::reject_many(&id, &rows)),
-            crate::refs::Wide::Missing => missed(r, &log, &id),
-        };
-    }
-    // a non-id-shaped `id` keeps the old prefix shortcut: an exact id or
-    // unique prefix pulls that row's body, else the call is rejected
+    // `find {"id": ...}` pulls that row's body — one resolver for every id
+    // shape (F-IDENT, c2): `resolve_identity` decides One/Many/Missing, so the
+    // old `looks_like_id` gate plus `resolve_row` fallback collapse into one
+    // call with the same messages as the CLI. Pass the value as `text` for a
+    // text search.
     if let Some(id) = s(a, "id") {
-        let row = core::resolve_row(&log, &id)?;
-        let shown = row.id.clone();
-        let text = crate::journal::tag(core::render_full(&log, &[row], 10_000), &branch_of);
-        return Ok((with_mentioned(&log, row, text), vec![shown]));
+        match core::resolve_identity(&log, &id) {
+            core::Ref::One(row) => {
+                let shown = row.id.clone();
+                let text = crate::journal::tag(core::render_full(&log, &[row], 10_000), &branch_of);
+                return Ok((with_mentioned(&log, row, text), vec![shown]));
+            }
+            core::Ref::Many(rows) => {
+                let owned: Vec<core::Row> = rows.into_iter().cloned().collect();
+                return Err(crate::find::reject_many(&id, &owned));
+            }
+            core::Ref::Missing => return missed(r, &log, &id),
+        }
     }
     // `text: "translate --all"`: a CLI flag typed into the words is no word
     let text = s(a, "text").map(|t| {
@@ -84,6 +76,13 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         words.join(" ")
     });
     let text = text.filter(|t| !t.is_empty());
+    // ULID-as-text auto-routes to id lookup (F-IDENT) — one resolver, no
+    // second miss path; `--text` on the CLI stays the literal-search hatch.
+    if let Some(t) = text.as_deref()
+        && let Some(routed) = auto_route(r, &log, &branch_of, t)
+    {
+        return routed;
+    }
     // `text: "plan:x"` reads the anchor the way `kickoff` does, `text: "#k"` the key (CLI parity)
     let (text, anchor, text_key) = crate::find::text_or_anchor(&log, None, text.as_ref(), r);
     let mut files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
@@ -155,6 +154,34 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     Ok((with_hint(text, &f), shown))
 }
 
+/// ULID-as-text auto-route (F-IDENT): a single id-shaped token passed as
+/// `text` (an agent pasting an id into the wrong field, or a `query`/`search`
+/// synonym rewritten to `text` at the boundary) is an id lookup, never a text
+/// search — so it never lands in `find-misses.jsonl` as a vocabulary miss.
+/// `Some` when the text was single-token id-shaped (hit or typed miss).
+fn auto_route(
+    r: &Repo,
+    log: &core::Log,
+    branch_of: &crate::journal::BranchMap,
+    t: &str,
+) -> Option<Result<(String, Vec<String>), String>> {
+    if t.contains(char::is_whitespace) || !core::looks_like_id(t) {
+        return None;
+    }
+    Some(match core::resolve_identity(log, t) {
+        core::Ref::One(row) => {
+            let shown = row.id.clone();
+            let text = crate::journal::tag(core::render_full(log, &[row], 10_000), branch_of);
+            Ok((with_mentioned(log, row, text), vec![shown]))
+        }
+        core::Ref::Many(rows) => {
+            let owned: Vec<core::Row> = rows.into_iter().cloned().collect();
+            Err(crate::find::reject_many(t, &owned))
+        }
+        core::Ref::Missing => missed(r, log, t),
+    })
+}
+
 /// `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`).
 fn revisit_arg(a: &serde_json::Value) -> Option<String> {
     match (a["revisit"].as_bool(), s(a, "revisit")) {
@@ -223,7 +250,24 @@ fn missed(r: &Repo, log: &core::Log, id: &str) -> Result<(String, Vec<String>), 
 fn followed(w: &crate::find::owner::Elsewhere) -> Result<(String, Vec<String>), String> {
     let o = crate::repo_at(&w.at).map_err(|e| format!("rejected: {e}"))?;
     let (log, tags) = crate::journal::read(&o);
-    let row = core::resolve_row(&log, &w.id).map_err(|e| format!("rejected: {e}"))?;
+    // Same canonical lookup: the id came from `row_elsewhere`, so it is One
+    // content row; anything else is a typed miss, never silent.
+    let row = match core::resolve_identity(&log, &w.id) {
+        core::Ref::One(r) if !core::is_carrier_row(r) => r,
+        core::Ref::One(_) | core::Ref::Missing => {
+            return Err(format!(
+                "{} {:?} — copy the id from fael find (this session's output, never from memory)",
+                core::NO_ROW_WITH_ID,
+                w.id
+            ));
+        }
+        core::Ref::Many(rows) => {
+            return Err(crate::find::reject_many(
+                &w.id,
+                &rows.into_iter().cloned().collect::<Vec<_>>(),
+            ));
+        }
+    };
     let body = crate::journal::tag(core::render_full(&log, &[row], 10_000), &tags);
     let text = format!(
         "in {} ({}) — pass {{\"cwd\": \"{}\"}} to work there\n{}",

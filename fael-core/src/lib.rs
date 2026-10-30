@@ -67,9 +67,9 @@ pub use query::{
     handoff_first, has_regex_chars, id_tokens, is_date, json_note, key_hints, keys, kickoff,
     levenshtein, names_key, nearest, on_work, page, parse_recall, phantom_md_refs, phantom_refs,
     plan_anchor, push, push_tiered, query, ranked, ref_state, regex_hint, render, render_full,
-    render_full_page, render_page, resolve, resolve_row, resolve_urgent, restored, reverted,
-    row_due, row_waiting, select, select_with, stale_refs, successors, superseded, today, waiting,
-    waiting_line, warnings, why_empty, with_due,
+    render_full_page, render_page, resolve, resolve_identity, resolve_row, resolve_urgent,
+    restored, reverted, row_due, row_waiting, select, select_with, stale_refs, successors,
+    superseded, today, waiting, waiting_line, warnings, why_empty, with_due,
 };
 pub use repo::{Repo, git, git_output, read as read_repo, repo, repo_at, sibling_suggest};
 pub use row::{Row, Stamp};

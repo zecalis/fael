@@ -67,10 +67,12 @@ fn find_filters_by_writer_and_includes_closed() {
     );
 }
 
-/// PLAN-fael-id-refs chunk-1: MCP `find {"id"}` answers exactly like the CLI —
-/// a real id pulls the body, a missing id-shaped query rejects (naming the
-/// rows that only mention it), and the same string under `text` is a literal
-/// text search.
+/// PLAN-fael-id-refs chunk-1 + fael-secretary c2: MCP `find {"id"}` answers
+/// exactly like the CLI — a real id pulls the body, a missing id-shaped query
+/// rejects (naming the rows that only mention it). ULID-as-text auto-routes
+/// (F-IDENT): the same string under `text` is the same id lookup — a typed
+/// miss, never a silent text search and never a `find-misses.jsonl`
+/// vocabulary miss. (`--text` on the CLI stays the literal-search hatch.)
 #[test]
 fn find_id_shapes_match_cli() {
     let (_, wt) = main_and_worktree();
@@ -141,9 +143,17 @@ fn find_id_shapes_match_cli() {
             && body.contains("mentioned (not owned) by:"),
         "{body}"
     );
-    // the same string as `text` → the literal text search, no reject
+    // the same string as `text` → the same id lookup (ULID-as-text
+    // auto-routes, F-IDENT): a typed miss naming the mentioner, never a
+    // silent text search — the citer is still named in the same call.
     let (is_err, body) = find(serde_json::json!({"text": fake}));
-    assert!(!is_err && body.contains("for context"), "{body}");
+    assert!(
+        is_err
+            && body.contains("rejected: no row with id")
+            && body.contains("copy the id from fael find")
+            && body.contains("mentioned (not owned) by:"),
+        "{body}"
+    );
 }
 
 /// The opencode round-trip (2026-10-22): MCP `find {"id"}` for a row that

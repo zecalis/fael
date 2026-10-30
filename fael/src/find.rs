@@ -5,6 +5,7 @@
 mod bases;
 pub(crate) mod extra;
 mod flat_cache;
+pub(crate) mod id;
 pub(crate) mod issue;
 mod kickoff;
 pub(crate) mod many;
@@ -40,39 +41,15 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // the union read tags journal-only rows with their stamped branch
     let (mut log, branch_of) = super::journal::read(&r);
     super::hook::mark_dormant(&r, &mut log);
-    // an id-shaped query is an id lookup, never text — unless `--text`
-    // forces a text search (the escape hatch for the old fallback)
+    // Identity (F-IDENT, c2): `resolve_identity` is the only id lookup — an
+    // id-shaped query is an id lookup, never text, unless `--text` forces a
+    // text search (the escape hatch for the old fallback).
     let forced = a.one("text");
     if forced.is_none()
         && let Some(t) = text
-        && core::looks_like_id(t)
+        && let Some(answered) = id::lookup(a, &r, &log, &branch_of, t)
     {
-        return match super::refs::resolve_wide(&log, t) {
-            super::refs::Wide::One(row) => {
-                // the body was just printed — the next push must not say it again
-                super::hook::note_seen(&super::session::hook_session(&r.root), &r.root, &[&row.id]);
-                show_found(a, &r.root, &log, &row, &branch_of)
-            }
-            super::refs::Wide::Many(rows) => Err(reject_many(t, &rows)),
-            // --json is the machine shape: a chunk there stays the reject
-            super::refs::Wide::Missing => {
-                match (!a.has("json")).then(|| owner::chunk_here(&r, t)).flatten() {
-                    Some(c) => {
-                        print!("{c}");
-                        Ok(())
-                    }
-                    None => Err(reject_missing(&r, &log, t)),
-                }
-            }
-        };
-    }
-    // `fael find <id>` pulls the body: an exact id or unique prefix wins over
-    // text search (a text query equalling a unique id prefix means the id)
-    if forced.is_none()
-        && let Some(t) = text
-        && let Ok(row) = core::resolve_row(&log, t)
-    {
-        return show_found(a, &r.root, &log, row, &branch_of);
+        return answered;
     }
     // `find plan:x` reads the anchor the way `kickoff plan:x` does
     let (query, anchor, text_key) = text_or_anchor(&log, forced.as_ref(), text, &r);

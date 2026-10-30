@@ -110,9 +110,11 @@ fn a_short_list_stays_one_line_per_row_and_full_asks_for_bodies() {
 }
 
 /// A fat body would cost more than the `find <id>` it saves, so a short list
-/// keeps its title; the ids pull is cut at the budget and names the ids left.
+/// keeps its title; an explicit ids pull returns every body in one call (c2:
+/// the list names exactly what the agent needs — truncating it only costs the
+/// round the call saved).
 #[test]
-fn fat_bodies_are_bounded_in_a_short_list_and_in_an_ids_pull() {
+fn fat_bodies_are_bounded_in_a_short_list_but_an_ids_pull_returns_all() {
     let d = repo();
     let fat = "word ".repeat(900);
     let a = add(&d, "a.rs", "fat headline one", &fat);
@@ -122,17 +124,14 @@ fn fat_bodies_are_bounded_in_a_short_list_and_in_an_ids_pull() {
         out.contains("fat headline one") && !out.contains("word word word"),
         "{out}"
     );
-    // the first body always shows; the second is cut with the exact next call
+    // every asked body shows, no cut line — the ids said what to read
     let (ok, out, err) = fael(&d, &["find", &a, &b]);
     assert!(ok, "{err}");
     assert!(
-        out.matches("word word").count() >= 1 && !out.contains("fat headline two →"),
+        out.contains("fat headline one →") && out.contains("fat headline two →"),
         "{out}"
     );
-    assert!(
-        out.contains("… +1 more — next: fael find ") && out.contains(&b[..12]),
-        "{out}"
-    );
+    assert!(!out.contains("more — next:"), "{out}");
 }
 
 /// `--json` is never cut, only priced: a script still gets every row, an agent
