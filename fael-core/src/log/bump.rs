@@ -57,6 +57,13 @@ pub fn bump_row(
             old.id
         ));
     }
+    // Claims and routing carry the old hashes too: only a verification
+    // bump asserts that the report was checked against the files.
+    let checked = opts.fh.is_some()
+        && opts.held.is_none()
+        && opts.to.is_none()
+        && opts.revisit.is_none()
+        && matches!(opts.urgent, UrgentChange::Keep);
     let mut ev = Row::bumped(&stamp.by, &old.id);
     // the fold orders events by id: a bump in the same ms as the row's last
     // one would sort by its random half, so step past it. ponytail: two
@@ -101,7 +108,7 @@ pub fn bump_row(
         );
     }
     // bump = checked, still true: a relayed claim stops being one
-    if old.from_report() && opts.fh.is_some() {
+    if old.from_report() && checked {
         ev.extra.insert("checked".into(), true.into());
     }
     if let Some(h) = opts.held.as_deref().or(old.held()) {
