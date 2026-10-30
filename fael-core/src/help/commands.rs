@@ -312,9 +312,12 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
         "doctor",
         "check the log; --fix repairs what it can",
         "fael doctor [--fix] [--fat] [--json]
-     (check the log and the repo for problems; --fix repairs what it can, including
-      closing the confirmed [Shipped] status notes — rules and facts on a landed
-      branch are listed as [Shipped kept], never closed; [Phantom] flags citations of ids
+     (check the log and the repo for problems; --fix repairs what it can:
+      broken/torn lines move to quarantine, conflict markers are stripped,
+      encoding is normalised, and the mechanically provable rows are closed —
+      stuck [Superseded] chains, [Gone] rows, confirmed [Shipped] status notes;
+      everything else stays report-only with its ready `fael close` command —
+      rules and facts on a landed branch are listed as [Shipped kept], never closed; [Phantom] flags citations of ids
       with no row behind them — in rows, in close reasons and in the prose of
       every *.md in the repo (fenced code skipped); [NoVerdict] lists rows on a
       file over the 1 MiB push cap — push never says whether it changed since the

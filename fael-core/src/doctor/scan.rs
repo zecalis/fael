@@ -35,7 +35,7 @@ pub fn scan(fael: &Path, root: &Path, month: &str) -> Report {
         ));
         return r;
     }
-    let mut ids: HashMap<String, usize> = HashMap::new();
+    let mut ids: HashMap<String, Vec<(PathBuf, usize)>> = HashMap::new();
     let mut no_files = 0usize;
     let mut no_files_example = String::new();
     let mut no_files_ids: Vec<String> = vec![];
@@ -50,15 +50,30 @@ pub fn scan(fael: &Path, root: &Path, month: &str) -> Report {
             month,
         );
     }
-    let mut dupes: Vec<(&String, &usize)> = ids.iter().filter(|(_, n)| **n > 1).collect();
+    let mut dupes: Vec<(&String, &Vec<(PathBuf, usize)>)> =
+        ids.iter().filter(|(_, v)| v.len() > 1).collect();
     dupes.sort();
-    for (id, n) in dupes {
+    for (id, hits) in dupes {
+        // read order is sorted files, lines ascending — the first hit is the
+        // row read keeps (same first-wins the union uses, never a guess)
+        let mut hits = hits.clone();
+        hits.sort();
+        let at: Vec<String> = hits
+            .iter()
+            .map(|(f, l)| format!("{}:{l}", f.display()))
+            .collect();
         r.problems.push(
             Problem::error(
                 Kind::Duplicate,
                 false,
                 None,
-                format!("id {id} appears {n}× — read dedupes it, `fael compact` rewrites it away"),
+                format!(
+                    "id {id} appears {}× ({}) — read keeps the first ({}), \
+                     `fael compact` rewrites the rest away",
+                    hits.len(),
+                    at.join(", "),
+                    at[0]
+                ),
             )
             .with_ids(vec![id.clone()]),
         );
@@ -86,7 +101,7 @@ pub fn scan(fael: &Path, root: &Path, month: &str) -> Report {
 fn scan_file(
     path: &Path,
     r: &mut Report,
-    ids: &mut HashMap<String, usize>,
+    ids: &mut HashMap<String, Vec<(PathBuf, usize)>>,
     no_files: &mut usize,
     no_files_example: &mut String,
     no_files_ids: &mut Vec<String>,
@@ -132,7 +147,9 @@ fn scan_file(
         match serde_json::from_str::<Row>(line) {
             Ok(row) => {
                 if !row.id.is_empty() {
-                    *ids.entry(row.id.clone()).or_insert(0) += 1;
+                    ids.entry(row.id.clone())
+                        .or_default()
+                        .push((path.to_path_buf(), i + 1));
                 }
                 if let Some(what) = crate::secret(line) {
                     r.problems.push(

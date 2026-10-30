@@ -156,6 +156,14 @@ fn duplicates_are_report_only() {
         .find(|x| x.kind == ProblemKind::Duplicate)
         .unwrap();
     assert!(!dupe.fixable);
+    // exact rows plus the survivor rule (first in read order wins): the
+    // report never picks a canonical copy beyond what read already does
+    assert!(dupe.detail.contains("appears 2×"), "{}", dupe.detail);
+    assert!(
+        dupe.detail.contains("read keeps the first"),
+        "{}",
+        dupe.detail
+    );
     assert_eq!(read(&fael).rows.len(), 1); // read dedupes first-wins
     assert!(
         after

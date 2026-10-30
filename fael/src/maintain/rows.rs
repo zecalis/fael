@@ -81,20 +81,33 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
         let eg: Vec<String> = gone
             .iter()
             .take(5)
-            .map(|row| format!("{} → {}", w.short(&row.id), row.files.join(", ")))
+            .map(|row| {
+                format!(
+                    "{} ({}): `fael close {} \"gone\"`",
+                    w.short(&row.id),
+                    row.files.join(", "),
+                    w.short(&row.id)
+                )
+            })
             .collect();
-        let ids = gone.iter().map(|row| row.id.clone()).collect();
+        // mechanically closable: every file is gone from every branch, so the
+        // row never pushes again — `doctor --fix` applies exactly the ready
+        // command above (force, same identity rule as the close path)
+        let closes: Vec<(String, String)> = gone
+            .iter()
+            .map(|row| (row.id.clone(), "gone".into()))
+            .collect();
         out.push(
             core::Problem::info(
                 core::ProblemKind::Gone,
                 format!(
                     "{} open row(s) name only files that no longer exist, so they never push — \
-                     re-file them on the new path or `fael close` them (e.g. {})",
+                     re-file them on the new path or close them (e.g. {})",
                     gone.len(),
                     eg.join("; ")
                 ),
             )
-            .with_ids(ids),
+            .with_closes(closes),
         );
     }
     // some files gone, some left: the row still pushes, but it likely describes
@@ -106,7 +119,12 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
         .map(|(row, m)| {
             (
                 row.id.clone(),
-                format!("{} → {}", w.short(&row.id), m.join(", ")),
+                format!(
+                    "{} ({}): `fael close {} \"part-gone\"`",
+                    w.short(&row.id),
+                    m.join(", "),
+                    w.short(&row.id)
+                ),
             )
         })
         .collect();
@@ -126,16 +144,23 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
         );
     }
     // prose rot: the row's text points at a backticked path with no file
-    // behind it, so the next reader follows a dead pointer
+    // behind it, so the next reader follows a dead pointer. The example is a
+    // ready command (same id the gate resolves); an issue still owes its
+    // `<cause> → <fix>` + guard — the detector never invents them.
     let stale = stale_rows(log, root, al);
     if !stale.is_empty() {
-        let eg: Vec<&str> = stale.iter().take(5).map(|(_, e)| e.as_str()).collect();
+        let w = core::abbrev(log);
+        let eg: Vec<String> = stale
+            .iter()
+            .take(5)
+            .map(|(id, e)| format!("{e}: `fael close {} \"stale\"`", w.short(id)))
+            .collect();
         out.push(
             core::Problem::info(
                 core::ProblemKind::Stale,
                 format!(
                     "{} open row(s) name a path in backticks that is not on disk — check the text \
-                     still holds, then re-file with `--supersedes` or `fael close <id>` (e.g. {})",
+                     still holds, then re-file with `--supersedes` or close it (e.g. {})",
                     stale.len(),
                     eg.join("; ")
                 ),
@@ -165,7 +190,11 @@ fn branch_notes(log: &core::Log) -> Vec<core::Problem> {
         .take(5)
         .map(|(b, i)| {
             let shorts: Vec<&str> = i.iter().map(|id| w.short(id)).collect();
-            format!("{b} → {}", shorts.join(", "))
+            let first = shorts.first().copied().unwrap_or("?");
+            format!(
+                "{b} → {}: `fael close {first} \"orphan\"`",
+                shorts.join(", ")
+            )
         })
         .collect();
     vec![
@@ -173,7 +202,7 @@ fn branch_notes(log: &core::Log) -> Vec<core::Problem> {
             core::ProblemKind::Orphan,
             format!(
                 "{n} open row(s) filed on branch(es) whose PR was closed without merge — \
-                 the work likely died with the branch; re-file with `--supersedes` or `fael close <id>` (e.g. {})",
+                 the work likely died with the branch; re-file with `--supersedes` or close it (e.g. {})",
                 eg.join("; ")
             ),
         )
@@ -236,6 +265,13 @@ fn superseded_note(log: &core::Log) -> Option<core::Problem> {
             )
         })
         .collect();
+    // mechanically closable: the head is already closed, so the relaxed guard
+    // lets each stuck version through — `doctor --fix` applies exactly the
+    // ready command above (force, same identity rule as the close path)
+    let closes: Vec<(String, String)> = stuck
+        .iter()
+        .map(|r| (r.id.clone(), "superseded".into()))
+        .collect();
     Some(
         core::Problem::info(
             core::ProblemKind::Superseded,
@@ -246,7 +282,7 @@ fn superseded_note(log: &core::Log) -> Option<core::Problem> {
                 eg.join("; ")
             ),
         )
-        .with_ids(stuck.iter().map(|r| r.id.clone()).collect()),
+        .with_closes(closes),
     )
 }
 

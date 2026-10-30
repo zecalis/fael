@@ -89,7 +89,7 @@ fn rows_of_an_unmerged_branch_are_not_gone() {
     assert!(ok, "{out}");
     std::fs::remove_file(d.join("src/old.rs")).unwrap();
     let (_, out) = fael(&d, &["doctor"]);
-    assert!(out.contains("note [Gone]: 1 open row(s)"), "{out}");
+    assert!(out.contains("note [Gone] [--fix]: 1 open row(s)"), "{out}");
     assert!(
         !out.contains("[PartGone]") && !out.contains("src/new.rs"),
         "{out}"

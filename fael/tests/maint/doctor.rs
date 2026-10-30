@@ -52,7 +52,7 @@ fn doctor_notes_local_and_gone_rows() {
     );
     let (_, out, _) = fael(&d, &["doctor"]);
     assert!(
-        out.contains("note [Gone]: 1 open row(s)") && out.contains("src/deleted.rs"),
+        out.contains("note [Gone] [--fix]: 1 open row(s)") && out.contains("src/deleted.rs"),
         "{out}"
     );
     // one file left, one gone: still pushes, reported apart, naming only the gone file
@@ -69,9 +69,9 @@ fn doctor_notes_local_and_gone_rows() {
     );
     let (_, out, _) = fael(&d, &["doctor"]);
     assert!(
-        out.contains("note [Gone]: 1 open row(s)")
+        out.contains("note [Gone] [--fix]: 1 open row(s)")
             && out.contains("note [PartGone]: 1 open row(s)")
-            && out.contains("→ src/removed.rs"),
+            && out.contains("(src/removed.rs): `fael close"),
         "{out}"
     );
 }
