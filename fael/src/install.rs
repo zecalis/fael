@@ -22,6 +22,7 @@ mod claude;
 mod codex;
 mod hooks;
 mod opencode;
+pub(crate) mod preset;
 mod skill;
 mod upgrade;
 
@@ -128,17 +129,34 @@ pub fn upgrade(client: Option<String>, dry: bool, yes: bool, wiring: bool) -> Re
             return Ok(());
         }
     }
-    cmd(client, dry, !yes)
+    cmd(client, dry, !yes, None)
 }
 
-pub fn cmd(client: Option<String>, dry: bool, ask: bool) -> Result<(), String> {
+pub fn cmd(
+    client: Option<String>,
+    dry: bool,
+    ask: bool,
+    preset: Option<String>,
+) -> Result<(), String> {
+    if let Some(n) = preset.as_deref() {
+        // unknown preset rejects before anything is written (no friction flag yet:
+        // the name is validated here, the write below).
+        fael_core::preset_toml(n)?;
+    }
     let home = crate::home().ok_or("fael install: cannot find the home directory")?;
     // Configs never use current_exe(): under npx that is a disposable cache dir.
     // ponytail: resolved from PATH now, so PATH at hook time must find it too
     let exe = match hook_exe() {
         Some(e) => e,
         None if dry => "fael".into(),
-        None => return Err("fael install: fael is not on PATH, so the hooks could not run it — install it first: brew install zecalis/tap/fael, npm i -g @zecalis/fael or cargo install fael".into()),
+        None => {
+            // a preset-only run in a repo still writes the repo config: hooks
+            // can be wired later once fael is on PATH.
+            if let Some(n) = preset.as_deref() {
+                return preset::apply_without_exe(n, dry);
+            }
+            return Err("fael install: fael is not on PATH, so the hooks could not run it — install it first: brew install zecalis/tap/fael, npm i -g @zecalis/fael or cargo install fael".into());
+        }
     };
     let ctx = |dry| Ctx {
         home: home.clone(),
@@ -148,6 +166,14 @@ pub fn cmd(client: Option<String>, dry: bool, ask: bool) -> Result<(), String> {
         changed: Cell::new(0),
     };
     let c = ctx(dry || ask);
+    if dry {
+        println!("dry run — nothing is written");
+    }
+    // the repo preset lands before client wiring, in the same pass, so one
+    // `install --preset` is the whole multi-agent setup.
+    if let Some(n) = preset.as_deref() {
+        preset::apply(&c, n)?;
+    }
     let targets: Vec<&str> = match client.as_deref() {
         Some(n) if CLIENTS.contains(&n) => vec![n],
         Some(n) => {
@@ -156,10 +182,18 @@ pub fn cmd(client: Option<String>, dry: bool, ask: bool) -> Result<(), String> {
         None => detect(&c.home, true),
     };
     if targets.is_empty() {
+        if preset.is_some() {
+            let n = c.changed.get();
+            if dry {
+                println!("\n{n} change(s) pending — `fael upgrade` applies them");
+            } else if n == 0 {
+                println!("\nup to date — nothing to change");
+            } else {
+                println!("\n{n} change(s) applied");
+            }
+            return Ok(());
+        }
         return Err("fael install: found no Claude Code (~/.claude), Codex (~/.codex) or OpenCode (~/.config/opencode)".into());
-    }
-    if dry {
-        println!("dry run — nothing is written");
     }
     run(&c, &targets)?;
     let n = c.changed.get();
@@ -181,6 +215,9 @@ pub fn cmd(client: Option<String>, dry: bool, ask: bool) -> Result<(), String> {
         }
         println!();
         let w = ctx(false);
+        if let Some(n) = preset.as_deref() {
+            preset::apply(&w, n)?;
+        }
         run(&w, &targets)?;
         println!("\n{} change(s) applied", w.changed.get());
     } else {

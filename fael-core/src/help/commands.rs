@@ -360,8 +360,11 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "install",
         "install hooks and skills for a client",
-        "fael install [--client claude|codex|opencode] [--dry-run]
-    (install hooks and skills for an agent client; --dry-run prints without writing)",
+        "fael install [--client claude|codex|opencode] [--preset multi-agent] [--dry-run]
+    (install hooks and skills for an agent client; --dry-run prints without writing;
+     --preset multi-agent writes the repo's .fael/config.toml from proven defaults only
+     (no new behavior: the file parses to Config::default), leaving an existing
+     config alone — one setup for multi-agent teams, then no hand-tuning)",
     ),
     (
         "upgrade",
