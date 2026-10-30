@@ -3,8 +3,8 @@
 
 use super::{Log, is_month};
 use crate::{
-    Config, Row, Stamp, closed, resolve_row, reverted, superseded, validate, validate_alias,
-    validate_close, warnings,
+    Config, Ref, Row, Stamp, closed, resolve_identity, reverted, superseded, validate,
+    validate_alias, validate_close, warnings,
 };
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -89,12 +89,71 @@ pub fn close(fael: &Path, row: &Row, cfg: &Config) -> Result<PathBuf, String> {
     append(fael, row, true)
 }
 
+/// One content row by exact id or unique prefix, through the canonical
+/// identity resolver (c2, F-IDENT) — never a private fallback. Carriers and
+/// close rows are not supersede/close targets: naming one rejects like a miss
+/// so the caller retries with the content id `fael find` printed.
+fn resolve_content<'a>(log: &'a Log, input: &str) -> Result<&'a Row, String> {
+    match resolve_identity(log, input) {
+        Ref::One(r) if crate::is_carrier_row(r) => Err(format!(
+            "rejected: no row with id {input:?} — copy the id from fael find (this session's output, never from memory)"
+        )),
+        Ref::One(r) if log.closes.iter().any(|c| c.id == r.id) => Err(format!(
+            "rejected: no row with id {input:?} — copy the id from fael find (this session's output, never from memory)"
+        )),
+        Ref::One(r) => Ok(r),
+        Ref::Many(hits) => Err(format!(
+            "rejected: id {input:?} matches {} rows ({}) — use more characters",
+            hits.len(),
+            hits.iter()
+                .take(5)
+                .map(|r| r.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        Ref::Missing => Err(format!(
+            "rejected: no row with id {input:?} — copy the id from fael find (this session's output, never from memory)"
+        )),
+    }
+}
+
+/// Whitespace-normalised, lowercased text — the duplicate comparison core
+/// shares with the binary's recall (same content retries name the survivor).
+fn norm(t: &str) -> String {
+    t.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// One content-row id through the canonical resolver — what supersede and
+/// close targets resolve with (c1 uses c2's resolver, never a fallback).
+pub(crate) fn resolve_content_id<'a>(log: &'a Log, input: &'a str) -> Result<&'a str, String> {
+    Ok(resolve_content(log, input)?.id.as_str())
+}
+fn existing_path(dir: &Path, row: &Row, is_close: bool) -> PathBuf {
+    let month = row.ts.get(..7).filter(|m| is_month(m)).unwrap_or("unknown");
+    dir.join("log").join(&row.by).join(format!(
+        "{month}{}.jsonl",
+        if is_close { ".close" } else { "" }
+    ))
+}
+
+/// Marker every idempotent no-op warn carries — the binary skips hook tally
+/// and usage recording when it is present (retry emits zero new events).
+pub const NOOP_MARK: &str = "— not filed again";
+
 /// Resolve `supersedes`, stamp, validate, append — the one add path every adapter (CLI, MCP,
 /// a server) goes through. `row.files` must already be normalised. Returns the non-fatal warnings.
 ///
 /// `journal` is the clone-shared journal root (`<git-common-dir>/fael`, resolved
 /// without a spawn on the adapter side; `None` without git). The journal is the
 /// only store: the tree log is written only without one (no git).
+///
+/// Idempotent (c1, T5): superseding an already-superseded row writes nothing
+/// and hands back the live survivor with a `NOOP_MARK` warn, so a retry after
+/// a timeout emits zero new events. Superseding a closed-but-open-headed row
+/// still files (an explicit reopen, counted as a confirmed repeat).
 pub fn add_row(
     fael: &Path,
     journal: Option<&Path>,
@@ -105,7 +164,33 @@ pub fn add_row(
     supersedes: Option<&str>,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
     if let Some(s) = supersedes {
-        row.supersedes = Some(resolve_row(log, s)?.id.clone());
+        let target = resolve_content(log, s)?.id.clone();
+        // T5: already superseded -> a retry (same content as the survivor)
+        // names the winner with zero new rows. Different content files a new
+        // edge (multi-edge, disambiguated by `restore --edge`): dropping an
+        // explicit caller's content would be inference.
+        if superseded(log).contains(target.as_str()) {
+            let surv_id = newest_version(log, target.as_str()).to_string();
+            if let Some(surv) = log.rows.iter().find(|r| r.id == surv_id) {
+                let same = surv.kind == row.kind
+                    && surv.key == row.key
+                    && norm(&surv.text) == norm(&row.text)
+                    && surv.files.iter().collect::<std::collections::BTreeSet<_>>()
+                        == row.files.iter().collect::<std::collections::BTreeSet<_>>();
+                if same {
+                    let surv = surv.clone();
+                    let path = existing_path(journal.unwrap_or(fael), &surv, false);
+                    return Ok((
+                        surv,
+                        path,
+                        vec![format!(
+                            "already superseded: {target} by {surv_id} {NOOP_MARK}"
+                        )],
+                    ));
+                }
+            }
+        }
+        row.supersedes = Some(target);
     }
     stamp.apply(&mut row);
     let path = write_both(fael, journal, |d| add(d, &row, cfg))?;
@@ -128,7 +213,13 @@ pub(crate) fn write_both(
     Ok(path)
 }
 
-/// Resolve `id`, stamp, validate, append a close row. A row already closed is rejected.
+/// Resolve `id`, stamp, validate, append a close row.
+///
+/// Idempotent (c1, T2/T3): a retry writes zero events and hands back the
+/// canonical result — the existing close row (T2, already closed) or the live
+/// survivor (T3, superseded with an open head) — with a `NOOP_MARK` warn.
+/// A superseded row whose head is already closed is the stuck-chain repair:
+/// it still writes (one close row per open version, oldest first, atomic).
 ///
 /// Closing the newest version of a bumped chain also closes every version it
 /// supersedes — one close row each, oldest first, the requested row last. A
@@ -149,29 +240,45 @@ pub fn close_row(
     id: &str,
     why: &str,
 ) -> Result<(Row, PathBuf, Vec<String>), String> {
-    let target = resolve_row(log, id)?;
-    // a second close row adds nothing but noise to an append-only log
-    if closed(log).contains(target.id.as_str()) {
-        return Err(format!("rejected: {} is already closed", target.id));
+    let target = resolve_content(log, id)?.id.clone();
+    // T2: a second close writes nothing but names the existing close row
+    if closed(log).contains(target.as_str()) {
+        let existing = log
+            .closes
+            .iter()
+            .find(|c| c.reference.as_deref() == Some(target.as_str()))
+            .cloned()
+            .ok_or_else(|| format!("rejected: {target} is already closed"))?;
+        let path = existing_path(journal.unwrap_or(fael), &existing, true);
+        return Ok((
+            existing,
+            path,
+            vec![format!("already closed: {target} {NOOP_MARK}")],
+        ));
     }
-    // bump makes id churn routine: closing the hidden old version would leave
-    // the live one open, so point at the newest version instead — unless that
-    // newest version is itself closed, which is the trap this path repairs
-    if superseded(log).contains(target.id.as_str()) {
-        let newest = newest_version(log, target.id.as_str());
-        if !closed(log).contains(newest) {
-            return Err(format!(
-                "rejected: {} is superseded — close the newest version {newest}",
-                target.id
+    // T3: superseded with an open head — point at the survivor, write nothing
+    if superseded(log).contains(target.as_str()) {
+        let newest = newest_version(log, target.as_str()).to_string();
+        if !closed(log).contains(newest.as_str()) {
+            let surv = log
+                .rows
+                .iter()
+                .find(|r| r.id == newest)
+                .cloned()
+                .ok_or_else(|| format!("rejected: no row with id {id:?}"))?;
+            let path = existing_path(journal.unwrap_or(fael), &surv, false);
+            return Ok((
+                surv,
+                path,
+                vec![format!(
+                    "superseded by {newest} {NOOP_MARK} — close {newest} instead"
+                )],
             ));
         }
     }
-    let mut paths = vec![];
-    let mut last: Option<Row> = None;
-    // oldest first, the requested row last (its id is the chain's last entry):
-    // an interrupt leaves the chain's newest version open and visible, so
-    // re-running the same close repairs it
-    for r in chain_versions(log, target.id.as_str()) {
+    let mut pending: Vec<Row> = vec![];
+    // oldest first, the requested row last (its id is the chain's last entry)
+    for r in chain_versions(log, target.as_str()) {
         if closed(log).contains(r.as_str()) {
             continue;
         }
@@ -179,14 +286,23 @@ pub fn close_row(
         stamp.apply(&mut row);
         // the `shown` stamp names the requested row's target, not this one: an
         // older version closed by the chain was never itself shown (r1)
-        if r != target.id {
+        if r != target {
             row.extra.remove("shown");
         }
-        paths.push(write_both(fael, journal, |d| close(d, &row, cfg))?);
-        last = Some(row);
+        validate_close(&row, cfg)?;
+        pending.push(row);
     }
+    let Some(last) = pending.last().cloned() else {
+        return Err(format!("rejected: {target} is already closed"));
+    };
+    // one .lock across the chain: an interrupt never leaves a half-closed
+    // chain behind, so a retry is always a clean T2 no-op above
+    let dir = journal.unwrap_or(fael);
+    let refs: Vec<(&Row, bool)> = pending.iter().map(|r| (r, true)).collect();
+    let mut paths = super::atomic::append_many(dir, &refs)?;
+    crate::work::elsewhere::register_store(fael, journal);
     Ok((
-        last.expect("the requested row is never already closed here"),
+        last,
         paths.pop().expect("at least one close row lands"),
         vec![],
     ))
@@ -254,54 +370,8 @@ pub fn mv_row(
 }
 
 /// Append without validating (import/compact write already-checked rows through here).
-/// lock → seal a torn tail with `\n` → one `write_all` of the whole line → unlock on drop.
+/// One `.lock` across the write via `atomic::append_many`.
 pub fn append(fael: &Path, row: &Row, is_close: bool) -> Result<PathBuf, String> {
-    // `by` and the month become path parts — refuse anything that could leave the writer folder
-    let by = &row.by;
-    if by.is_empty() || by.starts_with(['_', '.']) || by.contains(['/', '\\']) {
-        return Err(format!("rejected: writer id {by:?} is not a folder name"));
-    }
-    let month = row.ts.get(..7).filter(|m| is_month(m));
-    let Some(month) = month else {
-        return Err(format!("rejected: ts {:?} is not RFC 3339", row.ts));
-    };
-    let dir = fael.join("log").join(by);
-    let path = dir.join(format!(
-        "{month}{}.jsonl",
-        if is_close { ".close" } else { "" }
-    ));
-    let io = |e: std::io::Error| format!("{}: {e}", path.display());
-
-    fs::create_dir_all(&dir).map_err(io)?;
-    ignore_lock(fael);
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(fael.join(".lock"))
-        .map_err(io)?;
-    lock.lock().map_err(io)?;
-
-    let mut f = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .append(true)
-        .open(&path)
-        .map_err(io)?;
-    let len = f.metadata().map_err(io)?.len();
-    if len >= MONTH_MAX {
-        return Err(format!(
-            "rejected: {} is ≥ 50 MiB — run `fael compact` first",
-            path.display()
-        ));
-    }
-    let line = row.to_line();
-    let mut buf = Vec::with_capacity(line.len() + 2);
-    if len > 0 && needs_seal(&mut f).map_err(io)? {
-        buf.push(b'\n'); // seal the torn line off; readers then skip it as a broken line
-    }
-    buf.extend_from_slice(line.as_bytes());
-    buf.push(b'\n');
-    f.write_all(&buf).map_err(io)?;
-    Ok(path)
+    let mut paths = super::atomic::append_many(fael, &[(row, is_close)])?;
+    Ok(paths.pop().expect("one row"))
 }

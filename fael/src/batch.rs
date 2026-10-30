@@ -136,7 +136,11 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
         match res {
             Ok((row, _path, warns)) => {
                 emit_warns(&warns);
-                record_row_asks("cli", "add", &r.root, &row, &warns);
+                // c1: a no-op retry (duplicate/supersede) writes nothing —
+                // same id back, zero new events.
+                if !write::is_noop(&warns) {
+                    record_row_asks("cli", "add", &r.root, &row, &warns);
+                }
                 // batch rides `--json`: one JSON row per line, like single add
                 println!("{}", row.to_line());
                 // c2: like single add — held rows on this row's files, but
@@ -162,7 +166,10 @@ pub(crate) fn batch_add(a: &crate::Args) -> Result<ExitCode, String> {
 /// so nobody runs `fael find` to check. None when the target can't be read back.
 pub(crate) fn closed_line(r: &crate::Repo, close: &Row) -> Option<String> {
     let log = crate::read(r);
-    let t = core::resolve_row(&log, close.reference.as_deref()?).ok()?;
+    let t = match core::resolve_identity(&log, close.reference.as_deref()?) {
+        core::Ref::One(t) if !core::is_carrier_row(t) => t,
+        _ => return None,
+    };
     let title = t.title.clone().unwrap_or_else(|| {
         t.text
             .lines()
@@ -178,8 +185,9 @@ pub(crate) fn closed_line(r: &crate::Repo, close: &Row) -> Option<String> {
 
 /// Batch close — `fael close a b "why"` closes each id with the same reason;
 /// a bad id reports alone while the rest save (never all-or-nothing, like
-/// batch add above). A single id keeps the old behaviour byte for byte: the
-/// original error returns unchanged, so `already closed` still lands on stderr.
+/// batch add above). A retry (already-closed / superseded-with-open-head) is
+/// a no-op Ok naming the canonical id with zero new events — a single id
+/// keeps the plain result, so callers see the same id twice.
 pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<ExitCode, String> {
     a.only("close", &["json", "key", "force"])?;
     let r = crate::repo()?;
@@ -188,7 +196,10 @@ pub(crate) fn batch_close(a: &crate::Args, ids: &[String], why: &str) -> Result<
         match write::close_row(&r, id, why, a.has("force")) {
             Ok((row, path, warns)) => {
                 emit_warns(&warns);
-                record_asks("cli", ASK_WARN, "close", Some(&r.root), &warns);
+                // c1: a no-op retry writes nothing — same id back, zero new events.
+                if !write::is_noop(&warns) {
+                    record_asks("cli", ASK_WARN, "close", Some(&r.root), &warns);
+                }
                 written(a, &r, &row, &path);
                 if !a.has("json") {
                     closed_line(&r, &row).iter().for_each(|l| println!("{l}"));

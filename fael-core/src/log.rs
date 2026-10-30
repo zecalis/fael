@@ -7,12 +7,16 @@
 //! change — `fael_core::…` and `crate::log::…` resolve as before.
 
 mod append;
+mod atomic;
 mod bump;
 mod purge;
 mod restore;
 
-pub use append::{MONTH_MAX, add, add_row, append, close, close_row, mv_row, needs_seal};
+pub use append::{
+    MONTH_MAX, NOOP_MARK, add, add_row, append, close, close_row, mv_row, needs_seal,
+};
 pub(crate) use append::{lock, tmp_rename, write_both};
+pub use atomic::{add_close, append_many};
 pub use bump::{BumpOpts, bump_row, fold_bumps};
 pub use purge::{Purged, purge_row};
 pub use restore::{Restored, restore_row};

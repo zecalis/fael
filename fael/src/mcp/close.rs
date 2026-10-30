@@ -54,7 +54,10 @@ fn close_checked(a: &Value) -> Result<String, String> {
                 });
             }
             Ok((row, _, warns)) => {
-                record_asks("mcp", ASK_WARN, "mcp-close", Some(&r.root), &warns);
+                // c1: a no-op retry writes nothing — same id back, zero new events.
+                if !crate::write::is_noop(&warns) {
+                    record_asks("mcp", ASK_WARN, "mcp-close", Some(&r.root), &warns);
+                }
                 out.push(done(&row.id, &warns));
                 out.extend(closed_line(&r, &row));
             }

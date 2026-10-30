@@ -7,6 +7,7 @@
 mod append;
 mod common;
 mod ids;
+mod lifecycle;
 mod parse;
 mod secretary;
 mod validate;

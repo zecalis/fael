@@ -55,6 +55,33 @@ pub(crate) fn already_line(log: &core::Log, old: &core::Row) -> String {
     )
 }
 
+pub(crate) fn is_noop(warns: &[String]) -> bool {
+    warns.iter().any(|w| w.contains(crate::core::NOOP_MARK))
+}
+
+pub(crate) fn ambiguous(id: &str, hits: &[&crate::core::Row]) -> String {
+    format!(
+        "rejected: id {id:?} matches {} rows ({}) — use more characters",
+        hits.len(),
+        hits.iter()
+            .take(5)
+            .map(|x| x.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+pub(crate) fn missing(r: &crate::Repo, id: &str) -> String {
+    let e = format!(
+        "rejected: no row with id {id:?} — copy the id from fael find (this session's output, never from memory)"
+    );
+    let mut m = format!("{e} (searched {})", r.root.display());
+    if let Some(o) = crate::find::owner::owner(r, id) {
+        m.push_str(&format!("\n{o}"));
+    }
+    m
+}
+
 /// Info lines for open issues on a shared file whose title reads like `row`'s
 /// (at most two, newest first). `log` is the log before the row.
 pub(crate) fn near(log: &core::Log, row: &core::Row) -> Vec<String> {
