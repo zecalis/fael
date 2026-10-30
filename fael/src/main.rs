@@ -138,7 +138,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             // install writes unasked; upgrade/update update the binary, look first and
             // ask (`--wiring` = the new binary's half)
             if cmd == "install" {
-                install::cmd(client, dry, false)
+                install::cmd(client, dry, false, a.one("preset"))
             } else if a.has("auto") {
                 install::auto::run(a.has("dry-run"), client.is_some())
             } else {

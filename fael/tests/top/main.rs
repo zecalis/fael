@@ -37,6 +37,7 @@ mod kickoff_plan;
 mod mcp_pin;
 mod mcp_unstamped;
 mod paging;
+mod preset;
 mod purge;
 mod report;
 mod restore;
