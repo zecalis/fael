@@ -11,6 +11,12 @@
 //! `@<id>` per in-context mark and `^<id>` per cited id (`cited`), `~start:<id>` per row session start said.
 //! No session = no file: every line is said, nothing remembered.
 //!
+//! Crash boundary (c3): a push counts as said when its reply persists the
+//! spent keys. A process restart inside the same session reopens the same
+//! seen file, so an already-pushed row stays silent. A crash before the
+//! reply persists nothing and the next push says the rows again —
+//! at-most-once per completed push, at-least-once across crashes.
+//!
 //! Lines cut for low yield have no `Kind` any more (the `fix:` commit line and
 //! the `bodies:` pointer; the edit ask is said at an edit only) — their
 //! `SayKind` names stay in `fael-core` so old usage rows still tally

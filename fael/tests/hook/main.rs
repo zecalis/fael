@@ -10,6 +10,8 @@
 //! `stats_golden` (PLAN-fael-sync chunk 2 golden pin),
 //! `day` (PLAN-fael-sync chunk 3: `fael stats --day`),
 //! `push_cap` (edit-push row cap + omitted line),
+//! `push_once` (c3: push once per (session_id, row_id): repeat, restart,
+//! cross-session, budget-cut keys),
 //! `precision` (PLAN-fael-moat-token chunk 2: push footer + branch tag fixture),
 //! `focus` (session Focus: focus.json written at start, read by the push),
 //! `tied` (session start lists issues tied to the branch), `notify` (the
@@ -41,6 +43,7 @@ mod overlap;
 mod precision;
 mod prompt;
 mod push_cap;
+mod push_once;
 mod replay;
 mod review;
 mod said;
