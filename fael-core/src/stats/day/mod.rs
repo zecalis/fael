@@ -8,7 +8,7 @@
 mod panels;
 
 use super::parse::{Parsed, UsageRow};
-use crate::{Log, is_alias_row, is_carrier_row, ts_ms};
+use crate::{Log, is_alias_row, is_carrier_row, ts_ms, tz_offset_string};
 use panels::{context_of, for_you_of, health_of, memory_of, timeline_of};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -182,7 +182,7 @@ pub fn day(
     DayView {
         schema: DAY_SCHEMA,
         day: ctx.day.clone(),
-        tz_offset: tz_string(tz_min),
+        tz_offset: tz_offset_string(tz_min),
         all: sum_all(&today, &repos, &union, &ctx),
         repos,
     }
@@ -270,13 +270,4 @@ fn log_added_today(log: &Log, noon: i64, tz_min: i32) -> bool {
 /// every "today" check shares, so a +07:00 midnight never splits a day.
 pub(super) fn day_number(ms: i64, tz_min: i32) -> i64 {
     (ms + tz_min as i64 * 60_000).div_euclid(86_400_000)
-}
-
-fn tz_string(tz_min: i32) -> String {
-    let (sign, abs) = if tz_min < 0 {
-        ('-', (-tz_min) as u32)
-    } else {
-        ('+', tz_min as u32)
-    };
-    format!("{sign}{:02}:{:02}", abs / 60, abs % 60)
 }

@@ -110,6 +110,26 @@ pub fn rfc3339(ms: u64) -> String {
     )
 }
 
+/// `+07:00` for 420, `+00:00` for 0 — the one rendering of a tz offset the
+/// day view, stats windows and reports share, so a local time never prints
+/// without its zone.
+pub fn tz_offset_string(tz_min: i32) -> String {
+    let (sign, abs) = if tz_min < 0 {
+        ('-', (-tz_min) as u32)
+    } else {
+        ('+', tz_min as u32)
+    };
+    format!("{sign}{:02}:{:02}", abs / 60, abs % 60)
+}
+
+/// `rfc3339` shifted into `tz_min` minutes east of UTC: canonical UTC stays
+/// on disk, this renders the local side only
+/// (`2026-10-30T00:00:00.000+07:00`). Pre-epoch shifts clamp to the epoch.
+pub fn rfc3339_in(ms: u64, tz_min: i32) -> String {
+    let shifted = (ms as i64 + tz_min as i64 * 60_000).max(0) as u64;
+    format!("{}{}", &rfc3339(shifted)[..23], tz_offset_string(tz_min))
+}
+
 /// `"2026-09-25T10:00:01Z"` (or `+00:00`, optional `.frac`) → unix ms.
 /// `None` = unparsable — the hook's numeric recency compare runs on this, so
 /// a row filed a second before the session start never reads as newer.
@@ -217,6 +237,20 @@ mod tests {
             let id = super::ulid_at(ms);
             assert_eq!(super::ulid_ms(&id), Some(ms), "{id}");
         }
+    }
+
+    #[test]
+    fn local_render_keeps_utc_parseable() {
+        // BKK midnight is the previous day 17:00Z — and it parses back.
+        let z = super::rfc3339(1_793_293_200_000); // 2026-10-29T17:00:00Z
+        assert_eq!(z, "2026-10-29T17:00:00.000Z");
+        let local = super::rfc3339_in(1_793_293_200_000, 420);
+        assert_eq!(local, "2026-10-30T00:00:00.000+07:00");
+        assert_eq!(super::ts_ms(&local), Some(1_793_293_200_000));
+        assert_eq!(super::ts_ms(&z), Some(1_793_293_200_000));
+        assert_eq!(super::tz_offset_string(420), "+07:00");
+        assert_eq!(super::tz_offset_string(0), "+00:00");
+        assert_eq!(super::tz_offset_string(-330), "-05:30");
     }
 
     #[test]

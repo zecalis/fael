@@ -54,6 +54,7 @@ mod session;
 mod shadow;
 mod spent_notes;
 mod stats;
+mod stats_coherence;
 mod stats_golden;
 mod stats_handoff;
 mod stop;

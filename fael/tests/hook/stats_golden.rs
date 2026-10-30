@@ -4,7 +4,7 @@
 //! The fixture uses `/work/real` (never a temp dir, never a real repo) so no
 //! log join fires: every row status is `unknown`, every aggregate is local.
 
-use super::fael_at;
+use super::{fael_at, fael_at_env};
 use std::path::{Path, PathBuf};
 
 /// Three usage rows with distinct event/client counts (deterministic order)
@@ -112,7 +112,10 @@ fn stats_json_matches_golden_values() {
     let state = golden_state();
     // not under the repo: the lifecycle panel reads the repo `fael stats` runs in
     let dir = &std::env::temp_dir();
-    let (ok, out, err) = fael_at(&state, dir, &["stats", "--json"], "");
+    // pin the viewer zone: `since_local`/`tz_offset` render it, so the pin
+    // must not depend on the machine the test runs on
+    let utc = [("FAEL_TZ_OFFSET", "+00:00")];
+    let (ok, out, err) = fael_at_env(&state, dir, &["stats", "--json"], "", &utc);
     assert!(ok, "{err}");
     let mut v: serde_json::Value = serde_json::from_str(&out).unwrap();
     // `days` is checked apart: one more key passes the json! recursion limit
@@ -140,7 +143,7 @@ fn stats_json_matches_golden_values() {
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"warning": {"events": 0, "bytes": 0, "codes": {}}},
             "constants": {"skill_bytes": 3298, "skill_est": 833, "mcp_schema_bytes": 4053, "mcp_schema_est": 1016},
-            "rounds": {"rows_added": 0, "since": "2026-09-26"},
+            "rounds": {"rows_added": 0, "since": "2026-09-26", "since_utc": "2026-09-26T00:00:00.000Z", "since_local": "2026-09-26T00:00:00.000+00:00", "tz_offset": "+00:00"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},
             "capture": {"manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "edit_session_issues": 0, "no_row_sessions": []},
@@ -188,13 +191,19 @@ fn stats_empty_matches_golden() {
     let (ok, out, _) = fael_at(&state, dir, &["stats"], "");
     assert!(ok);
     assert_eq!(out, "fael: no usage recorded yet\n", "{out}");
-    let (ok, out, _) = fael_at(&state, dir, &["stats", "--json"], "");
+    let (ok, out, _) = fael_at_env(
+        &state,
+        dir,
+        &["stats", "--json"],
+        "",
+        &[("FAEL_TZ_OFFSET", "+00:00")],
+    );
     assert!(ok);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["events"], 0, "{out}");
     assert_eq!(
         v["rounds"],
-        serde_json::json!({"rows_added": 0, "since": ""}),
+        serde_json::json!({"rows_added": 0, "since": "", "since_utc": "", "since_local": "", "tz_offset": "+00:00"}),
         "{out}"
     );
 }

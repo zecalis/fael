@@ -197,7 +197,15 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     let since = u.parsed.first_seen.values().copied().min();
     let merges = super::flow::merges(since);
     let mut s = core::stats::aggregate(
-        &u.parsed, &u.logs, &commits, &runs, &merges, cfg, constants, rows,
+        &u.parsed,
+        &u.logs,
+        &commits,
+        &runs,
+        &merges,
+        cfg,
+        constants,
+        rows,
+        local_tz_offset_min(),
     );
     if let Ok(r) = crate::repo() {
         let (log, held) = super::lifecycle::marked(&r);

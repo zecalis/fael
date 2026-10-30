@@ -168,10 +168,12 @@ pub fn since(text: &str, ms: i64) -> String {
         .collect()
 }
 
-/// A `--since` value: `YYYY-MM-DD` (00:00 UTC) or a full RFC 3339 time.
-pub fn since_arg(s: &str) -> Option<i64> {
+/// A `--since` value in `tz_min` minutes east of UTC: `YYYY-MM-DD` is that
+/// day's local midnight (a BKK `2026-10-30` is `2026-10-29T17:00:00Z`), a
+/// full RFC 3339 time keeps its own zone and ignores `tz_min`.
+pub fn since_arg(s: &str, tz_min: i32) -> Option<i64> {
     match s.len() {
-        10 => ts_ms(&format!("{s}T00:00:00Z")),
+        10 => ts_ms(&format!("{s}T00:00:00Z")).map(|ms| ms - tz_min as i64 * 60_000),
         _ => ts_ms(s),
     }
 }
@@ -232,13 +234,31 @@ mod tests {
         let line =
             |ts: &str| format!("{{\"ts\":\"{ts}\",\"repo\":\"/work/real\",\"event\":\"read\"}}\n");
         let text = line("2026-09-29T23:59:59.000Z") + &line("2026-09-30T09:00:00.000Z") + "torn\n";
-        let day = super::since_arg("2026-09-30").unwrap();
+        let day = super::since_arg("2026-09-30", 0).unwrap();
         assert_eq!(super::since(&text, day), line("2026-09-30T09:00:00.000Z"));
         assert_eq!(
-            super::since_arg("2026-09-30T09:00:00Z"),
+            super::since_arg("2026-09-30T09:00:00Z", 0),
             Some(day + 9 * 3_600_000)
         );
-        assert_eq!(super::since_arg("last week"), None);
+        assert_eq!(super::since_arg("last week", 0), None);
+    }
+
+    #[test]
+    fn since_date_only_is_local_midnight() {
+        // BKK (+07:00) 2026-09-30 starts at 2026-09-29T17:00:00Z; a full
+        // timestamp keeps its own zone whatever the offset is.
+        assert_eq!(
+            super::since_arg("2026-09-30", 420),
+            super::ts_ms("2026-09-29T17:00:00.000Z")
+        );
+        assert_eq!(
+            super::since_arg("2026-09-30T09:00:00Z", 420),
+            super::since_arg("2026-09-30T09:00:00Z", 0)
+        );
+        assert_eq!(
+            super::since_arg("2026-09-30", 0),
+            super::ts_ms("2026-09-30T00:00:00.000Z")
+        );
     }
 
     #[test]

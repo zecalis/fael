@@ -49,7 +49,8 @@ pub use hook::last_row_ms;
 
 pub use gitcmd::git_cmd;
 pub use id::{
-    looks_like_id, now_ms, rfc3339, to_matches, ts_ms, ulid, ulid_at, ulid_ms, writer_id,
+    looks_like_id, now_ms, rfc3339, rfc3339_in, to_matches, ts_ms, tz_offset_string, ulid, ulid_at,
+    ulid_ms, writer_id,
 };
 pub use lang::{Hit, Lang, by_name, fixed_hit, marker_hit, row_language_check};
 pub use log::{

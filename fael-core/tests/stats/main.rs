@@ -25,6 +25,7 @@ fn value_of(text: &str, with_rows: bool) -> serde_json::Value {
         &Config::default(),
         (1, 2, 3, 4).into(),
         with_rows,
+        0,
     );
     serde_json::to_value(&stats).unwrap()
 }
@@ -147,7 +148,17 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    assert_eq!(keys(&v["rounds"]), ["rows_added", "since"], "{v}");
+    assert_eq!(
+        keys(&v["rounds"]),
+        [
+            "rows_added",
+            "since",
+            "since_local",
+            "since_utc",
+            "tz_offset"
+        ],
+        "{v}"
+    );
     assert_eq!(keys(&v["non_english_rows"]), ["non_english", "rows"], "{v}");
     let top = v["top_rows"].as_array().unwrap();
     assert_eq!(top.len(), 2, "{v}");
@@ -281,6 +292,7 @@ fn carriers_never_count_as_rows_added() {
         &Config::default(),
         (1, 2, 3, 4).into(),
         false,
+        0,
     );
     let v = serde_json::to_value(&s).unwrap();
     assert_eq!(v["rounds"]["rows_added"], 1, "{v}");
@@ -313,6 +325,7 @@ fn worktrees_sharing_a_journal_count_rows_added_once() {
         &Config::default(),
         (1, 2, 3, 4).into(),
         false,
+        0,
     );
     let v = serde_json::to_value(&s).unwrap();
     assert_eq!(v["rounds"]["rows_added"], 1, "{v}");
