@@ -332,7 +332,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
 /// so a column added later rides along without touching the feed.
 fn rows(c: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<Json>, String> {
     let mut q = c.prepare(sql).map_err(err)?;
-    let names: Vec<String> = q.column_names().into_iter().map(String::from).collect();
+    let names: Vec<String> = q.column_names().map(String::from).collect();
     q.query_map(p, |r| {
         let mut o = serde_json::Map::new();
         for (i, n) in names.iter().enumerate() {
