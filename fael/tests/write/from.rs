@@ -122,6 +122,58 @@ fn a_report_row_is_labelled_and_bump_drops_it() {
 }
 
 #[test]
+fn claiming_a_report_does_not_mark_it_checked() {
+    report_stays_unchecked_after(&["claim"]);
+}
+
+#[test]
+fn routing_a_report_does_not_mark_it_checked() {
+    for flags in [
+        vec!["bump", "--to", "codex"],
+        vec!["bump", "--revisit", "2999-01"],
+        vec!["bump", "--urgent"],
+        vec!["bump", "--not-urgent"],
+    ] {
+        report_stays_unchecked_after(&flags);
+    }
+}
+
+fn report_stays_unchecked_after(args: &[&str]) {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// before\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "audit says x is broken",
+            "--files",
+            "src/a.rs",
+            "--from",
+            "report",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap();
+    std::fs::write(d.join("src/a.rs"), "// after\n").unwrap();
+    let call = [&args[..1], &[id], &args[1..]].concat();
+    let (ok, out, err) = fael(&d, &call, "");
+    assert!(ok, "{call:?}: {out}{err}");
+    assert!(!err.contains("bump marks it checked"), "{call:?}: {err}");
+    let (_, found, _) = fael(&d, &["find", id], "");
+    assert!(
+        found.contains("from report, unchecked"),
+        "{call:?}: {found}"
+    );
+    // A subsequent explicit verification still clears provenance.
+    let (ok, _, err) = fael(&d, &["bump", id], "");
+    assert!(ok && err.contains("bump marks it checked"), "{err}");
+    let (_, found, _) = fael(&d, &["find", id], "");
+    assert!(!found.contains("from report"), "{found}");
+}
+
+#[test]
 fn a_new_issue_lists_open_rows_on_its_files() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "//\n").unwrap();
