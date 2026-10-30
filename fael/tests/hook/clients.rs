@@ -3,6 +3,28 @@
 
 use super::{fael, flagged, repo, state, transcript};
 
+/// Redacted real CLI 0.166.0-alpha.5.1 hook payloads; substitute only local
+/// paths and identities, leaving the vendor's shape intact.
+fn codex_fixture(event: &str, d: &std::path::Path, id: &str) -> serde_json::Value {
+    let raw = match event {
+        "start" => include_str!("fixtures/codex-session-start.json"),
+        "edit" => include_str!("fixtures/codex-edit.json"),
+        "stop" => include_str!("fixtures/codex-stop.json"),
+        _ => unreachable!(),
+    };
+    let mut v: serde_json::Value = serde_json::from_str(raw).unwrap();
+    v["cwd"] = serde_json::json!(d);
+    v["session_id"] = id.into();
+    let name = std::path::Path::new(v["transcript_path"].as_str().unwrap())
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .replace("<thread-id>", id);
+    v["transcript_path"] = serde_json::json!(d.join(name));
+    v
+}
+
 /// Every path the edit hook recorded, across sessions.
 fn recorded_edits(d: &std::path::Path) -> String {
     std::fs::read_dir(state(d).join("sessions").join("edits"))
@@ -29,9 +51,10 @@ fn codex_apply_patch_edits_and_last_message() {
     assert!(fael(&d, &["hook", "edit", "--client", "codex"], &edit).0);
     assert!(recorded_edits(&d).contains("src/b.rs"));
     // a bug claim in the last message is flagged on the next push
-    let stop = serde_json::json!({"cwd": d, "session_id": "codex-thread", "transcript_path": t,
-        "last_assistant_message": "Found a bug: the parser is broken on empty input."})
-    .to_string();
+    let mut stop = codex_fixture("stop", &d, "codex-thread");
+    stop["transcript_path"] = serde_json::json!(t);
+    stop["last_assistant_message"] = "Found a bug: the parser is broken on empty input.".into();
+    let stop = stop.to_string();
     let (ok, out, _) = fael(&d, &["hook", "stop", "--client", "codex"], &stop);
     assert!(ok && !out.contains("block"), "{out}");
     assert!(flagged(&d, r#""codex-thread""#));
@@ -67,10 +90,7 @@ fn codex_rollouts_join_shell_threads_without_crossing_chats() {
     ];
     for (id, file) in threads.iter().zip(["src/a.rs", "src/b.rs"]) {
         std::fs::write(d.join(file), "// file\n").unwrap();
-        let t = d.join(format!("rollout-2026-10-31T04-54-13-{id}.jsonl"));
-        let start = serde_json::json!({"cwd": d, "session_id": id,
-            "transcript_path": t, "source": "startup"})
-        .to_string();
+        let start = codex_fixture("start", &d, id).to_string();
         assert!(fael(&d, &["hook", "session-start", "--client", "codex"], &start).0);
         let (ok, _, err) = super::fael_env(
             &d,
@@ -83,10 +103,9 @@ fn codex_rollouts_join_shell_threads_without_crossing_chats() {
     // Record both edits after every row so the global row cutoff cannot hide one.
     std::thread::sleep(std::time::Duration::from_millis(5));
     for (id, file) in threads.iter().zip(["src/a.rs", "src/b.rs"]) {
-        let edit = serde_json::json!({"cwd": d, "session_id": id,
-            "transcript_path": d.join(format!("rollout-2026-10-31T04-54-13-{id}.jsonl")),
-            "tool_input": {"command": format!("*** Update File: {file}")}})
-        .to_string();
+        let mut edit = codex_fixture("edit", &d, id);
+        edit["tool_input"]["command"] = format!("*** Update File: {file}").into();
+        let edit = edit.to_string();
         assert!(fael(&d, &["hook", "edit", "--client", "codex"], &edit).0);
     }
     let (ok, out, err) = super::fael_env(
@@ -161,8 +180,28 @@ fn codex_subagent_start_and_stop_use_the_child_context() {
             .lines()
             .any(|l| l.contains("child shell row") && l.contains(r#""session":"child""#))
     );
-    let edit = serde_json::json!({"cwd":d,"session_id":"child", "tool_input":{"command":"*** Update File: src/a.rs"}}).to_string();
+    let mut edit: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/codex-child-edit.json")).unwrap();
+    edit["cwd"] = serde_json::json!(d);
+    edit["session_id"] = "parent".into();
+    edit["agent_id"] = "child".into();
+    let edit = edit.to_string();
     assert!(fael(&d, &["hook", "edit", "--client", "codex"], &edit).0);
+    let edits = recorded_edits(&d);
+    assert!(
+        edits.lines().any(|l| {
+            let v: serde_json::Value = serde_json::from_str(l).unwrap();
+            v["session"] == "child"
+        }),
+        "{edits}"
+    );
+    let (ok, out, err) = super::fael_env(
+        &d,
+        &["add", "note", "child derived files"],
+        "",
+        &[("CODEX_THREAD_ID", "child")],
+    );
+    assert!(ok, "{out}{err}");
     let stop = serde_json::json!({"cwd":d,"session_id":"parent", "hook_event_name":"SubagentStop",
         "agent_id":"child", "transcript_path":d.join("parent.jsonl"),
         "agent_transcript_path":d.join("child.jsonl"),

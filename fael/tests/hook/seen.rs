@@ -261,10 +261,15 @@ fn codex_seen_state_joins_shell_and_resets_only_the_compacted_chat() {
         .0
     );
     let event = |id: &str, source: &str| {
-        serde_json::json!({"cwd":d,"session_id":id,
-        "transcript_path":d.join(format!("rollout-2026-10-31T04-54-13-{id}.jsonl")),
-        "source":source,"tool_input":{"command":"*** Update File: src/a.rs"}})
-        .to_string()
+        let mut v: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/codex-compact.json")).unwrap();
+        v["cwd"] = serde_json::json!(d);
+        v["session_id"] = id.into();
+        v["transcript_path"] =
+            serde_json::json!(d.join(format!("rollout-2026-10-31T04-54-13-{id}.jsonl")));
+        v["source"] = source.into();
+        v["tool_input"] = serde_json::json!({"command":"*** Update File: src/a.rs"});
+        v.to_string()
     };
     let edit = |id: &str| fael(&d, &["hook", "edit", "--client", "codex"], &event(id, "")).1;
     let start = |id: &str, source: &str| {

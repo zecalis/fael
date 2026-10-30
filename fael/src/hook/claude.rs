@@ -20,7 +20,9 @@ struct ClaudeBase {
     hook_event_name: Option<String>,
     #[serde(default)]
     agent_transcript_path: Option<String>,
-    /// Claude: inside a sub-agent. Codex: SubagentStart/Stop only, with parent session_id.
+    #[serde(default)]
+    agent_type: Option<String>,
+    /// Both clients supply agent_id on child tool events too.
     #[serde(default)]
     agent_id: Option<String>,
     /// SessionStart: startup | resume | clear | compact
@@ -41,13 +43,23 @@ impl ClaudeBase {
             )
     }
 
-    /// Codex child lifecycle hooks name the parent as session_id. Child tool
-    /// hooks and shell calls use the child's thread id instead.
+    fn child_context(&self, codex: bool) -> bool {
+        self.subagent(codex) || (codex && (self.agent_id.is_some() || self.agent_type.is_some()))
+    }
+
+    /// Codex child hooks name the parent as session_id. agent_id joins the
+    /// child's shell CODEX_THREAD_ID; tool transcript_path names the child.
     fn event(self, codex: bool) -> Event {
         let nonempty = |v: Option<String>| v.filter(|s| !s.is_empty());
-        let child = self.subagent(codex);
+        let child = self.child_context(codex);
+        let lifecycle = self.subagent(codex);
         let (session, transcript, agent) = if child {
-            (nonempty(self.agent_id), self.agent_transcript_path, None)
+            let transcript = if lifecycle {
+                self.agent_transcript_path
+            } else {
+                self.transcript_path
+            };
+            (nonempty(self.agent_id), transcript, None)
         } else if codex {
             // A rollout stem is rollout-<timestamp>-<thread-id>, not the id.
             (
@@ -180,7 +192,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
     match event {
         "stop" => {
             let p: ClaudeStop = serde_json::from_str(stdin).unwrap_or_default();
-            let child = p.base.subagent(codex);
+            let child = p.base.child_context(codex);
             let e = Event {
                 // Codex transcripts are not Claude format. An absent last
                 // message stays empty, never parsed as a Claude transcript.
@@ -270,6 +282,35 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search|prompt|review"
             );
             ExitCode::SUCCESS
+        }
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::ClaudeBase;
+
+    #[test]
+    fn codex_child_identity_never_falls_back_to_the_parent() {
+        let p: ClaudeBase = serde_json::from_value(serde_json::json!({
+            "session_id":"parent", "transcript_path":"/parent/rollout.jsonl",
+            "hook_event_name":"SubagentStop", "agent_id":"child",
+            "agent_transcript_path":"/child/rollout.jsonl"
+        }))
+        .unwrap();
+        let e = p.event(true);
+        assert_eq!(e.session.as_deref(), Some("child"));
+        assert_eq!(e.transcript.as_deref(), Some("/child/rollout.jsonl"));
+        assert!(e.agent.is_none()); // The normalized child context joins its shell thread id.
+        for agent in [serde_json::Value::Null, serde_json::json!("")] {
+            let p: ClaudeBase = serde_json::from_value(serde_json::json!({
+                "session_id":"parent", "transcript_path":"/parent/rollout.jsonl",
+                "hook_event_name":"SubagentStart", "agent_id":agent
+            }))
+            .unwrap();
+            let e = p.event(true);
+            assert!(e.session.is_none());
+            assert!(e.transcript.is_none());
         }
     }
 }
