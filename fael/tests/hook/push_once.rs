@@ -69,6 +69,16 @@ fn three_edits_push_the_body_once() {
         })
         .collect();
     assert_eq!(pushed.len(), 1, "{pushed:?}");
+    // exposure of the later edits lives in bookkeeping only: one
+    // `in-context` row names the id (the `@id` mark makes the third a no-op)
+    let hits = usage_events(&d, "in-context");
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert!(
+        hits[0]["in_context"]
+            .as_array()
+            .is_some_and(|ids| ids.iter().any(|id| id == &pushed[0]["ids"][0])),
+        "{hits:?}"
+    );
     let (ok, out, err) = fael_at_env(
         &d.join("state"),
         &d,
