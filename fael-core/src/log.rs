@@ -11,6 +11,7 @@ mod atomic;
 mod bump;
 mod purge;
 mod restore;
+mod transaction;
 
 pub use append::{
     MONTH_MAX, NOOP_MARK, add, add_row, append, close, close_row, mv_row, needs_seal,

@@ -36,11 +36,16 @@ fn parts(row: &Row, is_close: bool) -> Result<(String, String), String> {
 /// (`validate`/`validate_close`, both gates for `add_close`) before calling,
 /// so a gate fault writes nothing.
 pub fn append_many(fael: &Path, rows: &[(&Row, bool)]) -> Result<Vec<PathBuf>, String> {
+    let _guard = lock(fael)?;
+    append_locked(fael, rows)
+}
+
+/// Append while a lifecycle transaction holds the store's `.lock`.
+pub(super) fn append_locked(fael: &Path, rows: &[(&Row, bool)]) -> Result<Vec<PathBuf>, String> {
     let planned: Vec<(String, String, String)> = rows
         .iter()
         .map(|(r, c)| parts(r, *c).map(|(by, name)| (by, name, r.to_line())))
         .collect::<Result<_, _>>()?;
-    let _guard = lock(fael)?;
     let mut out = vec![];
     for ((by, name, line), _) in planned.iter().zip(rows.iter()) {
         let dir = fael.join("log").join(by);
