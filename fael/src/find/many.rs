@@ -3,8 +3,7 @@
 //! a bad id reports alone and the rest still print.
 
 use crate::journal::BranchMap;
-use crate::refs::Wide;
-use crate::{Args, Repo, core, journal, refs};
+use crate::{Args, Repo, core, journal};
 
 pub(crate) struct Pulled {
     pub text: String,
@@ -12,18 +11,20 @@ pub(crate) struct Pulled {
     pub shown: Vec<String>,
 }
 
-/// Every id's body (or its JSON line), in the order asked, under the same
-/// token `budget` as `--full` — the first body always shows, and the cut line
-/// names the ids left, spelled by `spell` for this surface. An id that is
-/// missing, ambiguous or not id-shaped is named in `errors`. JSON is the
-/// machine shape and is not cut.
+/// Every id's body (or its JSON line), in the order asked — all of them in
+/// one call (c2: no budget cut; an explicit list of ids is the agent naming
+/// exactly what it needs). An id that is missing or ambiguous is named in
+/// `errors`; a non-id-shaped token keeps the `is not an id` wording (the
+/// same internal `Missing`, presentation alias only). JSON is the machine
+/// shape. `spell` stays for callers that name the next call on a cut, but no
+/// cut is printed — every found body shows.
 pub(crate) fn pull(
     r: &Repo,
     base: core::Log,
     tags: BranchMap,
     ids: &[String],
     json: bool,
-    spell: &dyn Fn(&[String]) -> String,
+    _spell: &dyn Fn(&[String]) -> String,
 ) -> Pulled {
     let log = base;
     let mut found: Vec<core::Row> = vec![];
@@ -36,19 +37,25 @@ pub(crate) fn pull(
             ));
             continue;
         }
-        if !core::looks_like_id(id) {
-            errors.push(format!(
-                "rejected: {id:?} is not an id — copy it from fael find"
-            ));
-            continue;
-        }
-        match refs::resolve_wide(&log, id) {
-            Wide::One(row) => found.push(*row),
-            Wide::Many(rows) => errors.push(super::reject_many(id, &rows)),
-            Wide::Missing => match (!json).then(|| super::owner::chunk_here(r, id)).flatten() {
-                Some(c) => chunks.push_str(&c),
-                None => errors.push(super::reject_missing(r, &log, id)),
-            },
+        // Single canonical lookup: `resolve_identity` decides One/Many/Missing;
+        // `looks_like_id` below only picks the miss wording, never the outcome.
+        match core::resolve_identity(&log, id) {
+            core::Ref::One(row) => found.push(row.clone()),
+            core::Ref::Many(rows) => {
+                let owned: Vec<core::Row> = rows.into_iter().cloned().collect();
+                errors.push(super::reject_many(id, &owned));
+            }
+            core::Ref::Missing if core::looks_like_id(id) => {
+                match (!json).then(|| super::owner::chunk_here(r, id)).flatten() {
+                    Some(c) => chunks.push_str(&c),
+                    None => errors.push(super::reject_missing(r, &log, id)),
+                }
+            }
+            core::Ref::Missing => {
+                errors.push(format!(
+                    "rejected: {id:?} is not an id — copy it from fael find"
+                ));
+            }
         }
     }
     if json {
@@ -61,16 +68,9 @@ pub(crate) fn pull(
         };
     }
     let rows: Vec<&core::Row> = found.iter().collect();
-    let left = |n: usize| spell(&found[n..].iter().map(|r| r.id.clone()).collect::<Vec<_>>());
-    let cut = core::Cut {
-        total: rows.len(),
-        offset: 0,
-        next: &left,
-    };
-    let text = journal::tag(
-        core::render_full_page(&log, &rows, r.cfg.find_tokens, cut),
-        &tags,
-    ) + &chunks;
+    // All ids in one call: no budget cut (an explicit id list names exactly
+    // what the agent needs — truncating it only costs the round it saved).
+    let text = journal::tag(core::render_full(&log, &rows, usize::MAX), &tags) + &chunks;
     let n = text.lines().filter(|l| l.starts_with("- [")).count();
     let shown = found.iter().take(n).map(|r| r.id.clone()).collect();
     Pulled {

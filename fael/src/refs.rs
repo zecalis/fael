@@ -1,24 +1,14 @@
 //! Id-reference lookups (PLAN-fael-id-refs §2) over the union log (tree +
 //! journal, what `crate::read` returns). No git spawn: every row a clone can
 //! see is in its journal (or imported into it), never only on another branch.
+//!
+//! Identity itself is `core::resolve_identity` (plan fael-secretary c2) —
+//! this module keeps only `phantoms`, the write-path citation scan over that
+//! single lookup. The old owned `Wide`/`resolve_wide` wrapper is gone: CLI
+//! find/find-many and MCP find call the canonical resolver directly.
 
 use super::Repo;
 use fael_core::{self as core};
-
-/// Owned answer — `One`/`Many`/`Missing`, cloned out of the log.
-pub(crate) enum Wide {
-    One(Box<core::Row>),
-    Many(Vec<core::Row>),
-    Missing,
-}
-
-pub(crate) fn resolve_wide(log: &core::Log, tok: &str) -> Wide {
-    match core::ref_state(log, tok) {
-        core::Ref::One(row) => Wide::One(Box::new(row.clone())),
-        core::Ref::Many(rows) => Wide::Many(rows.into_iter().cloned().collect()),
-        core::Ref::Missing => Wide::Missing,
-    }
-}
 
 /// Id-shaped tokens in `text` that are `Missing` in the union — the phantom
 /// citations. `skip` holds full ids the caller already resolved (the row
@@ -34,7 +24,7 @@ pub(crate) fn phantoms(r: &Repo, log: &core::Log, text: &str, skip: &[&str]) -> 
         if skipped {
             continue;
         }
-        if matches!(core::ref_state(log, tok), core::Ref::Missing) {
+        if matches!(core::resolve_identity(log, tok), core::Ref::Missing) {
             missing.push(tok);
         }
     }

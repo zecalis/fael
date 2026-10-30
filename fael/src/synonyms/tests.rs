@@ -204,6 +204,38 @@ fn argv(s: &str) -> Vec<String> {
     s.split(' ').map(String::from).collect()
 }
 
+/// Identity aliases are boundary-only (c2, F-IDENT): every way to spell an id
+/// normalizes to the same canonical argv/args before any lookup runs, so
+/// there is exactly one internal miss outcome and no alias mints identity
+/// state. The lookup itself (`resolve_identity`) never sees the alias.
+#[test]
+fn identity_aliases_converge_at_the_boundary() {
+    let id = "01M62AAAA1";
+    // CLI: `--id` is the positional; `--query`/`-q`/`--search` are `--text`
+    // (an explicit text search — the escape hatch, never silent auto-route).
+    assert_eq!(rw(&format!("find --id {id}")), format!("find {id}"));
+    assert_eq!(rw(&format!("find --id={id}")), format!("find {id}"));
+    assert_eq!(
+        rw(&format!("find --query {id}")),
+        format!("find --text {id}")
+    );
+    assert_eq!(rw(&format!("find -q {id}")), format!("find --text {id}"));
+    assert_eq!(
+        rw(&format!("find --search {id}")),
+        format!("find --text {id}")
+    );
+    // MCP: `query`/`search` are `text` — a ULID there auto-routes to id lookup
+    // at the single resolver, never to a second miss path.
+    let a = |tool, v: Value| mcp(tool, &v);
+    assert_eq!(a("find", json!({"query": id})), json!({"text": id}));
+    assert_eq!(a("find", json!({"search": id})), json!({"text": id}));
+    // the real property wins, the guess is dropped nowhere it matters
+    assert_eq!(
+        a("find", json!({"text": "t", "query": id})),
+        json!({"text": "t", "query": id})
+    );
+}
+
 /// `add note x --body y` is two texts: name the flag, not "wrong arguments".
 /// A flag with no second text, or an arity error of another kind, is left as
 /// it came.

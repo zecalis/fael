@@ -1,4 +1,5 @@
 use super::Filter;
+use super::refs::Ref;
 use super::shape::{topic_list, untitled};
 use super::{est_tokens, glob};
 use crate::{Config, Log, Row, anchor, is_carrier_row};
@@ -7,6 +8,45 @@ use std::collections::HashMap;
 /// How a reject of an id that names no row begins: usage tags those rejects
 /// `reason: unknown-id` by this prefix (PLAN-fael-say-gate chunk 4c).
 pub const NO_ROW_WITH_ID: &str = "rejected: no row with id";
+
+/// Canonical identity resolve (plan fael-secretary c2, F-IDENT): one input →
+/// one resolver → one canonical row id or a typed miss/ambiguity. Union scope
+/// (content rows, then carriers, then closes) with content priority, so a
+/// close row or a carrier never turns a row's unique prefix into `Many` —
+/// that would make `find` reject an id it just printed. Every caller (CLI
+/// find/find-many, MCP find, close path, phantom scan) uses this;
+/// presentation aliases (`Wide`, reject strings, `--id`/`query` synonyms)
+/// live at the boundary only. An id-shaped input that misses is a typed
+/// miss — never falls through to text silently; a non-id-shaped `Missing`
+/// lets the caller try key/text next. Empty tokens never match.
+pub fn resolve_identity<'a>(log: &'a Log, input: &str) -> Ref<'a> {
+    if input.is_empty() {
+        return Ref::Missing;
+    }
+    let carrier = |r: &&Row| is_carrier_row(r);
+    let mut hits = identity_hits(log.rows.iter().filter(|r| !carrier(r)), input);
+    if hits.is_empty() {
+        hits = identity_hits(log.rows.iter().filter(carrier), input);
+    }
+    if hits.is_empty() {
+        hits = identity_hits(log.closes.iter(), input);
+    }
+    match hits.len() {
+        0 => Ref::Missing,
+        1 => Ref::One(hits[0]),
+        _ => Ref::Many(hits),
+    }
+}
+
+/// Rows whose id is `tok` or starts with it (case-insensitive) — the one
+/// prefix matcher every identity path shares.
+fn identity_hits<'a>(rows: impl Iterator<Item = &'a Row>, tok: &str) -> Vec<&'a Row> {
+    rows.filter(|r| {
+        r.id.get(..tok.len())
+            .is_some_and(|p| p.eq_ignore_ascii_case(tok))
+    })
+    .collect()
+}
 
 /// A row by exact id or a unique prefix (like a git sha, case-insensitive).
 pub fn resolve<'a>(log: &'a Log, prefix: &str) -> Result<&'a Row, String> {

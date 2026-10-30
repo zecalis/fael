@@ -3,7 +3,9 @@
 //! citation written in any `*.md` under the repo (issue `ids:doctor-plans`).
 //! Split out of `rows.rs` next to `fat.rs`/`orphan.rs` so `files_notes` stays
 //! under the 100-line function cap. Union-scope candidates come from core
-//! (`phantom_refs`, `phantom_md_refs`).
+//! (`phantom_refs`, `phantom_md_refs`) — both read the single canonical
+//! identity lookup (`resolve_identity`, c2 F-IDENT), so a phantom is exactly
+//! a typed `Missing`, never a second miss path.
 //!
 //! Only close *texts* and open rows are scanned in the log: a closed row's own
 //! text went quiet with the row, but its close reason still speaks for it.
