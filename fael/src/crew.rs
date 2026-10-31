@@ -122,12 +122,21 @@ fn reject_block(err: &str) -> String {
     at.map_or(err, |i| &err[i..]).to_string()
 }
 
+/// The MCP server's own env names its launcher (an editor), not the calling agent; fael-crew's
+/// resolver would bind `run.session` to it. A caller's session rides as the `--session` arg.
+fn clear_client_identity(cmd: &mut Command) {
+    for k in ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] {
+        cmd.env_remove(k);
+    }
+}
+
 /// Run a crew verb in `dir` with its output captured: stdout trimmed, or its stderr as the
 /// error — what the MCP `chunk` tool returns, so an agent sees what the CLI would print.
 pub(crate) fn capture(args: &[String], dir: &std::path::Path) -> Result<String, String> {
     let bin = locate().ok_or(MISSING)?;
     let mut cmd = Command::new(&bin);
     cmd.args(args).current_dir(dir);
+    clear_client_identity(&mut cmd);
     // a replaced MCP server hands the write to the installed fael, not its own old exe
     if let Some(me) = crate::mcp::installed_exe().or_else(|| std::env::current_exe().ok()) {
         cmd.env("FAEL_BIN", me);
@@ -143,7 +152,20 @@ pub(crate) fn capture(args: &[String], dir: &std::path::Path) -> Result<String, 
 
 #[cfg(test)]
 mod tests {
-    use super::mismatch;
+    use super::{clear_client_identity, mismatch};
+    use std::process::Command;
+
+    /// 01M67F3X: an MCP start with CODEX_THREAD_ID=inherited-editor must not persist it.
+    #[test]
+    fn mcp_subprocess_drops_inherited_client_identity() {
+        let mut cmd = Command::new("true");
+        cmd.env("CODEX_THREAD_ID", "inherited-editor");
+        clear_client_identity(&mut cmd);
+        for k in ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] {
+            let set = cmd.get_envs().find(|(n, _)| *n == k).unwrap();
+            assert!(set.1.is_none(), "{k} still passed to fael-crew");
+        }
+    }
 
     #[test]
     fn same_version_is_silent_and_different_names_both() {
