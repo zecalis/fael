@@ -83,7 +83,7 @@ contract tests alone do not establish full parity.
 - `notice` — one line for the **user**, never the agent: which issues the brief handed over, which
   decision or issue a push reminded the agent of (once per file per session), and the turn's receipt
   on `stop`. Show it where only the user sees it (a toast, a status line); a client with no such
-  channel drops it. Never put it in `context`. `[notify] user = false` turns it off.
+  channel drops it (Codex is dropped too: its `systemMessage` stays out of model context in `codex exec`, measured 2026-10-31, but no run showed it reaching the user). Never put it in `context`. `[notify] user = false` turns it off.
 - `reply` — the assistant's **last message only**. fael files its `fael decision|issue|note: <text> [files: a,b]`
   lines (column 0, outside code fences); leave it out and fael reads the last message of `session` as a Claude
   transcript. Send it once per turn end — the same lines twice in a session file once.

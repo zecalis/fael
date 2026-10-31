@@ -1,7 +1,7 @@
 //! The user channel (PLAN-fael-visible-secretary chunk 4): Claude's
 //! `systemMessage` carries one line per beat — brief, reminder, receipt —
 //! only when fael did something, at most one reminder per file per session,
-//! never for codex, and `additionalContext` stays byte-identical with the
+//! never for codex (unverified channel), and `additionalContext` stays byte-identical with the
 //! channel on or off.
 
 use super::{fael, fael_env, json, repo};
