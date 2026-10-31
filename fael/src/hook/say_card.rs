@@ -128,6 +128,12 @@ pub(crate) fn policy(k: &Kind) -> Policy {
             Some("fael chunk note"),
             &[At::Search],
         ),
+        Kind::ChunkBrief { .. } => card(
+            SayKind::ChunkBrief,
+            Key,
+            Some("fael chunk show"),
+            &[At::SessionStart],
+        ),
         Kind::BriefDrift { .. } => card(SayKind::BriefDrift, Key, Some("fael chunk show"), EDIT),
         Kind::Retired { .. } => card(SayKind::Retired, Key, Some("fael add decision"), PUSH),
         // a session-start warning, or a stashed risk at a push
