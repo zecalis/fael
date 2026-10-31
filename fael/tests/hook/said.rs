@@ -103,10 +103,10 @@ fn add(d: &Path, args: &[&str]) {
     assert!(ok, "{err}");
 }
 
-/// The MCP pull line carries the session and the query, and an id lookup
-/// records the shown id.
+/// The MCP pull line carries the query but no session (the server's env is its
+/// launcher's, not the caller's), and an id lookup records the shown id.
 #[test]
-fn an_mcp_find_records_its_session_and_query() {
+fn an_mcp_find_records_its_query_but_no_session() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let key = "vela:credit-ledger";
@@ -143,7 +143,7 @@ fn an_mcp_find_records_its_session_and_query() {
         (&pull["event"], &pull["session"], &pull["q"]),
         (
             &"mcp-find".into(),
-            &"s1".into(),
+            &serde_json::Value::Null,
             &serde_json::json!({"key": key})
         ),
         "{pull}"

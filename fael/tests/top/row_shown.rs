@@ -223,15 +223,16 @@ fn mcp_close(d: &Path, s: &Path, session: &str, id: &str) -> String {
 }
 
 #[test]
-fn an_mcp_close_after_add_stamps_add() {
+fn an_mcp_close_never_stamps_from_the_server_env() {
     let (d, s) = repo();
-    // the edit hook records the session, so the MCP server's env id meets it
+    // the MCP server's env is its launcher's, not the caller's: even a recorded
+    // edit from that id must not attribute the close to it
     let full = hold(&d, &s, "SM");
     hook(&d, &s, "edit", "SM", &["src/c.rs"]);
     let out = mcp_close(&d, &s, "SM", &full);
     assert!(out.contains("recorded"), "{out}");
     let row = close_row(&d, &full);
-    assert_eq!(row["shown"], serde_json::json!(["add"]), "{row}");
+    assert_eq!(row["shown"], serde_json::Value::Null, "{row}");
 }
 
 /// The full id `add` prints as its first line.

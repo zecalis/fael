@@ -16,7 +16,13 @@ struct ClaudeBase {
     session_id: Option<String>,
     #[serde(default)]
     transcript_path: Option<String>,
-    /// Claude Code: set only when the hook fires inside a sub-agent
+    #[serde(default)]
+    hook_event_name: Option<String>,
+    #[serde(default)]
+    agent_transcript_path: Option<String>,
+    #[serde(default)]
+    agent_type: Option<String>,
+    /// Both clients supply agent_id on child tool events too.
     #[serde(default)]
     agent_id: Option<String>,
     /// SessionStart: startup | resume | clear | compact
@@ -26,6 +32,58 @@ struct ClaudeBase {
     /// else the transcript tail says it (askstats::transcript_model).
     #[serde(default)]
     model: Option<String>,
+}
+
+impl ClaudeBase {
+    fn subagent(&self, codex: bool) -> bool {
+        codex
+            && matches!(
+                self.hook_event_name.as_deref(),
+                Some("SubagentStart" | "SubagentStop")
+            )
+    }
+
+    fn child_context(&self, codex: bool) -> bool {
+        self.subagent(codex) || (codex && (self.agent_id.is_some() || self.agent_type.is_some()))
+    }
+
+    /// Codex child hooks name the parent as session_id. agent_id joins the
+    /// child's shell CODEX_THREAD_ID; tool transcript_path names the child.
+    fn event(self, codex: bool) -> Event {
+        let nonempty = |v: Option<String>| v.filter(|s| !s.is_empty());
+        let child = self.child_context(codex);
+        let lifecycle = self.subagent(codex);
+        let (session, transcript, agent) = if child {
+            let transcript = if lifecycle {
+                self.agent_transcript_path
+            } else {
+                self.transcript_path
+            };
+            (nonempty(self.agent_id), transcript, None)
+        } else if codex {
+            // A rollout stem is rollout-<timestamp>-<thread-id>, not the id.
+            (
+                nonempty(self.session_id).or_else(|| nonempty(self.transcript_path.clone())),
+                self.transcript_path,
+                None,
+            )
+        } else {
+            (
+                nonempty(self.transcript_path).or_else(|| nonempty(self.session_id)),
+                None,
+                self.agent_id,
+            )
+        };
+        Event {
+            session,
+            transcript,
+            agent,
+            cwd: self.cwd,
+            source: self.source,
+            model: self.model,
+            ..Event::default()
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -118,13 +176,11 @@ fn prompt_reply(stdin: &str, client: Option<String>) -> super::protocol::Reply {
     if p.prompt.is_empty() && !stdin.trim().is_empty() {
         eprintln!("fael hook prompt: UserPromptSubmit payload has no `prompt` text — hint skipped");
     }
+    let codex = client.as_deref() == Some("codex");
     let e = Event {
-        cwd: p.base.cwd,
-        session: p.base.transcript_path.or(p.base.session_id),
         text: Some(p.prompt),
         client,
-        model: p.base.model,
-        ..Event::default()
+        ..p.base.event(codex)
     };
     super::prompt::prompt(&e)
 }
@@ -136,26 +192,20 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
     match event {
         "stop" => {
             let p: ClaudeStop = serde_json::from_str(stdin).unwrap_or_default();
+            let child = p.base.child_context(codex);
             let e = Event {
-                cwd: p.base.cwd,
-                session: p.base.transcript_path.or(p.base.session_id),
-                // codex transcripts are not claude-format: always hand the
-                // text over, so stop never falls back to parsing the file
-                text: if codex {
-                    Some(p.last_assistant_message.clone().unwrap_or_default())
-                } else {
-                    None
-                },
-                // the final message, when the client hands it over (codex always;
-                // Claude Code on recent versions) — else stop reads the transcript
+                // Codex transcripts are not Claude format. An absent last
+                // message stays empty, never parsed as a Claude transcript.
+                text: codex.then(|| p.last_assistant_message.clone().unwrap_or_default()),
                 reply: p.last_assistant_message,
-                // SubagentStop runs this arm too
-                agent: p.base.agent_id,
                 client,
-                model: p.base.model,
-                ..Event::default()
+                ..p.base.event(codex)
             };
-            let r = stop(&e);
+            let r = if child {
+                super::stop::subagent_stop(&e)
+            } else {
+                stop(&e)
+            };
             if let Some(n) = user_line(&r, codex) {
                 println!("{}", serde_json::json!({"systemMessage": n}));
             }
@@ -163,17 +213,20 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
         }
         "session-start" => {
             let p: ClaudeBase = serde_json::from_str(stdin).unwrap_or_default();
+            let child = p.subagent(codex);
             let e = Event {
-                cwd: p.cwd,
-                // same key as stop/edit, or session-start's branch baseline lands
-                // under a filename stop never reads (transcript path over session id)
-                session: p.transcript_path.or(p.session_id),
-                source: p.source,
                 client,
-                model: p.model,
-                ..Event::default()
+                ..p.event(codex)
             };
-            print_reply("SessionStart", session_start(&e), codex);
+            print_reply(
+                if child {
+                    "SubagentStart"
+                } else {
+                    "SessionStart"
+                },
+                session_start(&e),
+                codex,
+            );
             ExitCode::SUCCESS
         }
         "prompt" => {
@@ -196,14 +249,9 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                     .collect()
             };
             let e = Event {
-                cwd: p.base.cwd,
-                // same key as stop, which needs the transcript path
-                session: p.base.transcript_path.or(p.base.session_id),
                 files,
-                agent: p.base.agent_id,
                 client,
-                model: p.base.model,
-                ..Event::default()
+                ..p.base.event(codex)
             };
             super::cited::note_tool(&e, input);
             // a read says nothing: rows reach the agent at the edit, at kickoff and in briefs
@@ -219,12 +267,8 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
         "review" => {
             let p: ClaudeTool = serde_json::from_str(stdin).unwrap_or_default();
             let e = Event {
-                cwd: p.base.cwd,
-                session: p.base.transcript_path.or(p.base.session_id),
-                agent: p.base.agent_id,
                 client,
-                model: p.base.model,
-                ..Event::default()
+                ..p.base.event(codex)
             };
             print_reply(
                 "PostToolUse",
@@ -238,6 +282,35 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 "fael hook: unknown event {event:?} — want stop|session-start|read|edit|search|prompt|review"
             );
             ExitCode::SUCCESS
+        }
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::ClaudeBase;
+
+    #[test]
+    fn codex_child_identity_never_falls_back_to_the_parent() {
+        let p: ClaudeBase = serde_json::from_value(serde_json::json!({
+            "session_id":"parent", "transcript_path":"/parent/rollout.jsonl",
+            "hook_event_name":"SubagentStop", "agent_id":"child",
+            "agent_transcript_path":"/child/rollout.jsonl"
+        }))
+        .unwrap();
+        let e = p.event(true);
+        assert_eq!(e.session.as_deref(), Some("child"));
+        assert_eq!(e.transcript.as_deref(), Some("/child/rollout.jsonl"));
+        assert!(e.agent.is_none()); // The normalized child context joins its shell thread id.
+        for agent in [serde_json::Value::Null, serde_json::json!("")] {
+            let p: ClaudeBase = serde_json::from_value(serde_json::json!({
+                "session_id":"parent", "transcript_path":"/parent/rollout.jsonl",
+                "hook_event_name":"SubagentStart", "agent_id":agent
+            }))
+            .unwrap();
+            let e = p.event(true);
+            assert!(e.session.is_none());
+            assert!(e.transcript.is_none());
         }
     }
 }

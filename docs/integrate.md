@@ -39,11 +39,41 @@ Zero or several matches leave it unset: identical concurrent commands warn each
 candidate's notice file, and `fael add` without `--files` there needs a single
 active session or explicit `--files`.
 
-`fael install` wires **Codex** Stop, SessionStart, UserPromptSubmit and shell/search/edit
-hooks. UserPromptSubmit calls the same silent no-op adapter as Claude Code; it
+`fael install` wires **Codex** Stop, SessionStart, SubagentStart, SubagentStop,
+UserPromptSubmit and shell/search/edit hooks. UserPromptSubmit calls the same silent no-op adapter as Claude Code; it
 adds no context and keeps no per-turn edit-ask counter. New or changed Codex hooks
 require user review and trust through `/hooks`; installation does not trust them.
 See the [Codex hook contract](https://learn.chatgpt.com/docs/hooks).
+
+Codex hook state uses `session_id`, matching the shell's `CODEX_THREAD_ID`.
+Rollout filenames include a timestamp before that id, so their stems are not
+session identities. The transcript remains separate evidence for Stop's start
+time. Subagent lifecycle hooks carry the parent's `session_id`: fael uses the
+child's `agent_id`, with `agent_transcript_path` kept separate, and never falls
+back to the parent when the child id is missing. Observed child tool hooks also
+carry the parent `session_id` and the child `agent_id`; their `transcript_path`
+names the child. They use that same child id for state and shell attribution. A resume keeps said-once state; `SessionStart` with `source: compact`
+resets only that thread's context.
+
+Stdio MCP has no per-request caller binding. Its inherited environment and even
+a recorded editor cannot identify the calling chat. MCP `add` therefore requires
+explicit `files` (inside each row when batching), writes no writer session, and
+`find`/`add` never consume a hook session's said-once state. A later edit may repeat
+a row read through MCP. For session attribution, use the shell CLI with its
+verified thread id. Concurrent rows can make file derivation return `files is
+required`; naming the files explicitly is the fallback, never another chat's edits.
+
+Evidence baseline: CLI `0.166.0-alpha.5.1`, bundled with Desktop `26.1027.30824`,
+checked on 2026-10-31. Redacted real start/edit/stop payloads live in
+`fael/tests/hook/fixtures/codex-*.json`. Concurrent CLI probes and resume verified
+shell thread ids versus unbound MCP writes. A real child tool/shell probe
+confirmed parent/agent identity fields. An app-server compact plus continuation
+emitted the real `SessionStart` with `source: compact`, retained as a fixture.
+Workspace-write probes received
+`lock: Operation not permitted` at the `.git/fael` journal; attribution writes
+were checked in an unrestricted scratch repo. Desktop GUI lifecycle and newly
+trusted subagent lifecycle wiring still require the runtime acceptance pass;
+contract tests alone do not establish full parity.
 
 - `session` — an RFC 3339 time the session started (`2026-09-25T10:00:00.000Z`), or a transcript
   file whose birthtime is the start. **Send the exact same string to `read`, `edit` and `stop`**: it keys the

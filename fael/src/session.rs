@@ -7,9 +7,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Set once for the long-lived `fael mcp` server (`mcp::serve`): its env is
-/// inherited at spawn, not per call, so `FAEL_SESSION` there is no fresher
-/// than a client var — it must not be trusted raw (01M47N67).
+/// Set once for `fael mcp`: process env belongs to the server's launcher,
+/// not its callers. Even a recorded edit cannot prove who made a request.
 static MCP_SERVER: AtomicBool = AtomicBool::new(false);
 
 /// Called by `mcp::serve` at startup, so every `add` the server handles knows
@@ -41,6 +40,9 @@ fn mcp_server() -> bool {
 /// stdio MCP servers: openai/codex#19937), so a `fael add` from a Codex shell
 /// joins the same way.
 fn env_session() -> String {
+    if mcp_server() {
+        return String::new();
+    }
     for k in ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] {
         let v = std::env::var(k).unwrap_or_default();
         if !v.is_empty() {
@@ -54,6 +56,9 @@ fn env_session() -> String {
 /// nothing else: `FAEL_SESSION` is OpenCode's, then Claude's, then Codex's;
 /// none = a plain `cli`.
 pub(crate) fn env_client() -> &'static str {
+    if mcp_server() {
+        return "cli";
+    }
     client_of(|k| std::env::var(k).unwrap_or_default())
 }
 
@@ -96,7 +101,7 @@ fn recorded(root: &Path, env: &str) -> Option<String> {
 /// is the calling session and stamps raw; the client vars travel further, so
 /// an id no hook event ever recorded (an edit, or session-start in this
 /// worktree) stamps nothing. The MCP server's env is inherited at spawn,
-/// never per call — so there *every* id must be recorded by an edit.
+/// never per call — so it supplies no caller identity, even after an edit.
 pub(crate) fn writer_session(root: &Path) -> Option<String> {
     let env = env_session();
     if env.is_empty() {
@@ -283,6 +288,11 @@ pub(crate) fn active_edits(root: &Path) -> Vec<(String, i64)> {
 // another agent's row can hide older edits, which fails toward "files is
 // required", never toward wrong files. Rows would need a session to do better.
 pub(crate) fn derive(root: &Path, log: &core::Log) -> Vec<String> {
+    // No per-request session binding exists in the stdio protocol. A sole
+    // active editor may be a different chat, so MCP must name files explicitly.
+    if mcp_server() {
+        return vec![];
+    }
     let mut sessions = active_sessions(root);
     let id = env_session();
     let mine = if !id.is_empty() {

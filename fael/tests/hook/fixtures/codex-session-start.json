@@ -1,0 +1,9 @@
+{
+  "session_id": "<thread-id>",
+  "transcript_path": "/redacted/sessions/rollout-2026-10-31T05-24-52-<thread-id>.jsonl",
+  "cwd": "<redacted-cwd>",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "source": "startup"
+}

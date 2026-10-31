@@ -331,6 +331,12 @@ existing config is left alone, and deleting lines you never changed is safe
 | `close` | `id` or `ids[]` `text` | `ids` closes many with one reason — a bad id reports alone, the rest close |
 | `chunk` | `verb` (`show\|start\|note\|done\|wait\|after`) `uid` `text?` `other?` `on?` `run?` `client?` `model?` `session?` `force?` `with?` `as?` `pr?` `left?` `review?` (`no_change?` is accepted, not in the schema) | the `fael chunk` verbs an agent needs, run by `fael-crew` (same call, same text: `fael/src/mcp/chunk.rs`); `result` and `handoff` are accepted for `text` |
 
+The stdio server has no per-request hook-session identity. Process env and a
+recorded edit do not establish the caller: MCP writes stay session-less and
+`add` needs explicit files, including each row of a batch. MCP reads and writes
+leave hook said-once state untouched. Shell CLI calls can join a verified hook
+session through their client-provided environment id.
+
 `bump` is CLI-only (`fael bump`): re-routing a row is rare and mostly a human call, so its schema is not paid in every session. The server still answers a `bump` call from a client that sends one.
 
 ### Hook protocol
@@ -343,6 +349,15 @@ fael hook <stop|session-start|read|edit|search|prompt> [--client claude|codex]  
 neutral Event  {"cwd","session","client","files":[…],"text","reply","agent","source","tool","tool_input","tool_response"}
 neutral Reply  {"block":false,"context"?:str,"notice"?:str}
 ```
+
+Codex hook state keys by `session_id`, not the timestamped rollout filename.
+The adapter retains the transcript separately for Stop's start-time evidence.
+`SubagentStart`/`SubagentStop` name the parent in `session_id`; their `agent_id`
+keys the child context. Observed child tool hooks also carry the parent session
+and child agent id; normalization joins them with the child's shell calls.
+Missing child identity never borrows the parent. Resume preserves said-once
+state; a compact start resets the identified thread only. Supported runtime
+observations and remaining acceptance limits are in [integrate.md](integrate.md).
 
 **The user channel** (`notice`, PLAN-fael-visible-secretary): fael does its work in the agent's context, so the user never saw it. Each hook can now carry one line for the user only. Claude Code gets it as `systemMessage`, which is shown to the user and never added to the model's context. OpenCode shows it as a toast. Codex and the bare neutral protocol have no such channel, so they stay silent. There are three beats. Session start names the rows the brief handed over. A push names the first decision or issue it reminded the agent of, at most once per file per session. Stop gives the turn's receipt (`filed · reminded · retired · closed`), and every count names up to two ids or keys that `fael find` takes back. When nothing happened there is no line: fael never says "nothing new", and never claims anything was prevented or saved. The receipt reads a per-session tally in the state dir (`<seen key>.tally`). `add`, `close` and the push append to it, and each Stop reads the lines since its last marker. The tally is never part of a row, and `additionalContext` is the same byte for byte with the channel on or off. `[notify] user = false` turns the channel off.
 

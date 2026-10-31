@@ -3,7 +3,7 @@
 
 use super::{fael_env, json, repo};
 
-fn log_text(d: &std::path::Path) -> String {
+pub(super) fn log_text(d: &std::path::Path) -> String {
     let mut out = String::new();
     let mut stack = vec![d.join(".git/fael/log")];
     while let Some(p) = stack.pop() {

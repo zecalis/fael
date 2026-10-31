@@ -139,10 +139,9 @@ fn receipt(e: &Event) -> Option<String> {
 }
 
 /// A sub-agent's stop only notes the ids its own reply cites: the bug rule
-/// belongs to the session's stop. No
-/// transcript fallback — `session` is the parent's transcript, never this
-/// agent's reply.
-fn subagent_stop(e: &Event) -> Reply {
+/// belongs to the session's stop. No transcript fallback: only the explicit
+/// reply identifies this child's closing words.
+pub(super) fn subagent_stop(e: &Event) -> Reply {
     if let (Some(c), Some(reply)) = (ctx(e), &e.reply)
         && adopted(&c)
     {
@@ -248,7 +247,7 @@ fn signal(
 /// transcript), or a transcript file's birthtime (fallback: mtime). `None` =
 /// no usable session.
 fn session_start(e: &Event) -> Option<i64> {
-    let s = e.session.as_deref()?;
+    let s = e.transcript.as_deref().or(e.session.as_deref())?;
     core::ts_ms(s).or_else(|| file_birth_ms(Path::new(s)).map(|m| m as i64))
 }
 
