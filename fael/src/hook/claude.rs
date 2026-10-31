@@ -139,8 +139,9 @@ fn patch_files(patch: &str) -> Vec<String> {
 }
 
 /// The user line, Claude Code only: its `systemMessage` shows to the user
-/// and never reaches the model. Codex has no such channel, so it says
-/// nothing (PLAN-fael-visible-secretary §2).
+/// and never reaches the model. Codex documents `systemMessage` as a UI or
+/// event-stream warning but nothing says it stays out of model context, and
+/// no capture proves it (issue 01M679PP), so Codex says nothing.
 fn user_line(r: &super::protocol::Reply, codex: bool) -> Option<&str> {
     (!codex).then_some(r.notice.as_deref()).flatten()
 }
