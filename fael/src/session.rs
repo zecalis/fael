@@ -284,9 +284,8 @@ pub(crate) fn active_edits(root: &Path) -> Vec<(String, i64)> {
 /// active session counts — two agents in one checkout must never file rows on
 /// each other's files. Empty = the caller keeps the old "files is required"
 /// error, so behaviour without a hook session is unchanged.
-// ponytail: the cutoff is the newest row by anyone (as the stop hook does) —
-// another agent's row can hide older edits, which fails toward "files is
-// required", never toward wrong files. Rows would need a session to do better.
+// The cutoff is the caller's newest row, ignoring rows stamped with another
+// session (01M67ET2); unstamped rows and a caller without an id still count.
 pub(crate) fn derive(root: &Path, log: &core::Log) -> Vec<String> {
     // No per-request session binding exists in the stdio protocol. A sole
     // active editor may be a different chat, so MCP must name files explicitly.
@@ -307,7 +306,16 @@ pub(crate) fn derive(root: &Path, log: &core::Log) -> Vec<String> {
     } else {
         None
     };
-    let last = core::last_row_ms(log, 0);
+    let last = log
+        .rows
+        .iter()
+        .chain(log.closes.iter())
+        .filter(|r| {
+            let other = r.extra.get("session").and_then(|v| v.as_str());
+            id.is_empty() || other.is_none_or(|s| s == id)
+        })
+        .filter_map(|r| core::ts_ms(&r.ts))
+        .max();
     let mut seen = HashSet::new();
     let mut out = vec![];
     for (path, at, ..) in mine.unwrap_or_default() {
