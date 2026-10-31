@@ -219,10 +219,22 @@ fn skipped(
         }
         Ready::No(why) => {
             return Err(format!(
-                "rejected: chunk {m}{pair} is not ready: {why} — try `fael chunk show {m}`"
+                "rejected: chunk {m}{pair} is not ready: {why} — {}",
+                way_out(&why, m)
             ));
         }
     })
+}
+
+/// What follows a not-ready reason. A wait on the owner is the owner's to end, so the verb is
+/// named for them, never for the agent to type; `why` is `ready::ready_in`'s text.
+fn way_out(why: &str, m: &str) -> String {
+    match why.starts_with("it waits on owner") {
+        true => format!(
+            "the owner's answer unblocks it (`fael chunk answer {m} \"<text>\"` or the board); the question: `fael chunk show {m}`"
+        ),
+        false => format!("try `fael chunk show {m}`"),
+    }
 }
 
 /// One run row. `loc` = (worktree, branch, base); `with` = (joint mode, partner uid).

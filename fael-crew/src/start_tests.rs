@@ -430,3 +430,17 @@ fn start_resume_wait_data_needs_until_before_record() {
     assert_eq!(before, after, "invalid shape writes nothing");
     assert_eq!(state(&s, &c), "running");
 }
+
+#[test]
+fn a_start_on_an_owner_wait_names_who_unblocks_it() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    start(&mut s, &a, "/w").unwrap();
+    s.wait(&a, "owner", "q?", None, &[], &here("/w")).unwrap();
+    let e = start(&mut s, &a, "/w2").unwrap_err();
+    assert!(e.contains("it waits on owner"), "{e}");
+    assert!(
+        e.contains(&format!("fael chunk answer {a} \"<text>\"")) && e.contains("the owner's"),
+        "{e}"
+    );
+}
