@@ -147,13 +147,26 @@ fn with_retype(
     handoff: &str,
     flag: impl Fn(&str) -> Option<String>,
 ) -> String {
-    let Some(run) = e
+    if let Some(run) = e
         .split("pass --run ")
         .nth(1)
         .and_then(|t| t.split_whitespace().next())
-    else {
-        return e;
-    };
+    {
+        return format!("{e}\nretype: {} --run {run}", done_cmd(uid, handoff, flag));
+    }
+    // a missing --left: the same line, the one answer left to the agent as a placeholder —
+    // fael cannot know that nothing is left, so it never types `none` for it
+    if e.starts_with("rejected: chunk done needs --left") {
+        return format!(
+            "{e}\ntry: {} --left none|<ids>",
+            done_cmd(uid, handoff, flag)
+        );
+    }
+    e
+}
+
+/// `fael chunk done <uid> "<handoff>"` with the flags the caller passed, in a fixed order.
+fn done_cmd(uid: &str, handoff: &str, flag: impl Fn(&str) -> Option<String>) -> String {
     let q = |v: &str| format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\""));
     let mut cmd = format!("fael chunk done {uid} {}", q(handoff));
     for f in ["pr", "out", "review", "left", "no-change"] {
@@ -163,7 +176,7 @@ fn with_retype(
             None => {}
         }
     }
-    format!("{e}\nretype: {cmd} --run {run}")
+    cmd
 }
 
 /// A flag's value for the retype line; a bare flag (`--no-change`) is the empty string.
@@ -244,7 +257,8 @@ pub(crate) fn done(
         .then_some(&mut copy as &mut fael_crew::Copy<'_>);
     let mut st = Store::open(&db(r))?;
     // issue 01M5FMHQX: leftovers are rows; the statement rides in the hand-off the next brief prints
-    let handoff = &crate::chunk_left::resolve(a.one("left"), handoff, &st, &crate::read(r))?;
+    let handoff = &crate::chunk_left::resolve(a.one("left"), handoff, &st, &crate::read(r))
+        .map_err(|e| with_retype(e, uid, handoff, |f| flag_of(a, f)))?;
     // issue 01M62VY2: a review that changed nothing says so in the hand-off the next brief prints
     let handoff = &match no_change {
         true => format!("reviewed, no change: {handoff}"),
@@ -471,6 +485,19 @@ mod retype_tests {
         assert_eq!(
             with_retype("rejected: x".into(), "C1", "h", flag),
             "rejected: x"
+        );
+    }
+
+    /// A missing --left gets the whole command back with the answer as a placeholder.
+    #[test]
+    fn a_missing_left_gets_a_copyable_try_with_the_answer_left_open() {
+        let e = "rejected: chunk done needs --left none or --left <id|uid>,… — how";
+        let flag = |f: &str| (f == "pr").then(|| "12".to_string());
+        let got = with_retype(e.into(), "C1", "did it", flag);
+        assert!(got.starts_with(e), "{got}");
+        assert!(
+            got.ends_with("try: fael chunk done C1 \"did it\" --pr 12 --left none|<ids>"),
+            "{got}"
         );
     }
 }

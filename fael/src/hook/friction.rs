@@ -57,6 +57,14 @@ pub(crate) fn sub<'a>(cmd: &str, argv: &'a [String]) -> Option<&'a str> {
         .filter(|v| verbs.contains(v))
 }
 
+/// An MCP `chunk` call names its verb in `verb`, not in an argv: without it every MCP chunk
+/// reject lands in one bucket no verb's fix can be read from. Same closed vocabulary as `sub`.
+fn mcp_sub<'a>(cmd: &str, args: &'a Value) -> Option<&'a str> {
+    args["verb"]
+        .as_str()
+        .filter(|v| cmd == "chunk" && crate::core::work::CHUNK_VERBS.contains(v))
+}
+
 /// The real command an unknown one was a near miss of (`did you mean X?`) —
 /// a name from the command table, never what was typed.
 fn near(e: &str) -> Option<&'static str> {
@@ -93,7 +101,7 @@ fn record(
     session: &str,
     (o, empty, human): (Outcome, bool, bool),
     sig: String,
-    argv: Option<&[String]>,
+    (argv, sub): (Option<&[String]>, Option<&str>),
 ) {
     let meta = UsageMeta {
         session: (!session.is_empty()).then_some(session),
@@ -112,7 +120,7 @@ fn record(
     if human {
         row["who"] = "human".into();
     }
-    if let Some(s) = argv.and_then(|a| sub(cmd, a)) {
+    if let Some(s) = sub {
         row["sub"] = s.into();
     }
     match o {
@@ -194,7 +202,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         &session,
         (outcome, empty, human),
         sig(argv),
-        Some(argv),
+        (Some(argv), sub(cmd, argv)),
     );
 }
 
@@ -218,6 +226,7 @@ pub(crate) fn record_mcp_call(
     } else {
         "?"
     };
+    let verb = mcp_sub(cmd, args);
     record(
         "mcp",
         cmd,
@@ -225,7 +234,7 @@ pub(crate) fn record_mcp_call(
         "",
         (outcome, empty, false),
         sig(args.to_string()),
-        None,
+        (None, verb),
     );
 }
 
@@ -331,6 +340,15 @@ mod tests {
             near("rejected: unknown command \"zz\" — try 'fael --help'"),
             None
         );
+    }
+
+    #[test]
+    fn an_mcp_chunk_call_reads_its_verb_from_the_args() {
+        let a = serde_json::json!({"verb": "note", "uid": "u"});
+        assert_eq!(mcp_sub("chunk", &a), Some("note"));
+        assert_eq!(mcp_sub("find", &a), None);
+        let bad = serde_json::json!({"verb": "zzz"});
+        assert_eq!(mcp_sub("chunk", &bad), None);
     }
 
     #[test]
