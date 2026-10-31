@@ -311,7 +311,7 @@ pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{command, lines, near, sub};
+    use super::{command, lines, mcp_sub, near, sub};
     use crate::core::stats::{Friction, Tally};
 
     fn argv(s: &str) -> Vec<String> {

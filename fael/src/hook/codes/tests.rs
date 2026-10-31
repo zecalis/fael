@@ -107,6 +107,10 @@ fn start_refusals_read_apart_from_state_moves() {
             "scope_overlap",
         ),
         (
+            "rejected: chunk 01M5AAAA is not ready: it waits on owner — the owner's answer unblocks it (`fael chunk answer 01M5AAAA \"<text>\"` or the board); the question: `fael chunk show 01M5AAAA`",
+            "chunk_state",
+        ),
+        (
             "rejected: chunk 01M5AAAA is held by run 01M5RRRR — try `fael chunk start 01M5AAAA --force` to take it over",
             "held",
         ),
