@@ -129,6 +129,55 @@ fn codex_rollouts_join_shell_threads_without_crossing_chats() {
     assert_eq!(row["session"], threads[1]);
 }
 
+/// 01M67ET2: chat C's row filed after chat D's edit must not hide D's edit.
+#[test]
+fn another_chats_later_row_does_not_hide_my_edits() {
+    let d = repo();
+    assert!(fael(&d, &["add", "note", "seed", "--files", "doc:seed"], "").0);
+    let (c, me) = (
+        "019dba93-8214-7d50-a089-9690b4ce6b9e",
+        "019dba93-8214-7d50-a089-9690b4ce6b9f",
+    );
+    for id in [c, me] {
+        let start = codex_fixture("start", &d, id).to_string();
+        assert!(fael(&d, &["hook", "session-start", "--client", "codex"], &start).0);
+    }
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    std::fs::write(d.join("src/mine.rs"), "// file\n").unwrap_or_else(|_| {
+        std::fs::create_dir_all(d.join("src")).unwrap();
+        std::fs::write(d.join("src/mine.rs"), "// file\n").unwrap();
+    });
+    let mut edit = codex_fixture("edit", &d, me);
+    edit["tool_input"]["command"] = "*** Update File: src/mine.rs".into();
+    assert!(
+        fael(
+            &d,
+            &["hook", "edit", "--client", "codex"],
+            &edit.to_string()
+        )
+        .0
+    );
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let env_c = [("CODEX_THREAD_ID", c)];
+    let (ok, _, err) = super::fael_env(
+        &d,
+        &["add", "note", "c row", "--files", "doc:c"],
+        "",
+        &env_c,
+    );
+    assert!(ok, "{err}");
+    let (ok, out, err) =
+        super::fael_env(&d, &["add", "note", "mine"], "", &[("CODEX_THREAD_ID", me)]);
+    assert!(ok, "{out}{err}");
+    let log = super::writer::log_text(&d);
+    let row: serde_json::Value = log
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|r| r["text"] == "mine")
+        .unwrap();
+    assert_eq!(row["files"], serde_json::json!(["src/mine.rs"]));
+}
+
 /// The vendor lifecycle contract names the parent session and the child agent.
 /// Child tools carry the same parent/agent pair; the shell uses the child id.
 #[test]
