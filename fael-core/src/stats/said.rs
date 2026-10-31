@@ -49,6 +49,7 @@ use super::parse::Parsed;
 use super::retire::{RETIRE_WINDOW_MS, retire_times};
 use super::said_yield::tally;
 pub use super::said_yield::{EventYield, KindYield};
+use super::touch::Touches;
 use crate::{Log, Row, ts_ms};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -73,6 +74,10 @@ fn session(v: &serde_json::Value) -> Option<&str> {
             .and_then(|f| f.to_str())
             .unwrap_or(s),
     )
+}
+
+fn session_raw(v: &serde_json::Value) -> Option<&str> {
+    v["session"].as_str()
 }
 
 pub(super) fn strs<'a>(v: &'a serde_json::Value, k: &str) -> impl Iterator<Item = &'a str> {
@@ -126,8 +131,8 @@ fn filed_after(
 }
 
 /// When a usage line is an accepted `fael chunk note` call.
-fn chunk_note_ms(v: &serde_json::Value) -> Option<i64> {
-    let is = v["event"] == "call" && v["cmd"] == "chunk" && v["sub"] == "note";
+fn chunk_note_ms(v: &serde_json::Value, any: bool) -> Option<i64> {
+    let is = v["event"] == "call" && v["cmd"] == "chunk" && (any || v["sub"] == "note");
     (is && v["outcome"] == "ok")
         .then(|| v["ts"].as_str().and_then(ts_ms))
         .flatten()
@@ -142,20 +147,24 @@ fn index(
     HashSet<(Session<'_>, &str)>,
     HashMap<Session<'_>, Vec<Pull<'_>>>,
     HashMap<Session<'_>, i64>,
+    HashMap<Session<'_>, i64>,
 ) {
     let mut in_ctx: HashSet<(Session, &str)> = HashSet::new();
     let mut pulls: HashMap<Session, Vec<Pull>> = HashMap::new();
     // the latest accepted chunk note per session
     let mut last_note: HashMap<Session, i64> = HashMap::new();
+    // and the latest accepted chunk call of any verb
+    let mut last_chunk: HashMap<Session, i64> = HashMap::new();
     for v in &parsed.kept {
         let (Some(repo), Some(s)) = (v["repo"].as_str(), session(v)) else {
             continue;
         };
-        if let Some(ms) = chunk_note_ms(v) {
-            last_note
-                .entry((repo, s))
-                .and_modify(|m| *m = (*m).max(ms))
-                .or_insert(ms);
+        for (any, last) in [(false, &mut last_note), (true, &mut last_chunk)] {
+            if let Some(ms) = chunk_note_ms(v, any) {
+                last.entry((repo, s))
+                    .and_modify(|m| *m = (*m).max(ms))
+                    .or_insert(ms);
+            }
         }
         if v["event"] == "in-context" {
             let ids = strs(v, "in_context").chain(strs(v, "in_context_notes"));
@@ -172,7 +181,7 @@ fn index(
             });
         }
     }
-    (in_ctx, pulls, last_note)
+    (in_ctx, pulls, last_note, last_chunk)
 }
 
 /// Each repo's note ids, so a `row` said entry joins by lookup, not by scan.
@@ -186,7 +195,8 @@ fn note_ids(logs: &HashMap<String, Log>) -> HashMap<&str, HashSet<&str>> {
 }
 
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
-    let (in_ctx, pulls, last_note) = index(parsed);
+    let (in_ctx, pulls, last_note, last_chunk) = index(parsed);
+    let touches = Touches::index(parsed);
     let gone: HashMap<&str, HashMap<&str, i64>> = logs
         .iter()
         .map(|(repo, log)| (repo.as_str(), retire_times(log)))
@@ -239,9 +249,15 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 continue;
             }
             let used = |id: &str| s.is_some_and(|s| in_ctx.contains(&(s, id))) || retired(id);
+            // a brief row also counts a cite, a find of the id, or a read/edit of
+            // its files (issue 01M5ZGYRQ): a read-only session is no miss
+            let handed = |id: &str| {
+                used(id) || session_raw(v).is_some_and(|raw| touches.acted(repo, raw, id, log))
+            };
             let note = kind == SayKind::Row && notes.get(repo).is_some_and(|n| n.contains(key));
             let bucket = if note { "note" } else { kind.name() };
             let earned = match kind.earned() {
+                Earned::InContext if kind == SayKind::Brief => handed(key),
                 Earned::InContext => used(key),
                 Earned::Retired => retired(key),
                 // an issue the session filed on the finding's file after it
@@ -252,6 +268,7 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 Earned::FiledDecision => filed_after(log, s, ms, |r| r.kind == "decision"),
                 Earned::FiledAny => filed_after(log, s, ms, |_| true),
                 Earned::ChunkNote => noted,
+                Earned::ChunkCall => s.and_then(|s| last_chunk.get(&s)).is_some_and(|n| *n >= ms),
                 Earned::Pulled => pulled(&|p| p.key == Some(key)),
                 Earned::PulledId => pulled(&|p| p.id.is_some()),
             };

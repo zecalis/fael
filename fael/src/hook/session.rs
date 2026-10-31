@@ -46,7 +46,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let f = core::Focus::from_rows(branch.as_deref(), &all);
     focus::write(&c.session, &c.repo.root, &f);
     let shown = start_rows(&all, &f, &reader, e.client.as_deref());
-    let mut body = crate::journal::tag(
+    let body = crate::journal::tag(
         core::render(&c.log, &shown, c.repo.cfg.kickoff_tokens),
         &c.tags,
     );
@@ -55,11 +55,8 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let said = &shown[..n.min(shown.len())];
     let mut ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    let mut keys: Vec<String> = ids.iter().map(|i| format!("~start:{i}")).collect();
-    if let Some((uid, line)) = chunk_line(&c.repo, &c.session) {
-        keys.push(format!("~start:chunk:{uid}"));
-        body.push_str(&line);
-    }
+    let keys: Vec<String> = ids.iter().map(|i| format!("~start:{i}")).collect();
+    let chunk = chunk_line(&c.repo, &c.session);
     let adopted = crate::journal::home(&c.repo).is_some();
     let seen = seen_path(&c.session, &c.agent, &c.repo.root);
     let mut out = Outbox::open(
@@ -77,6 +74,13 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         kind: brief,
         text: body,
     });
+    // its own line: it names no row, so it never sits in the row hand-off's rate
+    if let Some((uid, text)) = chunk {
+        out.say(Line {
+            kind: Kind::ChunkBrief { uid },
+            text,
+        });
+    }
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
     }

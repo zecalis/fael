@@ -41,13 +41,24 @@ pub struct Value {
 /// row its session already holds, so a later event carries only what is new
 /// and an `edit` push, made at the edit, can only hit on a later edit; and
 /// a client that has never written an `in-context` line has no entry at all.
-/// Cost per event is `Stats::by_event` — not repeated here.
+/// `acted` widens the bar to a cite, a find of the id or a read/edit of the
+/// row's files: the two rates bracket what the lines can show. Cost per event
+/// is `Stats::by_event` — not repeated here.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct EventValue {
     /// Distinct (session, row) pairs this event handed over first.
     pub pushed: usize,
     /// Of those, rows still in context when the agent edited their file.
     pub in_context_at_edit: usize,
+    /// Of those, rows the session also cited, found by id, or whose file it
+    /// read or edited (`touch.rs`) — a superset of `in_context_at_edit`, the
+    /// upper end of what the usage lines can show (issue 01M5ZGYRQ).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub acted: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// (session, row) pairs a push handed over, each with the event of the first
@@ -142,6 +153,14 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
             .entry(pushed[k].to_string())
             .or_default()
             .in_context_at_edit += 1;
+    }
+    let touches = super::touch::Touches::index(parsed);
+    for (&(repo, session, id), event) in &pushed {
+        if in_window.contains(&(repo, session, id))
+            || touches.acted(repo, session, id, logs.get(repo))
+        {
+            by_event.entry(event.to_string()).or_default().acted += 1;
+        }
     }
     // repos in one clone share the journal: dedup closes and rows by id
     let mut closed: HashSet<&str> = HashSet::new();
@@ -280,5 +299,46 @@ mod tests {
                 .sum::<usize>(),
             v.in_context_at_edit
         );
+    }
+
+    /// Issue 01M5ZGYRQ: a session that only read a briefed row's file (or cited
+    /// or found the row) is no miss in `acted`, though no edit wrote an
+    /// in-context line; `in_context_at_edit` stays the lower bound.
+    #[test]
+    fn a_read_cite_or_find_counts_as_acted_not_as_an_edit_hit() {
+        let log = Log {
+            rows: rows(
+                &(row("D1", "2026-09-20T00:00:00Z", "decision", "")
+                    + &row("D2", "2026-09-20T00:00:00Z", "decision", "")
+                    + &row("D3", "2026-09-20T00:00:00Z", "decision", "")
+                    + &row("D4", "2026-09-20T00:00:00Z", "decision", "")),
+            ),
+            ..Default::default()
+        };
+        let start = |s: &str, ids: &str| {
+            format!(
+                r#"{{"ts":"2026-09-26T00:00:10.000Z","repo":"/work/r","client":"claude","event":"session-start","bytes":9,"est_tokens":2,"ids":{ids},"session":"{s}"}}"#
+            )
+        };
+        let usage = [
+            // opens the window for the client
+            r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["Z9"],"session":"s0"}"#.to_string(),
+            start("s1", r#"["D1"]"#),
+            start("s2", r#"["D2"]"#),
+            start("s3", r#"["D3"]"#),
+            start("s4", r#"["D4"]"#),
+            // s1 reads a file the row names, s2 cites it, s3 finds it by id
+            // (a repo log read names another file: no match), s4 does nothing
+            r#"{"ts":"2026-09-26T00:01:00.000Z","repo":"/work/r","client":"claude","event":"read","bytes":9,"est_tokens":2,"ids":[],"files":["a.rs"],"session":"s1"}"#.to_string(),
+            r#"{"ts":"2026-09-26T00:01:10.000Z","repo":"/work/r","client":"claude","event":"outcome","bytes":0,"est_tokens":0,"ids":[],"cited":["D2"],"session":"s2"}"#.to_string(),
+            r#"{"ts":"2026-09-26T00:01:20.000Z","repo":"/work/r","client":"claude","event":"find","bytes":9,"est_tokens":2,"ids":["D3"],"found":["D3"],"q":{"id":"D3"},"session":"s3"}"#.to_string(),
+            r#"{"ts":"2026-09-26T00:01:30.000Z","repo":"/work/r","client":"claude","event":"read","bytes":9,"est_tokens":2,"ids":[],"files":["other.rs"],"session":"s4"}"#.to_string(),
+        ]
+        .join("\n");
+        let parsed =
+            super::super::parse::parse(&usage, std::path::Path::new("/s/usage.jsonl"), &[]);
+        let logs = HashMap::from([("/work/r".to_string(), log)]);
+        let e = &super::value(&parsed, &logs).by_event["session-start"];
+        assert_eq!((e.pushed, e.in_context_at_edit, e.acted), (4, 0, 3));
     }
 }

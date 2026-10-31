@@ -300,3 +300,46 @@ fn tokens_and_events_split_each_kind() {
         serde_json::json!({"said": 2, "earned": 1, "tokens": 13})
     );
 }
+
+/// Issue 01M5ZGYRQ: a brief row the session only read (its file), cited or
+/// found by id earns; one it ignored does not. `chunkbrief` earns on any
+/// accepted `fael chunk` call after it, not on one before.
+#[test]
+fn a_brief_earns_on_a_read_cite_or_find_and_a_chunk_brief_on_a_chunk_call() {
+    let row = |id: &str, f: &str| {
+        format!(
+            "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"2026-09-26T00:00:00Z\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"{f}\"]}}\n"
+        )
+    };
+    let log = Log {
+        rows: rows(&(row("R", "a.rs") + &row("C", "c.rs") + &row("F", "f.rs") + &row("N", "n.rs"))),
+        ..Log::default()
+    };
+    let line = |min: u8, rest: &str| {
+        format!(
+            "{{\"ts\":\"2026-09-26T00:0{min}:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"s1\",{rest}}}\n"
+        )
+    };
+    let usage = line(
+        0,
+        r#""event":"session-start","ids":["R","C","F","N"],"said":[{"kind":"brief"},{"kind":"chunkbrief","key":"U1"}]"#,
+    ) + &line(1, r#""event":"read","ids":[],"files":["a.rs"]"#)
+        + &line(2, r#""event":"outcome","ids":[],"cited":["C"]"#)
+        + &line(
+            3,
+            r#""event":"find","ids":["F"],"found":["F"],"q":{"id":"F"}"#,
+        )
+        + &line(
+            4,
+            r#""event":"call","cmd":"chunk","sub":"show","outcome":"ok""#,
+        );
+    let p = super::parse::parse(
+        &usage,
+        Path::new("/w/state/usage.jsonl"),
+        &[PathBuf::from("/tmp")],
+    );
+    let y = yields(&p, &HashMap::from([("/w/r".to_string(), log)]));
+    let got = |k: &str| (y[k].said, y[k].earned);
+    assert_eq!(got("brief"), (4, 3), "N ignored");
+    assert_eq!(got("chunkbrief"), (1, 1), "a chunk show after it");
+}

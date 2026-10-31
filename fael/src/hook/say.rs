@@ -86,6 +86,9 @@ pub(crate) enum Kind {
     /// compacted or cleared context. Its keys are `~start:<id>`, never the row
     /// id — the next read of a briefed file may push its rows again.
     Brief { keys: Vec<String> },
+    /// Session start's pointer to the chunk run this worktree holds: split
+    /// from `Brief` so row rates never carry a line that names no row.
+    ChunkBrief { uid: String },
     /// The edit hint: re-check open issues already in context, each named.
     /// It names only open issues on the edited
     /// file (a vela edit's issue went unasked behind another ask in the turn).
@@ -133,6 +136,7 @@ impl Kind {
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![format!("~retired:{id}")],
             Kind::Brief { keys } => keys.clone(),
+            Kind::ChunkBrief { uid } => vec![format!("~start:chunk:{uid}")],
             Kind::Notice => vec![],
         }
     }
@@ -171,6 +175,7 @@ impl Kind {
             Kind::Overlap { owner } => vec![owner.clone()],
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![id.clone()],
+            Kind::ChunkBrief { uid } => vec![uid.clone()],
             Kind::Brief { .. } | Kind::Fixed | Kind::Notice => vec![],
         }
     }

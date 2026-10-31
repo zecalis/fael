@@ -35,6 +35,7 @@ mod said;
 #[cfg(test)]
 mod said_tests;
 mod said_yield;
+mod touch;
 mod unused;
 mod value;
 

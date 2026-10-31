@@ -76,6 +76,10 @@ pub(super) fn all() -> Vec<Line> {
             Kind::Retired { id: "01N".into() },
             "fael: note 01N retired from the push after 5 sessions — a standing rule? re-file it: `fael add decision \"...\" --files a.rs --supersedes 01N`\n",
         ),
+        line(
+            Kind::ChunkBrief { uid: "01C".into() },
+            "fael: this worktree runs chunk 01C \"t\" — its brief and hand-offs: fael chunk show 01C\n",
+        ),
     ]
 }
 
@@ -92,6 +96,7 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Checkpoint { .. } => 8,
         Kind::BriefDrift { .. } => 9,
         Kind::Retired { .. } => 10,
+        Kind::ChunkBrief { .. } => 11,
     }
 }
 
@@ -330,7 +335,8 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "overlap",
             "checkpoint",
             "briefdrift",
-            "retired"
+            "retired",
+            "chunkbrief"
         ]
     );
 }

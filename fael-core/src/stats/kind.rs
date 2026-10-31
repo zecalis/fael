@@ -42,6 +42,9 @@ pub enum SayKind {
     BriefDrift,
     /// A note said in its last session: file it as a decision, or let it go.
     Retired,
+    /// Session start's pointer to the chunk run this worktree holds. Split from
+    /// `Brief`: it names no row id, so no row rate could ever score it.
+    ChunkBrief,
 }
 
 /// What an entry of a kind must be followed by, in the same session, to count
@@ -62,6 +65,8 @@ pub enum Earned {
     FiledAny,
     /// The session ran `fael chunk note`.
     ChunkNote,
+    /// The session ran any accepted `fael chunk` call (show, note, done …).
+    ChunkCall,
     /// A later pull by the entry's key.
     Pulled,
     /// A later pull by an id.
@@ -70,7 +75,7 @@ pub enum Earned {
 
 impl SayKind {
     /// Every kind, in `fael stats` order (`buckets` adds `note` after `row`).
-    pub const ALL: [SayKind; 15] = [
+    pub const ALL: [SayKind; 16] = [
         SayKind::Row,
         SayKind::Brief,
         SayKind::Ask,
@@ -86,6 +91,7 @@ impl SayKind {
         SayKind::Held,
         SayKind::BriefDrift,
         SayKind::Retired,
+        SayKind::ChunkBrief,
     ];
 
     /// The name on the wire.
@@ -106,6 +112,7 @@ impl SayKind {
             SayKind::Held => "held",
             SayKind::BriefDrift => "briefdrift",
             SayKind::Retired => "retired",
+            SayKind::ChunkBrief => "chunkbrief",
         }
     }
 
@@ -138,6 +145,8 @@ impl SayKind {
             // `show` is indexed — the nearest recorded act on that chunk is
             // the note an agent writes once it has read the changed brief
             SayKind::Overlap | SayKind::Checkpoint | SayKind::BriefDrift => Earned::ChunkNote,
+            // it offers `fael chunk show`: any accepted chunk call after it
+            SayKind::ChunkBrief => Earned::ChunkCall,
             SayKind::Pointer => Earned::Pulled,
             SayKind::Bodies => Earned::PulledId,
         }
@@ -175,6 +184,7 @@ mod tests {
             SayKind::Held => 12,
             SayKind::BriefDrift => 13,
             SayKind::Retired => 14,
+            SayKind::ChunkBrief => 15,
         }
     }
 
@@ -214,7 +224,8 @@ mod tests {
                 "checkpoint",
                 "held",
                 "briefdrift",
-                "retired"
+                "retired",
+                "chunkbrief"
             ]
         );
     }

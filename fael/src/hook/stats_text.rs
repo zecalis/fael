@@ -24,17 +24,19 @@ fn value_line(s: &core::stats::Stats) -> Option<String> {
     (!parts.is_empty()).then(|| format!("fael since {}: {}", s.rounds.since, parts.join(" · ")))
 }
 
-/// ` · hit 7/638 rows (1%)` beside an event's cost: rows still in context at
-/// an edit over rows this event handed over first (a lower bound — see
+/// ` · hit 7/638 rows (1%) · acted 40/638 rows (6%)` beside an event's cost,
+/// n beside each rate: rows still in context at an edit, and rows also cited,
+/// found by id or whose file was read — each over the rows this event handed
+/// over first. The first is a lower bound, the second the wider reading (see
 /// `core::stats::EventValue`); empty when the event pushed no row.
 fn hit_suffix(s: &core::stats::Stats, event: &str) -> String {
     match s.value.by_event.get(event) {
-        Some(e) if e.pushed > 0 => format!(
-            " · hit {}/{} rows ({}%)",
-            e.in_context_at_edit,
-            e.pushed,
-            e.in_context_at_edit * 100 / e.pushed
-        ),
+        Some(e) if e.pushed > 0 => {
+            let rate = |k: &str, n: usize| {
+                format!(" · {k} {n}/{} rows ({}%)", e.pushed, n * 100 / e.pushed)
+            };
+            rate("hit", e.in_context_at_edit) + &rate("acted", e.acted)
+        }
         _ => String::new(),
     }
 }
