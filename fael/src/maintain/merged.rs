@@ -167,8 +167,6 @@ pub(crate) fn merged_times(json: &str) -> Vec<(i64, i64)> {
 /// Merged PR count for `range` (`YYYY-MM-DD..YYYY-MM-DD`) from one
 /// `gh api search/issues` call — the whole range, not the 200-row list.
 /// None = unknown (no `gh`, offline, bad output), never an error.
-// ponytail: unused until the outcome stats chunk reads it.
-#[allow(dead_code)]
 pub(crate) fn prs_merged_count(root: &Path, range: &str) -> Option<u64> {
     let q = format!(
         "search/issues?q=repo:{{owner}}/{{repo}}+type:pr+is:merged+merged:{range}&per_page=1"
@@ -181,6 +179,68 @@ pub(crate) fn prs_merged_count(root: &Path, range: &str) -> Option<u64> {
     String::from_utf8_lossy(&out).trim().parse().ok()
 }
 
+/// Every listed PR with a number, any state, as the outcome row join
+/// (`core::stats::ListedPr`): number, head branch, created/merged times
+/// (`None` = missing/unreadable — including gh's zero time). Entries without
+/// a number contribute nothing; unparseable output reads empty, never errors.
+pub(crate) fn listed_prs(json: &str) -> Vec<core::stats::ListedPr> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else {
+        return vec![];
+    };
+    let Some(ps) = v.as_array() else {
+        return vec![];
+    };
+    ps.iter()
+        .filter_map(|p| {
+            let number = p.get("number")?.as_u64()? as i64;
+            let at = |k: &str| match p.get(k) {
+                Some(serde_json::Value::String(s)) if !s.starts_with("0001-") => core::ts_ms(s),
+                _ => None,
+            };
+            Some(core::stats::ListedPr {
+                number,
+                branch: p
+                    .get("headRefName")
+                    .and_then(|h| h.as_str())
+                    .map(str::to_string),
+                created_ms: at("createdAt"),
+                merged_ms: at("mergedAt"),
+            })
+        })
+        .collect()
+}
+
+/// Search range for the outcome window: `YYYY-MM-DD..YYYY-MM-DD` from the
+/// window's day to today in the viewer's zone (`tz_min` east of UTC, the zone
+/// a bare `--since <date>` is read in) — the range `prs_merged_count` counts,
+/// so a `--since 2026-10-01` check recomputes the manual count over the same
+/// string. `None` when either end is unreadable.
+pub(crate) fn range_for(window_ms: i64, now_ms: i64, tz_min: i32) -> Option<String> {
+    let day = |ms: i64| {
+        core::rfc3339_in(ms.max(0) as u64, tz_min)
+            .get(..10)
+            .map(str::to_string)
+    };
+    Some(format!("{}..{}", day(window_ms)?, day(now_ms)?))
+}
+
+/// Outcome gh inputs for `aggregate`: the listed PRs plus the search-count
+/// total over the outcome window's range (`window-day..today`). No repo, no
+/// `gh` or offline reads empty + unknown, never an error.
+pub(crate) fn outcome_inputs(
+    since: Option<i64>,
+    logs: &std::collections::HashMap<String, core::Log>,
+    tz_min: i32,
+) -> (Vec<core::stats::ListedPr>, Option<u64>) {
+    let Ok(r) = crate::repo() else {
+        return (vec![], None);
+    };
+    let prs = gh_prs(&r.root).map(|j| listed_prs(&j)).unwrap_or_default();
+    let total = core::stats::outcome_window(since, logs)
+        .and_then(|w| range_for(w, core::now_ms() as i64, tz_min))
+        .and_then(|range| prs_merged_count(&r.root, &range));
+    (prs, total)
+}
 /// Pure half of the above: None on unparseable output (nothing to say), else
 /// the PRs per branch head (possibly empty — no merged PR at all). Entries
 /// without a head name are skipped; without a usable time they still count,
@@ -256,6 +316,38 @@ mod tests {
         // a head-only entry (the old shape) is still a key in the map
         assert!(
             parse_merged(r#"[{"headRefName":"feat/y"}]"#).is_some_and(|m| m.contains_key("feat/y"))
+        );
+    }
+
+    #[test]
+    fn listed_prs_keep_every_state_and_range_spans_window_to_today() {
+        let j = r#"[{"headRefName":"a","state":"MERGED","number":7,"mergedAt":"2026-09-27T04:50:08Z","createdAt":"2026-09-26T00:00:00Z"},{"headRefName":"b","state":"OPEN","number":8,"createdAt":"2026-10-19T00:00:00Z"},{"headRefName":"c","state":"MERGED","mergedAt":null}]"#;
+        let prs = super::listed_prs(j);
+        // the merged-without-number entry contributes nothing, silently
+        assert_eq!(prs.len(), 2);
+        assert_eq!(prs[0].number, 7);
+        assert_eq!(prs[0].branch.as_deref(), Some("a"));
+        assert_eq!(prs[0].merged_ms, crate::core::ts_ms("2026-09-27T04:50:08Z"));
+        assert_eq!(prs[1].merged_ms, None);
+        assert!(super::listed_prs("nope").is_empty());
+        assert_eq!(
+            super::range_for(
+                crate::core::ts_ms("2026-10-01T00:00:00Z").unwrap(),
+                crate::core::ts_ms("2026-10-31T12:00:00Z").unwrap(),
+                0,
+            )
+            .as_deref(),
+            Some("2026-10-01..2026-10-31")
+        );
+        // a bare `--since 2026-10-01` in +07:00 is 2026-09-30T17:00Z: still the 1st
+        assert_eq!(
+            super::range_for(
+                crate::core::ts_ms("2026-09-30T17:00:00Z").unwrap(),
+                crate::core::ts_ms("2026-10-31T12:00:00Z").unwrap(),
+                420,
+            )
+            .as_deref(),
+            Some("2026-10-01..2026-10-31")
         );
     }
 }

@@ -249,6 +249,9 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     if let Some(line) = value_line(s) {
         println!("{line}");
     }
+    if let Some(line) = super::stats_outcome::outcome_line(s) {
+        println!("{line}");
+    }
     println!(
         "fael usage ({}): {} injections · {} bytes · ~{} tokens into context",
         path.display(),

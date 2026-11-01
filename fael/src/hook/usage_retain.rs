@@ -44,6 +44,9 @@ fn summarise(raw: &Path, month: &str) -> Option<()> {
         super::asks::constants().into(),
         false,
         0, // UTC snapshot; the live read renders local at the CLI
+        None,
+        &[],
+        None,
     );
     let tmp = sum.with_extension("tmp");
     let done = std::fs::write(&tmp, serde_json::to_vec(&s).ok()?)

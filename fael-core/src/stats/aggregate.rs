@@ -7,6 +7,7 @@ use super::experience::{Commits, Experience, experience};
 use super::flow::{Flow, WeekCount, flow as flow_stats, throughput as throughput_stats};
 use super::friction::{Friction, friction};
 use super::metrics::{ask_totals, non_english_share, rows_added as count_rows_added};
+use super::outcome::{ListedPr, Outcome, outcome};
 use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
 use super::parse::{Parsed, outcome_window};
 use super::retire::{Retired, retired};
@@ -141,6 +142,8 @@ pub struct Stats {
     pub lifecycle: super::Lifecycle,
     /// Flow time (filed→closed, start→done, done→merged) with merge coverage.
     pub flow: Flow,
+    /// PR/issue outcome joins (`outcome.rs`): observed links only, never causal.
+    pub outcome: Outcome,
     /// Chunk dones per calendar week (Monday, UTC) from `Run.ended`.
     pub throughput: Vec<WeekCount>,
     /// Runs with and without an `after` hand-off in the brief, side by side (`handoff.rs`).
@@ -154,7 +157,11 @@ pub struct Stats {
 /// Join parsed usage with pre-loaded logs. `logs` must cover `parsed.repos()`;
 /// a repo with no entry reads as empty (its rows resolve `unknown`). A repo
 /// with no `commits` entry has no fix commits. `runs`/`merges` feed the flow
-/// spans; empty when the clone has no crew.db or git. `tz_min` is minutes
+/// spans; empty when the clone has no crew.db or git. `prs` is the listed PRs
+/// for the row join and `prs_merged_total` the search-count total over the
+/// range (`None` = offline/no `gh`, reads unknown, never an error). `since`
+/// is the explicit `--since` ms (`Some(0)` = all): the outcome window for the
+/// flow/outcome joins, else the oldest log row. `tz_min` is minutes
 /// east of UTC for the `since_local` render — storage stays UTC.
 #[allow(clippy::too_many_arguments)]
 pub fn aggregate(
@@ -167,9 +174,12 @@ pub fn aggregate(
     constants: Constants,
     with_rows: bool,
     tz_min: i32,
+    since: Option<i64>,
+    prs: &[ListedPr],
+    prs_merged_total: Option<u64>,
 ) -> Stats {
     let rows_added = count_rows_added(logs, &parsed.first_seen);
-    let since = parsed
+    let first = parsed
         .first_seen
         .values()
         .copied()
@@ -178,11 +188,10 @@ pub fn aggregate(
     let (row_total, foreign_rows) = non_english_share(logs, cfg);
     let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
     let value = value(parsed, logs);
-    // Outcome window: the oldest log row, never the first usage — so a fresh
-    // clone with zero usage still reads filed→closed and throughput. The
-    // explicit `--since` threads through here when the gh-ingest chunk lands
-    // (it owns the adapter side); until then the helper takes `None`.
-    let window = outcome_window(None, logs);
+    // Outcome window: the explicit `--since`, else the oldest log row —
+    // never the first usage, so a fresh clone with zero usage still reads
+    // filed→closed and throughput. Flow and outcome share this one window.
+    let window = outcome_window(since, logs);
     let mut top: Vec<(&String, &usize)> = parsed.by_id.iter().collect();
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     Stats {
@@ -206,9 +215,9 @@ pub fn aggregate(
         constants,
         rounds: Rounds {
             rows_added,
-            since: since_day(since),
-            since_utc: since_stamp(since),
-            since_local: since_stamp_local(since, tz_min),
+            since: since_day(first),
+            since_utc: since_stamp(first),
+            since_local: since_stamp_local(first, tz_min),
             tz_offset: tz_offset_string(tz_min),
         },
         non_english_rows: NonEnglish {
@@ -227,6 +236,7 @@ pub fn aggregate(
         experience: experience(parsed, logs, commits),
         lifecycle: Default::default(),
         flow: flow_stats(logs, runs, merges, window),
+        outcome: outcome(logs, prs, prs_merged_total, commits, window),
         throughput: throughput_stats(runs, window),
         handoff_runs: super::handoff_runs(parsed, runs),
         days: super::days::days(parsed),
@@ -361,6 +371,9 @@ mod tests {
             (1, 2, 3, 4).into(),
             true,
             420,
+            None,
+            &[],
+            None,
         );
         assert_eq!(
             (s.events, s.bytes, s.est_tokens, s.skipped_temp),
@@ -380,5 +393,8 @@ mod tests {
         assert_eq!(s.rounds.tz_offset, "+07:00");
         let rows = s.rows.unwrap();
         assert!(rows.iter().all(|r| r.status == "unknown"));
+        // no gh, no PRs: the total reads unknown, never an error
+        assert!(s.outcome.prs_merged_unknown);
+        assert_eq!(s.outcome.prs_merged, 0);
     }
 }

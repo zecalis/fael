@@ -7,6 +7,7 @@
 //! shape above, `day` (PLAN-fael-sync chunk 3: `DayView` edges + shape).
 
 mod day;
+mod outcome;
 
 use fael_core::Config;
 use fael_core::stats::{aggregate, parse};
@@ -26,6 +27,9 @@ fn value_of(text: &str, with_rows: bool) -> serde_json::Value {
         (1, 2, 3, 4).into(),
         with_rows,
         0,
+        None,
+        &[],
+        None,
     );
     serde_json::to_value(&stats).unwrap()
 }
@@ -87,6 +91,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "handoff_runs",
             "lifecycle",
             "non_english_rows",
+            "outcome",
             "outcomes_v",
             "retired",
             "rounds",
@@ -293,6 +298,9 @@ fn carriers_never_count_as_rows_added() {
         (1, 2, 3, 4).into(),
         false,
         0,
+        None,
+        &[],
+        None,
     );
     let v = serde_json::to_value(&s).unwrap();
     assert_eq!(v["rounds"]["rows_added"], 1, "{v}");
@@ -326,6 +334,9 @@ fn worktrees_sharing_a_journal_count_rows_added_once() {
         (1, 2, 3, 4).into(),
         false,
         0,
+        None,
+        &[],
+        None,
     );
     let v = serde_json::to_value(&s).unwrap();
     assert_eq!(v["rounds"]["rows_added"], 1, "{v}");

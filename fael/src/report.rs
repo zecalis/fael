@@ -318,6 +318,9 @@ mod tests {
             (0, 0, 0, 0).into(),
             true,
             420,
+            None,
+            &[],
+            None,
         );
         // statuses come from logs this fixture has none of — set them by hand
         for r in s.rows.iter_mut().flatten() {
