@@ -8,7 +8,7 @@ use super::flow::{Flow, WeekCount, flow as flow_stats, throughput as throughput_
 use super::friction::{Friction, friction};
 use super::metrics::{ask_totals, non_english_share, rows_added as count_rows_added};
 use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
-use super::parse::Parsed;
+use super::parse::{Parsed, outcome_window};
 use super::retire::{Retired, retired};
 use super::said::{KindYield, yields};
 use super::unused::{UnusedRow, unused};
@@ -178,6 +178,11 @@ pub fn aggregate(
     let (row_total, foreign_rows) = non_english_share(logs, cfg);
     let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
     let value = value(parsed, logs);
+    // Outcome window: the oldest log row, never the first usage — so a fresh
+    // clone with zero usage still reads filed→closed and throughput. The
+    // explicit `--since` threads through here when the gh-ingest chunk lands
+    // (it owns the adapter side); until then the helper takes `None`.
+    let window = outcome_window(None, logs);
     let mut top: Vec<(&String, &usize)> = parsed.by_id.iter().collect();
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     Stats {
@@ -221,8 +226,8 @@ pub fn aggregate(
         context_loop: super::repeat::context_loop(parsed, logs),
         experience: experience(parsed, logs, commits),
         lifecycle: Default::default(),
-        flow: flow_stats(parsed, logs, runs, merges),
-        throughput: throughput_stats(parsed, runs),
+        flow: flow_stats(logs, runs, merges, window),
+        throughput: throughput_stats(runs, window),
         handoff_runs: super::handoff_runs(parsed, runs),
         days: super::days::days(parsed),
         rows: with_rows.then(|| row_statuses(parsed, logs)),

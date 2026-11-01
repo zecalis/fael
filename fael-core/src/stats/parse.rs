@@ -4,7 +4,7 @@
 //! itself is scratch (01M3CRR6A). The caller passes both sides in, so there
 //! is no clock, env or filesystem read here.
 
-use crate::ts_ms;
+use crate::{Log, ts_ms};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -178,6 +178,21 @@ pub fn since_arg(s: &str, tz_min: i32) -> Option<i64> {
     }
 }
 
+/// Outcome window for the flow/outcome joins: explicit `--since` when the
+/// caller passed one (`Some(0)` = `--since all`, cuts nothing), else the
+/// oldest log row ts on this machine — never `parsed.first_seen`, so a fresh
+/// clone with zero usage still reads its ledger. `None` = no log row to
+/// window on; the join reads unwindowed rather than erroring.
+pub fn outcome_window(since: Option<i64>, logs: &HashMap<String, Log>) -> Option<i64> {
+    if let Some(ms) = since {
+        return Some(ms);
+    }
+    logs.values()
+        .flat_map(|log| log.rows.iter().chain(log.closes.iter()))
+        .filter_map(|r| ts_ms(&r.ts))
+        .min()
+}
+
 /// Ids one usage event handed to the agent — shared by the push counts
 /// above and the day view's delivered panel, so the two cannot drift.
 fn ids_of(v: &serde_json::Value) -> Vec<String> {
@@ -200,11 +215,47 @@ fn count(into: &mut HashMap<String, (usize, usize)>, key: String, toks: usize) {
 
 #[cfg(test)]
 mod tests {
+    use super::outcome_window;
     use super::parse;
+    use std::collections::HashMap;
     use std::path::{Path, PathBuf};
 
     fn tmp() -> Vec<PathBuf> {
         vec![PathBuf::from("/tmp")]
+    }
+
+    #[test]
+    fn outcome_window_prefers_explicit_since_else_oldest_log_row() {
+        fn rows(jsonl: &str) -> Vec<crate::Row> {
+            let (mut out, mut w) = (vec![], vec![]);
+            crate::log::parse(jsonl.as_bytes(), "t.jsonl", &mut out, &mut w);
+            out
+        }
+        let log = crate::Log {
+            rows: rows(concat!(
+                "{\"v\":1,\"id\":\"A\",\"ts\":\"2026-10-02T00:00:00Z\",\"by\":\"w\",\"kind\":\"issue\",\"text\":\"t\",\"files\":[]}\n",
+                "{\"v\":1,\"id\":\"B\",\"ts\":\"2026-10-01T00:00:00Z\",\"by\":\"w\",\"kind\":\"note\",\"text\":\"t\",\"files\":[]}\n",
+            )),
+            closes: rows(
+                "{\"v\":1,\"id\":\"X\",\"ts\":\"2026-10-03T00:00:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"A\"}\n",
+            ),
+            ..Default::default()
+        };
+        let logs = HashMap::from([("/w/r".to_string(), log)]);
+        // no explicit since: the oldest row, whatever its kind
+        assert_eq!(
+            outcome_window(None, &logs),
+            crate::ts_ms("2026-10-01T00:00:00Z")
+        );
+        // explicit --since wins, even when later than the oldest row
+        assert_eq!(
+            outcome_window(crate::ts_ms("2026-10-02T12:00:00Z"), &logs),
+            crate::ts_ms("2026-10-02T12:00:00Z")
+        );
+        // --since all cuts nothing
+        assert_eq!(outcome_window(Some(0), &logs), Some(0));
+        // no row anywhere: unwindowed, never an error
+        assert_eq!(outcome_window(None, &HashMap::new()), None);
     }
 
     #[test]
