@@ -116,16 +116,25 @@ pub fn for_argv(argv: &[String]) -> String {
         return text;
     }
     let all = argv.iter().take_while(|x| *x != "--").any(|x| x == "--all");
-    let section = argv
+    let named = argv
         .iter()
-        .find(|a| !a.starts_with('-') && a.as_str() != "help")
-        .and_then(|c| match all {
-            true => for_command_full(c),
-            false => for_command(c),
-        });
+        .find(|a| !a.starts_with('-') && a.as_str() != "help");
+    let section = named.and_then(|c| match all {
+        true => for_command_full(c),
+        false => for_command(c),
+    });
     match section {
         Some(text) => {
-            format!("{text}\n\nrun 'fael --help' for all commands and global options.")
+            // a core section that hides flags says where they are, or an agent
+            // guesses that only `fael --help --all` (commands) exists
+            let more = match named.and_then(|c| for_command_full(c)) {
+                Some(full) if !all && full != text => format!(
+                    "\nrun 'fael {} --help --all' for its hidden flags.",
+                    named.map_or("", |c| c.as_str())
+                ),
+                _ => String::new(),
+            };
+            format!("{text}\n\nrun 'fael --help' for all commands and global options.{more}")
         }
         None => match all {
             true => usage_all(),

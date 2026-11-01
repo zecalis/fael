@@ -141,6 +141,12 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     // `fael find --help` is the core: everyday flags only (tier C), no workflow ones
     let (ok, out, err) = fael(&d, &["find", "--help"]);
     assert!(ok, "{err}");
+    // the footer names `--help --all` as the way to the hidden flags
+    assert!(
+        out.contains("run 'fael find --help --all' for its hidden flags."),
+        "{out}"
+    );
+    let out = out.split("\n\nrun 'fael --help'").next().unwrap();
     for present in ["--files", "--key", "--limit", "--offset"] {
         assert!(out.contains(present), "{present} missing: {out}");
     }

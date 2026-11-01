@@ -127,7 +127,7 @@ fn help_counts_and_a_call_outside_a_session_does_not() {
 fn stats_and_doctor_calls_are_human_rows_outside_friction() {
     let d = repo();
     call(&d, Some("s1"), &["stats"]);
-    call(&d, Some("s1"), &["doctor"]);
+    call(&d, Some("s1"), &["doctor", "--help"]); // its help too: no 100 per 100 with no clean call
     all_human(&d);
 }
 

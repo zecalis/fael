@@ -84,7 +84,7 @@ usage: fael <command> [options]
 commands:
 {core}also shown (no guide names them yet — never hidden):
 {gap}{footer}
-run 'fael --help --all' for every command."
+run 'fael --help --all' for every command, 'fael <command> --help --all' for its every flag."
     )
 }
 
