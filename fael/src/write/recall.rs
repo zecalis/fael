@@ -95,6 +95,7 @@ pub(crate) fn near(log: &core::Log, row: &core::Row) -> Vec<String> {
         .iter()
         .filter(|r| r.kind == "issue")
         .filter(|r| !gone.contains(r.id.as_str()) && !linked.contains(r.id.as_str()))
+        .filter(|r| row.follows.as_deref() != Some(r.id.as_str()))
         .filter(|r| shares_file(r, row))
         .filter(|r| {
             let theirs = words(&r.display_title());
@@ -138,6 +139,7 @@ pub(crate) fn lines(log: &core::Log, row: &core::Row) -> Vec<String> {
         .iter()
         .filter(|r| r.kind == "issue" && gone.contains(r.id.as_str()))
         .filter(|r| !linked.contains(r.id.as_str()))
+        .filter(|r| row.follows.as_deref() != Some(r.id.as_str())) // said it continues that one
         .filter(|r| shares_file(r, row))
         .collect();
     hits.sort_by(|a, b| b.id.cmp(&a.id)); // ids are time-ordered

@@ -105,7 +105,7 @@ pub(crate) fn moved(
 
 /// Chunk 6b: batch add — a JSON array on stdin, one object per row
 /// (`{kind, text, files[], key?, to?, title?, revisit?, urgent?,
-/// urgent_before?, supersedes?, force?}`). Every row runs the same
+/// urgent_before?, supersedes?, follows?, force?}`). Every row runs the same
 /// validate + self-heal as a single add; a rejected row reports alone while
 /// the rest still save (never all-or-nothing, so no resending the batch).
 /// Exit is failure when any row rejected — the saved ones stay saved.
@@ -237,6 +237,9 @@ pub(crate) struct BatchRow {
 
 pub(crate) fn batch_row(v: &serde_json::Value) -> Result<BatchRow, String> {
     let one = |k: &str| v[k].as_str().filter(|s| !s.is_empty()).map(String::from);
+    if v.get("then").is_some() {
+        return Err("rejected: then is not a batch field — file the issue as its own row with follows: <id>".into());
+    }
     let (kind, text) = match (one("kind"), one("text")) {
         (Some(k), Some(t)) => (k, t),
         _ => return Err("rejected: each row needs kind and text".into()),
@@ -271,6 +274,7 @@ pub(crate) fn batch_row(v: &serde_json::Value) -> Result<BatchRow, String> {
             revisit: one("revisit"),
             urgent,
             supersedes: one("supersedes"),
+            follows: one("follows"),
             force: v["force"].as_bool().unwrap_or(false),
             by: None,
         },

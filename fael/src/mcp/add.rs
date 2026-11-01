@@ -8,7 +8,7 @@ use serde_json::Value;
 
 /// Hidden `add` properties: read but not in the schema surface.
 #[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
-pub(crate) const HIDDEN: &[&str] = &["urgent_before", "dry_run"];
+pub(crate) const HIDDEN: &[&str] = &["urgent_before", "dry_run", "then"];
 /// Every key `add` reads: the schema surface plus HIDDEN plus routing.
 pub(crate) const KNOWN: &[&str] = &[
     "kind",
@@ -23,6 +23,8 @@ pub(crate) const KNOWN: &[&str] = &[
     "urgent",
     "urgent_before",
     "supersedes",
+    "follows",
+    "then",
     "force",
     "dry_run",
 ];
@@ -75,6 +77,7 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
             revisit: s(a, "revisit"),
             urgent: urgent_ask(a)?,
             supersedes: s(a, "supersedes"),
+            follows: s(a, "follows"),
             force: a["force"].as_bool().unwrap_or(false),
             by: None,
         },
@@ -85,6 +88,14 @@ fn add_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     }
     // the id stays alone on the first line, callers read it from there
     let mut text = done(&row.id, &[]);
+    // `then`: the part still to do, an issue that follows the row just written
+    if let Some(t) = s(a, "then") {
+        let force = a["force"].as_bool().unwrap_or(false);
+        let (kid, _, kw) = crate::write::then::child(r, &row, &t, force)?;
+        record_row_asks("mcp", "mcp-add", &r.root, &kid, &kw);
+        text.push_str(&format!("\nrecorded {} (follows {})", kid.id, row.id));
+        text.extend(kw.iter().map(|l| format!("\n{l}")));
+    }
     let routed = [
         crate::batch::paste_line(&row),
         crate::batch::launch_line(&row),
@@ -141,6 +152,8 @@ fn add_rows(a: &Value, rows: &[Value], r: &Repo) -> Result<(String, Vec<String>)
             "urgent",
             "urgent_before",
             "supersedes",
+            "follows",
+            "then",
             "force",
         ]
         .into_iter()

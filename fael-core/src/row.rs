@@ -81,6 +81,14 @@ pub struct Row {
     /// `to`, same compat: old readers skip the carrier, no `v` bump.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bumps: Option<String>,
+    /// The earlier row this one continues without replacing it (`add --follows`):
+    /// its full id. Unlike `supersedes` nothing is hidden or closed — the old row
+    /// keeps its state, the new one only says its scope differs, so the
+    /// closed-earlier and open-duplicate recall stay silent for that id and
+    /// `find` shows "followed by". Top-level like `to`, same compat: old
+    /// readers keep it in `extra`, no `v` bump.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follows: Option<String>,
     #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
     #[serde(flatten)]

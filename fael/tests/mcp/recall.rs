@@ -43,3 +43,32 @@ fn add_issue_names_the_closed_issue_on_its_file() {
     let short = short.split(|c: char| !c.is_alphanumeric()).next().unwrap();
     assert!(old.starts_with(short) && short.len() >= 8, "{again}");
 }
+
+#[test]
+fn follows_silences_the_closed_line_and_then_files_a_child_issue() {
+    let (_, wt) = main_and_worktree();
+    let add = |v: serde_json::Value| text(&mcp_tool(&wt, "add", &[v])[0]);
+    let first = add(
+        serde_json::json!({"kind": "issue", "text": "heic breaks in chrome", "files": ["src/a.rs"]}),
+    );
+    let old = first.split_whitespace().nth(1).unwrap().to_string();
+    text(
+        &mcp_tool(
+            &wt,
+            "close",
+            &[
+                serde_json::json!({"id": old, "text": "heic broke → pinned the decoder; guard `src/a_test.rs`"}),
+            ],
+        )[0],
+    );
+    let next = add(
+        serde_json::json!({"kind": "issue", "text": "chrome rejects heic again", "files": ["src/a.rs"], "follows": old}),
+    );
+    assert!(!next.contains("closed earlier on these files"), "{next}");
+    // `then`: a note and an issue that follows it, one call
+    let both = add(
+        serde_json::json!({"kind": "note", "text": "8 queries measured at 11k docs", "files": ["src/a.rs"], "then": "measure with the real provider"}),
+    );
+    assert_eq!(both.matches("recorded").count(), 2, "{both}");
+    assert!(both.contains("(follows "), "{both}");
+}

@@ -58,9 +58,9 @@ fn normalize(out: &str, state: &Path) -> String {
 // Chunk `with` + `as` (2026-10-24, issue 01M5PE238): schema 4046 → 4055 —
 // joint `start` through MCP alone, paid by trimming chunk prop sentences
 // (client/model/session/pr/left/review/uid/run) and the cwd sentence.
-// Chunk `pr` takes a number too (2026-10-27): schema 4055 → 4067; `left` takes an array: → 4077, then "file as is," trimmed twice: 4053.
+// Chunk `pr` takes a number too (2026-10-27): schema 4055 → 4067; `left` takes an array: → 4077, then "file as is," trimmed twice: 4053. `add.follows` (2026-11-01), paid by trimming find.id/ids and add.rows: 4064.
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 3294 bytes (~830 est) + MCP schema 4053 bytes (~1016 est)";
+    "  constants per session: SKILL.md 3294 bytes (~830 est) + MCP schema 4064 bytes (~1018 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -143,7 +143,7 @@ fn stats_json_matches_golden_values() {
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"warning": {"events": 0, "bytes": 0, "codes": {}}},
-            "constants": {"skill_bytes": 3294, "skill_est": 830, "mcp_schema_bytes": 4053, "mcp_schema_est": 1016},
+            "constants": {"skill_bytes": 3294, "skill_est": 830, "mcp_schema_bytes": 4064, "mcp_schema_est": 1018},
             "rounds": {"rows_added": 0, "since": "2026-09-26", "since_utc": "2026-09-26T00:00:00.000Z", "since_local": "2026-09-26T00:00:00.000+00:00", "tz_offset": "+00:00"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},
