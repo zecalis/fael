@@ -28,6 +28,7 @@ mod git_budget;
 mod held_rotate;
 mod help;
 mod install;
+mod install_opencode;
 mod install_skills;
 mod intake;
 mod issues;
