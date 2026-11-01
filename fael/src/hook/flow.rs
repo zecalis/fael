@@ -27,7 +27,7 @@ pub(crate) fn runs() -> Vec<core::stats::FlowRun> {
         .collect()
 }
 
-/// Merged PRs on this clone's default branch: `gh`'s merged list plus the
+/// Merged PRs on this clone's default branch: the shared `gh` PR list plus the
 /// squash subjects in `git log` (`(#N)` + committer date) — matched by PR
 /// number only, never a sha. `gh` failing leaves the `git log` fallback;
 /// both failing leaves none (spans shrink, never impute). The `gh` half is
@@ -78,48 +78,14 @@ pub(crate) fn merges(since_ms: Option<i64>) -> Vec<core::stats::FlowMerge> {
     out
 }
 
-/// The one `gh pr list --state merged` call per process, shared by repeated
-/// `stats` in one run. `(number, merged_at_ms)`, empty when `gh` is missing
+/// Merged PRs as `(number, merged_at_ms)`, read off the one shared `gh pr
+/// list` (`maintain::gh_prs`, also behind doctor). Empty when `gh` is missing
 /// or fails — the `git log` fallback in `merges` still applies.
 fn gh_merged(root: &std::path::Path) -> Vec<(i64, i64)> {
-    static CACHE: std::sync::OnceLock<Vec<(i64, i64)>> = std::sync::OnceLock::new();
-    // the cache is per process, not per repo: `stats` reads one clone per
-    // run, so the first root wins — same single-clone assumption as `runs`.
-    CACHE
-        .get_or_init(|| {
-            let Some(stdout) = gh_raw(
-                root,
-                "gh-merged.json",
-                &[
-                    "pr",
-                    "list",
-                    "--state",
-                    "merged",
-                    "--json",
-                    "mergedAt,number",
-                    "--limit",
-                    "500",
-                ],
-            ) else {
-                return vec![];
-            };
-            let Ok(list) = serde_json::from_slice::<Vec<serde_json::Value>>(&stdout) else {
-                return vec![];
-            };
-            let mut merged = vec![];
-            for m in &list {
-                if let (Some(n), Some(at)) = (
-                    m.get("number").and_then(|n| n.as_i64()),
-                    m.get("mergedAt")
-                        .and_then(|s| s.as_str())
-                        .and_then(core::ts_ms),
-                ) {
-                    merged.push((n, at));
-                }
-            }
-            merged
-        })
-        .clone()
+    let Some(json) = crate::maintain::gh_prs(root) else {
+        return vec![];
+    };
+    crate::maintain::merged_times(&json)
 }
 
 /// `gh`'s raw list for `args`, kept on disk next to `usage.jsonl` for `GH_TTL`:
