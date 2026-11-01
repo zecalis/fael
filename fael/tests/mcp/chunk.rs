@@ -115,3 +115,41 @@ fn chunk_done_forwards_pr_and_left() {
     );
     assert!(is_err && out.contains("--review"), "{out}");
 }
+
+/// A client that declares `roots` and names a worktree other than the server's launch dir
+/// gives `chunk start` its seat with no `cwd` (issue 01M6BKHZP); the server asks for roots
+/// after `initialized`.
+#[test]
+fn start_takes_its_seat_from_a_client_root_that_is_not_the_launch_dir() {
+    use std::process::Stdio;
+    let (main, wt) = main_and_worktree();
+    let (ok, uid, err) = cli(&main, &["chunk", "add", "t", "--brief", "b"]);
+    assert!(ok, "{err}");
+    let uid = uid.trim().to_string();
+    let lines = [
+        serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {"roots": {}}}}),
+        serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        serde_json::json!({"jsonrpc": "2.0", "id": "fael-roots", "result": {"roots": [{"uri": format!("file://{}", wt.display())}]}}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "chunk", "arguments": {"verb": "start", "uid": uid}}}),
+    ];
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .arg("mcp")
+        .env("FAEL_STATE_DIR", main.join("state"))
+        .current_dir(&main)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = c.stdin.take().unwrap();
+    let body: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+    stdin
+        .write_all((body.join("\n") + "\n").as_bytes())
+        .unwrap();
+    drop(stdin);
+    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
+    assert!(out.contains(r#""method":"roots/list""#), "{out}");
+    assert!(out.contains(r#""isError":false"#), "{out}");
+    let (_, show, _) = cli(&main, &["chunk", "show", &uid, "--json"]);
+    let c: serde_json::Value = serde_json::from_str(&show).unwrap();
+    assert_eq!(c["run"]["worktree"], wt.to_str().unwrap(), "{show}");
+}

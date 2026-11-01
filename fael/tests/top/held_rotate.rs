@@ -184,3 +184,32 @@ fn start_names_a_row_once_then_the_next_rows() {
         seen.extend(got.into_iter().cloned());
     }
 }
+
+/// Issue 01M6BMFK: `held done --since <run start>` lists the caller's own notes still open
+/// from this run — not another session's, not before the start, not without a start.
+#[test]
+fn done_lists_the_callers_own_open_notes_of_this_run() {
+    let (d, s, ids) = repo();
+    let long_ago = "2000-01-01T00:00:00Z";
+    let own = |session: &str, since: &[&str]| {
+        let args = [&["held", "done"][..], since].concat();
+        run(&d, &s, session, &args, "src/b.rs\n")
+    };
+    // the notes above were filed by session W
+    let out = own("W", &["--since", long_ago]);
+    let mine: Vec<&str> = out
+        .lines()
+        .filter(|l| l.contains("you filed it this run"))
+        .collect();
+    assert_eq!(mine.len(), 3, "{out}");
+    assert!(out.contains("+4 more of your notes"), "{out}");
+    assert!(mine[0].contains("fael close "), "{out}");
+    assert!(
+        own("Z", &["--since", long_ago])
+            .lines()
+            .all(|l| !l.contains("you filed it"))
+    );
+    assert!(!own("W", &["--since", "2999-01-01T00:00:00Z"]).contains("you filed it"));
+    assert!(!own("W", &[]).contains("you filed it"));
+    assert_eq!(ids.len(), 7);
+}

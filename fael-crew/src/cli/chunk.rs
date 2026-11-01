@@ -18,8 +18,11 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
         println!("{}", fael_core::help::bare("chunk").unwrap_or_default());
         return Ok(ExitCode::SUCCESS);
     }
-    let r = repo()?;
+    let r = crate::chunk_seat::repo_for(a, rest)?;
     crate::plan::in_repo(&r)?;
+    // `--seat`/`--cwd` said where to run; the verbs below read neither
+    let bare = a.without("seat").without("cwd");
+    let a = &bare;
     let named;
     let (a, rest) = match crate::chunk_show::natural(a, rest, &r)
         .and_then(|n| n.map_or_else(|| in_plan(a, rest, &r), |n| Ok(Some(n))))

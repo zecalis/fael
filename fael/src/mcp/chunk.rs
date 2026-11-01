@@ -3,7 +3,7 @@
 //! `verb`, so the served schema stays small. The verbs run in `fael-crew`
 //! (`crew::capture`): the same call, the same text.
 
-use super::args::{need, repo_for, s, unknown_note, with_notes};
+use super::args::{repo_for, s, unknown_note, with_notes};
 use super::chunk_misplaced::misplaced_note;
 use crate::Repo;
 use serde_json::Value;
@@ -68,9 +68,28 @@ fn text_alias(a: &Value) -> Value {
     a
 }
 
+/// A `start` with no `cwd`: the client's one root other than this server's launch dir, if it
+/// gave one — the seat it works in. Otherwise `a` as it came (and `start_needs_cwd` rejects).
+fn with_client_seat(a: &Value) -> Value {
+    let mut a = a.clone();
+    let none = s(&a, "cwd").is_none() && s(&a, "run").is_none();
+    if s(&a, "verb").as_deref() == Some("start")
+        && none
+        && !super::pinned()
+        && let Ok(launch) = std::env::current_dir()
+        && let Some(root) = super::roots::seat(&launch)
+        && let Some(o) = a.as_object_mut()
+    {
+        o.insert("cwd".into(), root.to_string_lossy().into_owned().into());
+    }
+    a
+}
+
 fn chunk_checked(a: &Value) -> Result<String, String> {
-    let verb = need(a, "verb")?;
-    let uid = need(a, "uid")?;
+    let a = &with_client_seat(a);
+    let (Some(verb), Some(uid)) = (s(a, "verb"), s(a, "uid")) else {
+        return Err(shape_missing(a));
+    };
     start_needs_cwd(a, &verb, &uid)?;
     let r = repo_for(a)?;
     let args = build_args(&verb, &uid, a)?;
@@ -79,6 +98,19 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
         Err(e) if verb == "show" => show_elsewhere(&r, &uid, e),
         Err(e) => Err(with_cwd_hint(e)),
     }
+}
+
+/// Every required key missing, said once with the whole call shape — `start` is the widest
+/// shape (it needs `cwd`), so a caller that forgot `verb` is not sent back a round per key.
+fn shape_missing(a: &Value) -> String {
+    let what = match (s(a, "verb").is_none(), s(a, "uid").is_none()) {
+        (true, true) => "verb + uid",
+        (true, false) => "verb",
+        _ => "uid",
+    };
+    format!(
+        "rejected: {what} is required for chunk — verb: show|start|note|done|wait|after; try chunk {{verb: \"start\", uid: \"<uid>\", cwd: \"<your working directory>\"}} (cwd only on start)"
+    )
 }
 
 /// A start records the caller's cwd as its seat, and `done` later refuses a run started from
@@ -180,6 +212,15 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
             args.extend(["--as".into(), m]);
         }
     }
+    // no cwd, no `run`: the call answers from the live run's seat, which fael holds
+    // (issue 01M6BK561); a pinned server has one workspace and no seat to look up
+    if matches!(verb, "done" | "wait" | "after")
+        && s(a, "cwd").is_none()
+        && s(a, "run").is_none()
+        && !super::pinned()
+    {
+        args.push("--seat".into());
+    }
     if verb == "start" && a["force"].as_bool().unwrap_or(false) {
         args.push("--force".into());
     }
@@ -216,6 +257,19 @@ fn pr_arg(a: &Value) -> Option<String> {
         .as_str()
         .map(String::from)
         .or_else(|| a["pr"].as_i64().map(|n| n.to_string()))
+        // several PRs ride comma-joined, as `--pr 1503,1505`
+        .or_else(|| {
+            let v: Vec<String> = a["pr"]
+                .as_array()?
+                .iter()
+                .filter_map(|n| {
+                    n.as_i64()
+                        .map(|n| n.to_string())
+                        .or(n.as_str().map(String::from))
+                })
+                .collect();
+            (!v.is_empty()).then(|| v.join(","))
+        })
 }
 
 /// `done --left`: `none`, one id, or many — an array rides comma-joined, as

@@ -24,6 +24,48 @@ impl Store {
                 "rejected: --replace needs the text to replace, not an empty string; try --replace \"<old>\" --with \"<new>\"".into(),
             );
         }
+        self.edit_section(plan, key, now, |body, at| match body.matches(old).count() {
+            1 => Ok(body.replacen(old, new, 1)),
+            0 => Err(format!(
+                "rejected: {old:?} is not in {at} (0 matches) — try copying it exactly: `fael plan export {} --section {key}`",
+                plan.name
+            )),
+            n => Err(format!(
+                "rejected: {old:?} occurs {n} times in {at} — try a longer passage until it matches once"
+            )),
+        })
+    }
+
+    /// Add `text` as a new paragraph at the end of section `key` of `plan`, through the same
+    /// bill as `plan_edit` (issue 01M6BKHZM).
+    pub fn plan_append(
+        &mut self,
+        plan: &PlanRow,
+        key: &str,
+        text: &str,
+        now: &str,
+    ) -> Result<(Vec<String>, i64), String> {
+        if text.trim().is_empty() {
+            return Err(
+                "rejected: --append needs the text to add; try --append \"<paragraph>\"".into(),
+            );
+        }
+        self.edit_section(plan, key, now, |body, _| {
+            Ok(match body.trim_end() {
+                "" => text.trim_end().to_string(),
+                b => format!("{b}\n\n{}", text.trim_end()),
+            })
+        })
+    }
+
+    /// The section `key`'s new body from `f(body, "section k of plan")`, written as a one-section bill.
+    fn edit_section(
+        &mut self,
+        plan: &PlanRow,
+        key: &str,
+        now: &str,
+        f: impl FnOnce(&str, &str) -> Result<String, String>,
+    ) -> Result<(Vec<String>, i64), String> {
         // rev first: a writer between the two reads makes the bill's rev check reject as stale
         let rev = export_json(self, plan.id)?["rev"]
             .as_i64()
@@ -36,22 +78,7 @@ impl Store {
                 keys.join(", ")
             ));
         };
-        let at = format!("section {} of {}", sec.key, plan.name);
-        match sec.body.matches(old).count() {
-            1 => {}
-            0 => {
-                return Err(format!(
-                    "rejected: {old:?} is not in {at} (0 matches) — try copying it exactly: `fael plan export {} --section {}`",
-                    plan.name, sec.key
-                ));
-            }
-            n => {
-                return Err(format!(
-                    "rejected: {old:?} occurs {n} times in {at} — try a longer passage until it matches once"
-                ));
-            }
-        }
-        let body = sec.body.replacen(old, new, 1);
+        let body = f(&sec.body, &format!("section {} of {}", sec.key, plan.name))?;
         let name = if plan.app.is_empty() {
             plan.name.clone()
         } else {

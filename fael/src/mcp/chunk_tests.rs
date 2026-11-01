@@ -142,3 +142,37 @@ fn start_forwards_full_for_the_resumed_brief() {
         "{w}"
     );
 }
+
+#[test]
+fn done_wait_after_without_cwd_or_run_ask_for_the_runs_seat() {
+    for verb in ["done", "wait", "after"] {
+        let a = json!({"verb": verb, "uid": "U1", "text": "t", "other": "U2"});
+        let args = build_args(verb, "U1", &a).unwrap();
+        assert!(args.contains(&"--seat".to_string()), "{verb}: {args:?}");
+        for named in [json!({"cwd": "/w"}), json!({"run": "R1"})] {
+            let mut b = a.clone();
+            b.as_object_mut()
+                .unwrap()
+                .extend(named.as_object().unwrap().clone());
+            let args = build_args(verb, "U1", &b).unwrap();
+            assert!(!args.contains(&"--seat".to_string()), "{verb}: {args:?}");
+        }
+    }
+    // start and note never look for a seat: start records one, note answers from anywhere
+    for verb in ["start", "note"] {
+        let a = json!({"verb": verb, "uid": "U1", "text": "t"});
+        let args = build_args(verb, "U1", &a).unwrap();
+        assert!(!args.contains(&"--seat".to_string()), "{verb}: {args:?}");
+    }
+}
+
+#[test]
+fn a_call_missing_verb_gets_the_whole_start_shape_once() {
+    let e = super::shape_missing(&json!({"uid": "U1"}));
+    assert!(
+        e.contains("verb is required") && e.contains("cwd: \""),
+        "{e}"
+    );
+    let e = super::shape_missing(&json!({}));
+    assert!(e.contains("verb + uid is required"), "{e}");
+}

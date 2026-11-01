@@ -154,6 +154,21 @@ impl super::Store {
         Ok(uid)
     }
 
+    /// `(R, worktree)` of the live run of the chunk `key` names — the seat a caller with no
+    /// known cwd (MCP) answers from. None = no live run, or one with no worktree.
+    pub fn seat(&self, key: &str) -> Result<Option<(String, String)>, String> {
+        let tx = self.conn.unchecked_transaction().map_err(err)?;
+        let (id, ..) = lookup(&tx, key)?.ok_or_else(|| no_chunk(key))?;
+        tx.query_row(
+            "SELECT start, worktree FROM run WHERE chunk = ?1 AND ended IS NULL
+             AND worktree IS NOT NULL ORDER BY id DESC LIMIT 1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(err)
+    }
+
     /// The uid `key` names inside `plan` (`name` or `app/name`): a label in that plan,
     /// else what `lookup` finds — refused when that chunk sits in another plan. So
     /// `--plan` answers a label two plans share, and checks a uid it is given.

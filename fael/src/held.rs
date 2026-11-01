@@ -23,7 +23,7 @@ pub(crate) fn cmd(kind: &str, since: Option<String>) -> Result<ExitCode, String>
         "done" => {
             let since = since.as_deref().and_then(core::ts_ms);
             print!("{}", hook::held_text(&r, &files, since));
-            print!("{}", hook::done_loop_line(&r).unwrap_or_default())
+            print!("{}", hook::held_own_notes(&r, since));
         }
         _ => return Err(format!("held: unknown kind {kind:?} — start|done")),
     }

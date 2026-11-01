@@ -74,7 +74,7 @@ pub(crate) fn shown_for(session: &str, root: &Path, target: &str) -> Vec<String>
 }
 
 /// True for a row neither closed nor superseded.
-fn active(log: &core::Log) -> impl Fn(&str) -> bool {
+pub(super) fn active(log: &core::Log) -> impl Fn(&str) -> bool {
     let (closed, gone) = (core::closed(log), core::superseded(log));
     move |id| !closed.contains(id) && !gone.contains(id)
 }
