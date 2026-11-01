@@ -231,3 +231,76 @@ fn a_bill_with_a_bad_header_or_version_is_refused() {
         assert!(e.contains(want), "{want} in {e}");
     }
 }
+
+#[test]
+fn a_bill_wait_gates_start_until_the_owner_answers_and_round_trips() {
+    use super::super::Owner;
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("do a"));
+    let w = json!({"on": "owner", "ask": "real job round first?", "options": ["yes", "no"]});
+    let mut line = json!({"uid": a, "wait": w});
+    let v = bill(&s, json!({}), json!([line.clone()]));
+    let out = apply(&mut s, v, false).unwrap();
+    assert!(out[0].contains("wait owner"), "{out:?}");
+    assert_eq!(state(&s, &a), "waiting");
+    let e = start(&mut s, &a, "/w").unwrap_err();
+    assert!(
+        e.contains("it waits on owner") && e.contains("fael chunk answer"),
+        "{e}"
+    );
+    // exported back: the same wait is no change
+    let ex = export(&s);
+    assert_eq!(ex["chunks"][0]["wait"], w);
+    assert!(apply(&mut s, ex, false).unwrap().is_empty());
+    line["wait"]["ask"] = json!("changed?");
+    let v = bill(&s, json!({}), json!([line]));
+    assert_eq!(apply(&mut s, v, false).unwrap().len(), 1);
+    s.owner(&a, Owner::Answer, Some("yes"), NOW).unwrap();
+    assert_eq!(state(&s, &a), "open");
+    start(&mut s, &a, "/w").unwrap();
+}
+
+#[test]
+fn a_bill_adds_a_gated_chunk_and_refuses_a_bad_or_running_wait() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("do a"));
+    let v = bill(
+        &s,
+        json!({}),
+        json!([{"title": "g", "brief": "b", "wait": {"on": "data", "ask": "n>=5", "until": "2026-12-01"}}]),
+    );
+    assert!(apply(&mut s, v, false).unwrap()[0].contains("(waiting)"));
+    let n = count(
+        &s,
+        "SELECT COUNT(*) FROM chunk WHERE state = 'waiting' AND wait_until = '2026-12-01'",
+    );
+    assert_eq!(n, 1);
+    for (w, want) in [
+        (json!({"on": "data", "ask": "q"}), "needs wait.until"),
+        (
+            json!({"on": "owner", "ask": "q", "until": "soon"}),
+            "YYYY-MM-DD",
+        ),
+        (
+            json!({"on": "data", "ask": "q", "until": "2026-12-01", "options": ["x"]}),
+            "options needs",
+        ),
+        (json!({"on": "me", "ask": "q"}), "owner or data"),
+        (json!({"on": "owner", "ask": " "}), "needs an ask"),
+    ] {
+        let v = bill(&s, json!({}), json!([{"uid": a, "wait": w}]));
+        let e = apply(&mut s, v, false).unwrap_err();
+        assert!(e.contains(want), "{want} in {e}");
+    }
+    start(&mut s, &a, "/w").unwrap();
+    let v = bill(
+        &s,
+        json!({}),
+        json!([{"uid": a, "wait": {"on": "owner", "ask": "q"}}]),
+    );
+    assert!(
+        apply(&mut s, v, false)
+            .unwrap_err()
+            .contains("changes nothing that runs")
+    );
+}

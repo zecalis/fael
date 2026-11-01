@@ -3,6 +3,7 @@
 //! line. The plan's own text (Goal, Scope, Done, Constraints, …) follows the chunks: its
 //! sections in order, each dated by its newest event.
 
+use super::bill_wait::Wait;
 use super::section::{self, Row};
 use super::store::{Store, err};
 use rusqlite::types::Value;
@@ -287,7 +288,8 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
         .prepare(
             "SELECT c.uid, c.label, c.title, c.brief, c.size, c.model_hint, c.scope, c.reads,
                     (SELECT group_concat(a.uid, char(10)) FROM edge e JOIN chunk a ON a.id = e.dst
-                      WHERE e.src = c.id AND e.kind = 'after')
+                      WHERE e.src = c.id AND e.kind = 'after'),
+                    c.wait_on, c.wait_text, c.wait_until, c.wait_options
              FROM chunk c WHERE c.plan = ?1 AND c.state NOT IN ('replaced', 'dropped')
              ORDER BY c.seq",
         )
@@ -302,6 +304,7 @@ pub fn export_json(s: &Store, plan: i64) -> Result<Json, String> {
                 "uid": g(0)?, "label": g(1)?, "title": g(2)?, "brief": g(3)?, "size": g(4)?,
                 "model": g(5)?, "scope": lines(g(6)?), "reads": lines(g(7)?),
                 "after": lines(g(8)?),
+                "wait": Wait::from_cols(g(9)?, g(10)?, g(11)?, g(12)?),
             }))
         })
         .map_err(err)?

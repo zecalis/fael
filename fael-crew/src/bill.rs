@@ -6,6 +6,7 @@
 
 use super::State;
 use super::apply::{Op, insert, run};
+use super::bill_wait::{Wait, gate};
 use super::chunk::{Fields, add_after, batch, edit_in, last_event, row, set, tx, uid_id};
 use super::export::rev;
 use super::section::{self, Part};
@@ -53,6 +54,8 @@ struct Line {
     reads: Option<Vec<String>>,
     /// the full set of chunks it waits on
     after: Option<Vec<String>>,
+    /// a start gate: the chunk waits on the owner (or a date) until `chunk answer`
+    wait: Option<Wait>,
 }
 
 /// `new` when it differs from `old` (the bill sends back what it read).
@@ -156,7 +159,12 @@ fn add_line(tx: &Transaction, pid: i64, l: &Line, now: &str) -> Result<String, S
     for a in l.after.iter().flatten() {
         add_after(tx, id, uid_id(tx, pid, a)?)?;
     }
-    let state = if l.brief.as_deref().is_some_and(|b| !b.trim().is_empty()) {
+    if let Some(w) = &l.wait {
+        gate(tx, &row(tx, &uid)?, w, now)?;
+    }
+    let state = if l.wait.is_some() {
+        "waiting"
+    } else if l.brief.as_deref().is_some_and(|b| !b.trim().is_empty()) {
         "open"
     } else {
         "draft"
@@ -202,6 +210,14 @@ fn edit_line(
         label: changed(&l.label, &cur[5]),
         ..Fields::default()
     };
+    let cur_wait = tx
+        .query_row(
+            "SELECT wait_on, wait_text, wait_until, wait_options FROM chunk WHERE id = ?1",
+            [r.id],
+            |q| Ok(Wait::from_cols(q.get(0)?, q.get(1)?, q.get(2)?, q.get(3)?)),
+        )
+        .map_err(err)?;
+    let gated = l.wait.as_ref().filter(|w| cur_wait.as_ref() != Some(*w));
     let edits = f.title.is_some()
         || f.brief.is_some()
         || f.size.is_some()
@@ -219,7 +235,7 @@ fn edit_line(
     };
     let adds: Vec<i64> = want.iter().filter(|w| !have.contains(w)).copied().collect();
     let cuts: Vec<i64> = have.iter().filter(|h| !want.contains(h)).copied().collect();
-    let changes = l.drop || edits || !adds.is_empty() || !cuts.is_empty();
+    let changes = l.drop || edits || gated.is_some() || !adds.is_empty() || !cuts.is_empty();
     let dropped_again = l.drop && r.state == State::Dropped;
     if changes && (r.state == State::Running || (r.state.terminal() && !dropped_again)) {
         return Err(format!(
@@ -245,6 +261,9 @@ fn edit_line(
     let mut out = Vec::new();
     if edits {
         out.push(edit_in(tx, uid, &f, now)?);
+    }
+    if let Some(w) = gated {
+        out.push(gate(tx, &row(tx, uid)?, w, now)?);
     }
     if !adds.is_empty() || !cuts.is_empty() {
         for &d in &adds {
