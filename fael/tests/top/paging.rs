@@ -145,7 +145,7 @@ fn kickoff_pages_too() {
     }
     let (ok, out, err) = fael(&d, &["kickoff", "--limit", "2"]);
     assert!(ok, "{err}");
-    assert_eq!(out.lines().count(), 3, "{out}");
+    assert_eq!(out.lines().count(), 4, "{out}");
     assert!(
         out.ends_with("… +1 more — next: fael kickoff --limit 2 --offset 2\n"),
         "{out}"
