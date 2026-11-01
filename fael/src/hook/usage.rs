@@ -137,6 +137,9 @@ pub(crate) struct Usage {
     pub(crate) empty: bool,
     pub(crate) parsed: core::stats::Parsed,
     pub(crate) logs: HashMap<String, core::Log>,
+    /// The explicit `--since` ms (`Some(0)` = all, `None` = absent): the
+    /// outcome window for the flow/outcome joins, else the oldest log row.
+    pub(crate) since: Option<i64>,
 }
 
 pub(crate) fn load(since: Option<i64>) -> Usage {
@@ -186,6 +189,7 @@ pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -
         empty: s.trim().is_empty(),
         parsed,
         logs,
+        since,
     }
 }
 
@@ -194,8 +198,9 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     let commits = commits_by_clone(u);
     let constants = asks::constants().into();
     let runs = super::flow::runs();
-    let since = u.parsed.first_seen.values().copied().min();
-    let merges = super::flow::merges(since);
+    let window = core::stats::outcome_window(u.since, &u.logs);
+    let merges = super::flow::merges(window);
+    let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, &u.logs);
     let mut s = core::stats::aggregate(
         &u.parsed,
         &u.logs,
@@ -206,6 +211,9 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         constants,
         rows,
         local_tz_offset_min(),
+        u.since,
+        &prs,
+        prs_merged_total,
     );
     if let Ok(r) = crate::repo() {
         let (log, held) = super::lifecycle::marked(&r);
