@@ -39,10 +39,9 @@ fn two_worktrees() -> (PathBuf, PathBuf) {
     git(&main, &["init", "-q", "-b", "main"]);
     git(&main, &["commit", "-q", "--allow-empty", "-m", "init"]);
     let w2 = d.join("w2");
-    git(
-        &main,
-        &["worktree", "add", "-q", "-b", "w2", w2.to_str().unwrap()],
-    );
+    // git on Windows rejects the `\\?\` verbatim prefix `canonicalize` adds.
+    let w2_arg = w2.to_string_lossy().replacen(r"\\?\", "", 1);
+    git(&main, &["worktree", "add", "-q", "-b", "w2", &w2_arg]);
     (main, w2.canonicalize().unwrap())
 }
 
