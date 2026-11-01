@@ -66,7 +66,7 @@ Every number comes from two inputs, joined as pure functions in
   wins, else the machine zone): a BKK `--since 2026-10-30` starts at `2026-10-29T17:00:00Z`. `fael report` renders this same
   `Stats` (with `--rows`) as one offline HTML page.
   Raw archives keep 3 months before the current one. The daily `prune_state` pass
-  writes `usage/<YYYY-MM>.sum.json` (that month's `Stats` from its usage rows alone — no repo log, git or `gh` is read, so fields joined from those read empty; written atomically) for each older
+  writes `usage/<YYYY-MM>.sum.json` (that month's `Stats` from its usage rows alone — no repo log, git or `gh` is read, so fields joined from those read empty, `outcome` among them (`prs_merged_unknown` true, joins zero: it reads this clone's log and `gh`, not that month); written atomically) for each older
   archive and only then deletes the raw file; a failed summary keeps the raw. A
   `--since` reaching past the raw files adds `summaries` (month → `Stats`) to `--json`
   and one `<month> (summary)` line per month to the text — additive counters only, never
@@ -75,6 +75,7 @@ Every number comes from two inputs, joined as pure functions in
 - the repos' logs (tree + journal union) — for row statuses, rows added
   and language share. A repo that no longer resolves reads empty
   (its rows resolve `unknown`).
+- the log of the repo `fael stats` runs in, read even when no usage line names it — a fresh clone with zero usage still reads `outcome` (issues, filed→closed, the PR join) and `fael stats` prints its `outcome:` line under `no usage recorded yet`.
 - this clone's `gh` PRs — for the `outcome` joins only (PLAN-fael-outcome-dayone):
   the newest 200 PRs of any state (`gh pr list --state all`, shared with doctor,
   cached 10 min) plus one `gh api search/issues` count over the outcome window's
@@ -187,6 +188,8 @@ newest-first across repos.
 ## Changelog
 
 Newest first.
+
+- `5` (2026-11-01): `outcome` also reads with zero usage (the run repo's log is loaded even when no usage names it) and stays out of `summaries` (their fields joined from log/git/`gh` read empty by design); no new keys, no bump.
 
 - `5` (2026-11-01): added `outcome` (merged/created PRs, issues filed/closed, filed→closed span, `joined_since`, PRs with/without a fael row; PLAN-fael-outcome-dayone) with one `outcome:` text line beside the value line; no bump.
 

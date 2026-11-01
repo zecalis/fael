@@ -73,6 +73,7 @@ mod stats_text;
 mod stop;
 mod tally;
 mod usage;
+mod usage_commits;
 pub(crate) mod usage_files;
 mod usage_retain;
 

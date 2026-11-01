@@ -197,7 +197,9 @@ fn stats_empty_matches_golden() {
         .join(format!("stats-golden-empty-{}", fael_core::ulid()));
     std::fs::create_dir_all(&state).unwrap();
     std::fs::write(state.join("usage.jsonl"), "").unwrap();
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"));
+    // a fresh repo of its own: the cwd repo's outcome reads even with no usage,
+    // and target/tmp sits inside this checkout
+    let dir = &super::repo();
     let (ok, out, _) = fael_at(&state, dir, &["stats"], "");
     assert!(ok);
     assert_eq!(out, "fael: no usage recorded yet\n", "{out}");
