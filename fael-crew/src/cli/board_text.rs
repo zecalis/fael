@@ -105,16 +105,29 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
 /// Cost-per-feature read (run-telemetry t5): totals with unknown-% beside
 /// every cost number, per-model sums, and the 30-run verdict window.
 /// Old NULL rows stay NULL — the unknown-% is the point, not a gap to fill.
+/// A cost unknown-% over half hides the cost numbers (issue 01M6B4CX): a sum
+/// over ~nothing reads as a total and gets planned against. The unknown-%
+/// stays — it is the signal — and JSON keeps every number (machine contract).
+const COST_HIDE_PCT: f64 = 50.0;
+
 fn models_card(b: &Board) -> String {
     let m = &b.models;
     if m.total == 0 {
         return String::new();
     }
+    let hide_cost = m.unknown_cost_pct > COST_HIDE_PCT;
     let mut out = String::from("models\n");
-    out.push_str(&format!(
-        "  runs {} · with model {} (unknown {:.1}%) · with cost {} (unknown {:.1}%)\n",
-        m.total, m.with_client_model, m.unknown_model_pct, m.with_cost, m.unknown_cost_pct
-    ));
+    if hide_cost {
+        out.push_str(&format!(
+            "  runs {} · with model {} (unknown {:.1}%) · cost hidden (unknown {:.1}% > {:.0}%)\n",
+            m.total, m.with_client_model, m.unknown_model_pct, m.unknown_cost_pct, COST_HIDE_PCT
+        ));
+    } else {
+        out.push_str(&format!(
+            "  runs {} · with model {} (unknown {:.1}%) · with cost {} (unknown {:.1}%)\n",
+            m.total, m.with_client_model, m.unknown_model_pct, m.with_cost, m.unknown_cost_pct
+        ));
+    }
     let mut by: Vec<(&String, &fael_crew::ModelRow)> = m.by_model.iter().collect();
     by.sort_by_key(|(_, r)| std::cmp::Reverse(r.runs));
     let shown = 5;
@@ -122,10 +135,14 @@ fn models_card(b: &Board) -> String {
         .iter()
         .take(shown)
         .map(|(k, r)| {
-            format!(
-                "{k} {} runs ${:.6} (unknown {:.1}%)",
-                r.runs, r.cost, r.unknown_cost_pct
-            )
+            if hide_cost {
+                format!("{k} {} runs (cost hidden)", r.runs)
+            } else {
+                format!(
+                    "{k} {} runs ${:.6} (unknown {:.1}%)",
+                    r.runs, r.cost, r.unknown_cost_pct
+                )
+            }
         })
         .collect();
     if !parts.is_empty() {
@@ -144,7 +161,11 @@ fn models_card(b: &Board) -> String {
         None => "pending",
     };
     let mp = w.model_pct.map_or("—".into(), |v| format!("{v:.1}%"));
-    let cp = w.cost_pct.map_or("—".into(), |v| format!("{v:.1}%"));
+    let cp = if hide_cost {
+        "—".to_string()
+    } else {
+        w.cost_pct.map_or("—".into(), |v| format!("{v:.1}%"))
+    };
     out.push_str(&format!(
         "  window {}/{}: {verdict} (model {mp}, cost {cp})\n",
         w.n, w.need
@@ -264,4 +285,73 @@ fn repos_line(b: &Board) -> String {
     roots.sort_unstable();
     roots.dedup();
     format!("repos: {}\n", roots.join(", "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn models(unknown_cost_pct: f64, with_cost: usize, total: usize) -> fael_crew::Models {
+        let mut by_model = BTreeMap::new();
+        by_model.insert(
+            "opencode/opencode-go/m".to_string(),
+            fael_crew::ModelRow {
+                runs: total,
+                cost: 1.5,
+                unknown_cost_pct,
+                missing: 0,
+            },
+        );
+        fael_crew::Models {
+            total,
+            with_client_model: total,
+            with_cost,
+            unknown_model_pct: 0.0,
+            unknown_cost_pct,
+            by_model,
+            window: fael_crew::CostWindow {
+                n: 0,
+                need: 30,
+                model_pct: None,
+                cost_pct: Some(40.0),
+                pass: None,
+            },
+        }
+    }
+
+    fn card(unknown_cost_pct: f64, with_cost: usize, total: usize) -> String {
+        models_card(&Board {
+            v: 1,
+            at: String::new(),
+            needs_you: Vec::new(),
+            queue: Vec::new(),
+            running: Vec::new(),
+            blocked: Vec::new(),
+            queue_exclusive: Vec::new(),
+            queue_joint: Vec::new(),
+            blocked_on_overlap: Vec::new(),
+            models: models(unknown_cost_pct, with_cost, total),
+            projects: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn cost_hidden_past_half_but_unknown_stays() {
+        let t = card(97.5, 1, 40);
+        assert!(t.contains("cost hidden (unknown 97.5% > 50%)"), "{t}");
+        assert!(!t.contains("with cost"), "{t}");
+        assert!(!t.contains('$'), "{t}");
+        assert!(t.contains("(model —, cost —)"), "{t}");
+    }
+
+    #[test]
+    fn cost_shown_at_or_below_half() {
+        for u in [0.0, 50.0] {
+            let t = card(u, 2, 2);
+            assert!(t.contains("with cost 2"), "{u}: {t}");
+            assert!(t.contains("$1.500000"), "{u}: {t}");
+            assert!(t.contains("cost 40.0%"), "{u}: {t}");
+        }
+    }
 }

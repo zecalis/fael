@@ -120,6 +120,10 @@ fn install_all_three_idempotent_and_leaves_what_is_not_fael_alone() {
             && p.contains("async setup(ctx)"),
         "plugin is not both the OpenCode 1 and 2 shape: {p}"
     );
+    // The generated OpenCode plugin reports session cost (01M6B4CX): cost rides
+    // the messages the stop hook already fetches, and without it the board stays
+    // cost-unknown. Pinned here so an edit to `opencode.js` cannot drop it silently.
+
     assert!(read(&home.join(".claude/skills/fael/SKILL.md")).contains("fael add issue"));
     assert!(home.join(".agents/skills/fael/SKILL.md").is_file());
 

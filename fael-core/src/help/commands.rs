@@ -248,7 +248,7 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
      lane after), and says each path outside the declared scope as done does; beat:
      start R's live rows are seen now — the launcher calls it while a headless client
      runs, so a long run never reads stalled)
-  --cost USD   what the client reported the run cost (claude's total_cost_usd), a
+  --cost USD   what the client reported the run cost (opencode: `opencode session export <sessionID>` `.info.cost`; claude's total_cost_usd), a
                decimal >= 0; kept on start R's rows and shown as run.cost on the board",
     ),
     (

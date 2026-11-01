@@ -63,6 +63,34 @@ fn doctor_reports_wiring_behind_the_binary_and_clears_after_install() {
     assert!(out.contains("fael upgrade"), "{out}");
 }
 
+#[test]
+fn doctor_reports_a_stale_opencode_plugin_and_install_refreshes_it() {
+    let (home, repo) = scratch();
+    // scratch() seeds a .claude dir, so both clients are detected wiring
+    fael(&home, &repo, &["install", "--client", "claude"]);
+    fael(&home, &repo, &["install", "--client", "opencode"]);
+    assert!(
+        !fael(&home, &repo, &["doctor"]).contains("[Wiring]"),
+        "wiring is current"
+    );
+    // a plugin from before cost reporting shipped (01M6B4CX): the board
+    // stays cost-unknown until the wiring is refreshed
+    let plugin = home.join(".config/opencode/plugins/fael.js");
+    let old = std::fs::read_to_string(&plugin)
+        .unwrap()
+        .replace("cost_of_messages", "cost_of_msg");
+    assert_ne!(old, std::fs::read_to_string(&plugin).unwrap());
+    std::fs::write(&plugin, old).unwrap();
+    let out = fael(&home, &repo, &["doctor"]);
+    assert!(out.contains("[Wiring]"), "stale plugin: {out}");
+    assert!(out.contains("fael upgrade"), "{out}");
+    fael(&home, &repo, &["install", "--client", "opencode"]);
+    assert!(
+        !fael(&home, &repo, &["doctor"]).contains("[Wiring]"),
+        "plugin refreshed"
+    );
+}
+
 /// session-start output for `repo`, with `home` as the machine's home.
 fn session_start(home: &Path, repo: &Path) -> String {
     use std::io::Write;

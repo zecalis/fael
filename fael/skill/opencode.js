@@ -134,11 +134,16 @@ const epoch = (v) => {
 };
 
 // The running model as `providerID/id`, and the session's total cost in USD —
-// both client-reported from `session.get` (V1 wraps the session in `data`, V2
-// unwraps it), never guessed: anything missing or misshapen is null, and Rust
-// keeps the NULL. Cost only matters on stop (the server's running total);
-// model is cached per session (it rarely changes mid-session) and refreshed
-// on stop alongside cost.
+// both client-reported, never guessed: anything missing or misshapen is null,
+// and Rust keeps the NULL. Model comes from `session.get` (V1 wraps the
+// session in `data`, V2 unwraps it); cost comes from the messages first —
+// `session.get` carries it only as an optional `SessionInfo.cost` (absent on
+// some builds, and V2 has no messages API at all: issue 01M6B4CX), while
+// every assistant message reports its own `cost` and `opencode session
+// export` shows the total at `.info.cost` (= the message sum, verified
+// against the server db). Cost only matters on stop (the server's running
+// total); model is cached per session (it rarely changes mid-session) and
+// refreshed on stop alongside cost.
 const model_of = (s) => {
   const m = s?.model ?? s?.data?.model ?? s?.info?.model ?? null;
   if (typeof m === "string") return m || null;
@@ -156,6 +161,56 @@ const model_of = (s) => {
 const cost_of = (s) => {
   const c = s?.cost ?? s?.data?.cost ?? s?.info?.cost ?? null;
   return typeof c === "number" && Number.isFinite(c) && c >= 0 ? c : null;
+};
+
+// Session total from its messages: the sum of per-assistant-message `cost`
+// (V1 `session.messages` `{info, parts}[]`, `session export` `.messages[]`),
+// falling back to summed `step-finish` part costs when messages carry none.
+// Message-level and part-level sums are the same total (both equal the
+// session total), so parts are only read when no message reported one —
+// never both. Null when nothing reported a cost (free models report 0,
+// which is a real zero and is kept).
+const cost_of_messages = (msgs) => {
+  const arr = msgs?.data ?? msgs;
+  if (!Array.isArray(arr)) return null;
+  const num = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+  let sum = 0;
+  let found = false;
+  for (const m of arr) {
+    if (!m || typeof m !== "object") continue;
+    const info = m.info && typeof m.info === "object" ? m.info : null;
+    if (info) {
+      if (info.role === "assistant") {
+        const n = num(info.cost);
+        if (n !== null) {
+          sum += n;
+          found = true;
+        }
+      }
+    } else {
+      const n = num(m.cost);
+      if (n !== null && (m.type === "assistant" || m.role === "assistant" || m.type === undefined)) {
+        sum += n;
+        found = true;
+      }
+    }
+  }
+  if (found) return sum;
+  for (const m of arr) {
+    if (!m || typeof m !== "object") continue;
+    const parts = m.parts ?? m.content;
+    if (!Array.isArray(parts)) continue;
+    for (const p of parts) {
+      if (p?.type === "step-finish") {
+        const n = num(p?.cost);
+        if (n !== null) {
+          sum += n;
+          found = true;
+        }
+      }
+    }
+  }
+  return found ? sum : null;
 };
 
 // OpenCode 1: a function returning hooks, one object with a key per event.
@@ -279,16 +334,21 @@ export const Fael = async ({ client, directory }) => {
       if (!root) return;
       let text = "";
       let reply = "";
+      let msgCost = null;
       try {
         const m = await client.session.messages({ path: { id } });
         ({ text, reply } = stop_texts(m.data, true));
+        // the messages already fetched carry the cost (per-assistant-message
+        // `cost` sums to the session total); `session.get` is only the fallback
+        msgCost = cost_of_messages(m.data);
       } catch {}
       const { model: m, cost: c } = await fresh(id);
+      const cost = msgCost ?? c;
       const r = hook("stop", {
         cwd: directory,
         session: await start(id),
         model: m,
-        cost: c,
+        cost,
         text,
         reply,
         ...(root !== id ? { agent: root } : {}),
@@ -485,15 +545,21 @@ export default {
         }
         let text = "";
         let reply = "";
+        let msgCost = null;
         try {
-          ({ text, reply } = stop_texts(await ctx.session.context({ sessionID: id }), false));
+          const msgs = await ctx.session.context({ sessionID: id });
+          ({ text, reply } = stop_texts(msgs, false));
+          // prompt-context shape carries no cost today (upstream has no
+          // messages API: issue 01M6B4CX), but read it anyway — a future
+          // shape with per-message `cost` flows with no plugin update
+          msgCost = cost_of_messages(msgs);
         } catch {}
         const { model: m, cost: c } = await fresh(id);
         say(id, hook("stop", {
           cwd: directory,
           session: await start(id),
           model: m,
-          cost: c,
+          cost: msgCost ?? c,
           text,
           reply,
           ...(root !== id ? { agent: root } : {}),
