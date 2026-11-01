@@ -104,3 +104,36 @@ fn seat_finds_the_runs_worktree_and_cwd_names_one() {
     );
     assert!(ok && out.contains(uid), "{out}{err}");
 }
+
+/// A uid this db lacks (another repo's) keeps the verb's own routing reject under `--seat`.
+#[test]
+fn seat_leaves_another_repos_chunk_to_the_routing_reject() {
+    let (a, _) = two_worktrees();
+    let (b, _) = two_worktrees();
+    // one state dir, so repo a knows repo b exists
+    let state = a.join("state");
+    let run = |dir: &Path, args: &[&str]| {
+        Command::new(crate::common::fael_bin())
+            .args(args)
+            .current_dir(dir)
+            .env("FAEL_STATE_DIR", &state)
+            .env_remove("FAEL_DIR")
+            .output()
+            .unwrap()
+    };
+    let o = run(&b, &["chunk", "add", "x", "--brief", "b"]);
+    let uid = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    let args = [
+        "chunk",
+        "done",
+        &uid,
+        "h",
+        "--left",
+        "none",
+        "--no-change",
+        "--seat",
+    ];
+    let o = run(&a, &args);
+    let err = String::from_utf8_lossy(&o.stderr).into_owned();
+    assert!(!o.status.success() && err.contains("lives in"), "{err}");
+}

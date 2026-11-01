@@ -25,8 +25,12 @@ pub(crate) fn repo_for(a: &Args, rest: &[String]) -> Result<Repo, String> {
     if !a.has("seat") || !SEATED.contains(&verb.as_str()) || a.has("run") {
         return Ok(r);
     }
-    // no live run (an amend after done, a chunk never started): the process dir, as ever
-    let Some((run, seat)) = Store::open(&db(&r))?.seat(uid)? else {
+    // no live run (an amend after done, a chunk never started) or a uid this db lacks (another
+    // repo's — the verb's own reject routes it): the process dir, as ever
+    let Some((run, seat)) = Store::open(&db(&r))
+        .ok()
+        .and_then(|s| s.seat(uid).ok().flatten())
+    else {
         return Ok(r);
     };
     if !Path::new(&seat).is_dir() {
