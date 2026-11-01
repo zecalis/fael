@@ -127,8 +127,9 @@ pub(super) fn merged_prs(root: &Path) -> Option<BTreeMap<String, Vec<Merge>>> {
 /// and `[Orphan]` (each used to spawn its own, ~1.5 s apiece). The union of
 /// fields both read; None = no `gh` or it failed.
 // ponytail: newest 200 PRs of any state: ~0.7 s per 100 PRs, so a larger limit
-// costs back what sharing saves. On this repo 198 of them are merged (was 200
-// merged), so coverage is equal in practice; raise --limit if a repo outgrows it.
+// costs back what sharing saves. Doctor coverage is equal in practice; stats lost
+// the older merged PRs (was --state merged --limit 500), which its `git log (#N)`
+// fallback still covers by commit date. Raise --limit if a repo outgrows it.
 pub(crate) fn gh_prs(root: &Path) -> Option<String> {
     static ALL: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     ALL.get_or_init(|| {
