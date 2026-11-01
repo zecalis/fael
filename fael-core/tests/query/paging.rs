@@ -55,7 +55,8 @@ fn render_page_cut_names_next_call() {
             next: &|n| format!("fael find --limit 2 --offset {n}"),
         },
     );
-    assert_eq!(out.lines().count(), 3, "{out}");
+    assert_eq!(out.lines().count(), 4, "{out}");
+    assert!(out.starts_with("4 matches, showing 2\n"), "{out}");
     assert!(
         out.ends_with("… +2 more — next: fael find --limit 2 --offset 2\n"),
         "{out}"

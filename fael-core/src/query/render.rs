@@ -276,6 +276,7 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
             out.push_str(&cut_line(rest, (c.next)(c.offset + rows.len())));
         }
     }
+    cut.iter().for_each(|c| total_header(&mut out, c.total));
     if hidden {
         out.push_str(
             "bodies: fael find <id> (MCP: find id=<id>) · every body: --full (MCP: full=true)\n",
@@ -298,4 +299,12 @@ fn followed_by(mark: &str, by: Option<&Vec<&str>>, ab: &Abbrev) -> String {
 /// `… +N more — next: <the exact next call>` — an agent pages without guessing.
 fn cut_line(rest: usize, next: String) -> String {
     format!("… +{rest} more — next: {next}\n")
+}
+
+/// A partial page says the total on top — the cut line at the bottom is easy to miss.
+fn total_header(out: &mut String, total: usize) {
+    let shown = out.lines().filter(|l| l.starts_with("- [")).count();
+    if total > shown {
+        out.insert_str(0, &format!("{total} matches, showing {shown}\n"));
+    }
 }
