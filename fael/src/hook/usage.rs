@@ -200,7 +200,8 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     let runs = super::flow::runs();
     let window = core::stats::outcome_window(u.since, &u.logs);
     let merges = super::flow::merges(window);
-    let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, &u.logs);
+    let tz = local_tz_offset_min();
+    let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, &u.logs, tz);
     let mut s = core::stats::aggregate(
         &u.parsed,
         &u.logs,

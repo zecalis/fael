@@ -78,9 +78,9 @@ Every number comes from two inputs, joined as pure functions in
 - this clone's `gh` PRs — for the `outcome` joins only (PLAN-fael-outcome-dayone):
   the newest 200 PRs of any state (`gh pr list --state all`, shared with doctor,
   cached 10 min) plus one `gh api search/issues` count over the outcome window's
-  range (`window-day..today`, e.g. a `--since 2026-10-01` read counts
-  `2026-10-01..<today>` — recompute the manual count over the same string when
-  checking). No `gh` or offline reads `prs_merged_unknown`, never an error.
+  range (`window-day..today` in the viewer's zone, the one a bare `--since` date is
+  read in, e.g. a `--since 2026-10-01` read counts `2026-10-01..<today>` — recompute
+  the manual count over the same string when checking). No `gh` or offline reads `prs_merged_unknown`, never an error.
 
 ## Schema rule
 

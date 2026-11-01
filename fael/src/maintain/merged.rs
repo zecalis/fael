@@ -211,15 +211,16 @@ pub(crate) fn listed_prs(json: &str) -> Vec<core::stats::ListedPr> {
 }
 
 /// Search range for the outcome window: `YYYY-MM-DD..YYYY-MM-DD` from the
-/// window's day to today (UTC) — the range `prs_merged_count` counts, so a
-/// `--since 2026-10-01` check recomputes the manual count over the same
+/// window's day to today in the viewer's zone (`tz_min` east of UTC, the zone
+/// a bare `--since <date>` is read in) — the range `prs_merged_count` counts,
+/// so a `--since 2026-10-01` check recomputes the manual count over the same
 /// string. `None` when either end is unreadable.
-pub(crate) fn range_for(window_ms: i64, now_ms: i64) -> Option<String> {
-    fn day(ms: i64) -> Option<String> {
-        core::rfc3339(ms.max(0) as u64)
+pub(crate) fn range_for(window_ms: i64, now_ms: i64, tz_min: i32) -> Option<String> {
+    let day = |ms: i64| {
+        core::rfc3339_in(ms.max(0) as u64, tz_min)
             .get(..10)
             .map(str::to_string)
-    }
+    };
     Some(format!("{}..{}", day(window_ms)?, day(now_ms)?))
 }
 
@@ -229,13 +230,14 @@ pub(crate) fn range_for(window_ms: i64, now_ms: i64) -> Option<String> {
 pub(crate) fn outcome_inputs(
     since: Option<i64>,
     logs: &std::collections::HashMap<String, core::Log>,
+    tz_min: i32,
 ) -> (Vec<core::stats::ListedPr>, Option<u64>) {
     let Ok(r) = crate::repo() else {
         return (vec![], None);
     };
     let prs = gh_prs(&r.root).map(|j| listed_prs(&j)).unwrap_or_default();
     let total = core::stats::outcome_window(since, logs)
-        .and_then(|w| range_for(w, core::now_ms() as i64))
+        .and_then(|w| range_for(w, core::now_ms() as i64, tz_min))
         .and_then(|range| prs_merged_count(&r.root, &range));
     (prs, total)
 }
@@ -332,6 +334,17 @@ mod tests {
             super::range_for(
                 crate::core::ts_ms("2026-10-01T00:00:00Z").unwrap(),
                 crate::core::ts_ms("2026-10-31T12:00:00Z").unwrap(),
+                0,
+            )
+            .as_deref(),
+            Some("2026-10-01..2026-10-31")
+        );
+        // a bare `--since 2026-10-01` in +07:00 is 2026-09-30T17:00Z: still the 1st
+        assert_eq!(
+            super::range_for(
+                crate::core::ts_ms("2026-09-30T17:00:00Z").unwrap(),
+                crate::core::ts_ms("2026-10-31T12:00:00Z").unwrap(),
+                420,
             )
             .as_deref(),
             Some("2026-10-01..2026-10-31")
