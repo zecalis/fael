@@ -10,7 +10,7 @@
 //! `codes` (plus the gate's `rules`, or the command an unknown one was `near`),
 //! and a `chunk`/`plan` call its `sub` verb — each from a closed vocabulary.
 //! Every CLI row carries the call's `shape` (`verb`, flag names, positional
-//! count — never a value); an MCP row carries none.
+//! count — never a value); an MCP row carries its argument names as `flags`.
 
 use super::asks::{UsageMeta, append_row};
 use super::usage::usage_row;
@@ -102,7 +102,7 @@ fn record(
     (o, empty, human): (Outcome, bool, bool),
     sig: String,
     (argv, sub): (Option<&[String]>, Option<&str>),
-) {
+) -> Value {
     let meta = UsageMeta {
         session: (!session.is_empty()).then_some(session),
         ..UsageMeta::default()
@@ -154,7 +154,7 @@ fn record(
             }
         }
     }
-    append_row(row);
+    row
 }
 
 /// The CLI's one choke point — the only place a CLI reject is counted: what `run` returned
@@ -186,16 +186,17 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         return;
     };
     let session = crate::session::hook_session(&root);
-    // a call outside an agent session, or a clean one to a command no agent
-    // asks an answer from, is a human's: counted as usage, never as friction —
-    // and only in a real repo (`repo_at` falls back to the cwd), so the app's
-    // `board` run from `/` stays unrecorded
-    let human =
-        session.is_empty() || (matches!(outcome, Outcome::Ok) && !AGENT_CMDS.contains(&cmd));
+    // a call outside an agent session, or any call to a command no agent asks
+    // an answer from, is a human's: counted as usage, never as friction — its
+    // help and rejects too, or a `stats` read would show 100 per 100 with no
+    // clean call to dilute it; `?` stays the agent's (an unknown command is
+    // friction). Only in a real repo (`repo_at` falls back to the cwd), so the
+    // app's `board` run from `/` stays unrecorded
+    let human = session.is_empty() || (cmd != "?" && !AGENT_CMDS.contains(&cmd));
     if human && !(root.join(".git").exists() || root.join(".fael").exists()) {
         return;
     }
-    record(
+    append_row(record(
         crate::session::env_client(),
         cmd,
         Some(&root),
@@ -203,7 +204,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         (outcome, empty, human),
         sig(argv),
         (Some(argv), sub(cmd, argv)),
-    );
+    ));
 }
 
 /// One MCP tool call: `res` is what the tool returned. No session — an MCP
@@ -227,7 +228,7 @@ pub(crate) fn record_mcp_call(
         "?"
     };
     let verb = mcp_sub(cmd, args);
-    record(
+    let mut row = record(
         "mcp",
         cmd,
         root,
@@ -236,6 +237,8 @@ pub(crate) fn record_mcp_call(
         sig(args.to_string()),
         (None, verb),
     );
+    row["flags"] = super::shape::mcp_flags(args).into();
+    append_row(row);
 }
 
 /// `per 100 calls`, one decimal.

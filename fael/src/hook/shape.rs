@@ -172,6 +172,21 @@ pub(crate) fn apply(cmd: &str, argv: &[String], row: &mut serde_json::Value) {
     row["npos"] = serde_json::json!(s.npos);
 }
 
+/// An MCP call's argument names as flag names (`urgent_before` → `urgent-before`),
+/// so `stats::by_flag` counts a flag used only through MCP. Positional ones
+/// (`text`, `id`) land as names too.
+// ponytail: over-counts at worst, never hides a used flag from retire
+pub(crate) fn mcp_flags(args: &serde_json::Value) -> Vec<String> {
+    args.as_object()
+        .map(|o| {
+            o.keys()
+                .filter(|k| *k != "verb")
+                .map(|k| k.replace('_', "-"))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::shape;
@@ -186,6 +201,12 @@ mod tests {
         assert_eq!(s.verb.as_deref(), Some("show"));
         assert_eq!(s.flags, ["json"]);
         assert_eq!(s.npos, 2);
+    }
+
+    #[test]
+    fn mcp_args_count_as_flag_names() {
+        let a = serde_json::json!({"text": "x", "urgent_before": "01M", "verb": "start"});
+        assert_eq!(super::mcp_flags(&a), ["text", "urgent-before"]);
     }
 
     #[test]
