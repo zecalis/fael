@@ -137,7 +137,9 @@ fn stats_json_matches_golden_values() {
     let outcome = v.as_object_mut().unwrap().remove("outcome");
     assert_eq!(
         outcome,
-        Some(serde_json::json!({"prs_merged": 0, "prs_created": 0, "prs_merged_unknown": true, "issues_filed": 0, "issues_closed": 0, "filed_to_close": {"median": 0, "p90": 0, "n": 0}, "joined_since": "", "prs_with_row": 0, "prs_without_row": 0}))
+        Some(
+            serde_json::json!({"prs_merged": 0, "prs_created": 0, "prs_merged_unknown": true, "issues_filed": 0, "issues_closed": 0, "filed_to_close": {"median": 0, "p90": 0, "n": 0}, "joined_since": "", "prs_with_row": 0, "prs_without_row": 0})
+        )
     );
     // its own json! call: one literal with every kind passes the macro's recursion limit
     let said = serde_json::json!({"row": {"said": 2, "earned": 0, "by_event": {"read": {"said": 2, "earned": 0}}}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1, "by_event": {"read": {"said": 1, "earned": 1}}}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}, "briefdrift": {"said": 0, "earned": 0}, "retired": {"said": 0, "earned": 0}, "chunkbrief": {"said": 0, "earned": 0}});
