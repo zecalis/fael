@@ -63,17 +63,17 @@ impl Args {
                 "all" | "force" | "json" | "dry-run" | "yes" | "fix" | "prune" | "urgent"
                 | "not-urgent" | "full" | "rows" | "fat" | "day" | "pin" | "open" | "misses"
                 | "days" | "wiring" | "auto" | "no-worktree" | "watch" | "input" | "lean"
-                | "merged" | "no-change" => {
+                | "merged" | "no-change" | "seat" => {
                     a.flags.entry(name).or_default();
                 }
                 "files" | "key" | "supersedes" | "follows" | "then" | "kind" | "since" | "by"
                 | "client" | "writer" | "before" | "map" | "to" | "from" | "title"
                 | "urgent-before" | "limit" | "offset" | "text" | "edge" | "out" | "replace"
-                | "with" | "plan" | "brief" | "size" | "model" | "scope" | "after" | "run"
-                | "on" | "until" | "pr" | "cost" | "app" | "area" | "label" | "returns"
+                | "append" | "with" | "plan" | "brief" | "size" | "model" | "scope" | "after"
+                | "run" | "on" | "until" | "pr" | "cost" | "app" | "area" | "label" | "returns"
                 | "check" | "issue" | "drop" | "section" | "session" | "reads" | "uid"
                 | "option" | "worktree" | "verdict" | "review" | "parent" | "recall" | "wait"
-                | "ask" | "left" | "as" | "why" | "preset" => {
+                | "ask" | "left" | "as" | "why" | "preset" | "cwd" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("rejected: --{name} needs a value"))?;

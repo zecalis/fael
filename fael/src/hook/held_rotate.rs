@@ -1,7 +1,7 @@
 //! Rotation for the held rows `chunk done` and `chunk start` name (issue
 //! 01M5EEGR): each chunk is a new session, so the per-session shown file cannot
 //! tell a row was already put in front of an agent. This machine-local record
-//! (row id → last-shown ms, keyed by repo root like `retired/<repo>.txt`) lets
+//! (row id → last-shown ms, keyed by the clone's shared root like `retired/<repo>.txt`) lets
 //! the next chunk see the rows the last ones did not. Fail open: unreadable is
 //! empty, unwritable drops.
 
@@ -10,8 +10,11 @@ use crate::core;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Keyed by the clone's shared journal root, not the worktree: every worktree reads the same
+/// ledger, so a row one worktree's start named is not named again in the next (issue 01M6BK566).
 fn path(root: &Path, dir: &str) -> PathBuf {
-    let key = session_key(&root.to_string_lossy());
+    let shared = crate::journal::root(root).unwrap_or_else(|| root.to_path_buf());
+    let key = session_key(&shared.to_string_lossy());
     state_dir().join(dir).join(format!("{key}.txt"))
 }
 

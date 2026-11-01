@@ -344,3 +344,15 @@ fn touch_with_run_names_the_live_run() {
     let e = s.touch(&a, &["src/c.rs".to_string()], &live).unwrap_err();
     assert!(e.contains("live run"), "{e}");
 }
+
+#[test]
+fn a_chunk_left_over_reads_its_origins_handoff() {
+    assert!(super::names_left("did it\nleft: 01ABCDEF", "01ABCDEFGHJK"));
+    assert!(super::names_left("x\nleft: none, 01abcdef", "01ABCDEFGHJK"));
+    assert!(!super::names_left("left: none", "01ABCDEFGHJK"));
+    assert!(!super::names_left(
+        "01ABCDEF mentioned, no left line",
+        "01ABCDEFGHJK"
+    ));
+    assert!(!super::names_left("left: 01ABCDEG", "01ABCDEFGHJK"));
+}

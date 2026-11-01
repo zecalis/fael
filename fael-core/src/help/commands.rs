@@ -209,7 +209,7 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "plan",
         "create a plan, export or edit its sections and chunks, park or finish it",
-        "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan apply <file|-> [--dry-run]
+        "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json] | fael plan export <plan> --section <key> | fael plan export --since <event-id> | fael plan edit <plan> --section <key> (--replace <old> --with <new> | --append <text>) | fael plan apply <file|-> [--dry-run]
      | fael plan park|unpark|done|undone|drop <plan> | fael plan lint <plan>
     (a plan is sections and chunks in <git-common-dir>/fael/crew.db, no file;
      new: a plan whose chunks live in the db from the start (`fael chunk add --plan`),
@@ -227,6 +227,8 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
      for backup and fael-sync (\"v\": 1) — db_id, head (the next --since), the events
      after the id and the current rows they touched, whole (plans, every section of those
      plans, chunks, the edges out of those chunks, their runs); 0 = everything;
+     edit: one section changed in place, through the same bill and rev check — --replace swaps
+     the one occurrence of <old> (0 or 2 reject), --append adds a paragraph at the end;
      apply: the bill edited and sent back, one transaction — a stale rev rejects it and
      writes nothing; a header key left out stays, a section is matched by key (a new key
      needs a title, {key, drop:true} drops it, one left out stays), a line without uid

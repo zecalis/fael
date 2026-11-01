@@ -53,3 +53,19 @@ fn zero_and_two_occurrences_reject_and_change_nothing() {
     assert!(e.contains("no section zz"), "{e}");
     assert_eq!(state(&s), before);
 }
+
+#[test]
+fn append_adds_a_paragraph_at_the_end_with_one_rev_bump() {
+    let mut s = store("keep a\n");
+    let (_, r0) = state(&s);
+    let p = s.plans().unwrap().remove(0);
+    let (_, r1) = s.plan_append(&p, "c", "new line\n", NOW).unwrap();
+    assert_eq!(state(&s).0, "keep a\n\nnew line");
+    assert!(r1 > r0);
+    assert!(s.plan_append(&p, "c", "  ", NOW).is_err());
+    assert!(
+        s.plan_append(&p, "zz", "x", NOW)
+            .unwrap_err()
+            .contains("no section zz")
+    );
+}

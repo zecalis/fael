@@ -196,7 +196,7 @@ pub(crate) fn note(st: &mut Store, uid: &str, text: &str, now: &str) -> Result<(
 }
 
 /// `--pr`'s number from `12`, `#12`, `owner/repo#12` or a pull URL.
-fn pr_number(raw: Option<&str>) -> Result<Option<i64>, String> {
+pub(crate) fn pr_number(raw: Option<&str>) -> Result<Option<i64>, String> {
     raw.map(|n| {
         n.trim_end_matches('/')
             .rsplit(['#', '/'])
@@ -230,7 +230,7 @@ pub(crate) fn done(
         );
     }
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
-    let raw = a.one("pr").or(pr_default);
+    let (raw, earlier) = crate::chunk_prs::split(a.one("pr").or(pr_default))?;
     let pr = pr_number(raw.as_deref())?;
     // issue 01M4QFJ6V: another repo's PR is refused, never dropped; no origin = no check
     if let Some((raw, want)) = raw.as_deref().and_then(|p| Some((p, pr_repo(p)?)))
@@ -259,10 +259,12 @@ pub(crate) fn done(
     // issue 01M5FMHQX: leftovers are rows; the statement rides in the hand-off the next brief prints
     let handoff = &crate::chunk_left::resolve(a.one("left"), handoff, &st, &crate::read(r))
         .map_err(|e| with_retype(e, uid, handoff, |f| flag_of(a, f)))?;
+    // issue 01M6BKHZSP: a `measured:` line is dated and checked before any prefix goes on
+    let handoff = &crate::chunk_measured::check(handoff)?;
     // issue 01M62VY2: a review that changed nothing says so in the hand-off the next brief prints
     let handoff = &match no_change {
         true => format!("reviewed, no change: {handoff}"),
-        false => handoff.to_string(),
+        false => crate::chunk_prs::with_earlier(handoff, &earlier),
     };
     // a done chunk's done again only amends its hand-off: no run, pr or touched change
     if pr.is_none() && src.is_none() && st.amend(uid, handoff, here.now)? {
@@ -303,6 +305,8 @@ pub(crate) fn done(
         let _ = st.claim(uid, d);
     }
     let to = if pr.is_some() { "done" } else { "review" };
+    let explicit = a.has("pr") && earlier.is_empty();
+    crate::chunk_prs::say_branch(explicit, (&r.root, branch.as_deref().or(here.branch)), pr);
     println!("chunk {uid} → {to}");
     print!("{}", st.drift_line(uid));
     let reviewed = a.one("review").is_some();
@@ -359,11 +363,23 @@ pub(crate) fn outside_text(r: &Repo, st: &Store, uid: &str, diff: &[String]) -> 
         return String::new();
     };
     let mut s = format!("declared scope: {}\n", declared.join(", "));
+    let mut free: Vec<String> = vec![];
     for (f, owner) in out {
         match owner {
             Some(o) => s += &format!("outside declared scope: {f} (overlaps open chunk {o})\n"),
-            None => s += &format!("outside declared scope: {f}\n"),
+            None => {
+                s += &format!("outside declared scope: {f}\n");
+                free.push(f);
+            }
         }
+    }
+    // a widening keeps the owner's approval (chunk edit --scope), so the line is runnable as is
+    if !free.is_empty() {
+        let all = declared.iter().chain(&free).cloned().collect::<Vec<_>>();
+        s += &format!(
+            "to cover them: fael chunk edit {uid} --scope {}\n",
+            all.join(",")
+        );
     }
     s
 }

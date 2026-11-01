@@ -62,23 +62,23 @@ pub fn under(x: &str, y: &str) -> bool {
     x == y || x.strip_prefix(y).is_some_and(|r| r.starts_with('/'))
 }
 
-/// `x` is `y` or below it, or `y` is a file and `x` is its test beside it in the same
-/// directory (`a.ts` → `a.test.ts` / `a.spec.ts` / `a_test.ts`): a chunk that edits a file
-/// edits its test, so that is no "outside declared scope".
+/// `x` is `y` or below it, or `y` is a file and `x` is a test file in the same directory with
+/// the same extension (`a.ts` → `a.test.ts`, `a.spec.ts`, `a_test.ts`, `b.test.ts`): a chunk
+/// that edits a file adds or edits tests beside it, so that is no "outside declared scope".
 pub fn within(x: &str, y: &str) -> bool {
     if under(x, y) {
         return true;
     }
     let (dx, fx) = x.rsplit_once('/').unwrap_or(("", x));
     let (dy, fy) = y.rsplit_once('/').unwrap_or(("", y));
-    let (Some((sx, ex)), Some((sy, ey))) = (fx.rsplit_once('.'), fy.rsplit_once('.')) else {
+    let (Some((sx, ex)), Some((_, ey))) = (fx.rsplit_once('.'), fy.rsplit_once('.')) else {
         return false;
     };
     dx == dy
         && ex == ey
         && [".test", ".spec", "_test"]
             .iter()
-            .any(|t| sx.strip_suffix(t) == Some(sy))
+            .any(|t| sx.len() > t.len() && sx.ends_with(t))
 }
 
 #[cfg(test)]
@@ -91,7 +91,10 @@ mod tests {
         assert!(within("src/series.spec.ts", "src/series.ts"));
         assert!(within("src/series_test.ts", "src/series.ts"));
         assert!(within("src/a/b.rs", "src/a/"));
-        assert!(!within("src/other.test.ts", "src/series.ts"));
+        // a new test beside a scope file is in scope too, whatever its stem
+        assert!(within("src/cache-beat.test.ts", "src/series.ts"));
+        assert!(!within("src/other.ts", "src/series.ts"));
+        assert!(!within("src/.test.ts", "src/series.ts"));
         assert!(!within("lib/series.test.ts", "src/series.ts"));
         assert!(!within("src/series.test.js", "src/series.ts"));
         // a scope dir never pairs; only a file does

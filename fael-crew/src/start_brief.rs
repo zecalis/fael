@@ -120,7 +120,12 @@ pub(super) fn brief(
     b.notes = texts(tx, &since("by = 'note'"), &b.uid)?;
     b.issues = super::issue::of(tx, id)?;
     b.after = super::handoff::after(tx, id)?;
+    let origin = super::handoff::left_over(tx, id)?;
     (b.by_file, b.by_file_more) = super::handoff::by_file(tx, id, b.scope.as_deref())?;
+    // an origin already printed above is not printed again as a by-file word
+    b.by_file
+        .retain(|(w, ..)| !origin.iter().any(|(o, ..)| o == w));
+    b.after.extend(origin);
     (b.live, b.live_more) = super::handoff::live(tx, id, b.scope.as_deref())?;
     Ok(b)
 }

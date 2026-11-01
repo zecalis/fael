@@ -95,7 +95,9 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     git(&d, &["merge", "-q", "--no-edit", "lane1", "lane2"]);
 
     // l1/a.txt is inside, Cargo.lock is shared: nobody's, never said
-    let want = "declared scope: l1/\noutside declared scope: o/x.txt (overlaps open chunk inbox/o)\noutside declared scope: stray.txt";
+    let want = format!(
+        "declared scope: l1/\noutside declared scope: o/x.txt (overlaps open chunk inbox/o)\noutside declared scope: stray.txt\nto cover them: fael chunk edit {l1} --scope l1/,stray.txt"
+    );
     // the lead's run end at the lane's exit says it first, before the lane lands
     let out = f(&["run", "end", "R1"]);
     assert_eq!(out, format!("run R1: {l1} {want}"));
@@ -119,7 +121,9 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
     assert_eq!(
         block,
-        "declared scope: l3/\noutside declared scope: stray3.txt"
+        format!(
+            "declared scope: l3/\noutside declared scope: stray3.txt\nto cover them: fael chunk edit {l3} --scope l3/,stray3.txt"
+        )
     );
 
     // the lead merges in the lane's own worktree, now on a wave branch: ending the run there
@@ -148,7 +152,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     }
     git(&d, &["commit", "-qm", "solo"]);
     let out = f(&["chunk", "done", &s, "h", "--left", "none"]);
-    assert!(out.ends_with("outside declared scope: solo.txt"), "{out}");
+    assert!(out.contains("outside declared scope: solo.txt"), "{out}");
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &s, "--json"])).unwrap();
     assert_eq!(c["scope"], serde_json::json!(["s/a.txt", "solo.txt"]));
 }
@@ -344,17 +348,25 @@ fn said_id(out: &str, id: &str) -> Option<String> {
 }
 
 #[test]
-fn a_test_beside_a_scope_file_is_inside_but_another_test_is_not() {
+fn a_test_beside_a_scope_file_is_inside_but_another_file_is_not() {
     let (d, state) = init();
     let f = |args: &[&str]| fael(&d, &state, args);
     let args = ["--brief", "b", "--label", "t", "--scope", "t/series.ts"];
     let t = f(&[&["chunk", "add", "t"], &args[..]].concat());
-    let files = ["t/series.ts", "t/series.test.ts", "t/other.test.ts"];
+    // any test file beside the scope file is inside, a new one too; a plain file is not
+    let files = [
+        "t/series.ts",
+        "t/series.test.ts",
+        "t/other.test.ts",
+        "t/other.ts",
+    ];
     lane(&d, &state, &t, ("lane-t", "main"), "RT", &files);
     let out = f(&["chunk", "done", &t, "h", "--left", "none", "--run", "RT"]);
     let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
     assert_eq!(
         block,
-        "declared scope: t/series.ts\noutside declared scope: t/other.test.ts"
+        format!(
+            "declared scope: t/series.ts\noutside declared scope: t/other.ts\nto cover them: fael chunk edit {t} --scope t/series.ts,t/other.ts"
+        )
     );
 }

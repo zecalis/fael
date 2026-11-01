@@ -34,6 +34,49 @@ pub(super) fn after(tx: &Transaction, id: i64) -> Result<Vec<Word>, String> {
         .map_err(err)
 }
 
+/// The chunks whose latest done / review hand-off names `id`'s chunk on its `left:` line — the
+/// origin of a follow-up, so its brief reads what the origin measured and decided without an
+/// `after` edge being drawn (issue 01M6BKHZSP). `<uid> <title>` words, newest first, `CAP` at most.
+pub(super) fn left_over(tx: &Transaction, id: i64) -> Result<Vec<Word>, String> {
+    let uid: String = tx
+        .query_row("SELECT uid FROM chunk WHERE id = ?1", [id], |r| r.get(0))
+        .map_err(err)?;
+    let mut q = tx
+        .prepare(
+            "SELECT c.uid || ' ' || c.title, e.text, COALESCE(c.touched, '') FROM chunk c
+             JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE chunk_uid = c.uid
+                                       AND by = 'agent' AND to_state IN ('done', 'review'))
+             WHERE c.id != ?1 AND e.text LIKE '%left:%'
+               AND c.id NOT IN (SELECT dst FROM edge
+                                 WHERE src = ?1 AND kind = 'after' AND dst IS NOT NULL)
+             ORDER BY e.id DESC",
+        )
+        .map_err(err)?;
+    let all: Vec<Word> = q
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    Ok(all
+        .into_iter()
+        .filter(|(_, text, _)| names_left(text, &uid))
+        .take(CAP)
+        .collect())
+}
+
+/// Does the hand-off's `left:` line name `uid` — by its uid or a prefix of it, as
+/// `chunk done --left` took it?
+fn names_left(handoff: &str, uid: &str) -> bool {
+    handoff
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("left:"))
+        .is_some_and(|v| {
+            v.split(',')
+                .map(|t| t.trim().to_uppercase())
+                .any(|t| t.len() >= 4 && uid.starts_with(&t))
+        })
+}
+
 /// Done chunks (any plan of this db, not already printed through `after`) whose `touched`
 /// meets `scope` and whose done is newer than the last edit of chunk `id`'s brief (its
 /// creation when never edited): ranked (most touched files under the scope, same plan,

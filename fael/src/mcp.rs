@@ -14,6 +14,7 @@ pub(crate) mod chunk;
 mod chunk_misplaced;
 pub(crate) mod close;
 pub(crate) mod find;
+pub(crate) mod roots;
 
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
@@ -119,16 +120,27 @@ fn handle(line: &str) -> Option<Value> {
     let Ok(msg) = serde_json::from_str::<Value>(line) else {
         return Some(error(Value::Null, -32700, "parse error"));
     };
-    // no id = notification (notifications/initialized, cancelled, …) — never answered
-    let id = msg.get("id")?.clone();
+    // our `roots/list` request comes back as a response: no method, our id
+    if msg.get("method").is_none() && msg["id"] == roots::ASK_ID {
+        roots::take(&msg);
+        return None;
+    }
+    // no id = notification (notifications/initialized, cancelled, …) — never answered, except
+    // that the first one asks a client that has roots for them
+    let Some(id) = msg.get("id").cloned() else {
+        return roots::ask_for(msg["method"].as_str().unwrap_or(""));
+    };
     let params = msg.get("params").cloned().unwrap_or(Value::Null);
     let result = match msg["method"].as_str().unwrap_or("") {
-        "initialize" => json!({
+        "initialize" => {
+            roots::declare(&params);
+            json!({
             // ponytail: echo the client's version — the tools use nothing version-specific
             "protocolVersion": params["protocolVersion"].as_str().unwrap_or(VERSION),
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "fael", "version": env!("CARGO_PKG_VERSION")},
-        }),
+            })
+        }
         "ping" => json!({}),
         "tools/list" => json!({"tools": crate::schema::tools()}),
         "tools/call" => call(&params),

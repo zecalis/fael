@@ -6,7 +6,7 @@ use fael_crew::{Bill, PlanRow, Store};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done|undone|drop <plan> | fael plan lint <plan> — try 'fael plan --help'";
+const PLAN_USAGE: &str = "fael plan new <name> \"<title>\" [--app A] [--area dev|marketing] [--parent <plan>] | fael plan list | fael plan export [<plan>] [--json | --section <key>] | fael plan edit <plan> --section <key> (--replace <old> --with <new> | --append <text>) | fael plan apply <file|-> [--dry-run] | fael plan park|unpark|done|undone|drop <plan> | fael plan lint <plan> — try 'fael plan --help'";
 
 /// The verbs `plan` answers — `show` is `export` by another name.
 /// Canonical in `fael-core::work`; the command reuses it.
@@ -32,7 +32,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     let flags: &[&str] = match sub {
         Some("export") => &["json", "since", "section"],
         Some("apply") => &["dry-run"],
-        Some("edit") => &["section", "replace", "with"],
+        Some("edit") => &["section", "replace", "with", "append"],
         _ => &[],
     };
     a.only("plan", flags)?;
@@ -94,21 +94,33 @@ fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `edit <plan> --section <key> --replace <old> --with <new>`: one passage of a section,
-/// through the same bill as `apply` (issue 01M5D5FCG).
+/// `edit <plan> --section <key> --replace <old> --with <new>` or `--append <text>`: one passage
+/// of a section, or a paragraph added at its end, through the same bill as `apply`
+/// (issues 01M5D5FCG, 01M6BKHZM).
 fn edit(a: &Args, r: &Repo, want: &str) -> Result<(), String> {
-    let (Some(key), Some(old)) = (a.one("section"), a.one("replace")) else {
-        return Err(
-            "rejected: plan edit needs --section <key> --replace <old> --with <new>".into(),
-        );
+    let Some(key) = a.one("section") else {
+        return Err("rejected: plan edit needs --section <key> and --replace <old> --with <new>, or --append <text>".into());
     };
-    let new = a
-        .one("with")
-        .ok_or("rejected: --replace needs --with \"<new text>\"")?;
     let mut s = open(r)?;
     let p = one(&s, want)?;
     let now = fael_core::rfc3339(fael_core::now_ms());
-    let (_, rev) = s.plan_edit(&p, &key, &old, &new, &now)?;
+    let (_, rev) = match (a.one("append"), a.one("replace")) {
+        (Some(_), Some(_)) => {
+            return Err("rejected: --append or --replace, not both".into());
+        }
+        (Some(text), None) => s.plan_append(&p, &key, &text, &now)?,
+        (None, Some(old)) => {
+            let new = a
+                .one("with")
+                .ok_or("rejected: --replace needs --with \"<new text>\"")?;
+            s.plan_edit(&p, &key, &old, &new, &now)?
+        }
+        (None, None) => {
+            return Err(
+                "rejected: plan edit needs --replace <old> --with <new>, or --append <text>".into(),
+            );
+        }
+    };
     crate::board::register(r);
     println!("applied (rev {rev})");
     Ok(())
