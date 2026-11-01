@@ -91,7 +91,9 @@ are served by the `fael-crew` binary that `fael` execs — without it they print
 — don't restate them here. The `fael chunk done <uid> "<handoff>"` text is the handoff: the
 board shows it and the brief of every chunk `after` it prints it, so it needs no ledger row.
 A word for a chunk another agent will start goes in `fael chunk note <uid> "<text>"`, printed
-in that chunk's next brief; never `chunk edit` (it clears the owner's approval).
+in that chunk's next brief; never `chunk edit` (it clears the owner's approval) — except
+`chunk edit <uid> --scope <old + new>` on your own chunk: a scope that still covers every old
+path keeps the approval.
 
 A chunk that waits on events (a draft titled with its gate, or `wait --on data`) runs only
 once the count its brief names meets its locked bar; its result goes in the decision that

@@ -202,7 +202,14 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     let (head, rest) = found.split_at(found.len().min(START_MAX));
     let ev = super::held_evidence::lines(&log, &r.root, &al, head);
     let mut out = text_with(&log, head, &ev);
-    out.push_str(&more_line(rest));
+    // the scope, not every file under it: a wide scope made this line dozens of paths long
+    if !rest.is_empty() {
+        out.push_str(&format!(
+            "+{} more: fael find --files {}\n",
+            rest.len(),
+            scope.join(",")
+        ));
+    }
     // r1: stamp what this output showed under `start`, so a later retire of
     // one of these rows carries `shown: ["start", …]` — head only, fail open.
     let ids: Vec<String> = head.iter().map(|(w, _)| w.id.clone()).collect();

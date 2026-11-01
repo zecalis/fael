@@ -43,7 +43,11 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
             "needs you",
             b.needs_you
                 .iter()
-                .map(|n| (n.uid.as_str(), n.kind))
+                // `merged` = its branch landed while the run is live: say why it is also running
+                .map(|n| match n.kind {
+                    "merged" => (n.uid.as_str(), "merged, still running"),
+                    k => (n.uid.as_str(), k),
+                })
                 .collect::<Vec<_>>(),
         ),
         ("stale", stale),
