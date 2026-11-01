@@ -60,6 +60,7 @@ const REJECTS: &[(&str, &str)] = &[
     ("wrong arguments", "usage"),
     ("pinned to one workspace", "usage"),
     ("takes one row", "usage"),
+    ("not a batch field", "usage"),
     ("lists a plan's chunks", "usage"),
     ("rows rejected", "partial"),
     ("closes rejected", "partial"),

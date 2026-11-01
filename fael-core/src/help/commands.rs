@@ -8,7 +8,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "add",
         "write a row",
-        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user|report] [--revisit date|text] [--urgent|--urgent-before id] [--supersedes id [--replace old --with new, no <text>]] [--force] [--dry-run] [--json]
+        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user|report] [--revisit date|text] [--urgent|--urgent-before id] [--supersedes id [--replace old --with new, no <text>]] [--follows id] [--then \"<still to do>\"] [--force] [--dry-run] [--json]
     (chat in any language; write rows in English; file each in the same message as your next tool call, never alone;
      no --files = the files this session edited, as the edit hook recorded;
      --title = the ≤15-word headline lists show, the body is pulled by id — give one to any
@@ -17,6 +17,11 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
      and a later agent asks the user before re-filing or closing it;
      --from report = relayed from someone else's report, not checked against the code:
      lists say (from report, unchecked), `fael bump <id>` drops it once you checked it;
+     --follows id = this row continues an earlier one with a different scope (a measured result,
+     then the next piece): nothing is replaced or closed, the closed-earlier/open-duplicate
+     recall stays silent for that id, `find` shows (followed by …);
+     --then \"<text>\" files, with this row, an issue that follows it (same files, key) — a result
+     as a note, the part still to do as the issue; not --supersedes (that one means the same bug);
      --replace old --with new re-files the --supersedes row with that one passage changed
      (no text; files, key, title and from carry over; old must occur in the body exactly once);
      --to who routes an issue: it lists in full at the session start of whoever's git user.name

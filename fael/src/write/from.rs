@@ -33,6 +33,7 @@ pub(super) fn on_files(log: &core::Log, row: &core::Row, sup: Option<&str>) -> V
         .iter()
         .filter(|o| matches!(o.kind.as_str(), "decision" | "note"))
         .filter(|o| !gone.contains(o.id.as_str()) && Some(o.id.as_str()) != sup)
+        .filter(|o| row.follows.as_deref() != Some(o.id.as_str()))
         .filter(|o| {
             o.files
                 .iter()

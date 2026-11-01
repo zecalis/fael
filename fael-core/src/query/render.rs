@@ -1,4 +1,4 @@
-use super::{closed, reverted, successors, superseded};
+use super::{closed, followers, reverted, successors, superseded};
 use crate::{Log, Row};
 use std::collections::{HashMap, HashSet};
 
@@ -180,7 +180,7 @@ fn close_notes(log: &Log) -> HashMap<&str, String> {
 
 fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option<Cut>) -> String {
     let ab = abbrev(log);
-    let (closed, successors) = (closed(log), successors(log));
+    let (closed, successors, followers) = (closed(log), successors(log), followers(log));
     let restored = restored(log);
     let day = super::revisit::today();
     let notes = if full {
@@ -214,6 +214,7 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
         } else {
             ""
         };
+        let mark = &followed_by(mark, followers.get(r.id.as_str()), &ab);
         let key = r.key.as_ref().map(|k| format!(" #{k}")).unwrap_or_default();
         // `(from user, urgent 1, to: ploy, waiting: mdl lands, held @feat/x)` — whichever are set
         let route = [
@@ -281,6 +282,17 @@ fn render_inner(log: &Log, rows: &[&Row], budget: usize, full: bool, cut: Option
         );
     }
     out
+}
+
+/// `mark` plus `(followed by …)` when later rows continue this one (`--follows`).
+fn followed_by(mark: &str, by: Option<&Vec<&str>>, ab: &Abbrev) -> String {
+    match by {
+        Some(f) => {
+            let ids: Vec<_> = f.iter().map(|x| ab.short(x)).collect();
+            format!("{mark} (followed by {})", ids.join(", "))
+        }
+        None => mark.to_string(),
+    }
 }
 
 /// `… +N more — next: <the exact next call>` — an agent pages without guessing.

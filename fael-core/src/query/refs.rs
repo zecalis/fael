@@ -75,3 +75,16 @@ pub fn successors(log: &Log) -> HashMap<&str, &str> {
     }
     out
 }
+
+/// Rows that continue another without replacing it (`follows`), by the id they
+/// follow, oldest first. Read by `find` ("followed by") and nothing else: a
+/// follow never hides, closes or revives a row.
+pub fn followers(log: &Log) -> HashMap<&str, Vec<&str>> {
+    let mut out: HashMap<&str, Vec<&str>> = HashMap::new();
+    for r in &log.rows {
+        if let Some(t) = r.follows.as_deref() {
+            out.entry(t).or_default().push(r.id.as_str());
+        }
+    }
+    out
+}

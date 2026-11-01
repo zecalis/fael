@@ -279,6 +279,7 @@ fn apply(r: &Repo, step: &Step) -> Result<String, String> {
                 revisit: None,
                 urgent: core::Urgent::Unset,
                 supersedes: None,
+                follows: None,
                 force: false,
                 by: Some(BY.into()),
             };

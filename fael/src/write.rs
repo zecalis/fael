@@ -18,6 +18,7 @@ mod from;
 mod keys;
 mod paths;
 mod recall;
+pub(crate) mod then;
 
 /// Optional fields for `add_row` — bundled so the arg count stays under the lint.
 pub(crate) struct AddOpts {
@@ -29,6 +30,8 @@ pub(crate) struct AddOpts {
     pub revisit: Option<String>,
     pub urgent: core::Urgent,
     pub supersedes: Option<String>,
+    /// Id of an earlier row this one continues without replacing (`--follows`).
+    pub follows: Option<String>,
     pub force: bool,
     /// The writer id when it is not the git identity (`intake`); absent = the git identity.
     pub by: Option<String>,
@@ -80,6 +83,7 @@ pub(crate) fn prepare(
         revisit,
         urgent,
         supersedes,
+        follows,
         force,
         by,
     } = opts;
@@ -120,6 +124,10 @@ pub(crate) fn prepare(
         .map(|t| t.trim().to_lowercase())
         .filter(|t| !t.is_empty());
     row.from = from_user(from)?;
+    // the full id, so a short one pasted from `find` keeps matching later
+    row.follows = follows
+        .map(|f| core::resolve_row(&log, f.trim()).map(|t| t.id.clone()))
+        .transpose()?;
     // the queue position resolves against the open issues (`--urgent` = back,
     // `--urgent-before` = just above that row); core rejects non-issues
     row.urgent = core::resolve_urgent(&log, &urgent)?;

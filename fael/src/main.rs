@@ -250,12 +250,16 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         revisit,
         urgent,
         supersedes: a.one("supersedes"),
+        follows: a.one("follows"),
         force: a.has("force"),
         by: None,
     };
     // `--dry-run` prints the Verdict the real add would act on and writes
     // nothing — same `prepare` as the real add, so the two can never disagree
     if a.has("dry-run") {
+        if a.has("then") {
+            return Err("rejected: --dry-run previews one row — drop --then".into());
+        }
         let (p, _, log) = write::prepare(&r, kind, text, &files, opts)?;
         batch::emit_warns(&p.warns);
         println!(
@@ -268,6 +272,13 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     batch::emit_warns(&warns);
     hook::record_row_asks("cli", "add", &r.root, &row, &warns);
     batch::written(a, &r, &row, &path);
+    // `--then`: the part still to do, an issue that follows the row just written
+    if let Some(t) = a.one("then") {
+        let (kid, kpath, kwarns) = write::then::child(&r, &row, &t, a.has("force"))?;
+        batch::emit_warns(&kwarns);
+        hook::record_row_asks("cli", "add", &r.root, &kid, &kwarns);
+        batch::written(a, &r, &kid, &kpath);
+    }
     // c2: open held rows on the new row's files, verdicts ready — human
     // output after the add result, never a hook line; itself excluded. Under
     // `--json` stdout stays one JSON row per line, so the held text is a

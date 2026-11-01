@@ -40,7 +40,7 @@ pub use lookup::{
 pub use matching::{glob, has_regex_chars, regex_hint};
 pub use md::{MdRef, phantom_md_refs};
 pub use push::{push, push_tiered};
-pub use refs::{Ref, id_tokens, phantom_refs, ref_state, successors};
+pub use refs::{Ref, followers, id_tokens, phantom_refs, ref_state, successors};
 pub use render::{
     Abbrev, Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page, restored,
 };
