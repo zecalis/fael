@@ -19,17 +19,10 @@
 
 use super::parse::Parsed;
 use super::repeat::issue_closes;
-use crate::{Log, rfc3339, ts_ms};
+use super::span::{Span, day_string, monday_days, span_of};
+use crate::{Log, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
-
-/// One span: median + p90 in whole seconds over `n` measured durations.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
-pub struct Span {
-    pub median: u64,
-    pub p90: u64,
-    pub n: usize,
-}
 
 /// The three flow spans plus the done→merge mapping coverage:
 /// `runs_with_pr` of `runs_total` runs carry a PR (e.g. 105/136).
@@ -69,30 +62,6 @@ pub struct FlowRun {
 pub struct FlowMerge {
     pub number: i64,
     pub at_ms: i64,
-}
-
-fn span_of(mut secs: Vec<u64>) -> Span {
-    secs.sort_unstable();
-    let n = secs.len();
-    if n == 0 {
-        return Span::default();
-    }
-    let median = secs[n / 2];
-    let p90 = secs[(n * 90).div_ceil(100).saturating_sub(1).min(n - 1)];
-    Span { median, p90, n }
-}
-
-/// Monday (UTC) of `ms` as days since the epoch.
-fn monday_days(ms: i64) -> i64 {
-    let days = ms.div_euclid(86_400_000);
-    days - (days + 3).rem_euclid(7)
-}
-
-pub(super) fn day_string(days: i64) -> String {
-    rfc3339((days * 86_400_000).max(0) as u64)
-        .get(..10)
-        .unwrap_or("")
-        .to_string()
 }
 
 pub fn flow(

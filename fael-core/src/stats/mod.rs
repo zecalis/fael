@@ -35,6 +35,7 @@ mod said;
 #[cfg(test)]
 mod said_tests;
 mod said_yield;
+mod span;
 mod touch;
 mod unused;
 mod value;
@@ -58,7 +59,7 @@ pub use experience::{
     CLOSE_TEMPLATE, Commit, Commits, Experience, FIX_CUTOFF_MS, Shape, bare_shas, cites_fix,
     close_shape, fael_cites, new_close, pr_cites, resolve,
 };
-pub use flow::{Flow, FlowMerge, FlowRun, Span, WeekCount};
+pub use flow::{Flow, FlowMerge, FlowRun, WeekCount};
 pub use friction::{FIRST_CALL_WINDOW, Friction, SHAPE_GATE, Tally};
 pub use handoff::{HandoffRuns, Side, handoff_runs};
 pub use kind::{Earned, SayKind};
@@ -71,6 +72,7 @@ pub use parse::{Parsed, UsageRow, parse, session_stem, since, since_arg};
 pub use repeat::{ContextLoop, context_loop};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{ASK_SPLIT, EventYield, KindYield};
+pub use span::Span;
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
 

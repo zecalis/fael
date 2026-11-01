@@ -1,7 +1,7 @@
 //! Usage per calendar day (UTC) in one pass over the parsed rows: the series
 //! a chart reads, so no reader loops `--since` (issue 01M5S63N).
 
-use super::flow::day_string;
+use super::span::day_string;
 use super::parse::Parsed;
 use serde::Serialize;
 use std::collections::BTreeMap;
