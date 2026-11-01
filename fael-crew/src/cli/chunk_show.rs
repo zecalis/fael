@@ -9,6 +9,12 @@ use std::process::ExitCode;
 /// `fael chunk show <uid|label> [--json]`: the board's chunk object plus the brief, owner
 /// answers and notes its next start prints — one chunk, no filtering the whole board.
 pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
+    // `--full` is start's flag (it claims); show already prints the whole brief
+    if a.has("full") {
+        return Err(format!(
+            "rejected: chunk show prints the whole brief already — try `fael chunk show {key}`"
+        ));
+    }
     a.only("chunk show", &["json"])?;
     let s = Store::open(&db(r))?;
     let b = s.show(key)?;

@@ -44,16 +44,22 @@ fn about(s: &work::Scopes, shared: &[String], files: &[String]) -> Vec<Line> {
         }
     }
     by.into_iter()
-        .map(|(o, fs)| Line {
-            kind: Kind::Overlap { owner: o.uid.clone() },
-            text: format!(
-                "fael: {} outside chunk {}'s scope, inside {} chunk {}'s — coordinate: fael chunk note {} \"<text>\", or go on; said once per chunk, chunk done lists every file\n",
-                fs.join(", "),
-                s.uid,
-                o.state,
-                o.name,
-                o.uid
-            ),
+        .map(|(o, fs)| {
+            // the files are this chunk's work? widen its scope: a superset keeps the approval
+            let wider: Vec<&str> = s.declared.iter().map(String::as_str).chain(fs.iter().copied()).collect();
+            Line {
+                kind: Kind::Overlap { owner: o.uid.clone() },
+                text: format!(
+                    "fael: {} outside chunk {}'s scope, inside {} chunk {}'s — coordinate: fael chunk note {} \"<text>\" · yours? fael chunk edit {} --scope {} (a superset keeps approval) · or go on; said once per chunk, chunk done lists every file\n",
+                    fs.join(", "),
+                    s.uid,
+                    o.state,
+                    o.name,
+                    o.uid,
+                    s.uid,
+                    wider.join(",")
+                ),
+            }
         })
         .collect()
 }
@@ -88,7 +94,7 @@ mod tests {
         assert_eq!(ls.len(), 1);
         assert_eq!(
             ls[0].text,
-            "fael: src/b/x.rs outside chunk U1's scope, inside running chunk p/b's — coordinate: fael chunk note U2 \"<text>\", or go on; said once per chunk, chunk done lists every file\n"
+            "fael: src/b/x.rs outside chunk U1's scope, inside running chunk p/b's — coordinate: fael chunk note U2 \"<text>\" · yours? fael chunk edit U1 --scope src/a/,src/b/x.rs (a superset keeps approval) · or go on; said once per chunk, chunk done lists every file\n"
         );
     }
 
