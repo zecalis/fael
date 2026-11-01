@@ -5,6 +5,7 @@
 use super::asks::{self, UsageMeta};
 use super::state::{head_branch, now_rfc3339};
 use super::stats_text::{print_day, print_text};
+use super::usage_commits::{commits, commits_by_clone};
 use crate::core;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -195,23 +196,42 @@ pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -
 
 /// The `Stats` `fael stats --json` prints — `fael report` renders the same one.
 pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stats::Stats {
-    let commits = commits_by_clone(u);
+    // The repo `fael stats` runs in is read even when no usage line names it,
+    // so a fresh clone's outcome reads log + git + gh alone (outcome-dayone).
+    let cwd = crate::repo()
+        .ok()
+        .map(|r| r.root.to_string_lossy().into_owned())
+        .filter(|k| !u.logs.contains_key(k));
+    let mut owned;
+    let logs = match &cwd {
+        Some(k) => {
+            owned = u.logs.clone();
+            owned.insert(k.clone(), repo_log(k));
+            &owned
+        }
+        None => &u.logs,
+    };
+    let window = core::stats::outcome_window(u.since, logs);
+    let mut commit_map = commits_by_clone(u);
+    if let Some(k) = &cwd {
+        let found = commits(Path::new(k), window.unwrap_or(0));
+        commit_map.insert(k.clone(), found.into_iter().map(|(_, c)| c).collect());
+    }
     let constants = asks::constants().into();
     let runs = super::flow::runs();
-    let window = core::stats::outcome_window(u.since, &u.logs);
     let merges = super::flow::merges(window);
     let tz = local_tz_offset_min();
-    let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, &u.logs, tz);
+    let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, logs, tz);
     let mut s = core::stats::aggregate(
         &u.parsed,
-        &u.logs,
-        &commits,
+        logs,
+        &commit_map,
         &runs,
         &merges,
         cfg,
         constants,
         rows,
-        local_tz_offset_min(),
+        tz,
         u.since,
         &prs,
         prs_merged_total,
@@ -223,54 +243,6 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
             core::stats::decision_by_state(&u.parsed, &log, &held, crate::write::cap::MAX_LIVE);
     }
     s
-}
-
-/// Each repo's default-branch commits since its first usage (H5 capture
-/// recall), read by `fael stats`, never on a push. Worktrees of one clone
-/// share its object store, so the clone gets one `git log` from its earliest
-/// first usage and each worktree keeps the commits since its own.
-fn commits_by_clone(u: &Usage) -> core::stats::Commits {
-    let mut clones: HashMap<PathBuf, Vec<(&String, i64)>> = HashMap::new();
-    for repo in u.logs.keys() {
-        if let Some(&since) = u.parsed.first_seen.get(repo) {
-            let key = crate::journal::root(Path::new(repo)).unwrap_or_else(|| repo.into());
-            clones.entry(key).or_default().push((repo, since));
-        }
-    }
-    let mut out = core::stats::Commits::new();
-    for repos in clones.values() {
-        let since = repos.iter().map(|(_, s)| *s).min().unwrap_or(0);
-        let all = commits(Path::new(repos[0].0), since);
-        for (repo, since) in repos {
-            let mine = all.iter().filter(|(at, _)| *at >= *since);
-            out.insert((*repo).clone(), mine.map(|(_, c)| c.clone()).collect());
-        }
-    }
-    out
-}
-
-/// The default branch's commits since `since_ms`, each with its committer
-/// time (what `--since` filters on). No git, no branch: none.
-fn commits(root: &Path, since_ms: i64) -> Vec<(i64, core::stats::Commit)> {
-    let branch = crate::maintain::default_branch(root);
-    let since = format!("--since={}", core::rfc3339(since_ms.max(0) as u64));
-    let log = |r: &str| {
-        let fmt = "--format=%H%x1f%cI%x1f%B%x1e";
-        crate::git(root, &["log", r, "--no-merges", &since, fmt])
-    };
-    let out = log(&format!("origin/{branch}")).or_else(|| log(&branch));
-    out.unwrap_or_default()
-        .split('\x1e')
-        .filter_map(|c| {
-            let mut p = c.trim().splitn(3, '\x1f');
-            let (sha, at, message) = (p.next()?, p.next()?, p.next()?);
-            let commit = core::stats::Commit {
-                sha: sha.to_string(),
-                message: message.trim().to_string(),
-            };
-            Some((core::ts_ms(at)?, commit))
-        })
-        .collect()
 }
 
 pub fn stats(a: &crate::Args) -> Result<(), String> {
@@ -301,17 +273,21 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         misses();
         return Ok(());
     }
-    // without `--json` an empty log is one friendly line, not a table of zeros
-    if u.empty && !json {
-        println!("fael: no usage recorded yet");
-        misses();
-        return Ok(());
-    }
-    if u.parsed.n == 0 && !json {
-        println!(
-            "fael: no usage recorded yet ({} from temp repos skipped)",
-            u.parsed.skipped
-        );
+    // without `--json` an empty log is one friendly line, not a table of zeros;
+    // the outcome joins read log + git + gh, so day one still has them
+    if (u.empty || u.parsed.n == 0) && !json {
+        if u.empty {
+            println!("fael: no usage recorded yet");
+        } else {
+            println!(
+                "fael: no usage recorded yet ({} from temp repos skipped)",
+                u.parsed.skipped
+            );
+        }
+        let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
+        if let Some(line) = super::stats_outcome::outcome_line(&aggregate(&u, &cfg, false)) {
+            println!("{line}");
+        }
         misses();
         return Ok(());
     }

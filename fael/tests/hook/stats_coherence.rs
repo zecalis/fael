@@ -127,3 +127,57 @@ fn since_date_only_is_local_midnight() {
     );
     assert!(v["rounds"]["since_utc"] == "", "{out}");
 }
+
+/// PLAN-fael-outcome-dayone: a repo with a ledger and PRs but not one usage
+/// line still reads `outcome` — filed→closed from the log, the PR join from the
+/// listed PRs, the merged total unknown (no GitHub remote answers the count).
+#[test]
+fn outcome_reads_with_zero_usage() {
+    let d = repo();
+    let state = d.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add", "issue", "broke it", "--title", "broke it", "--files", "src/a.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let (ok, _, err) = fael(
+        &d,
+        &["close", &id, "cause → fixed in (#7); guard `src/a.rs` test"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let prs = r#"[{"number":7,"headRefName":"fix/a","state":"MERGED","createdAt":"2026-10-30T00:00:00Z","mergedAt":"2026-10-31T00:00:00Z"},{"number":8,"headRefName":"feat/b","state":"OPEN","createdAt":"2026-10-31T00:00:00Z"}]"#;
+    let (ok, out, _) = fael_at_env(
+        &state,
+        &d,
+        &["stats", "--json"],
+        "",
+        &[("FAEL_GH_JSON", prs)],
+    );
+    assert!(ok, "{out}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let o = &v["outcome"];
+    assert!(v["events"] == 0, "{out}");
+    assert!(o["issues_filed"] == 1 && o["issues_closed"] == 1, "{out}");
+    assert!(o["filed_to_close"]["n"] == 1, "{out}");
+    assert!(o["prs_with_row"] == 1 && o["prs_without_row"] == 1, "{out}");
+    assert!(o["joined_since"] == "2026-10-30", "{out}");
+    assert!(o["prs_merged_unknown"] == true, "{out}");
+    // the text path prints the same joins under the "no usage" line
+    let (ok, out, _) = fael_at_env(&state, &d, &["stats"], "", &[("FAEL_GH_JSON", prs)]);
+    assert!(
+        ok && out.starts_with("fael: no usage recorded yet")
+            && out.contains(
+                "
+outcome: "
+            ),
+        "{out}"
+    );
+    assert!(out.contains("issues 1 filed / 1 closed"), "{out}");
+}

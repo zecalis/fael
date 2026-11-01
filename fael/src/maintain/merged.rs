@@ -235,7 +235,11 @@ pub(crate) fn outcome_inputs(
     let Ok(r) = crate::repo() else {
         return (vec![], None);
     };
-    let prs = gh_prs(&r.root).map(|j| listed_prs(&j)).unwrap_or_default();
+    // `FAEL_GH_JSON` (tests only, see orphan's) stands in for the PR list
+    let list = std::env::var("FAEL_GH_JSON")
+        .ok()
+        .or_else(|| gh_prs(&r.root));
+    let prs = list.map(|j| listed_prs(&j)).unwrap_or_default();
     let total = core::stats::outcome_window(since, logs)
         .and_then(|w| range_for(w, core::now_ms() as i64, tz_min))
         .and_then(|range| prs_merged_count(&r.root, &range));
