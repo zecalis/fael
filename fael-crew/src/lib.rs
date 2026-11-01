@@ -7,6 +7,7 @@ mod apply;
 mod apply_graph;
 mod backup;
 mod bill;
+mod bill_wait;
 mod board;
 mod board_math;
 mod brief;
