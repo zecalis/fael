@@ -109,13 +109,16 @@ fn partner(
 
 /// The start's clash gate. A clash with the partner is no refusal for `follow`, `pair`, or a
 /// `lane` over a dir (prefix) overlap; a lane over the same file still refuses — that is a
-/// pair. Any other clash (or none named) refuses with the ready joint command, `--force` last.
+/// pair. Any other clash (or none named) refuses with the ready joint command, `--force
+/// --because` last. Bare `--force` is rejected (issue 01M6CZ0K); a force past a clash
+/// writes a receipt (clash snapshot + because) the caller stores in the start event.
+/// Returns the partner and, on a forced clash, its receipt.
 pub(super) fn gate(
     tx: &Transaction,
     first: &Row,
     ms: &[String],
     o: &Start,
-) -> Result<Option<Partner>, String> {
+) -> Result<(Option<Partner>, Option<String>), String> {
     let p = partner(tx, first, ms, o)?;
     let report = clash_report(tx, ms, &o.shared, &o.stale)?;
     let exact_lane = |u: &str, c: OverlapClass| {
@@ -129,10 +132,20 @@ pub(super) fn gate(
                 .is_some_and(|p| &p.uid == u && !exact_lane(u, *c))
         })
         .collect();
-    if kept.is_empty() || o.force {
-        return Ok(p);
-    }
     let uid = &first.uid;
+    let because = o
+        .because
+        .as_deref()
+        .map(str::trim)
+        .filter(|b| !b.is_empty());
+    if kept.is_empty() {
+        if o.force && because.is_none() {
+            return Err(format!(
+                "rejected: --force needs --because \"<what you will avoid>\" — try `fael chunk start {uid} --force --because \"<what you will avoid>\"`"
+            ));
+        }
+        return Ok((p, None));
+    }
     let (hit, class, _) = kept[0];
     let how = if kept.iter().any(|(_, c, _)| *c == OverlapClass::Exact) || exact_lane(hit, *class) {
         "pair"
@@ -140,9 +153,22 @@ pub(super) fn gate(
         "lane"
     };
     let lines: Vec<_> = kept.iter().map(|k| k.2.as_str()).collect();
-    Err(format!(
-        "rejected: chunk {uid} shares files with a running chunk — {}; try `fael chunk start {uid} --with {hit} --as {how}` to start beside it, or `fael chunk start {uid} --force` to start it anyway",
-        lines.join("; ")
+    let joined_lines = lines.join("; ");
+    if !o.force {
+        return Err(format!(
+            "rejected: chunk {uid} shares files with a running chunk — {joined_lines}; try `fael chunk start {uid} --with {hit} --as {how}` to start beside it, or `fael chunk start {uid} --force --because \"<what you will avoid>\"` to start it anyway"
+        ));
+    }
+    let Some(because) = because else {
+        return Err(format!(
+            "rejected: chunk {uid} shares files with a running chunk — {joined_lines}; try `fael chunk start {uid} --with {hit} --as {how}` to start beside it, or `fael chunk start {uid} --force --because \"<what you will avoid>\"` to start it anyway (bare --force is rejected)"
+        ));
+    };
+    Ok((
+        p,
+        Some(format!(
+            "started by --force past clash {joined_lines} — because {because}"
+        )),
     ))
 }
 

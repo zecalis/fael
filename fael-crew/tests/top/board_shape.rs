@@ -125,11 +125,19 @@ fn fixes_open(b: &Value, uid: &Value) -> bool {
 }
 
 /// A chunk's keys without the optional tail, each checked: `conflicts` (PLAN-fael-parallel
-/// merge-check: only on an open PR), then `touched` (the paths `done` claimed from the run's diff: only once claimed).
+/// merge-check: only on an open PR), then `touched` (the paths `done` claimed from the run's diff: only once claimed),
+/// then `forced` (the receipts this chunk's forced starts wrote: only when forced, issue 01M6CZ0K).
 /// `client_hint` (`chunk add|edit --client`; absent = none, issue 01M5F9DH) is stripped
 /// wherever serde put it (after `model`) before the base-keys compare.
 fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
     let mut k = keys(c);
+    if k.last() == Some(&"forced") {
+        k.pop();
+        assert!(
+            c["forced"].as_array().unwrap().iter().all(Value::is_string),
+            "{uid}"
+        );
+    }
     if k.last() == Some(&"touched") {
         k.pop();
         assert!(
@@ -220,16 +228,21 @@ fn shows_live_fields(b: &Value, chunks: &[&Value]) {
 }
 
 /// A chunk's `run`/`wait` objects carry their key sets; `review`
-/// (`chunk done --review clean|fixed|failed`; absent = none) is the run's trailing
-/// optional, like `client_hint` is the chunk's.
+/// (`chunk done --review clean|fixed|failed`; absent = none) and `force_reason`
+/// (`chunk start --force --because`; absent = none, issue 01M6CZ0K) are the run's
+/// trailing optionals, like `client_hint` is the chunk's.
 fn subkeys(c: &Value, uid: &str) {
     for (k, want) in [("run", RUN_KEYS), ("wait", WAIT_KEYS)] {
         let mut have = Vec::new();
         if !c[k].is_null() {
             have = keys(&c[k]);
-            if k == "run" && have.last() == Some(&"review") {
-                have.pop();
-                assert!(c["run"]["review"].is_string(), "{uid}");
+            if k == "run" {
+                for tail in ["review", "force_reason"] {
+                    if have.last() == Some(&tail) {
+                        have.pop();
+                        assert!(c["run"][tail].is_string(), "{uid}");
+                    }
+                }
             }
         }
         assert!(c[k].is_null() || have == want, "{uid}: {k}");

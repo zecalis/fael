@@ -56,6 +56,7 @@ fn parse_reads_a_multi_line_call_under_crlf() {
 const HIDDEN: &[(&str, &str)] = &[
     ("start", "with"),
     ("start", "as"),
+    ("start", "because"),
     ("start", "session"),
     ("accept", "merged"),
 ];

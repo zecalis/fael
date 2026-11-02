@@ -51,6 +51,7 @@ fn the_brief_prints_the_plan_sections_once() {
         chunks: vec![chunk("A"), chunk("B")],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     };
     let t = st.text();
     assert!(t.starts_with("fael run R · 2 paired chunks\n"), "{t}");
@@ -75,6 +76,7 @@ fn the_brief_prints_the_plan_sections_once() {
         chunks: vec![labelled],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     };
     assert!(one.text().contains("\n# 1 — titled with its label (C)\n"));
     assert!(t.contains("brief A") && t.contains("brief B"), "{t}");
@@ -104,6 +106,7 @@ fn the_brief_prints_the_plan_sections_once() {
         chunks: vec![noted],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(
@@ -125,6 +128,7 @@ fn the_brief_prints_the_plan_sections_once() {
         chunks: vec![bare],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(!t.contains("Goal") && t.contains("brief E"), "{t}");
@@ -178,6 +182,7 @@ fn start_full_prints_the_full_rules_and_the_lean_start_the_core() {
         chunks: vec![chunk("A")],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     };
     assert!(st.render(true, true).contains("lane: one scope"));
     assert!(!st.render(false, true).contains("lane: one scope"));
@@ -197,6 +202,7 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
         chunks: vec![c],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(t.contains("## 1. Goal"), "{t}");
@@ -218,6 +224,7 @@ fn a_section_left_as_plan_new_wrote_it_is_not_printed() {
         chunks: vec![c],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     // a blank Goal still prints the plan header with its fill pointer
@@ -275,6 +282,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
         chunks: vec![chunk("A")],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(
@@ -289,6 +297,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
         chunks: vec![bare],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(
@@ -327,6 +336,7 @@ fn only_a_mixed_chunk_gets_the_delegate_line() {
         chunks: vec![c],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(t.contains("small-model subagents"), "{t}");
@@ -341,6 +351,7 @@ fn the_default_brief_is_handoff_and_tldr_with_rules_once() {
         chunks: vec![c],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     };
     let lean = st.render(false, false);
     assert!(
@@ -376,6 +387,7 @@ fn start_resume_short_orders_run_tldr_resume_pointer() {
         chunks: vec![c],
         orphaned: vec![],
         resumed: true,
+        forced: vec![],
     };
     let short = st.render_short();
     let (run, tldr, resume, ptr) = (

@@ -118,13 +118,22 @@ fn run_end_forced_takeover_and_fencing() {
             .contains("already used")
     );
     let r2 = start(&mut s, &c, "/b").unwrap();
-    // --force takes over: /b's run ends, /b is fenced off, /c holds it
+    // --force --because takes over: /b's run ends, /b is fenced off, /c holds it
     let force = Start {
         force: true,
+        because: Some("c is the live seat, b left".into()),
         client: Some("codex".into()),
         ..Start::default()
     };
-    let r3 = s.start(&c, &force, &here("/c")).unwrap().run;
+    let st = s.start(&c, &force, &here("/c")).unwrap();
+    let r3 = st.run;
+    assert_eq!(st.forced.len(), 1, "{:?}", st.forced);
+    assert!(st.forced[0].contains("taken over"), "{:?}", st.forced);
+    assert!(
+        st.forced[0].contains("c is the live seat"),
+        "{:?}",
+        st.forced
+    );
     assert_eq!(live(&s, &c), 1);
     let e = s
         .wait(&c, "owner", "q?", None, &[], &here_on("/b", "x"))

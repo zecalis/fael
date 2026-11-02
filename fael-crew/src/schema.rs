@@ -65,6 +65,9 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// from git (product:mission, same rule as run-telemetry model/cost) — so a waiter sees
 /// live files, not the whole declared scope. Distinct from `chunk.touched` (the diff `done`
 /// claimed).
+/// `run.force_reason`: `chunk start --force --because "<what you will avoid>"` (issue
+/// 01M6CZ0K) — the receipt a force writes; NULL = a start that forced nothing past.
+/// A column, since the run row is what `board` reads and old rows stay NULL.
 /// `chunk.client_hint`: the client the planner picked (`chunk add|edit --client`), which
 /// `approve` falls back to; epoch v8 dropped an unwired one (issue 01M4XM98).
 /// `plan.parent`: the name of the umbrella plan of the same app, one level (issue 01M51KW0).
@@ -84,6 +87,7 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("run", "verdict", "TEXT"),
     ("run", "review", "TEXT"),
     ("run", "base", "TEXT"),
+    ("run", "force_reason", "TEXT"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open

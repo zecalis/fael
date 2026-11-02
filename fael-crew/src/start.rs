@@ -6,7 +6,7 @@
 
 use super::State;
 use super::agent::unwait;
-use super::chunk::{Here, end_live, row, set, tx};
+use super::chunk::{Here, Row, end_live, row, set, tx};
 use super::holder::{
     end_caller_seat, end_here, holder, holder_detail, holder_worktree, members, ready_paired,
 };
@@ -31,6 +31,10 @@ pub struct Start {
     /// take over a live run in another worktree (its end names who took it), never a kill;
     /// a live run in the caller's own worktree is taken over without it
     pub force: bool,
+    /// `--force --because "<what you will avoid>"` (issue 01M6CZ0K): the receipt a
+    /// force writes — stored on the run and in the start event. Bare `--force`
+    /// is rejected; `--because` without `--force` is rejected.
+    pub because: Option<String>,
     /// the agent's session (`CLAUDE_CODE_SESSION_ID`) on a start without `--run`, for `--resume`
     pub session: Option<String>,
     /// HEAD's sha in the worktree at start → `run.base`, where `done`'s diff begins
@@ -104,6 +108,10 @@ pub struct Started {
     /// Same-session retry: `reuse_live` returned the live R without a new run row.
     /// The caller prints short unless `--full`.
     pub resumed: bool,
+    /// The force receipt this start wrote, if it forced anything past
+    /// (`started by --force past … — because …`): the CLI prints it after
+    /// the brief (issue 01M6CZ0K). Empty = a start that forced nothing.
+    pub forced: Vec<String>,
 }
 
 fn prev(tx: &Transaction, id: i64) -> Result<Option<Prev>, String> {
@@ -192,10 +200,13 @@ fn reuse_live(
         chunks,
         orphaned: Vec::new(),
         resumed: true,
+        forced: Vec::new(),
     }))
 }
 
-/// The event text of a start past an unmet after (`--force` only); `None` = it was ready.
+/// The event text of a start past an unmet after (`--force --because` only);
+/// `None` = it was ready. Bare `--force` is rejected; the receipt carries
+/// the past after plus `--because` (issue 01M6CZ0K).
 fn skipped(
     tx: &Transaction,
     id: i64,
@@ -203,19 +214,23 @@ fn skipped(
     pair: &str,
     ms: &[String],
     today: &str,
-    force: bool,
+    o: &Start,
 ) -> Result<Option<String>, String> {
     Ok(match ready_paired(tx, id, today, ms)? {
         Ready::Yes => None,
         Ready::Blocked(u) => {
             let w: Vec<_> = u.into_iter().map(|u| u.uid.unwrap_or(u.what)).collect();
-            if !force {
+            if !o.force {
                 return Err(format!(
-                    "rejected: chunk {m}{pair} is blocked — after {} first, or try `fael chunk start {m} --force` to start it anyway",
+                    "rejected: chunk {m}{pair} is blocked — after {} first, or try `fael chunk start {m} --force --because \"<what you will avoid>\"` to start it anyway",
                     w.join(", ")
                 ));
             }
-            Some(format!("started by --force past after {}", w.join(", ")))
+            let because = need_because(o, m)?;
+            Some(format!(
+                "started by --force past after {} — because {because}",
+                w.join(", ")
+            ))
         }
         Ready::No(why) => {
             return Err(format!(
@@ -224,6 +239,39 @@ fn skipped(
             ));
         }
     })
+}
+
+/// Bare `--force` is rejected; returns the trimmed receipt on a forced start.
+/// Call only when `o.force` already held (the caller rejected the unforced
+/// path); a non-force call is a programming error, rejected as one.
+fn need_because(o: &Start, m: &str) -> Result<String, String> {
+    if !o.force {
+        return Err(format!(
+            "crew.db: need_because called without --force for {m}"
+        ));
+    }
+    match o
+        .because
+        .as_deref()
+        .map(str::trim)
+        .filter(|b| !b.is_empty())
+    {
+        Some(b) => Ok(b.to_string()),
+        None => Err(format!(
+            "rejected: --force needs --because \"<what you will avoid>\" — try `fael chunk start {m} --force --because \"<what you will avoid>\"`"
+        )),
+    }
+}
+
+/// `--because` without `--force` names no bypass: reject it, so a receipt
+/// never rides a start that forced nothing past.
+fn check_lonely_because(o: &Start, m: &str) -> Result<(), String> {
+    if !o.force && o.because.as_deref().is_some_and(|b| !b.trim().is_empty()) {
+        return Err(format!(
+            "rejected: --because needs --force — try `fael chunk start {m}` alone, or `fael chunk start {m} --force --because \"<what you will avoid>\"`"
+        ));
+    }
+    Ok(())
 }
 
 /// What follows a not-ready reason. A wait on the owner is the owner's to end, so the verb is
@@ -238,6 +286,7 @@ fn way_out(why: &str, m: &str) -> String {
 }
 
 /// One run row. `loc` = (worktree, branch, base); `with` = (joint mode, partner uid).
+/// `force_reason` = `--because` trimmed, only on a `--force` start, else NULL.
 fn insert_run(
     tx: &Transaction,
     run: &str,
@@ -248,14 +297,29 @@ fn insert_run(
     now: &str,
 ) -> Result<(), String> {
     // issue 01M4XN3S: no --client/--model = the approval's, else the chunk's hint
+    let force_reason = o
+        .force
+        .then(|| o.because.as_deref().map(str::trim))
+        .flatten()
+        .filter(|b| !b.is_empty());
     tx.execute(
-        "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base, joint, partner)
+        "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base, joint, partner, force_reason)
          SELECT ?1, id, COALESCE(?3, approved_client, client_hint),
-                COALESCE(?4, approved_model, model_hint), ?5, ?6, ?7, ?8, ?9, ?10, ?11
+                COALESCE(?4, approved_model, model_hint), ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
          FROM chunk WHERE id = ?2",
         params![
-            run, chunk, o.client, o.model, loc.0, loc.1, now, o.session, loc.2,
-            with.map(|w| w.0), with.map(|w| w.1)
+            run,
+            chunk,
+            o.client,
+            o.model,
+            loc.0,
+            loc.1,
+            now,
+            o.session,
+            loc.2,
+            with.map(|w| w.0),
+            with.map(|w| w.1),
+            force_reason
         ],
     )
     .map_err(err)?;
@@ -277,6 +341,128 @@ fn end_seats(
     Ok(orphaned)
 }
 
+/// Claim every paired member: write its start event (joint handshake and force
+/// receipts ride on the first member) and return the rows plus the force
+/// receipts for `Started.forced` (issue 01M6CZ0K).
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+fn claim_members(
+    tx: &Transaction,
+    ms: &[String],
+    first: &Row,
+    uid: &str,
+    o: &Start,
+    run: &str,
+    wt: Option<&str>,
+    here: &Here,
+    today: &str,
+    joined: &Option<String>,
+    clash_forced: &Option<String>,
+) -> Result<(Vec<(Row, Option<Prev>)>, Vec<String>), String> {
+    // the handshake and the clash receipt ride on the first member's start event
+    let said = |m: &str, t: Option<String>| {
+        if m != first.uid {
+            return t;
+        }
+        let mut parts = Vec::new();
+        if let Some(t) = t {
+            parts.push(t);
+        }
+        if let Some(j) = joined {
+            parts.push(j.clone());
+        }
+        if let Some(f) = clash_forced {
+            parts.push(f.clone());
+        }
+        (!parts.is_empty()).then(|| parts.join("; "))
+    };
+    let mut forced: Vec<String> = clash_forced.clone().into_iter().collect();
+    let mut claim = Vec::new();
+    for m in ms.iter().cloned() {
+        let r = row(tx, &m)?;
+        let pair = if m == first.uid {
+            String::new()
+        } else {
+            format!(" (paired with {uid})")
+        };
+        let mut was = None;
+        if r.state == State::Running {
+            was = prev(tx, r.id)?;
+            // a running chunk whose run ended (the agent exited) starts again as is
+            // the same worktree is the same seat: the agent that held it is gone
+            let seat = wt.is_some() && holder_worktree(tx, r.id)?.as_deref() == wt;
+            let text = match holder(tx, r.id)? {
+                Some(h) if !o.force && !seat => {
+                    return Err(format!(
+                        "rejected: chunk {m}{pair} is held by run {h} — try `fael chunk start {m} --force --because \"<what you will avoid>\"` to take it over"
+                    ));
+                }
+                Some(h) => {
+                    end_live(tx, r.id, here.now)?;
+                    let who = o.client.as_deref().unwrap_or("agent");
+                    if o.force {
+                        let because = need_because(o, &m)?;
+                        let t = format!(
+                            "taken over from run {h} by run {run} ({who}) in {} by --force — because {because}",
+                            wt.unwrap_or("no worktree")
+                        );
+                        forced.push(t.clone());
+                        t
+                    } else {
+                        format!(
+                            "taken over from run {h} by run {run} ({who}) in {}",
+                            wt.unwrap_or("no worktree")
+                        )
+                    }
+                }
+                None => {
+                    if o.force {
+                        let because = need_because(o, &m)?;
+                        let t = format!(
+                            "started again by run {run} by --force: the last run ended — because {because}"
+                        );
+                        forced.push(t.clone());
+                        t
+                    } else {
+                        format!("started again by run {run}: the last run ended")
+                    }
+                }
+            };
+            set(
+                tx,
+                &r,
+                State::Running,
+                "agent",
+                said(&m, Some(text)).as_deref(),
+                here.now,
+            )?;
+        } else {
+            // a chunk whose work shipped before its after was met still needs a run
+            // to reach done: `--force --because` starts it, and the event says what it skipped
+            let mut text = skipped(tx, r.id, &m, &pair, ms, today, o)?;
+            if let Some(t) = &text {
+                if t.contains("--force") {
+                    forced.push(t.clone());
+                }
+            } else if o.force && clash_forced.is_none() {
+                let because = need_because(o, &m)?;
+                let t = format!("started by --force — because {because}");
+                forced.push(t.clone());
+                text = Some(t);
+            }
+            set(
+                tx,
+                &r,
+                State::Running,
+                "agent",
+                said(&m, text).as_deref(),
+                here.now,
+            )?;
+        }
+        claim.push((r, was));
+    }
+    Ok((claim, forced))
+}
+
 impl Store {
     pub fn start(&mut self, uid: &str, o: &Start, here: &Here) -> Result<Started, String> {
         let mut run = o.run.clone().unwrap_or_else(fael_core::ulid);
@@ -284,7 +470,6 @@ impl Store {
         let mut wt = (!o.no_worktree).then_some(here.worktree);
         let tx = tx(self)?;
         let first = row(&tx, uid)?;
-        let mut claim = Vec::new();
         let ms = members(&tx, first.id)?;
         // a retry from the session that already holds it is success, not a
         // takeover: the brief header names the live R, so re-running start in
@@ -293,7 +478,8 @@ impl Store {
             tx.commit().map_err(err)?;
             return Ok(reused);
         }
-        let partner = joint::gate(&tx, &first, &ms, o)?;
+        check_lonely_because(o, uid)?;
+        let (partner, clash_forced) = joint::gate(&tx, &first, &ms, o)?;
         // a pair is one R in the partner's worktree and branch; any other start is its own R
         let seat = partner.as_ref().filter(|p| p.mode == Joint::Pair);
         let caller_wt = wt;
@@ -313,63 +499,19 @@ impl Store {
             None => check_fresh(&tx, &run)?,
         }
         let joined = partner.as_ref().map(joint::Partner::text);
-        // the handshake rides on the first member's start event
-        let said = |m: &str, t: Option<String>| match (&joined, m == first.uid) {
-            (Some(j), true) => Some(t.map_or_else(|| j.clone(), |t| format!("{t}; {j}"))),
-            _ => t,
-        };
-        for m in ms.iter().cloned() {
-            let r = row(&tx, &m)?;
-            let pair = if m == first.uid {
-                String::new()
-            } else {
-                format!(" (paired with {uid})")
-            };
-            let mut was = None;
-            if r.state == State::Running {
-                was = prev(&tx, r.id)?;
-                // a running chunk whose run ended (the agent exited) starts again as is
-                // the same worktree is the same seat: the agent that held it is gone
-                let seat = wt.is_some() && holder_worktree(&tx, r.id)?.as_deref() == wt;
-                let text = match holder(&tx, r.id)? {
-                    Some(h) if !o.force && !seat => {
-                        return Err(format!(
-                            "rejected: chunk {m}{pair} is held by run {h} — try `fael chunk start {m} --force` to take it over"
-                        ));
-                    }
-                    Some(h) => {
-                        end_live(&tx, r.id, here.now)?;
-                        let who = o.client.as_deref().unwrap_or("agent");
-                        format!(
-                            "taken over from run {h} by run {run} ({who}) in {}",
-                            wt.unwrap_or("no worktree")
-                        )
-                    }
-                    None => format!("started again by run {run}: the last run ended"),
-                };
-                set(
-                    &tx,
-                    &r,
-                    State::Running,
-                    "agent",
-                    said(&m, Some(text)).as_deref(),
-                    here.now,
-                )?;
-            } else {
-                // a chunk whose work shipped before its after was met still needs a run
-                // to reach done: `--force` starts it, and the event says what it skipped
-                let text = skipped(&tx, r.id, &m, &pair, &ms, today, o.force)?;
-                set(
-                    &tx,
-                    &r,
-                    State::Running,
-                    "agent",
-                    said(&m, text).as_deref(),
-                    here.now,
-                )?;
-            }
-            claim.push((r, was));
-        }
+        let (claim, forced) = claim_members(
+            &tx,
+            &ms,
+            &first,
+            uid,
+            o,
+            &run,
+            wt,
+            here,
+            today,
+            &joined,
+            &clash_forced,
+        )?;
         let orphaned = end_seats(&tx, seat.is_some(), caller_wt, wt, &ms, here.now)?;
         let mut chunks = Vec::new();
         for (r, was) in claim {
@@ -387,6 +529,7 @@ impl Store {
             chunks,
             orphaned,
             resumed: false,
+            forced,
         })
     }
 }

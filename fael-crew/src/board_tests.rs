@@ -143,11 +143,12 @@ fn a_static_pair_and_a_live_joint_name_no_overlap() {
         .unwrap();
     start(&mut s, &c, "/wt/2").unwrap();
     // the pair shares c's dir: no agreement, so the overlap stays —
-    // force the pair in beside the running dir
+    // force the pair in beside the running dir (with a receipt, 01M6CZ0K)
     s.start(
         &a,
         &Start {
             force: true,
+            because: Some("pair ships with c, will rebase".into()),
             stale: NOW.into(),
             ..Start::default()
         },

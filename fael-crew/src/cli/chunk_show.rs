@@ -48,6 +48,14 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
             "run {} in {wt} since {} · last seen {seen}{flag}",
             run.id, run.started
         );
+        if let Some(reason) = run.force_reason.as_deref() {
+            println!("forced: --because {reason}");
+        }
+    }
+    if let Some(forced) = c.forced.as_deref().filter(|f| !f.is_empty()) {
+        for f in forced {
+            println!("forced: {f}");
+        }
     }
     // the result first: an owner without the board app reads a done chunk here
     if let Some(h) = &c.handoff {

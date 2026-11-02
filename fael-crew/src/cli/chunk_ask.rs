@@ -52,6 +52,7 @@ pub(crate) fn add_wait(
         model: None,
         no_worktree: true,
         force: false,
+        because: None,
         session: None,
         base: None,
         shared: Vec::new(),
