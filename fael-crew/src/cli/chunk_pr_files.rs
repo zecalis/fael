@@ -75,6 +75,7 @@ pub(crate) fn none_claimed(trunk: &str, pr: Option<i64>, uid: &str) -> String {
 /// this way; otherwise the warning asks for the ref or the reason `left: none`
 /// stands (l4).
 pub(crate) fn left_names(handoff: &str, uid: &str) -> bool {
+    let uid = uid.to_uppercase();
     handoff
         .lines()
         .find_map(|l| l.trim().strip_prefix("left:"))
