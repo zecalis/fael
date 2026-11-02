@@ -250,7 +250,10 @@ fn show_full_reads_the_sections_and_writes_nothing() {
     let before = rows();
     let (ok, out, err) = fael(&d, &["chunk", "show", &u, "--full"]);
     assert!(ok, "{err}");
-    assert!(out.contains("plan sections") || out.contains("<!-- plan"), "{out}");
+    assert!(
+        out.contains("plan sections") || out.contains("<!-- plan"),
+        "{out}"
+    );
     assert_eq!(rows(), before, "show --full wrote a row");
     let (_, plain, _) = fael(&d, &["chunk", "show", &u]);
     assert!(!plain.contains("<!-- plan"), "{plain}");
