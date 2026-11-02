@@ -13,6 +13,7 @@ mod db;
 mod db_runs;
 mod drift;
 pub(crate) mod elsewhere;
+mod inbox;
 mod pure;
 mod ready;
 mod report;
@@ -68,6 +69,7 @@ pub use db::{
 };
 pub use db_runs::flow_runs;
 pub use drift::{Drift, drift, in_conn as drift_in};
+pub use inbox::notes as inbox_notes;
 pub use elsewhere::{
     Elsewhere, chunk_elsewhere, register_repo, repos as elsewhere_repos, row_elsewhere,
 };

@@ -43,6 +43,7 @@ mod held_own;
 mod held_rotate;
 mod hidden_titles;
 mod in_context;
+mod inbox;
 mod lifecycle;
 mod markers;
 mod opencode;

@@ -81,6 +81,9 @@ pub(crate) fn session_start(e: &Event) -> Reply {
             text,
         });
     }
+    for l in super::inbox::lines(&c) {
+        out.say(l);
+    }
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
     }

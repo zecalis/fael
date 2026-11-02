@@ -34,6 +34,8 @@ pub enum SayKind {
     FixCommit,
     /// An edit outside the held chunk's scope, inside another open chunk's.
     Overlap,
+    /// A `fael chunk note` left for the running chunk since its run started.
+    Inbox,
     /// A step commit in a worktree holding a chunk: ask for the checkpoint note.
     Checkpoint,
     /// Legacy: no hook says it now (the held-chunk line went), old usage still holds it.
@@ -75,7 +77,7 @@ pub enum Earned {
 
 impl SayKind {
     /// Every kind, in `fael stats` order (`buckets` adds `note` after `row`).
-    pub const ALL: [SayKind; 16] = [
+    pub const ALL: [SayKind; 17] = [
         SayKind::Row,
         SayKind::Brief,
         SayKind::Ask,
@@ -87,6 +89,7 @@ impl SayKind {
         SayKind::Fixed,
         SayKind::FixCommit,
         SayKind::Overlap,
+        SayKind::Inbox,
         SayKind::Checkpoint,
         SayKind::Held,
         SayKind::BriefDrift,
@@ -108,6 +111,7 @@ impl SayKind {
             SayKind::Fixed => "fixed",
             SayKind::FixCommit => "fixcommit",
             SayKind::Overlap => "overlap",
+            SayKind::Inbox => "inbox",
             SayKind::Checkpoint => "checkpoint",
             SayKind::Held => "held",
             SayKind::BriefDrift => "briefdrift",
@@ -144,7 +148,9 @@ impl SayKind {
             // `briefdrift` offers `fael chunk show`, but no usage line of a
             // `show` is indexed — the nearest recorded act on that chunk is
             // the note an agent writes once it has read the changed brief
-            SayKind::Overlap | SayKind::Checkpoint | SayKind::BriefDrift => Earned::ChunkNote,
+            SayKind::Overlap | SayKind::Inbox | SayKind::Checkpoint | SayKind::BriefDrift => {
+                Earned::ChunkNote
+            }
             // it offers `fael chunk show`: any accepted chunk call after it
             SayKind::ChunkBrief => Earned::ChunkCall,
             SayKind::Pointer => Earned::Pulled,
@@ -180,11 +186,12 @@ mod tests {
             SayKind::Fixed => 8,
             SayKind::FixCommit => 9,
             SayKind::Overlap => 10,
-            SayKind::Checkpoint => 11,
-            SayKind::Held => 12,
-            SayKind::BriefDrift => 13,
-            SayKind::Retired => 14,
-            SayKind::ChunkBrief => 15,
+            SayKind::Inbox => 11,
+            SayKind::Checkpoint => 12,
+            SayKind::Held => 13,
+            SayKind::BriefDrift => 14,
+            SayKind::Retired => 15,
+            SayKind::ChunkBrief => 16,
         }
     }
 
@@ -221,6 +228,7 @@ mod tests {
                 "fixed",
                 "fixcommit",
                 "overlap",
+                "inbox",
                 "checkpoint",
                 "held",
                 "briefdrift",

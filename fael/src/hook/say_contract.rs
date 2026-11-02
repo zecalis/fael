@@ -61,6 +61,13 @@ pub(super) fn all() -> Vec<Line> {
             "fael: a.rs outside chunk 01C's scope, inside open chunk p/x's — coordinate: fael chunk note 01D \"<text>\", or go on\n",
         ),
         line(
+            Kind::Inbox {
+                id: "7".into(),
+                uid: "01C".into(),
+            },
+            "fael: new note for chunk 01C: use v2 — reply: fael chunk note 01C \"<text>\" (said once per note)\n",
+        ),
+        line(
             Kind::Checkpoint {
                 key: "~checkpoint:01C:0".into(),
             },
@@ -93,10 +100,11 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Notice => 5,
         Kind::Fixed => 6,
         Kind::Overlap { .. } => 7,
-        Kind::Checkpoint { .. } => 8,
-        Kind::BriefDrift { .. } => 9,
-        Kind::Retired { .. } => 10,
-        Kind::ChunkBrief { .. } => 11,
+        Kind::Inbox { .. } => 8,
+        Kind::Checkpoint { .. } => 9,
+        Kind::BriefDrift { .. } => 10,
+        Kind::Retired { .. } => 11,
+        Kind::ChunkBrief { .. } => 12,
     }
 }
 
@@ -333,6 +341,7 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "notice",
             "fixed",
             "overlap",
+            "inbox",
             "checkpoint",
             "briefdrift",
             "retired",

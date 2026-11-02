@@ -105,6 +105,9 @@ pub(crate) enum Kind {
     /// An edit outside the held chunk's scope, inside another open chunk's
     /// (issues 01M5D9GB, 01M5QF1Q): said once per owner chunk and session.
     Overlap { owner: String },
+    /// A `fael chunk note` left for the running chunk since its run started:
+    /// said once per note event.
+    Inbox { id: String, uid: String },
     /// The held chunk's brief, scope or title was edited after its run started; the key
     /// names the edit event, so a later edit says again.
     BriefDrift { key: String },
@@ -133,6 +136,7 @@ impl Kind {
             Kind::Finding { file, line } => vec![format!("~finding:{file}:{line}")],
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::Overlap { owner } => vec![format!("~overlap:{owner}")],
+            Kind::Inbox { id, uid } => vec![format!("~inbox:{uid}:{id}")],
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![format!("~retired:{id}")],
             Kind::Brief { keys } => keys.clone(),
@@ -173,6 +177,7 @@ impl Kind {
             Kind::Row { ids } | Kind::Ask { ids } | Kind::Cited { ids } => ids.clone(),
             Kind::Finding { file, .. } => vec![file.clone()],
             Kind::Overlap { owner } => vec![owner.clone()],
+            Kind::Inbox { id, .. } => vec![id.clone()],
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![id.clone()],
             Kind::ChunkBrief { uid } => vec![uid.clone()],
