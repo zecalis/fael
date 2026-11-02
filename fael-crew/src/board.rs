@@ -819,6 +819,138 @@ fn handoff_for(
     handoffs.remove(&c.uid)
 }
 
+/// Push-PR survival (l4): a file `done --pr` claims that a live partner also
+/// touches. `Exact` = the same file the partner's live `run.touched` names;
+/// `Prefix` = a dir on one side covers the file on the other (partner scope or
+/// live touch). DB only — no git, no gh — so `chunk done` stays warn-only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dodge {
+    pub uid: String,
+    pub title: String,
+    pub class: fael_core::OverlapClass,
+    pub files: Vec<String>,
+    pub branch: Option<String>,
+    pub worktree: Option<String>,
+}
+
+/// One live partner `dodge` reads: uid, title, scope, live touch, branch, worktree.
+type DodgeRow = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+impl Store {
+    /// Live partners of `uid` whose scope or live `run.touched` meets `diff`
+    /// (less `shared`, which is nobody's claim). Exact wins per partner: when a
+    /// diff file equals a live-touched file the entry is Exact with those
+    /// files, else Prefix with the diff files under the partner's live files
+    /// or scope. Self is left out; done/review/dropped partners are gone.
+    pub fn dodge(
+        &self,
+        uid: &str,
+        diff: &[String],
+        shared: &[String],
+    ) -> Result<Vec<Dodge>, String> {
+        if diff.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mine: Vec<String> = diff
+            .iter()
+            .filter(|f| !shared.iter().any(|s| fael_core::under(f, s)))
+            .cloned()
+            .collect();
+        if mine.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut q = self
+            .conn
+            .prepare(
+                "SELECT c.uid, c.title, c.scope, r.touched, r.branch, r.worktree
+                 FROM chunk c JOIN run r ON r.id = (SELECT MAX(id) FROM run
+                   WHERE chunk = c.id AND ended IS NULL)
+                 WHERE c.state = 'running' AND c.uid != ?1 AND r.ended IS NULL",
+            )
+            .map_err(err)?;
+        let rows: Vec<DodgeRow> = q
+            .query_map([uid], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                ))
+            })
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        let mut out = Vec::new();
+        for (pu, title, scope, touched, branch, worktree) in rows {
+            let live: Vec<String> = touched
+                .unwrap_or_default()
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(String::from)
+                .filter(|f| !shared.iter().any(|s| fael_core::under(f, s)))
+                .collect();
+            let declared: Vec<String> = scope
+                .unwrap_or_default()
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(String::from)
+                .filter(|f| !shared.iter().any(|s| fael_core::under(f, s)))
+                .collect();
+            let exact: Vec<String> = mine
+                .iter()
+                .filter(|f| live.iter().any(|t| t == *f))
+                .cloned()
+                .collect();
+            if !exact.is_empty() {
+                out.push(Dodge {
+                    uid: pu,
+                    title,
+                    class: fael_core::OverlapClass::Exact,
+                    files: exact,
+                    branch,
+                    worktree,
+                });
+                continue;
+            }
+            let wide: Vec<String> = live.iter().chain(declared.iter()).cloned().collect();
+            if wide.is_empty() {
+                continue;
+            }
+            let hit: Vec<String> = mine
+                .iter()
+                .filter(|f| {
+                    wide.iter()
+                        .any(|p| fael_core::under(f, p) || fael_core::under(p, f))
+                })
+                .cloned()
+                .collect();
+            if !hit.is_empty() {
+                out.push(Dodge {
+                    uid: pu,
+                    title,
+                    class: fael_core::OverlapClass::Prefix,
+                    files: hit,
+                    branch,
+                    worktree,
+                });
+            }
+        }
+        out.sort_by(|a, b| a.uid.cmp(&b.uid));
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod models_tests {
     use super::*;

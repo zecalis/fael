@@ -266,6 +266,42 @@ fn touched_is_the_claimed_diff_absent_until_claimed() {
     );
 }
 
+/// l4: `dodge` reads live partners' touched files, not done ones — exact wins
+/// per partner, else prefix; self and done partners stay out; shared is nobody's.
+#[test]
+fn dodge_names_live_exact_before_prefix() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "me", &["me/"], &[]);
+    let live = scoped(&mut s, "live", &["live/"], &[]);
+    let dir = scoped(&mut s, "dir", &["src/sub/"], &[]);
+    start(&mut s, &live, "/w1").unwrap();
+    start(&mut s, &dir, "/w2").unwrap();
+    start(&mut s, &me, "/w3").unwrap();
+    s.touch(&live, &["src/a.rs".to_string()], None, &here("/w1"))
+        .unwrap();
+    let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // exact: the same file the partner's live touch names
+    let hits = s.dodge(&me, &v(&["src/a.rs"]), &[]).unwrap();
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].uid, live);
+    assert_eq!(hits[0].class, OverlapClass::Exact);
+    assert_eq!(hits[0].files, v(&["src/a.rs"]));
+    // prefix: under the partner's scope, no live touch on it
+    let hits = s.dodge(&me, &v(&["src/sub/b.rs"]), &[]).unwrap();
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].uid, dir);
+    assert_eq!(hits[0].class, OverlapClass::Prefix);
+    // done partners are gone; shared files are nobody's
+    s.done(&live, "h\nleft: none", None, None, &here("/w1"))
+        .unwrap();
+    let hits = s.dodge(&me, &v(&["src/a.rs"]), &[]).unwrap();
+    assert!(hits.is_empty(), "{hits:?}");
+    let hits = s
+        .dodge(&me, &v(&["src/sub/b.rs"]), &v(&["src/sub/"]))
+        .unwrap();
+    assert!(hits.is_empty(), "shared: {hits:?}");
+}
+
 /// `plan done|park inbox` would hide every inbox chunk from the board: refused.
 #[test]
 fn inbox_plan_cannot_leave_active() {

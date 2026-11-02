@@ -70,11 +70,35 @@ pub(crate) fn none_claimed(trunk: &str, pr: Option<i64>, uid: &str) -> String {
     )
 }
 
+/// Does the hand-off's `left:` line name `uid` — by its uid or a prefix of it,
+/// as `chunk done --left` takes it? A prefix dodge is ok when it is linked
+/// this way; otherwise the warning asks for the ref or the reason `left: none`
+/// stands (l4).
+pub(crate) fn left_names(handoff: &str, uid: &str) -> bool {
+    let uid = uid.to_uppercase();
+    handoff
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("left:"))
+        .is_some_and(|v| {
+            v.split(',')
+                .map(|t| t.trim().to_uppercase())
+                .any(|t| t.len() >= 4 && t != "NONE" && uid.starts_with(&t))
+        })
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn a_missing_gh_gives_no_files() {
         let dir = std::env::temp_dir();
         assert_eq!(super::open_files(&dir, 8, "fael-no-such-gh-binary"), None);
+    }
+
+    #[test]
+    fn left_names_matches_uid_prefixes_and_none() {
+        assert!(super::left_names("did it\nleft: 01ABC", "01ABCDEF"));
+        assert!(!super::left_names("did it\nleft: none", "01ABCDEF"));
+        assert!(!super::left_names("did it\nleft: 01XYZ", "01ABCDEF"));
+        assert!(!super::left_names("did it", "01ABCDEF"));
     }
 }
