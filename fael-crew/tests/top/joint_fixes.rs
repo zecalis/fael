@@ -84,3 +84,15 @@ fn touch_msg_shows_as_doing_on_the_other_cards() {
     let shown = ok(&w[1], &["chunk", "show", &b]);
     assert!(shown.contains("doing: rewriting parse()"), "{shown}");
 }
+
+/// Issue 01M6E23QTD: a pair's brief offered `start --with <partner> --as pair` — the step taken.
+#[test]
+fn a_pair_partner_is_no_avoid_card() {
+    let w = worktrees(&["wa", "wb"]);
+    let (a, b) = (chunk(&w[0], "A"), chunk(&w[0], "B"));
+    ok(&w[0], &["chunk", "start", &a]);
+    let start = ok(&w[1], &["chunk", "start", &b, "--with", &a, "--as", "pair"]);
+    assert!(!start.contains("avoid:"), "{start}");
+    let shown = ok(&w[0], &["chunk", "show", &b]);
+    assert!(!shown.contains("avoid:"), "{shown}");
+}
