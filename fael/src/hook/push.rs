@@ -10,6 +10,7 @@ use super::asks::{UsageMeta, hook_meta};
 use super::changed::{self, Ask, Blobs, edit_hint, read_seen};
 use super::decision;
 use super::protocol::{Event, ctx};
+use super::push_files::repo_files;
 use super::say::{Kind, Line, Outbox, Reply};
 use super::say_card::At;
 use super::spent_notes::{self, Count};
@@ -18,7 +19,6 @@ use super::state::{
 };
 use super::usage::record_usage;
 use crate::{aliases, core};
-use fael_core::is_anchor;
 use std::collections::HashSet;
 
 /// The stashed Weak-signal line: one line, shown on the next push only.
@@ -91,45 +91,6 @@ fn cut_body(
         out.push('\n');
     }
     (crate::journal::tag(out, tags), n)
-}
-
-/// The pushed paths as repo-relative files. Outside the repo falls away,
-/// never errors out.
-fn repo_files(c: &super::protocol::Ctx, raw: &[String]) -> Vec<String> {
-    let mut files = vec![];
-    for f in raw {
-        // the client sends whatever the OS gave it (`/var/…` vs `/private/var/…`);
-        // resolve symlinks while the repo root is already resolved, or the
-        // lexical strip in normalize_files reads the file as outside the repo
-        // (anchors are opaque, never filesystem paths)
-        let f = if is_anchor(f) {
-            f.clone()
-        } else {
-            std::fs::canonicalize(c.repo.cwd.join(f)) // join keeps an absolute f
-                .map(|p| p.to_string_lossy().replace('\\', "/"))
-                .unwrap_or_else(|_| f.clone())
-        };
-        let one = std::slice::from_ref(&f);
-        if let Ok(mut n) = core::normalize_files(one, &c.repo.cwd, &c.repo.root)
-            .or_else(|e| sibling(c, &f).map_or(Err(e), |r| core::normalize_files(one, &r, &r)))
-        {
-            files.append(&mut n);
-        }
-    }
-    files
-}
-
-/// The root of the sibling worktree holding `f` when it shares this clone's
-/// journal: a session that `cd`s into `git worktree add ../wt` reads and edits
-/// the same repo files there.
-fn sibling(c: &super::protocol::Ctx, f: &str) -> Option<std::path::PathBuf> {
-    let common = |root: &std::path::Path| crate::journal::root(root)?.parent()?.canonicalize().ok();
-    let mine = common(&c.repo.root)?;
-    let root = std::path::Path::new(f)
-        .ancestors()
-        .skip(1)
-        .find(|d| d.join(".git").exists())?;
-    (common(root)? == mine).then(|| root.to_path_buf())
 }
 
 /// Only adopted repos record an edit — `add` derives files from this list only there.
@@ -257,6 +218,7 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
     }));
     lines.extend(retired_lines(&c, &spent, sid, &shown));
     lines.extend(super::overlap::lines(&c, &files));
+    lines.extend(super::inbox::lines(&c));
     lines.extend(super::drift::line(&c));
     lines.extend(notes);
     // the hint and the stashed notice share the budget the rows left
