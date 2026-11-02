@@ -113,12 +113,15 @@ fn partner(
 /// --because` last. Bare `--force` is rejected (issue 01M6CZ0K); a force past a clash
 /// writes a receipt (clash snapshot + because, gap (1) in fael:01M6D140) the caller
 /// stores in the start event.
+/// `seated` = the chunk already runs in the caller's worktree: it holds its files, so a chunk
+/// that started beside it later is no reason to refuse a restart (`start --full` to re-read).
 /// Returns the partner and, on a forced clash, its receipt.
 pub(super) fn gate(
     tx: &Transaction,
     first: &Row,
     ms: &[String],
     o: &Start,
+    seated: bool,
 ) -> Result<(Option<Partner>, Option<String>), String> {
     let p = partner(tx, first, ms, o)?;
     let report = clash_report(tx, ms, &o.shared, &o.stale)?;
@@ -126,13 +129,16 @@ pub(super) fn gate(
         p.as_ref()
             .is_some_and(|p| p.uid == u && p.mode == Joint::Lane && c == OverlapClass::Exact)
     };
-    let kept: Vec<_> = report
+    let mut kept: Vec<_> = report
         .iter()
         .filter(|(u, c, _)| {
             !p.as_ref()
                 .is_some_and(|p| &p.uid == u && !exact_lane(u, *c))
         })
         .collect();
+    if seated {
+        kept.clear();
+    }
     let uid = &first.uid;
     let because = o
         .because

@@ -500,3 +500,26 @@ fn a_start_on_an_owner_wait_names_who_unblocks_it() {
         "{e}"
     );
 }
+
+/// A restart from the worktree already holding the chunk is no new claim: a chunk that started
+/// beside it later must not reject it (`start --full` used to re-read the brief this way).
+#[test]
+fn a_restart_in_the_holding_worktree_ignores_a_later_clash() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/");
+    start(&mut s, &a, "/w1").unwrap();
+    let b = scoped(&mut s, "b", "src/");
+    let o = Start {
+        force: true,
+        because: Some("test".into()),
+        ..Start::default()
+    };
+    s.start(&b, &o, &here("/w2")).unwrap();
+    start(&mut s, &a, "/w1").unwrap();
+    assert_eq!(live(&s, &a), 1);
+    let c = scoped(&mut s, "c", "src/");
+    assert!(
+        start(&mut s, &c, "/w3").is_err(),
+        "a fresh start still clashes"
+    );
+}
