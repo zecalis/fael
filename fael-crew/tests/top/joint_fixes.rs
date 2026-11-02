@@ -96,3 +96,42 @@ fn a_pair_partner_is_no_avoid_card() {
     let shown = ok(&w[0], &["chunk", "show", &b]);
     assert!(!shown.contains("avoid:"), "{shown}");
 }
+
+/// Issue 01M6E23QX4: D pairing with A was refused for B's clash, though B works inside A's run.
+#[test]
+fn a_pair_start_clears_clashes_under_the_partners_run() {
+    let w = worktrees(&["wa", "wb", "wd"]);
+    let (a, b, d) = (chunk(&w[0], "A"), chunk(&w[0], "B"), chunk(&w[0], "D"));
+    ok(&w[0], &["chunk", "start", &a]);
+    ok(&w[1], &["chunk", "start", &b, "--with", &a, "--as", "pair"]);
+    let (good, out, err) = fael(&w[2], &["chunk", "start", &d, "--with", &a, "--as", "pair"]);
+    assert!(good, "{out}{err}");
+}
+
+/// Issue 01M6E23QX4: an unrelated run still refuses.
+#[test]
+fn a_pair_start_still_refuses_an_unrelated_clash() {
+    let w = worktrees(&["wa", "wb", "wd"]);
+    let (a, b, d) = (chunk(&w[0], "A"), chunk(&w[0], "B"), chunk(&w[0], "D"));
+    ok(&w[0], &["chunk", "start", &a]);
+    ok(&w[1], &["chunk", "start", &b, "--force", "--because", "x"]);
+    let (good, _, err) = fael(&w[2], &["chunk", "start", &d, "--with", &a, "--as", "pair"]);
+    assert!(!good && err.contains(&b), "{err}");
+}
+
+/// Issue 01M6E23QX4 (part 4): the refusal of `--as lane` over the same file says why.
+#[test]
+fn a_lane_over_the_same_file_says_it_is_a_pair() {
+    let w = worktrees(&["wa", "wb"]);
+    let (a, b) = (chunk(&w[0], "A"), chunk(&w[0], "B"));
+    ok(&w[0], &["chunk", "start", &a]);
+    let (good, _, err) = fael(&w[1], &["chunk", "start", &b, "--with", &a, "--as", "lane"]);
+    assert!(
+        !good
+            && err.contains("--as lane over the same file is a pair")
+            && err.contains("--as pair"),
+        "{err}"
+    );
+    let (good, _, err) = fael(&w[1], &["chunk", "start", &b]);
+    assert!(!good && !err.contains("is a pair"), "{err}");
+}
