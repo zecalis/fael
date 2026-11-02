@@ -39,6 +39,8 @@ fn chunk(uid: &str) -> Brief {
         by_file_more: 0,
         live: vec![],
         live_more: 0,
+        avoid: vec![],
+        avoid_more: 0,
         resume: None,
         issues: vec![],
     }
@@ -411,4 +413,37 @@ fn start_resume_short_orders_run_tldr_resume_pointer() {
             "{gone} stays in the first brief: {short}"
         );
     }
+}
+
+/// l3 avoid (issue 01M6CZ0K): the brief renders one card per colliding file.
+#[test]
+fn the_brief_renders_avoid_cards_with_doing_and_do() {
+    use super::super::handoff::Avoid;
+    let mut c = chunk("A");
+    c.avoid = vec![Avoid {
+        uid: "B".into(),
+        title: "other work".into(),
+        client: Some("claude".into()),
+        class: "prefix".into(),
+        files: vec!["src/".into()],
+        worktree: Some("/wt/2".into()),
+        branch: Some("feat/x".into()),
+        started: "2026-10-11T09:00:00Z".into(),
+        last_seen: None,
+        stalled: true,
+        doing: "wiring the form".into(),
+        do_cmd: "wait or lane".into(),
+    }];
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    }
+    .text();
+    for needle in ["avoid:", "who:", "where:", "when:", "doing:", "do:"] {
+        assert!(t.contains(needle), "{needle} in {t}");
+    }
+    assert!(t.contains("wiring the form"), "{t}");
 }

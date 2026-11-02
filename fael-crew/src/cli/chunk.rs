@@ -217,10 +217,14 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
 fn touch(a: &Args, s: &mut Store, uid: &str, files: &[&str], here: &Here) -> Result<(), String> {
     // `chunk touch` (issue 01M5PB7Z, CLI-only, not MCP): publish touched-so-far — one or more
     // repo-relative paths. `--run R` answers from another checkout, like wait/after.
-    a.only("chunk touch", &["run"])?;
+    // `--msg` (l3, issue 01M6CZ0K) stores the intent beside the files, shown as `doing:`.
+    a.only("chunk touch", &["run", "msg"])?;
     let paths: Vec<String> = files.iter().map(|s| s.to_string()).collect();
-    s.touch(uid, &paths, here)?;
-    println!("chunk {uid} → touched {}", paths.join(", "));
+    s.touch(uid, &paths, a.one("msg").as_deref(), here)?;
+    match a.one("msg") {
+        Some(m) => println!("chunk {uid} → touched {} — {m}", paths.join(", ")),
+        None => println!("chunk {uid} → touched {}", paths.join(", ")),
+    }
     Ok(())
 }
 fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String> {

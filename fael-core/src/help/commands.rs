@@ -132,7 +132,7 @@ fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktr
 fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
 fael chunk move <uid> --plan <p>
 fael chunk note <uid> \"<text>\"
-fael chunk touch <uid> <path>… [--run R]
+fael chunk touch <uid> <path>… [--msg \"<what you are doing>\"] [--run R]
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
 fael chunk after <uid> <other> \"<why>\" [--plan p] [--run R]
 fael chunk unafter <uid> <other> \"<why>\" [--plan p]

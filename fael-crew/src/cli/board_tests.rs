@@ -37,6 +37,7 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         touched: None,
         merged: false,
         forced: None,
+        avoid: None,
         seq: 0,
     }
 }

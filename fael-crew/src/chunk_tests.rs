@@ -150,7 +150,8 @@ fn run_end_forced_takeover_and_fencing() {
     );
     assert!(s.done(&c, "h", Some(1), None, &here_on("/b", "x")).is_err());
     // the run's own branch from another worktree is the same work: passes
-    s.touch(&c, &["src/z.rs".to_string()], &here("/z")).unwrap();
+    s.touch(&c, &["src/z.rs".to_string()], None, &here("/z"))
+        .unwrap();
     // the old shell's cleanup never ends the new start
     assert_eq!(s.run_end(&r2, None, NOW).unwrap(), 0);
     assert_eq!(live(&s, &c), 1);

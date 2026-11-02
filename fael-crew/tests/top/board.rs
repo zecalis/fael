@@ -75,6 +75,37 @@ fn write(p: PathBuf, body: &str) {
     std::fs::write(p, body).unwrap();
 }
 
+/// l3: avoid card shape + free names running a.
+fn check_avoid(p: &Value, gp: &Value, free: &str, a: &str) {
+    for c in p["chunks"].as_array().unwrap() {
+        let mut k = keys(c);
+        if k.last() == Some(&"avoid") {
+            k.pop();
+            for x in c["avoid"].as_array().unwrap() {
+                assert!(x["uid"].is_string(), "{c}");
+                assert!(x["class"].is_string(), "{c}");
+                assert!(x["files"].is_string() || x["files"].is_array(), "{c}");
+                assert!(x["doing"].is_string(), "{c}");
+            }
+        }
+        assert_eq!(k, keys(&gp["chunks"][0]), "{c}");
+    }
+    let fc = p["chunks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["uid"] == free)
+        .unwrap();
+    assert!(
+        fc["avoid"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|x| x["uid"] == a),
+        "avoid"
+    );
+}
+
 #[test]
 fn the_binary_speaks_board_v1() {
     let tmp = std::env::temp_dir().join(format!("fael-board-{}", fael_core::ulid()));
@@ -117,9 +148,7 @@ fn the_binary_speaks_board_v1() {
             .find(|c| c["uid"] == u)
             .unwrap()
     };
-    for c in p["chunks"].as_array().unwrap() {
-        assert_eq!(keys(c), keys(&gp["chunks"][0]), "{c}");
-    }
+    check_avoid(p, gp, &free, &a);
     assert_eq!(keys(&chunk(&a)["run"]), keys(&gp["chunks"][0]["run"]));
     assert_eq!(chunk(&a)["run"]["id"], "R2");
     assert_eq!(chunk(&a)["run"]["cost"], Value::Null);

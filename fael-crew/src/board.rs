@@ -127,6 +127,10 @@ pub struct Chunk {
     /// absent = never forced (issue 01M6CZ0K). A new nullable key, board stays v1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub forced: Option<Vec<String>>,
+    /// avoid cards (l3, issue 01M6CZ0K): one per colliding file — who/class/files/
+    /// where/when/doing/do. Absent = no clash. A new nullable key, board stays v1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avoid: Option<Vec<super::handoff::Avoid>>,
     #[serde(skip)]
     pub seq: i64,
 }
@@ -385,6 +389,7 @@ impl Store {
                         .map(|t| t.lines().map(String::from).collect()),
                     merged: false,
                     forced: None,
+                    avoid: None,
                     seq: r.get(16)?,
                     label,
                     state,
@@ -407,6 +412,7 @@ impl Store {
         let mut handoffs = self.handoffs()?;
         let mut closes = self.closes()?;
         let mut forced = self.forced()?;
+        let tx = self.conn.unchecked_transaction().map_err(err)?;
         let mut chunks = Vec::with_capacity(rows.len());
         let mut ids = Vec::with_capacity(rows.len());
         for (id, mut c) in rows {
@@ -414,6 +420,10 @@ impl Store {
             c.issues = super::issue::of(&self.conn, id)?;
             c.forced = forced.remove(&c.uid).filter(|v| !v.is_empty());
             self.derive(id, &mut c, today, stale)?;
+            let scope = (!c.scope.is_empty()).then(|| c.scope.join("\n"));
+            let (avoid, _) =
+                super::handoff::avoid(&tx, id, scope.as_deref(), stale).unwrap_or_default();
+            c.avoid = (!avoid.is_empty()).then_some(avoid);
             ids.push(id);
             chunks.push(c);
         }

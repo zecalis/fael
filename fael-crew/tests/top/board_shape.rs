@@ -126,11 +126,40 @@ fn fixes_open(b: &Value, uid: &Value) -> bool {
 
 /// A chunk's keys without the optional tail, each checked: `conflicts` (PLAN-fael-parallel
 /// merge-check: only on an open PR), then `touched` (the paths `done` claimed from the run's diff: only once claimed),
-/// then `forced` (the receipts this chunk's forced starts wrote: only when forced, issue 01M6CZ0K).
+/// then `forced` (the receipts this chunk's forced starts wrote: only when forced, issue 01M6CZ0K),
+/// then `avoid` (one card per colliding file: only when colliding, issue 01M6CZ0K l3).
 /// `client_hint` (`chunk add|edit --client`; absent = none, issue 01M5F9DH) is stripped
 /// wherever serde put it (after `model`) before the base-keys compare.
 fn optional<'a>(c: &'a Value, uid: &str) -> Vec<&'a str> {
     let mut k = keys(c);
+    if k.last() == Some(&"avoid") {
+        k.pop();
+        let arr = c["avoid"].as_array().unwrap();
+        for a in arr {
+            assert_eq!(
+                keys(a),
+                [
+                    "uid",
+                    "title",
+                    "client",
+                    "class",
+                    "files",
+                    "worktree",
+                    "branch",
+                    "started",
+                    "last_seen",
+                    "stalled",
+                    "doing",
+                    "do"
+                ],
+                "{uid}: {a}"
+            );
+            assert!(
+                matches!(a["class"].as_str(), Some("exact" | "prefix")),
+                "{uid}: {a}"
+            );
+        }
+    }
     if k.last() == Some(&"forced") {
         k.pop();
         assert!(

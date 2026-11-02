@@ -5,7 +5,7 @@
 use super::overlap;
 use super::store::err;
 use fael_core::under;
-use rusqlite::{Transaction, params};
+use rusqlite::{OptionalExtension, Transaction, params};
 
 /// `(title, handoff, touched)`: one done / review word and the files its done claimed.
 /// From [`by_file`] the title is `<uid> <title>`: the brief prints it as one line.
@@ -13,6 +13,155 @@ pub type Word = (String, String, String);
 
 /// At most this many chunks by file; the rest are counted, not printed.
 const CAP: usize = 5;
+
+/// One avoid card (l3, issue 01M6CZ0K): a running chunk whose scope collides with
+/// mine. Who (uid/title/client) + class exact|prefix + files + where
+/// (run worktree/branch) + when (started/last_seen/stalled) + doing (live intent,
+/// never guessed) + do (how to start beside it). Db only, no git/gh.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Avoid {
+    pub uid: String,
+    pub title: String,
+    pub client: Option<String>,
+    pub class: String,
+    pub files: Vec<String>,
+    pub worktree: Option<String>,
+    pub branch: Option<String>,
+    pub started: String,
+    pub last_seen: Option<String>,
+    pub stalled: bool,
+    pub doing: String,
+    #[serde(rename = "do")]
+    pub do_cmd: String,
+}
+
+/// Live scope clash: running chunks of my app whose scope meets mine.
+/// `(uid, title, client, class, files, worktree, branch, started, last_seen, touch_msg)`
+/// newest run first. Self is left out; pairs/joints are not filtered here (the board
+/// filters them for `overlaps`; an avoid card names every clash so the agent sees it).
+type ClashRow = (
+    String,
+    String,
+    Option<String>,
+    String,
+    Vec<String>,
+    Option<String>,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+);
+
+type DbRow = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+);
+
+fn clashes(tx: &Transaction, id: i64, mine: &[String], app: &str) -> Result<Vec<ClashRow>, String> {
+    let mut q = tx
+        .prepare(
+            "SELECT c.uid, c.title, r.client, c.scope, r.worktree, r.branch,
+                    r.started, r.last_seen, r.touch_msg
+             FROM chunk c JOIN plan p ON p.id = c.plan
+             JOIN run r ON r.id = (SELECT x.id FROM run x WHERE x.chunk = c.id
+               AND x.ended IS NULL ORDER BY x.id DESC LIMIT 1)
+             WHERE c.id != ?1 AND p.app = ?2 AND c.scope IS NOT NULL AND c.state = 'running'
+             ORDER BY r.id DESC",
+        )
+        .map_err(err)?;
+    let rows: Vec<DbRow> = q
+        .query_map(params![id, app], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+                r.get(8)?,
+            ))
+        })
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    let mut out = Vec::new();
+    for (uid, title, client, scope, worktree, branch, started, seen, touch_msg) in rows {
+        let theirs: Vec<String> = scope
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect();
+        if theirs.is_empty() {
+            continue;
+        }
+        let hits: Vec<String> = mine
+            .iter()
+            .filter(|m| theirs.iter().any(|t| under(m, t) || under(t, m)))
+            .cloned()
+            .collect();
+        if hits.is_empty() {
+            continue;
+        }
+        let class = fael_core::overlap_class(mine, &theirs)
+            .map(|c| c.as_str().to_string())
+            .unwrap_or_else(|| "prefix".to_string());
+        out.push((
+            uid, title, client, class, hits, worktree, branch, started, seen, touch_msg,
+        ));
+    }
+    Ok(out)
+}
+
+/// What the other side is doing (never guessed): its live `touch --msg`, else its
+/// latest `chunk note` since its last start, else its last done/review word,
+/// else `nothing handed off yet`.
+fn doing(tx: &Transaction, partner: &str, touch_msg: Option<String>) -> Result<String, String> {
+    if let Some(m) = touch_msg
+        .map(|m| m.trim().to_string())
+        .filter(|m| !m.is_empty())
+    {
+        return Ok(m);
+    }
+    let note: Option<String> = tx
+        .query_row(
+            "SELECT text FROM event WHERE chunk_uid = ?1 AND by = 'note' AND text IS NOT NULL
+              AND id > COALESCE((SELECT MAX(id) FROM event WHERE chunk_uid = ?1
+                AND to_state = 'running' AND by != 'note'), 0)
+             ORDER BY id DESC LIMIT 1",
+            [partner],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(err)?
+        .flatten();
+    if let Some(n) = note.filter(|n| !n.trim().is_empty()) {
+        return Ok(n);
+    }
+    let last: Option<String> = tx
+        .query_row(
+            "SELECT text FROM event WHERE chunk_uid = ?1 AND by = 'agent'
+              AND to_state IN ('done', 'review') AND text IS NOT NULL AND text != ''
+             ORDER BY id DESC LIMIT 1",
+            [partner],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(err)?
+        .flatten();
+    Ok(last
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| "nothing handed off yet".to_string()))
+}
 
 /// The done / review word of each chunk `id` is after.
 pub(super) fn after(tx: &Transaction, id: i64) -> Result<Vec<Word>, String> {
@@ -202,6 +351,65 @@ pub(super) fn live(
     let more = hit.len().saturating_sub(CAP);
     hit.truncate(CAP);
     Ok((hit, more))
+}
+
+/// Avoid cards (l3): one per running chunk whose scope collides with mine.
+/// Who (uid/title/client) + class + files + where (worktree/branch) + when
+/// (started/last_seen/stalled) + doing (live intent, never guessed) + do.
+/// `stale` is the board's 30-min line; `my_uid` names the waiter for `do`.
+pub(super) fn avoid(
+    tx: &Transaction,
+    id: i64,
+    scope: Option<&str>,
+    stale: &str,
+) -> Result<(Vec<Avoid>, usize), String> {
+    let mine: Vec<String> = scope
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    if mine.is_empty() {
+        return Ok((vec![], 0));
+    }
+    let (my_uid, app): (String, String) = tx
+        .query_row(
+            "SELECT c.uid, p.app FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(err)?;
+    let mut out = Vec::new();
+    for (uid, title, client, class, files, worktree, branch, started, seen, touch_msg) in
+        clashes(tx, id, &mine, &app)?
+    {
+        let stalled = seen.as_deref().unwrap_or(&started) < stale;
+        let live = doing(tx, &uid, touch_msg)?;
+        let follow = format!("fael chunk start {my_uid} --with {uid} --as follow");
+        let side = match class.as_str() {
+            "exact" => format!("fael chunk start {my_uid} --with {uid} --as pair"),
+            _ => format!("fael chunk start {my_uid} --with {uid} --as lane"),
+        };
+        out.push(Avoid {
+            uid: uid.clone(),
+            title,
+            client,
+            class,
+            files,
+            worktree,
+            branch,
+            started,
+            last_seen: seen,
+            stalled,
+            doing: live,
+            do_cmd: format!(
+                "wait (fael chunk wait {my_uid} --on owner \"<why>\") or {side} or {follow}"
+            ),
+        });
+    }
+    let more = out.len().saturating_sub(CAP);
+    out.truncate(CAP);
+    Ok((out, more))
 }
 
 #[cfg(test)]

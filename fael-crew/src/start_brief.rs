@@ -12,7 +12,8 @@ impl Store {
     pub fn show(&self, key: &str) -> Result<Brief, String> {
         let tx = self.conn.unchecked_transaction().map_err(err)?;
         let (id, _, state, ..) = lookup(&tx, key)?.ok_or_else(|| no_chunk(key))?;
-        brief(&tx, id, u32::from(state == "running"), None)
+        let stale = fael_core::rfc3339(fael_core::now_ms().saturating_sub(30 * 60 * 1000));
+        brief(&tx, id, u32::from(state == "running"), None, &stale)
     }
 }
 
@@ -35,11 +36,13 @@ impl Store {
 /// `skip` = how many starts back the answers and notes count from: 1 inside a start (its
 /// own event is the newest), 0 for the start still to come. `start` = this start's R:
 /// the brief names the model it runs; None = the next start's (latest run, approval, hint).
+/// `stale` = the board's 30-min line for avoid cards (a live run last seen before it reads stalled).
 pub(super) fn brief(
     tx: &Transaction,
     id: i64,
     skip: u32,
     start: Option<&str>,
+    stale: &str,
 ) -> Result<Brief, String> {
     let (mut b, pid, reads) = tx
         .query_row(
@@ -68,6 +71,8 @@ pub(super) fn brief(
                     by_file_more: 0,
                     live: vec![],
                     live_more: 0,
+                    avoid: vec![],
+                    avoid_more: 0,
                     resume: None,
                     issues: vec![],
                 };
@@ -127,6 +132,7 @@ pub(super) fn brief(
         .retain(|(w, ..)| !origin.iter().any(|(o, ..)| o == w));
     b.after.extend(origin);
     (b.live, b.live_more) = super::handoff::live(tx, id, b.scope.as_deref())?;
+    (b.avoid, b.avoid_more) = super::handoff::avoid(tx, id, b.scope.as_deref(), stale)?;
     Ok(b)
 }
 

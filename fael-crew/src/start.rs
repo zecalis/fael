@@ -81,6 +81,10 @@ pub struct Brief {
     /// capped): `(title, touched)` — no hand-off text yet, printed distinct from `by_file`
     pub live: Vec<(String, String)>,
     pub live_more: usize,
+    /// avoid cards (l3, issue 01M6CZ0K): one per running chunk whose scope collides
+    /// with mine — who/class/files/where/when/doing/do. Newest run first, capped.
+    pub avoid: Vec<super::handoff::Avoid>,
+    pub avoid_more: usize,
     /// the run this start took over or restarted — where the last agent stopped
     pub resume: Option<Prev>,
     /// the ledger issue ids it fixes (`add --issue`); the CLI swaps each for its row's text
@@ -168,6 +172,7 @@ fn reuse_live(
     first: &super::chunk::Row,
     ms: &[String],
     session: Option<&str>,
+    stale: &str,
 ) -> Result<Option<Started>, String> {
     let Some(session) = session else {
         return Ok(None);
@@ -199,7 +204,7 @@ fn reuse_live(
     let mut chunks = Vec::new();
     for m in ms {
         let r = row(tx, m)?;
-        let mut b = brief(tx, r.id, 1, Some(&live))?;
+        let mut b = brief(tx, r.id, 1, Some(&live), stale)?;
         b.resume = prev(tx, r.id)?;
         chunks.push(b);
     }
@@ -520,7 +525,7 @@ impl Store {
         // a retry from the session that already holds it is success, not a
         // takeover: the brief header names the live R, so re-running start in
         // the same session must print that brief, never demand `--force`.
-        if let Some(reused) = reuse_live(&tx, &first, &ms, o.session.as_deref())? {
+        if let Some(reused) = reuse_live(&tx, &first, &ms, o.session.as_deref(), &o.stale)? {
             tx.commit().map_err(err)?;
             return Ok(reused);
         }
@@ -569,7 +574,7 @@ impl Store {
             let with = partner.as_ref().map(|p| (p.mode.as_str(), p.uid.as_str()));
             insert_run(&tx, &run, r.id, o, loc, with, here.now)?;
             unwait(&tx, r.id)?;
-            let mut b = brief(&tx, r.id, 1, Some(&run))?;
+            let mut b = brief(&tx, r.id, 1, Some(&run), &o.stale)?;
             b.resume = was;
             chunks.push(b);
         }
