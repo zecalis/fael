@@ -331,6 +331,7 @@ pub(crate) fn done(
         print!("{}", crate::chunk_pr_files::none_claimed(t, pr, uid));
     }
     print!("{}", outside.unwrap_or_default());
+    print!("{}", dodge_note(r, &st, uid, diff.as_ref(), pr, handoff));
     // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
     // ready — the agent judges, done never closes or bumps
     if let Some(d) = &diff {
@@ -340,6 +341,25 @@ pub(crate) fn done(
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }
     Ok(())
+}
+
+/// l4: push-PR survival — `done --pr` against live partners' touched files
+/// (board dodge data). Warn only, never blocks done.
+fn dodge_note(
+    r: &Repo,
+    st: &Store,
+    uid: &str,
+    diff: Option<&Vec<String>>,
+    pr: Option<i64>,
+    handoff: &str,
+) -> String {
+    let (Some(d), Some(_)) = (diff, pr) else {
+        return String::new();
+    };
+    let shared = fael_crew::shared(&r.root).unwrap_or_default();
+    st.dodge(uid, d, &shared)
+        .map(|hits| crate::chunk_prs::dodge_text(&hits, handoff))
+        .unwrap_or_default()
 }
 
 /// What `uid`'s run on `branch` touched (None = the cwd's HEAD): its trunk diff since the
