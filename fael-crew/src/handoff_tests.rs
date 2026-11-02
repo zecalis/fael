@@ -186,6 +186,7 @@ fn a_running_chunks_touch_shows_live_in_a_scope_overlapping_brief() {
     s.touch(
         &a,
         &["src/a.rs".to_string(), "src/b.rs".to_string()],
+        None,
         &here("/wa"),
     )
     .unwrap();
@@ -230,16 +231,17 @@ fn touch_unions_never_infers_and_only_running_counts() {
     start(&mut s, &a, "/wa").unwrap();
     // a bad path rejects the whole call: nothing stored
     let e = s
-        .touch(&a, &["../etc/passwd".to_string()], &here("/wa"))
+        .touch(&a, &["../etc/passwd".to_string()], None, &here("/wa"))
         .unwrap_err();
     assert!(e.contains("scope"), "{e}");
     assert!(s.show(&me).unwrap().live.is_empty());
     // two calls union; a file outside my scope is stored but never shown to me
-    s.touch(&a, &["src/a.rs".to_string()], &here("/wa"))
+    s.touch(&a, &["src/a.rs".to_string()], None, &here("/wa"))
         .unwrap();
     s.touch(
         &a,
         &["src/a.rs".to_string(), "other/z.rs".to_string()],
+        None,
         &here("/wa"),
     )
     .unwrap();
@@ -271,7 +273,7 @@ fn touch_unions_never_infers_and_only_running_counts() {
         &here("/wd"),
     )
     .unwrap();
-    s.touch(&d, &["src/d.rs".to_string()], &here("/wd"))
+    s.touch(&d, &["src/d.rs".to_string()], None, &here("/wd"))
         .unwrap();
     s.done(&d, "d done", Some(1), None, &here("/wd")).unwrap();
     let b = s.show(&me).unwrap();
@@ -300,7 +302,7 @@ fn touch_unions_never_infers_and_only_running_counts() {
         &here("/wc"),
     )
     .unwrap();
-    s.touch(&c, &["src/c.rs".to_string()], &here("/wc"))
+    s.touch(&c, &["src/c.rs".to_string()], None, &here("/wc"))
         .unwrap();
     let b = s.show(&me).unwrap();
     assert_eq!(b.live.len(), 2);
@@ -311,6 +313,7 @@ fn touch_unions_never_infers_and_only_running_counts() {
         .touch(
             &a,
             &["src/nope.rs".to_string()],
+            None,
             &here_on("/elsewhere", "x"),
         )
         .unwrap_err();
@@ -334,7 +337,7 @@ fn touch_with_run_names_the_live_run() {
         run: Some(&r),
     };
     // another worktree with --run R answers: the seat rule is the run, not the cwd
-    s.touch(&a, &["src/a.rs".to_string()], &live).unwrap();
+    s.touch(&a, &["src/a.rs".to_string()], None, &live).unwrap();
     assert_eq!(s.show(&a).unwrap().live, vec![]);
     // a foreign R is fenced off before anything is stored
     let bad = Here {
@@ -343,12 +346,163 @@ fn touch_with_run_names_the_live_run() {
         now: NOW,
         run: Some("R-BAD"),
     };
-    let e = s.touch(&a, &["src/b.rs".to_string()], &bad).unwrap_err();
+    let e = s
+        .touch(&a, &["src/b.rs".to_string()], None, &bad)
+        .unwrap_err();
     assert!(e.contains("no longer holds"), "{e}");
     // an ended R names no live run
     s.run_end(&r, None, NOW).unwrap();
-    let e = s.touch(&a, &["src/c.rs".to_string()], &live).unwrap_err();
+    let e = s
+        .touch(&a, &["src/c.rs".to_string()], None, &live)
+        .unwrap_err();
     assert!(e.contains("live run"), "{e}");
+}
+
+/// l3 avoid (issue 01M6CZ0K): one card per colliding file — who/class/files/
+/// where/when/doing/do. Db only, never guessed.
+#[test]
+fn avoid_card_shows_who_class_files_where_when_doing_do() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    let a = add(&mut s, "a", Some("b"));
+    s.edit(
+        &a,
+        &Fields {
+            scope: Some(vec!["src/a.rs".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    start(&mut s, &a, "/wa").unwrap();
+    s.touch(
+        &a,
+        &["src/a.rs".to_string()],
+        Some("wiring the form"),
+        &here("/wa"),
+    )
+    .unwrap();
+    let b = s.show(&me).unwrap();
+    assert_eq!(b.avoid.len(), 1, "{:?}", b.avoid);
+    let card = &b.avoid[0];
+    assert_eq!(card.uid, a);
+    assert_eq!(card.title, "a");
+    assert_eq!(card.class, "prefix");
+    assert_eq!(card.files, vec!["src/".to_string()]);
+    assert_eq!(card.worktree.as_deref(), Some("/wa"));
+    assert_eq!(card.doing, "wiring the form");
+    assert!(
+        card.do_cmd.contains(&format!("--with {a} --as lane")),
+        "{}",
+        card.do_cmd
+    );
+    assert!(card.do_cmd.contains("--as follow"), "{}", card.do_cmd);
+    assert!(card.do_cmd.contains("fael chunk wait"), "{}", card.do_cmd);
+}
+
+/// l3 doing priority: touch --msg beats note beats nothing-handed-off-yet.
+#[test]
+fn avoid_doing_prefers_touch_msg_then_note_then_nothing() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    let a = add(&mut s, "a", Some("b"));
+    s.edit(
+        &a,
+        &Fields {
+            scope: Some(vec!["src/a.rs".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    start(&mut s, &a, "/wa").unwrap();
+    // nothing yet
+    assert_eq!(
+        s.show(&me).unwrap().avoid[0].doing,
+        "nothing handed off yet"
+    );
+    // a note feeds doing
+    s.note(&a, "working on the form", NOW).unwrap();
+    assert_eq!(s.show(&me).unwrap().avoid[0].doing, "working on the form");
+    // touch --msg beats the note
+    s.touch(
+        &a,
+        &["src/a.rs".to_string()],
+        Some("wiring the inputs"),
+        &here("/wa"),
+    )
+    .unwrap();
+    assert_eq!(s.show(&me).unwrap().avoid[0].doing, "wiring the inputs");
+    // a later touch without --msg keeps the intent
+    s.touch(&a, &["src/b.rs".to_string()], None, &here("/wa"))
+        .unwrap();
+    assert_eq!(s.show(&me).unwrap().avoid[0].doing, "wiring the inputs");
+}
+
+/// l3 touch --msg: stored beside touched, rejects empty, keeps old when absent.
+#[test]
+fn touch_msg_is_stored_beside_touched_and_rejects_empty() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("b"));
+    s.edit(
+        &a,
+        &Fields {
+            scope: Some(vec!["src/".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    start(&mut s, &a, "/wa").unwrap();
+    let e = s
+        .touch(&a, &["src/a.rs".to_string()], Some("  "), &here("/wa"))
+        .unwrap_err();
+    assert!(e.contains("--msg needs text"), "{e}");
+    s.touch(
+        &a,
+        &["src/a.rs".to_string()],
+        Some("first intent"),
+        &here("/wa"),
+    )
+    .unwrap();
+    let msg: Option<String> = s.conn.query_row("SELECT touch_msg FROM run WHERE chunk = (SELECT id FROM chunk WHERE uid = ?1) AND ended IS NULL", [&a], |r| r.get(0)).unwrap();
+    assert_eq!(msg.as_deref(), Some("first intent"));
+    s.touch(&a, &["src/b.rs".to_string()], None, &here("/wa"))
+        .unwrap();
+    let msg2: Option<String> = s.conn.query_row("SELECT touch_msg FROM run WHERE chunk = (SELECT id FROM chunk WHERE uid = ?1) AND ended IS NULL", [&a], |r| r.get(0)).unwrap();
+    assert_eq!(
+        msg2.as_deref(),
+        Some("first intent"),
+        "None keeps what is there"
+    );
+}
+
+/// l3 exact vs prefix: same file suggests pair, dir overlap suggests lane.
+#[test]
+fn avoid_exact_suggests_pair_prefix_suggests_lane() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/a.rs");
+    let a = add(&mut s, "a", Some("b"));
+    s.edit(
+        &a,
+        &Fields {
+            scope: Some(vec!["src/a.rs".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    start(&mut s, &a, "/wa").unwrap();
+    let bme = s.show(&me).unwrap();
+    let card = &bme.avoid[0];
+    assert_eq!(card.class, "exact");
+    assert!(card.do_cmd.contains("--as pair"), "{}", card.do_cmd);
+    let me2 = scoped(&mut s, "src/");
+    // me2 is a different chunk with dir scope; a still running on the same file
+    let bme2 = s.show(&me2).unwrap();
+    let card2 = bme2.avoid.iter().find(|c| c.uid == a).unwrap();
+    assert_eq!(card2.class, "prefix");
+    assert!(card2.do_cmd.contains("--as lane"), "{}", card2.do_cmd);
 }
 
 #[test]

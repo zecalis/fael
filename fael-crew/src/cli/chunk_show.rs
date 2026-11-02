@@ -74,6 +74,7 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
             println!("{head}: {t}");
         }
     }
+    print_avoid(&b);
     // issue 01M6DVP4M: start's `--full` sections, read without the claim start makes
     if a.has("full") {
         let st = Started {
@@ -86,6 +87,29 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
         print!("{}", st.plan_sections());
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Avoid cards (l3, issue 01M6CZ0K): the clash to dodge, with doing/do.
+fn print_avoid(b: &fael_crew::Brief) {
+    for a in &b.avoid {
+        println!("avoid: {} {}", a.uid, a.title);
+        println!("class: {} files: {}", a.class, a.files.join(", "));
+        match &a.client {
+            Some(c) => println!("who: {}:{} ({c})", a.uid, a.title),
+            None => println!("who: {}:{}", a.uid, a.title),
+        }
+        let wh = a.worktree.as_deref().unwrap_or("no worktree");
+        let br = a.branch.as_deref().unwrap_or("");
+        println!("where: {wh} {br} (since {})", a.started);
+        let when = a.last_seen.as_deref().unwrap_or("never");
+        let flag = if a.stalled { " (stalled)" } else { "" };
+        println!("when: last seen {when}{flag}");
+        println!("doing: {}", a.doing);
+        println!("do: {}", a.do_cmd);
+    }
+    if b.avoid_more > 0 {
+        println!("({} more avoid cards not shown)", b.avoid_more);
+    }
 }
 
 /// A chunk the board does not list: say why — its plan is parked or done (the

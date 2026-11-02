@@ -89,6 +89,58 @@ fn live(o: &mut String, all: &[(String, String)], more: usize) {
     }
 }
 
+/// Avoid cards (l3, issue 01M6CZ0K): one per colliding file — who/class/files/
+/// where/when/doing/do. Db only, never guessed; `doing` is the other's live
+/// `touch --msg`, latest note, last done/review, else nothing-handed-off.
+fn avoid(o: &mut String, all: &[super::handoff::Avoid], more: usize) {
+    let (full, rest) = all.split_at(all.len().min(FULL));
+    for a in full {
+        let _ = writeln!(
+            o,
+            "\navoid: {} {} [{}] {}",
+            a.uid,
+            a.title,
+            a.class,
+            a.files.join(", ")
+        );
+        let who = match &a.client {
+            Some(c) => format!("{} \"{}\" ({c})", a.uid, a.title),
+            None => format!("{} \"{}\"", a.uid, a.title),
+        };
+        let _ = writeln!(o, "who: {who}");
+        let wh = format!(
+            "{} {}",
+            a.worktree.as_deref().unwrap_or("no worktree"),
+            a.branch.as_deref().unwrap_or("")
+        );
+        let _ = writeln!(o, "where: {} (since {})", wh.trim(), a.started);
+        let when = match &a.last_seen {
+            Some(s) if a.stalled => format!("{s} (stalled)"),
+            Some(s) => s.clone(),
+            None => "never".to_string(),
+        };
+        let _ = writeln!(o, "when: last seen {when}");
+        let _ = writeln!(o, "doing: {}", a.doing);
+        let _ = writeln!(o, "do: {}", a.do_cmd);
+    }
+    for a in rest {
+        let _ = writeln!(
+            o,
+            "- {} {} [{}] — doing: {}",
+            a.uid, a.title, a.class, a.doing
+        );
+    }
+    if more > 0 {
+        let _ = writeln!(o, "({more} more avoid cards not shown)");
+    }
+}
+
+/// Live + avoid in one call so `render` stays at the line ratchet.
+fn live_avoid(o: &mut String, c: &Brief) {
+    live(o, &c.live, c.live_more);
+    avoid(o, &c.avoid, c.avoid_more);
+}
+
 /// The chunk rules whole, or one pointer line when the session already read them
 /// (issue 01M5Y6H4).
 fn rules_text(o: &mut String, uid: &str, first: Option<&Brief>, whole: bool, full: bool) {
@@ -207,9 +259,7 @@ impl Started {
             if c.by_file_more > 0 {
                 let _ = writeln!(o, "({} more such chunks not shown)", c.by_file_more);
             }
-            // live touches (`chunk touch`, issue 01M5PB7Z): a section of its own, never
-            // merged with the done-claimed one above.
-            live(&mut o, &c.live, c.live_more);
+            live_avoid(&mut o, c);
         }
         let first = self.chunks.first();
         let uid = first.map_or("<uid>", |c| &c.uid);

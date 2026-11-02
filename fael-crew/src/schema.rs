@@ -69,6 +69,9 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// 01M6CZ0K) — the receipt a force writes; NULL = a start that forced nothing past.
 /// A column, since the run row is what `board` reads and old rows stay NULL
 /// (no VERSION bump: additions ride COLUMNS, fael:01M6D140 §gaps).
+/// `run.touch_msg`: `chunk touch --msg "<what you are doing>"` (issue 01M6CZ0K, l3) —
+/// the intent beside `run.touched`; NULL = no intent reported yet. Shown as `doing:`
+/// on the other side's avoid card. A column, same ride as `force_reason`.
 /// `chunk.client_hint`: the client the planner picked (`chunk add|edit --client`), which
 /// `approve` falls back to; epoch v8 dropped an unwired one (issue 01M4XM98).
 /// `plan.parent`: the name of the umbrella plan of the same app, one level (issue 01M51KW0).
@@ -89,6 +92,7 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("run", "review", "TEXT"),
     ("run", "base", "TEXT"),
     ("run", "force_reason", "TEXT"),
+    ("run", "touch_msg", "TEXT"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open

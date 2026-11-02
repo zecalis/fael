@@ -1,21 +1,30 @@
-//! `fael chunk touch <uid> <path>…` (plan overlap-broker o3, issue 01M5PB7Z):
-//! a running chunk publishes the files it has touched so far. Stored on the live
-//! run row (`run.touched`), never inferred from git — only what the agent reports
-//! is kept (product:mission, same rule as run-telemetry model/cost), so a waiter
-//! sees live files, not the whole declared scope. A new module (not a split:
-//! `agent.rs` sits at the 400-line ratchet, so the method lives here instead).
+//! `fael chunk touch <uid> <path>… [--msg "<what you are doing>"]` (plan overlap-broker
+//! o3, issue 01M5PB7Z; l3 issue 01M6CZ0K): a running chunk publishes the files it has
+//! touched so far. Stored on the live run row (`run.touched`), never inferred from git —
+//! only what the agent reports is kept (product:mission, same rule as run-telemetry
+//! model/cost), so a waiter sees live files, not the whole declared scope. `--msg`
+//! stores the intent beside it (`run.touch_msg`), shown as `doing:` on the other side's
+//! avoid card. A new module (not a split: `agent.rs` sits at the 400-line ratchet, so
+//! the method lives here instead).
 
 use super::State;
 use super::chunk::{Here, fence, row, scope, tx};
 use super::store::{Store, err};
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 impl Store {
     /// Publish touched-so-far: each call unions with what is already there, newest
     /// paths last. A bad path rejects the whole call — nothing is stored — so a
     /// typo never narrows what the next brief shows. Fenced to the chunk's live
-    /// worktree (or `--run R`), and only while it runs.
-    pub fn touch(&mut self, uid: &str, files: &[String], here: &Here) -> Result<(), String> {
+    /// worktree (or `--run R`), and only while it runs. `--msg` stores the intent
+    /// beside `touched` (`run.touch_msg`); `None` keeps what is there.
+    pub fn touch(
+        &mut self,
+        uid: &str,
+        files: &[String],
+        msg: Option<&str>,
+        here: &Here,
+    ) -> Result<(), String> {
         let s = scope(files)?;
         let fresh: Vec<String> = s
             .as_deref()
@@ -37,14 +46,26 @@ impl Store {
                 r.state.as_str()
             ));
         }
+        let want_msg: Option<String> = match msg {
+            None => None,
+            Some(m) => {
+                let t = m.trim();
+                if t.is_empty() {
+                    return Err(format!(
+                        "rejected: --msg needs text — try `fael chunk touch {uid} src/a.rs --msg \"wiring the form\"`"
+                    ));
+                }
+                Some(t.to_string())
+            }
+        };
         // the live run this call holds: `--run R` names it, else the chunk's live row.
         // `fence` already refused a foreign R, so either names the same live run.
-        let cur: Option<String> = match here.run {
+        let cur: (Option<String>, Option<String>) = match here.run {
             Some(run) => tx
                 .query_row(
-                    "SELECT touched FROM run WHERE chunk = ?1 AND start = ?2 AND ended IS NULL",
+                    "SELECT touched, touch_msg FROM run WHERE chunk = ?1 AND start = ?2 AND ended IS NULL",
                     params![r.id, run],
-                    |q| q.get(0),
+                    |q| Ok((q.get(0)?, q.get(1)?)),
                 )
                 .map_err(|_| {
                     format!(
@@ -53,15 +74,18 @@ impl Store {
                 })?,
             None => tx
                 .query_row(
-                    "SELECT touched FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
+                    "SELECT touched, touch_msg FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
                     [r.id],
-                    |q| q.get(0),
+                    |q| Ok((q.get(0)?, q.get(1)?)),
                 )
-                .map_err(err)?,
+                .optional()
+                .map_err(err)?
+                .unwrap_or((None, None)),
         };
+        let (cur_touched, cur_msg) = cur;
         let mut seen = std::collections::BTreeSet::new();
         let mut merged: Vec<String> = Vec::new();
-        for line in cur
+        for line in cur_touched
             .unwrap_or_default()
             .lines()
             .chain(fresh.iter().map(String::as_str))
@@ -73,17 +97,18 @@ impl Store {
             }
         }
         let joined = merged.join("\n");
+        let final_msg = want_msg.or(cur_msg);
         let n = match here.run {
             Some(run) => tx
                 .execute(
-                    "UPDATE run SET touched = ?1 WHERE chunk = ?2 AND start = ?3 AND ended IS NULL",
-                    params![joined, r.id, run],
+                    "UPDATE run SET touched = ?1, touch_msg = ?2 WHERE chunk = ?3 AND start = ?4 AND ended IS NULL",
+                    params![joined, final_msg, r.id, run],
                 )
                 .map_err(err)?,
             None => tx
                 .execute(
-                    "UPDATE run SET touched = ?1 WHERE chunk = ?2 AND ended IS NULL",
-                    params![joined, r.id],
+                    "UPDATE run SET touched = ?1, touch_msg = ?2 WHERE chunk = ?3 AND ended IS NULL",
+                    params![joined, final_msg, r.id],
                 )
                 .map_err(err)?,
         };
