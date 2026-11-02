@@ -539,3 +539,34 @@ fn a_stalled_exact_holder_lanes_with_a_receipt() {
     .unwrap();
     assert!(ev.contains("lane beside") && ev.contains("stalled"), "{ev}");
 }
+
+/// A stalled holder of the same chunk is no refusal (fael:01M6CZ9G41): starting
+/// it again from another worktree takes it over with an automatic receipt —
+/// no --force, no --because.
+#[test]
+fn stalled_holder_takeover_receipt() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    start(&mut s, &a, "/w1").unwrap();
+    let o = Start {
+        stale: "2999-01-01T00:00:00Z".into(),
+        ..Start::default()
+    };
+    s.start(&a, &o, &here("/w2")).unwrap();
+    let ev = get(
+        &s,
+        "SELECT text FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",
+        &a,
+    )
+    .unwrap();
+    assert!(
+        ev.contains("taken over") && ev.contains(&format!("partner {a} stalled since")),
+        "{ev}"
+    );
+    // a live holder still refuses without --force
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    start(&mut s, &a, "/w1").unwrap();
+    let e = s.start(&a, &Start::default(), &here("/w2")).unwrap_err();
+    assert!(e.contains("is held by run") && e.contains("--force"), "{e}");
+}

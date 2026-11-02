@@ -65,6 +65,29 @@ pub(super) fn holder_worktree(tx: &Transaction, id: i64) -> Result<Option<String
     .map_err(err)
 }
 
+/// The live run's last touch when it is stalled (`last_seen` else `started` before
+/// `stale`, the board's rule): `None` = no live run, or it was seen recently.
+/// A stalled holder is no refusal — the caller takes it over with this as the
+/// receipt (fael:01M6CZ9G41).
+pub(super) fn stalled_since(
+    tx: &Transaction,
+    id: i64,
+    stale: &str,
+) -> Result<Option<String>, String> {
+    let row: Option<(String, Option<String>)> = tx
+        .query_row(
+            "SELECT started, last_seen FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(err)?;
+    Ok(row.and_then(|(started, seen)| {
+        let at = seen.unwrap_or(started);
+        (at.as_str() < stale).then_some(at)
+    }))
+}
+
 /// End every live run in a worktree: one start per worktree, so a run still live there
 /// belongs to an agent that left. The chunk stays `running`; its next start says so.
 pub(super) fn end_in_worktree(

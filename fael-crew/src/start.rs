@@ -9,6 +9,7 @@ use super::agent::unwait;
 use super::chunk::{Here, Row, end_live, row, set, tx};
 use super::holder::{
     end_caller_seat, end_here, holder, holder_detail, holder_worktree, members, ready_paired,
+    stalled_since,
 };
 use super::joint::{self, Joint};
 use super::ready::Ready;
@@ -348,6 +349,54 @@ fn end_seats(
     Ok(orphaned)
 }
 
+/// The event text for taking over a live holder: a stalled holder goes without
+/// `--force`, its stall as the receipt (fael:01M6CZ9G41); a live one needs
+/// `--force --because`, and the receipt rides `forced` (issue 01M6CZ0K).
+#[allow(clippy::too_many_arguments)]
+fn held_takeover(
+    tx: &Transaction,
+    r_id: i64,
+    h: String,
+    m: &str,
+    pair: &str,
+    o: &Start,
+    run: &str,
+    wt: Option<&str>,
+    now: &str,
+    seat: bool,
+    forced: &mut Vec<String>,
+) -> Result<String, String> {
+    if !o.force && !seat {
+        if let Some(since) = stalled_since(tx, r_id, &o.stale)? {
+            end_live(tx, r_id, now)?;
+            let who = o.client.as_deref().unwrap_or("agent");
+            return Ok(format!(
+                "taken over from run {h} by run {run} ({who}) in {} — partner {m} stalled since {since}",
+                wt.unwrap_or("no worktree")
+            ));
+        }
+        return Err(format!(
+            "rejected: chunk {m}{pair} is held by run {h} — try `fael chunk start {m} --force --because \"<what you will avoid>\"` to take it over"
+        ));
+    }
+    end_live(tx, r_id, now)?;
+    let who = o.client.as_deref().unwrap_or("agent");
+    if o.force {
+        let because = need_because(o, m)?;
+        let t = format!(
+            "taken over from run {h} by run {run} ({who}) in {} by --force — because {because}",
+            wt.unwrap_or("no worktree")
+        );
+        forced.push(t.clone());
+        Ok(t)
+    } else {
+        Ok(format!(
+            "taken over from run {h} by run {run} ({who}) in {}",
+            wt.unwrap_or("no worktree")
+        ))
+    }
+}
+
 /// Claim every paired member: write its start event (joint handshake and force
 /// receipts ride on the first member) and return the rows plus the force
 /// receipts for `Started.forced` (issue 01M6CZ0K).
@@ -398,29 +447,19 @@ fn claim_members(
             // the same worktree is the same seat: the agent that held it is gone
             let seat = wt.is_some() && holder_worktree(tx, r.id)?.as_deref() == wt;
             let text = match holder(tx, r.id)? {
-                Some(h) if !o.force && !seat => {
-                    return Err(format!(
-                        "rejected: chunk {m}{pair} is held by run {h} — try `fael chunk start {m} --force --because \"<what you will avoid>\"` to take it over"
-                    ));
-                }
-                Some(h) => {
-                    end_live(tx, r.id, here.now)?;
-                    let who = o.client.as_deref().unwrap_or("agent");
-                    if o.force {
-                        let because = need_because(o, &m)?;
-                        let t = format!(
-                            "taken over from run {h} by run {run} ({who}) in {} by --force — because {because}",
-                            wt.unwrap_or("no worktree")
-                        );
-                        forced.push(t.clone());
-                        t
-                    } else {
-                        format!(
-                            "taken over from run {h} by run {run} ({who}) in {}",
-                            wt.unwrap_or("no worktree")
-                        )
-                    }
-                }
+                Some(h) => held_takeover(
+                    tx,
+                    r.id,
+                    h,
+                    &m,
+                    &pair,
+                    o,
+                    run,
+                    wt,
+                    here.now,
+                    seat,
+                    &mut forced,
+                )?,
                 None => {
                     if o.force {
                         let because = need_because(o, &m)?;
