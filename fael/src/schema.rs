@@ -91,8 +91,14 @@ pub(crate) fn tools() -> Value {
     ]);
     // pinned: one workspace, so no `cwd` to route by
     if !crate::mcp::pinned() {
-        for tool in t.as_array_mut().unwrap() {
+        let tools = t.as_array_mut().unwrap();
+        for tool in tools.iter_mut() {
             tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
+        }
+        // `chunk start` refuses without it (mcp/chunk.rs) — said on the one
+        // tool that needs it, in place of the shared line, so bytes hold.
+        if let Some(c) = tools.iter_mut().find(|x| x["name"] == "chunk") {
+            c["inputSchema"]["properties"]["cwd"]["description"] = json!("start needs cwd");
         }
     }
     t
