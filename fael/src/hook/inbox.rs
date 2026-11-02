@@ -26,17 +26,11 @@ fn one(uid: &str, id: i64, text: &str) -> Line {
 /// Empty with no crew.db, no live run or no new notes.
 pub(crate) fn lines(c: &Ctx) -> Vec<Line> {
     let db = work::db_for(c.repo.journal.as_deref(), &c.repo.fael);
-    let Some((uid, notes)) = work::inbox_notes(
-        &db,
-        &c.repo.root.to_string_lossy(),
-        &c.session,
-    ) else {
+    let Some((uid, notes)) = work::inbox_notes(&db, &c.repo.root.to_string_lossy(), &c.session)
+    else {
         return vec![];
     };
-    notes
-        .into_iter()
-        .map(|(id, t)| one(&uid, id, &t))
-        .collect()
+    notes.into_iter().map(|(id, t)| one(&uid, id, &t)).collect()
 }
 
 #[cfg(test)]

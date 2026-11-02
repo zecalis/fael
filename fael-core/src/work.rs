@@ -69,10 +69,10 @@ pub use db::{
 };
 pub use db_runs::flow_runs;
 pub use drift::{Drift, drift, in_conn as drift_in};
-pub use inbox::notes as inbox_notes;
 pub use elsewhere::{
     Elsewhere, chunk_elsewhere, register_repo, repos as elsewhere_repos, row_elsewhere,
 };
+pub use inbox::notes as inbox_notes;
 pub use pure::{
     CHUNK_VERBS, LANE_LINE, PLAN_VERBS, held_session_db, held_session_file, in_tmp, is_scratch,
     main_root_for, overlap, registered, rules, rules_full, shared, wait_hint,

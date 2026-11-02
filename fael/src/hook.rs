@@ -52,6 +52,7 @@ mod prompt;
 mod protocol;
 mod prune;
 mod push;
+mod push_files;
 mod retired;
 mod review;
 mod said_text;
