@@ -165,7 +165,7 @@ pub(crate) fn show(a: &Args, r: &Repo, keys: &[&str]) -> Result<ExitCode, String
     if keys.is_empty() {
         return Err(bad(Some("show")));
     }
-    a.only("chunk show", &["json", "plan"])?;
+    a.only("chunk show", &["json", "plan", "full"])?;
     let plan = a.one("plan");
     // chunk_show reads no --plan: each key has become its uid by then
     let a = &a.without("plan");

@@ -234,3 +234,27 @@ fn show_warns_when_the_brief_cites_a_closed_issue() {
     let (ok, _, err) = fael(&d, &["chunk", "show", uid.trim()]);
     assert!(ok && err.contains(&format!("brief cites {id}")), "{err}");
 }
+
+/// issue 01M6DVP4M: `show --full` prints start's plan sections and writes no run or event row.
+#[test]
+fn show_full_reads_the_sections_and_writes_nothing() {
+    let (d, u) = repo();
+    let rows = || {
+        let c = rusqlite::Connection::open(d.join(".git/fael/crew.db")).unwrap();
+        let n = |t: &str| -> i64 {
+            c.query_row(&format!("SELECT count(*) FROM {t}"), [], |r| r.get(0))
+                .unwrap()
+        };
+        (n("run"), n("event"))
+    };
+    let before = rows();
+    let (ok, out, err) = fael(&d, &["chunk", "show", &u, "--full"]);
+    assert!(ok, "{err}");
+    assert!(
+        out.contains("plan sections") || out.contains("<!-- plan"),
+        "{out}"
+    );
+    assert_eq!(rows(), before, "show --full wrote a row");
+    let (_, plain, _) = fael(&d, &["chunk", "show", &u]);
+    assert!(!plain.contains("<!-- plan"), "{plain}");
+}
