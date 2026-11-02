@@ -69,6 +69,11 @@ fn partner(
     ms: &[String],
     o: &Start,
 ) -> Result<Option<Partner>, String> {
+    if o.with.as_deref().is_some_and(|w| w.contains(',')) {
+        return Err(
+            "rejected: --with takes one chunk — to start beside several, name none: a dir overlap or a stalled holder lanes by itself".into(),
+        );
+    }
     let (with, mode) = match (&o.with, o.joint) {
         (None, None) => return Ok(None),
         (Some(w), Some(m)) => (w, m),
@@ -76,6 +81,17 @@ fn partner(
             "rejected: --with and --as go together; try `fael chunk start <uid> --with <partner> --as pair`".into(),
         ),
     };
+    join(tx, first, ms, with, mode).map(Some)
+}
+
+/// The live run of the chunk `with` names, joined as `mode`.
+fn join(
+    tx: &Transaction,
+    first: &Row,
+    ms: &[String],
+    with: &str,
+    mode: Joint,
+) -> Result<Partner, String> {
     let p = super::lookup::lookup(tx, with)?.ok_or_else(|| super::lookup::no_chunk(with))?;
     let uid = p.1.clone();
     if p.0 == first.id || ms.contains(&uid) {
@@ -97,15 +113,21 @@ fn partner(
         .optional()
         .map_err(err)?
         .unwrap_or_default();
-    Ok(Some(Partner {
+    Ok(Partner {
         uid,
         mode,
         run,
         worktree,
         branch,
         base,
-    }))
+    })
 }
+
+/// `(partner, force receipt, auto-lane note)`.
+pub(super) type Gate = (Option<Partner>, Option<String>, Option<String>);
+
+/// How a stalled clash line ends (`holder::clash_report`).
+const STALLED: &str = " · stalled";
 
 /// The start's clash gate. A clash with the partner is no refusal for `follow`, `pair`, or a
 /// `lane` over a dir (prefix) overlap; a lane over the same file still refuses — that is a
@@ -115,14 +137,17 @@ fn partner(
 /// stores in the start event.
 /// `seated` = the chunk already runs in the caller's worktree: it holds its files, so a chunk
 /// that started beside it later is no reason to refuse a restart (`start --full` to re-read).
-/// Returns the partner and, on a forced clash, its receipt.
+/// A dir (prefix) overlap or a stalled holder is no refusal: the start lanes beside it with a
+/// receipt, no `--with` needed, however many there are (fael:01M6CZ9G41). Only a live
+/// same-file clash refuses, and `--with` names one partner, so with two the hint is `--force`.
+/// Returns the partner, on a forced clash its receipt, and the auto-lane note.
 pub(super) fn gate(
     tx: &Transaction,
     first: &Row,
     ms: &[String],
     o: &Start,
     seated: bool,
-) -> Result<(Option<Partner>, Option<String>), String> {
+) -> Result<Gate, String> {
     let p = partner(tx, first, ms, o)?;
     let report = clash_report(tx, ms, &o.shared, &o.stale)?;
     let exact_lane = |u: &str, c: OverlapClass| {
@@ -136,9 +161,25 @@ pub(super) fn gate(
                 .is_some_and(|p| &p.uid == u && !exact_lane(u, *c))
         })
         .collect();
+    let mut eased = Vec::new();
     if seated {
         kept.clear();
+    } else {
+        kept.retain(|k| {
+            let easy = k.1 != OverlapClass::Exact || k.2.ends_with(STALLED);
+            if easy {
+                eased.push((k.0.as_str(), k.2.as_str()));
+            }
+            !easy
+        });
     }
+    let lines: Vec<_> = eased.iter().map(|e| e.1).collect();
+    let lane = (!eased.is_empty()).then(|| format!("lane beside {}", lines.join("; ")));
+    // the run row keeps one partner: the first, so its files are no "outside scope" for this lane
+    let auto = match (&p, eased.first()) {
+        (None, Some((u, _))) if !o.force => Some(join(tx, first, ms, u, Joint::Lane)?),
+        _ => None,
+    };
     let uid = &first.uid;
     let because = o
         .because
@@ -151,9 +192,10 @@ pub(super) fn gate(
                 "rejected: --force needs --because \"<what you will avoid>\" — try `fael chunk start {uid} --force --because \"<what you will avoid>\"`"
             ));
         }
-        return Ok((p, None));
+        return Ok((p.or(auto), None, lane));
     }
     let (hit, class, _) = kept[0];
+    let several = kept.len() > 1;
     let how = if kept.iter().any(|(_, c, _)| *c == OverlapClass::Exact) || exact_lane(hit, *class) {
         "pair"
     } else {
@@ -161,21 +203,33 @@ pub(super) fn gate(
     };
     let lines: Vec<_> = kept.iter().map(|k| k.2.as_str()).collect();
     let joined_lines = lines.join("; ");
-    if !o.force {
+    let force = format!("`fael chunk start {uid} --force --because \"<what you will avoid>\"`");
+    let way = if several {
+        format!(
+            "--with takes one partner and these {} clash, so only {force} starts it",
+            kept.len()
+        )
+    } else {
+        format!(
+            "try `fael chunk start {uid} --with {hit} --as {how}` to start beside it, or {force} to start it anyway"
+        )
+    };
+    let Some(because) = because.filter(|_| o.force) else {
+        let bare = if o.force {
+            " (bare --force is rejected)"
+        } else {
+            ""
+        };
         return Err(format!(
-            "rejected: chunk {uid} shares files with a running chunk — {joined_lines}; try `fael chunk start {uid} --with {hit} --as {how}` to start beside it, or `fael chunk start {uid} --force --because \"<what you will avoid>\"` to start it anyway"
-        ));
-    }
-    let Some(because) = because else {
-        return Err(format!(
-            "rejected: chunk {uid} shares files with a running chunk — {joined_lines}; try `fael chunk start {uid} --with {hit} --as {how}` to start beside it, or `fael chunk start {uid} --force --because \"<what you will avoid>\"` to start it anyway (bare --force is rejected)"
+            "rejected: chunk {uid} shares files with a running chunk — {joined_lines}; {way}{bare}"
         ));
     };
     Ok((
-        p,
+        p.or(auto),
         Some(format!(
             "started by --force past clash {joined_lines} — because {because}"
         )),
+        lane,
     ))
 }
 

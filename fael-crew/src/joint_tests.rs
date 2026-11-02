@@ -43,13 +43,10 @@ fn lane_starts_a_dir_overlap_without_force_and_both_reach_done() {
     let a = scoped(&mut s, "a", "src/");
     let b = scoped(&mut s, "b", "src/x.rs");
     start(&mut s, &a, "/w1").unwrap();
-    let e = start(&mut s, &b, "/w2").unwrap_err();
-    assert!(e.contains(&format!("--with {a} --as lane")), "{e}");
-    assert!(e.contains("--force"), "{e}");
-    s.start(&b, &with(&a, Joint::Lane), &here("/w2")).unwrap();
-    assert_eq!(col(&s, &b, "joint").as_deref(), Some("lane"));
-    assert_eq!(col(&s, &b, "partner").as_deref(), Some(a.as_str()));
-    assert_eq!(col(&s, &a, "joint"), None);
+    // no --with, no --force: a dir overlap lanes by itself, the event is the receipt
+    start(&mut s, &b, "/w2").unwrap();
+    let ev = col_event(&s, &b);
+    assert!(ev.contains("lane beside") && ev.contains(&a), "{ev}");
     // a lane's files are no "outside declared scope" against its partner
     let out = s.outside(&b, &["src/y.rs".into()], &[]).unwrap();
     assert!(out.1.iter().all(|(_, o)| o.is_none()), "{:?}", out.1);
@@ -142,4 +139,44 @@ fn pair_frees_the_callers_seat_but_keeps_a_shared_one() {
     s.start(&d, &with(&a, Joint::Pair), &here("/w1")).unwrap();
     assert_eq!(live(&s, &a), 1, "shared seat keeps the run");
     assert_eq!(live(&s, &d), 1, "joiner runs");
+}
+
+fn col_event(s: &Store, uid: &str) -> String {
+    s.conn
+        .query_row(
+            "SELECT text FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",
+            [uid],
+            |r| r.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn two_dir_overlaps_lane_together_without_with() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/");
+    let b = scoped(&mut s, "b", "src/y.rs");
+    let c = scoped(&mut s, "c", "src/z.rs");
+    start(&mut s, &a, "/w1").unwrap();
+    start(&mut s, &b, "/w2").unwrap();
+    start(&mut s, &c, "/w3").unwrap();
+}
+
+#[test]
+fn two_exact_clashes_say_with_takes_one_and_a_list_is_named() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/y.rs");
+    let c = scoped(&mut s, "c", "src/x.rs\nsrc/y.rs");
+    start(&mut s, &a, "/w1").unwrap();
+    start(&mut s, &b, "/w2").unwrap();
+    let e = start(&mut s, &c, "/w3").unwrap_err();
+    assert!(
+        e.contains("--with takes one partner") && !e.contains("--as pair"),
+        "{e}"
+    );
+    let e = s
+        .start(&c, &with(&format!("{a},{b}"), Joint::Pair), &here("/w3"))
+        .unwrap_err();
+    assert!(e.contains("--with takes one chunk"), "{e}");
 }
