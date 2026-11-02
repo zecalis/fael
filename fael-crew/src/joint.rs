@@ -111,7 +111,8 @@ fn partner(
 /// `lane` over a dir (prefix) overlap; a lane over the same file still refuses — that is a
 /// pair. Any other clash (or none named) refuses with the ready joint command, `--force
 /// --because` last. Bare `--force` is rejected (issue 01M6CZ0K); a force past a clash
-/// writes a receipt (clash snapshot + because) the caller stores in the start event.
+/// writes a receipt (clash snapshot + because, gap (1) in fael:01M6D140) the caller
+/// stores in the start event.
 /// Returns the partner and, on a forced clash, its receipt.
 pub(super) fn gate(
     tx: &Transaction,

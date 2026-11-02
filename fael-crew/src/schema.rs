@@ -67,7 +67,8 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// claimed).
 /// `run.force_reason`: `chunk start --force --because "<what you will avoid>"` (issue
 /// 01M6CZ0K) — the receipt a force writes; NULL = a start that forced nothing past.
-/// A column, since the run row is what `board` reads and old rows stay NULL.
+/// A column, since the run row is what `board` reads and old rows stay NULL
+/// (no VERSION bump: additions ride COLUMNS, fael:01M6D140 §gaps).
 /// `chunk.client_hint`: the client the planner picked (`chunk add|edit --client`), which
 /// `approve` falls back to; epoch v8 dropped an unwired one (issue 01M4XM98).
 /// `plan.parent`: the name of the umbrella plan of the same app, one level (issue 01M51KW0).
