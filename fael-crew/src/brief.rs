@@ -218,7 +218,7 @@ impl Started {
         } else {
             let _ = writeln!(
                 o,
-                "\nplan sections (goal, scope, done, constraints): `fael chunk start {uid} --full`"
+                "\nplan sections (goal, scope, done, constraints): `fael chunk show {uid} --full` (reads, claims nothing)"
             );
         }
         rules_text(&mut o, uid, first, rules_full, full);
@@ -274,6 +274,14 @@ impl Started {
             "\nresumed {0} — full brief: `fael chunk start {uid} --full`",
             self.run
         );
+        o
+    }
+
+    /// The plan sections `render(true, ..)` ends with, alone: `chunk show --full` prints them
+    /// after the brief it already reads, with no run to claim.
+    pub fn plan_sections(&self) -> String {
+        let mut o = String::new();
+        self.plan_context(&mut o);
         o
     }
 

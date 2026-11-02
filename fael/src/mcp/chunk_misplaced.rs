@@ -6,7 +6,7 @@ use serde_json::Value;
 /// (2026-10-22) was this: a `done` naming them silently dropped them. Say the
 /// key and where it applies, never reject a call that saves.
 /// (keys the verb takes none of, keys only another verb takes). `until` /
-/// `option` / `options` ride only on `wait` (c5 shape), `full` only on `start`.
+/// `option` / `options` ride only on `wait` (c5 shape), `full` only on `start` and `show`.
 fn tables(verb: &str) -> Option<(&'static [&'static str], &'static [&'static str])> {
     Some(match verb {
         "show" => (
@@ -17,7 +17,6 @@ fn tables(verb: &str) -> Option<(&'static [&'static str], &'static [&'static str
                 "until",
                 "option",
                 "options",
-                "full",
                 "pr",
                 "left",
                 "review",

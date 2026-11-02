@@ -233,7 +233,7 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
         args.extend(["--because".into(), b]);
     }
     // c5: same-session resume prints short — `--full` reprints the whole brief.
-    if verb == "start" && a["full"].as_bool().unwrap_or(false) {
+    if matches!(verb, "start" | "show") && a["full"].as_bool().unwrap_or(false) {
         args.push("--full".into());
     }
     Ok(args)
