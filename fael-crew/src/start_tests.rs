@@ -267,7 +267,7 @@ fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
 #[test]
 fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
     let mut s = Store::open_in_memory().unwrap();
-    let a = scoped(&mut s, "a", "src/");
+    let a = scoped(&mut s, "a", "src/x.rs");
     let b = scoped(&mut s, "b", "src/x.rs\ndocs/");
     start(&mut s, &a, "/w1").unwrap();
     let e = start(&mut s, &b, "/w2").unwrap_err();
@@ -279,25 +279,19 @@ fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
         e.contains("--because"),
         "bare --force names the receipt: {e}"
     );
-    assert!(e.contains("[prefix]"), "the reject names the class: {e}");
+    assert!(e.contains("[exact]"), "the reject names the class: {e}");
     assert_eq!(state(&s, &b), "open");
     assert!(
         e.contains("last seen never") && !e.contains("stalled"),
         "{e}"
     );
-    let o = Start {
-        stale: "2026-10-12T00:00:00Z".into(),
-        ..Start::default()
-    };
-    let e = s.start(&b, &o, &here("/w2")).unwrap_err();
-    assert!(e.contains("last seen never · stalled"), "{e}");
     // bare --force past a clash is rejected (issue 01M6CZ0K)
     let bare = Start {
         force: true,
         ..Start::default()
     };
     let e = s.start(&b, &bare, &here("/w2")).unwrap_err();
-    assert!(e.contains("--because") && e.contains("--as lane"), "{e}");
+    assert!(e.contains("--because") && e.contains("--as pair"), "{e}");
     let o = Start {
         force: true,
         because: Some("will stay in docs/ only".into()),
@@ -522,4 +516,26 @@ fn a_restart_in_the_holding_worktree_ignores_a_later_clash() {
         start(&mut s, &c, "/w3").is_err(),
         "a fresh start still clashes"
     );
+}
+
+/// A stalled same-file holder is no refusal (fael:01M6CZ9G41): the start lanes beside it and
+/// the event carries the stalled line as the receipt.
+#[test]
+fn a_stalled_exact_holder_lanes_with_a_receipt() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    start(&mut s, &a, "/w1").unwrap();
+    let o = Start {
+        stale: "2999-01-01T00:00:00Z".into(),
+        ..Start::default()
+    };
+    s.start(&b, &o, &here("/w2")).unwrap();
+    let ev = get(
+        &s,
+        "SELECT text FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",
+        &b,
+    )
+    .unwrap();
+    assert!(ev.contains("lane beside") && ev.contains("stalled"), "{ev}");
 }

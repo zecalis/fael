@@ -486,7 +486,8 @@ impl Store {
             return Ok(reused);
         }
         check_lonely_because(o, uid)?;
-        let (partner, clash_forced) = joint::gate(&tx, &first, &ms, o, seated(&tx, &first, wt)?)?;
+        let (partner, clash_forced, lane) =
+            joint::gate(&tx, &first, &ms, o, seated(&tx, &first, wt)?)?;
         // a pair is one R in the partner's worktree and branch; any other start is its own R
         let seat = partner.as_ref().filter(|p| p.mode == Joint::Pair);
         let caller_wt = wt;
@@ -505,7 +506,10 @@ impl Store {
             }
             None => check_fresh(&tx, &run)?,
         }
-        let joined = partner.as_ref().map(joint::Partner::text);
+        let joined = [partner.as_ref().map(joint::Partner::text), lane]
+            .into_iter()
+            .flatten()
+            .reduce(|a, b| format!("{a}; {b}"));
         let (claim, forced) = claim_members(
             &tx,
             &ms,
