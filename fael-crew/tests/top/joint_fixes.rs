@@ -135,3 +135,15 @@ fn a_lane_over_the_same_file_says_it_is_a_pair() {
     let (good, _, err) = fael(&w[1], &["chunk", "start", &b]);
     assert!(!good && !err.contains("is a pair"), "{err}");
 }
+
+/// The pair start said "pass --run R to done", but done from the partner's worktree needs none.
+#[test]
+fn a_pair_done_from_the_partners_worktree_needs_no_run() {
+    let w = worktrees(&["wa", "wb"]);
+    let (a, b) = (chunk(&w[0], "A"), chunk(&w[0], "B"));
+    ok(&w[0], &["chunk", "start", &a]);
+    let start = ok(&w[1], &["chunk", "start", &b, "--with", &a, "--as", "pair"]);
+    assert!(!start.contains("--run"), "{start}");
+    let done = ["chunk", "done", &b, "h", "--left", "none", "--no-change"];
+    ok(&w[0], &done);
+}
