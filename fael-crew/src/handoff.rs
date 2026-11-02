@@ -38,7 +38,8 @@ pub struct Avoid {
 /// Live scope clash: running chunks of my app whose scope meets mine.
 /// `(uid, title, client, class, files, worktree, branch, started, last_seen, touch_msg)`
 /// newest run first. Self is left out; pairs/joints are not filtered here (the board
-/// filters them for `overlaps`; an avoid card names every clash so the agent sees it).
+/// filters them for `overlaps`; an avoid card names every clash so the agent sees it,
+/// except a chunk under my own run: a joint partner is no one to avoid, issue 01M6E23QTD).
 type ClashRow = (
     String,
     String,
@@ -73,6 +74,8 @@ fn clashes(tx: &Transaction, id: i64, mine: &[String], app: &str) -> Result<Vec<
              JOIN run r ON r.id = (SELECT x.id FROM run x WHERE x.chunk = c.id
                AND x.ended IS NULL ORDER BY x.id DESC LIMIT 1)
              WHERE c.id != ?1 AND p.app = ?2 AND c.scope IS NOT NULL AND c.state = 'running'
+               AND r.start IS NOT (SELECT y.start FROM run y WHERE y.chunk = ?1
+                 AND y.ended IS NULL ORDER BY y.id DESC LIMIT 1)
              ORDER BY r.id DESC",
         )
         .map_err(err)?;

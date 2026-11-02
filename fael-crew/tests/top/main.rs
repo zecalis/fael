@@ -33,6 +33,7 @@ mod done_merged_pr;
 mod done_pr;
 mod done_scope;
 mod help_reach;
+mod joint_fixes;
 mod plan;
 mod start_gates;
 mod start_resume;

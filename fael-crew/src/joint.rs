@@ -150,16 +150,29 @@ pub(super) fn gate(
 ) -> Result<Gate, String> {
     let p = partner(tx, first, ms, o)?;
     let report = clash_report(tx, ms, &o.shared, &o.stale)?;
+    // chunks under the partner's run work beside it: no clash for a pair, follow or dir lane
+    let in_run: Vec<String> = match &p {
+        Some(p) => tx
+            .prepare(
+                "SELECT c.uid FROM run r JOIN chunk c ON c.id = r.chunk
+                 WHERE r.ended IS NULL AND r.start = ?1",
+            )
+            .and_then(|mut q| q.query_map([&p.run], |r| r.get(0))?.collect())
+            .map_err(err)?,
+        None => vec![],
+    };
+    let joined = |u: &str| {
+        p.as_ref()
+            .is_some_and(|p| p.uid == u || in_run.iter().any(|r| r == u))
+    };
     let exact_lane = |u: &str, c: OverlapClass| {
         p.as_ref()
-            .is_some_and(|p| p.uid == u && p.mode == Joint::Lane && c == OverlapClass::Exact)
+            .is_some_and(|p| p.mode == Joint::Lane && c == OverlapClass::Exact)
+            && joined(u)
     };
     let mut kept: Vec<_> = report
         .iter()
-        .filter(|(u, c, _)| {
-            !p.as_ref()
-                .is_some_and(|p| &p.uid == u && !exact_lane(u, *c))
-        })
+        .filter(|(u, c, _)| !(joined(u) && !exact_lane(u, *c)))
         .collect();
     let mut eased = Vec::new();
     if seated {
@@ -214,6 +227,11 @@ pub(super) fn gate(
             "try `fael chunk start {uid} --with {hit} --as {how}` to start beside it, or {force} to start it anyway"
         )
     };
+    let why = if kept.iter().any(|k| exact_lane(&k.0, k.1)) {
+        " (--as lane over the same file is a pair)"
+    } else {
+        ""
+    };
     let Some(because) = because.filter(|_| o.force) else {
         let bare = if o.force {
             " (bare --force is rejected)"
@@ -221,7 +239,7 @@ pub(super) fn gate(
             ""
         };
         return Err(format!(
-            "rejected: chunk {uid} shares files with a running chunk — {joined_lines}; {way}{bare}"
+            "rejected: chunk {uid} shares files with a running chunk — {joined_lines}; {way}{why}{bare}"
         ));
     };
     Ok((
