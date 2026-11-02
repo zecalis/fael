@@ -152,6 +152,13 @@ fn check_fresh(tx: &Transaction, run: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The chunk already runs in the caller's worktree: a restart there is its own seat.
+fn seated(tx: &Transaction, first: &super::chunk::Row, wt: Option<&str>) -> Result<bool, String> {
+    Ok(wt.is_some()
+        && first.state == State::Running
+        && holder_worktree(tx, first.id)?.as_deref() == wt)
+}
+
 /// A retry from the session holding the chunk: the live brief again, not a
 /// takeover. `None` = another session holds it (or none does) — the caller
 /// runs the usual held/blocked checks.
@@ -479,7 +486,7 @@ impl Store {
             return Ok(reused);
         }
         check_lonely_because(o, uid)?;
-        let (partner, clash_forced) = joint::gate(&tx, &first, &ms, o)?;
+        let (partner, clash_forced) = joint::gate(&tx, &first, &ms, o, seated(&tx, &first, wt)?)?;
         // a pair is one R in the partner's worktree and branch; any other start is its own R
         let seat = partner.as_ref().filter(|p| p.mode == Joint::Pair);
         let caller_wt = wt;
