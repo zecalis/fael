@@ -14,7 +14,7 @@ use serde_json::Value;
 /// unknown-arg note. Every other verb key is in the schema; a key the verb ignores is
 /// still known, so it gets the verb note below, not unknown.
 #[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
-pub(crate) const HIDDEN: &[&str] = &["no_change", "until", "option", "options", "full"];
+pub(crate) const HIDDEN: &[&str] = &["no_change", "until", "option", "options", "full", "because"];
 /// Every key `chunk` reads.
 pub(crate) const KNOWN: &[&str] = &[
     "verb",
@@ -31,6 +31,7 @@ pub(crate) const KNOWN: &[&str] = &[
     "model",
     "session",
     "force",
+    "because",
     "pr",
     "left",
     "review",
@@ -223,6 +224,13 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
     }
     if verb == "start" && a["force"].as_bool().unwrap_or(false) {
         args.push("--force".into());
+    }
+    // force receipt (issue 01M6CZ0K): hidden, forwarded like --force — the
+    // reject names it, so an MCP agent learns it without a schema byte.
+    if verb == "start"
+        && let Some(b) = s(a, "because")
+    {
+        args.extend(["--because".into(), b]);
     }
     // c5: same-session resume prints short — `--full` reprints the whole brief.
     if verb == "start" && a["full"].as_bool().unwrap_or(false) {

@@ -76,7 +76,15 @@ fn left_and_stale_ride_the_board() {
     f(&[
         "chunk", "done", &none, "shipped", "--left", "none", "--pr", "1",
     ]);
-    f(&["chunk", "start", &both, "--no-worktree", "--force"]);
+    f(&[
+        "chunk",
+        "start",
+        &both,
+        "--no-worktree",
+        "--force",
+        "--because",
+        "test forces past stale block",
+    ]);
     f(&[
         "chunk",
         "done",

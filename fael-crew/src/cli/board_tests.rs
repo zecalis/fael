@@ -36,6 +36,7 @@ fn ready(uid: &str, unblocks: usize) -> BoardChunk {
         conflicts: None,
         touched: None,
         merged: false,
+        forced: None,
         seq: 0,
     }
 }
@@ -244,6 +245,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         review: None,
         joint: None,
         partner: None,
+        force_reason: None,
     });
     let p = Project {
         branches: vec![super::branches::Branch {
@@ -286,6 +288,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         review: None,
         joint: None,
         partner: None,
+        force_reason: None,
     });
     let p = Project {
         branches: vec![super::branches::Branch {
@@ -345,6 +348,7 @@ fn lean_keeps_the_summary_of_a_finished_chunk() {
         review: None,
         joint: None,
         partner: None,
+        force_reason: None,
     });
     let mut cs = vec![done];
     lean(&mut cs);

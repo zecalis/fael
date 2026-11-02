@@ -54,6 +54,7 @@ fn a_done_chunk_on_my_files_is_handed_over_with_its_left_ids() {
         chunks: vec![b],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     let uid = b_uid(&t);
@@ -116,6 +117,7 @@ fn by_file_is_newest_first_and_capped_with_the_rest_counted() {
         chunks: vec![b],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(t.contains("(2 more such chunks not shown)"), "{t}");
@@ -154,6 +156,7 @@ fn by_file_entries_are_one_line_without_handoff_text() {
         chunks: vec![s.show(&me).unwrap()],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(!t.contains("text-"), "{t}");
@@ -197,6 +200,7 @@ fn a_running_chunks_touch_shows_live_in_a_scope_overlapping_brief() {
         chunks: vec![b],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text();
     assert!(
@@ -261,6 +265,7 @@ fn touch_unions_never_infers_and_only_running_counts() {
         &d,
         &Start {
             force: true,
+            because: Some("test forces past live overlap".into()),
             ..Start::default()
         },
         &here("/wd"),
@@ -289,6 +294,7 @@ fn touch_unions_never_infers_and_only_running_counts() {
         &c,
         &Start {
             force: true,
+            because: Some("test forces past live overlap".into()),
             ..Start::default()
         },
         &here("/wc"),

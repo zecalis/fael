@@ -122,6 +122,11 @@ pub struct Chunk {
     /// merged. Never a state change on read (decision 01M4V3A0D)
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub merged: bool,
+    /// forced starts: the receipts this chunk's forced starts wrote
+    /// (`started by --force past … — because …`, `taken over … by --force — because …`);
+    /// absent = never forced (issue 01M6CZ0K). A new nullable key, board stays v1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub forced: Option<Vec<String>>,
     #[serde(skip)]
     pub seq: i64,
 }
@@ -168,6 +173,12 @@ pub struct Run {
     /// `chunk done --review clean|fixed|failed`; absent = none given
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review: Option<String>,
+    /// `chunk start --force --because "<what you will avoid>"` (issue 01M6CZ0K):
+    /// the receipt the force wrote; absent = a start that forced nothing past.
+    /// A new nullable key, so the board contract stays v1 (a removed or retyped
+    /// key would bump it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub force_reason: Option<String>,
     /// joint start (01M5PE238): the live run's mode and partner chunk uid.
     /// Skipped from JSON — the board's overlap math reads it, the app's
     /// contract stays byte-identical (overlap_classes is skipped the same way).
@@ -284,8 +295,19 @@ impl Store {
     /// a live run last seen before it is `stalled` (a warning, never a state change).
     pub fn board(&self, today: &str, stale: &str) -> Result<Board, String> {
         let plans = self.board_plans()?;
+        let rows = self.board_rows()?;
+        let (mut chunks, ids) = self.finish(rows, today, stale)?;
+        edges(&self.conn, &ids, &mut chunks)?;
+        Ok(Board {
+            plans,
+            chunks,
+            models: self.models()?,
+        })
+    }
+
+    /// Live chunks with their runs, approvals and waits — `finish` derives the rest.
+    fn board_rows(&self) -> Result<Vec<(i64, Chunk)>, String> {
         let runs = self.latest_runs()?;
-        let (handoffs, closes) = (self.handoffs()?, self.closes()?);
         let mut q = self
             .conn
             .prepare(
@@ -298,106 +320,99 @@ impl Store {
                  ORDER BY p.app, p.name, c.seq",
             )
             .map_err(err)?;
-        let rows = q
-            .query_map([], |r| {
-                let id: i64 = r.get(0)?;
-                let uid: String = r.get(1)?;
-                let label: Option<String> = r.get(4)?;
-                let title: String = r.get(5)?;
-                let state: String = r.get(6)?;
-                let scope: Option<String> = r.get(9)?;
-                let at: Option<String> = r.get(13)?;
-                let waiting = state == "waiting";
-                Ok((
-                    id,
-                    Chunk {
-                        app: r.get(2)?,
-                        plan: r.get(3)?,
-                        title: clean(&title, label.as_deref()),
-                        size: r.get(7)?,
-                        model_hint: r.get(8)?,
-                        model: None, // derive() resolves run → approval → hint
-                        client_hint: r.get(19)?,
-                        scope: scope
-                            .iter()
-                            .flat_map(|s| s.lines())
-                            .map(String::from)
-                            .collect(),
-                        ready: false,
-                        blocked_by: Vec::new(),
-                        unblocks: 0,
-                        overlaps: Vec::new(),
-                        overlaps_how: Vec::new(),
-                        overlap_classes: Vec::new(),
-                        pair: Vec::new(),
-                        stalled: false,
-                        ended: false,
-                        wait: waiting
-                            .then(|| -> rusqlite::Result<Wait> {
-                                Ok(Wait {
-                                    on: r.get(10)?,
-                                    text: r.get(11)?,
-                                    until: r.get(12)?,
-                                    options: options(r.get(17)?),
-                                })
+        q.query_map([], |r| {
+            let id: i64 = r.get(0)?;
+            let uid: String = r.get(1)?;
+            let label: Option<String> = r.get(4)?;
+            let title: String = r.get(5)?;
+            let state: String = r.get(6)?;
+            let scope: Option<String> = r.get(9)?;
+            let at: Option<String> = r.get(13)?;
+            let waiting = state == "waiting";
+            Ok((
+                id,
+                Chunk {
+                    app: r.get(2)?,
+                    plan: r.get(3)?,
+                    title: clean(&title, label.as_deref()),
+                    size: r.get(7)?,
+                    model_hint: r.get(8)?,
+                    model: None, // derive() resolves run → approval → hint
+                    client_hint: r.get(19)?,
+                    scope: scope
+                        .iter()
+                        .flat_map(|s| s.lines())
+                        .map(String::from)
+                        .collect(),
+                    ready: false,
+                    blocked_by: Vec::new(),
+                    unblocks: 0,
+                    overlaps: Vec::new(),
+                    overlaps_how: Vec::new(),
+                    overlap_classes: Vec::new(),
+                    pair: Vec::new(),
+                    stalled: false,
+                    ended: false,
+                    wait: waiting
+                        .then(|| -> rusqlite::Result<Wait> {
+                            Ok(Wait {
+                                on: r.get(10)?,
+                                text: r.get(11)?,
+                                until: r.get(12)?,
+                                options: options(r.get(17)?),
                             })
-                            .transpose()?,
-                        approval: at
-                            .map(|at| -> rusqlite::Result<Approval> {
-                                Ok(Approval {
-                                    at,
-                                    model: r.get(14)?,
-                                    client: r.get(15)?,
-                                })
+                        })
+                        .transpose()?,
+                    approval: at
+                        .map(|at| -> rusqlite::Result<Approval> {
+                            Ok(Approval {
+                                at,
+                                model: r.get(14)?,
+                                client: r.get(15)?,
                             })
-                            .transpose()?,
-                        run: runs.get(&id).cloned(),
-                        handoff: None,
-                        issues: Vec::new(),
-                        left: Vec::new(),
-                        left_open: Vec::new(),
-                        stale: Vec::new(),
-                        owner_actions: Owner::actions(&state),
-                        conflicts: None,
-                        touched: r
-                            .get::<_, Option<String>>(18)?
-                            .map(|t| t.lines().map(String::from).collect()),
-                        merged: false,
-                        seq: r.get(16)?,
-                        label,
-                        state,
-                        uid,
-                    },
-                ))
-            })
-            .map_err(err)?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(err)?;
-        let mut handoffs = handoffs;
-        let mut closes = closes;
-        let (mut chunks, ids) = self.finish(rows, &mut handoffs, &mut closes, today, stale)?;
-        edges(&self.conn, &ids, &mut chunks)?;
-        Ok(Board {
-            plans,
-            chunks,
-            models: self.models()?,
+                        })
+                        .transpose()?,
+                    run: runs.get(&id).cloned(),
+                    handoff: None,
+                    issues: Vec::new(),
+                    left: Vec::new(),
+                    left_open: Vec::new(),
+                    stale: Vec::new(),
+                    owner_actions: Owner::actions(&state),
+                    conflicts: None,
+                    touched: r
+                        .get::<_, Option<String>>(18)?
+                        .map(|t| t.lines().map(String::from).collect()),
+                    merged: false,
+                    forced: None,
+                    seq: r.get(16)?,
+                    label,
+                    state,
+                    uid,
+                },
+            ))
         })
+        .map_err(err)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(err)
     }
 
     /// ready / blocked_by (the one `ready_in`), ended, stalled.
     fn finish(
         &self,
         rows: Vec<(i64, Chunk)>,
-        handoffs: &mut HashMap<String, Handoff>,
-        closes: &mut HashMap<String, Handoff>,
         today: &str,
         stale: &str,
     ) -> Result<(Vec<Chunk>, Vec<i64>), String> {
+        let mut handoffs = self.handoffs()?;
+        let mut closes = self.closes()?;
+        let mut forced = self.forced()?;
         let mut chunks = Vec::with_capacity(rows.len());
         let mut ids = Vec::with_capacity(rows.len());
         for (id, mut c) in rows {
-            c.handoff = handoff_for(handoffs, closes, &c);
+            c.handoff = handoff_for(&mut handoffs, &mut closes, &c);
             c.issues = super::issue::of(&self.conn, id)?;
+            c.forced = forced.remove(&c.uid).filter(|v| !v.is_empty());
             self.derive(id, &mut c, today, stale)?;
             ids.push(id);
             chunks.push(c);
@@ -507,7 +522,7 @@ impl Store {
             .conn
             .prepare(
                 "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
-                        started, last_seen, ended, cost, review, joint, partner
+                        started, last_seen, ended, cost, review, joint, partner, force_reason
                  FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)",
             )
             .map_err(err)?;
@@ -530,6 +545,7 @@ impl Store {
                     review: r.get(13)?,
                     joint: r.get(14)?,
                     partner: r.get(15)?,
+                    force_reason: r.get(16)?,
                 },
             ))
         })
@@ -622,6 +638,31 @@ impl Store {
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)
+    }
+
+    /// uid → every forced-start receipt (`by --force … because …`, issue 01M6CZ0K),
+    /// oldest first. A start event, so `handoff` (which reads non-running agent
+    /// events) never shows it — the board carries it beside the run instead.
+    fn forced(&self) -> Result<HashMap<String, Vec<String>>, String> {
+        let mut q = self
+            .conn
+            .prepare(
+                "SELECT chunk_uid, text FROM event
+                 WHERE by = 'agent' AND to_state = 'running'
+                   AND text LIKE '%--force%'
+                 ORDER BY id",
+            )
+            .map_err(err)?;
+        let rows: Vec<(String, String)> = q
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        let mut out: HashMap<String, Vec<String>> = HashMap::new();
+        for (uid, text) in rows {
+            out.entry(uid).or_default().push(text);
+        }
+        Ok(out)
     }
 }
 

@@ -85,16 +85,42 @@ fn a_blocked_chunk_starts_only_with_force() {
         .unwrap();
     let e = start(&mut s, &shipped, "/w").unwrap_err();
     assert!(e.contains("is blocked") && e.contains("--force"), "{e}");
-    let o = Start {
+    // bare --force is rejected: it names --because (issue 01M6CZ0K)
+    let bare = Start {
         force: true,
         ..Start::default()
     };
-    s.start(&shipped, &o, &here("/w")).unwrap();
+    let e = s.start(&shipped, &bare, &here("/w")).unwrap_err();
+    assert!(e.contains("--because"), "{e}");
+    let o = Start {
+        force: true,
+        because: Some("will rebase after first lands".into()),
+        ..Start::default()
+    };
+    let st = s.start(&shipped, &o, &here("/w")).unwrap();
+    assert_eq!(st.forced.len(), 1, "{:?}", st.forced);
+    assert!(
+        st.forced[0].contains("--force past after"),
+        "{:?}",
+        st.forced
+    );
+    assert!(st.forced[0].contains("will rebase"), "{:?}", st.forced);
     s.done(&shipped, "landed in #383", Some(383), None, &here("/w"))
         .unwrap();
     assert_eq!(state(&s, &shipped), "done");
     let q = "SELECT text FROM event WHERE chunk_uid = ?1 AND to_state = 'running'";
-    assert!(get(&s, q, &shipped).unwrap().contains(&first));
+    let ev = get(&s, q, &shipped).unwrap();
+    assert!(ev.contains(&first), "{ev}");
+    assert!(ev.contains("because will rebase"), "{ev}");
+    let reason: Option<String> = s
+        .conn
+        .query_row(
+            "SELECT force_reason FROM run WHERE chunk = (SELECT id FROM chunk WHERE uid = ?1)",
+            [&shipped],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(reason.as_deref(), Some("will rebase after first lands"));
 }
 
 #[test]
@@ -249,6 +275,10 @@ fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
         e.contains(&a) && e.contains("src/x.rs") && e.contains("--force"),
         "{e}"
     );
+    assert!(
+        e.contains("--because"),
+        "bare --force names the receipt: {e}"
+    );
     assert!(e.contains("[prefix]"), "the reject names the class: {e}");
     assert_eq!(state(&s, &b), "open");
     assert!(
@@ -261,12 +291,38 @@ fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
     };
     let e = s.start(&b, &o, &here("/w2")).unwrap_err();
     assert!(e.contains("last seen never · stalled"), "{e}");
-    let o = Start {
+    // bare --force past a clash is rejected (issue 01M6CZ0K)
+    let bare = Start {
         force: true,
         ..Start::default()
     };
-    s.start(&b, &o, &here("/w2")).unwrap();
+    let e = s.start(&b, &bare, &here("/w2")).unwrap_err();
+    assert!(e.contains("--because") && e.contains("--as lane"), "{e}");
+    let o = Start {
+        force: true,
+        because: Some("will stay in docs/ only".into()),
+        ..Start::default()
+    };
+    let st = s.start(&b, &o, &here("/w2")).unwrap();
     assert_eq!(state(&s, &b), "running");
+    assert_eq!(st.forced.len(), 1, "{:?}", st.forced);
+    assert!(st.forced[0].contains("past clash"), "{:?}", st.forced);
+    assert!(
+        st.forced[0].contains("will stay in docs/"),
+        "{:?}",
+        st.forced
+    );
+    let bd = s.board("2026-10-11", "2026-10-11T09:00:00Z").unwrap();
+    let got = bd.chunks.iter().find(|c| c.uid == b).unwrap();
+    assert_eq!(
+        got.run.as_ref().and_then(|r| r.force_reason.as_deref()),
+        Some("will stay in docs/ only")
+    );
+    let forced = got.forced.as_deref().unwrap_or(&[]);
+    assert!(
+        forced.iter().any(|f| f.contains("past clash")),
+        "{forced:?}"
+    );
 }
 
 #[test]

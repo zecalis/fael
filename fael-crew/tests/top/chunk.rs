@@ -163,7 +163,19 @@ fn a_run_killed_mid_turn_resumes_from_its_session_notes_and_branch() {
     // session start stamps the run before any Stop: a kill mid-turn keeps the session
     hook(&d, "session-start", "S1");
     assert!(fael(&d, &["chunk", "note", &u, "parser done; next the CLI"]).0);
-    let (ok, brief, err) = fael(&d, &["chunk", "start", &u, "--run", "R2", "--force"]);
+    let (ok, brief, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "start",
+            &u,
+            "--run",
+            "R2",
+            "--force",
+            "--because",
+            "R2 takes over killed R1",
+        ],
+    );
     assert!(ok, "{err}");
     assert!(
         brief.contains("\nresume — run R1 (claude) started "),

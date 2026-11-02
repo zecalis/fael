@@ -54,6 +54,7 @@ fn brief_text(s: &Store, uid: &str) -> String {
         chunks: vec![s.show(uid).unwrap()],
         orphaned: vec![],
         resumed: false,
+        forced: vec![],
     }
     .text()
 }

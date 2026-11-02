@@ -81,6 +81,22 @@ fn start_refuses_a_brief_citing_a_closed_row_until_forced() {
     // show only warns
     assert!(fael(&d, &["chunk", "show", &u]).0);
     let (ok, _, err) = fael(&d, &["chunk", "start", &u, "--no-worktree", "--force"]);
+    assert!(
+        !ok && err.contains("--because"),
+        "bare --force rejected: {err}"
+    );
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "start",
+            &u,
+            "--no-worktree",
+            "--force",
+            "--because",
+            "correction noted, will verify",
+        ],
+    );
     assert!(ok, "{err}");
 }
 

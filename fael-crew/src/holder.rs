@@ -358,6 +358,7 @@ mod tests {
             &c,
             &Start {
                 force: true,
+                because: Some("test sets up exact+prefix".into()),
                 ..Start::default()
             },
             &here("/w2"),

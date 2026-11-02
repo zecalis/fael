@@ -17,6 +17,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             "model",
             "run",
             "force",
+            "because",
             "no-worktree",
             "session",
             "with",
@@ -39,6 +40,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         model: a.one("model"),
         no_worktree: a.has("no-worktree"),
         force: a.has("force"),
+        because: a.one("because"),
         session: session.clone(),
         base: crate::git(&r.root, &["rev-parse", "HEAD"]),
         shared: fael_crew::shared(&r.root).unwrap_or_default(),
@@ -79,6 +81,9 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         return Ok(());
     }
     print!("{}", st.render(a.has("full"), a.has("full") || !rules_seen));
+    for f in &st.forced {
+        println!("forced: {f}");
+    }
     if let (Some(w), Some(j)) = (&o.with, o.joint) {
         println!("joint {} with {w} (run {})", j.as_str(), st.run);
         if j == fael_crew::Joint::Pair {
