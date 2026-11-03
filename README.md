@@ -1,4 +1,6 @@
-# fael
+<p align="center">
+  <img src="docs/assets/logo.png" alt="fael" width="360">
+</p>
 
 [![npm](https://img.shields.io/npm/v/@zecalis/fael.svg)](https://www.npmjs.com/package/@zecalis/fael)
 [![release](https://img.shields.io/github/v/release/zecalis/fael.svg)](https://github.com/zecalis/fael/releases)
