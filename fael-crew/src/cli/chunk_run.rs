@@ -6,6 +6,7 @@ use crate::plan::db;
 use crate::{Args, Repo, core};
 use fael_crew::{Here, Start, Store};
 use std::collections::HashSet;
+use std::fmt::Write as _;
 use std::path::Path;
 
 /// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
@@ -120,7 +121,34 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             crate::chunk_scope::warn(&s, r, &c.uid, true);
         }
     }
+    // e3 scoped board default: this plan's open rows, plus colliding chunks.
+    print!("{}", scoped_board_lines(&st));
     Ok(())
+}
+
+/// e3 scoped board default: one plan's open rows plus the running chunks
+/// colliding with the scope (the brief's avoid/live) — never whole-repo
+/// `board --open`. `board --json` stays the app's contract, untouched.
+fn scoped_board_lines(st: &fael_crew::Started) -> String {
+    let mut o = String::new();
+    for c in &st.chunks {
+        let mut colliding: Vec<String> = c
+            .avoid
+            .iter()
+            .map(|a| format!("{} [{}]", a.uid, a.class))
+            .collect();
+        for (who, _) in &c.live {
+            if !who.trim().is_empty() && !colliding.iter().any(|x| x == who) {
+                colliding.push(format!("{who} (live)"));
+            }
+        }
+        let _ = write!(o, "board: `fael board --open --plan {}`", c.plan);
+        if !colliding.is_empty() {
+            let _ = write!(o, " · colliding: {}", colliding.join(", "));
+        }
+        o.push('\n');
+    }
+    o
 }
 
 /// Each linked issue's id → its row, so the agent reads what to fix without a find.
@@ -205,6 +233,15 @@ fn refuse_open_linked(a: &Args, uid: &str, handoff: &str, linked: &[String]) -> 
         ));
     }
     Ok(())
+}
+
+/// e3 one-line done: the held detail over the run's diff (or its one-liner
+/// when nothing is stale), printed above the done line — never a no-op status
+/// block with no command after it. Carries the linked ids (e2) so the warn
+/// lists unlinked issues only (linked already gated above).
+fn held_hint(diff: Option<&Vec<String>>, started: Option<&str>, linked: &[String]) -> String {
+    diff.map(|d| crate::fael_bin::held_done_checked(d, started, linked).unwrap_or_default())
+        .unwrap_or_default()
 }
 
 /// `chunk note`: the word is kept; a brief edited since the start is said too.
@@ -343,6 +380,7 @@ pub(crate) fn done(
     let to = if pr.is_some() { "done" } else { "review" };
     let explicit = a.has("pr") && earlier.is_empty();
     crate::chunk_prs::say_branch(explicit, (&r.root, branch.as_deref().or(here.branch)), pr);
+    print!("{}", held_hint(diff.as_ref(), started.as_deref(), &linked));
     println!("chunk {uid} → {to}");
     print!("{}", st.drift_line(uid));
     let reviewed = a.one("review").is_some();
@@ -363,14 +401,6 @@ pub(crate) fn done(
     }
     print!("{}", outside.unwrap_or_default());
     print!("{}", dodge_note(r, &st, uid, diff.as_ref(), pr, handoff));
-    // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
-    // ready — the agent judges, done never closes or bumps. e2: the same call carries
-    // the linked ids so the warn lists unlinked issues only (linked already gated above).
-    if let Some(d) = &diff {
-        let hint =
-            crate::fael_bin::held_done_checked(d, started.as_deref(), &linked).unwrap_or_default();
-        print!("{hint}");
-    }
     if let (Some(trunk), Some(_)) = (trunk, pr) {
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }

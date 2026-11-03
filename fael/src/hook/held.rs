@@ -146,6 +146,28 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String], since: Option<i64>) -
     }
     super::held_rotate::order(&mut found, &seen);
     let (head, rest) = found.split_at(found.len().min(DONE_MAX));
+    // e3 one-line done: nothing stale — one line with the find command, never
+    // silence and never the per-row noise. No files named (no diff) stays silent.
+    if head.is_empty() && rest.is_empty() {
+        let listed: Vec<&str> = files
+            .iter()
+            .map(String::as_str)
+            .filter(|f| !f.trim().is_empty())
+            .collect();
+        if listed.is_empty() {
+            return String::new();
+        }
+        let n = super::held_evidence::touching_open(&log, files);
+        let rows = if n == 1 {
+            "1 open row touches".to_string()
+        } else {
+            format!("{n} open rows touch")
+        };
+        return format!(
+            "{rows} edited files - none stale; fael find --files {}\n",
+            listed.join(",")
+        );
+    }
     let ev = super::held_evidence::lines(&log, &r.root, &al, head);
     let mut out = text_with(&log, head, &ev);
     out.push_str(&more_line(rest));
