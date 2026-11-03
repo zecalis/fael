@@ -21,7 +21,6 @@
 //! The hook always exits 0. Any internal error is an empty Reply (let the
 //! turn through) — a memory tool must never break the agent's tool call.
 
-mod also;
 mod asked;
 mod asks;
 mod askstats;

@@ -11,7 +11,7 @@
 ## 10 edit {"session":"2025-12-01T00:00:00Z","files":["src/a.rs"]}
 context:
 fael mem for src/a.rs (1 of 15):
-- [01K00000000000000000AAA002] decision a keeps its cache, file unchanged
+- decision: a keeps its cache, file unchanged (01K00000000000000000AAA002)
 
 notice:
 fael: reminded agent — 01K00000000000000000AAA002 "a keeps its cache, file unchanged" (src/a.rs)
@@ -19,7 +19,7 @@ fael: reminded agent — 01K00000000000000000AAA002 "a keeps its cache, file unc
 ## 12 edit {"session":"2025-12-01T00:00:00Z","files":["src/b.rs"]}
 context:
 fael mem for src/b.rs (1 of 14):
-- [01K00000000000000000B] issue b leaks a handle
+- issue: b leaks a handle (01K00000000000000000B)
 fael: done with one? fael close 01K00000000000000000B "<why>"
 
 notice:
@@ -27,24 +27,24 @@ fael: reminded agent — 01K00000000000000000B "b leaks a handle" (src/b.rs)
 ## 13 edit {"session":"2025-12-01T00:00:00Z","files":["src/b.rs"]}
 ## 14 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 context:
-fael mem for src/hub.rs (5 of 13 · also: 01K00000000000000000HUB006 "hub row 6 says something about the hub", 01K00000000000000000HUB003 "hub row 3 says something about the hub", 01K00000000000000000HUB000 "hub row 0 says something about the hub"):
-- [01K00000000000000000HUB01] issue hub row 10 says something about the hub
-- [01K00000000000000000HUB007] issue hub row 7 says something about the hub
-- [01K00000000000000000HUB004] issue hub row 4 says something about the hub
-- [01K00000000000000000HUB001] issue hub row 1 says something about the hub
-- [01K00000000000000000HUB009] decision #hub:shape hub row 9 says something about the hub
+fael mem for src/hub.rs (5 of 13 · also: decision: hub row 6 says something about the hub (01K00000000000000000HUB006), decision: hub row 3 says something about the hub (01K00000000000000000HUB003), decision: hub row 0 says something about the hub (01K00000000000000000HUB000)):
+- issue: hub row 10 says something about the hub (01K00000000000000000HUB01)
+- issue: hub row 7 says something about the hub (01K00000000000000000HUB007)
+- issue: hub row 4 says something about the hub (01K00000000000000000HUB004)
+- issue: hub row 1 says something about the hub (01K00000000000000000HUB001)
+- decision: hub row 9 says something about the hub (01K00000000000000000HUB009)
 fael: done with one? fael close 01K00000000000000000HUB01 "<why>" · fael close 01K00000000000000000HUB007 "<why>"
 
 notice:
 fael: reminded agent — 01K00000000000000000HUB01 "hub row 10 says something about the hub" (src/hub.rs) +4 more
 ## 15 edit {"session":"2025-12-01T00:00:00Z","files":["src/hub.rs"]}
 context:
-fael mem for src/hub.rs (5 of 8 · also: 01K00000000000000000HUB002 "hub row 2 says something about the hub"):
-- [01K00000000000000000HUB006] decision #hub:shape hub row 6 says something about the hub
-- [01K00000000000000000HUB003] decision #hub:shape hub row 3 says something about the hub
-- [01K00000000000000000HUB000] decision #hub:shape hub row 0 says something about the hub
-- [01K00000000000000000HUB008] note #hub:wip hub row 8 says something about the hub
-- [01K00000000000000000HUB005] note #hub:wip hub row 5 says something about the hub
+fael mem for src/hub.rs (5 of 8 · also: note: hub row 2 says something about the hub (01K00000000000000000HUB002)):
+- decision: hub row 6 says something about the hub (01K00000000000000000HUB006)
+- decision: hub row 3 says something about the hub (01K00000000000000000HUB003)
+- decision: hub row 0 says something about the hub (01K00000000000000000HUB000)
+- note: hub row 8 says something about the hub (01K00000000000000000HUB008)
+- note: hub row 5 says something about the hub (01K00000000000000000HUB005)
 fael: done with one? fael close 01K00000000000000000HUB004 "<why>" · fael close 01K00000000000000000HUB001 "<why>"
 
 ## 16 stop {"session":"2025-12-01T00:00:00Z","text":"the schema and the docs are out of sync","reply":"fael issue: broken thing with no files"}
@@ -62,7 +62,7 @@ fael: this turn — reminded 10 (01K00000000000000000AAA002, 01K0000000000000000
 ## 26 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"printf x >> src/b.rs"}}
 context:
 fael mem for src/b.rs (1 of 15):
-- [01K00000000000000000B] issue b leaks a handle
+- issue: b leaks a handle (01K00000000000000000B)
 fael note: this session mentioned a possible problem ("out of sync") — file an issue if it holds up: fael add issue "<what is at risk>" --files src/b.rs
 
 ## 27 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001'"}}
@@ -79,12 +79,12 @@ fael: 01K00000000000000000B cited in a commit — `(fael:01K00000000000000000B)`
 ## 35 edit {"session":"2026-01-02T00:00:00Z","client":"opencode","files":["src/c.rs"]}
 context:
 fael mem for src/c.rs (1 of 15):
-- [01K00000000000000000C] note c is half migrated
+- note: c is half migrated (01K00000000000000000C)
 
 ## 36 search {"session":"2026-01-02T00:00:00Z","client":"opencode","tool":"shell","tool_input":{"command":"true"},"tool_response":{}}
 ## 37 search {"session":"2026-01-02T00:00:00Z","client":"opencode","tool":"bash","tool_input":{"command":"true"},"tool_response":{}}
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-15 lines · ~712 tokens
+15 lines · ~708 tokens
 silent-start edit in-context edit in-context edit in-context edit silent-start shell-edit outcome search silent-start silent-start edit

@@ -49,7 +49,7 @@ fn edit_hint_names_open_issues_with_a_ready_close() {
         .filter(|id| *id != "<id>")
         .collect();
     assert!(
-        shown.iter().all(|id| out.contains(&format!("[{id}"))),
+        shown.iter().all(|id| out.contains(&format!("({id}"))),
         "{hint}\n{out}"
     );
 }

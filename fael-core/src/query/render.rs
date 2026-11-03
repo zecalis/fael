@@ -308,3 +308,53 @@ fn total_header(out: &mut String, total: usize) {
         out.insert_str(0, &format!("{total} matches, showing {shown}\n"));
     }
 }
+
+/// Max title chars in an edit-push row: the agent skims titles, then pulls
+/// the body by id (`fael find <id>`).
+pub const PUSH_TITLE_CHARS: usize = 60;
+
+/// The one-line push title: `display_title` collapsed to one line, cut at
+/// `PUSH_TITLE_CHARS` (same truncation `hidden_titles` uses for its names).
+pub fn push_title(r: &Row) -> String {
+    let t: String = r
+        .display_title()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(PUSH_TITLE_CHARS)
+        .collect();
+    t.trim_end_matches([' ', '…']).to_string()
+}
+
+/// One edit-push row: `- <kind>: <title60> (<short-id>)` plus only the
+/// why-now suffix (the L1 tier that brought it here: same dir / same key).
+/// No file list — the agent just opened the file, and the full list is one
+/// `fael find <id>` away. Tier 0 (the file or its zone) carries no suffix.
+pub fn push_line(log: &Log, r: &Row, tier: usize) -> String {
+    let id = abbrev(log).short(&r.id);
+    let why = match tier {
+        1 => " · same dir",
+        2 => " · same key",
+        _ => "",
+    };
+    format!("- {}: {} ({id}){why}\n", r.kind, push_title(r))
+}
+
+/// The edit-push body: one `push_line` per row, stopping once `budget`
+/// estimated tokens are used (the first row always shows). No cut line —
+/// the caller names the cut in its header (`Selection::hidden`), so `find`
+/// keeps its own cut line and `render` stays untouched.
+pub fn render_push(log: &Log, rows: &[(&Row, usize)], budget: usize) -> String {
+    let mut out = String::new();
+    let mut used = 0;
+    for (i, (r, tier)) in rows.iter().enumerate() {
+        let line = push_line(log, r, *tier);
+        used += est_tokens(&line);
+        if i > 0 && used > budget {
+            break;
+        }
+        out.push_str(&line);
+    }
+    out
+}

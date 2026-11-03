@@ -107,14 +107,19 @@ fn focus_rows_lead_a_fresher_tier0_decision() {
     let out = edit(&d, None, "focus-1");
     let (keyed, plain) = order(&out);
     assert!(keyed < plain, "keyed row must lead: {keyed} {plain}\n{out}");
-    // the lib/z.rs issue came by its key, not the file: its line says so,
-    // and the rows about src/a.rs itself carry no label
+    // the lib/z.rs issue came by its key, not the file: its one-line row
+    // says so (`<kind>: <title> (<id>) · same key`), and the rows about
+    // src/a.rs itself carry no suffix
     let sibling = out
         .split("\\n")
         .find(|l| l.contains("keyed on the focus branch"))
         .unwrap_or_else(|| panic!("sibling missing: {out}"));
-    assert!(sibling.contains("] (same key) issue"), "{sibling}");
-    assert_eq!(out.matches("(same ").count(), 1, "{out}");
+    assert!(
+        sibling.contains("issue: keyed on the focus branch"),
+        "{sibling}"
+    );
+    assert!(sibling.contains("same key"), "{sibling}");
+    assert_eq!(out.matches("same ").count(), 1, "{out}");
 
     // no session-start for this session = no Focus = today's order, freshest first
     let (keyed, plain) = order(&edit(&d, None, "no-focus"));
