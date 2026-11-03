@@ -24,7 +24,13 @@ fn status_text(run: &str, status: &str) -> String {
     }
     let mut s = status.to_string();
     if s.len() > CAP {
-        s.truncate(CAP);
+        // byte 8000 can split a multi-byte filename: back to a char boundary
+        // or truncate panics and the whole touch rolls back (01M6H01152 review).
+        let mut cut = CAP;
+        while !s.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        s.truncate(cut);
         s.push_str("\n…(truncated)");
     }
     format!("touch {run} status:\n{s}")
@@ -334,5 +340,14 @@ mod tests {
         assert!(t.contains("…(truncated)"), "marked");
         assert!(t.len() < big.len(), "capped");
         assert_eq!(status_text("R1", ""), "touch R1 status: clean");
+        // a multi-byte char straddling the cap must not panic the touch:
+        // byte 8000 lands inside 'é' here, so the cut backs to its start.
+        let straddle = format!("{}éb", "a".repeat(7999));
+        let t = status_text("R1", &straddle);
+        assert!(t.contains("…(truncated)"), "marked, never panics");
+        // one ending fully before the cap is kept whole, never split.
+        let whole = format!("{}é{}", "a".repeat(7998), "b".repeat(100));
+        let t = status_text("R1", &whole);
+        assert!(t.contains('é'), "kept whole: {t:?}");
     }
 }
