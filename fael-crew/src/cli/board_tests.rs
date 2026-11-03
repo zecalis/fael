@@ -246,6 +246,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         review: None,
         joint: None,
         partner: None,
+        partners: Vec::new(),
         force_reason: None,
         touched: None,
     });
@@ -290,6 +291,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         review: None,
         joint: None,
         partner: None,
+        partners: Vec::new(),
         force_reason: None,
         touched: None,
     });
@@ -351,6 +353,7 @@ fn lean_keeps_the_summary_of_a_finished_chunk() {
         review: None,
         joint: None,
         partner: None,
+        partners: Vec::new(),
         force_reason: None,
         touched: None,
     });

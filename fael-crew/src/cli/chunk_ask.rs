@@ -57,7 +57,7 @@ pub(crate) fn add_wait(
         base: None,
         shared: Vec::new(),
         stale: String::new(),
-        with: None,
+        with: Vec::new(),
         joint: None,
     };
     let here = || Here {

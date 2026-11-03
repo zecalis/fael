@@ -60,19 +60,24 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
         c.overlaps_how.clear();
         c.overlap_classes.clear();
     }
-    // a live joint run's partner uid, both directions: agreeing to share files
-    // is no clash. Ended runs are gone — their overlap comes back.
+    // a live joint run's partner uids (f3: `partner` plus `partners` JSON), both
+    // directions: agreeing to share files is no clash. Ended runs are gone —
+    // their overlap comes back.
     let mut joint: HashSet<(String, String)> = HashSet::new();
     for c in chunks.iter() {
         let live = c.run.as_ref().is_some_and(|r| r.ended.is_none());
-        if live
-            && let (Some(p), Some(_)) = (
-                c.run.as_ref().and_then(|r| r.partner.clone()),
-                c.run.as_ref().and_then(|r| r.joint.clone()),
-            )
-        {
-            joint.insert((c.uid.clone(), p.clone()));
-            joint.insert((p, c.uid.clone()));
+        if live && c.run.as_ref().and_then(|r| r.joint.clone()).is_some() {
+            let mut all = Vec::new();
+            if let Some(p) = c.run.as_ref().and_then(|r| r.partner.clone()) {
+                all.push(p);
+            }
+            if let Some(run) = c.run.as_ref() {
+                all.extend(run.partners.iter().cloned());
+            }
+            for p in all {
+                joint.insert((c.uid.clone(), p.clone()));
+                joint.insert((p, c.uid.clone()));
+            }
         }
     }
     let hot: Vec<usize> = (0..chunks.len())
