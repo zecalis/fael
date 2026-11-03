@@ -35,6 +35,30 @@ pub(super) fn unshared(scope: &[String], shared: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// Effective files for clash/overlap (f1): a live partner's `run.touched`
+/// when present, its declared scope as fallback. Both columns are newline
+/// lists; blank lines never count. `None` + `None` = no claim.
+pub(super) fn effective(touched: Option<&str>, scope: Option<&str>) -> Vec<String> {
+    if let Some(t) = touched {
+        let v: Vec<String> = t
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect();
+        if !v.is_empty() {
+            return v;
+        }
+    }
+    scope
+        .unwrap_or_default()
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

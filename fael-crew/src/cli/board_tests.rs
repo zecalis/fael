@@ -247,6 +247,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         joint: None,
         partner: None,
         force_reason: None,
+        touched: None,
     });
     let p = Project {
         branches: vec![super::branches::Branch {
@@ -290,6 +291,7 @@ fn merged_branch_puts_running_chunk_in_needs_you() {
         joint: None,
         partner: None,
         force_reason: None,
+        touched: None,
     });
     let p = Project {
         branches: vec![super::branches::Branch {
@@ -350,6 +352,7 @@ fn lean_keeps_the_summary_of_a_finished_chunk() {
         joint: None,
         partner: None,
         force_reason: None,
+        touched: None,
     });
     let mut cs = vec![done];
     lean(&mut cs);

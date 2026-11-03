@@ -55,6 +55,39 @@ fn lane_starts_a_dir_overlap_without_force_and_both_reach_done() {
 }
 
 #[test]
+fn same_scope_with_narrow_touch_lanes_instead_of_pair() {
+    use super::super::chunk::tests::here;
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/");
+    let b = scoped(&mut s, "b", "src/");
+    start(&mut s, &a, "/w1").unwrap();
+    // same dir, no touch: exact refuses, names pair
+    let e = s
+        .start(
+            &b,
+            &Start {
+                stale: STALE.into(),
+                ..Start::default()
+            },
+            &here("/w2"),
+        )
+        .unwrap_err();
+    assert!(e.contains("--as pair"), "{e}");
+    // the partner touched one file: the same start lanes beside it, no force
+    s.touch(&a, &["src/a.rs".into()], None, &here("/w1"))
+        .unwrap();
+    s.start(
+        &b,
+        &Start {
+            stale: STALE.into(),
+            ..Start::default()
+        },
+        &here("/w2"),
+    )
+    .unwrap();
+}
+
+#[test]
 fn an_exact_clash_refuses_and_prints_the_pair_command() {
     let mut s = Store::open_in_memory().unwrap();
     let a = scoped(&mut s, "a", "src/x.rs");

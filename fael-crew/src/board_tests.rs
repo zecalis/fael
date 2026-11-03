@@ -127,6 +127,34 @@ fn overlap_classes_name_exact_and_prefix() {
 }
 
 #[test]
+fn overlaps_use_effective_touched_not_declared_scope() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", &["src/"], &[]);
+    let b = scoped(&mut s, "b", &["src/"], &[]);
+    start(&mut s, &a, "/wt/1").unwrap();
+    let bd = s.board("2026-10-11", NOW).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|c| c.uid == u).unwrap();
+    assert_eq!(
+        by(&b).overlap_classes,
+        vec![(a.clone(), OverlapClass::Exact)]
+    );
+    // a touched one file: the same dir scope now reads as a dir cover
+    s.touch(
+        &a,
+        &["src/a.rs".into()],
+        None,
+        &super::super::chunk::tests::here("/wt/1"),
+    )
+    .unwrap();
+    let bd = s.board("2026-10-11", NOW).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|c| c.uid == u).unwrap();
+    assert_eq!(
+        by(&b).overlap_classes,
+        vec![(a.clone(), OverlapClass::Prefix)]
+    );
+}
+
+#[test]
 fn a_static_pair_and_a_live_joint_name_no_overlap() {
     use super::super::{Joint, Start};
     let mut s = Store::open_in_memory().unwrap();
@@ -268,6 +296,33 @@ fn touched_is_the_claimed_diff_absent_until_claimed() {
 
 /// l4: `dodge` reads live partners' touched files, not done ones — exact wins
 /// per partner, else prefix; self and done partners stay out; shared is nobody's.
+#[test]
+fn dodge_uses_effective_touched_with_scope_fallback() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "me", &["me/"], &[]);
+    let live = scoped(&mut s, "live", &["src/"], &[]);
+    start(&mut s, &live, "/w1").unwrap();
+    start(&mut s, &me, "/w3").unwrap();
+    let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // no touch: the declared dir still claims
+    let hits = s.dodge(&me, &v(&["src/b.rs"]), &[]).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].class, OverlapClass::Prefix);
+    // touched one file: an unrelated file under the old dir no longer dodges
+    s.touch(
+        &live,
+        &["src/a.rs".to_string()],
+        None,
+        &super::super::chunk::tests::here("/w1"),
+    )
+    .unwrap();
+    assert!(s.dodge(&me, &v(&["src/b.rs"]), &[]).unwrap().is_empty());
+    // the touched file itself still dodges, as exact
+    let hits = s.dodge(&me, &v(&["src/a.rs"]), &[]).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].class, OverlapClass::Exact);
+}
+
 #[test]
 fn dodge_names_live_exact_before_prefix() {
     let mut s = Store::open_in_memory().unwrap();
