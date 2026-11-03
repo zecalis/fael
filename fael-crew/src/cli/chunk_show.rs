@@ -35,7 +35,10 @@ pub(crate) fn show(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
         .unwrap_or_default();
     println!("{}  {}{label}  {}  {}", c.uid, c.plan, c.state, c.title);
     if let Some(run) = &c.run {
-        let seen = run.last_seen.as_deref().unwrap_or("never");
+        let seen = match &run.last_seen {
+            Some(s) => s.clone(),
+            None => format!("never (started {})", run.started),
+        };
         let flag = if c.stalled { " · stalled" } else { "" };
         let wt = run.worktree.as_deref().unwrap_or("no worktree");
         println!(
@@ -101,7 +104,10 @@ fn print_avoid(b: &fael_crew::Brief) {
         let wh = a.worktree.as_deref().unwrap_or("no worktree");
         let br = a.branch.as_deref().unwrap_or("");
         println!("where: {wh} {br} (since {})", a.started);
-        let when = a.last_seen.as_deref().unwrap_or("never");
+        let when = match &a.last_seen {
+            Some(s) => s.clone(),
+            None => format!("never (started {})", a.started),
+        };
         let flag = if a.stalled { " (stalled)" } else { "" };
         println!("when: last seen {when}{flag}");
         println!("doing: {}", a.doing);

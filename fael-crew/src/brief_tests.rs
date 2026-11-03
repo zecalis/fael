@@ -415,6 +415,78 @@ fn start_resume_short_orders_run_tldr_resume_pointer() {
     }
 }
 
+/// f4: an untouched run prints `never (started T)`, plus stalled past the line.
+#[test]
+fn an_unseen_run_names_its_start_and_its_stall() {
+    use super::super::handoff::Avoid;
+    use super::super::start::Prev;
+    let prev = |last_seen: Option<String>| Prev {
+        start: "R".into(),
+        client: None,
+        session: None,
+        worktree: None,
+        branch: None,
+        started: "2020-01-01T00:00:00Z".into(),
+        last_seen,
+    };
+    let rendered = |resume: Option<Prev>| {
+        let mut c = chunk("A");
+        c.resume = resume;
+        Started {
+            run: "R".into(),
+            chunks: vec![c],
+            orphaned: vec![],
+            resumed: true,
+            forced: vec![],
+        }
+        .render_short()
+    };
+    // untouched since 2020: never names the start, and the line reads stalled
+    let t = rendered(Some(prev(None)));
+    assert!(
+        t.contains("last seen never (started 2020-01-01T00:00:00Z) (stalled)"),
+        "{t}"
+    );
+    // a fresh stamp prints as is, with no stall and no never
+    let now = fael_core::rfc3339(fael_core::now_ms());
+    let t = rendered(Some(prev(Some(now.clone()))));
+    assert!(t.contains(&format!("last seen {now}")), "{t}");
+    assert!(!t.contains("never") && !t.contains("stalled"), "{t}");
+    // avoid cards read the same way: stalled and fresh side by side
+    let mut c = chunk("A");
+    let card = |stalled: bool| Avoid {
+        uid: "B".into(),
+        title: "other work".into(),
+        client: None,
+        class: "prefix".into(),
+        files: vec!["src/".into()],
+        worktree: None,
+        branch: None,
+        started: "2020-01-01T00:00:00Z".into(),
+        last_seen: None,
+        stalled,
+        doing: "wiring".into(),
+        do_cmd: "wait".into(),
+    };
+    c.avoid = vec![card(true), card(false)];
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    }
+    .text();
+    assert!(
+        t.contains("when: last seen never (started 2020-01-01T00:00:00Z) (stalled)"),
+        "{t}"
+    );
+    assert!(
+        t.contains("when: last seen never (started 2020-01-01T00:00:00Z)\n"),
+        "{t}"
+    );
+}
+
 /// l3 avoid (issue 01M6CZ0K): the brief renders one card per colliding file.
 #[test]
 fn the_brief_renders_avoid_cards_with_doing_and_do() {

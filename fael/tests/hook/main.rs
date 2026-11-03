@@ -35,6 +35,7 @@ mod focus;
 mod from_user;
 mod handoff;
 mod held;
+mod liveness;
 mod model;
 mod notify;
 mod opencode;

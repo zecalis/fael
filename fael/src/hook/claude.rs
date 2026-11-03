@@ -258,7 +258,12 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             // a read says nothing: rows reach the agent at the edit, at kickoff and in briefs
             let reply = match event {
                 "search" => super::search::push_call(&e, &p.tool_name, input, &p.tool_response),
-                "edit" => push(&e, At::Edit),
+                "edit" => {
+                    // liveness, not Stop only: a live turn longer than 30 min
+                    // without Stop reads stalled, so the edit stamps it too
+                    super::stop::seen(&e);
+                    push(&e, At::Edit)
+                }
                 _ => super::protocol::Reply::default(),
             };
             print_reply("PostToolUse", reply, codex);
