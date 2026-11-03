@@ -20,7 +20,16 @@ fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
 
 fn with(partner: &str, joint: Joint) -> Start {
     Start {
-        with: Some(partner.into()),
+        with: vec![partner.into()],
+        joint: Some(joint),
+        stale: STALE.into(),
+        ..Start::default()
+    }
+}
+
+fn with_all(partners: &[String], joint: Joint) -> Start {
+    Start {
+        with: partners.to_vec(),
         joint: Some(joint),
         stale: STALE.into(),
         ..Start::default()
@@ -128,7 +137,7 @@ fn with_needs_a_live_partner_and_a_mode() {
         .unwrap_err();
     assert!(e.contains("has no live run"), "{e}");
     let only = Start {
-        with: Some(a),
+        with: vec![a],
         ..Start::default()
     };
     let e = s.start(&b, &only, &here("/w2")).unwrap_err();
@@ -196,7 +205,7 @@ fn two_dir_overlaps_lane_together_without_with() {
 }
 
 #[test]
-fn two_exact_clashes_say_with_takes_one_and_a_list_is_named() {
+fn two_exact_clashes_name_both_partners_and_start_with_both() {
     let mut s = Store::open_in_memory().unwrap();
     let a = scoped(&mut s, "a", "src/x.rs");
     let b = scoped(&mut s, "b", "src/y.rs");
@@ -205,11 +214,44 @@ fn two_exact_clashes_say_with_takes_one_and_a_list_is_named() {
     start(&mut s, &b, "/w2").unwrap();
     let e = start(&mut s, &c, "/w3").unwrap_err();
     assert!(
-        e.contains("--with takes one partner") && !e.contains("--as pair"),
+        e.contains(&format!("--with {a}"))
+            && e.contains(&format!("--with {b}"))
+            && e.contains("--as pair"),
         "{e}"
     );
+    // one partner is not enough: the other exact clash still refuses
     let e = s
-        .start(&c, &with(&format!("{a},{b}"), Joint::Pair), &here("/w3"))
+        .start(&c, &with(&a, Joint::Pair), &here("/w3"))
         .unwrap_err();
-    assert!(e.contains("--with takes one chunk"), "{e}");
+    assert!(e.contains(&b), "{e}");
+    // both partners at once clears both exact clashes
+    s.start(
+        &c,
+        &with_all(&[a.clone(), b.clone()], Joint::Pair),
+        &here("/w3"),
+    )
+    .unwrap();
+    // the first partner's uid stays in run.partner, the rest in run.partners JSON
+    assert_eq!(col(&s, &c, "partner").as_deref(), Some(a.as_str()));
+    let rest: Vec<String> = serde_json::from_str(
+        &s.conn
+            .query_row(
+                "SELECT r.partners FROM run r JOIN chunk k ON k.id = r.chunk WHERE k.uid = ?1",
+                [&c],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(rest, vec![b.clone()]);
+    // board: joint both directions, so no clash is named between c and either partner
+    let bd = s.board("2026-10-11", STALE).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|x| x.uid == u).unwrap();
+    assert!(
+        !by(&c).overlaps.contains(&a) && !by(&c).overlaps.contains(&b),
+        "{:?}",
+        by(&c).overlaps
+    );
+    assert!(!by(&a).overlaps.contains(&c), "{:?}", by(&a).overlaps_how);
 }

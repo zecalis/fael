@@ -46,7 +46,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         base: crate::git(&r.root, &["rev-parse", "HEAD"]),
         shared: fael_crew::shared(&r.root).unwrap_or_default(),
         stale: crate::board::clock().1,
-        with: a.one("with"),
+        with: a.many("with"),
         joint: a
             .one("as")
             .map(|m| fael_crew::Joint::parse(&m))
@@ -85,11 +85,15 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     for f in &st.forced {
         println!("forced: {f}");
     }
-    if let (Some(w), Some(j)) = (&o.with, o.joint) {
-        println!("joint {} with {w} (run {})", j.as_str(), st.run);
+    if !o.with.is_empty()
+        && let Some(j) = o.joint
+    {
+        let ws = o.with.join(",");
+        println!("joint {} with {ws} (run {})", j.as_str(), st.run);
         if j == fael_crew::Joint::Pair {
             println!(
-                "pair: work in {w}'s worktree and branch (your seat {} freed)",
+                "pair: work in {}'s worktree and branch (your seat {} freed)",
+                o.with.first().map(String::as_str).unwrap_or("?"),
                 here.worktree
             );
         }
@@ -98,7 +102,9 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             println!("{}", fael_core::work::LANE_LINE.replace("<R>", &st.run));
         }
         if j == fael_crew::Joint::Follow {
-            print!("{}", store.follow_text(w)?);
+            for w in &o.with {
+                print!("{}", store.follow_text(w)?);
+            }
         }
     }
     // plan fael-row-retire c3: contracts and open decisions and notes on files under the

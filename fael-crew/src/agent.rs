@@ -286,6 +286,55 @@ impl Store {
             .ok()
     }
 
+    /// f3: every chunk uid joint with `uid`, both directions — `run.partner` plus the
+    /// `run.partners` JSON array. Used to keep joint lanes out of `outside`'s owner
+    /// check. Best-effort on old DBs without the column: the single-partner half.
+    fn joint_uids(conn: &rusqlite::Connection, uid: &str) -> Result<Vec<String>, String> {
+        let has: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('run') WHERE name = 'partners'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .map_err(err)
+            .map(|n| n > 0)?;
+        let mut out = Vec::new();
+        if has {
+            let rows: Vec<(Option<String>, Option<String>)> = conn
+                .prepare(
+                    "SELECT r.partner, r.partners FROM run r JOIN chunk c ON c.id = r.chunk
+                     WHERE c.uid = ?1 AND r.joint IS NOT NULL",
+                )
+                .map_err(err)?
+                .query_map([uid], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(err)?
+                .collect::<Result<_, _>>()
+                .map_err(err)?;
+            for (p, ps) in rows {
+                if let Some(p) = p {
+                    out.push(p);
+                }
+                if let Some(s) = ps
+                    && let Ok(v) = serde_json::from_str::<Vec<String>>(&s)
+                {
+                    out.extend(v);
+                }
+            }
+            let rev: Vec<String> = conn
+                .prepare(
+                    "SELECT c.uid FROM run r JOIN chunk c ON c.id = r.chunk
+                     WHERE r.partner = ?1 OR r.partners LIKE ?2",
+                )
+                .map_err(err)?
+                .query_map(rusqlite::params![uid, format!("%\"{uid}\"%")], |r| r.get(0))
+                .map_err(err)?
+                .collect::<Result<_, _>>()
+                .map_err(err)?;
+            out.extend(rev);
+        }
+        Ok(out)
+    }
+
     /// `done`'s diff against `uid`'s declared scope, before `claim` replaces it: the declared
     /// scope (its pair's with it), then each path not under it with the `plan/label` of another unfinished chunk
     /// whose scope covers it (board's prefix rule), None = unowned. A `shared` path is
@@ -321,7 +370,7 @@ impl Store {
         let others: Vec<(String, Vec<String>)> = self
             .conn
             .prepare(
-                "SELECT p.name || '/' || COALESCE(c.label, c.uid), c.scope FROM chunk c
+                "SELECT p.name || '/' || COALESCE(c.label, c.uid), c.scope, c.uid FROM chunk c
                  JOIN plan p ON p.id = c.plan WHERE c.uid != ?1 AND c.scope IS NOT NULL
                  AND c.state NOT IN ('done', 'replaced', 'dropped')
                  AND c.uid NOT IN (SELECT r.partner FROM run r JOIN chunk m ON m.id = r.chunk
@@ -329,11 +378,24 @@ impl Store {
                    JOIN chunk c2 ON c2.id = r.chunk WHERE r.partner = ?1) ORDER BY c.seq",
             )
             .map_err(err)?
-            .query_map([uid], |q| Ok((q.get(0)?, q.get(1)?)))
+            .query_map([uid], |q| {
+                Ok((q.get(0)?, q.get(1)?, q.get::<_, String>(2)?))
+            })
             .map_err(err)?
-            .map(|r| r.map(|(n, s)| (n, unshared(&lines(Some(s)), shared))))
-            .collect::<Result<_, _>>()
-            .map_err(err)?;
+            .map(|r| {
+                r.map(|(n, s, u)| (n, unshared(&lines(s), shared), u))
+                    .map(|(n, sc, u)| ((n, sc), u))
+            })
+            .collect::<Result<Vec<((String, Vec<String>), String)>, _>>()
+            .map_err(err)?
+            .into_iter()
+            .filter(|(_, u)| {
+                !Self::joint_uids(&self.conn, uid)
+                    .unwrap_or_default()
+                    .contains(u)
+            })
+            .map(|((n, sc), _)| (n, sc))
+            .collect();
         let out = files
             .iter()
             .filter(|f| !declared.is_empty() && !declared.iter().any(|d| within(f, d)))

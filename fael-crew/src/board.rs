@@ -191,6 +191,10 @@ pub struct Run {
     /// joint start partner (see `joint`); skipped from JSON likewise.
     #[serde(skip)]
     pub partner: Option<String>,
+    /// f3: the second and later `--with` uids (`run.partners` JSON). Skipped
+    /// from JSON like `partner` — only the overlap math reads it.
+    #[serde(skip)]
+    pub partners: Vec<String>,
     /// live `run.touched` (f1): the files the agent reported so far, one per
     /// line split already. Skipped from JSON — the board's overlap math reads
     /// it, the app's contract stays byte-identical.
@@ -533,15 +537,33 @@ impl Store {
     }
 
     fn latest_runs(&self) -> Result<HashMap<i64, Run>, String> {
-        let mut q = self
+        // `partners` (f3) rides COLUMNS: old rows stay NULL, parsed as empty.
+        let has_partners: bool = self
             .conn
-            .prepare(
-                "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
-                        started, last_seen, ended, cost, review, joint, partner, force_reason, touched
-                 FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)",
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('run') WHERE name = 'partners'",
+                [],
+                |r| r.get::<_, i64>(0),
             )
-            .map_err(err)?;
+            .map_err(err)
+            .map(|n| n > 0)?;
+        let sql = if has_partners {
+            "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
+                        started, last_seen, ended, cost, review, joint, partner, force_reason, touched, partners
+                 FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)"
+        } else {
+            "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
+                        started, last_seen, ended, cost, review, joint, partner, force_reason, touched
+                 FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)"
+        };
+        let mut q = self.conn.prepare(sql).map_err(err)?;
         q.query_map([], |r| {
+            let partners: Vec<String> = has_partners
+                .then(|| r.get::<_, Option<String>>(18))
+                .transpose()?
+                .flatten()
+                .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+                .unwrap_or_default();
             Ok((
                 r.get(0)?,
                 Run {
@@ -571,6 +593,7 @@ impl Store {
                                 .collect()
                         })
                         .filter(|v: &Vec<String>| !v.is_empty()),
+                    partners,
                 },
             ))
         })

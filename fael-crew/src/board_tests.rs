@@ -187,7 +187,7 @@ fn a_static_pair_and_a_live_joint_name_no_overlap() {
     s.start(
         &d,
         &Start {
-            with: Some(c.clone()),
+            with: vec![c.clone()],
             joint: Some(Joint::Lane),
             stale: NOW.into(),
             ..Start::default()

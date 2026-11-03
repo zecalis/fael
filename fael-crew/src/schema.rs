@@ -59,7 +59,9 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// clean|fixed|failed` — apart from the old `verdict` column, unused now (issue 01M4XN3S).
 /// `run.joint` / `run.partner`: `chunk start --with <partner> --as pair|lane|follow` (issue
 /// 01M5PB7Z) — the mode and the partner chunk's uid; NULL = a solo start. A column, since
-/// `edge.kind`'s CHECK cannot change in place.
+/// `edge.kind`'s CHECK cannot change in place. `run.partners` (f3): the second and later
+/// `--with` uids as a JSON array; the first stays in `run.partner` so old readers keep
+/// their seat and scope. A column, same ride (no VERSION bump).
 /// `run.touched`: the paths `chunk touch` reported so far, one per line; NULL = none
 /// reported yet (issue 01M5PB7Z). Only what the agent reports is stored — never inferred
 /// from git (product:mission, same rule as run-telemetry model/cost) — so a waiter sees
@@ -79,6 +81,7 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("plan", "parent", "TEXT"),
     ("run", "joint", "TEXT"),
     ("run", "partner", "TEXT"),
+    ("run", "partners", "TEXT"),
     ("run", "touched", "TEXT"),
     ("chunk", "client_hint", "TEXT"),
     ("chunk", "reads", "TEXT"),

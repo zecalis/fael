@@ -43,8 +43,9 @@ pub struct Start {
     /// `.fael/shared` paths: nobody's claim, never an overlap (as on the board)
     pub shared: Vec<String>,
     pub stale: String, // a live run last seen before this is `stalled` in a clash line
-    /// `--with`: the chunk whose live run this start joins as `joint` (issue 01M5PB7Z)
-    pub with: Option<String>,
+    /// `--with`: the chunks whose live runs this start joins as `joint` (issue 01M5PB7Z,
+    /// f3: repeated `--with` names several partners, one `--as` for all of them)
+    pub with: Vec<String>,
     pub joint: Option<Joint>,
 }
 
@@ -298,7 +299,8 @@ fn way_out(why: &str, m: &str) -> String {
     }
 }
 
-/// One run row. `loc` = (worktree, branch, base); `with` = (joint mode, partner uid).
+/// One run row. `loc` = (worktree, branch, base); `with` = the joint partners, first in
+/// `run.partner`, the rest as JSON in `run.partners` (f3, additive column).
 /// `force_reason` = `--because` trimmed, only on a `--force` start, else NULL.
 fn insert_run(
     tx: &Transaction,
@@ -306,7 +308,7 @@ fn insert_run(
     chunk: i64,
     o: &Start,
     loc: (Option<&str>, Option<&str>, Option<&str>),
-    with: Option<(&str, &str)>,
+    with: &[super::joint::Partner],
     now: &str,
 ) -> Result<(), String> {
     // issue 01M4XN3S: no --client/--model = the approval's, else the chunk's hint
@@ -315,10 +317,14 @@ fn insert_run(
         .then(|| o.because.as_deref().map(str::trim))
         .flatten()
         .filter(|b| !b.is_empty());
+    let rest = (with.len() > 1).then(|| {
+        serde_json::to_string(&with[1..].iter().map(|p| &p.uid).collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".into())
+    });
     tx.execute(
-        "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base, joint, partner, force_reason)
+        "INSERT INTO run(start, chunk, client, model, worktree, branch, started, session, base, joint, partner, partners, force_reason)
          SELECT ?1, id, COALESCE(?3, approved_client, client_hint),
-                COALESCE(?4, approved_model, model_hint), ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
+                COALESCE(?4, approved_model, model_hint), ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
          FROM chunk WHERE id = ?2",
         params![
             run,
@@ -330,8 +336,9 @@ fn insert_run(
             now,
             o.session,
             loc.2,
-            with.map(|w| w.0),
-            with.map(|w| w.1),
+            with.first().map(|p| p.mode.as_str()),
+            with.first().map(|p| p.uid.as_str()),
+            rest,
             force_reason
         ],
     )
@@ -530,14 +537,14 @@ impl Store {
             return Ok(reused);
         }
         check_lonely_because(o, uid)?;
-        let (partner, clash_forced, lane) =
+        let (partners, clash_forced, lane) =
             joint::gate(&tx, &first, &ms, o, seated(&tx, &first, wt)?)?;
         // a pair is one R in the partner's worktree and branch; any other start is its own R
-        let seat = partner.as_ref().filter(|p| p.mode == Joint::Pair);
+        let seat = partners.iter().find(|p| p.mode == Joint::Pair);
         let caller_wt = wt;
         let (mut branch, mut base) = (here.branch.map(String::from), o.base.clone());
-        if let Some(p) = seat {
-            joint::no_rejoin(&tx, &first, p)?;
+        if seat.is_some() {
+            joint::no_rejoin(&tx, &first, &partners)?;
         }
         match seat {
             Some(p) => {
@@ -550,9 +557,10 @@ impl Store {
             }
             None => check_fresh(&tx, &run)?,
         }
-        let joined = [partner.as_ref().map(joint::Partner::text), lane]
-            .into_iter()
-            .flatten()
+        let joined = partners
+            .iter()
+            .map(joint::Partner::text)
+            .chain(lane)
             .reduce(|a, b| format!("{a}; {b}"));
         let (claim, forced) = claim_members(
             &tx,
@@ -571,8 +579,7 @@ impl Store {
         let mut chunks = Vec::new();
         for (r, was) in claim {
             let loc = (wt, wt.and(branch.as_deref()), wt.and(base.as_deref()));
-            let with = partner.as_ref().map(|p| (p.mode.as_str(), p.uid.as_str()));
-            insert_run(&tx, &run, r.id, o, loc, with, here.now)?;
+            insert_run(&tx, &run, r.id, o, loc, &partners, here.now)?;
             unwait(&tx, r.id)?;
             let mut b = brief(&tx, r.id, 1, Some(&run), &o.stale)?;
             b.resume = was;
