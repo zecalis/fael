@@ -127,8 +127,8 @@ fn a_guess_that_cannot_run_names_the_closest_and_the_usage() {
             "unknown flag --groups — gone: open issues, ready first: fael find --kind issue",
         ),
         (
-            &["find", "--status", "open"],
-            "unknown flag --status — --all adds closed rows",
+            &["find", "--state", "open"],
+            "unknown flag --state — --all adds closed rows",
         ),
         (
             &["bump", &id, "--title", "x"],
