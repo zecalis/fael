@@ -11,7 +11,7 @@ use std::process::ExitCode;
 /// Canonical in `fael-core::work` (the read seam owns the closed vocabulary);
 /// the command reuses it so the two cannot drift.
 pub(crate) const VERBS: &[&str] = fael_core::work::CHUNK_VERBS;
-pub(crate) const USAGE: &str = "fael chunk add|show|start|edit|move|note|touch|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
+pub(crate) const USAGE: &str = "fael chunk add|show|status|start|edit|move|note|touch|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     if rest.is_empty() {
@@ -120,7 +120,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
     let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     match rest.as_slice() {
-        ["show", ..] => return crate::chunk_verbs::show(a, r, &rest[1..]),
+        ["show", ..] | ["status", ..] => return read(a, r, &rest),
         ["add", title] => {
             a.only(
                 "chunk add",
@@ -209,6 +209,15 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
     }
     crate::board::register(r);
     Ok(ExitCode::SUCCESS)
+}
+
+/// Read-only verbs: `show` (several uids) and `status` (both sides at once).
+fn read(a: &Args, r: &Repo, rest: &[&str]) -> Result<ExitCode, String> {
+    match rest {
+        ["show", ..] => crate::chunk_verbs::show(a, r, &rest[1..]),
+        ["status", uid] => crate::chunk_status::status(a, r, uid),
+        _ => Err(crate::chunk_verbs::bad(rest.first().copied())),
+    }
 }
 
 /// The planner's batch: `apply` reads merge/split/pair/after ops off stdin. The owner's
