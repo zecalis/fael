@@ -73,7 +73,8 @@ impl Args {
                 | "run" | "on" | "until" | "pr" | "cost" | "app" | "area" | "label" | "returns"
                 | "check" | "issue" | "drop" | "section" | "session" | "reads" | "uid"
                 | "option" | "worktree" | "verdict" | "review" | "parent" | "recall" | "wait"
-                | "ask" | "left" | "as" | "why" | "preset" | "cwd" | "because" | "msg" => {
+                | "ask" | "left" | "as" | "why" | "preset" | "cwd" | "because" | "msg"
+                | "detail" => {
                     let v = inline
                         .or_else(|| it.next())
                         .ok_or(format!("rejected: --{name} needs a value"))?;

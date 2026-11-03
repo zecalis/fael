@@ -24,6 +24,7 @@ mod find_ids;
 mod find_owner;
 mod find_recall;
 mod found_bytes;
+mod gate_broken;
 mod git_budget;
 mod held_rotate;
 mod help;
