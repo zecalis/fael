@@ -49,6 +49,43 @@ fn a_closed_issue_on_the_file_is_named_with_the_command() {
 }
 
 #[test]
+fn an_overlapping_but_different_file_set_offers_follows_not_supersedes() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "heic upload breaks in chrome",
+            "--files",
+            "src/a.rs,src/b.rs",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let old = out.split_whitespace().next().unwrap().to_string();
+    close(&d, &old);
+    // same file shared, different set: same bug on another surface
+    let (_, err) = issue(&d, "chrome rejects heic again", &[]);
+    assert!(err.contains("same bug, new surface"), "{err}");
+    assert!(err.contains("--follows"), "{err}");
+    assert!(!err.contains("--supersedes"), "{err}");
+}
+
+#[test]
+fn an_identical_file_set_keeps_the_supersedes_offer() {
+    let d = repo();
+    let (old, _) = issue(&d, "heic upload breaks in chrome", &[]);
+    close(&d, &old);
+    let (_, err) = issue(&d, "chrome rejects heic again", &[]);
+    assert!(err.contains(LINE), "{err}");
+    assert!(err.contains("--supersedes"), "{err}");
+    assert!(!err.contains("--follows"), "{err}");
+}
+
+#[test]
 fn no_closed_issue_is_silent() {
     let d = repo();
     let (_, err) = issue(&d, "first on this file", &[]);

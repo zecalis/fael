@@ -1,7 +1,12 @@
-//! Closed-issue recall (PLAN-fael-context-loop chunk 5): a new issue on a file
-//! that already carries a closed one says so, with the command to link them.
-//! Only the agent can say it is the same bug — fael names the candidates (at
-//! most two, newest first) and never links them itself. Silent without one.
+//! Closed-issue recall (PLAN-fael-context-loop chunk 5, e1 same-bug link):
+//! a new issue on files that already carry a closed one says so, with the
+//! command to link them. A row on the identical file set offers
+//! `--supersedes` (a true refile); a row sharing files but on a different
+//! set offers `--follows` (same bug, new surface — continues without
+//! replacing, nothing hidden or closed). Only the agent can say it is the
+//! same bug — fael names the candidates (at most two, newest first) and
+//! never links them itself. Silent without one. No text inference: file sets
+//! only (decision 01M5ABTD).
 
 use crate::{core, hook};
 
@@ -127,7 +132,10 @@ fn shares_file(a: &core::Row, b: &core::Row) -> bool {
 
 /// Info lines for the issue just filed (`log` is the log before it). None when
 /// the row is no issue, already supersedes something (the caller linked it, or
-/// self-heal did), or no closed issue shares a file with it.
+/// self-heal did), or no closed issue shares a file with it. A closed row on
+/// the identical file set keeps the `--supersedes` refile offer; a closed row
+/// sharing files on a different set offers `--follows` (same bug, new
+/// surface) instead — never `--supersedes` there.
 pub(crate) fn lines(log: &core::Log, row: &core::Row) -> Vec<String> {
     if row.kind != "issue" || row.supersedes.is_some() {
         return vec![];
@@ -145,15 +153,26 @@ pub(crate) fn lines(log: &core::Log, row: &core::Row) -> Vec<String> {
     hits.sort_by(|a, b| b.id.cmp(&a.id)); // ids are time-ordered
     let w = core::abbrev(log).with(&row.id);
     let new = w.short(&row.id);
+    let mine: std::collections::BTreeSet<&str> = row.files.iter().map(String::as_str).collect();
     hits.iter()
         .take(MAX)
         .map(|c| {
             let old = w.short(&c.id);
-            format!(
-                "closed earlier on these files (left closed): {old} \"{}\" — only if it is \
+            let theirs: std::collections::BTreeSet<&str> =
+                c.files.iter().map(String::as_str).collect();
+            if theirs == mine {
+                format!(
+                    "closed earlier on these files (left closed): {old} \"{}\" — only if it is \
 the same bug: fael add issue \"<text>\" --supersedes {old}, then fael close {new} \"refiled\"",
-                c.display_title()
-            )
+                    c.display_title()
+                )
+            } else {
+                format!(
+                    "same bug, new surface (left closed): {old} \"{}\" — only if it is \
+the same bug on another surface: fael add issue \"<text>\" --follows {old}",
+                    c.display_title()
+                )
+            }
         })
         .collect()
 }
