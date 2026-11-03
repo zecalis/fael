@@ -23,6 +23,11 @@ pub(crate) fn listed(handoff: &str) -> Vec<String> {
 }
 
 /// The hand-off to store: `handoff` with the validated statement on a `left:` line.
+/// On success each token is echoed with its kind and where it surfaces, so a
+/// `--left <issue-id>` never reads as a hand-off to a next chunk: chunks ride the
+/// next brief through `handoff::left_over`/`names_left`, ledger rows ride the board's
+/// `left_open` only. A `--left` naming ledger rows but no chunk warns (it still
+/// stores) instead of silently printing `left: <issue>` the next start never picks up.
 pub(crate) fn resolve(
     flag: Option<String>,
     handoff: &str,
@@ -61,6 +66,29 @@ pub(crate) fn resolve(
             "rejected: --left {} is no open ledger row or chunk of this db — {HOW}",
             bad.join(", ")
         ));
+    }
+    let mut saw_chunk = false;
+    for t in &toks {
+        if s.is_chunk(t) {
+            saw_chunk = true;
+            println!(
+                "left: {t} is a chunk — the next start of that chunk reads this hand-off (brief left_over)"
+            );
+            continue;
+        }
+        let kind = match fael_core::ref_state(log, t) {
+            fael_core::Ref::One(r) => r.kind.clone(),
+            fael_core::Ref::Many(_) => "ambiguous".to_string(),
+            fael_core::Ref::Missing => "missing".to_string(),
+        };
+        println!(
+            "left: {t} is a ledger {kind} — shows on board left_open, not in the next brief (brief left_over follows chunk uids only)"
+        );
+    }
+    if !saw_chunk {
+        println!(
+            "warn: --left names only ledger rows — no chunk uid, so no next brief surfaces them via left_over; they show on board left_open only; to hand to a chunk, file it first: fael chunk add \"<title>\" --plan <plan> --brief \"…\""
+        );
     }
     Ok(text)
 }

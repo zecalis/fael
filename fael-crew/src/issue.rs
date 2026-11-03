@@ -74,4 +74,18 @@ impl Store {
         // later rows (newer chunks) overwrite earlier ones
         rows.collect::<Result<_, _>>().map_err(err)
     }
+
+    /// The ledger issue ids linked to `uid`'s chunk, in link order (e2 done gate).
+    pub fn linked_issues(&self, uid: &str) -> Result<Vec<String>, String> {
+        self.conn
+            .prepare(
+                "SELECT i.row_id FROM chunk_issue i JOIN chunk c ON c.id = i.chunk
+                 WHERE c.uid = ?1 ORDER BY i.rowid",
+            )
+            .map_err(err)?
+            .query_map([uid], |r| r.get(0))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)
+    }
 }

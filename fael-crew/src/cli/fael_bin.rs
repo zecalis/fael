@@ -48,12 +48,29 @@ pub(crate) fn held(kind: &str, files: &[String]) -> String {
     run(&["held", kind], &files.join("\n")).unwrap_or_default()
 }
 
-/// `held("done", …)` that leaves out rows named at or after `since` (the run's start, as
-/// stored): this chunk's `start` already showed them.
-pub(crate) fn held_done(files: &[String], since: Option<&str>) -> String {
+/// The held-rows text for a chunk `done` (the paths the branch touched), leaving out
+/// rows named at or after `since` (the run's start, as stored): this chunk's `start`
+/// already showed them. Carries the chunk's linked ledger issue ids to the ledger
+/// (e2 done gate): stdin gains a `---issues---` section (see
+/// `fael/src/hook/held_done_gate.rs`), and an `Err` means linked issues are still
+/// open — refuse `chunk done` with it. The `Ok` text is the hint plus the
+/// unlinked-issue warn, printed as before.
+pub(crate) fn held_done_checked(
+    files: &[String],
+    since: Option<&str>,
+    linked: &[String],
+) -> Result<String, String> {
+    let mut stdin = files.join("\n");
+    if !linked.is_empty() {
+        if !stdin.is_empty() {
+            stdin.push('\n');
+        }
+        stdin.push_str("---issues---\n");
+        stdin.push_str(&linked.join("\n"));
+    }
     let mut args = vec!["held", "done"];
     args.extend(since.into_iter().flat_map(|s| ["--since", s]));
-    run(&args, &files.join("\n")).unwrap_or_default()
+    run(&args, &stdin)
 }
 
 /// `fael close <id> "<why>" --force` — the row, closed by the ledger's own
