@@ -86,6 +86,8 @@ fn blank_text_narrows_nothing() {
 
 /// An empty find names the part that matched nothing: each word, file and
 /// filter counted on its own, so the agent fixes one word instead of guessing.
+/// The exception is a text-only search no row mentions at all: every count
+/// would read ×0, so say so honestly and point at code instead.
 #[test]
 fn an_empty_find_counts_each_part_alone() {
     let l = log_of(vec![
@@ -103,14 +105,14 @@ fn an_empty_find_counts_each_part_alone() {
         why_empty(&l, &f, "--files"),
         "no rows match — each alone: \"find\" ×2 · \"search\" ×2 · kind=issue ×0"
     );
-    // a word no row uses reads ×0, and a path typed as a word points at --files
+    // no row uses either word: no breakdown could help, so say so honestly
     let f = Filter {
         text: Some("vector decide.rs".into()),
         ..Filter::default()
     };
     assert_eq!(
         why_empty(&l, &f, "files"),
-        "no rows match — each alone: \"vector\" ×0 · \"decide.rs\" ×0 · a path? use files"
+        "no row mentions \"vector decide.rs\" — if it is a code symbol, it lives in code: search with rg or file it with fael add · a path? use files"
     );
     // one filter: no "each alone" breakdown, and the hidden closed rows named
     let f = Filter {
@@ -132,6 +134,7 @@ fn an_empty_find_counts_each_part_alone() {
 
 /// An empty find names the `--key` a key-shaped text retries as — glob and
 /// prefix forms included — and stays quiet for prose, paths and word lists.
+/// A text no row mentions says so honestly first, then the key retry.
 #[test]
 fn an_empty_find_names_the_key_a_key_shaped_text_retries_as() {
     let l = log_of(vec![note(1, &["src/a.rs"], None, "some prose")]);
@@ -141,17 +144,17 @@ fn an_empty_find_names_the_key_a_key_shaped_text_retries_as() {
     };
     assert_eq!(
         why_empty(&l, &f("feature:*"), "--files"),
-        "no rows match \"feature:*\" (open rows only; --all adds closed) · a key? use --key feature:*"
+        "no row mentions \"feature:*\" — if it is a code symbol, it lives in code: search with rg or file it with fael add · a key? use --key feature:*"
     );
     // `#` and `key:` prefixes retry stripped
-    assert!(
-        why_empty(&l, &f("#feature:login"), "--files")
-            .ends_with("· a key? use --key feature:login")
-    );
-    assert!(
-        why_empty(&l, &f("key:feature:login"), "--files")
-            .ends_with("· a key? use --key feature:login")
-    );
+    for t in ["#feature:login", "key:feature:login"] {
+        let s = why_empty(&l, &f(t), "--files");
+        assert!(
+            s.starts_with(&format!("no row mentions {t:?} — ")),
+            "{t}: {s}"
+        );
+        assert!(s.ends_with("· a key? use --key feature:login"), "{t}: {s}");
+    }
     // prose with a colon, several words, and paths stay quiet
     for t in ["review: skipped", "trailing:", "decide.rs", "src/a.rs:12"] {
         assert!(!why_empty(&l, &f(t), "--files").contains("a key?"), "{t}");

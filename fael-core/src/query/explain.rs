@@ -21,17 +21,27 @@ pub fn json_note(rows: &[&Row], budget: usize) -> Option<String> {
 
 /// The reason a find came back empty: every part of the call counted on its
 /// own, so the one that matched nothing — a word the rows never use, a key
-/// that does not exist — shows next to the ones that did. `files_flag` is how
-/// this surface spells `--files`, for the path hint.
+/// that does not exist — shows next to the ones that did. The one exception
+/// is a text-only search none of whose words any row uses: no breakdown
+/// could help (every count is zero), so say so honestly and point at code.
+/// `files_flag` is how this surface spells `--files`, for the path hint.
 pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
     let alone = |g: Filter| find(log, &Filter { all: f.all, ..g }).len();
-    let mut parts: Vec<String> = vec![];
     let words: Vec<&str> = f.text.as_deref().unwrap_or("").split_whitespace().collect();
-    for w in &words {
-        let n = alone(Filter {
-            text: Some(w.to_string()),
-            ..Filter::default()
-        });
+    let word_ns: Vec<usize> = words
+        .iter()
+        .map(|w| {
+            alone(Filter {
+                text: Some(w.to_string()),
+                ..Filter::default()
+            })
+        })
+        .collect();
+    if let Some(s) = honest_no_mention(f, &words, &word_ns, files_flag) {
+        return s;
+    }
+    let mut parts: Vec<String> = vec![];
+    for (w, n) in words.iter().zip(word_ns.iter()) {
         parts.push(format!("{w:?} ×{n}"));
     }
     if !f.files.is_empty() {
@@ -95,23 +105,7 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
     let mut s = match &parts[..] {
         // one filter: "each alone" adds nothing — say what matched nothing,
         // and that closed rows are out of sight unless --all
-        [one] => {
-            let what = one.rsplit_once(" ×").map_or(one.as_str(), |(p, _)| p);
-            let (gone, spent) = (
-                log.dormant.len().saturating_sub(log.retired.len()),
-                log.retired.len(),
-            );
-            let hidden = match (f.all, gone, spent) {
-                (true, ..) => String::new(),
-                (false, 0, 0) => " (open rows only; --all adds closed)".into(),
-                (false, n, 0) => format!(" (open rows only; --all adds closed and {n} dormant)"),
-                (false, 0, m) => format!(" (open rows only; --all adds closed and {m} retired)"),
-                (false, n, m) => {
-                    format!(" (open rows only; --all adds closed, {n} dormant and {m} retired)")
-                }
-            };
-            format!("no rows match {what}{hidden}")
-        }
+        [one] => single_empty(log, f, one),
         _ => format!("no rows match — each alone: {}", parts.join(" · ")),
     };
     // a path typed as a word searches row text, not the files rows sit on
@@ -127,6 +121,62 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
         s.push_str(&format!(" · a key? use --key {k}"));
     }
     s
+}
+
+/// A text-only search none of whose words any row uses: the cross-product
+/// (`each alone … ×0`) reads as if the ledger failed, when the term likely
+/// lives in code. `None` for every other empty shape, which keeps its
+/// per-part breakdown.
+fn honest_no_mention(
+    f: &Filter,
+    words: &[&str],
+    word_ns: &[usize],
+    files_flag: &str,
+) -> Option<String> {
+    if words.is_empty()
+        || !word_ns.iter().all(|&n| n == 0)
+        || !f.files.is_empty()
+        || f.key.is_some()
+        || f.kind.is_some()
+        || f.since.is_some()
+        || f.by.is_some()
+        || f.to.is_some()
+        || f.revisit.is_some()
+        || f.recall.is_some()
+    {
+        return None;
+    }
+    let q = words.join(" ");
+    let mut s = format!(
+        "no row mentions {q:?} — if it is a code symbol, it lives in code: search with rg or file it with fael add"
+    );
+    if words.iter().any(|w| path_like(w)) {
+        s.push_str(&format!(" · a path? use {files_flag}"));
+    }
+    if let Some(k) = f.text.as_deref().and_then(key_text) {
+        s.push_str(&format!(" · a key? use --key {k}"));
+    }
+    Some(s)
+}
+
+/// One filter: "each alone" adds nothing — say what matched nothing, and that
+/// closed rows are out of sight unless --all.
+fn single_empty(log: &Log, f: &Filter, one: &str) -> String {
+    let what = one.rsplit_once(" ×").map_or(one, |(p, _)| p);
+    let (gone, spent) = (
+        log.dormant.len().saturating_sub(log.retired.len()),
+        log.retired.len(),
+    );
+    let hidden = match (f.all, gone, spent) {
+        (true, ..) => String::new(),
+        (false, 0, 0) => " (open rows only; --all adds closed)".into(),
+        (false, n, 0) => format!(" (open rows only; --all adds closed and {n} dormant)"),
+        (false, 0, m) => format!(" (open rows only; --all adds closed and {m} retired)"),
+        (false, n, m) => {
+            format!(" (open rows only; --all adds closed, {n} dormant and {m} retired)")
+        }
+    };
+    format!("no rows match {what}{hidden}")
 }
 
 /// Most rows a `nearest` answer lists: best guesses, not a page.

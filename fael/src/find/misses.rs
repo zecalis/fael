@@ -98,6 +98,7 @@ pub(crate) fn print_recent(limit: usize) {
             g("why")
                 .trim_start_matches("no rows match — each alone: ")
                 .trim_start_matches("no rows match ")
+                .trim_start_matches("no row mentions ")
         );
     }
 }
