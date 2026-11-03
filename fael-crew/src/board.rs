@@ -191,6 +191,11 @@ pub struct Run {
     /// joint start partner (see `joint`); skipped from JSON likewise.
     #[serde(skip)]
     pub partner: Option<String>,
+    /// live `run.touched` (f1): the files the agent reported so far, one per
+    /// line split already. Skipped from JSON — the board's overlap math reads
+    /// it, the app's contract stays byte-identical.
+    #[serde(skip)]
+    pub touched: Option<Vec<String>>,
 }
 
 /// The last word on the chunk: the agent's `done` / `wait` / `after` text,
@@ -532,7 +537,7 @@ impl Store {
             .conn
             .prepare(
                 "SELECT chunk, start, client, session, model, worktree, branch, pr, out,
-                        started, last_seen, ended, cost, review, joint, partner, force_reason
+                        started, last_seen, ended, cost, review, joint, partner, force_reason, touched
                  FROM run WHERE id IN (SELECT MAX(id) FROM run GROUP BY chunk)",
             )
             .map_err(err)?;
@@ -556,6 +561,16 @@ impl Store {
                     joint: r.get(14)?,
                     partner: r.get(15)?,
                     force_reason: r.get(16)?,
+                    touched: r
+                        .get::<_, Option<String>>(17)?
+                        .map(|s| {
+                            s.lines()
+                                .map(str::trim)
+                                .filter(|l| !l.is_empty())
+                                .map(String::from)
+                                .collect()
+                        })
+                        .filter(|v: &Vec<String>| !v.is_empty()),
                 },
             ))
         })
@@ -820,9 +835,10 @@ fn handoff_for(
 }
 
 /// Push-PR survival (l4): a file `done --pr` claims that a live partner also
-/// touches. `Exact` = the same file the partner's live `run.touched` names;
-/// `Prefix` = a dir on one side covers the file on the other (partner scope or
-/// live touch). DB only — no git, no gh — so `chunk done` stays warn-only.
+/// touches. `Exact` = the same file the partner's effective files name;
+/// `Prefix` = a dir on one side covers the file on the other (effective =
+/// live `run.touched` when present, declared scope as fallback, f1).
+/// DB only — no git, no gh — so `chunk done` stays warn-only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dodge {
     pub uid: String,
@@ -844,11 +860,10 @@ type DodgeRow = (
 );
 
 impl Store {
-    /// Live partners of `uid` whose scope or live `run.touched` meets `diff`
-    /// (less `shared`, which is nobody's claim). Exact wins per partner: when a
-    /// diff file equals a live-touched file the entry is Exact with those
-    /// files, else Prefix with the diff files under the partner's live files
-    /// or scope. Self is left out; done/review/dropped partners are gone.
+    /// Live partners of `uid` whose effective files meet `diff`
+    /// (less `shared`, which is nobody's claim). Effective = live `run.touched`
+    /// when present, declared scope as fallback (f1). Self is left out;
+    /// done/review/dropped partners are gone.
     pub fn dodge(
         &self,
         uid: &str,
@@ -891,55 +906,47 @@ impl Store {
             .map_err(err)?;
         let mut out = Vec::new();
         for (pu, title, scope, touched, branch, worktree) in rows {
-            let live: Vec<String> = touched
+            let raw_touched: Vec<String> = touched
                 .unwrap_or_default()
                 .lines()
                 .map(str::trim)
                 .filter(|l| !l.is_empty())
                 .map(String::from)
-                .filter(|f| !shared.iter().any(|s| fael_core::under(f, s)))
                 .collect();
-            let declared: Vec<String> = scope
-                .unwrap_or_default()
-                .lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty())
-                .map(String::from)
-                .filter(|f| !shared.iter().any(|s| fael_core::under(f, s)))
-                .collect();
-            let exact: Vec<String> = mine
-                .iter()
-                .filter(|f| live.iter().any(|t| t == *f))
-                .cloned()
-                .collect();
-            if !exact.is_empty() {
-                out.push(Dodge {
-                    uid: pu,
-                    title,
-                    class: fael_core::OverlapClass::Exact,
-                    files: exact,
-                    branch,
-                    worktree,
-                });
-                continue;
-            }
-            let wide: Vec<String> = live.iter().chain(declared.iter()).cloned().collect();
-            if wide.is_empty() {
+            let effective: Vec<String> = if raw_touched.is_empty() {
+                scope
+                    .unwrap_or_default()
+                    .lines()
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty())
+                    .map(String::from)
+                    .filter(|f| !shared.iter().any(|s| fael_core::under(f, s)))
+                    .collect()
+            } else {
+                raw_touched
+                    .into_iter()
+                    .filter(|f| !shared.iter().any(|s| fael_core::under(f, s)))
+                    .collect()
+            };
+            if effective.is_empty() {
                 continue;
             }
             let hit: Vec<String> = mine
                 .iter()
                 .filter(|f| {
-                    wide.iter()
+                    effective
+                        .iter()
                         .any(|p| fael_core::under(f, p) || fael_core::under(p, f))
                 })
                 .cloned()
                 .collect();
             if !hit.is_empty() {
+                let class = fael_core::overlap_class(&mine, &effective)
+                    .unwrap_or(fael_core::OverlapClass::Prefix);
                 out.push(Dodge {
                     uid: pu,
                     title,
-                    class: fael_core::OverlapClass::Prefix,
+                    class,
                     files: hit,
                     branch,
                     worktree,

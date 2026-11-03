@@ -4,7 +4,7 @@
 
 use super::board_math::under;
 use super::ready::{Ready, ready_in};
-use super::shared::unshared;
+use super::shared::{effective, unshared};
 use super::store::err;
 use fael_core::OverlapClass;
 use rusqlite::{OptionalExtension, Transaction};
@@ -197,7 +197,7 @@ struct Clash {
     stalled: bool,
 }
 
-/// Live-run chunks of the same app, outside the pair `ms`, whose scope (less `shared`) shares
+/// Live-run chunks of the same app, outside the pair `ms`, whose effective files (less `shared`) share
 /// a path prefix with a member's (the board's `overlap` rule).
 fn clashes_in(
     tx: &Transaction,
@@ -227,33 +227,46 @@ fn clashes_in(
     };
     let mut q = tx
         .prepare(
-            "SELECT c.uid, COALESCE(c.label, c.title), p.name, c.scope, r.started, r.last_seen
+            "SELECT c.uid, COALESCE(c.label, c.title), p.name, c.scope, r.touched, r.started, r.last_seen
              FROM chunk c JOIN plan p ON p.id = c.plan
              JOIN run r ON r.id = (SELECT x.id FROM run x WHERE x.chunk = c.id
                AND x.ended IS NULL ORDER BY x.started DESC LIMIT 1)
-             WHERE c.scope IS NOT NULL AND p.app = ?1",
+             WHERE p.app = ?1",
         )
         .map_err(err)?;
-    let rows = q
+    type LiveRow = (
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        Option<String>,
+    );
+    let rows: Vec<LiveRow> = q
         .query_map([app], |r| {
             Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
                 r.get(3)?,
-                r.get::<_, String>(4)?,
-                r.get::<_, Option<String>>(5)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
             ))
         })
         .map_err(err)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(err)?;
     let mut out = Vec::new();
-    for (uid, label, plan, scope, started, seen) in rows {
+    for (uid, label, plan, scope, touched, started, seen) in rows {
         if ms.contains(&uid) {
             continue;
         }
-        let theirs = paths(scope);
+        let theirs = unshared(&effective(touched.as_deref(), scope.as_deref()), shared);
+        if theirs.is_empty() {
+            continue;
+        }
         let hit: Vec<_> = mine
             .iter()
             .filter(|x| theirs.iter().any(|y| under(x, y) || under(y, x)))
@@ -279,7 +292,7 @@ fn clashes_in(
     Ok(out)
 }
 
-/// Live-run chunks of the same app, outside the pair `ms`, whose scope (less `shared`) shares
+/// Live-run chunks of the same app, outside the pair `ms`, whose effective files (less `shared`) share
 /// a path prefix with a member's (the board's `overlap` rule): `(uid, class, line)` each, the
 /// line `uid (plan/label): [class] path, … — since T · last seen T` plus `· stalled` when the
 /// run is older than `stale` (the board's rule); the class lets o2's joint start offer pair
@@ -345,6 +358,33 @@ mod tests {
             .into_iter()
             .map(|(u, c, _)| (u, c))
             .collect()
+    }
+
+    #[test]
+    fn effective_touched_narrows_exact_to_prefix_and_falls_back() {
+        let mut s = Store::open_in_memory().unwrap();
+        let a = scoped(&mut s, "a", "src/");
+        let b = scoped(&mut s, "b", "src/");
+        start(&mut s, &a, "/w1").unwrap();
+        let stale = "2026-10-11T09:00:00Z";
+        // no touch yet: same dir scope is exact
+        {
+            let tx = s.conn.unchecked_transaction().unwrap();
+            assert_eq!(
+                classes(&tx, &b, stale),
+                vec![(a.clone(), OverlapClass::Exact)]
+            );
+        }
+        // a touched one file: the same starter now sees a dir cover, not the same file
+        s.touch(&a, &["src/a.rs".to_string()], None, &here("/w1"))
+            .unwrap();
+        {
+            let tx = s.conn.unchecked_transaction().unwrap();
+            assert_eq!(
+                classes(&tx, &b, stale),
+                vec![(a.clone(), OverlapClass::Prefix)]
+            );
+        }
     }
 
     #[test]

@@ -477,6 +477,31 @@ fn touch_msg_is_stored_beside_touched_and_rejects_empty() {
     );
 }
 
+#[test]
+fn avoid_uses_effective_touched_not_declared_scope() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    let a = add(&mut s, "a", Some("b"));
+    s.edit(
+        &a,
+        &Fields {
+            scope: Some(vec!["src/".into()]),
+            ..Fields::default()
+        },
+        NOW,
+    )
+    .unwrap();
+    start(&mut s, &a, "/wa").unwrap();
+    // same dir, no touch yet: exact suggests pair
+    assert_eq!(s.show(&me).unwrap().avoid[0].class, "exact");
+    // the partner touched one file: the same waiter now sees prefix, a lane
+    s.touch(&a, &["src/a.rs".to_string()], None, &here("/wa"))
+        .unwrap();
+    let card = &s.show(&me).unwrap().avoid[0];
+    assert_eq!(card.class, "prefix");
+    assert!(card.do_cmd.contains("--as lane"), "{}", card.do_cmd);
+}
+
 /// l3 exact vs prefix: same file suggests pair, dir overlap suggests lane.
 #[test]
 fn avoid_exact_suggests_pair_prefix_suggests_lane() {

@@ -3,6 +3,7 @@
 //! Deterministic: the db only, no git, no gh.
 
 use super::overlap;
+use super::shared::effective;
 use super::store::err;
 use fael_core::under;
 use rusqlite::{OptionalExtension, Transaction, params};
@@ -60,6 +61,7 @@ type DbRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
     String,
     Option<String>,
     Option<String>,
@@ -68,12 +70,12 @@ type DbRow = (
 fn clashes(tx: &Transaction, id: i64, mine: &[String], app: &str) -> Result<Vec<ClashRow>, String> {
     let mut q = tx
         .prepare(
-            "SELECT c.uid, c.title, r.client, c.scope, r.worktree, r.branch,
+            "SELECT c.uid, c.title, r.client, c.scope, r.touched, r.worktree, r.branch,
                     r.started, r.last_seen, r.touch_msg
              FROM chunk c JOIN plan p ON p.id = c.plan
              JOIN run r ON r.id = (SELECT x.id FROM run x WHERE x.chunk = c.id
                AND x.ended IS NULL ORDER BY x.id DESC LIMIT 1)
-             WHERE c.id != ?1 AND p.app = ?2 AND c.scope IS NOT NULL AND c.state = 'running'
+             WHERE c.id != ?1 AND p.app = ?2 AND c.state = 'running'
                AND r.start IS NOT (SELECT y.start FROM run y WHERE y.chunk = ?1
                  AND y.ended IS NULL ORDER BY y.id DESC LIMIT 1)
              ORDER BY r.id DESC",
@@ -91,19 +93,15 @@ fn clashes(tx: &Transaction, id: i64, mine: &[String], app: &str) -> Result<Vec<
                 r.get(6)?,
                 r.get(7)?,
                 r.get(8)?,
+                r.get(9)?,
             ))
         })
         .map_err(err)?
         .collect::<Result<_, _>>()
         .map_err(err)?;
     let mut out = Vec::new();
-    for (uid, title, client, scope, worktree, branch, started, seen, touch_msg) in rows {
-        let theirs: Vec<String> = scope
-            .unwrap_or_default()
-            .lines()
-            .filter(|l| !l.is_empty())
-            .map(String::from)
-            .collect();
+    for (uid, title, client, scope, touched, worktree, branch, started, seen, touch_msg) in rows {
+        let theirs = effective(touched.as_deref(), scope.as_deref());
         if theirs.is_empty() {
             continue;
         }

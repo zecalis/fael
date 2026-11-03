@@ -49,7 +49,8 @@ pub(super) fn edges(conn: &Connection, ids: &[i64], chunks: &mut [Chunk]) -> Res
 }
 
 /// Ready, live running, review and `open_pr` chunks (a done chunk whose PR is not on the
-/// base yet: the CLI reads git) whose scopes share a path prefix — their files are taken.
+/// base yet: the CLI reads git) whose effective files share a path prefix — their files are taken.
+/// Effective = the live run's touched when present, the declared scope as fallback (f1).
 /// A `shared` path (`.fael/shared`) is nobody's: it never makes an overlap.
 /// A static `pair` is one run's work, and a live joint run (`run.joint/partner`,
 /// 01M5PE238) agreed to work beside its partner — neither names an overlap.
@@ -83,7 +84,17 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
                 || open_pr.contains(&c.uid)
         })
         .collect();
-    let own: Vec<Vec<String>> = chunks.iter().map(|c| unshared(&c.scope, shared)).collect();
+    let effective_of = |c: &Chunk| -> Vec<String> {
+        if let Some(run) = &c.run
+            && run.ended.is_none()
+            && let Some(touched) = &run.touched
+            && !touched.is_empty()
+        {
+            return unshared(touched, shared);
+        }
+        unshared(&c.scope, shared)
+    };
+    let own: Vec<Vec<String>> = chunks.iter().map(effective_of).collect();
     for &a in &hot {
         for &b in &hot {
             if a == b {
@@ -97,7 +108,7 @@ pub fn overlaps(chunks: &mut [Chunk], open_pr: &HashSet<String>, shared: &[Strin
             if joint.contains(&(chunks[a].uid.clone(), chunks[b].uid.clone())) {
                 continue;
             }
-            // the class is Some exactly when the scopes overlap, so one call
+            // the class is Some exactly when the effective files overlap, so one call
             // fills the uid list (today's shape), the per-pair class and the
             // app's `overlaps_how` (who + class + witness path)
             let how: Option<(OverlapClass, String)> = overlap_how(&own[a], &own[b]);
