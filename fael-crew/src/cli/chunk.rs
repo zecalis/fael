@@ -161,7 +161,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             a.only("chunk note", &[])?;
             crate::chunk_run::note(&mut s()?, uid, text, &now)?;
         }
-        ["touch", uid, files @ ..] => touch(a, &mut s()?, uid, files, &here)?,
+        ["touch", uid, files @ ..] => touch(a, r, &mut s()?, uid, files, &here)?,
         ["wait", uid, text] => {
             // `--run R`: a start in another checkout's worktree (`start --worktree`) answers here
             a.only("chunk wait", &["on", "until", "option", "run"])?;
@@ -214,7 +214,14 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
 /// The planner's batch: `apply` reads merge/split/pair/after ops off stdin. The owner's
 /// queue mark (`approve`, `unapprove`, `accept`) lives in `chunk_verbs`, which takes
 /// several uids; this keeps only the stdin batch.
-fn touch(a: &Args, s: &mut Store, uid: &str, files: &[&str], here: &Here) -> Result<(), String> {
+fn touch(
+    a: &Args,
+    r: &Repo,
+    s: &mut Store,
+    uid: &str,
+    files: &[&str],
+    here: &Here,
+) -> Result<(), String> {
     // `chunk touch` (issue 01M5PB7Z, CLI-only, not MCP): publish touched-so-far — one or more
     // repo-relative paths. `--run R` answers from another checkout, like wait/after.
     // `--msg` (l3, issue 01M6CZ0K) stores the intent beside the files, shown as `doing:`.
@@ -225,6 +232,11 @@ fn touch(a: &Args, s: &mut Store, uid: &str, files: &[&str], here: &Here) -> Res
         Some(m) => println!("chunk {uid} → touched {} — {m}", paths.join(", ")),
         None => println!("chunk {uid} → touched {}", paths.join(", ")),
     }
+    // the `done`-time dodge, early: a touched file a live partner also holds is
+    // named now — at `done` it is already a rebase order. Warn only, never refuse.
+    let shared = fael_crew::shared(&r.root).unwrap_or_default();
+    let hits = s.touch_warnings(uid, &paths, &shared)?;
+    print!("{}", crate::chunk_prs::dodge_text(&hits, ""));
     Ok(())
 }
 fn queue(a: &Args, rest: &[&str], s: &mut Store, now: &str) -> Result<(), String> {

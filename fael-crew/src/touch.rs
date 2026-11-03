@@ -10,6 +10,7 @@
 use super::State;
 use super::chunk::{Here, fence, row, scope, tx};
 use super::store::{Store, err};
+use crate::Dodge;
 use rusqlite::{OptionalExtension, params};
 
 impl Store {
@@ -118,5 +119,67 @@ impl Store {
             ));
         }
         tx.commit().map_err(err)
+    }
+
+    /// Files `uid` just touched that a live partner also holds — the same
+    /// `dodge` the `done` path warns about, surfaced here so the agent learns
+    /// it while choosing what to touch, not at `done` when the rebase order
+    /// is already set. Warn-only data; the caller prints it, nothing refuses.
+    pub fn touch_warnings(
+        &self,
+        uid: &str,
+        files: &[String],
+        shared: &[String],
+    ) -> Result<Vec<Dodge>, String> {
+        let s = scope(files)?;
+        let fresh: Vec<String> = s
+            .as_deref()
+            .unwrap_or_default()
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect();
+        if fresh.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.dodge(uid, &fresh, shared)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::chunk::tests::{NOW, start};
+    use super::super::{Fields, Store};
+
+    fn scoped(s: &mut Store, title: &str, scope: &[&str]) -> String {
+        let f = Fields {
+            title: Some(title.into()),
+            brief: Some("b".into()),
+            scope: Some(scope.iter().map(|x| x.to_string()).collect()),
+            ..Fields::default()
+        };
+        s.add("inbox", &f, &[], NOW).unwrap()
+    }
+
+    /// The `done`-time dodge, surfaced at `touch` time: a touched file under
+    /// a live partner's scope warns now, not at `done` when rebase order is set.
+    #[test]
+    fn touch_warnings_names_live_partner_early() {
+        let mut s = Store::open_in_memory().unwrap();
+        let me = scoped(&mut s, "me", &["me/"]);
+        let live = scoped(&mut s, "live", &["src/"]);
+        start(&mut s, &live, "/w1").unwrap();
+        start(&mut s, &me, "/w2").unwrap();
+        let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let hits = s.touch_warnings(&me, &v(&["src/a.rs"]), &[]).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uid, live);
+        let hits = s.touch_warnings(&me, &v(&["other/b.rs"]), &[]).unwrap();
+        assert!(hits.is_empty(), "{hits:?}");
+        let hits = s
+            .touch_warnings(&me, &v(&["src/a.rs"]), &v(&["src/"]))
+            .unwrap();
+        assert!(hits.is_empty(), "shared: {hits:?}");
     }
 }
