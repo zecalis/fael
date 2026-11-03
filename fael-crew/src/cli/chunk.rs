@@ -234,12 +234,27 @@ fn touch(
     // `chunk touch` (issue 01M5PB7Z, CLI-only, not MCP): publish touched-so-far — one or more
     // repo-relative paths. `--run R` answers from another checkout, like wait/after.
     // `--msg` (l3, issue 01M6CZ0K) stores the intent beside the files, shown as `doing:`.
-    a.only("chunk touch", &["run", "msg"])?;
+    // `--status` (f6, issue 01M6HA52P) stores the agent's own `git status --porcelain`
+    // output in the touch event tied to the run id — the lost-hunk audit. Fael never
+    // spawns git: pipe it in (`--status "$(git status --porcelain)"`).
+    a.only("chunk touch", &["run", "msg", "status"])?;
     let paths: Vec<String> = files.iter().map(|s| s.to_string()).collect();
-    s.touch(uid, &paths, a.one("msg").as_deref(), here)?;
+    let status = a.one("status");
+    s.touch_with_status(
+        uid,
+        &paths,
+        a.one("msg").as_deref(),
+        status.as_deref(),
+        here,
+    )?;
     match a.one("msg") {
         Some(m) => println!("chunk {uid} → touched {} — {m}", paths.join(", ")),
         None => println!("chunk {uid} → touched {}", paths.join(", ")),
+    }
+    match status.as_deref() {
+        None => {}
+        Some(st) if st.trim().is_empty() => println!("status: clean"),
+        Some(st) => println!("status:\n{st}"),
     }
     // the `done`-time dodge, early: a touched file a live partner also holds is
     // named now — at `done` it is already a rebase order. Warn only, never refuse.

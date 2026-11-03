@@ -38,6 +38,7 @@ const VALUE_FLAGS: &[&str] = &[
     "limit",
     "map",
     "model",
+    "msg",
     "offset",
     "on",
     "option",
@@ -55,6 +56,7 @@ const VALUE_FLAGS: &[&str] = &[
     "section",
     "since",
     "size",
+    "status",
     "supersedes",
     "text",
     "then",
@@ -256,6 +258,22 @@ mod tests {
         let s = shape("find", &argv("find --revisit --json"));
         assert_eq!(s.flags, ["json", "revisit"]);
         assert_eq!(s.npos, 0);
+    }
+
+    #[test]
+    fn touch_status_and_msg_values_are_not_positionals() {
+        // f6 (issue 01M6HA52P): `chunk touch --status` counts for by_flag, and
+        // its value is not a positional — like the older `--msg` (01M6E23QP).
+        let s = shape("chunk", &argv("chunk touch A src/a.rs --status M-a.rs"));
+        assert_eq!(s.verb.as_deref(), Some("touch"));
+        assert_eq!(s.flags, ["status"]);
+        assert_eq!(s.npos, 2);
+        let s = shape(
+            "chunk",
+            &argv("chunk touch A src/a.rs --msg wiring --status M-a.rs"),
+        );
+        assert_eq!(s.flags, ["msg", "status"]);
+        assert_eq!(s.npos, 2);
     }
 
     #[test]

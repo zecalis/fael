@@ -85,7 +85,26 @@ fn touch_msg_shows_as_doing_on_the_other_cards() {
     assert!(shown.contains("doing: rewriting parse()"), "{shown}");
 }
 
-/// Issue 01M6E23QTD: a pair's brief offered `start --with <partner> --as pair` — the step taken.
+/// Issue 01M6HA52P (f6): `touch --status` stores the agent's git snapshot in
+/// the touch event tied to the run, and prints it back — the lost-hunk audit.
+#[test]
+fn touch_status_is_stored_and_printed() {
+    let w = worktrees(&["wa"]);
+    let a = chunk(&w[0], "A");
+    ok(&w[0], &["chunk", "start", &a]);
+    let (good, out, err) = fael(
+        &w[0],
+        &["chunk", "touch", &a, "src/x.rs", "--status", " M src/x.rs"],
+    );
+    assert!(good, "{out}{err}");
+    assert!(out.contains(" M src/x.rs"), "prints the snapshot: {out}");
+    // the audit path: the change feed carries the touch event with the snapshot
+    let feed = ok(&w[0], &["plan", "export", "--since", "0"]);
+    assert!(feed.contains(" M src/x.rs"), "feed audits it: {feed}");
+    assert!(feed.contains("status:"), "tied to the run: {feed}");
+}
+
+/// A pair's brief offered `start --with <partner> --as pair` — the step taken.
 #[test]
 fn a_pair_partner_is_no_avoid_card() {
     let w = worktrees(&["wa", "wb"]);
