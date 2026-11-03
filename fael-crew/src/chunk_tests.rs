@@ -359,7 +359,17 @@ fn notes_and_the_handoff_before_reach_the_next_brief() {
         &here("/a"),
     )
     .unwrap();
-    assert!(s.note(&a, "x", NOW).unwrap_err().contains("is done"));
+    assert!(
+        s.note(&a, "follow-up polish", NOW).is_ok(),
+        "a done chunk takes a follow-up note"
+    );
+    assert!(
+        s.show(&a)
+            .unwrap()
+            .notes
+            .contains(&"follow-up polish".to_string()),
+        "show prints the follow-up beside the hand-off"
+    );
     let st = s.start(&b, &Start::default(), &here("/b")).unwrap();
     let br = &st.chunks[0];
     assert_eq!(br.notes, ["use the v2 fixture"]);

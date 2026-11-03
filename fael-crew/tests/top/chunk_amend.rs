@@ -76,6 +76,34 @@ fn a_dropped_chunk_is_not_amended() {
     assert!(!o.status.success());
 }
 
+/// Small post-merge work with no new chunk: a note lands on the done chunk and
+/// `show` prints it beside the hand-off; dropped chunks stay history.
+#[test]
+fn a_note_lands_on_a_done_chunk_but_not_a_dropped_one() {
+    let t = std::env::temp_dir().join(format!("fael-amend-{}", fael_core::ulid()));
+    let (d, state) = (repo(&t), t.join("state"));
+    let f = |args: &[&str]| ok(&d, &state, args);
+    let a = f(&["chunk", "add", "a", "--brief", "b"]);
+    f(&["chunk", "start", &a, "--run", "R1", "--no-worktree"]);
+    f(&[
+        "chunk", "done", &a, "shipped", "--left", "none", "--pr", "7", "--run", "R1",
+    ]);
+    let note = f(&["chunk", "note", &a, "post-merge polish"]);
+    assert!(note.contains(&a), "{note}");
+    let shown = f(&["chunk", "show", &a]);
+    assert!(shown.contains("shipped"), "{shown}");
+    assert!(shown.contains("post-merge polish"), "{shown}");
+    let b = f(&["chunk", "add", "b", "--brief", "b"]);
+    f(&["chunk", "drop", &b, "no"]);
+    let o = run(&d, &state, &["chunk", "note", &b, "too late"]);
+    assert!(!o.status.success());
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains("history takes no note"),
+        "{:?}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+}
+
 /// A real done names the amend and the review flag once; `-` reads the hand-off from stdin.
 #[test]
 fn a_real_done_hints_the_amend_and_review_and_dash_reads_stdin() {

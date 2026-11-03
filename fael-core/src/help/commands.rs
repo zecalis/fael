@@ -131,7 +131,7 @@ fael chunk show <uid|label> [--plan p] [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree] [--full]
 fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
 fael chunk move <uid> --plan <p>
-fael chunk note <uid> \"<text>\"
+fael chunk note <uid> \"<text>\" (reaches the next start; on a closed chunk a follow-up annotation — show prints it beside the hand-off; an outcome change is a hand-off amend)
 fael chunk touch <uid> <path>… [--msg \"<what you are doing>\"] [--run R]
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
 fael chunk after <uid> <other> \"<why>\" [--plan p] [--run R]
