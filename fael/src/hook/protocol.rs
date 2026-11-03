@@ -109,7 +109,12 @@ fn neutral(event: &str, stdin: &str) -> ExitCode {
     let reply = match event {
         "stop" => stop(&e),
         "session-start" => session_start(&e),
-        "edit" => push(&e, At::Edit),
+        "edit" => {
+            // liveness, not Stop only: a live turn longer than 30 min without
+            // Stop reads stalled, so every edit stamps last_seen too
+            super::stop::seen(&e);
+            push(&e, At::Edit)
+        }
         "search" if e.files.is_empty() => super::search::push_call(
             &e,
             e.tool.as_deref().unwrap_or(""),

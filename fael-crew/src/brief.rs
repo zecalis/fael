@@ -25,13 +25,24 @@ fn base(heading: &str, few: bool) -> bool {
 /// Where the run this start took over stopped. git owns what changed: its commands, never
 /// their output.
 fn resume(o: &mut String, p: &Prev) {
+    // the board's 30-min line: a live turn last seen before it reads stalled
+    let stale = fael_core::rfc3339(fael_core::now_ms().saturating_sub(30 * 60 * 1000));
+    let at = p.last_seen.as_deref().unwrap_or(&p.started);
+    let seen = match &p.last_seen {
+        Some(s) => s.clone(),
+        None => format!("never (started {})", p.started),
+    };
+    let flag = if at < stale.as_str() {
+        " (stalled)"
+    } else {
+        ""
+    };
     let _ = writeln!(
         o,
-        "\nresume — run {} ({}) started {}, last seen {}",
+        "\nresume — run {} ({}) started {}, last seen {seen}{flag}",
         p.start,
         p.client.as_deref().unwrap_or("agent"),
         p.started,
-        p.last_seen.as_deref().unwrap_or("never")
     );
     if let Some(s) = &p.session {
         let _ = writeln!(o, "session {s}");
@@ -117,7 +128,8 @@ fn avoid(o: &mut String, all: &[super::handoff::Avoid], more: usize) {
         let when = match &a.last_seen {
             Some(s) if a.stalled => format!("{s} (stalled)"),
             Some(s) => s.clone(),
-            None => "never".to_string(),
+            None if a.stalled => format!("never (started {}) (stalled)", a.started),
+            None => format!("never (started {})", a.started),
         };
         let _ = writeln!(o, "when: last seen {when}");
         let _ = writeln!(o, "doing: {}", a.doing);
