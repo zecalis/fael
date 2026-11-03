@@ -105,9 +105,10 @@ fn add_try(row: &Row, topics: bool, supersedes: Option<&str>) -> String {
         .map(|s| format!(" --supersedes {s}"))
         .unwrap_or_default();
     let once = if topics { "one call per topic: " } else { "" };
+    let mcp_key = if topics { ", key" } else { "" };
     format!(
         "try {once}`fael add {kind} \"<one topic>\" --title \"<≤15-word headline>\" --files {files}{key}{sup}` \
-(MCP: add {{kind: \"{kind}\", text, title, files}})",
+(MCP: add {{kind: \"{kind}\", text, title, files{mcp_key}}})",
         kind = row.kind
     )
 }
@@ -192,7 +193,7 @@ pub fn close_rejects(text: &str, kind: &str) -> Vec<String> {
         );
     }
     if !shape.guard && !dont_because(text) {
-        r.push("close names no check — guard `<test path>` or don't <X> because <Y>".into());
+        r.push("close names no check — guard `<dir>/<test-file>` (a backticked path holding a `/`) or don't <X> because <Y>".into());
     }
     r
 }
@@ -206,8 +207,8 @@ pub fn close_gate(id: &str, text: &str, kind: &str) -> Result<(), String> {
         return Ok(());
     }
     Err(format!(
-        "rejected: nothing written — {} — try `fael close {id} \"<cause> → <fix>; guard \\`<test path>\\` \
-or don't <X> because <Y>\"` (MCP: close {{id: \"{id}\", text: \"<cause> → <fix>; guard `<test path>`\"}})",
+        "rejected: nothing written — {} — try `fael close {id} \"<cause> → <fix>; guard \\`<dir>/<test-file>\\` \
+or don't <X> because <Y>\"` (MCP: close {{id: \"{id}\", text: \"<cause> → <fix>; guard `<dir>/<test-file>`\"}})",
         why.join(" · ")
     ))
 }
