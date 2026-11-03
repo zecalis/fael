@@ -1,14 +1,15 @@
-//! The scopes an edit-time overlap line compares (issue 01M5D9GB): what the
+//! The scopes an edit-time overlap line compares (issue 01M5D9GB, f5): what the
 //! chunk a worktree holds declared (its pair's with it) and what every other
-//! unfinished chunk declared. Same prefix rule as the board (`under`) and the
-//! same read as `Store::outside` in fael-crew, kept here read-only so core
+//! unfinished chunk declared — plus each live run's touched files beside its
+//! declared scope. Same prefix rule as the board (`under`) and the same read
+//! as `Store::outside` in fael-crew, kept here read-only so core
 //! never depends on crew.
 
 use super::db::readonly;
 use crate::{under, within};
 use std::path::Path;
 
-/// Another unfinished chunk with a declared scope.
+/// Another unfinished chunk: its declared scope and its live run's touch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Other {
     pub uid: String,
@@ -17,6 +18,14 @@ pub struct Other {
     /// The chunk's `state` as stored (`running`, `open`, `draft`, `review`...).
     pub state: String,
     pub scope: Vec<String>,
+    /// The live run's branch, if it has one.
+    pub branch: Option<String>,
+    /// `run.touch_msg`: what the partner said it is doing, if reported.
+    pub doing: Option<String>,
+    /// The live run's `started`, for the `since` the edit line shows.
+    pub since: Option<String>,
+    /// The live run's `touched` (`chunk touch` so far), less `shared`.
+    pub touched: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,14 +66,89 @@ pub fn scopes(db: &Path, worktree: &str, session: &str, shared: &[String]) -> Op
         .ok()?;
     let uid = rows.iter().find(|r| r.2)?.0.clone();
     let declared = rows.into_iter().flat_map(|r| lines(r.1)).collect();
+    let others = others(&c, worktree, session, shared)?;
+    Some(Scopes {
+        uid,
+        declared,
+        others,
+    })
+}
+
+/// The unfinished chunks around the held team, with each live run's touched
+/// files beside its declared scope. Falls back to scope-only when the db
+/// predates `run.touched`/`touch_msg` (added as columns, no epoch bump).
+fn others(
+    c: &rusqlite::Connection,
+    worktree: &str,
+    session: &str,
+    shared: &[String],
+) -> Option<Vec<Other>> {
+    type Row = (
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    );
+    let live = "r.id = (SELECT x.id FROM run x WHERE x.chunk = c.id
+        AND x.ended IS NULL ORDER BY x.started DESC LIMIT 1)";
+    let rest = format!(
+        "{TEAM} SELECT c.uid, p.name || '/' || COALESCE(c.label, c.uid), c.state, c.scope,
+          r.branch, r.touch_msg, r.touched, r.started
+         FROM chunk c JOIN plan p ON p.id = c.plan
+         LEFT JOIN run r ON {live}
+         WHERE c.state NOT IN ('done', 'replaced', 'dropped')
+         AND c.id NOT IN (SELECT id FROM team)
+         AND (c.scope IS NOT NULL OR r.touched IS NOT NULL) ORDER BY c.seq"
+    );
+    if let Ok(rows) = c.prepare(&rest).and_then(|mut q| {
+        q.query_map([worktree, session], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+            ))
+        })
+        .and_then(|rows| rows.collect::<Result<Vec<Row>, _>>())
+    }) {
+        return Some(
+            rows.into_iter()
+                .map(
+                    |(uid, name, state, s, branch, doing, touched, since)| Other {
+                        uid,
+                        name,
+                        state,
+                        scope: lines(s)
+                            .into_iter()
+                            .filter(|p| !shared.iter().any(|s| under(p, s)))
+                            .collect(),
+                        branch: branch.filter(|b| !b.is_empty()),
+                        doing: doing.filter(|d| !d.is_empty()),
+                        since: since.filter(|s| !s.is_empty()),
+                        touched: lines(touched)
+                            .into_iter()
+                            .filter(|p| !shared.iter().any(|s| under(p, s)))
+                            .collect(),
+                    },
+                )
+                .collect(),
+        );
+    }
     let rest = format!(
         "{TEAM} SELECT c.uid, p.name || '/' || COALESCE(c.label, c.uid), c.state, c.scope
          FROM chunk c JOIN plan p ON p.id = c.plan
          WHERE c.scope IS NOT NULL AND c.state NOT IN ('done', 'replaced', 'dropped')
          AND c.id NOT IN (SELECT id FROM team) ORDER BY c.seq"
     );
-    let others = c
-        .prepare(&rest)
+    c.prepare(&rest)
         .ok()?
         .query_map([worktree, session], |r| {
             Ok((
@@ -86,20 +170,29 @@ pub fn scopes(db: &Path, worktree: &str, session: &str, shared: &[String]) -> Op
                 .into_iter()
                 .filter(|p| !shared.iter().any(|s| under(p, s)))
                 .collect(),
+            branch: None,
+            doing: None,
+            since: None,
+            touched: Vec::new(),
         })
-        .collect();
-    Some(Scopes {
-        uid,
-        declared,
-        others,
-    })
+        .collect::<Vec<_>>()
+        .into()
 }
 
 impl Scopes {
     /// The unfinished chunk whose scope covers `file` when `file` is outside
-    /// the held chunk's own. A `docs/` or `shared` path is nobody's; no
-    /// declared scope = nothing to compare. An unowned path is `None`.
+    /// the held chunk's own, or whose live run touched `file` even inside it.
+    /// Touched wins: a live file beats a declared dir. A `docs/` or `shared`
+    /// path is nobody's; no declared scope = nothing to compare. An unowned
+    /// path is `None`.
     pub fn overlap(&self, file: &str, shared: &[String]) -> Option<&Other> {
+        self.touched_overlap(file, shared)
+            .or_else(|| self.scope_overlap(file, shared))
+    }
+
+    /// The unfinished chunk whose declared scope covers `file` when `file` is
+    /// outside the held chunk's own. The old rule, kept for its own tests.
+    pub fn scope_overlap(&self, file: &str, shared: &[String]) -> Option<&Other> {
         let nobody = file.starts_with("docs/") || shared.iter().any(|s| under(file, s));
         let mine = self.declared.iter().any(|d| within(file, d));
         (!self.declared.is_empty() && !nobody && !mine)
@@ -110,88 +203,23 @@ impl Scopes {
             })
             .flatten()
     }
+
+    /// The unfinished chunk whose live run touched `file`, even inside the
+    /// held chunk's own scope. A prefix either way counts (`src/` covers
+    /// `src/a.rs`), the board's rule; `docs/` and `shared` stay nobody's.
+    pub fn touched_overlap(&self, file: &str, shared: &[String]) -> Option<&Other> {
+        let nobody = file.starts_with("docs/") || shared.iter().any(|s| under(file, s));
+        (!self.declared.is_empty() && !nobody)
+            .then(|| {
+                self.others.iter().find(|o| {
+                    !o.touched.is_empty()
+                        && o.touched.iter().any(|t| under(file, t) || under(t, file))
+                })
+            })
+            .flatten()
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn db(rows: &str) -> std::path::PathBuf {
-        let p = std::env::temp_dir().join(format!("fael-scopes-{}.db", crate::ulid()));
-        let c = rusqlite::Connection::open(&p).unwrap();
-        c.execute_batch(&format!(
-            "CREATE TABLE plan(id INTEGER PRIMARY KEY, name TEXT);
-             CREATE TABLE chunk(id INTEGER PRIMARY KEY, uid TEXT, label TEXT, plan INTEGER,
-               seq INTEGER, scope TEXT, state TEXT);
-             CREATE TABLE run(chunk INTEGER, worktree TEXT, ended TEXT, session TEXT);
-             CREATE TABLE edge(src INTEGER, dst INTEGER, kind TEXT);
-             INSERT INTO plan VALUES (1, 'p');
-             {rows}"
-        ))
-        .unwrap();
-        p
-    }
-
-    #[test]
-    fn reads_held_scope_and_other_unfinished_scopes() {
-        let p = db(
-            "INSERT INTO chunk VALUES (1,'U1','a',1,1,'src/a/','running'),
-              (2,'U2','b',1,2,'src/b/\nshared/x','ready'),
-              (3,'U3','c',1,3,'src/c/','done'),
-              (4,'U4',NULL,1,4,'src/d/','ready'),
-              (5,'U5','e',1,5,'src/e/','review');
-             INSERT INTO run VALUES (1,'/wt',NULL,'S'),(3,'/wt','2026-01-01',NULL);
-             INSERT INTO edge VALUES (1,5,'pair');",
-        );
-        let s = scopes(&p, "/wt", "", &["shared/".into()]).unwrap();
-        assert_eq!((s.uid.as_str(), s.declared.len()), ("U1", 2));
-        let names: Vec<&str> = s.others.iter().map(|o| o.name.as_str()).collect();
-        assert_eq!(
-            names,
-            ["p/b", "p/U4"],
-            "done, own and pair partner left out"
-        );
-        assert_eq!(s.others[0].scope, ["src/b/"], "shared path dropped");
-        assert_eq!(s.others[0].state, "ready", "state as stored");
-        assert!(scopes(&p, "/other", "", &[]).is_none());
-        assert!(scopes(&p, "/other", "T", &[]).is_none(), "another session");
-        assert_eq!(
-            scopes(&p, "/other", "S", &[]).map(|s| s.uid),
-            Some("U1".into()),
-            "same session, other worktree"
-        );
-        let _ = std::fs::remove_file(p);
-    }
-
-    #[test]
-    fn overlap_names_only_an_open_owner_outside_my_scope() {
-        let s = Scopes {
-            uid: "U1".into(),
-            declared: vec!["src/a/".into()],
-            others: vec![Other {
-                uid: "U2".into(),
-                name: "p/b".into(),
-                state: "open".into(),
-                scope: vec!["src/b/".into()],
-            }],
-        };
-        assert_eq!(
-            s.overlap("src/b/x.rs", &[]).map(|o| o.uid.as_str()),
-            Some("U2")
-        );
-        assert!(s.overlap("src/a/x.rs", &[]).is_none(), "in scope");
-        assert!(s.overlap("src/z.rs", &[]).is_none(), "unowned");
-        assert!(
-            s.overlap("src/b/x.rs", &["src/b/".into()]).is_none(),
-            "shared"
-        );
-        let none = Scopes {
-            declared: vec![],
-            ..s
-        };
-        assert!(
-            none.overlap("src/b/x.rs", &[]).is_none(),
-            "no declared scope"
-        );
-    }
-}
+#[path = "scopes_tests.rs"]
+mod tests;
