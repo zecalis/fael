@@ -411,12 +411,16 @@ impl Store {
 
     /// `fael chunk note <uid> "<text>"`: a word for whoever starts the chunk next — from any
     /// worktree, the owner too; state and approval stay (unlike `edit`), the next brief prints it.
+    /// On a done chunk it is a follow-up annotation (small post-merge work with no new chunk):
+    /// the outcome stays, `chunk show <uid>` prints the note beside the hand-off; an outcome
+    /// change is still a `done` amend, a new scope a new chunk. Dropped and replaced chunks
+    /// are history and take no note.
     pub fn note(&mut self, uid: &str, text: &str, now: &str) -> Result<(), String> {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
-        if r.state.terminal() {
+        if r.state.terminal() && r.state != State::Done {
             return Err(format!(
-                "rejected: chunk {uid} is {} — a note reaches only a chunk still to run; try `fael board` to pick one (`fael add note` keeps it in the ledger)",
+                "rejected: chunk {uid} is {} — history takes no note; try `fael add note` to keep it in the ledger",
                 r.state.as_str()
             ));
         }
