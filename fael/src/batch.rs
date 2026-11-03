@@ -103,6 +103,65 @@ pub(crate) fn moved(
     }
 }
 
+/// Batch bump — `fael bump <id> [<id>...]` restamps each row ("still true",
+/// like a bare single bump); a bad id reports alone while the rest save
+/// (never all-or-nothing, like batch close above). Field flags
+/// (--to/--urgent/--revisit) move one row, so several ids with any of them is
+/// rejected — re-run bare, or one at a time. A single id keeps the plain
+/// result, so callers see the same error as before.
+pub(crate) fn batch_bump(a: &crate::Args, ids: &[String]) -> Result<ExitCode, String> {
+    a.only(
+        "bump",
+        &[
+            "to",
+            "urgent",
+            "urgent-before",
+            "not-urgent",
+            "revisit",
+            "why",
+            "json",
+        ],
+    )?;
+    let fielded = a.one("to").is_some()
+        || a.has("urgent")
+        || a.one("urgent-before").is_some()
+        || a.has("not-urgent")
+        || a.has("revisit");
+    if ids.len() > 1 && fielded {
+        return Err(
+            "rejected: --to/--urgent/--revisit move one row — bump several ids bare, or one at a time"
+                .into(),
+        );
+    }
+    let r = crate::repo()?;
+    let (mut failed, mut first) = (0, String::new());
+    for id in ids {
+        match write::bump(&r, a, id) {
+            Ok((row, path, warns)) => {
+                emit_warns(&warns);
+                record_asks("cli", ASK_WARN, "bump", Some(&r.root), &warns);
+                moved(a, &r, &row, &path, a.one("to").is_some());
+            }
+            Err(e) => {
+                failed += 1;
+                if first.is_empty() {
+                    first = e.clone();
+                }
+                println!("rejected: {id}: {}", e.trim_start_matches("rejected: "));
+            }
+        }
+    }
+    if failed == 0 {
+        Ok(ExitCode::SUCCESS)
+    } else if ids.len() == 1 {
+        Err(first)
+    } else {
+        Err(format!(
+            "rejected: {failed} of {} bumps rejected — the rest saved",
+            ids.len()
+        ))
+    }
+}
 /// Chunk 6b: batch add — a JSON array on stdin, one object per row
 /// (`{kind, text, files[], key?, to?, title?, revisit?, urgent?,
 /// urgent_before?, supersedes?, follows?, force?}`). Every row runs the same
