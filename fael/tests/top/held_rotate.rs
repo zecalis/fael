@@ -185,6 +185,91 @@ fn start_names_a_row_once_then_the_next_rows() {
     }
 }
 
+/// e1 same-bug link: `held start` names a closed issue under the scope with a
+/// `--follows` offer, newest first, at most two — file sets only, no text match.
+#[test]
+fn start_names_closed_issues_under_the_scope_with_a_follows_offer() {
+    let (d, s, _) = repo();
+    let mut closed = vec![];
+    for t in ["old bug", "newer bug", "newest bug"] {
+        let out = run(&d, &s, "W", &["add", "issue", t, "--files", "src/a.rs"], "");
+        let id = out.split_whitespace().next().unwrap().to_string();
+        let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+            .args(["close", &id, "broke → fixed it; guard `src/a.rs`"])
+            .current_dir(&d)
+            .env("FAEL_STATE_DIR", &s)
+            .output()
+            .unwrap();
+        assert!(c.status.success(), "{}", String::from_utf8_lossy(&c.stderr));
+        closed.push(id);
+        let _ = &mut c;
+    }
+    let out = run(&d, &s, "S9", &["held", "start"], "src/\n");
+    assert_eq!(out.matches("(left closed)").count(), 2, "{out}");
+    assert!(out.contains("--follows"), "{out}");
+    // newest first: the oldest closed issue is left out
+    let has = |id: &str| {
+        out.split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|w| w.len() >= 8 && id.starts_with(w))
+    };
+    assert!(
+        has(&closed[2]) && has(&closed[1]) && !has(&closed[0]),
+        "{out}"
+    );
+}
+
+/// e1 cross-surface: a row under the scope that `--follows` a closed issue
+/// elsewhere names that closed issue with its link.
+#[test]
+fn start_names_a_followed_closed_issue_on_another_surface() {
+    let t = std::env::temp_dir().join(format!("fael-rot-{}", fael_core::ulid()));
+    let d = t.join("r");
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    git(&d, &["init", "-q", "-b", "main"]);
+    git(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    std::fs::write(d.join("src/a.rs"), "fn x() {}\n").unwrap();
+    std::fs::write(d.join("src/other.rs"), "fn y() {}\n").unwrap();
+    let (d, s) = (d.canonicalize().unwrap(), t.join("state"));
+    let out = run(
+        &d,
+        &s,
+        "W",
+        &["add", "issue", "button bug", "--files", "src/other.rs"],
+        "",
+    );
+    let old = out.split_whitespace().next().unwrap().to_string();
+    let c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(["close", &old, "broke → fixed it; guard `src/other.rs`"])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", &s)
+        .output()
+        .unwrap();
+    assert!(c.status.success(), "{}", String::from_utf8_lossy(&c.stderr));
+    let out = run(
+        &d,
+        &s,
+        "W",
+        &[
+            "add",
+            "issue",
+            "same buttons here",
+            "--files",
+            "src/a.rs",
+            "--follows",
+            &old,
+        ],
+        "",
+    );
+    let new = out.split_whitespace().next().unwrap().to_string();
+    let out = run(&d, &s, "S1", &["held", "start"], "src/a.rs\n");
+    assert!(out.contains("same bug, new surface"), "{out}");
+    let has = |id: &str| {
+        out.split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|w| w.len() >= 8 && id.starts_with(w))
+    };
+    assert!(has(&old) && has(&new), "{out}");
+}
+
 /// Issue 01M6BMFK: `held done --since <run start>` lists the caller's own notes still open
 /// from this run — not another session's, not before the start, not without a start.
 #[test]

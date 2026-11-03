@@ -167,7 +167,8 @@ pub(crate) fn done_text(r: &crate::Repo, files: &[String], since: Option<i64>) -
 /// passes. `scope` holds the declared scope lines (dirs or files); a row
 /// counts when one of its files sits under the scope on a `/` boundary.
 /// Same selection and wording as `done_text` (`select` + `text` + `more_line`),
-/// at most `START_MAX` rows, then where the rest are. Silent when none. Never
+/// at most `START_MAX` rows, then where the rest are. Closed-issue recall
+/// (`recall_text`, e1) rides below the held rows. Silent when none. Never
 /// blocks start, never closes anything.
 pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     use std::collections::HashSet;
@@ -202,6 +203,9 @@ pub(crate) fn start_text(r: &crate::Repo, scope: &[String]) -> String {
     let (head, rest) = found.split_at(found.len().min(START_MAX));
     let ev = super::held_evidence::lines(&log, &r.root, &al, head);
     let mut out = text_with(&log, head, &ev);
+    // e1 same-bug link: closed issues under this scope plus rows that follow
+    // one elsewhere — the decision-time recall `add` used to carry alone
+    out.push_str(&super::held_recall::recall_text(r, scope));
     // the scope, not every file under it: a wide scope made this line dozens of paths long
     if !rest.is_empty() {
         out.push_str(&format!(
