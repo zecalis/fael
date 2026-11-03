@@ -199,13 +199,13 @@ fn non_id_shaped_query_stays_text_search() {
     // plain words never id-match
     let (ok, out, err) = fael(&d, &["find", "no-such-words-anywhere"]);
     assert!(
-        ok && out.is_empty() && err.contains("no rows match"),
+        ok && out.is_empty() && err.contains("no row mentions"),
         "{err}{out}"
     );
     // too short to be id-shaped (7 chars) — text search, not a reject
     let (ok, out, err) = fael(&d, &["find", "01ABCDE"]);
     assert!(
-        ok && out.is_empty() && err.contains("no rows match"),
+        ok && out.is_empty() && err.contains("no row mentions"),
         "{err}{out}"
     );
 }

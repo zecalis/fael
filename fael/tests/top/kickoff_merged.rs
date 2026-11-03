@@ -299,7 +299,7 @@ fn find_reads_an_anchor_like_kickoff() {
         .current_dir(&d)
         .output()
         .unwrap();
-    assert!(String::from_utf8_lossy(&o.stderr).contains("no rows match \"plan:other\""));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("no row mentions \"plan:other\""));
 }
 
 #[test]
