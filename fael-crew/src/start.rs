@@ -47,6 +47,10 @@ pub struct Start {
     /// f3: repeated `--with` names several partners, one `--as` for all of them)
     pub with: Vec<String>,
     pub joint: Option<Joint>,
+    /// `--as stack`: the CLI's `merge-base --is-ancestor` read, parallel to the expanded
+    /// `--with` order — true when the caller's HEAD already contains that partner's live
+    /// branch tip. The store enforces it; the CLI computes it (pure DB logic stays testable).
+    pub stack_contains: Vec<bool>,
 }
 
 /// One claimed chunk, with what its brief needs.
@@ -538,8 +542,9 @@ impl Store {
         }
         check_lonely_because(o, uid)?;
         let (partners, clash_forced, lane) =
-            joint::gate(&tx, &first, &ms, o, seated(&tx, &first, wt)?)?;
-        // a pair is one R in the partner's worktree and branch; any other start is its own R
+            joint::gate(&tx, &first, &ms, o, seated(&tx, &first, wt)?, here)?;
+        // a pair is one R in the partner's worktree and branch; a stack keeps its own R,
+        // worktree and branch cut from the partner's branch — any other start is its own R
         let seat = partners.iter().find(|p| p.mode == Joint::Pair);
         let caller_wt = wt;
         let (mut branch, mut base) = (here.branch.map(String::from), o.base.clone());

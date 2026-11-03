@@ -1,8 +1,8 @@
 //! Joint start (plan overlap-broker o2, issue 01M5PB7Z): `chunk start <uid> --with <partner>
-//! --as pair|lane|follow` turns a clash into a handshake recorded on the run row and the start
+//! --as pair|lane|follow|stack` turns a clash into a handshake recorded on the run row and the start
 //! event — crew.db only, no daemon. Judges nothing: the caller names the mode; `--force` stays.
 
-use super::chunk::Row;
+use super::chunk::{Here, Row};
 use super::holder::{clash_report, holder_detail};
 use super::start::Start;
 use super::store::err;
@@ -17,6 +17,10 @@ pub enum Joint {
     Lane,
     /// read-only: no clash against the partner, its handoff reaches the brief by file
     Follow,
+    /// own R, worktree and branch, cut from the partner's branch: an Exact clash
+    /// with the partner is no refusal (like pair); the caller's HEAD must already
+    /// contain the partner's live branch tip
+    Stack,
 }
 
 impl Joint {
@@ -25,8 +29,9 @@ impl Joint {
             "pair" => Ok(Self::Pair),
             "lane" => Ok(Self::Lane),
             "follow" => Ok(Self::Follow),
+            "stack" => Ok(Self::Stack),
             _ => Err(format!(
-                "rejected: --as {s} is not pair, lane or follow; try --as pair"
+                "rejected: --as {s} is not pair, lane, follow or stack; try --as pair"
             )),
         }
     }
@@ -36,6 +41,7 @@ impl Joint {
             Self::Pair => "pair",
             Self::Lane => "lane",
             Self::Follow => "follow",
+            Self::Stack => "stack",
         }
     }
 }
@@ -215,11 +221,14 @@ fn refuse(
     ))
 }
 
-/// The start's clash gate. A clash with the partner is no refusal for `follow`, `pair`, or a
-/// `lane` over a dir (prefix) overlap; a lane over the same file still refuses — that is a
-/// pair. Any other clash (or none named) refuses with the ready joint command, `--force
-/// --because` last. Bare `--force` is rejected (issue 01M6CZ0K); a force past a clash
-/// writes a receipt (clash snapshot + because, gap (1) in fael:01M6D140) the caller
+/// The start's clash gate. A clash with the partner is no refusal for `follow`, `pair`,
+/// `stack`, or a `lane` over a dir (prefix) overlap; a lane over the same file still refuses —
+/// that is a pair. A `stack` keeps its own R, worktree and branch but must be cut from the
+/// partner's branch: the caller's HEAD must already contain the partner's live branch tip
+/// (`o.stack_contains`, the CLI's `merge-base --is-ancestor` read), else it rejects with the
+/// ready `git switch -c` line. Any other clash (or none named) refuses with the ready joint
+/// command, `--force --because` last. Bare `--force` is rejected (issue 01M6CZ0K); a force past
+/// a clash writes a receipt (clash snapshot + because, gap (1) in fael:01M6D140) the caller
 /// stores in the start event.
 /// `seated` = the chunk already runs in the caller's worktree: it holds its files, so a chunk
 /// that started beside it later is no reason to refuse a restart (`start --full` to re-read).
@@ -233,8 +242,28 @@ pub(super) fn gate(
     ms: &[String],
     o: &Start,
     seated: bool,
+    here: &Here,
 ) -> Result<Gate, String> {
     let ps = partners(tx, first, ms, o)?;
+    if o.joint == Some(Joint::Stack) {
+        if o.stack_contains.len() != ps.len() {
+            return Err(format!(
+                "crew.db: stack needs ancestor for every partner ({} with, {} checked)",
+                ps.len(),
+                o.stack_contains.len()
+            ));
+        }
+        for (p, ok) in ps.iter().zip(o.stack_contains.iter()) {
+            if !ok {
+                let pb = p.branch.as_deref().unwrap_or("<partner-branch>");
+                let cb = here.branch.unwrap_or("<branch>");
+                return Err(format!(
+                    "rejected: chunk {} stacks on {} but HEAD does not contain {pb} tip — try `git switch -c {cb} {pb}` then start again",
+                    first.uid, p.uid
+                ));
+            }
+        }
+    }
     let report = clash_report(tx, ms, &o.shared, &o.stale)?;
     // chunks under any partner's run work beside it: no clash for a pair, follow or dir lane
     let in_run = run_members(tx, &ps)?;
@@ -325,6 +354,26 @@ impl super::store::Store {
             }
         }
         Ok(o)
+    }
+
+    /// `--as stack`: the live run's branch of the chunk `key` names (uid, label or prefix),
+    /// if it has one. The CLI resolves its tip and checks the caller's HEAD contains it;
+    /// the store enforces the result (`Start.stack_contains`). None = no live run or no
+    /// branch recorded — the store's `join` says which.
+    pub fn live_branch(&self, key: &str) -> Result<Option<String>, String> {
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(err)?;
+        let Some((id, _, _)) = super::lookup::lookup(&tx, key)? else {
+            return Ok(None);
+        };
+        tx.query_row(
+            "SELECT branch FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
+            [id],
+            |r| r.get(0),
+        )
+        .map_err(err)
     }
 }
 

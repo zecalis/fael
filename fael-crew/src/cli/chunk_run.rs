@@ -9,9 +9,72 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::path::Path;
 
+/// `--as stack`: per `--with` partner, whether the caller's HEAD already contains the
+/// partner's live branch tip (`merge-base --is-ancestor`). The store enforces the
+/// result; this only reads git, never the clash gate.
+fn stack_contains(
+    store: &Store,
+    r: &Repo,
+    with: &[String],
+    head: Option<&str>,
+) -> Result<Vec<bool>, String> {
+    let mut out = Vec::new();
+    let expanded = with
+        .iter()
+        .flat_map(|w| w.split(','))
+        .map(str::trim)
+        .filter(|w| !w.is_empty());
+    for key in expanded {
+        let branch = store.live_branch(key)?;
+        let tip =
+            branch.as_deref().and_then(|b| crate::git(&r.root, &["rev-parse", b]));
+        let ok = match (tip, head) {
+            (Some(t), Some(h)) => {
+                crate::board::git_output(&r.root, &["merge-base", "--is-ancestor", &t, h])
+                    .is_some_and(|(code, _)| code == Some(0))
+            }
+            _ => false,
+        };
+        out.push(ok);
+    }
+    Ok(out)
+}
+
+/// The joint handshake line plus the mode's seating rule (pair/lane/stack/follow).
+fn say_joint(o: &Start, st: &fael_crew::Started, store: &Store, here: &Here) -> Result<(), String> {
+    let (Some(j), false) = (o.joint, o.with.is_empty()) else {
+        return Ok(());
+    };
+    let ws = o.with.join(",");
+    println!("joint {} with {ws} (run {})", j.as_str(), st.run);
+    if j == fael_crew::Joint::Pair {
+        println!(
+            "pair: work in {}'s worktree and branch (your seat {} freed)",
+            o.with.first().map(String::as_str).unwrap_or("?"),
+            here.worktree
+        );
+    }
+    if j == fael_crew::Joint::Lane {
+        // issue 01M5Y6H4: the lane rules said when a lane is seated, not at first start
+        println!("{}", fael_core::work::LANE_LINE.replace("<R>", &st.run));
+    }
+    if j == fael_crew::Joint::Stack {
+        println!("{}", fael_core::work::STACK_LINE.replace("<R>", &st.run));
+        println!(
+            "stack: your PR merges after {} — land it first, then rebase yours onto it",
+            o.with.join(",")
+        );
+    }
+    if j == fael_crew::Joint::Follow {
+        for w in &o.with {
+            print!("{}", store.follow_text(w)?);
+        }
+    }
+    Ok(())
+}
+
 /// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
-pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
-    a.only(
+pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {    a.only(
         "chunk start",
         &[
             "client",
@@ -35,7 +98,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     let no_run = a.one("run").is_none();
     let session =
         crate::start_session::resolve_session(a.one("session"), |k| std::env::var(k).ok(), no_run);
-    let o = Start {
+    let mut o = Start {
         run: a.one("run"),
         client: a.one("client"),
         model: a.one("model"),
@@ -51,8 +114,13 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             .one("as")
             .map(|m| fael_crew::Joint::parse(&m))
             .transpose()?,
+        stack_contains: Vec::new(),
     };
     let mut store = Store::open(&db(r))?;
+    // `--as stack` is cut from the partner's branch: HEAD must already contain its tip
+    if o.joint == Some(fael_crew::Joint::Stack) {
+        o.stack_contains = stack_contains(&store, r, &o.with, o.base.as_deref())?;
+    }
     if !o.force {
         crate::chunk_scope::gate(&store, r, uid)?;
     }
@@ -85,28 +153,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     for f in &st.forced {
         println!("forced: {f}");
     }
-    if !o.with.is_empty()
-        && let Some(j) = o.joint
-    {
-        let ws = o.with.join(",");
-        println!("joint {} with {ws} (run {})", j.as_str(), st.run);
-        if j == fael_crew::Joint::Pair {
-            println!(
-                "pair: work in {}'s worktree and branch (your seat {} freed)",
-                o.with.first().map(String::as_str).unwrap_or("?"),
-                here.worktree
-            );
-        }
-        if j == fael_crew::Joint::Lane {
-            // issue 01M5Y6H4: the lane rules said when a lane is seated, not at first start
-            println!("{}", fael_core::work::LANE_LINE.replace("<R>", &st.run));
-        }
-        if j == fael_crew::Joint::Follow {
-            for w in &o.with {
-                print!("{}", store.follow_text(w)?);
-            }
-        }
-    }
+    say_joint(&o, &st, &store, here)?;
     // plan fael-row-retire c3: contracts and open decisions and notes on files under the
     // chunk's scope, verdicts ready — the agent judges, start never blocks. `fael` words them
     // (its session state and said-once outbox), so this asks it.

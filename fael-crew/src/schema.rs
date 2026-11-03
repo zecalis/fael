@@ -57,8 +57,8 @@ pub(super) const TABLES: &[(&str, &str)] = &[
 /// (issue 01M4TVDGG: a lane stacked on another's branch).
 /// `run.review`: the fresh review's outcome on the run's work, `chunk done --review
 /// clean|fixed|failed` — apart from the old `verdict` column, unused now (issue 01M4XN3S).
-/// `run.joint` / `run.partner`: `chunk start --with <partner> --as pair|lane|follow` (issue
-/// 01M5PB7Z) — the mode and the partner chunk's uid; NULL = a solo start. A column, since
+/// `run.joint` / `run.partner`: `chunk start --with <partner> --as pair|lane|follow|stack` (issue
+/// 01M5PB7Z, f2: stack) — the mode and the partner chunk's uid; NULL = a solo start. A column, since
 /// `edge.kind`'s CHECK cannot change in place. `run.partners` (f3): the second and later
 /// `--with` uids as a JSON array; the first stays in `run.partner` so old readers keep
 /// their seat and scope. A column, same ride (no VERSION bump).
