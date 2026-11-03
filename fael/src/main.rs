@@ -12,6 +12,7 @@ mod close_key;
 mod crew;
 mod filehash;
 mod find;
+mod gate_broken;
 mod held;
 mod hook;
 mod install;
@@ -109,6 +110,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         }
         ("bump", rest) if !rest.is_empty() => batch::batch_bump(&a, rest),
         ("claim", [id]) => claim(&a, id).map(|()| ExitCode::SUCCESS),
+        ("gate-broken", []) => gate_broken::cmd(&a),
         ("next", []) => next(&a).map(|()| ExitCode::SUCCESS),
         ("find", _) => find::extra::dispatch(&a, rest),
         ("keys", [] | [_]) => find::keys(&a, rest.first()).map(|()| ExitCode::SUCCESS),

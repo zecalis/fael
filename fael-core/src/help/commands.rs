@@ -103,6 +103,12 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
      a cut list prints the exact next call — rerun it with the new --offset)",
     ),
     (
+        "gate-broken",
+        "file a broken-main gate failure once, keyed by check",
+        "fael gate-broken --check <name> --files <f> [--on <sha>] [--detail \"...\"] [--json]
+    (the gate failed and main fails the same way: files an issue keyed gate:<check> with the main sha and what failed; an open row on the key reports its id and writes nothing — one open row per check)",
+    ),
+    (
         "keys",
         "list keys with row counts",
         "fael keys [glob]
