@@ -233,7 +233,8 @@ pub(crate) fn add_row(
         pending.evaluated.heal.supersedes.as_deref(),
     )?;
     warns.append(&mut core_warns);
-    warns.extend(recall::lines(&log, &row)); // closed earlier on these files (context-loop 5)
+    warns.extend(recall::lines(&log, &row)); // closed earlier on these files: --supersedes when
+    // the file set is identical, --follows (same bug, new surface) when it only overlaps (e1)
     warns.extend(recall::near(&log, &row)); // open duplicates of this issue
     warns.extend(keys::lines(&log, &row));
     // PLAN-fael-languages chunk 2: the row-language warning lives in core
