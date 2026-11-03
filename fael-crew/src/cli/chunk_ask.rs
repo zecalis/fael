@@ -59,6 +59,7 @@ pub(crate) fn add_wait(
         stale: String::new(),
         with: Vec::new(),
         joint: None,
+        stack_contains: Vec::new(),
     };
     let here = || Here {
         worktree: wt,

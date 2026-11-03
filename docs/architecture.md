@@ -154,7 +154,7 @@ unchanged, only slower:
 
 No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Constraints.
 
-Lane contract (overlap-broker, info only — the owner merges every PR, fael never guards git flow): lanes are one scope per worktree on their own branch — land in plan order, first-listed chunk first, as a suggestion only; fael never enforces an order. A lane ends its run (`fael run end R`) before rebasing onto a lane that already landed, so its own diff is claimed first. `chunk done` and `run end` still say `outside declared scope` (with `(overlaps open chunk …)` when another chunk holds the path) as a fact, never a refusal — the same two lines `rules()` prints in every brief.
+Lane contract (overlap-broker, info only — the owner merges every PR, fael never guards git flow): lanes are one scope per worktree on their own branch — land in plan order, first-listed chunk first, as a suggestion only; fael never enforces an order. A lane ends its run (`fael run end R`) before rebasing onto a lane that already landed, so its own diff is claimed first. A stack (`chunk start --with <partner> --as stack`) is cut from the partner's branch — HEAD must already contain the partner's live branch tip, it keeps its own R, worktree and branch, and its PR merges after the partner's; a pair stays for same-hunk work. `chunk done` and `run end` still say `outside declared scope` (with `(overlaps open chunk …)` when another chunk holds the path) as a fact, never a refusal — the same two lines `rules()` prints in every brief.
 
 ## 2. Storage
 

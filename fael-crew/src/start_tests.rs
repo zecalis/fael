@@ -570,3 +570,81 @@ fn stalled_holder_takeover_receipt() {
     let e = s.start(&a, &Start::default(), &here("/w2")).unwrap_err();
     assert!(e.contains("is held by run") && e.contains("--force"), "{e}");
 }
+
+/// A stack is its own seat: the caller's worktree keeps its live run (a pair would free
+/// it) and the run row records mode stack + partner, so the next brief knows the PR
+/// order. Exact overlap with the partner is no refusal once the tip check passed.
+#[test]
+fn a_stack_start_keeps_its_own_seat_and_records_stack() {
+    use super::super::Joint;
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    let c = scoped(&mut s, "c", "other/");
+    let ra = start(&mut s, &a, "/w1").unwrap();
+    start(&mut s, &c, "/w2").unwrap();
+    let o = Start {
+        with: vec![a.clone()],
+        joint: Some(Joint::Stack),
+        stack_contains: vec![true],
+        stale: super::super::chunk::tests::NOW.into(),
+        ..Start::default()
+    };
+    let st = s.start(&b, &o, &here("/w2")).unwrap();
+    assert_ne!(st.run, ra, "stack keeps its own R, not the partner's");
+    assert_eq!(
+        live(&s, &c),
+        0,
+        "caller seat /w2 freed for the stack's own run"
+    );
+    assert_eq!(live(&s, &a), 1, "partner run stays live");
+    assert_eq!(live(&s, &b), 1, "stack runs");
+    let joint: Option<String> = s
+        .conn
+        .query_row(
+            "SELECT r.joint FROM run r JOIN chunk k ON k.id = r.chunk WHERE k.uid = ?1",
+            [&b],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let partner: Option<String> = s
+        .conn
+        .query_row(
+            "SELECT r.partner FROM run r JOIN chunk k ON k.id = r.chunk WHERE k.uid = ?1",
+            [&b],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        (joint.as_deref(), partner.as_deref()),
+        (Some("stack"), Some(a.as_str()))
+    );
+    let ev = get(
+        &s,
+        "SELECT text FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",
+        &b,
+    )
+    .unwrap();
+    assert!(
+        ev.contains(&format!("joint stack with {a}")),
+        "start event records the stack: {ev}"
+    );
+}
+
+/// A stack without an ancestor read per partner is a programming error, never a start.
+#[test]
+fn a_stack_without_an_ancestor_read_is_rejected() {
+    use super::super::Joint;
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    start(&mut s, &a, "/w1").unwrap();
+    let o = Start {
+        with: vec![a.clone()],
+        joint: Some(Joint::Stack),
+        stale: super::super::chunk::tests::NOW.into(),
+        ..Start::default()
+    };
+    let e = s.start(&b, &o, &here("/w2")).unwrap_err();
+    assert!(e.contains("stack needs ancestor"), "{e}");
+}

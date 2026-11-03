@@ -255,3 +255,70 @@ fn two_exact_clashes_name_both_partners_and_start_with_both() {
     );
     assert!(!by(&a).overlaps.contains(&c), "{:?}", by(&a).overlaps_how);
 }
+
+fn stack(partner: &str, contains: bool) -> Start {
+    Start {
+        with: vec![partner.into()],
+        joint: Some(Joint::Stack),
+        stale: STALE.into(),
+        stack_contains: vec![contains],
+        ..Start::default()
+    }
+}
+
+#[test]
+fn stack_keeps_own_run_and_allows_exact_when_head_contains_tip() {
+    use super::super::chunk::tests::here_on;
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    let r = s
+        .start(&a, &Start::default(), &here_on("/w1", "base"))
+        .unwrap()
+        .run;
+    let st = s
+        .start(&b, &stack(&a, true), &here_on("/w2", "top"))
+        .unwrap();
+    assert_ne!(st.run, r, "stack keeps its own R");
+    assert_eq!(col(&s, &b, "worktree").as_deref(), Some("/w2"));
+    assert_eq!(col(&s, &b, "branch").as_deref(), Some("top"));
+    assert_eq!(col(&s, &b, "joint").as_deref(), Some("stack"));
+    assert_eq!(col(&s, &b, "partner").as_deref(), Some(a.as_str()));
+    let ev = col_event(&s, &b);
+    assert!(ev.contains("joint stack with") && ev.contains(&a), "{ev}");
+    // board: joint both directions, so no clash is named between the stack and its partner
+    let bd = s.board("2026-10-11", STALE).unwrap();
+    let by = |u: &str| bd.chunks.iter().find(|x| x.uid == u).unwrap();
+    assert!(!by(&b).overlaps.contains(&a), "{:?}", by(&b).overlaps);
+    assert!(!by(&a).overlaps.contains(&b), "{:?}", by(&a).overlaps);
+}
+
+#[test]
+fn stack_rejects_when_head_missing_partner_tip() {
+    use super::super::chunk::tests::here_on;
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/x.rs");
+    let b = scoped(&mut s, "b", "src/x.rs");
+    s.start(&a, &Start::default(), &here_on("/w1", "base"))
+        .unwrap();
+    let e = s
+        .start(&b, &stack(&a, false), &here_on("/w2", "top"))
+        .unwrap_err();
+    assert!(e.contains("stacks on") && e.contains(&a), "{e}");
+    assert!(e.contains("does not contain") && e.contains("base"), "{e}");
+    assert!(
+        e.contains("git switch -c top base"),
+        "ready switch line: {e}"
+    );
+    assert_eq!(
+        s.conn
+            .query_row(
+                "SELECT COUNT(*) FROM run WHERE chunk = (SELECT id FROM chunk WHERE uid = ?1)",
+                [&b],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap(),
+        0,
+        "a rejected stack writes no run"
+    );
+}

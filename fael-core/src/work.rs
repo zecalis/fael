@@ -74,8 +74,8 @@ pub use elsewhere::{
 };
 pub use inbox::notes as inbox_notes;
 pub use pure::{
-    CHUNK_VERBS, LANE_LINE, PLAN_VERBS, held_session_db, held_session_file, in_tmp, is_scratch,
-    main_root_for, overlap, registered, rules, rules_full, shared, wait_hint,
+    CHUNK_VERBS, LANE_LINE, PLAN_VERBS, STACK_LINE, held_session_db, held_session_file, in_tmp,
+    is_scratch, main_root_for, overlap, registered, rules, rules_full, shared, wait_hint,
 };
 pub use ready::{first_ready, kickoff_text, ready_in};
 pub use report::{mark_report, mark_report_session};
