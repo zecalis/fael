@@ -361,10 +361,7 @@ impl super::store::Store {
     /// the store enforces the result (`Start.stack_contains`). None = no live run or no
     /// branch recorded — the store's `join` says which.
     pub fn live_branch(&self, key: &str) -> Result<Option<String>, String> {
-        let tx = self
-            .conn
-            .unchecked_transaction()
-            .map_err(err)?;
+        let tx = self.conn.unchecked_transaction().map_err(err)?;
         let Some((id, _, _)) = super::lookup::lookup(&tx, key)? else {
             return Ok(None);
         };

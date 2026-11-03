@@ -592,7 +592,11 @@ fn a_stack_start_keeps_its_own_seat_and_records_stack() {
     };
     let st = s.start(&b, &o, &here("/w2")).unwrap();
     assert_ne!(st.run, ra, "stack keeps its own R, not the partner's");
-    assert_eq!(live(&s, &c), 0, "caller seat /w2 freed for the stack's own run");
+    assert_eq!(
+        live(&s, &c),
+        0,
+        "caller seat /w2 freed for the stack's own run"
+    );
     assert_eq!(live(&s, &a), 1, "partner run stays live");
     assert_eq!(live(&s, &b), 1, "stack runs");
     let joint: Option<String> = s
@@ -611,7 +615,10 @@ fn a_stack_start_keeps_its_own_seat_and_records_stack() {
             |r| r.get(0),
         )
         .unwrap();
-    assert_eq!((joint.as_deref(), partner.as_deref()), (Some("stack"), Some(a.as_str())));
+    assert_eq!(
+        (joint.as_deref(), partner.as_deref()),
+        (Some("stack"), Some(a.as_str()))
+    );
     let ev = get(
         &s,
         "SELECT text FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",

@@ -285,10 +285,7 @@ fn stack_keeps_own_run_and_allows_exact_when_head_contains_tip() {
     assert_eq!(col(&s, &b, "joint").as_deref(), Some("stack"));
     assert_eq!(col(&s, &b, "partner").as_deref(), Some(a.as_str()));
     let ev = col_event(&s, &b);
-    assert!(
-        ev.contains("joint stack with") && ev.contains(&a),
-        "{ev}"
-    );
+    assert!(ev.contains("joint stack with") && ev.contains(&a), "{ev}");
     // board: joint both directions, so no clash is named between the stack and its partner
     let bd = s.board("2026-10-11", STALE).unwrap();
     let by = |u: &str| bd.chunks.iter().find(|x| x.uid == u).unwrap();

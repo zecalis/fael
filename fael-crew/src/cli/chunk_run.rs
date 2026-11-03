@@ -26,8 +26,9 @@ fn stack_contains(
         .filter(|w| !w.is_empty());
     for key in expanded {
         let branch = store.live_branch(key)?;
-        let tip =
-            branch.as_deref().and_then(|b| crate::git(&r.root, &["rev-parse", b]));
+        let tip = branch
+            .as_deref()
+            .and_then(|b| crate::git(&r.root, &["rev-parse", b]));
         let ok = match (tip, head) {
             (Some(t), Some(h)) => {
                 crate::board::git_output(&r.root, &["merge-base", "--is-ancestor", &t, h])
@@ -74,7 +75,8 @@ fn say_joint(o: &Start, st: &fael_crew::Started, store: &Store, here: &Here) -> 
 }
 
 /// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
-pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {    a.only(
+pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
+    a.only(
         "chunk start",
         &[
             "client",
