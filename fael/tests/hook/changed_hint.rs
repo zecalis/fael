@@ -1,6 +1,6 @@
 //! PLAN-fael-file-hash chunk 2: the edit hint names the tier-0 open issues
 //! whose edited file changed since the row was written, earns no hint when it
-//! still matches, and names issues with no verdict with their ready close.
+//! is unchanged, and names issues with no verdict with their ready close.
 //! Decisions and notes get no edit ask (issue hook:changed-line-noise).
 
 use super::{fael, fael_env, json, repo, strip_fh};

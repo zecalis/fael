@@ -105,8 +105,10 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     let c: Value = serde_json::from_str(&f(&["chunk", "show", &l1, "--json"])).unwrap();
     let scope = serde_json::json!(["Cargo.lock", "l1/a.txt", "o/x.txt", "stray.txt"]);
     assert_eq!(c["scope"], scope, "lane1's diff, not the wave's l2/b.txt");
-    // run end's claim is the scope now: said once, done after it is silent
-    assert_eq!(out.lines().count(), 1, "{out}");
+    // run end's claim is the scope now: said once, done after it ends on the
+    // e3 one-liner above the done line (no ledger rows: N is 0)
+    assert_eq!(out.lines().count(), 2, "{out}");
+    assert!(out.contains("none stale; fael find --files"), "{out}");
     // a run nobody ended: done says it
     let l3 = add("l3", "l3/");
     lane(
@@ -118,7 +120,12 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
         &["l3/a.txt", "stray3.txt"],
     );
     let out = f(&["chunk", "done", &l3, "h", "--left", "none", "--run", "R3"]);
-    let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
+    // e3: the held one-liner sits above the done line, then the outside block
+    let at = out
+        .lines()
+        .position(|l| l.starts_with("declared scope:"))
+        .unwrap();
+    let block = out.lines().skip(at).collect::<Vec<_>>().join("\n");
     assert_eq!(
         block,
         format!(
@@ -326,7 +333,7 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     for id in [&ids[5], &issue, &other, &asleep] {
         assert!(said_id(&out, id).is_none(), "{id}: {out}");
     }
-    // a chunk whose diff touches nothing with rows: nothing extra
+    // a chunk whose diff touches nothing with rows: the e3 one-liner, then done
     git(&d, &["switch", "-q", "main"]);
     f(&["chunk", "start", &v]);
     git(&d, &["switch", "-q", "-c", "quiet"]);
@@ -335,7 +342,9 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     git(&d, &["commit", "-qm", "quiet"]);
     assert_eq!(
         f(&["chunk", "done", &v, "h", "--left", "none"]),
-        format!("chunk {v} → review")
+        format!(
+            "0 open rows touch edited files - none stale; fael find --files w/c.txt\nchunk {v} → review"
+        )
     );
 }
 
@@ -362,7 +371,12 @@ fn a_test_beside_a_scope_file_is_inside_but_another_file_is_not() {
     ];
     lane(&d, &state, &t, ("lane-t", "main"), "RT", &files);
     let out = f(&["chunk", "done", &t, "h", "--left", "none", "--run", "RT"]);
-    let block = out.lines().skip(1).collect::<Vec<_>>().join("\n");
+    // e3: the held one-liner sits above the done line, then the outside block
+    let at = out
+        .lines()
+        .position(|l| l.starts_with("declared scope:"))
+        .unwrap();
+    let block = out.lines().skip(at).collect::<Vec<_>>().join("\n");
     assert_eq!(
         block,
         format!(

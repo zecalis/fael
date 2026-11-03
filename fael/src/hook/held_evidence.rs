@@ -75,7 +75,7 @@ fn since_ms(log: &core::Log, r: &core::Row) -> i64 {
         .unwrap_or(0)
 }
 
-/// `3/4 files changed, still matches: a.ts` over the stamped files with a
+/// `3/4 files changed, unchanged: a.ts` over the stamped files with a
 /// verdict (a gone, unreadable or over-cap file has none and is not counted).
 fn files_line(r: &core::Row, root: &Path, al: &core::Aliases, blobs: &mut Blobs) -> Option<String> {
     let (mut changed, mut same) = (0, vec![]);
@@ -96,9 +96,21 @@ fn files_line(r: &core::Row, root: &Path, al: &core::Aliases, blobs: &mut Blobs)
     let tail = if same.is_empty() {
         String::new()
     } else {
-        format!(", still matches: {}", same.join(", "))
+        format!(", unchanged: {}", same.join(", "))
     };
     Some(format!("{changed}/{total} files changed{tail}"))
+}
+
+/// Open decisions and notes naming a file of `files`, moved or not: the `N`
+/// `done_text` reports when none of them is stale.
+pub(crate) fn touching_open(log: &core::Log, files: &[String]) -> usize {
+    let (closed, gone) = (core::closed(log), core::superseded(log));
+    log.rows
+        .iter()
+        .filter(|r| matches!(r.kind.as_str(), "decision" | "note"))
+        .filter(|r| !closed.contains(r.id.as_str()) && !gone.contains(r.id.as_str()))
+        .filter(|r| core::overlap(&r.files, files))
+        .count()
 }
 
 fn clip(s: &str) -> String {

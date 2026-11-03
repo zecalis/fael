@@ -135,7 +135,7 @@ fn done_states_the_evidence_under_each_row() {
     git(&d, &["commit", "-qm", "touch a"]);
     let out = run(&d, &s, "S1", &["held", "done"], "src/a.rs\n");
     assert!(
-        out.contains("1/2 files changed, still matches: src/b.rs"),
+        out.contains("1/2 files changed, unchanged: src/b.rs"),
         "{out}"
     );
     assert!(out.contains("1 commit(s) on `src/a.rs`"), "{out}");
@@ -149,6 +149,45 @@ fn done_states_the_evidence_under_each_row() {
     );
     let per_row = out.matches("inspect:").count();
     assert_eq!(per_row, 5, "{out}");
+}
+
+/// e3 one-line done: nothing stale — one line with the find command, never
+/// silence and never the per-row noise.
+#[test]
+fn done_with_no_stale_prints_one_line_with_find() {
+    // files settled before the rows are filed: nothing moved since.
+    let t = std::env::temp_dir().join(format!("fael-fresh-{}", fael_core::ulid()));
+    let d = t.join("r");
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    git(&d, &["init", "-q", "-b", "main"]);
+    git(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    std::fs::write(d.join("src/a.rs"), "fn x() {}\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "fn y() {}\n").unwrap();
+    let (d, s) = (d.canonicalize().unwrap(), t.join("state"));
+    for i in 0..7 {
+        run(
+            &d,
+            &s,
+            "W",
+            &[
+                "add",
+                "note",
+                &format!("fresh rule {i}"),
+                "--files",
+                "src/a.rs,src/b.rs",
+            ],
+            "",
+        );
+    }
+    let out = run(&d, &s, "S1", &["held", "done"], "src/a.rs\n");
+    assert_eq!(out.lines().count(), 1, "{out:?}");
+    let line = out.lines().next().unwrap();
+    assert!(line.contains("none stale"), "{line}");
+    assert!(line.contains("fael find --files src/a.rs"), "{line}");
+    assert!(line.contains("7 open rows touch edited files"), "{line}");
+    for banned in ["unchanged:", "commit(s) on", "inspect:"] {
+        assert!(!line.contains(banned), "{banned} in:\n{line}");
+    }
 }
 
 #[test]
