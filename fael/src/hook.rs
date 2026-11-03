@@ -38,6 +38,7 @@ pub(crate) mod flow;
 mod focus;
 mod friction;
 mod held;
+pub(crate) mod held_done_gate;
 mod held_evidence;
 mod held_own;
 mod held_recall;

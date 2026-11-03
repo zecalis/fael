@@ -192,6 +192,21 @@ fn flag_of(a: &Args, f: &str) -> Option<String> {
     }
 }
 
+/// e2 done gate (approval rule): refuse while linked ledger issues are open.
+/// Crew holds only the ids (`chunk add --issue`, `issue::of`), so the ledger judges
+/// through `fael held done` (stdin `---issues---` section, no new command or flag).
+fn refuse_open_linked(a: &Args, uid: &str, handoff: &str, linked: &[String]) -> Result<(), String> {
+    if let Err(e) = crate::fael_bin::held_done_checked(&[], None, linked) {
+        return Err(with_retype(
+            format!("rejected: chunk {uid} done refuses — {e}"),
+            uid,
+            handoff,
+            |f| flag_of(a, f),
+        ));
+    }
+    Ok(())
+}
+
 /// `chunk note`: the word is kept; a brief edited since the start is said too.
 pub(crate) fn note(st: &mut Store, uid: &str, text: &str, now: &str) -> Result<(), String> {
     st.note(uid, text, now)?;
@@ -211,6 +226,32 @@ pub(crate) fn pr_number(raw: Option<&str>) -> Result<Option<i64>, String> {
     })
     .transpose()
     .map_err(|_| "rejected: --pr takes a PR number, owner/repo#N or its URL".into())
+}
+
+/// What `resolve_pr_out` returns: the PR number, earlier PRs riding the hand-off,
+/// and the `--out` path.
+type PrOut = (Option<i64>, Vec<i64>, Option<std::path::PathBuf>);
+
+/// `12`, `#12`, `owner/repo#12` or a pull URL plus `--out`: the PR number, earlier
+/// PRs riding the hand-off, and the `--out` path. Refuses another repo's PR and
+/// `--pr` with `--out`.
+fn resolve_pr_out(a: &Args, r: &Repo, pr_default: Option<String>) -> Result<PrOut, String> {
+    let (raw, earlier) = crate::chunk_prs::split(a.one("pr").or(pr_default))?;
+    let pr = pr_number(raw.as_deref())?;
+    // issue 01M4QFJ6V: another repo's PR is refused, never dropped; no origin = no check
+    if let Some((raw, want)) = raw.as_deref().and_then(|p| Some((p, pr_repo(p)?)))
+        && let Some(have) = crate::board::remote(&r.root).filter(|h| !h.eq_ignore_ascii_case(&want))
+    {
+        return Err(format!("rejected: --pr {raw} is not this repo's ({have})"));
+    }
+    let src = a.one("out").map(|o| r.cwd.join(o));
+    if pr.is_some() && src.is_some() {
+        return Err("rejected: --pr or --out, not both".into());
+    }
+    if let Some(p) = src.as_ref().filter(|p| !p.exists()) {
+        return Err(format!("rejected: --out {} does not exist", p.display()));
+    }
+    Ok((pr, earlier, src))
 }
 
 pub(crate) fn done(
@@ -235,21 +276,7 @@ pub(crate) fn done(
         );
     }
     // `12`, `#12`, `owner/repo#12`, `https://github.com/owner/repo/pull/12`: the number
-    let (raw, earlier) = crate::chunk_prs::split(a.one("pr").or(pr_default))?;
-    let pr = pr_number(raw.as_deref())?;
-    // issue 01M4QFJ6V: another repo's PR is refused, never dropped; no origin = no check
-    if let Some((raw, want)) = raw.as_deref().and_then(|p| Some((p, pr_repo(p)?)))
-        && let Some(have) = crate::board::remote(&r.root).filter(|h| !h.eq_ignore_ascii_case(&want))
-    {
-        return Err(format!("rejected: --pr {raw} is not this repo's ({have})"));
-    }
-    let src = a.one("out").map(|o| r.cwd.join(o));
-    if pr.is_some() && src.is_some() {
-        return Err("rejected: --pr or --out, not both".into());
-    }
-    if let Some(p) = src.as_ref().filter(|p| !p.exists()) {
-        return Err(format!("rejected: --out {} does not exist", p.display()));
-    }
+    let (pr, earlier, src) = resolve_pr_out(a, r, pr_default)?;
     let base = db(r).with_file_name("out").join(uid);
     let mut copy = |run: &str| -> Result<String, String> {
         let src = src.as_deref().unwrap_or(Path::new(""));
@@ -264,6 +291,10 @@ pub(crate) fn done(
     // issue 01M5FMHQX: leftovers are rows; the statement rides in the hand-off the next brief prints
     let handoff = &crate::chunk_left::resolve(a.one("left"), handoff, &st, &crate::read(r))
         .map_err(|e| with_retype(e, uid, handoff, |f| flag_of(a, f)))?;
+    // e2 done gate (approval rule): refuse while linked ledger issues are open.
+    // This sits before the amend below, so the done and the amend paths refuse alike.
+    let linked = st.linked_issues(uid).unwrap_or_default();
+    refuse_open_linked(a, uid, handoff, &linked)?;
     // issue 01M6BKHZSP: a `measured:` line is dated and checked before any prefix goes on
     let handoff = &crate::chunk_measured::check(handoff)?;
     // issue 01M62VY2: a review that changed nothing says so in the hand-off the next brief prints
@@ -333,9 +364,12 @@ pub(crate) fn done(
     print!("{}", outside.unwrap_or_default());
     print!("{}", dodge_note(r, &st, uid, diff.as_ref(), pr, handoff));
     // plan fael-row-retire w2: open decisions and notes on what the chunk touched, verdicts
-    // ready — the agent judges, done never closes or bumps
+    // ready — the agent judges, done never closes or bumps. e2: the same call carries
+    // the linked ids so the warn lists unlinked issues only (linked already gated above).
     if let Some(d) = &diff {
-        print!("{}", crate::fael_bin::held_done(d, started.as_deref()));
+        let hint =
+            crate::fael_bin::held_done_checked(d, started.as_deref(), &linked).unwrap_or_default();
+        print!("{hint}");
     }
     if let (Some(trunk), Some(_)) = (trunk, pr) {
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());

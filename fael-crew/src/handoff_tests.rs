@@ -516,3 +516,24 @@ fn a_chunk_left_over_reads_its_origins_handoff() {
     ));
     assert!(!super::names_left("left: 01ABCDEG", "01ABCDEFGHJK"));
 }
+
+/// e2: `left_over` follows chunk uids only — a `left:` line naming a ledger issue
+/// id never surfaces in a next brief (it rides the board's `left_open` instead),
+/// which is why `chunk done --left <issue-id>` warns.
+#[test]
+fn left_over_ignores_ledger_issue_ids() {
+    let mut s = Store::open_in_memory().unwrap();
+    let me = scoped(&mut s, "src/");
+    // origin leaves a ledger-looking id (no chunk carries it)
+    finish(
+        &mut s,
+        "origin",
+        "src/a.rs",
+        "origin done\nleft: 01ISSUEID00000000000000001",
+    );
+    let b = s.show(&me).unwrap();
+    assert!(
+        b.after.is_empty(),
+        "issue ids are not brief hand-offs: {b:?}"
+    );
+}

@@ -80,3 +80,110 @@ fn the_followup_brief_prints_the_origins_handoff_and_its_measure() {
     assert!(brief.contains(&format!("{a} Measure")), "{brief}");
     assert!(brief.contains("result: 24/30 · date: 20"), "{brief}");
 }
+
+/// e2: `--left <issue-id>` types each token (chunk vs ledger row) and warns when no
+/// chunk is named; `done` refuses while a linked `--issue` is still open, naming the
+/// copyable `fael close` command.
+#[test]
+fn left_types_tokens_and_done_refuses_while_a_linked_issue_is_open() {
+    let d = std::env::temp_dir().join(format!("fael-left-gate-{}", fael_core::ulid()));
+    std::fs::create_dir_all(&d).unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init", "-q", "-b", "main"])
+            .current_dir(&d)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "login times out on retry",
+            "--title",
+            "login timeout",
+            "--files",
+            "src/a.rs",
+        ],
+    );
+    assert!(ok, "{err}");
+    let issue = out
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    assert!(issue.starts_with("01"), "{out}");
+    let (ok, out, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "add",
+            "fix login",
+            "--brief",
+            "b",
+            "--issue",
+            &issue,
+        ],
+    );
+    assert!(ok, "{err}");
+    let chunk = out.trim().to_string();
+    assert!(
+        fael(
+            &d,
+            &["chunk", "start", &chunk, "--run", "R1", "--no-worktree"]
+        )
+        .0
+    );
+    // --left naming only the issue: typed lines + warn, then the linked gate refuses
+    let (ok, stdout, stderr) = fael(
+        &d,
+        &[
+            "chunk",
+            "done",
+            &chunk,
+            "fixed it",
+            "--left",
+            &issue,
+            "--no-change",
+            "--run",
+            "R1",
+        ],
+    );
+    assert!(
+        !ok,
+        "done must refuse while the linked issue is open: {stdout} {stderr}"
+    );
+    assert!(
+        stdout.contains("is a ledger issue") && stdout.contains("board left_open"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("no chunk uid"), "{stdout}");
+    assert!(stderr.contains(&format!("fael close {issue}")), "{stderr}");
+    // closing the issue lets the same done through
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "close",
+            &issue,
+            "timeout on retry → backoff retry; guard `fael/tests/x.rs`",
+        ],
+    );
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "chunk",
+            "done",
+            &chunk,
+            "fixed it",
+            "--left",
+            "none",
+            "--no-change",
+            "--run",
+            "R1",
+        ],
+    );
+    assert!(ok, "{err}");
+}
