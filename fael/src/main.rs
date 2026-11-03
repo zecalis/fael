@@ -107,7 +107,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("close", rest) if rest.len() >= 2 => {
             batch::batch_close(&a, &rest[..rest.len() - 1], &rest[rest.len() - 1])
         }
-        ("bump", [id]) => bump(&a, id).map(|()| ExitCode::SUCCESS),
+        ("bump", rest) if !rest.is_empty() => batch::batch_bump(&a, rest),
         ("claim", [id]) => claim(&a, id).map(|()| ExitCode::SUCCESS),
         ("next", []) => next(&a).map(|()| ExitCode::SUCCESS),
         ("find", _) => find::extra::dispatch(&a, rest),
@@ -289,28 +289,6 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
     } else {
         print!("{held}");
     }
-    Ok(())
-}
-
-/// `fael bump` — same text/files, new `to`/`urgent`/`revisit` (see write::bump).
-fn bump(a: &Args, id: &str) -> Result<(), String> {
-    a.only(
-        "bump",
-        &[
-            "to",
-            "urgent",
-            "urgent-before",
-            "not-urgent",
-            "revisit",
-            "why",
-            "json",
-        ],
-    )?;
-    let r = repo()?;
-    let (row, path, warns) = write::bump(&r, a, id)?;
-    batch::emit_warns(&warns);
-    hook::record_asks("cli", hook::ASK_WARN, "bump", Some(&r.root), &warns);
-    batch::moved(a, &r, &row, &path, a.has("to"));
     Ok(())
 }
 

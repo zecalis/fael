@@ -5,8 +5,9 @@
 //! Thin entry only — the suites sit next to this file:
 //! `derive` (session-derive), `paths` (path evidence + warnings),
 //! `refs` (id citations with no row behind them), `urgent` (urgent queue +
-//! bump round trip).
+//! bump round trip), `bump_batch` (several ids ride one bump call).
 
+mod bump_batch;
 mod derive;
 mod filehash;
 mod follows;

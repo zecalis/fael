@@ -64,6 +64,7 @@ const REJECTS: &[(&str, &str)] = &[
     ("lists a plan's chunks", "usage"),
     ("rows rejected", "partial"),
     ("closes rejected", "partial"),
+    ("bumps rejected", "partial"),
     ("chunks rejected", "partial"),
     ("already closed", "row_state"),
     ("superseded", "row_state"),

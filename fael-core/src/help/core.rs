@@ -58,9 +58,9 @@ const CORE: &[(&str, &str)] = &[
     ),
     (
         "bump",
-        "fael bump <id>
-    (same id, text and files — one bump event; text and files never change through bump;
-     a bare bump is the 'still true' verdict on a row whose files changed: restamps it from disk)",
+        "fael bump <id> [<id>...]
+    (same id, text and files — one bump event per id; text and files never change through bump;
+     several ids ride one call bare; a bare bump is the 'still true' verdict on a row whose files changed: restamps it from disk)",
     ),
     (
         "doctor",
