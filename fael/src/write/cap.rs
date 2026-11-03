@@ -78,7 +78,7 @@ pub(crate) fn check(
     }
     let try_tail = first.map_or(String::new(), |(f, id)| {
         format!(
-            " — try `fael add decision \"<one topic>\" --title \"<≤15-word headline>\" --files {f} --supersedes {id}`"
+            " — try `fael add decision \"<one topic>\" --title \"<≤15-word headline>\" --files {f} --key <area>:<topic> --supersedes {id}`"
         )
     });
     Err(format!(
