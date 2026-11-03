@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub const CHUNK_VERBS: &[&str] = &[
     "add",
     "show",
+    "status",
     "start",
     "edit",
     "move",

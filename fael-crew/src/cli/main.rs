@@ -19,6 +19,7 @@ mod chunk_scope_report;
 mod chunk_scope_skip;
 mod chunk_seat;
 mod chunk_show;
+mod chunk_status;
 mod chunk_verbs;
 mod fael_bin;
 mod plan;

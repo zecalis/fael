@@ -27,6 +27,7 @@ mod chunk_left_link;
 mod chunk_model;
 mod chunk_seat;
 mod chunk_show_forms;
+mod chunk_status;
 mod chunk_verbs;
 mod dispatch;
 mod done_merged_pr;

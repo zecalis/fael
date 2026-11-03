@@ -33,6 +33,7 @@ mod section;
 mod shared;
 mod start;
 mod start_brief;
+mod status;
 mod store;
 mod touch;
 
@@ -55,6 +56,7 @@ pub use owner::Owner;
 pub use ready::{Ready, Unmet};
 pub use shared::shared;
 pub use start::{Brief, Start, Started};
+pub use status::Side as StatusSide;
 pub use store::{PlanRow, StatsRun, Store, db_at};
 
 /// A chunk's one stored state (SPEC §1).

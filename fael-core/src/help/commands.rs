@@ -134,6 +134,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--option A] [--pr N] [--out path]
 fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…] [--wait owner|data --ask \"<q>\" [--option A …] [--until YYYY-MM-DD] [--run R]]
 fael chunk show <uid|label> [--plan p] [--json]
+fael chunk status <uid> [--plan p] [--json]
 fael chunk start <uid> [--client c] [--model m] [--run R] [--force] [--no-worktree] [--full]
 fael chunk edit <uid> [--title t] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope …] [--reads …]
 fael chunk move <uid> --plan <p>
