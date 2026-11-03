@@ -61,36 +61,26 @@ fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
     notice.into_iter().chain(fixed).collect()
 }
 
-/// Render the selected rows with the token budget — the hard cap after the
-/// row cap — dropping render's budget cut line, the header names the cut
-/// (render itself is untouched, so find keeps its own cut line). Returns the
-/// tagged rows and how many rows were actually said (usage counts only those).
-/// Render's `bodies:` pointer line is dropped: pulled by id 26 of 282 (9%),
-/// decision `product:push-noise-bar`.
+/// Render the selected rows as one line each (`core::render_push`), capped by
+/// the token budget — the hard cap after the row cap. No file list: the agent
+/// just opened the file, and the full list is one `fael find <id>` away.
+/// Returns the tagged body and how many rows were actually said (usage counts
+/// only those). `render` itself is untouched, so find keeps its own shape.
 fn cut_body(
-    body: String,
+    log: &core::Log,
     sel: &core::Selection,
-    files: &[String],
+    budget: usize,
     tags: &crate::journal::BranchMap,
 ) -> (String, usize) {
-    let n = body.lines().filter(|l| l.starts_with("- [")).count();
-    let mut row = 0; // render keeps `sel.shown` order: the k-th row line is shown[k]
-    let mut out = String::new();
-    for l in body
-        .lines()
-        .filter(|l| !l.starts_with("… +") && !l.starts_with("bodies: "))
-    {
-        let l = super::also::drop_touched(l, files);
-        let l = if l.starts_with("- [") {
-            row += 1;
-            super::also::label(&l, sel.tier(row - 1))
-        } else {
-            l
-        };
-        out.push_str(&l);
-        out.push('\n');
-    }
-    (crate::journal::tag(out, tags), n)
+    let rows: Vec<(&core::Row, usize)> = sel
+        .shown
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (*r, sel.tier(i)))
+        .collect();
+    let body = core::render_push(log, &rows, budget);
+    let n = body.lines().count();
+    (crate::journal::tag(body, tags), n)
 }
 
 /// Only adopted repos record an edit — `add` derives files from this list only there.
@@ -196,12 +186,7 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
     let sel = hub_select(tiered, said, &focus, &policy, &mut out, &files);
     let notes = stashed(&c, &files);
     let has_notes = !notes.is_empty();
-    let (body, n) = cut_body(
-        core::render(&c.log, &sel.shown, policy.budget),
-        &sel,
-        &files,
-        &c.tags,
-    );
+    let (body, n) = cut_body(&c.log, &sel, policy.budget, &c.tags);
     // usage counts only what was actually said — ids cut off never reached
     // any context, so stats must not count them
     let shown: Vec<String> = sel.shown.iter().take(n).map(|r| r.id.clone()).collect();

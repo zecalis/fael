@@ -42,7 +42,8 @@ pub use md::{MdRef, phantom_md_refs};
 pub use push::{push, push_tiered};
 pub use refs::{Ref, followers, id_tokens, phantom_refs, ref_state, successors};
 pub use render::{
-    Abbrev, Cut, abbrev, est_tokens, render, render_full, render_full_page, render_page, restored,
+    Abbrev, Cut, PUSH_TITLE_CHARS, abbrev, est_tokens, push_line, push_title, render, render_full,
+    render_full_page, render_page, render_push, restored,
 };
 pub use revisit::{due, is_date, row_due, row_waiting, today, waiting, waiting_line, with_due};
 pub use select::{

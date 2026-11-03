@@ -274,19 +274,46 @@ fn warn(log: &crate::Log) {
 }
 
 /// Tag every rendered row line that came from another branch: `- [id] … rst`
-/// becomes `- [id] … rst @branch`. Cut/bodies lines never start with `- [`,
-/// so they pass through untouched. An empty map = identity.
+/// becomes `- [id] … rst @branch`, and the one-line push row
+/// `- kind: title (id)` becomes `- kind: title (id) @branch`. Any other line
+/// carries no id-like paren group, so it passes through untouched. An empty
+/// map = identity.
 pub fn tag(out: String, branch_of: &BranchMap) -> String {
     if branch_of.is_empty() {
         return out;
     }
     let mut tagged = String::with_capacity(out.len());
     for line in out.split_inclusive('\n') {
-        let short = line
-            .strip_prefix("- [")
-            .and_then(|l| l.split(']').next())
-            .filter(|s| s.len() >= 8);
-        let branch = short.and_then(|s| {
+        let short: Option<String> = if let Some(l) = line.strip_prefix("- [") {
+            l.split(']')
+                .next()
+                .filter(|s| s.len() >= 8)
+                .map(String::from)
+        } else if let Some(l) = line.strip_prefix("- ") {
+            // one-line push row: the id is the last `(…)` group that reads
+            // id-like (≥8 chars of `0-9A-Z`), so a title paren never matches
+            let mut found: Option<String> = None;
+            let mut rest = l;
+            while let Some(i) = rest.find('(') {
+                let after = &rest[i + 1..];
+                if let Some(j) = after.find(')') {
+                    let s = &after[..j];
+                    if s.len() >= 8
+                        && s.bytes()
+                            .all(|c| c.is_ascii_digit() || c.is_ascii_uppercase())
+                    {
+                        found = Some(s.to_string());
+                    }
+                    rest = &after[j + 1..];
+                } else {
+                    break;
+                }
+            }
+            found
+        } else {
+            None
+        };
+        let branch = short.as_deref().and_then(|s| {
             branch_of
                 .iter()
                 .find(|(id, _)| id.starts_with(s))

@@ -79,7 +79,7 @@ fn push_usage_counts_only_rendered_rows() {
     assert!(ok && out.contains(" of 5 · also: "), "{out}");
     let reply: serde_json::Value = serde_json::from_str(&out).unwrap();
     let context = reply["context"].as_str().unwrap();
-    let rendered = context.lines().filter(|l| l.starts_with("- [")).count();
+    let rendered = context.lines().filter(|l| l.starts_with("- ")).count();
     assert!(rendered > 0 && rendered < 4, "{context}");
     assert!(!context.contains("neighbour choice"), "{context}");
     let usage = std::fs::read_to_string(d.join("state/usage.jsonl")).unwrap();

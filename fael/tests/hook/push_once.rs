@@ -168,7 +168,7 @@ fn budget_cut_rows_push_later_exactly_once() {
     for text in ["capped issue", "capped one", "capped two"] {
         let rows = all
             .lines()
-            .filter(|l| l.starts_with("- [") && l.contains(text))
+            .filter(|l| l.starts_with("- ") && l.contains(text))
             .count();
         assert_eq!(rows, 1, "{text}: {all}");
     }

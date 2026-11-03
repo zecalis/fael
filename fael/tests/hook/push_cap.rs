@@ -49,8 +49,10 @@ fn edit_file(d: &Path, session: Option<&str>, file: &str) -> (bool, String) {
 }
 
 fn shown(out: &str) -> usize {
-    // the Reply is one JSON line — row lines are `\n- [` once unescaped
-    out.matches("- [").count()
+    // the Reply is one JSON line — one-line push rows (`- <kind>: …`)
+    out.matches("- decision:").count()
+        + out.matches("- issue:").count()
+        + out.matches("- note:").count()
 }
 
 #[test]
