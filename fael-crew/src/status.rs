@@ -129,11 +129,15 @@ impl Store {
 }
 
 impl Store {
-    /// Other live runs in this repo: not `uid`, not its joint group (same `start`), not in
-    /// its worktree. Newest run per chunk; DB only — the CLI reads git.
+    /// Other live runs in this repo: not `uid`, not in its worktree (a pair shares it). A joint
+    /// partner elsewhere can really conflict, so it stays (issue 01M6KTTC). Newest run per
+    /// chunk; DB only — the CLI reads git.
     pub fn neighbours(&self, uid: &str) -> Result<Vec<Side>, String> {
         let mine = self.status(uid)?;
-        let skip_wt: Vec<&str> = mine.iter().filter_map(|s| s.worktree.as_deref()).collect();
+        let own_wt = mine
+            .iter()
+            .find(|s| s.uid == uid)
+            .and_then(|s| s.worktree.as_deref());
         let uids: Vec<String> = self
             .conn
             .prepare(
@@ -148,11 +152,11 @@ impl Store {
             .map_err(err)?;
         let mut out = Vec::new();
         for u in uids {
-            if mine.iter().any(|m| m.uid == u) {
+            if u == uid {
                 continue;
             }
             if let Some(s) = self.status(&u)?.into_iter().find(|s| s.uid == u)
-                && s.worktree.as_deref().is_none_or(|w| !skip_wt.contains(&w))
+                && (s.worktree.is_none() || s.worktree.as_deref() != own_wt)
             {
                 out.push(s);
             }

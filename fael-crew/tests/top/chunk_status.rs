@@ -247,6 +247,43 @@ fn same_untracked_filename_conflicts() {
     assert!(status(&d, &w1, &a).contains("new.txt"));
 }
 
+/// A joint partner in another worktree can really conflict, so it is checked like any run
+/// (issue 01M6KTTC): both modes, both directions.
+#[test]
+fn a_partner_in_another_worktree_is_checked() {
+    for mode in ["lane", "follow"] {
+        let (d, w1, _, a, _) = two();
+        let state = d.join("state");
+        let w3 = d.join("w3");
+        git(
+            &d,
+            &["worktree", "add", "-q", "-b", "b3", w3.to_str().unwrap()],
+        );
+        let (ok, c, err) = fael_at(
+            &d,
+            &state,
+            &[
+                "chunk", "add", "c", "--plan", "pl", "--brief", "b", "--scope", "src/c.rs",
+            ],
+        );
+        assert!(ok, "{err}");
+        let c = c.trim().to_string();
+        let (ok, _, err) = fael_at(
+            &w3,
+            &state,
+            &["chunk", "start", &c, "--with", &a, "--as", mode],
+        );
+        assert!(ok, "{mode}: {err}");
+        edit(&w1, 5, "mine");
+        edit(&w3, 5, "theirs");
+        let want = |u: &str| format!("conflict with {u}");
+        let out = status(&d, &w3, &c);
+        assert!(out.contains(&want(&a)), "{mode}: {out}");
+        let out = status(&d, &w1, &a);
+        assert!(out.contains(&want(&c)), "{mode}: {out}");
+    }
+}
+
 /// A neighbour whose worktree is gone: the command still succeeds and says so.
 #[test]
 fn missing_neighbour_worktree_is_unchecked_not_a_failure() {
