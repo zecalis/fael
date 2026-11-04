@@ -286,14 +286,14 @@ fn a_scope_overlap_with_a_running_chunk_never_refuses() {
     );
 }
 
-/// The one refusal left (issue 01M6KHWF): another live run in this worktree.
+/// The one refusal left (issue 01M6KHWF): a live run from another known session in this worktree.
 #[test]
-fn a_live_run_of_another_chunk_in_the_same_worktree_refuses() {
+fn a_live_run_of_another_session_in_the_same_worktree_refuses() {
     let mut s = Store::open_in_memory().unwrap();
     let a = scoped(&mut s, "a", "src/a.rs");
     let b = scoped(&mut s, "b", "docs/");
-    start(&mut s, &a, "/w1").unwrap();
-    let e = start(&mut s, &b, "/w1").unwrap_err();
+    sess(&mut s, &a, "/w1", "s1").unwrap();
+    let e = sess(&mut s, &b, "/w1", "s2").unwrap_err();
     assert!(
         e.contains(&a) && e.contains("another worktree") && e.contains("--force --because"),
         "{e}"
@@ -303,20 +303,58 @@ fn a_live_run_of_another_chunk_in_the_same_worktree_refuses() {
     // bare --force still names the receipt
     let bare = Start {
         force: true,
+        session: Some("s2".into()),
         ..Start::default()
     };
     let e = s.start(&b, &bare, &here("/w1")).unwrap_err();
     assert!(e.contains("--because"), "{e}");
     let o = Start {
-        force: true,
         because: Some("a is done editing".into()),
-        ..Start::default()
+        ..bare
     };
     let st = s.start(&b, &o, &here("/w1")).unwrap();
     assert_eq!(st.forced.len(), 1, "{:?}", st.forced);
     assert!(st.forced[0].contains("a is done editing") && st.forced[0].contains(&a));
     assert_eq!(live(&s, &a), 0, "the forced start took the seat");
     assert_eq!(st.orphaned.len(), 1);
+}
+
+/// The caller's own session left its work: its old run ends silently, as before.
+#[test]
+fn a_run_of_the_callers_own_session_ends_without_refusal() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/a.rs");
+    let b = scoped(&mut s, "b", "docs/");
+    sess(&mut s, &a, "/w1", "s1").unwrap();
+    let st = s
+        .start(
+            &b,
+            &Start {
+                session: Some("s1".into()),
+                ..Start::default()
+            },
+            &here("/w1"),
+        )
+        .unwrap();
+    assert!(st.forced.is_empty());
+    assert_eq!((live(&s, &a), live(&s, &b)), (0, 1));
+    assert_eq!(st.orphaned.len(), 1);
+}
+
+/// An unknown session (either side) never refuses: only two known, different sessions do.
+#[test]
+fn an_unknown_session_never_refuses() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/a.rs");
+    let b = scoped(&mut s, "b", "docs/");
+    let c = scoped(&mut s, "c", "lib/");
+    let d = scoped(&mut s, "d", "bin/");
+    start(&mut s, &a, "/w1").unwrap(); // run without a session
+    sess(&mut s, &b, "/w1", "s2").unwrap(); // caller known, other unknown
+    assert_eq!((live(&s, &a), live(&s, &b)), (0, 1));
+    start(&mut s, &c, "/w1").unwrap(); // caller unknown, other known
+    assert_eq!((live(&s, &b), live(&s, &c)), (0, 1));
+    sess(&mut s, &d, "/w1", "").unwrap(); // empty counts as unknown
 }
 
 /// A stalled run there is an agent that left: the start ends it, no refusal, as before.

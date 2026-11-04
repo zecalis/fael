@@ -184,28 +184,44 @@ pub(super) fn ready_paired(
 /// Another live, non-stalled run in `worktree` (outside the chunks in `ms` and the run `except`,
 /// a pair's own R): two agents there overwrite each other's files, so a start refuses —
 /// the one refusal left of the old overlap gate (issue 01M6KHWF). `(uid, run)` each; a
-/// stalled run is not listed, `end_here` still ends it as before.
+/// stalled run is not listed, `end_here` still ends it as before. A run of the caller's own
+/// session is not listed either (it left its work: `end_here` ends it), and neither is one
+/// where either session is unknown — only two known, different sessions refuse.
 pub(super) fn live_in_worktree(
     tx: &Transaction,
     worktree: &str,
     ms: &[String],
     except: Option<&str>,
+    session: Option<&str>,
     stale: &str,
 ) -> Result<Vec<(String, String)>, String> {
     let mut q = tx
         .prepare(
-            "SELECT c.uid, r.start FROM run r JOIN chunk c ON c.id = r.chunk
+            "SELECT c.uid, r.start, r.session FROM run r JOIN chunk c ON c.id = r.chunk
              WHERE r.worktree = ?1 AND r.ended IS NULL AND COALESCE(r.last_seen, r.started) >= ?2
              ORDER BY r.id",
         )
         .map_err(err)?;
     let rows = q
-        .query_map([worktree, stale], |r| Ok((r.get(0)?, r.get(1)?)))
+        .query_map([worktree, stale], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })
         .map_err(err)?
-        .collect::<Result<Vec<(String, String)>, _>>()
+        .collect::<Result<Vec<_>, _>>()
         .map_err(err)?;
+    fn known(s: Option<&str>) -> Option<&str> {
+        s.filter(|s| !s.is_empty())
+    }
     Ok(rows
         .into_iter()
-        .filter(|(u, run)| !ms.contains(u) && Some(run.as_str()) != except)
+        .filter(|(u, run, _)| !ms.contains(u) && Some(run.as_str()) != except)
+        .filter(|(_, _, theirs)| {
+            matches!((known(session), known(theirs.as_deref())), (Some(a), Some(b)) if a != b)
+        })
+        .map(|(u, run, _)| (u, run))
         .collect())
 }

@@ -150,7 +150,7 @@ unchanged, only slower:
 | contract | `rules()` in `fael-crew/src/brief.rs` (pure seam `fael-core/src/work/pure.rs`), printed by every `fael chunk start` | habits every chunk needs, any area or client: checkpoint, ask the owner, hand-off, a fresh-session check against Done before done, the lane contract below |
 | bar | the plan's Done and Constraints sections, printed in every brief | what "good" means for this plan: dev gates and criteria, marketing VOICE.md and source rules |
 | judgment skills | fael-plan, fael-review, fael-content | how to cut, check, plan posts |
-| overlap | `fael chunk start` | claim; a declared-scope overlap with another live run is said in the brief (avoid card, with the ready `fael chunk note` and `fael chunk status`), never a refusal — `fael chunk status` finds a real conflict. The one refusal is another live, non-stalled run in the same worktree (`--force --because` takes the seat) |
+| overlap | `fael chunk start` | claim; a declared-scope overlap with another live run is said in the brief (avoid card, with the ready `fael chunk note` and `fael chunk status`), never a refusal — `fael chunk status` finds a real conflict. The one refusal is another live, non-stalled run in the same worktree from a different known session (`--force --because` takes the seat); the caller's own session's run, or an unknown session on either side, never refuses and is ended on start |
 
 No area-specific code in fael; a dev-only habit goes in a dev plan's Done or Constraints.
 
