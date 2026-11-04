@@ -1,7 +1,9 @@
-//! `fael chunk status <uid> [--json]`: both sides of the joint run at once (f6).
+//! `fael chunk status <uid> [--json]`: both sides of the joint run at once (f6), plus real
+//! conflicts with other live runs (`chunk_conflicts`).
 //! DB from the store, git live in the CLI — the same split as board conflicts
 //! (`merge-tree`, CLI fills). Read-only: no state change.
 
+use super::chunk_conflicts as conflicts;
 use crate::plan::db;
 use crate::{Args, Repo};
 use fael_crew::{StatusSide, Store};
@@ -23,15 +25,27 @@ pub(crate) fn status(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> 
     let uid = s.uid_any(key)?;
     let sides = s.status(&uid)?;
     let filled: Vec<Filled> = sides.into_iter().map(|s| fill(&s)).collect();
+    // fail open: no worktree or a store error reads as no neighbours, never a reject
+    let hits = filled
+        .iter()
+        .find(|f| f.side.uid == uid)
+        .and_then(|f| f.side.worktree.as_deref())
+        .map(|wt| conflicts::check(Path::new(wt), s.neighbours(&uid).unwrap_or_default()))
+        .unwrap_or_default();
     if a.has("json") {
-        let v: Vec<serde_json::Value> = filled.iter().map(json_of).collect();
+        let mut v: Vec<serde_json::Value> = filled.iter().map(json_of).collect();
+        if let Some(m) = v.iter_mut().find(|x| x["uid"] == uid.as_str()) {
+            m["conflicts"] = conflicts::json_of(&hits)["conflicts"].take();
+            m["unchecked"] = conflicts::json_of(&hits)["unchecked"].take();
+        }
         println!(
             "{}",
             serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?
         );
         return Ok(ExitCode::SUCCESS);
     }
-    println!("{}", text_of(&filled));
+    print!("{}", text_of(&filled));
+    print!("{}", conflicts::text_of(&hits));
     Ok(ExitCode::SUCCESS)
 }
 

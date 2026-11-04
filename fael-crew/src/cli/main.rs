@@ -6,6 +6,7 @@
 mod board;
 mod chunk;
 mod chunk_ask;
+mod chunk_conflicts;
 mod chunk_elsewhere;
 mod chunk_here;
 mod chunk_left;
