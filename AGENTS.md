@@ -87,9 +87,17 @@ Draft or re-cut plans with the `fael-plan` skill. It ships with fael crew (the `
 skills, symlinked into the client's skills dir); `fael install` never writes it. `fael plan|chunk|board`
 are served by the `fael-crew` binary that `fael` execs — without it they print `cargo install --path fael-crew`.
 
+Plans and chunks are optional — the agent decides. One-session/small work with nothing
+for the next session to pick up ships directly: commit, push PR, report the number, no
+`plan new` / `chunk add` / `chunk done` needed. Start a chunk only when the work outlives
+the session, needs a handoff, or the owner put it on the board.
+
 `fael chunk start <uid>` prints the brief and the chunk rules (how to close, wait, checkpoint)
 — don't restate them here. The `fael chunk done <uid> "<handoff>"` text is the handoff: the
 board shows it and the brief of every chunk `after` it prints it, so it needs no ledger row.
+When a chunk pushed a PR, its done must name the number(s): `fael chunk done <uid> "<handoff>"
+--left none|<ids> --pr N` — or `--pr N,M,...` over several PRs (last is the board's, earlier
+ride in the hand-off); done without `--pr` is refused while the run's branch has an open PR.
 A word for a chunk another agent will start goes in `fael chunk note <uid> "<text>"`, printed
 in that chunk's next brief; never `chunk edit` (it clears the owner's approval) — except
 `chunk edit <uid> --scope <old + new>` on your own chunk: a scope that still covers every old

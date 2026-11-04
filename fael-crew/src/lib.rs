@@ -124,7 +124,7 @@ impl State {
             State::Running => "fael chunk start",
             State::Waiting => "fael chunk wait --on owner|data",
             State::Review => "fael chunk done [--out <path>]",
-            State::Done => "fael chunk done --pr N · fael chunk accept",
+            State::Done => "fael chunk done --pr N[,M...] · fael chunk accept",
             State::Replaced => "fael chunk apply (merge · split)",
             State::Dropped => "fael chunk drop",
             State::Parked => "fael chunk park",

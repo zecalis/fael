@@ -83,9 +83,11 @@ fn the_followup_brief_prints_the_origins_handoff_and_its_measure() {
 
 /// e2: `--left <issue-id>` types each token (chunk vs ledger row) and warns when no
 /// chunk is named; `done` refuses while a linked `--issue` is still open, naming the
-/// copyable `fael close` command.
-#[test]
-fn left_types_tokens_and_done_refuses_while_a_linked_issue_is_open() {
+/// copyable `fael close` command — unless the still-open issue rides `--left` to the
+/// next chunk, which lands instead of refusing.
+/// Setup for the e2 gate tests below: a repo, an open linked issue and its started
+/// chunk. Returns the dir, the issue id and the chunk uid.
+fn started_with_issue() -> (std::path::PathBuf, String, String) {
     let d = std::env::temp_dir().join(format!("fael-left-gate-{}", fael_core::ulid()));
     std::fs::create_dir_all(&d).unwrap();
     assert!(
@@ -136,7 +138,45 @@ fn left_types_tokens_and_done_refuses_while_a_linked_issue_is_open() {
         )
         .0
     );
-    // --left naming only the issue: typed lines + warn, then the linked gate refuses
+    (d, issue, chunk)
+}
+
+/// e2 negative: `done` refuses while a linked `--issue` is still open and unnamed in
+/// `--left`, naming the copyable `fael close` command and the `--left` way out.
+#[test]
+fn done_refuses_while_a_linked_issue_is_open_and_unnamed() {
+    let (d, issue, chunk) = started_with_issue();
+    let (ok, _, stderr) = fael(
+        &d,
+        &[
+            "chunk",
+            "done",
+            &chunk,
+            "fixed it",
+            "--left",
+            "none",
+            "--no-change",
+            "--run",
+            "R1",
+        ],
+    );
+    assert!(
+        !ok,
+        "done must refuse while the linked issue is open and unnamed"
+    );
+    assert!(stderr.contains(&format!("fael close {issue}")), "{stderr}");
+    assert!(
+        stderr.contains("name the still-open issue in --left"),
+        "{stderr}"
+    );
+}
+
+/// e2: `--left <issue-id>` types each token (chunk vs ledger row) and warns when no
+/// chunk is named; naming the still-open linked issue hands it to the next chunk, so
+/// the done lands instead of refusing.
+#[test]
+fn done_lands_when_the_open_linked_issue_rides_left() {
+    let (d, issue, chunk) = started_with_issue();
     let (ok, stdout, stderr) = fael(
         &d,
         &[
@@ -151,38 +191,19 @@ fn left_types_tokens_and_done_refuses_while_a_linked_issue_is_open() {
             "R1",
         ],
     );
-    assert!(
-        !ok,
-        "done must refuse while the linked issue is open: {stdout} {stderr}"
-    );
+    assert!(ok, "handing the open issue on must land: {stderr}");
     assert!(
         stdout.contains("is a ledger issue") && stdout.contains("board left_open"),
         "{stdout}"
     );
     assert!(stdout.contains("no chunk uid"), "{stdout}");
-    assert!(stderr.contains(&format!("fael close {issue}")), "{stderr}");
-    // closing the issue lets the same done through
+    // closing the issue lets a later done through as usual
     let (ok, _, err) = fael(
         &d,
         &[
             "close",
             &issue,
             "timeout on retry → backoff retry; guard `fael/tests/x.rs`",
-        ],
-    );
-    assert!(ok, "{err}");
-    let (ok, _, err) = fael(
-        &d,
-        &[
-            "chunk",
-            "done",
-            &chunk,
-            "fixed it",
-            "--left",
-            "none",
-            "--no-change",
-            "--run",
-            "R1",
         ],
     );
     assert!(ok, "{err}");
