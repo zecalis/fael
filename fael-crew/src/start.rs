@@ -1,15 +1,15 @@
 //! `fael chunk start <uid> [--run R] [--client C] [--force]` (SPEC §1 run rules, §4 pair):
 //! claim the chunk and every chunk paired with it in one `BEGIN IMMEDIATE` — all or none —
 //! insert one run row each under the same R, and hand back what the brief prints.
-//! One worktree is one seat: a live run there is an agent that left, so a start ends it
-//! (`--force` is only for a live run in another worktree).
+//! One worktree is one seat: a live, non-stalled run there refuses the start (`--force --because`
+//! takes it); a stalled run is an agent that left, so a start ends it.
 
 use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, Row, end_live, row, set, tx};
 use super::holder::{
-    end_caller_seat, end_here, holder, holder_detail, holder_worktree, members, ready_paired,
-    stalled_since,
+    end_caller_seat, end_here, holder, holder_detail, holder_worktree, live_in_worktree, members,
+    ready_paired, stalled_since,
 };
 use super::joint::{self, Joint};
 use super::ready::Ready;
@@ -40,9 +40,7 @@ pub struct Start {
     pub session: Option<String>,
     /// HEAD's sha in the worktree at start → `run.base`, where `done`'s diff begins
     pub base: Option<String>,
-    /// `.fael/shared` paths: nobody's claim, never an overlap (as on the board)
-    pub shared: Vec<String>,
-    pub stale: String, // a live run last seen before this is `stalled` in a clash line
+    pub stale: String, // a live run last seen before this is `stalled`: it holds no worktree
     /// `--with`: the chunks whose live runs this start joins as `joint` (issue 01M5PB7Z,
     /// f3: repeated `--with` names several partners, one `--as` for all of them)
     pub with: Vec<String>,
@@ -160,13 +158,6 @@ fn check_fresh(tx: &Transaction, run: &str) -> Result<(), String> {
         ));
     }
     Ok(())
-}
-
-/// The chunk already runs in the caller's worktree: a restart there is its own seat.
-fn seated(tx: &Transaction, first: &super::chunk::Row, wt: Option<&str>) -> Result<bool, String> {
-    Ok(wt.is_some()
-        && first.state == State::Running
-        && holder_worktree(tx, first.id)?.as_deref() == wt)
 }
 
 /// A retry from the session holding the chunk: the live brief again, not a
@@ -365,6 +356,43 @@ fn end_seats(
     Ok(orphaned)
 }
 
+/// The one refusal left of the old overlap gate (issue 01M6KHWF): another live, non-stalled run
+/// in the worktree this start sits in (or leaves, for a pair) — two agents there overwrite each
+/// other's files. A stalled run is no refusal: `end_seats` ends it as before. Overlap of
+/// declared scopes never refuses. `--force --because` takes the seat; returns that receipt.
+fn seat_taken(
+    tx: &Transaction,
+    uid: &str,
+    seat: Option<&joint::Partner>,
+    worktrees: &[Option<&str>],
+    ms: &[String],
+    o: &Start,
+) -> Result<Option<String>, String> {
+    let except = seat.map(|p| p.run.as_str());
+    let mut told = Vec::new();
+    for w in worktrees.iter().flatten() {
+        for (other, run) in live_in_worktree(tx, w, ms, except, &o.stale)? {
+            let t = format!("run {run} of chunk {other} in {w}");
+            if !told.contains(&t) {
+                told.push(t);
+            }
+        }
+    }
+    if told.is_empty() {
+        return Ok(None);
+    }
+    let told = told.join("; ");
+    if !o.force {
+        return Err(format!(
+            "rejected: chunk {uid} cannot start here — {told} is live, and two agents in one worktree overwrite each other's files; wait for it, start from another worktree, or try `fael chunk start {uid} --force --because \"<what you will avoid>\"` to end it"
+        ));
+    }
+    let because = need_because(o, uid)?;
+    Ok(Some(format!(
+        "started by --force past live {told} — because {because}"
+    )))
+}
+
 /// The event text for taking over a live holder: a stalled holder goes without
 /// `--force`, its stall as the receipt (fael:01M6CZ9G41); a live one needs
 /// `--force --because`, and the receipt rides `forced` (issue 01M6CZ0K).
@@ -428,7 +456,7 @@ fn claim_members(
     here: &Here,
     today: &str,
     joined: &Option<String>,
-    clash_forced: &Option<String>,
+    seat_forced: &Option<String>,
 ) -> Result<(Vec<(Row, Option<Prev>)>, Vec<String>), String> {
     // the handshake and the clash receipt ride on the first member's start event
     let said = |m: &str, t: Option<String>| {
@@ -442,12 +470,12 @@ fn claim_members(
         if let Some(j) = joined {
             parts.push(j.clone());
         }
-        if let Some(f) = clash_forced {
+        if let Some(f) = seat_forced {
             parts.push(f.clone());
         }
         (!parts.is_empty()).then(|| parts.join("; "))
     };
-    let mut forced: Vec<String> = clash_forced.clone().into_iter().collect();
+    let mut forced: Vec<String> = seat_forced.clone().into_iter().collect();
     let mut claim = Vec::new();
     for m in ms.iter().cloned() {
         let r = row(tx, &m)?;
@@ -505,7 +533,7 @@ fn claim_members(
                 if t.contains("--force") {
                     forced.push(t.clone());
                 }
-            } else if o.force && clash_forced.is_none() {
+            } else if o.force && seat_forced.is_none() {
                 let because = need_because(o, &m)?;
                 let t = format!("started by --force — because {because}");
                 forced.push(t.clone());
@@ -541,8 +569,7 @@ impl Store {
             return Ok(reused);
         }
         check_lonely_because(o, uid)?;
-        let (partners, clash_forced, lane) =
-            joint::gate(&tx, &first, &ms, o, seated(&tx, &first, wt)?, here)?;
+        let partners = joint::gate(&tx, &first, &ms, o, here)?;
         // a pair is one R in the partner's worktree and branch; a stack keeps its own R,
         // worktree and branch cut from the partner's branch — any other start is its own R
         let seat = partners.iter().find(|p| p.mode == Joint::Pair);
@@ -565,8 +592,8 @@ impl Store {
         let joined = partners
             .iter()
             .map(joint::Partner::text)
-            .chain(lane)
             .reduce(|a, b| format!("{a}; {b}"));
+        let seat_forced = seat_taken(&tx, uid, seat, &[caller_wt, wt], &ms, o)?;
         let (claim, forced) = claim_members(
             &tx,
             &ms,
@@ -578,7 +605,7 @@ impl Store {
             here,
             today,
             &joined,
-            &clash_forced,
+            &seat_forced,
         )?;
         let orphaned = end_seats(&tx, seat.is_some(), caller_wt, wt, &ms, here.now)?;
         let mut chunks = Vec::new();

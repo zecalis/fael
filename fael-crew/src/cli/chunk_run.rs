@@ -109,7 +109,6 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         because: a.one("because"),
         session: session.clone(),
         base: crate::git(&r.root, &["rev-parse", "HEAD"]),
-        shared: fael_crew::shared(&r.root).unwrap_or_default(),
         stale: crate::board::clock().1,
         with: a.many("with"),
         joint: a

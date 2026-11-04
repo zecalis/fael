@@ -127,32 +127,49 @@ fn a_pair_start_clears_clashes_under_the_partners_run() {
     assert!(good, "{out}{err}");
 }
 
-/// Issue 01M6E23QX4: an unrelated run still refuses.
+/// Issue 01M6KHWF: a scope overlap starts, says who and the ready note, and refuses nothing.
 #[test]
-fn a_pair_start_still_refuses_an_unrelated_clash() {
-    let w = worktrees(&["wa", "wb", "wd"]);
-    let (a, b, d) = (chunk(&w[0], "A"), chunk(&w[0], "B"), chunk(&w[0], "D"));
-    ok(&w[0], &["chunk", "start", &a]);
-    ok(&w[1], &["chunk", "start", &b, "--force", "--because", "x"]);
-    let (good, _, err) = fael(&w[2], &["chunk", "start", &d, "--with", &a, "--as", "pair"]);
-    assert!(!good && err.contains(&b), "{err}");
-}
-
-/// Issue 01M6E23QX4 (part 4): the refusal of `--as lane` over the same file says why.
-#[test]
-fn a_lane_over_the_same_file_says_it_is_a_pair() {
-    let w = worktrees(&["wa", "wb"]);
+fn an_overlap_starts_and_names_who_to_note() {
+    let w = worktrees(&["wa", "wb", "wc"]);
     let (a, b) = (chunk(&w[0], "A"), chunk(&w[0], "B"));
     ok(&w[0], &["chunk", "start", &a]);
-    let (good, _, err) = fael(&w[1], &["chunk", "start", &b, "--with", &a, "--as", "lane"]);
+    let out = ok(&w[1], &["chunk", "start", &b]);
+    assert!(out.contains(&format!("avoid: {a}")), "{out}");
+    assert!(out.contains(&format!("fael chunk note {a} ")), "{out}");
+    assert!(out.contains("fael chunk status"), "{out}");
+    assert!(
+        !out.contains("--with"),
+        "no joint offered as the way out: {out}"
+    );
+    // `--with --as lane` over the same file still works, and prints the lane rules
+    let c = chunk(&w[0], "C");
+    let args = [
+        "chunk", "start", &c, "--run", "RC", "--with", &a, "--as", "lane",
+    ];
+    let out = ok(&w[2], &args);
+    assert!(out.contains("lane: one scope per worktree"), "{out}");
+    assert!(out.contains("`fael run end RC`"), "the run named: {out}");
+}
+
+/// The one refusal left: another live run in the same worktree (two agents overwrite each other).
+#[test]
+fn another_live_run_in_the_same_worktree_refuses_until_forced() {
+    let w = worktrees(&["wa"]);
+    let (a, b) = (chunk(&w[0], "A"), chunk(&w[0], "B"));
+    ok(&w[0], &["chunk", "start", &a]);
+    let (good, _, err) = fael(&w[0], &["chunk", "start", &b]);
     assert!(
         !good
-            && err.contains("--as lane over the same file is a pair")
-            && err.contains("--as pair"),
+            && err.contains(&a)
+            && err.contains("another worktree")
+            && err.contains("--force --because"),
         "{err}"
     );
-    let (good, _, err) = fael(&w[1], &["chunk", "start", &b]);
-    assert!(!good && !err.contains("is a pair"), "{err}");
+    let out = ok(
+        &w[0],
+        &["chunk", "start", &b, "--force", "--because", "a is idle"],
+    );
+    assert!(out.contains("a is idle"), "{out}");
 }
 
 /// The pair start said "pass --run R to done", but done from the partner's worktree needs none.

@@ -265,58 +265,75 @@ fn scoped(s: &mut Store, title: &str, scope: &str) -> String {
 }
 
 #[test]
-fn a_start_refuses_a_scope_a_running_chunk_overlaps() {
+fn a_scope_overlap_with_a_running_chunk_never_refuses() {
     let mut s = Store::open_in_memory().unwrap();
     let a = scoped(&mut s, "a", "src/x.rs");
     let b = scoped(&mut s, "b", "src/x.rs\ndocs/");
     start(&mut s, &a, "/w1").unwrap();
-    let e = start(&mut s, &b, "/w2").unwrap_err();
+    // same file, another worktree: information (the brief's avoid card), no refusal
+    let st = s.start(&b, &Start::default(), &here("/w2")).unwrap();
+    assert_eq!(state(&s, &b), "running");
+    assert!(st.forced.is_empty(), "{:?}", st.forced);
+    assert_eq!(live(&s, &a), 1, "the other run is left alone");
+    let avoid = &st.chunks[0].avoid;
     assert!(
-        e.contains(&a) && e.contains("src/x.rs") && e.contains("--force"),
+        avoid.len() == 1 && avoid[0].uid == a && avoid[0].do_cmd.contains("fael chunk status"),
+        "{avoid:?}"
+    );
+    assert!(
+        avoid[0].do_cmd.contains(&format!("fael chunk note {a} ")),
+        "{avoid:?}"
+    );
+}
+
+/// The one refusal left (issue 01M6KHWF): another live run in this worktree.
+#[test]
+fn a_live_run_of_another_chunk_in_the_same_worktree_refuses() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/a.rs");
+    let b = scoped(&mut s, "b", "docs/");
+    start(&mut s, &a, "/w1").unwrap();
+    let e = start(&mut s, &b, "/w1").unwrap_err();
+    assert!(
+        e.contains(&a) && e.contains("another worktree") && e.contains("--force --because"),
         "{e}"
     );
-    assert!(
-        e.contains("--because"),
-        "bare --force names the receipt: {e}"
-    );
-    assert!(e.contains("[exact]"), "the reject names the class: {e}");
     assert_eq!(state(&s, &b), "open");
-    assert!(
-        e.contains("last seen never") && !e.contains("stalled"),
-        "{e}"
-    );
-    // bare --force past a clash is rejected (issue 01M6CZ0K)
+    assert_eq!(live(&s, &a), 1);
+    // bare --force still names the receipt
     let bare = Start {
         force: true,
         ..Start::default()
     };
-    let e = s.start(&b, &bare, &here("/w2")).unwrap_err();
-    assert!(e.contains("--because") && e.contains("--as pair"), "{e}");
+    let e = s.start(&b, &bare, &here("/w1")).unwrap_err();
+    assert!(e.contains("--because"), "{e}");
     let o = Start {
         force: true,
-        because: Some("will stay in docs/ only".into()),
+        because: Some("a is done editing".into()),
         ..Start::default()
     };
-    let st = s.start(&b, &o, &here("/w2")).unwrap();
-    assert_eq!(state(&s, &b), "running");
+    let st = s.start(&b, &o, &here("/w1")).unwrap();
     assert_eq!(st.forced.len(), 1, "{:?}", st.forced);
-    assert!(st.forced[0].contains("past clash"), "{:?}", st.forced);
-    assert!(
-        st.forced[0].contains("will stay in docs/"),
-        "{:?}",
-        st.forced
-    );
-    let bd = s.board("2026-10-11", "2026-10-11T09:00:00Z").unwrap();
-    let got = bd.chunks.iter().find(|c| c.uid == b).unwrap();
-    assert_eq!(
-        got.run.as_ref().and_then(|r| r.force_reason.as_deref()),
-        Some("will stay in docs/ only")
-    );
-    let forced = got.forced.as_deref().unwrap_or(&[]);
-    assert!(
-        forced.iter().any(|f| f.contains("past clash")),
-        "{forced:?}"
-    );
+    assert!(st.forced[0].contains("a is done editing") && st.forced[0].contains(&a));
+    assert_eq!(live(&s, &a), 0, "the forced start took the seat");
+    assert_eq!(st.orphaned.len(), 1);
+}
+
+/// A stalled run there is an agent that left: the start ends it, no refusal, as before.
+#[test]
+fn a_stalled_run_in_the_same_worktree_is_ended_without_force() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = scoped(&mut s, "a", "src/a.rs");
+    let b = scoped(&mut s, "b", "docs/");
+    start(&mut s, &a, "/w1").unwrap();
+    let o = Start {
+        stale: "2999-01-01T00:00:00Z".into(),
+        ..Start::default()
+    };
+    let st = s.start(&b, &o, &here("/w1")).unwrap();
+    assert!(st.forced.is_empty());
+    assert_eq!(live(&s, &a), 0);
+    assert_eq!(st.orphaned.len(), 1);
 }
 
 #[test]
@@ -330,28 +347,6 @@ fn a_pair_partner_or_an_idle_chunk_is_no_overlap() {
     assert_eq!(state(&s, &b), "running", "pair starts together");
     s.run_end(&r, None, NOW).unwrap();
     start(&mut s, &c, "/w2").unwrap();
-}
-
-#[test]
-fn another_app_or_a_shared_path_is_no_overlap() {
-    let mut s = Store::open_in_memory().unwrap();
-    let a = scoped(&mut s, "a", "src/\nCargo.lock");
-    let b = scoped(&mut s, "b", "src/x.rs");
-    let c = scoped(&mut s, "c", "Cargo.lock");
-    start(&mut s, &a, "/w1").unwrap();
-    s.conn
-        .execute_batch(&format!(
-            "INSERT INTO plan(app, name, title, state) VALUES ('other', 'p', 'p', 'active');
-             UPDATE chunk SET plan = (SELECT id FROM plan WHERE app = 'other') WHERE uid = '{b}'"
-        ))
-        .unwrap();
-    start(&mut s, &b, "/w2").unwrap();
-    assert!(start(&mut s, &c, "/w3").unwrap_err().contains(&a));
-    let o = Start {
-        shared: vec!["Cargo.lock".into()],
-        ..Start::default()
-    };
-    s.start(&c, &o, &here("/w3")).unwrap();
 }
 
 #[test]
@@ -408,22 +403,16 @@ fn a_live_run_in_the_same_worktree_is_taken_over_without_force() {
 }
 
 #[test]
-fn another_chunks_live_run_in_the_worktree_ends_on_start() {
-    let mut s = Store::open_in_memory().unwrap();
-    let a = add(&mut s, "a", Some("a"));
-    let b = add(&mut s, "b", Some("b"));
-    start(&mut s, &a, "/w").unwrap();
-    start(&mut s, &b, "/w").unwrap();
-    assert_eq!((live(&s, &a), live(&s, &b)), (0, 1));
-    assert_eq!(state(&s, &a), "running", "run end keeps the state");
-}
-
-#[test]
 fn start_reports_the_chunk_it_orphaned_in_the_worktree() {
     let mut s = Store::open_in_memory().unwrap();
     let a = add(&mut s, "a", Some("a"));
     let b = add(&mut s, "b", Some("b"));
-    let go = |s: &mut Store, u: &str| s.start(u, &Start::default(), &here("/w")).unwrap();
+    // a stalled run is the agent that left: the start ends it (a live one refuses)
+    let o = Start {
+        stale: "2999-01-01T00:00:00Z".into(),
+        ..Start::default()
+    };
+    let go = |s: &mut Store, u: &str| s.start(u, &o, &here("/w")).unwrap();
     assert!(go(&mut s, &a).orphaned.is_empty());
     let again = go(&mut s, &a);
     assert!(
@@ -495,51 +484,6 @@ fn a_start_on_an_owner_wait_names_who_unblocks_it() {
     );
 }
 
-/// A restart from the worktree already holding the chunk is no new claim: a chunk that started
-/// beside it later must not reject it (`start --full` used to re-read the brief this way).
-#[test]
-fn a_restart_in_the_holding_worktree_ignores_a_later_clash() {
-    let mut s = Store::open_in_memory().unwrap();
-    let a = scoped(&mut s, "a", "src/");
-    start(&mut s, &a, "/w1").unwrap();
-    let b = scoped(&mut s, "b", "src/");
-    let o = Start {
-        force: true,
-        because: Some("test".into()),
-        ..Start::default()
-    };
-    s.start(&b, &o, &here("/w2")).unwrap();
-    start(&mut s, &a, "/w1").unwrap();
-    assert_eq!(live(&s, &a), 1);
-    let c = scoped(&mut s, "c", "src/");
-    assert!(
-        start(&mut s, &c, "/w3").is_err(),
-        "a fresh start still clashes"
-    );
-}
-
-/// A stalled same-file holder is no refusal (fael:01M6CZ9G41): the start lanes beside it and
-/// the event carries the stalled line as the receipt.
-#[test]
-fn a_stalled_exact_holder_lanes_with_a_receipt() {
-    let mut s = Store::open_in_memory().unwrap();
-    let a = scoped(&mut s, "a", "src/x.rs");
-    let b = scoped(&mut s, "b", "src/x.rs");
-    start(&mut s, &a, "/w1").unwrap();
-    let o = Start {
-        stale: "2999-01-01T00:00:00Z".into(),
-        ..Start::default()
-    };
-    s.start(&b, &o, &here("/w2")).unwrap();
-    let ev = get(
-        &s,
-        "SELECT text FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",
-        &b,
-    )
-    .unwrap();
-    assert!(ev.contains("lane beside") && ev.contains("stalled"), "{ev}");
-}
-
 /// A stalled holder of the same chunk is no refusal (fael:01M6CZ9G41): starting
 /// it again from another worktree takes it over with an automatic receipt —
 /// no --force, no --because.
@@ -587,7 +531,7 @@ fn a_stack_start_keeps_its_own_seat_and_records_stack() {
         with: vec![a.clone()],
         joint: Some(Joint::Stack),
         stack_contains: vec![true],
-        stale: super::super::chunk::tests::NOW.into(),
+        stale: "2999-01-01T00:00:00Z".into(), // c in /w2 is stalled: its seat is freed
         ..Start::default()
     };
     let st = s.start(&b, &o, &here("/w2")).unwrap();

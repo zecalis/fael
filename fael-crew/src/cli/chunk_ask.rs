@@ -55,7 +55,6 @@ pub(crate) fn add_wait(
         because: None,
         session: None,
         base: None,
-        shared: Vec::new(),
         stale: String::new(),
         with: Vec::new(),
         joint: None,

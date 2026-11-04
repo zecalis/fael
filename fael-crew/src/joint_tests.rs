@@ -1,5 +1,5 @@
-//! Joint start (issue 01M5PB7Z): lane over a dir overlap, exact clash still refuses with the
-//! joint command, pair joins the partner's run.
+//! Joint start (issue 01M5PB7Z): `--with` joins a partner's run; an overlap alone never refuses
+//! (issue 01M6KHWF).
 
 use super::super::chunk::tests::{add, here, start};
 use super::super::{Joint, Start, Store};
@@ -47,67 +47,23 @@ fn col(s: &Store, uid: &str, c: &str) -> Option<String> {
 }
 
 #[test]
-fn lane_starts_a_dir_overlap_without_force_and_both_reach_done() {
+fn overlap_starts_alone_and_both_reach_done() {
     let mut s = Store::open_in_memory().unwrap();
     let a = scoped(&mut s, "a", "src/");
     let b = scoped(&mut s, "b", "src/x.rs");
+    let c = scoped(&mut s, "c", "src/x.rs");
     start(&mut s, &a, "/w1").unwrap();
-    // no --with, no --force: a dir overlap lanes by itself, the event is the receipt
+    // no --with, no --force: a dir or a same-file overlap is information, never a refusal,
+    // and writes no joint (issue 01M6KHWF)
     start(&mut s, &b, "/w2").unwrap();
-    let ev = col_event(&s, &b);
-    assert!(ev.contains("lane beside") && ev.contains(&a), "{ev}");
-    // a lane's files are no "outside declared scope" against its partner
-    let out = s.outside(&b, &["src/y.rs".into()], &[]).unwrap();
-    assert!(out.1.iter().all(|(_, o)| o.is_none()), "{:?}", out.1);
+    start(&mut s, &c, "/w3").unwrap();
+    assert_eq!(col(&s, &b, "joint"), None);
+    // `--with --as lane` still works, even over the same file (it used to refuse as a pair)
+    let d = scoped(&mut s, "d", "src/x.rs");
+    s.start(&d, &with(&b, Joint::Lane), &here("/w4")).unwrap();
+    assert_eq!(col(&s, &d, "joint").as_deref(), Some("lane"));
     s.done(&a, "h", Some(1), None, &here("/w1")).unwrap();
     s.done(&b, "h", Some(2), None, &here("/w2")).unwrap();
-}
-
-#[test]
-fn same_scope_with_narrow_touch_lanes_instead_of_pair() {
-    use super::super::chunk::tests::here;
-    let mut s = Store::open_in_memory().unwrap();
-    let a = scoped(&mut s, "a", "src/");
-    let b = scoped(&mut s, "b", "src/");
-    start(&mut s, &a, "/w1").unwrap();
-    // same dir, no touch: exact refuses, names pair
-    let e = s
-        .start(
-            &b,
-            &Start {
-                stale: STALE.into(),
-                ..Start::default()
-            },
-            &here("/w2"),
-        )
-        .unwrap_err();
-    assert!(e.contains("--as pair"), "{e}");
-    // the partner touched one file: the same start lanes beside it, no force
-    s.touch(&a, &["src/a.rs".into()], None, &here("/w1"))
-        .unwrap();
-    s.start(
-        &b,
-        &Start {
-            stale: STALE.into(),
-            ..Start::default()
-        },
-        &here("/w2"),
-    )
-    .unwrap();
-}
-
-#[test]
-fn an_exact_clash_refuses_and_prints_the_pair_command() {
-    let mut s = Store::open_in_memory().unwrap();
-    let a = scoped(&mut s, "a", "src/x.rs");
-    let b = scoped(&mut s, "b", "src/x.rs");
-    start(&mut s, &a, "/w1").unwrap();
-    let e = start(&mut s, &b, "/w2").unwrap_err();
-    assert!(e.contains(&format!("--with {a} --as pair")), "{e}");
-    let e = s
-        .start(&b, &with(&a, Joint::Lane), &here("/w2"))
-        .unwrap_err();
-    assert!(e.contains("--as pair"), "{e}");
 }
 
 #[test]
@@ -171,8 +127,13 @@ fn pair_frees_the_callers_seat_but_keeps_a_shared_one() {
     let c = scoped(&mut s, "c", "other/");
     start(&mut s, &a, "/w1").unwrap();
     start(&mut s, &c, "/w2").unwrap();
-    // b joins a's run in /w1; the caller leaves /w2, so its live run ends
-    s.start(&b, &with(&a, Joint::Pair), &here("/w2")).unwrap();
+    // b joins a's run in /w1; the caller leaves /w2, so its live run ends — c is stalled,
+    // else the start refuses (another live run in the caller's worktree)
+    let stalled = Start {
+        stale: "2999-01-01T00:00:00Z".into(),
+        ..with(&a, Joint::Pair)
+    };
+    s.start(&b, &stalled, &here("/w2")).unwrap();
     assert_eq!(live(&s, &c), 0, "caller seat /w2 freed");
     assert_eq!(live(&s, &a), 1, "partner run stays live");
     // same worktree both sides: nothing to free, the joined run stays live
@@ -194,37 +155,13 @@ fn col_event(s: &Store, uid: &str) -> String {
 }
 
 #[test]
-fn two_dir_overlaps_lane_together_without_with() {
-    let mut s = Store::open_in_memory().unwrap();
-    let a = scoped(&mut s, "a", "src/");
-    let b = scoped(&mut s, "b", "src/y.rs");
-    let c = scoped(&mut s, "c", "src/z.rs");
-    start(&mut s, &a, "/w1").unwrap();
-    start(&mut s, &b, "/w2").unwrap();
-    start(&mut s, &c, "/w3").unwrap();
-}
-
-#[test]
-fn two_exact_clashes_name_both_partners_and_start_with_both() {
+fn a_pair_with_two_partners_keeps_the_first_in_partner_and_the_rest_in_json() {
     let mut s = Store::open_in_memory().unwrap();
     let a = scoped(&mut s, "a", "src/x.rs");
     let b = scoped(&mut s, "b", "src/y.rs");
     let c = scoped(&mut s, "c", "src/x.rs\nsrc/y.rs");
     start(&mut s, &a, "/w1").unwrap();
     start(&mut s, &b, "/w2").unwrap();
-    let e = start(&mut s, &c, "/w3").unwrap_err();
-    assert!(
-        e.contains(&format!("--with {a}"))
-            && e.contains(&format!("--with {b}"))
-            && e.contains("--as pair"),
-        "{e}"
-    );
-    // one partner is not enough: the other exact clash still refuses
-    let e = s
-        .start(&c, &with(&a, Joint::Pair), &here("/w3"))
-        .unwrap_err();
-    assert!(e.contains(&b), "{e}");
-    // both partners at once clears both exact clashes
     s.start(
         &c,
         &with_all(&[a.clone(), b.clone()], Joint::Pair),
