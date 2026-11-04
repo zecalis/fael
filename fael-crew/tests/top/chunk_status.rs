@@ -130,3 +130,149 @@ fn solo_status_is_one_side_and_unknown_rejects() {
     assert!(!ok, "unknown uid accepted");
     assert!(err.contains("no chunk"), "{err}");
 }
+
+fn fael_at(wt: &Path, state: &Path, args: &[&str]) -> (bool, String, String) {
+    let o = Command::new(crate::common::fael_bin())
+        .args(args)
+        .current_dir(wt)
+        .env("FAEL_STATE_DIR", state)
+        .env_remove("FAEL_DIR")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("FAEL_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .output()
+        .unwrap();
+    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    (o.status.success(), s(&o.stdout), s(&o.stderr))
+}
+
+/// Two chunks with disjoint scopes (the start gate allows it), each started in its own
+/// linked worktree: (repo, wt1, wt2, uid1, uid2). `x.txt` has 30 lines.
+fn two() -> (PathBuf, PathBuf, PathBuf, String, String) {
+    let d = repo();
+    let body: String = (1..=30).map(|i| format!("line{i}\n")).collect();
+    std::fs::write(d.join("x.txt"), body).unwrap();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-qm", "x"]);
+    let (w1, w2) = (d.join("w1"), d.join("w2"));
+    git(
+        &d,
+        &["worktree", "add", "-q", "-b", "b1", w1.to_str().unwrap()],
+    );
+    git(
+        &d,
+        &["worktree", "add", "-q", "-b", "b2", w2.to_str().unwrap()],
+    );
+    let state = d.join("state");
+    let mut u = Vec::new();
+    for (n, wt) in [("a", &w1), ("b", &w2)] {
+        let sc = format!("src/{n}.rs");
+        let (ok, uid, err) = fael_at(
+            &d,
+            &state,
+            &[
+                "chunk", "add", n, "--plan", "pl", "--brief", "b", "--scope", &sc,
+            ],
+        );
+        assert!(ok, "{err}");
+        let uid = uid.trim().to_string();
+        let (ok, _, err) = fael_at(wt, &state, &["chunk", "start", &uid]);
+        assert!(ok, "{err}");
+        u.push(uid);
+    }
+    (d, w1, w2, u.remove(0), u.remove(0))
+}
+
+fn edit(wt: &Path, line: usize, to: &str) {
+    let s = std::fs::read_to_string(wt.join("x.txt")).unwrap();
+    let mut v: Vec<&str> = s.lines().collect();
+    v[line - 1] = to;
+    std::fs::write(wt.join("x.txt"), v.join("\n") + "\n").unwrap();
+}
+
+fn status(d: &Path, wt: &Path, uid: &str) -> String {
+    let (ok, out, err) = fael_at(wt, &d.join("state"), &["chunk", "status", uid]);
+    assert!(ok, "{err}");
+    out
+}
+
+/// Far-apart uncommitted edits to one file merge clean: nothing said.
+#[test]
+fn far_apart_edits_are_clean() {
+    let (d, w1, w2, a, _) = two();
+    edit(&w1, 2, "mine");
+    edit(&w2, 28, "theirs");
+    assert!(!status(&d, &w1, &a).contains("conflict"));
+}
+
+/// Same line, uncommitted on both sides: names the chunk, file, diff and note commands.
+#[test]
+fn same_line_conflicts_with_ready_commands() {
+    let (d, w1, w2, a, b) = two();
+    edit(&w1, 5, "mine");
+    git(&w1, &["commit", "-qam", "m"]);
+    edit(&w2, 5, "theirs"); // uncommitted
+    let out = status(&d, &w1, &a);
+    let diff = format!(
+        "git -C {} diff -- x.txt",
+        w2.canonicalize().unwrap().display()
+    );
+    for n in [
+        &format!("conflict with {b}"),
+        "branch b2",
+        "x.txt",
+        &diff,
+        &format!("fael chunk note {b} \""),
+    ] {
+        assert!(out.contains(n), "{n} missing in:\n{out}");
+    }
+    let (ok, j, err) = fael_at(&w1, &d.join("state"), &["chunk", "status", &a, "--json"]);
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&j).unwrap();
+    let me = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["uid"] == a.as_str())
+        .unwrap();
+    assert_eq!(me["conflicts"][0]["files"][0], "x.txt", "{v}");
+}
+
+/// The same new filename on both sides, untracked, conflicts.
+#[test]
+fn same_untracked_filename_conflicts() {
+    let (d, w1, w2, a, _) = two();
+    std::fs::write(w1.join("new.txt"), "one\n").unwrap();
+    std::fs::write(w2.join("new.txt"), "two\n").unwrap();
+    assert!(status(&d, &w1, &a).contains("new.txt"));
+}
+
+/// A neighbour whose worktree is gone: the command still succeeds and says so.
+#[test]
+fn missing_neighbour_worktree_is_unchecked_not_a_failure() {
+    let (d, w1, w2, a, b) = two();
+    std::fs::remove_dir_all(&w2).unwrap();
+    let out = status(&d, &w1, &a);
+    assert!(out.contains(&format!("could not check {b}")), "{out}");
+}
+
+/// Checking leaves the neighbour's `git status` and index untouched.
+#[test]
+fn check_leaves_neighbour_git_status_unchanged() {
+    let (d, w1, w2, a, _) = two();
+    edit(&w1, 5, "mine");
+    edit(&w2, 5, "theirs");
+    std::fs::write(w2.join("new.txt"), "n\n").unwrap();
+    git(&w2, &["add", "x.txt"]);
+    let st = |w: &Path| {
+        Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(w)
+            .output()
+            .unwrap()
+            .stdout
+    };
+    let (before, before1) = (st(&w2), st(&w1));
+    assert!(status(&d, &w1, &a).contains("conflict"));
+    assert_eq!((st(&w2), st(&w1)), (before, before1));
+}

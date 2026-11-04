@@ -128,6 +128,39 @@ impl Store {
     }
 }
 
+impl Store {
+    /// Other live runs in this repo: not `uid`, not its joint group (same `start`), not in
+    /// its worktree. Newest run per chunk; DB only — the CLI reads git.
+    pub fn neighbours(&self, uid: &str) -> Result<Vec<Side>, String> {
+        let mine = self.status(uid)?;
+        let skip_wt: Vec<&str> = mine.iter().filter_map(|s| s.worktree.as_deref()).collect();
+        let uids: Vec<String> = self
+            .conn
+            .prepare(
+                "SELECT c.uid FROM run r JOIN chunk c ON c.id = r.chunk
+                 WHERE r.ended IS NULL AND r.id = (SELECT MAX(id) FROM run WHERE chunk = c.id)
+                 ORDER BY c.uid",
+            )
+            .map_err(err)?
+            .query_map([], |r| r.get(0))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        let mut out = Vec::new();
+        for u in uids {
+            if mine.iter().any(|m| m.uid == u) {
+                continue;
+            }
+            if let Some(s) = self.status(&u)?.into_iter().find(|s| s.uid == u)
+                && s.worktree.as_deref().is_none_or(|w| !skip_wt.contains(&w))
+            {
+                out.push(s);
+            }
+        }
+        Ok(out)
+    }
+}
+
 /// Every uid joint with `uid`: `run.partner` + `partners` JSON, both directions.
 fn joint_of(tx: &rusqlite::Transaction, uid: &str) -> Result<Vec<String>, String> {
     let mut out = Vec::new();
