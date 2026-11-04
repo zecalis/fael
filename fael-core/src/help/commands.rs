@@ -131,7 +131,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "chunk",
         "add, start, wait on and finish the chunks of a db plan",
-        "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--option A] [--pr N] [--out path]
+        "fael chunk <verb> … [--plan p] [--label l] [--title t] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid] [--run R] [--force] [--no-worktree] [--on owner|data] [--until date] [--option A] [--pr N[,M...]] [--out path]
 fael chunk add \"<title>\" [--plan inbox|<plan>] [--label l] [--brief b] [--size S|M|L] [--model m] [--client c] [--scope a/,b.rs] [--reads key,plan/key] [--after uid,…] [--issue id,…] [--wait owner|data --ask \"<q>\" [--option A …] [--until YYYY-MM-DD] [--run R]]
 fael chunk show <uid|label> [--plan p] [--json]
 fael chunk status <uid> [--plan p] [--json]
@@ -143,7 +143,7 @@ fael chunk touch <uid> <path>… [--msg \"<what you are doing>\"] [--status \"$(
 fael chunk wait <uid> \"<question>\" --on owner|data [--until YYYY-MM-DD] [--option \"A\" --option \"B\" …] [--run R]
 fael chunk after <uid> <other> \"<why>\" [--plan p] [--run R]
 fael chunk unafter <uid> <other> \"<why>\" [--plan p]
-fael chunk done <uid> \"<handoff>\" --left none|<id|uid>,… [--pr N|owner/repo#N|URL | --out <path> | --no-change] [--review clean|fixed|failed] [--run R]
+fael chunk done <uid> \"<handoff>\" --left none|<id|uid>,… [--pr N[,M...]|owner/repo#N|URL[,M...] | --out <path> | --no-change] [--review clean|fixed|failed] [--run R]
 fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid> [--plan p]
 fael chunk apply --json - [--plan p]   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"label\":…,\"brief\":…,\"size\":…,\"model\":…,\"scope\":…,\"reads\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
 fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapprove <uid> [--plan p]
@@ -160,8 +160,8 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
      takes no worktree slot, and from Claude Code without --run binds its session,
      whose Stop hook keeps the run seen from any cwd; wait, after and done answer only to the worktree of the
      latest run and end it, or to --run R naming that run; wait --on owner --option offers the answers
-     the owner picks from; done --pr N lands in done (push pr is the ok) — an owner/repo#N or URL of
-     another repo than this one's origin is refused; done without a PR in review until accept; done takes the run's branch's diff against origin/HEAD, since the chunk's first start, as the scope
+     the owner picks from; done --pr N[,M...] lands in done (push pr is the ok; name every PR, last is the board's) — an owner/repo#N or URL of
+     another repo than this one's origin is refused; a chunk is optional — small one-session work ships without one (agent's call); done without a PR in review until accept; when the run's branch already has an open PR, done without --pr is refused — name it; done takes the run's branch's diff against origin/HEAD, since the chunk's first start, as the scope
      and prints each path outside the declared one, unowned or in <plan>/<label>; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval; unafter drops one after edge and keeps it; move puts a chunk at the end of
      another db plan of this repo with its uid, runs, notes and edges — refused while it

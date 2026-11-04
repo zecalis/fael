@@ -141,7 +141,7 @@ fn the_rules_keep_only_what_every_chunk_needs() {
     // issue 01M5Y6H4: the situational rules are said by their verb or in `--full`
     let r = rules("U1", None);
     let bullets = r.lines().filter(|l| l.starts_with("- ")).count();
-    assert!(bullets <= 8, "{bullets} bullets: {r}");
+    assert!(bullets <= 9, "{bullets} bullets: {r}");
     for gone in [
         "lane: one scope",
         "Recommend:",

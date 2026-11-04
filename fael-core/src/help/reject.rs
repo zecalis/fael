@@ -17,7 +17,7 @@ const NO_FLAG: &[(&str, &[&str], &str)] = &[
     (
         "chunk done",
         &["--amend"],
-        "fael chunk done <uid> \"<new hand-off>\" again, with no --pr, amends it",
+        "fael chunk done <uid> \"<new hand-off>\" again amends it (add --pr N[,M...] to also correct the PR)",
     ),
     (
         "chunk done",

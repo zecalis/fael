@@ -242,6 +242,28 @@ fn with_retype(
     {
         return format!("{e}\nretype: {} --run {run}", done_cmd(uid, handoff, flag));
     }
+    // a linked issue still open: the way out is handing it to the next chunk — name it
+    // in --left instead of closing it now
+    if e.contains("linked issues still open") {
+        // the handoff may already carry the `left:` line `resolve` appended: drop a
+        // trailing one so the retry answers in `--left` instead of tripping the
+        // `--left and a `left:` line both given` reject
+        let mut lines: Vec<&str> = handoff.lines().collect();
+        if lines
+            .last()
+            .is_some_and(|l| l.trim_start().starts_with("left:"))
+        {
+            lines.pop();
+        }
+        let bare = lines.join("\n");
+        return format!(
+            "{e}\nhanding the rest to the next chunk? name the still-open issue in --left: {}",
+            done_cmd(uid, &bare, |f| match f {
+                "left" => Some("<id>[,<ids>]".into()),
+                _ => flag(f),
+            })
+        );
+    }
     // a missing --left: the same line, the one answer left to the agent as a placeholder —
     // fael cannot know that nothing is left, so it never types `none` for it
     if e.starts_with("rejected: chunk done needs --left") {
@@ -288,6 +310,46 @@ fn refuse_open_linked(a: &Args, uid: &str, handoff: &str, linked: &[String]) -> 
         ));
     }
     Ok(())
+}
+
+/// A chunk is optional, but a chunk that pushed a PR must name it: done without
+/// `--pr` is refused while the run's branch has an open PR (explicit number(s),
+/// never auto-taken — `--pr N` or `--pr N,M,...`, last is the board's).
+fn refuse_missing_pr(
+    a: &Args,
+    r: &Repo,
+    uid: &str,
+    handoff: &str,
+    branch: Option<&str>,
+    here: &Here,
+) -> Result<(), String> {
+    let probe = branch.or(here.branch);
+    if let Some(found) = crate::chunk_here::pr_of(&r.root, probe, "gh")
+        && found.parse::<i64>().is_ok()
+    {
+        let msg = format!(
+            "rejected: chunk {uid} done needs --pr {found} — the run's branch already has PR #{found} (push pr is the ok); name it explicitly — one PR as --pr {found}, several as --pr N,{found} (last is the board's)"
+        );
+        return Err(with_retype(msg, uid, handoff, |f| flag_of(a, f)));
+    }
+    Ok(())
+}
+
+/// The linked ids the done gate still holds: a still-open linked issue named in the
+/// hand-off's `left:` line rides the next chunk (board `left_open` shows it), so only
+/// the unnamed remainder refuses. Prefix-proof either way: `--left` takes a prefix.
+fn gate_linked(linked: &[String], handoff: &str) -> Vec<String> {
+    let left = crate::chunk_left::listed(handoff);
+    linked
+        .iter()
+        .filter(|id| !left.iter().any(|l| covers(id, l)))
+        .cloned()
+        .collect()
+}
+
+/// A `--left` token names `id`: exact or a unique prefix, either direction.
+fn covers(id: &str, l: &str) -> bool {
+    id.starts_with(l) || l.starts_with(id)
 }
 
 /// e3 one-line done: the held detail over the run's diff (or its one-liner
@@ -386,7 +448,7 @@ pub(crate) fn done(
     // e2 done gate (approval rule): refuse while linked ledger issues are open.
     // This sits before the amend below, so the done and the amend paths refuse alike.
     let linked = st.linked_issues(uid).unwrap_or_default();
-    refuse_open_linked(a, uid, handoff, &linked)?;
+    refuse_open_linked(a, uid, handoff, &gate_linked(&linked, handoff))?;
     // issue 01M6BKHZSP: a `measured:` line is dated and checked before any prefix goes on
     let handoff = &crate::chunk_measured::check(handoff)?;
     // issue 01M62VY2: a review that changed nothing says so in the hand-off the next brief prints
@@ -394,11 +456,20 @@ pub(crate) fn done(
         true => format!("reviewed, no change: {handoff}"),
         false => crate::chunk_prs::with_earlier(handoff, &earlier),
     };
-    // a done chunk's done again only amends its hand-off: no run, pr or touched change
-    if pr.is_none() && src.is_none() && st.amend(uid, handoff, here.now)? {
-        println!("handoff amended for {uid}");
-        print!("{}", st.drift_line(uid));
-        return Ok(());
+    // a done chunk's done again only amends: its hand-off — and, with `--pr`, the PR
+    // it names (a wrong number, a reopened PR): no run or touched change either way
+    if src.is_none() {
+        if let Some(n) = pr {
+            if st.amend_pr(uid, handoff, n, here.now)? {
+                println!("pr corrected to #{n} and handoff amended for {uid}");
+                print!("{}", st.drift_line(uid));
+                return Ok(());
+            }
+        } else if st.amend(uid, handoff, here.now)? {
+            println!("handoff amended for {uid}");
+            print!("{}", st.drift_line(uid));
+            return Ok(());
+        }
     }
     // issue 01M4TFB5: the run's branch, not the cwd's — a lead's done per lane from the wave
     // branch diffs that lane only. Read before done: ending the run from its own worktree
@@ -412,6 +483,9 @@ pub(crate) fn done(
     let kept = st.claimed_at_end(uid, here.run);
     // the run's start, read before done ends it: held rows `start` named after it are not repeated
     let started = st.run_started(uid, here.run);
+    if pr.is_none() && src.is_none() && !no_change {
+        refuse_missing_pr(a, r, uid, handoff, branch.as_deref(), here)?;
+    }
     st.done_review(uid, handoff, pr, out, a.one("review").as_deref(), here)
         .map_err(|e| with_retype(e, uid, handoff, |f| flag_of(a, f)))?;
     let trunk = base_of(&r.root, branch.as_deref().or(here.branch));
@@ -659,5 +733,55 @@ mod retype_tests {
             got.ends_with("try: fael chunk done C1 \"did it\" --pr 12 --left none|<ids>"),
             "{got}"
         );
+    }
+}
+
+#[cfg(test)]
+mod retype_gate_tests {
+    use super::with_retype;
+
+    #[test]
+    fn a_linked_gate_refuse_points_at_left_with_a_runnable_retype() {
+        let e = "rejected: chunk C1 done refuses — linked issues still open — close each before done:\nopen linked issue 01AAA \"x\" — close it first: fael close 01AAA \"...\"";
+        let flag = |f: &str| match f {
+            "pr" => Some("9".to_string()),
+            "left" => Some("none".to_string()),
+            _ => None,
+        };
+        // the handoff resolve already appended to: the retry must not carry both
+        let got = with_retype(e.into(), "C1", "part done\nleft: none", flag);
+        assert!(got.contains("name the still-open issue in --left"), "{got}");
+        assert!(got.contains("--left <id>[,<ids>]"), "{got}");
+        assert!(!got.contains("left: none"), "{got}");
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::gate_linked;
+
+    #[test]
+    fn only_the_left_unnamed_linked_still_refuse() {
+        let linked = ["01AAA".to_string(), "01BBB".to_string()];
+        // nothing named: the gate holds both
+        assert_eq!(
+            gate_linked(&linked, "shipped\nleft: none"),
+            linked,
+            "none names nothing"
+        );
+        // the open issue handed to the next chunk rides it, the other still refuses
+        assert_eq!(
+            gate_linked(&linked, "part done\nleft: 01AAA"),
+            ["01BBB".to_string()]
+        );
+        // a unique prefix names it too
+        assert_eq!(
+            gate_linked(&linked, "part done\nleft: 01A"),
+            ["01BBB".to_string()]
+        );
+        // both named: the gate passes
+        assert!(gate_linked(&linked, "part done\nleft: 01AAA,01BBB").is_empty());
+        // no left line at all: the gate holds everything
+        assert_eq!(gate_linked(&linked, "shipped"), linked);
     }
 }

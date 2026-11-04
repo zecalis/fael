@@ -43,7 +43,7 @@ pub(crate) fn done_hints(uid: &str, done: bool, reviewed: bool) -> String {
     let mut s = String::new();
     if done {
         s = format!(
-            "hand-off changed after this (rebase, conflict)? fael chunk done {uid} \"<new hand-off>\" amends it\n"
+            "hand-off changed after this (rebase, conflict)? fael chunk done {uid} \"<new hand-off>\" amends it (add --pr N[,M...] to also correct the PR)\n"
         );
     }
     if !reviewed {

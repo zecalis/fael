@@ -155,3 +155,33 @@ fn a_real_done_hints_the_amend_and_review_and_dash_reads_stdin() {
     let shown = ok(&d, &state, &["chunk", "show", &a]);
     assert!(shown.contains("it's $HOME \"quoted\""), "{shown}");
 }
+
+/// A wrong PR number is correctable after done: `chunk done <uid> "<h>" --pr <right>`
+/// on a done chunk sets the run's PR (earlier numbers ride the hand-off), with no new
+/// run or touched change; correcting to several PRs keeps the last as the board's.
+#[test]
+fn a_done_pr_number_is_correctable_with_pr() {
+    let t = std::env::temp_dir().join(format!("fael-amendpr-{}", fael_core::ulid()));
+    let (d, state) = (repo(&t), t.join("state"));
+    let f = |args: &[&str]| ok(&d, &state, args);
+    let a = f(&["chunk", "add", "a", "--brief", "b"]);
+    f(&["chunk", "start", &a, "--run", "R1", "--no-worktree"]);
+    f(&[
+        "chunk", "done", &a, "first", "--left", "none", "--pr", "7", "--run", "R1",
+    ]);
+    let corrected = f(&["chunk", "done", &a, "second", "--left", "none", "--pr", "8"]);
+    assert!(corrected.contains("pr corrected to #8"), "{corrected}");
+    let shown = f(&["chunk", "show", &a, "--json"]);
+    let c: serde_json::Value = serde_json::from_str(&shown).unwrap();
+    assert_eq!(c["run"]["pr"], 8);
+    assert!(shown.contains("second"), "{shown}");
+    // several PRs: the last is the run's, the earlier ride the hand-off
+    let multi = f(&[
+        "chunk", "done", &a, "third", "--left", "none", "--pr", "7,8",
+    ]);
+    assert!(multi.contains("pr corrected to #8"), "{multi}");
+    let shown = f(&["chunk", "show", &a, "--json"]);
+    let c: serde_json::Value = serde_json::from_str(&shown).unwrap();
+    assert_eq!(c["run"]["pr"], 8);
+    assert!(f(&["chunk", "show", &a]).contains("earlier PRs: #7"));
+}
