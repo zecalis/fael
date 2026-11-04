@@ -17,8 +17,9 @@ const REJECTS: &[(&str, &str)] = &[
     ("has no 'cmd:'", "invalid_row"),
     ("not this machine's writer", "row_state"),
     // chunk start refusals (fael-crew joint.rs / start.rs): apart from state moves
-    ("shares files with a running chunk", "scope_overlap"),
     ("is held by run", "held"),
+    // another live run in this worktree (issue 01M6KHWF): the same family, someone holds the seat
+    ("cannot start here —", "held"),
     ("unknown command", "unknown_command"),
     ("unknown tool", "unknown_command"),
     ("unknown chunk verb", "unknown_command"),

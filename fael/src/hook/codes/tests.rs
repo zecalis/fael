@@ -103,8 +103,8 @@ fn rejects_read_as_their_family() {
 fn start_refusals_read_apart_from_state_moves() {
     for (msg, want) in [
         (
-            "rejected: chunk 01M5AAAA shares files with a running chunk — 01M5BBBB (p/x): [prefix] a.rs; try `fael chunk start 01M5AAAA --with 01M5BBBB --as lane` to start beside it, or `fael chunk start 01M5AAAA --force` to start it anyway",
-            "scope_overlap",
+            "rejected: chunk 01M5AAAA cannot start here — run 01M5RRRR of chunk 01M5BBBB in /w is live, and two agents in one worktree overwrite each other's files; wait for it, start from another worktree, or try `fael chunk start 01M5AAAA --force --because \"<what you will avoid>\"` to end it",
+            "held",
         ),
         (
             "rejected: chunk 01M5AAAA is not ready: it waits on owner — the owner's answer unblocks it (`fael chunk answer 01M5AAAA \"<text>\"` or the board); the question: `fael chunk show 01M5AAAA`",

@@ -90,19 +90,3 @@ fn a_wait_on_data_prints_what_it_must_name() {
         "{out}"
     );
 }
-
-#[test]
-fn a_lane_start_prints_the_lane_rules_and_a_plain_start_does_not() {
-    let d = repo();
-    let a = add(&d, "A", "src/");
-    let b = add(&d, "B", "src/b.rs");
-    let (ok, out, err) = fael(&d, &["chunk", "start", &a, "--run", "RA"]);
-    assert!(ok && !out.contains("lane:"), "{out}{err}");
-    let args = [
-        "chunk", "start", &b, "--run", "RB", "--with", &a, "--as", "lane",
-    ];
-    let (ok, out, err) = fael(&d, &args);
-    assert!(ok, "{err}");
-    assert!(out.contains("lane: one scope per worktree"), "{out}");
-    assert!(out.contains("`fael run end RB`"), "the run named: {out}");
-}

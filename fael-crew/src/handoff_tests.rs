@@ -391,13 +391,14 @@ fn avoid_card_shows_who_class_files_where_when_doing_do() {
     assert_eq!(card.files, vec!["src/".to_string()]);
     assert_eq!(card.worktree.as_deref(), Some("/wa"));
     assert_eq!(card.doing, "wiring the form");
+    // information, never a refusal: the ready note and the real-conflict check (01M6KHWF)
     assert!(
-        card.do_cmd.contains(&format!("--with {a} --as lane")),
+        card.do_cmd.contains(&format!("fael chunk note {a} ")),
         "{}",
         card.do_cmd
     );
-    assert!(card.do_cmd.contains("--as follow"), "{}", card.do_cmd);
-    assert!(card.do_cmd.contains("fael chunk wait"), "{}", card.do_cmd);
+    assert!(card.do_cmd.contains("fael chunk status"), "{}", card.do_cmd);
+    assert!(!card.do_cmd.contains("--with"), "{}", card.do_cmd);
 }
 
 /// l3 doing priority: touch --msg beats note beats nothing-handed-off-yet.
@@ -492,19 +493,18 @@ fn avoid_uses_effective_touched_not_declared_scope() {
     )
     .unwrap();
     start(&mut s, &a, "/wa").unwrap();
-    // same dir, no touch yet: exact suggests pair
+    // same dir, no touch yet: exact
     assert_eq!(s.show(&me).unwrap().avoid[0].class, "exact");
-    // the partner touched one file: the same waiter now sees prefix, a lane
+    // the partner touched one file: the same waiter now sees prefix
     s.touch(&a, &["src/a.rs".to_string()], None, &here("/wa"))
         .unwrap();
     let card = &s.show(&me).unwrap().avoid[0];
     assert_eq!(card.class, "prefix");
-    assert!(card.do_cmd.contains("--as lane"), "{}", card.do_cmd);
 }
 
-/// l3 exact vs prefix: same file suggests pair, dir overlap suggests lane.
+/// l3 exact vs prefix: same file is exact, a dir over it is prefix.
 #[test]
-fn avoid_exact_suggests_pair_prefix_suggests_lane() {
+fn avoid_class_is_exact_for_the_same_file_and_prefix_for_a_dir() {
     let mut s = Store::open_in_memory().unwrap();
     let me = scoped(&mut s, "src/a.rs");
     let a = add(&mut s, "a", Some("b"));
@@ -521,13 +521,11 @@ fn avoid_exact_suggests_pair_prefix_suggests_lane() {
     let bme = s.show(&me).unwrap();
     let card = &bme.avoid[0];
     assert_eq!(card.class, "exact");
-    assert!(card.do_cmd.contains("--as pair"), "{}", card.do_cmd);
     let me2 = scoped(&mut s, "src/");
     // me2 is a different chunk with dir scope; a still running on the same file
     let bme2 = s.show(&me2).unwrap();
     let card2 = bme2.avoid.iter().find(|c| c.uid == a).unwrap();
     assert_eq!(card2.class, "prefix");
-    assert!(card2.do_cmd.contains("--as lane"), "{}", card2.do_cmd);
 }
 
 #[test]

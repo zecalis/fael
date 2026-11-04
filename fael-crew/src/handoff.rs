@@ -18,7 +18,7 @@ const CAP: usize = 5;
 /// One avoid card (l3, issue 01M6CZ0K): a running chunk whose scope collides with
 /// mine. Who (uid/title/client) + class exact|prefix + files + where
 /// (run worktree/branch) + when (started/last_seen/stalled) + doing (live intent,
-/// never guessed) + do (how to start beside it). Db only, no git/gh.
+/// never guessed) + do (note it, check status). Db only, no git/gh.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Avoid {
     pub uid: String,
@@ -356,8 +356,8 @@ pub(super) fn live(
 
 /// Avoid cards (l3): one per running chunk whose scope collides with mine.
 /// Who (uid/title/client) + class + files + where (worktree/branch) + when
-/// (started/last_seen/stalled) + doing (live intent, never guessed) + do.
-/// `stale` is the board's 30-min line; `my_uid` names the waiter for `do`.
+/// (started/last_seen/stalled) + doing (live intent, never guessed) + do (information, never a
+/// refusal: note it, `fael chunk status` finds a real conflict). `stale` is the board's 30-min line.
 pub(super) fn avoid(
     tx: &Transaction,
     id: i64,
@@ -373,11 +373,11 @@ pub(super) fn avoid(
     if mine.is_empty() {
         return Ok((vec![], 0));
     }
-    let (my_uid, app): (String, String) = tx
+    let app: String = tx
         .query_row(
-            "SELECT c.uid, p.app FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
+            "SELECT p.app FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
             [id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| r.get(0),
         )
         .map_err(err)?;
     let mut out = Vec::new();
@@ -386,11 +386,6 @@ pub(super) fn avoid(
     {
         let stalled = seen.as_deref().unwrap_or(&started) < stale;
         let live = doing(tx, &uid, touch_msg)?;
-        let follow = format!("fael chunk start {my_uid} --with {uid} --as follow");
-        let side = match class.as_str() {
-            "exact" => format!("fael chunk start {my_uid} --with {uid} --as pair"),
-            _ => format!("fael chunk start {my_uid} --with {uid} --as lane"),
-        };
         out.push(Avoid {
             uid: uid.clone(),
             title,
@@ -404,7 +399,7 @@ pub(super) fn avoid(
             stalled,
             doing: live,
             do_cmd: format!(
-                "wait (fael chunk wait {my_uid} --on owner \"<why>\") or {side} or {follow}"
+                "tell it what you will take: fael chunk note {uid} \"<text>\"; real conflicts: fael chunk status"
             ),
         });
     }
