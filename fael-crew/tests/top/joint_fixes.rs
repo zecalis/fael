@@ -156,8 +156,8 @@ fn an_overlap_starts_and_names_who_to_note() {
 fn another_live_run_in_the_same_worktree_refuses_until_forced() {
     let w = worktrees(&["wa"]);
     let (a, b) = (chunk(&w[0], "A"), chunk(&w[0], "B"));
-    ok(&w[0], &["chunk", "start", &a]);
-    let (good, _, err) = fael(&w[0], &["chunk", "start", &b]);
+    ok(&w[0], &["chunk", "start", &a, "--session", "sess-a"]);
+    let (good, _, err) = fael(&w[0], &["chunk", "start", &b, "--session", "sess-b"]);
     assert!(
         !good
             && err.contains(&a)

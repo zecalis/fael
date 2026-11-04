@@ -1,8 +1,9 @@
 //! `fael chunk start <uid> [--run R] [--client C] [--force]` (SPEC §1 run rules, §4 pair):
 //! claim the chunk and every chunk paired with it in one `BEGIN IMMEDIATE` — all or none —
 //! insert one run row each under the same R, and hand back what the brief prints.
-//! One worktree is one seat: a live, non-stalled run there refuses the start (`--force --because`
-//! takes it); a stalled run is an agent that left, so a start ends it.
+//! One worktree is one seat: a live, non-stalled run there from another known session refuses the
+//! start (`--force --because` takes it); a stalled run, the caller's own session's run, or one
+//! whose session (or the caller's) is unknown is an agent that left, so a start ends it.
 
 use super::State;
 use super::agent::unwait;
@@ -357,8 +358,9 @@ fn end_seats(
 }
 
 /// The one refusal left of the old overlap gate (issue 01M6KHWF): another live, non-stalled run
-/// in the worktree this start sits in (or leaves, for a pair) — two agents there overwrite each
-/// other's files. A stalled run is no refusal: `end_seats` ends it as before. Overlap of
+/// in the worktree this start sits in (or leaves, for a pair), from a different known session —
+/// two agents there overwrite each other's files. The caller's own session never refuses itself,
+/// and an unknown session (either side) never refuses: a wrong refusal is the cost to avoid. A stalled run is no refusal: `end_seats` ends it as before. Overlap of
 /// declared scopes never refuses. `--force --because` takes the seat; returns that receipt.
 fn seat_taken(
     tx: &Transaction,
@@ -371,7 +373,7 @@ fn seat_taken(
     let except = seat.map(|p| p.run.as_str());
     let mut told = Vec::new();
     for w in worktrees.iter().flatten() {
-        for (other, run) in live_in_worktree(tx, w, ms, except, &o.stale)? {
+        for (other, run) in live_in_worktree(tx, w, ms, except, o.session.as_deref(), &o.stale)? {
             let t = format!("run {run} of chunk {other} in {w}");
             if !told.contains(&t) {
                 told.push(t);
