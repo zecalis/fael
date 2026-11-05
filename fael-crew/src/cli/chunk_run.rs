@@ -230,11 +230,18 @@ fn scoped_board_lines(st: &fael_crew::Started) -> String {
                 colliding.push(format!("{who} (live)"));
             }
         }
-        let _ = write!(o, "board: `fael board --open --plan {}`", c.plan);
+        // nothing running collides: say so and stay silent about the other chunks — the
+        // board is one `fael board --open --plan` away, never pushed (it pulled agents into
+        // reading chunks that do not block this one)
         if colliding.is_empty() {
-            let _ = write!(o, " · running overlaps: none");
+            o.push_str("running overlaps: none");
         } else {
-            let _ = write!(o, " · running overlaps: {}", colliding.join(", "));
+            let _ = write!(
+                o,
+                "board: `fael board --open --plan {}` · running overlaps: {}",
+                c.plan,
+                colliding.join(", ")
+            );
         }
         o.push('\n');
     }

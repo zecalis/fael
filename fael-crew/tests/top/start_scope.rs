@@ -95,7 +95,7 @@ fn start_lists_the_open_rows_under_its_scope() {
         assert!(out.contains(&want), "{want}: {out}");
     }
     // e3 scoped board default: this plan's open rows, never whole-repo board
-    assert!(out.contains("fael board --open --plan inbox"), "{out}");
+    assert!(out.contains("running overlaps: none"), "{out}");
     assert!(!out.contains("board --open\n"), "{out}");
 }
 
@@ -129,7 +129,7 @@ fn start_on_a_clean_scope_prints_nothing_extra() {
     assert!(!out.contains("fael close"), "{out}");
     assert!(!out.contains("--supersedes"), "{out}");
     // e3: the scoped board default prints even on a clean scope
-    assert!(out.contains("fael board --open --plan inbox"), "{out}");
+    assert!(out.contains("running overlaps: none"), "{out}");
 }
 
 #[test]
