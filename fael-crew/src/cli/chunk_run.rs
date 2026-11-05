@@ -177,7 +177,41 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     }
     // e3 scoped board default: this plan's open rows, plus colliding chunks.
     print!("{}", scoped_board_lines(&st));
+    print!("{}", branch_lines(&st, &o, here, &r.root));
     Ok(())
+}
+
+/// A suggestion, never a gate. A local branch already named `<plan>/<label>…` is a fact from
+/// git (`switch` to it); else `<plan>/<label>` (the label is unique in its plan, no guessing).
+/// Silent for a joint start (it works in the partner's branch) or when already on that branch.
+fn branch_lines(st: &fael_crew::Started, o: &Start, here: &Here, root: &Path) -> String {
+    let (Some(c), true) = (st.chunks.first(), o.with.is_empty()) else {
+        return String::new();
+    };
+    let Some(label) = c.label.as_deref() else {
+        return String::new();
+    };
+    let name = format!("{}/{label}", c.plan.rsplit('/').next().unwrap_or(&c.plan));
+    let found = crate::git(
+        root,
+        &[
+            "branch",
+            "--list",
+            &format!("{name}*"),
+            "--format=%(refname:short)",
+        ],
+    )
+    .and_then(|l| l.lines().next().map(String::from));
+    if here.branch.is_some_and(|b| b.starts_with(&name)) {
+        return String::new();
+    }
+    match found {
+        Some(b) => format!("branch: `git switch {b}` (exists)\n"),
+        None => {
+            let base = o.base.as_deref().map_or("HEAD", |b| &b[..b.len().min(8)]);
+            format!("branch: `git switch -c {name}` (base {base})\n")
+        }
+    }
 }
 
 /// e3 scoped board default: one plan's open rows plus the running chunks
@@ -197,8 +231,10 @@ fn scoped_board_lines(st: &fael_crew::Started) -> String {
             }
         }
         let _ = write!(o, "board: `fael board --open --plan {}`", c.plan);
-        if !colliding.is_empty() {
-            let _ = write!(o, " · colliding: {}", colliding.join(", "));
+        if colliding.is_empty() {
+            let _ = write!(o, " · running overlaps: none");
+        } else {
+            let _ = write!(o, " · running overlaps: {}", colliding.join(", "));
         }
         o.push('\n');
     }
