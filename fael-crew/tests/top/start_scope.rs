@@ -131,3 +131,24 @@ fn start_on_a_clean_scope_prints_nothing_extra() {
     // e3: the scoped board default prints even on a clean scope
     assert!(out.contains("fael board --open --plan inbox"), "{out}");
 }
+
+#[test]
+fn start_names_the_branch_and_says_no_running_overlap() {
+    let (d, state) = init();
+    let f = |args: &[&str]| fael(&d, &state, args);
+    let u = f(&["chunk", "add", "t", "--brief", "b", "--label", "corners"])
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+    let out = f(&["chunk", "start", &u]);
+    assert!(out.contains("running overlaps: none"), "{out}");
+    assert!(out.contains("git switch -c inbox/corners` (base"), "{out}");
+    // the branch exists now: the line points at it instead of cutting a new one
+    git(&d, &["branch", "inbox/corners-x"]);
+    let out = f(&["chunk", "start", &u, "--force", "--because", "t"]);
+    assert!(
+        out.contains("git switch inbox/corners-x` (exists)"),
+        "{out}"
+    );
+}
