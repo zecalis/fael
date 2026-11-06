@@ -167,7 +167,7 @@ fn rules_text(o: &mut String, uid: &str, first: Option<&Brief>, whole: bool, ful
         let _ = writeln!(
             o,
             "## chunk rules — printed at this session's first start; `fael chunk start {uid} --full` prints them again\n\
-             - finish: `fael chunk done {uid} \"<result>\" --left none|<ids> --pr N[,M...]` when you pushed a PR (done without --pr is refused while the branch has one); one chunk = one branch = one PR, never merge"
+             - finish: `fael chunk done {uid} \"<result>\" --left none|<ids> --pr N[,M...]` when you pushed a PR (done takes the PR from the run's branch unless --pr names it)"
         );
     }
 }

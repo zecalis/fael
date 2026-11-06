@@ -133,7 +133,9 @@ fn start_on_a_clean_scope_prints_nothing_extra() {
 }
 
 #[test]
-fn start_names_the_branch_and_says_no_running_overlap() {
+fn start_names_no_branch_and_says_no_running_overlap() {
+    // fael never polices git flow: `chunk start` names no branch.
+    // The agent cuts its own (or none) — start only reports overlap state.
     let (d, state) = init();
     let f = |args: &[&str]| fael(&d, &state, args);
     let u = f(&["chunk", "add", "t", "--brief", "b", "--label", "corners"])
@@ -143,12 +145,9 @@ fn start_names_the_branch_and_says_no_running_overlap() {
         .to_string();
     let out = f(&["chunk", "start", &u]);
     assert!(out.contains("running overlaps: none"), "{out}");
-    assert!(out.contains("git switch -c inbox/corners` (base"), "{out}");
-    // the branch exists now: the line points at it instead of cutting a new one
+    assert!(!out.contains("git switch"), "{out}");
+    // a branch that matches the old <plan>/<label> suggestion changes nothing
     git(&d, &["branch", "inbox/corners-x"]);
     let out = f(&["chunk", "start", &u, "--force", "--because", "t"]);
-    assert!(
-        out.contains("git switch inbox/corners-x` (exists)"),
-        "{out}"
-    );
+    assert!(!out.contains("git switch"), "{out}");
 }

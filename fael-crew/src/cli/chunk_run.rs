@@ -177,50 +177,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     }
     // e3 scoped board default: this plan's open rows, plus colliding chunks.
     print!("{}", scoped_board_lines(&st));
-    print!("{}", branch_lines(&st, &o, here, &r.root));
     Ok(())
-}
-
-/// A suggestion, never a gate. A local branch already named `<plan>/<label>…` is a fact from
-/// git (`switch` to it); else `<plan>/<label>` (the label is unique in its plan, no guessing).
-/// Silent for a joint start (it works in the partner's branch) or when already on that branch.
-fn branch_lines(st: &fael_crew::Started, o: &Start, here: &Here, root: &Path) -> String {
-    let (Some(c), true) = (st.chunks.first(), o.with.is_empty()) else {
-        return String::new();
-    };
-    let Some(label) = c.label.as_deref() else {
-        return String::new();
-    };
-    let name = format!("{}/{label}", c.plan.rsplit('/').next().unwrap_or(&c.plan));
-    let found = crate::git(
-        root,
-        &[
-            "branch",
-            "--list",
-            &format!("{name}*"),
-            "--format=%(refname:short)",
-        ],
-    )
-    .and_then(|l| l.lines().next().map(String::from));
-    if here.branch.is_some_and(|b| b.starts_with(&name)) {
-        return String::new();
-    }
-    match found {
-        Some(b) => format!("branch: `git switch {b}` (exists)\n"),
-        None => {
-            let base = o.base.as_deref().map_or("HEAD", |b| &b[..b.len().min(8)]);
-            // A bare `switch -c` reads as safe; with a dirty tree it strands another
-            // session's work. Say the dirt first so the agent checks before cutting.
-            let dirty =
-                crate::git(root, &["status", "--porcelain"]).is_some_and(|s| !s.trim().is_empty());
-            match dirty {
-                true => format!(
-                    "branch: tree dirty — `git status --short` first and confirm no other session owns it; only then `git switch -c {name}` (base {base})\n"
-                ),
-                false => format!("branch: `git switch -c {name}` (base {base})\n"),
-            }
-        }
-    }
 }
 
 /// e3 scoped board default: one plan's open rows plus the running chunks
@@ -364,26 +321,18 @@ fn refuse_open_linked(a: &Args, uid: &str, handoff: &str, linked: &[String]) -> 
 }
 
 /// A chunk is optional, but a chunk that pushed a PR must name it: done without
-/// `--pr` is refused while the run's branch has an open PR (explicit number(s),
-/// never auto-taken — `--pr N` or `--pr N,M,...`, last is the board's).
-fn refuse_missing_pr(
-    a: &Args,
-    r: &Repo,
-    uid: &str,
-    handoff: &str,
-    branch: Option<&str>,
-    here: &Here,
-) -> Result<(), String> {
+/// `--pr` takes it from the run's branch when `gh` finds the branch's open PR
+/// (explicit `--pr N` — or `--pr N,M,...`, last is the board's — wins when given).
+fn auto_pr(r: &Repo, branch: Option<&str>, here: &Here) -> Result<Option<i64>, String> {
     let probe = branch.or(here.branch);
-    if let Some(found) = crate::chunk_here::pr_of(&r.root, probe, "gh")
-        && found.parse::<i64>().is_ok()
-    {
-        let msg = format!(
-            "rejected: chunk {uid} done needs --pr {found} — the run's branch already has PR #{found} (push pr is the ok); name it explicitly — one PR as --pr {found}, several as --pr N,{found} (last is the board's)"
+    let found = crate::chunk_here::pr_of(&r.root, probe, "gh");
+    if found.as_deref().is_some_and(|n| n.parse::<i64>().is_ok()) {
+        println!(
+            "note: --pr {} from the run's branch (push pr was the ok); pass --pr explicitly to correct it",
+            found.as_deref().unwrap_or_default()
         );
-        return Err(with_retype(msg, uid, handoff, |f| flag_of(a, f)));
     }
-    Ok(())
+    Ok(found.and_then(|n| n.parse::<i64>().ok()))
 }
 
 /// The linked ids the done gate still holds: a still-open linked issue named in the
@@ -534,8 +483,9 @@ pub(crate) fn done(
     let kept = st.claimed_at_end(uid, here.run);
     // the run's start, read before done ends it: held rows `start` named after it are not repeated
     let started = st.run_started(uid, here.run);
+    let mut pr = pr;
     if pr.is_none() && src.is_none() && !no_change {
-        refuse_missing_pr(a, r, uid, handoff, branch.as_deref(), here)?;
+        pr = auto_pr(r, branch.as_deref(), here)?;
     }
     st.done_review(uid, handoff, pr, out, a.one("review").as_deref(), here)
         .map_err(|e| with_retype(e, uid, handoff, |f| flag_of(a, f)))?;

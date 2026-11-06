@@ -161,8 +161,8 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
      whose Stop hook keeps the run seen from any cwd; wait, after and done answer only to the worktree of the
      latest run and end it, or to --run R naming that run; wait --on owner --option offers the answers
      the owner picks from; done --pr N[,M...] lands in done (push pr is the ok; name every PR, last is the board's) — an owner/repo#N or URL of
-     another repo than this one's origin is refused; a chunk is optional — small one-session work ships without one (agent's call); done without a PR in review until accept; when the run's branch already has an open PR, done without --pr is refused — name it; done takes the run's branch's diff against origin/HEAD, since the chunk's first start, as the scope
-     and prints each path outside the declared one, unowned or in <plan>/<label>; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
+     another repo than this one's origin is refused; a chunk is optional — small one-session work ships without one (agent's call); done without a PR in review until accept; when the run's branch has an open PR, done without --pr takes it from the branch — pass --pr to correct it; done takes the run's branch's diff against origin/HEAD, since the chunk's first start, as the scope
+     and prints each path outside the declared one, unowned or held by another open chunk; --out is copied to <git-common-dir>/fael/out/<uid>/<R>/; edit
      never changes the state and clears an approval; unafter drops one after edge and keeps it; move puts a chunk at the end of
      another db plan of this repo with its uid, runs, notes and edges — refused while it
      runs, into a parked or done plan, or onto a label the plan has; apply runs every op or none —
