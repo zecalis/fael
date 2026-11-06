@@ -209,7 +209,16 @@ fn branch_lines(st: &fael_crew::Started, o: &Start, here: &Here, root: &Path) ->
         Some(b) => format!("branch: `git switch {b}` (exists)\n"),
         None => {
             let base = o.base.as_deref().map_or("HEAD", |b| &b[..b.len().min(8)]);
-            format!("branch: `git switch -c {name}` (base {base})\n")
+            // A bare `switch -c` reads as safe; with a dirty tree it strands another
+            // session's work. Say the dirt first so the agent checks before cutting.
+            let dirty =
+                crate::git(root, &["status", "--porcelain"]).is_some_and(|s| !s.trim().is_empty());
+            match dirty {
+                true => format!(
+                    "branch: tree dirty — `git status --short` first and confirm no other session owns it; only then `git switch -c {name}` (base {base})\n"
+                ),
+                false => format!("branch: `git switch -c {name}` (base {base})\n"),
+            }
         }
     }
 }

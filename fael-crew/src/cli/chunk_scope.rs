@@ -105,16 +105,17 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
     let log = crate::read(r);
     let shut = fael_core::closed(&log);
     let mut seen: HashSet<String> = HashSet::new();
-    let mut lines: Vec<String> = Vec::new();
+    let mut linked: Vec<String> = Vec::new();
     for id in &b.issues {
         if !shut.contains(id.as_str()) || !seen.insert(id.clone()) {
             continue;
         }
-        lines.push(format!(
+        linked.push(format!(
             "  linked issue {id} — closed: {}",
             close_first_line(&log, id)
         ));
     }
+    let mut cites: Vec<String> = Vec::new();
     for (cite, first, id) in closed_cites_ids(
         &b.title,
         &b.brief,
@@ -124,16 +125,32 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
         if !seen.insert(id) {
             continue;
         }
-        lines.push(format!("  {cite} — closed: {first}"));
+        cites.push(format!("  {cite} — closed: {first}"));
     }
-    if lines.is_empty() {
+    if linked.is_empty() && cites.is_empty() {
         return Ok(());
     }
+    let mut lines = linked;
+    lines.extend(cites);
+    // A linked issue closed means the work landed elsewhere: the way out is drop,
+    // not a note + restart (the note only corrects a stale brief cite). Name both
+    // so the agent does not "fix" a done chunk by starting it again.
+    let action = if lines.iter().any(|l| l.starts_with("  linked issue")) {
+        format!(
+            "done elsewhere? `fael chunk drop {}` — a deliberate reopen first notes the reason (`fael chunk note {} \"<text>\"`, never `chunk edit`: it clears the owner's approval), then `fael chunk start {} --force --because \"<what you will avoid>\"`",
+            b.uid, b.uid, b.uid
+        )
+    } else {
+        format!(
+            "put the correction in `fael chunk note {} \"<text>\"` (never `chunk edit`: it clears the owner's approval); `--force --because \"<what you will avoid>\"` starts anyway",
+            b.uid
+        )
+    };
     Err(format!(
-        "rejected: chunk {} cites closed rows:\n{}\nput the correction in `fael chunk note {} \"<text>\"` (never `chunk edit`: it clears the owner's approval); `--force` starts anyway",
+        "rejected: chunk {} cites closed rows:\n{}\n{}",
         b.uid,
         lines.join("\n"),
-        b.uid
+        action
     ))
 }
 
