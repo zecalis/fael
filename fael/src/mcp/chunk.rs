@@ -70,35 +70,46 @@ fn text_alias(a: &Value) -> Value {
 }
 
 /// A `start` with no `cwd`: the client's one root other than this server's launch dir, if it
-/// gave one — the seat it works in. Otherwise `a` as it came (and `start_needs_cwd` rejects).
-fn with_client_seat(a: &Value) -> Value {
+/// gave one — the seat it works in — else this server's own directory. The seat is recorded
+/// on the run, so a filled seat is said on the result line, never rejected: the first call
+/// claims. A pinned server has one workspace; a launcher's `run` already has its seat.
+/// Returns the filled call plus the seat note, if the seat was filled in.
+fn with_start_seat(a: &Value) -> (Value, Option<String>) {
     let mut a = a.clone();
-    let none = s(&a, "cwd").is_none() && s(&a, "run").is_none();
-    if s(&a, "verb").as_deref() == Some("start")
-        && none
-        && !super::pinned()
-        && let Ok(launch) = std::env::current_dir()
-        && let Some(root) = super::roots::seat(&launch)
-        && let Some(o) = a.as_object_mut()
-    {
+    let bare = s(&a, "verb").as_deref() == Some("start")
+        && s(&a, "cwd").is_none()
+        && s(&a, "run").is_none()
+        && !super::pinned();
+    if !bare {
+        return (a, None);
+    }
+    let Ok(launch) = std::env::current_dir() else {
+        return (a, None);
+    };
+    let root = super::roots::seat(&launch).unwrap_or(launch);
+    let note = format!(
+        "seat: {} (no cwd was given — if that is not your worktree, re-run this call with \"cwd\")",
+        root.display()
+    );
+    if let Some(o) = a.as_object_mut() {
         o.insert("cwd".into(), root.to_string_lossy().into_owned().into());
     }
-    a
+    (a, Some(note))
 }
 
 fn chunk_checked(a: &Value) -> Result<String, String> {
-    let a = &with_client_seat(a);
-    let (Some(verb), Some(uid)) = (s(a, "verb"), s(a, "uid")) else {
-        return Err(shape_missing(a));
+    let (a, seat) = with_start_seat(a);
+    let (Some(verb), Some(uid)) = (s(&a, "verb"), s(&a, "uid")) else {
+        return Err(shape_missing(&a));
     };
-    start_needs_cwd(a, &verb, &uid)?;
-    let r = repo_for(a)?;
-    let args = build_args(&verb, &uid, a)?;
-    match crate::crew::capture(&args, &r.root) {
+    let r = repo_for(&a)?;
+    let args = build_args(&verb, &uid, &a)?;
+    let res = match crate::crew::capture(&args, &r.root) {
         Ok(t) => Ok(t),
         Err(e) if verb == "show" => show_elsewhere(&r, &uid, e),
         Err(e) => Err(with_cwd_hint(e)),
-    }
+    };
+    with_notes(res, vec![seat])
 }
 
 /// Every required key missing, said once with the whole call shape — `start` is the widest
@@ -112,18 +123,6 @@ fn shape_missing(a: &Value) -> String {
     format!(
         "rejected: {what} is required for chunk — verb: show|start|note|done|wait|after; try chunk {{verb: \"start\", uid: \"<uid>\", cwd: \"<your working directory>\"}} (cwd only on start)"
     )
-}
-
-/// A start records the caller's cwd as its seat, and `done` later refuses a run started from
-/// elsewhere: with no `cwd` the client's launch dir becomes the seat. Said at the start, not
-/// at the done. A pinned server has one workspace; a launcher's `run` already has its seat.
-fn start_needs_cwd(a: &Value, verb: &str, uid: &str) -> Result<(), String> {
-    if verb != "start" || super::pinned() || s(a, "cwd").is_some() || s(a, "run").is_some() {
-        return Ok(());
-    }
-    Err(format!(
-        "rejected: cwd is required for chunk start — it records your seat, and chunk done refuses a run started from another directory; try chunk {{verb: \"start\", uid: \"{uid}\", cwd: \"<your working directory>\"}}"
-    ))
 }
 
 /// The argv `chunk_checked` runs — pure, so unit tests pin the contract without

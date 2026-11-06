@@ -25,7 +25,7 @@ pub(crate) fn tools() -> Value {
                 "id": str_("id or prefix, pulls the body; text search: use text"),
                 "ids": files("many ids, bodies in one call"),
                 "full": {"type": "boolean", "description": "bodies under titles"},
-                "files": files("paths, dirs, globs, anchors — rows on any"),
+                "files": files("paths, dirs, globs, anchors - rows on any"),
                 "text": str_("all words, any order, in text or title"),
                 "key": str_("key glob, e.g. auth:*"),
                 "kind": str_("decision | issue | note, or a repo kind"),
@@ -42,7 +42,7 @@ pub(crate) fn tools() -> Value {
                 "text": str_("what happened and why, standalone, one topic (no ; or · list)"),
                 "title": str_("≤15-word headline; required past 60 words/400 chars"),
                 "files": {"type": "array", "items": {"type": "string"},
-                    "description": "paths or anchors — omit for this session's edited files"},
+                    "description": "paths or anchors - omit for this session's edited files"},
                 "rows": {"type": "array", "items": {"type": "object", "required": ["kind", "text"]},
                     "description": "batch rows; a bad row fails alone"},
                 "key": str_("optional colon key, e.g. auth:session"),
@@ -82,7 +82,7 @@ pub(crate) fn tools() -> Value {
                 "session": str_("session"),
                 "force": {"type": "boolean", "description": "take over"},
                 "with": str_("partner"),
-                "as": str_("pair|lane|follow"),
+                "as": str_("pair|lane|follow|stack"),
                 "pr": {"type": ["string", "integer"], "description": "PR number"},
                 "left": {"type": ["string", "array"], "description": "leftovers"},
                 "review": str_("clean|fixed|failed"),
@@ -95,10 +95,11 @@ pub(crate) fn tools() -> Value {
         for tool in tools.iter_mut() {
             tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
         }
-        // `chunk start` refuses without it (mcp/chunk.rs) — said on the one
-        // tool that needs it, in place of the shared line, so bytes hold.
+        // `chunk start` without it takes this server's dir as its seat and says so
+        // (mcp/chunk.rs) — said on the one tool that records it, in place of the
+        // shared line, so bytes hold.
         if let Some(c) = tools.iter_mut().find(|x| x["name"] == "chunk") {
-            c["inputSchema"]["properties"]["cwd"]["description"] = json!("start needs cwd");
+            c["inputSchema"]["properties"]["cwd"]["description"] = json!("seat; default here");
         }
     }
     t

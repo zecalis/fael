@@ -1,6 +1,6 @@
 //! `chunk` arg contract: what MCP forwards, what it notes, never rejects.
 
-use super::{KNOWN, build_args, misplaced_note, start_needs_cwd, unknown_note, unknown_verb};
+use super::{KNOWN, build_args, misplaced_note, unknown_note, unknown_verb};
 
 #[test]
 fn an_unknown_verb_names_the_cli_when_it_is_one_there() {
@@ -13,19 +13,21 @@ fn an_unknown_verb_names_the_cli_when_it_is_one_there() {
 use serde_json::json;
 
 #[test]
-fn start_without_cwd_is_rejected_unless_a_run_names_the_seat() {
-    let e = start_needs_cwd(&json!({"verb": "start", "uid": "U1"}), "start", "U1").unwrap_err();
-    assert!(
-        e.starts_with("rejected: cwd is required") && e.contains("cwd: \""),
-        "{e}"
-    );
-    for ok in [
+fn start_without_cwd_takes_the_servers_seat_and_says_it() {
+    let (a, seat) = super::with_start_seat(&json!({"verb": "start", "uid": "U1"}));
+    let cwd = a["cwd"].as_str().unwrap();
+    assert!(!cwd.is_empty(), "{a}");
+    let note = seat.unwrap();
+    assert!(note.starts_with("seat: ") && note.contains(cwd), "{note}");
+    // an explicit cwd, a launcher run, or another verb rides untouched
+    for untouched in [
         json!({"verb": "start", "uid": "U1", "cwd": "/w"}),
         json!({"verb": "start", "uid": "U1", "run": "R1"}),
         json!({"verb": "done", "uid": "U1"}),
     ] {
-        let verb = ok["verb"].as_str().unwrap();
-        assert!(start_needs_cwd(&ok, verb, "U1").is_ok(), "{ok}");
+        let (b, seat) = super::with_start_seat(&untouched);
+        assert_eq!(b, untouched);
+        assert!(seat.is_none(), "{untouched:?}");
     }
 }
 
