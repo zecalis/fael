@@ -95,9 +95,8 @@ the session, needs a handoff, or the owner put it on the board.
 `fael chunk start <uid>` prints the brief and the chunk rules (how to close, wait, checkpoint)
 — don't restate them here. The `fael chunk done <uid> "<handoff>"` text is the handoff: the
 board shows it and the brief of every chunk `after` it prints it, so it needs no ledger row.
-When a chunk pushed a PR, its done must name the number(s): `fael chunk done <uid> "<handoff>"
---left none|<ids> --pr N` — or `--pr N,M,...` over several PRs (last is the board's, earlier
-ride in the hand-off); done without `--pr` is refused while the run's branch has an open PR.
+When a chunk pushed a PR, done takes its number from the run's branch — pass `--pr N` explicitly to correct it — or `--pr N,M,...` over several PRs (last is the board's, earlier
+ride in the hand-off).
 A word for a chunk another agent will start goes in `fael chunk note <uid> "<text>"`, printed
 in that chunk's next brief; never `chunk edit` (it clears the owner's approval) — except
 `chunk edit <uid> --scope <old + new>` on your own chunk: a scope that still covers every old
@@ -126,7 +125,7 @@ While iterating, run `cargo check -p <crate> --message-format=short` and
 `cargo nextest run -p <crate> <filter> --profile gate` (profile in `.config/nextest.toml`)
 instead of the full gate; run `scripts/gate.sh` once before ship.
 
-Windows CI runs on `main` and on wave PRs (head `plan/**`), not on other PRs. A PR that touches paths, golden files,
+Windows CI runs on `main` and on demand, not on PRs. A PR that touches paths, golden files,
 process spawning, env vars or time-dependent tests runs it and reports its result before
 review — `gh workflow run ci.yml --ref <branch>` after `git ship`, then
 `gh run watch <id> --exit-status` — and says pass, or fail with the failing test, in the
