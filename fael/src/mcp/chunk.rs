@@ -316,15 +316,28 @@ fn show_elsewhere(r: &Repo, uid: &str, e: String) -> Result<String, String> {
 }
 
 /// A write naming a chunk in another repo keeps pointing there, now with the
-/// MCP routing beside the CLI one — same call, plus `"cwd"`.
+/// MCP routing beside the CLI one — same call, plus `"cwd"`. Reads the
+/// `fael-elsewhere cwd=<root>` machine line fael-crew emits (issue 01M5J6M1);
+/// the `lives in` prose match stays only for old binaries.
 fn with_cwd_hint(e: String) -> String {
     if e.contains("same command with --run ") {
         return e.replace("same command with --run ", "same call with run: ");
+    }
+    if let Some(cwd) = elsewhere_cwd(&e) {
+        return format!("{e}\nMCP: re-run this call with \"cwd\": \"{cwd}\" set to that repo root");
     }
     match e.contains("lives in") {
         true => format!("{e}\nMCP: re-run this call with \"cwd\" set to that repo root"),
         false => e,
     }
+}
+
+/// The machine line's root, if present — everything after `cwd=`, trimmed.
+fn elsewhere_cwd(e: &str) -> Option<&str> {
+    e.lines()
+        .find_map(|l| l.strip_prefix("fael-elsewhere cwd="))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
 }
 
 /// An MCP verb outside `show|start|note|done|wait|after`: the closed list, and for a real

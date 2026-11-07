@@ -225,7 +225,7 @@ pub fn outcome(
         prs_merged: prs_merged_total.unwrap_or(0),
         prs_created: prs
             .iter()
-            .filter(|p| p.created_ms.is_none_or(in_window))
+            .filter(|p| p.created_ms.is_some_and(in_window))
             .count(),
         prs_merged_unknown: prs_merged_total.is_none(),
         issues_filed: add.len(),
@@ -306,5 +306,29 @@ mod tests {
         assert!(o.prs_merged_unknown);
         assert_eq!(o.prs_merged, 0);
         assert_eq!(o.joined_since, "2026-10-03");
+    }
+
+    #[test]
+    fn unknown_created_time_never_counts_as_created() {
+        let logs = HashMap::from([("/w/r".to_string(), Log::default())]);
+        let unknown = ListedPr {
+            number: 9,
+            branch: Some("feat/c".into()),
+            created_ms: None,
+            merged_ms: None,
+        };
+        let prs = vec![pr(7, "feat/a", "2026-10-03T00:00:00Z"), unknown];
+        // No window: only the readable time counts.
+        let o = outcome(&logs, &prs, None, &HashMap::new(), None);
+        assert_eq!(o.prs_created, 1);
+        // Window past the known PR: neither counts.
+        let o2 = outcome(
+            &logs,
+            &prs,
+            None,
+            &HashMap::new(),
+            crate::ts_ms("2026-10-19T00:00:00Z"),
+        );
+        assert_eq!(o2.prs_created, 0);
     }
 }
