@@ -12,6 +12,7 @@ pub struct Live {
     pub base: Option<String>,
     pub worktree: Option<String>,
     pub pr: Option<i64>,
+    pub session: Option<String>,
     /// the files the run reported (`touched`), else the declared scope
     pub files: Vec<String>,
 }
@@ -46,7 +47,7 @@ impl Store {
         let mut q = self
             .conn
             .prepare(
-                "SELECT c.uid, r.started, r.base, r.worktree, r.pr, r.touched, c.scope
+                "SELECT c.uid, r.started, r.base, r.worktree, r.pr, r.touched, c.scope, r.session
                  FROM chunk c JOIN run r ON r.chunk = c.id
                  WHERE c.state = 'running' AND r.ended IS NULL
                    AND r.id = (SELECT MAX(id) FROM run WHERE chunk = c.id)
@@ -55,12 +56,14 @@ impl Store {
             .map_err(err)?;
         q.query_map([only], |r| {
             let touched = lines(r.get(5)?);
+            let session = r.get(7)?;
             Ok(Live {
                 uid: r.get(0)?,
                 started: r.get(1)?,
                 base: r.get(2)?,
                 worktree: r.get(3)?,
                 pr: r.get(4)?,
+                session,
                 files: if touched.is_empty() {
                     lines(r.get(6)?)
                 } else {

@@ -55,7 +55,14 @@ impl Moved {
 /// `git log <base>..<main> --name-only`, newest first; None = git could not say.
 fn main_log(root: &Path, main: &str, base: &str) -> Option<Vec<Commit>> {
     let range = format!("{base}..{main}");
-    let args = ["log", "--name-only", "--format=%x01%H%x09%s", &range];
+    let args = [
+        "-c",
+        "core.quotepath=off",
+        "log",
+        "--name-only",
+        "--format=%x01%H%x09%s",
+        &range,
+    ];
     let (code, out) = super::board::git_output(root, &args)?;
     (code == Some(0)).then_some(())?;
     Some(
@@ -101,12 +108,28 @@ fn moved(
         .map(|w| w.strip_prefix("warning: ").unwrap_or(w).to_string())
         .collect();
     let mut seen = HashSet::new();
-    for c in ledger.closes.iter().filter(|c| c.ts > live.started) {
+    let started = fael_core::ts_ms(&live.started);
+    for c in ledger
+        .closes
+        .iter()
+        .filter(|c| fael_core::ts_ms(&c.ts) > started)
+        // the run's own `fael close` is its work, not drift
+        .filter(|c| live.session.is_none() || c.session() != live.session.as_deref())
+    {
         let Some(id) = c.reference.as_deref() else {
             continue;
         };
         let row = ledger.rows.iter().find(|r| r.id == id);
-        if row.is_some_and(|r| fael_core::overlap(&r.files, &live.files)) && seen.insert(id) {
+        // a cited row is in `stale` already (by id prefix or key)
+        let said = |r: &fael_core::Row| {
+            stale.iter().any(|w| {
+                w.contains(&id[..id.len().min(8)])
+                    || r.key.as_deref().is_some_and(|k| w.contains(k))
+            })
+        };
+        if row.is_some_and(|r| fael_core::overlap(&r.files, &live.files) && !said(r))
+            && seen.insert(id)
+        {
             let first = c.text.lines().next().unwrap_or("");
             closed.push(format!("{id} — {first}"));
         }
@@ -201,6 +224,7 @@ mod tests {
             base: None,
             worktree: None,
             pr: Some(3),
+            session: None,
             files: vec!["src/".into()],
         };
         let shut = [Shut {
