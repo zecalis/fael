@@ -21,6 +21,7 @@ mod chunk_amend;
 mod chunk_apply_plan;
 mod chunk_brief_paths;
 mod chunk_contract;
+mod chunk_drift;
 mod chunk_hints;
 mod chunk_issue;
 mod chunk_left_link;

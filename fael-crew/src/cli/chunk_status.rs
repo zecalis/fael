@@ -4,6 +4,7 @@
 //! (`merge-tree`, CLI fills). Read-only: no state change.
 
 use super::chunk_conflicts as conflicts;
+use super::chunk_drift::Moved;
 use crate::plan::db;
 use crate::{Args, Repo};
 use fael_crew::{StatusSide, Store};
@@ -16,21 +17,30 @@ struct Filled {
     branch: String,
     ahead: Vec<String>,
     unstaged: Vec<String>,
+    /// a running side: what the default branch did since its base
+    moved: Option<Moved>,
 }
 
 /// `fael chunk status <uid>`: each side's branch/base/ahead + unstaged.
 pub(crate) fn status(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> {
     a.only("chunk status", &["json"])?;
-    let s = Store::open(&db(r))?;
-    let uid = s.uid_any(key)?;
-    let sides = s.status(&uid)?;
-    let filled: Vec<Filled> = sides.into_iter().map(|s| fill(&s)).collect();
+    let st = Store::open(&db(r))?;
+    let uid = st.uid_any(key)?;
+    let sides = st.status(&uid)?;
+    let filled: Vec<Filled> = sides
+        .into_iter()
+        .map(|s| {
+            let mut f = fill(&s);
+            f.moved = super::chunk_drift::of(&st, r, &s.uid).filter(|_| s.state == "running");
+            f
+        })
+        .collect();
     // fail open: no worktree or a store error reads as no neighbours, never a reject
     let hits = filled
         .iter()
         .find(|f| f.side.uid == uid)
         .and_then(|f| f.side.worktree.as_deref())
-        .map(|wt| conflicts::check(Path::new(wt), s.neighbours(&uid).unwrap_or_default()))
+        .map(|wt| conflicts::check(Path::new(wt), st.neighbours(&uid).unwrap_or_default()))
         .unwrap_or_default();
     if a.has("json") {
         let mut v: Vec<serde_json::Value> = filled.iter().map(json_of).collect();
@@ -65,6 +75,7 @@ fn json_of(f: &Filled) -> serde_json::Value {
         "scope": f.side.scope,
         "ahead": f.ahead,
         "unstaged": f.unstaged,
+        "drift": f.moved,
     })
 }
 
@@ -93,6 +104,9 @@ fn text_of(all: &[Filled]) -> String {
         }
         for c in &f.ahead {
             o += &format!("    {c}\n");
+        }
+        if let Some(m) = &f.moved {
+            o += &m.text(&base);
         }
         o += "  unstaged:\n";
         if f.unstaged.is_empty() {
@@ -128,6 +142,7 @@ fn fill(s: &StatusSide) -> Filled {
             branch: s.branch.clone().unwrap_or_else(|| "-".into()),
             ahead: Vec::new(),
             unstaged: Vec::new(),
+            moved: None,
         };
     };
     let dir = Path::new(wt);
@@ -144,6 +159,7 @@ fn fill(s: &StatusSide) -> Filled {
         branch,
         ahead,
         unstaged,
+        moved: None,
     }
 }
 

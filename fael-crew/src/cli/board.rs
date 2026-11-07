@@ -226,7 +226,7 @@ fn project(
     let s = Store::open(&path)?;
     let mut b = s.board(today, stale)?;
     let base = git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
-    fill_left_stale(&s, &r, &mut b.chunks);
+    fill_left_stale(&s, &r, &mut b.chunks, base.as_deref());
     let shared = prs::open_prs(&mut b.chunks, &r.root, base.as_deref());
     let branches = branches::branches(&r.root, base.as_deref(), &b.chunks);
     branches::mark_merged(&mut b.chunks, &branches);
@@ -286,8 +286,8 @@ fn lean(chunks: &mut [BoardChunk]) {
 }
 
 /// `left` from the latest hand-off, `left_open` the still-open subset, `stale`
-/// from the brief against the ledger (read once).
-fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
+/// from the brief against the ledger (read once), `drift` of the running chunks.
+fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk], main: Option<&str>) {
     let log = crate::read(r);
     let shut = fael_core::closed(&log);
     let gone = fael_core::superseded(&log);
@@ -317,7 +317,7 @@ fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
             fael_core::Ref::Missing => false,
         }
     };
-    for c in chunks {
+    for c in chunks.iter_mut() {
         if let Some(h) = &c.handoff {
             c.left = crate::chunk_left::listed(&h.text);
             c.left_open = c.left.iter().filter(|t| open_tok(t)).cloned().collect();
@@ -336,6 +336,8 @@ fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk]) {
             );
         }
     }
+    // after `stale`: a running chunk's drift counts its cited closed rows
+    crate::chunk_drift::fill(s, &r.root, main, &log, chunks);
 }
 
 /// Every linked worktree; a repo with none pools its main checkout as one slot.
