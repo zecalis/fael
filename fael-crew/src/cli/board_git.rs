@@ -92,9 +92,13 @@ pub(super) fn live_branches(projects: &mut [super::Project]) {
 
 /// PR `n` on the base: a squash subject ending `(#n)`, or GitHub's merge commit.
 fn merged(log: &str, n: i64) -> bool {
-    let (squash, merge) = (format!("(#{n})"), format!("Merge pull request #{n} "));
-    log.lines()
-        .any(|s| s.contains(&squash) || s.starts_with(&merge))
+    log.lines().any(|s| names_pr(s, n))
+}
+
+/// A commit subject that is PR `n`'s landing: `(#n)` squash or `Merge pull request #n `.
+pub(crate) fn names_pr(subject: &str, n: i64) -> bool {
+    subject.contains(&format!("(#{n})"))
+        || subject.starts_with(&format!("Merge pull request #{n} "))
 }
 
 /// `git merge-tree --write-tree` (git >= 2.38): 0 = clean, 1 with a tree id = the conflicted

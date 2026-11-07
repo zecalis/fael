@@ -188,6 +188,8 @@ fn chunk_line(all: &HashMap<&str, &BoardChunk>, uid: &str, tag: &str) -> String 
             .stale
             .first()
             .map(|w| w.strip_prefix("warning: ").unwrap_or(w).to_string()),
+        // main moved under it: `fael chunk status <uid>` lists what
+        "running" => c.drift.map(|n| format!("drift {n}")),
         // a lead's overlap check cannot place it, so its set skips it (01M4WZ4M)
         "ready" if c.scope.is_empty() => Some("no scope".into()),
         "blocked" => Some(

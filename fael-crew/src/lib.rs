@@ -47,7 +47,7 @@ pub use board::{
 pub use board_math::{overlap, overlap_how, overlaps};
 pub use brief::rules;
 pub use chunk::{Fields, Here};
-pub use drift::Drift;
+pub use drift::{Drift, Live, Shut};
 pub use ended::EndedRun;
 pub use export::{export, export_json, export_section, feed};
 pub use issue::Fixer;

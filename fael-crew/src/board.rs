@@ -107,6 +107,10 @@ pub struct Chunk {
     /// closed-row warning lines for the title+brief (`chunk start` would refuse); `[]` = none.
     /// Filled by the CLI, only for chunks not done/dropped/replaced
     pub stale: Vec<String>,
+    /// a running chunk: scope-touching commits on the default branch since its base, plus
+    /// closed rows that bear on it (`fael chunk status` lists them); absent = none. The CLI fills it
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drift: Option<usize>,
     /// the owner verbs fael takes for this chunk now (`Owner::takes`)
     pub owner_actions: Vec<&'static str>,
     /// an open PR's branch merged into the base (`git merge-tree`, the CLI fills it): the
@@ -391,6 +395,7 @@ impl Store {
                     left: Vec::new(),
                     left_open: Vec::new(),
                     stale: Vec::new(),
+                    drift: None,
                     owner_actions: Owner::actions(&state),
                     conflicts: None,
                     touched: r
