@@ -21,7 +21,9 @@ fn dur(secs: u64) -> String {
 /// `outcome: 594 PRs merged · 200 listed since … (41 with row · 159 without)
 /// · …` beside the value line — nothing observed = no line. Flow coverage
 /// and the latest throughput week ride the same line (JSON-only before);
-/// `value`/`by_event` text is untouched.
+/// `value`/`by_event` text is untouched. The window segment names the one
+/// window every join used plus how to reproduce it, so the usage `since` and
+/// this line agree instead of mixing three windows.
 pub(super) fn outcome_line(s: &core::stats::Stats) -> Option<String> {
     let o = &s.outcome;
     if o.prs_merged == 0 && o.prs_created == 0 && o.issues_filed == 0 && o.issues_closed == 0 {
@@ -32,6 +34,7 @@ pub(super) fn outcome_line(s: &core::stats::Stats) -> Option<String> {
     } else {
         format!("{} PRs merged", o.prs_merged)
     }];
+    segs.push(window_seg(o));
     let listed = o.prs_with_row + o.prs_without_row;
     if listed > 0 {
         let since = if o.joined_since.is_empty() {
@@ -75,6 +78,21 @@ pub(super) fn outcome_line(s: &core::stats::Stats) -> Option<String> {
         segs.push(format!("{} dones week of {}", last.done, last.week));
     }
     Some(format!("outcome: {}", segs.join(" · ")))
+}
+
+/// The one window every join used, with its source and reproduce flag:
+/// `window 2026-10-01 (usage; --since 2026-10-01)` · `window all` ·
+/// `window unwindowed`. The PR-list reach (`listed since …`, gh limit 200)
+/// stays its own segment and never poses as this window.
+fn window_seg(o: &core::stats::Outcome) -> String {
+    match (o.window_since.as_str(), o.window_source.as_str()) {
+        ("all", _) => "window all (--since all)".to_string(),
+        ("", _) | (_, "none") => "window unwindowed".to_string(),
+        (d, "since") => format!("window {d} (--since {d})"),
+        (d, "usage") => format!("window {d} (usage; --since {d})"),
+        (d, "ledger") => format!("window {d} (oldest log row; --since {d} to align)"),
+        (d, _) => format!("window {d}"),
+    }
 }
 
 #[cfg(test)]
@@ -128,6 +146,8 @@ mod tests {
             joined_since: "2026-10-19".into(),
             prs_with_row: 41,
             prs_without_row: 159,
+            window_since: "2026-10-01".into(),
+            window_source: "usage".into(),
             ..Default::default()
         };
         let f = Flow {
@@ -147,7 +167,7 @@ mod tests {
         assert_eq!(
             outcome_line(&stats_with(o, f, t)).as_deref(),
             Some(
-                "outcome: 594 PRs merged · 200 listed since 2026-10-19 (41 with row · 159 without) \
+                "outcome: 594 PRs merged · window 2026-10-01 (usage; --since 2026-10-01) · 200 listed since 2026-10-19 (41 with row · 159 without) \
                  · issues 12 filed / 9 closed · filed→close med 2h p90 9h (n=9) \
                  · done→merge med 30m p90 1h (n=3 · 105/136 runs with PR) · 4 dones week of 2026-10-26"
             )
@@ -162,8 +182,34 @@ mod tests {
             ..Default::default()
         };
         let line = outcome_line(&stats_with(o, Flow::default(), vec![])).unwrap();
-        assert!(
-            line.starts_with("outcome: PRs merged unknown (offline) · issues 2 filed / 0 closed")
+        assert!(line.starts_with(
+            "outcome: PRs merged unknown (offline) · window unwindowed · issues 2 filed / 0 closed"
+        ));
+    }
+
+    #[test]
+    fn window_segment_names_source_and_reproduce_flag() {
+        let seg = |since: &str, source: &str| {
+            super::window_seg(&Outcome {
+                window_since: since.into(),
+                window_source: source.into(),
+                ..Default::default()
+            })
+        };
+        assert_eq!(seg("all", "all"), "window all (--since all)");
+        assert_eq!(seg("", "none"), "window unwindowed");
+        assert_eq!(seg("", ""), "window unwindowed");
+        assert_eq!(
+            seg("2026-10-01", "since"),
+            "window 2026-10-01 (--since 2026-10-01)"
+        );
+        assert_eq!(
+            seg("2026-10-01", "usage"),
+            "window 2026-10-01 (usage; --since 2026-10-01)"
+        );
+        assert_eq!(
+            seg("2026-09-25", "ledger"),
+            "window 2026-09-25 (oldest log row; --since 2026-09-25 to align)"
         );
     }
 }

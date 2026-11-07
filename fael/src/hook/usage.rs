@@ -211,7 +211,8 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         }
         None => &u.logs,
     };
-    let window = core::stats::outcome_window(u.since, logs);
+    let first_seen = u.parsed.first_seen.values().copied().min();
+    let window = core::stats::outcome_window(u.since, logs, first_seen);
     let mut commit_map = commits_by_clone(u);
     if let Some(k) = &cwd {
         let found = commits(Path::new(k), window.unwrap_or(0));
@@ -221,7 +222,7 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     let runs = super::flow::runs();
     let merges = super::flow::merges(window);
     let tz = local_tz_offset_min();
-    let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, logs, tz);
+    let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, logs, tz, first_seen);
     let mut s = core::stats::aggregate(
         &u.parsed,
         logs,

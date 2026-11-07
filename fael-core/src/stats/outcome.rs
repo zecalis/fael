@@ -33,6 +33,8 @@ pub struct ListedPr {
 
 /// Outcome numbers: PRs merged/created, issues filed/closed, the
 /// filed→closed span, and how many listed PRs carry a fael row.
+/// `window_since`/`window_source` name the one window every join used, so the
+/// usage line and this line can never be read as different windows.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct Outcome {
     pub prs_merged: u64,
@@ -44,6 +46,12 @@ pub struct Outcome {
     pub joined_since: String,
     pub prs_with_row: usize,
     pub prs_without_row: usize,
+    /// The window start as `YYYY-MM-DD`, `"all"` for `--since all`, `""` when unwindowed.
+    #[serde(default)]
+    pub window_since: String,
+    /// `since` (explicit flag) · `all` · `usage` (oldest usage read) · `ledger` (oldest log row) · `none`.
+    #[serde(default)]
+    pub window_source: String,
 }
 
 /// Issue adds in the window, earliest per id across worktrees.
@@ -197,6 +205,27 @@ fn joined_since_str(prs: &[ListedPr]) -> String {
         .unwrap_or_default()
 }
 
+/// Stamp the joined window onto the outcome (see `parse`): name + source.
+pub fn with_window(mut o: Outcome, window: Option<i64>, source: &str) -> Outcome {
+    o.window_since = super::window_str(window);
+    o.window_source = source.into();
+    o
+}
+
+/// Join + stamp the one window (see `parse`): flag → usage → ledger.
+pub fn outcome_windowed(
+    logs: &HashMap<String, Log>,
+    prs: &[ListedPr],
+    total: Option<u64>,
+    commits: &Commits,
+    since: Option<i64>,
+    first_seen: Option<i64>,
+) -> Outcome {
+    let window = super::outcome_window(since, logs, first_seen);
+    let source = super::parse::window_source(since, first_seen, logs);
+    with_window(outcome(logs, prs, total, commits, window), window, source)
+}
+
 /// Join ledger rows to the listed PRs. `prs_merged_total` is the
 /// `gh api search/issues` count for the range (`None` = offline/no `gh`,
 /// reads unknown, never an error). `window` is `parse::outcome_window`:
@@ -234,6 +263,7 @@ pub fn outcome(
         joined_since: joined_since_str(prs),
         prs_with_row: with,
         prs_without_row: without,
+        ..Default::default()
     }
 }
 

@@ -231,6 +231,7 @@ pub(crate) fn outcome_inputs(
     since: Option<i64>,
     logs: &std::collections::HashMap<String, core::Log>,
     tz_min: i32,
+    first_seen: Option<i64>,
 ) -> (Vec<core::stats::ListedPr>, Option<u64>) {
     let Ok(r) = crate::repo() else {
         return (vec![], None);
@@ -240,7 +241,7 @@ pub(crate) fn outcome_inputs(
         .ok()
         .or_else(|| gh_prs(&r.root));
     let prs = list.map(|j| listed_prs(&j)).unwrap_or_default();
-    let total = core::stats::outcome_window(since, logs)
+    let total = core::stats::outcome_window(since, logs, first_seen)
         .and_then(|w| range_for(w, core::now_ms() as i64, tz_min))
         .and_then(|range| prs_merged_count(&r.root, &range));
     (prs, total)

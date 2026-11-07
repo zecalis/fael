@@ -139,7 +139,7 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         outcome,
         Some(
-            serde_json::json!({"prs_merged": 0, "prs_created": 0, "prs_merged_unknown": true, "issues_filed": 0, "issues_closed": 0, "filed_to_close": {"median": 0, "p90": 0, "n": 0}, "joined_since": "", "prs_with_row": 0, "prs_without_row": 0})
+            serde_json::json!({"prs_merged": 0, "prs_created": 0, "prs_merged_unknown": true, "issues_filed": 0, "issues_closed": 0, "filed_to_close": {"median": 0, "p90": 0, "n": 0}, "joined_since": "", "prs_with_row": 0, "prs_without_row": 0, "window_since": "2026-09-26", "window_source": "usage"})
         )
     );
     // its own json! call: one literal with every kind passes the macro's recursion limit
