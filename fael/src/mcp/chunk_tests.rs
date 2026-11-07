@@ -92,6 +92,32 @@ fn result_and_out_fill_text_and_the_fence_reject_speaks_mcp() {
 }
 
 #[test]
+fn elsewhere_machine_line_routes_and_old_prose_still_falls_back() {
+    // fael-crew's machine line carries the root: MCP echoes it back as cwd.
+    let e = "rejected: chunk 01M5J6M1 lives in /w/other — cd /w/other && fael chunk show 01M5J6M1\nfael-elsewhere cwd=/w/other".to_string();
+    let got = super::with_cwd_hint(e.clone());
+    assert!(got.starts_with(&e), "{got}");
+    assert!(
+        got.contains("MCP: re-run this call with \"cwd\": \"/w/other\""),
+        "{got}"
+    );
+    // old binary without the machine line: the prose match still routes.
+    let old =
+        "rejected: chunk 01M5J6M1 lives in /w/other — cd /w/other && fael chunk show 01M5J6M1"
+            .to_string();
+    let got = super::with_cwd_hint(old);
+    assert!(
+        got.contains("MCP: re-run this call with \"cwd\" set to that repo root"),
+        "{got}"
+    );
+    // unrelated errors pass through untouched.
+    assert_eq!(
+        super::with_cwd_hint("rejected: no chunk X".into()),
+        "rejected: no chunk X"
+    );
+}
+
+#[test]
 fn unknown_keys_stay_notes_never_rejects() {
     // a future client field still builds — the note says it fell away
     let a = json!({"verb": "start", "uid": "U1", "future": "x"});
