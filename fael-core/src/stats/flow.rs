@@ -220,7 +220,7 @@ mod tests {
             "{\"v\":1,\"id\":\"Z\",\"ts\":\"2026-10-01T09:00:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"C\"}\n",
         );
         let logs = HashMap::from([("/w/r".to_string(), log_with(issues, closes))]);
-        let window = outcome_window(None, &logs);
+        let window = outcome_window(None, &logs, None);
         assert_eq!(window, crate::ts_ms("2026-10-01T00:00:00Z"));
         let f = flow(&logs, &[], &[], window);
         assert_eq!(
@@ -251,7 +251,7 @@ mod tests {
             "{\"v\":1,\"id\":\"Y\",\"ts\":\"2026-10-01T02:00:00Z\",\"by\":\"w\",\"kind\":\"close\",\"text\":\"t\",\"files\":[],\"ref\":\"B\"}\n",
         );
         let logs = HashMap::from([("/w/r".to_string(), log_with(issues, closes))]);
-        let window = outcome_window(None, &logs);
+        let window = outcome_window(None, &logs, None);
         assert_eq!(window, crate::ts_ms("2026-10-01T00:00:00Z"));
         let f = flow(&logs, &[], &[], window);
         assert_eq!(

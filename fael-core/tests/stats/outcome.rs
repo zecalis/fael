@@ -51,7 +51,9 @@ fn json_shape_outcome_is_frozen() {
             "prs_merged",
             "prs_merged_unknown",
             "prs_with_row",
-            "prs_without_row"
+            "prs_without_row",
+            "window_since",
+            "window_source"
         ],
         "{v}"
     );
@@ -68,7 +70,9 @@ fn json_shape_outcome_is_frozen() {
             && v["outcome"]["issues_closed"].is_u64()
             && v["outcome"]["joined_since"].is_string()
             && v["outcome"]["prs_with_row"].is_u64()
-            && v["outcome"]["prs_without_row"].is_u64(),
+            && v["outcome"]["prs_without_row"].is_u64()
+            && v["outcome"]["window_since"].is_string()
+            && v["outcome"]["window_source"].is_string(),
         "{v}"
     );
     // no gh in the test env: unknown, never an error

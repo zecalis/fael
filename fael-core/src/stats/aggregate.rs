@@ -7,7 +7,7 @@ use super::experience::{Commits, Experience, experience};
 use super::flow::{Flow, WeekCount, flow as flow_stats, throughput as throughput_stats};
 use super::friction::{Friction, friction};
 use super::metrics::{ask_totals, non_english_share, rows_added as count_rows_added};
-use super::outcome::{ListedPr, Outcome, outcome};
+use super::outcome::{ListedPr, Outcome, outcome_windowed};
 use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
 use super::parse::{Parsed, outcome_window};
 use super::retire::{Retired, retired};
@@ -188,10 +188,9 @@ pub fn aggregate(
     let (row_total, foreign_rows) = non_english_share(logs, cfg);
     let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
     let value = value(parsed, logs);
-    // Outcome window: the explicit `--since`, else the oldest log row —
-    // never the first usage, so a fresh clone with zero usage still reads
-    // filed→closed and throughput. Flow and outcome share this one window.
-    let window = outcome_window(since, logs);
+    // One window for the whole screen (see parse); flow and outcome share it.
+    let first_seen = parsed.first_seen.values().copied().min();
+    let window = outcome_window(since, logs, first_seen);
     let mut top: Vec<(&String, &usize)> = parsed.by_id.iter().collect();
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     Stats {
@@ -236,7 +235,7 @@ pub fn aggregate(
         experience: experience(parsed, logs, commits),
         lifecycle: Default::default(),
         flow: flow_stats(logs, runs, merges, window),
-        outcome: outcome(logs, prs, prs_merged_total, commits, window),
+        outcome: outcome_windowed(logs, prs, prs_merged_total, commits, since, first_seen),
         throughput: throughput_stats(runs, window),
         handoff_runs: super::handoff_runs(parsed, runs),
         days: super::days::days(parsed),

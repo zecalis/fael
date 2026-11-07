@@ -178,19 +178,56 @@ pub fn since_arg(s: &str, tz_min: i32) -> Option<i64> {
     }
 }
 
-/// Outcome window for the flow/outcome joins: explicit `--since` when the
-/// caller passed one (`Some(0)` = `--since all`, cuts nothing), else the
-/// oldest log row ts on this machine — never `parsed.first_seen`, so a fresh
-/// clone with zero usage still reads its ledger. `None` = no log row to
-/// window on; the join reads unwindowed rather than erroring.
-pub fn outcome_window(since: Option<i64>, logs: &HashMap<String, Log>) -> Option<i64> {
+/// One window for the whole screen: explicit `--since` (`Some(0)` = all),
+/// else the oldest usage read, else the oldest log row (fresh clone).
+/// `None` = nothing to window on; joins read unwindowed, never error.
+pub fn outcome_window(
+    since: Option<i64>,
+    logs: &HashMap<String, Log>,
+    first_seen: Option<i64>,
+) -> Option<i64> {
     if let Some(ms) = since {
+        return Some(ms);
+    }
+    if let Some(ms) = first_seen {
         return Some(ms);
     }
     logs.values()
         .flat_map(|log| log.rows.iter().chain(log.closes.iter()))
         .filter_map(|r| ts_ms(&r.ts))
         .min()
+}
+
+/// Where the outcome window came from — printed beside the numbers so two
+/// `since` lines on one screen can never be mistaken for one window.
+pub fn window_source(
+    since: Option<i64>,
+    first_seen: Option<i64>,
+    logs: &HashMap<String, Log>,
+) -> &'static str {
+    if let Some(ms) = since {
+        return if ms == 0 { "all" } else { "since" };
+    }
+    if first_seen.is_some() {
+        return "usage";
+    }
+    let any = logs
+        .values()
+        .flat_map(|log| log.rows.iter().chain(log.closes.iter()))
+        .any(|r| ts_ms(&r.ts).is_some());
+    if any { "ledger" } else { "none" }
+}
+
+/// `YYYY-MM-DD` of `outcome_window` (`"all"` / `""`), beside it by design.
+pub fn window_str(window: Option<i64>) -> String {
+    match window {
+        Some(0) => "all".to_string(),
+        Some(ms) => crate::rfc3339(ms.max(0) as u64)
+            .get(..10)
+            .unwrap_or("")
+            .to_string(),
+        None => String::new(),
+    }
 }
 
 /// Ids one usage event handed to the agent — shared by the push counts
@@ -225,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn outcome_window_prefers_explicit_since_else_oldest_log_row() {
+    fn outcome_window_prefers_explicit_since_else_usage_else_log_row() {
         fn rows(jsonl: &str) -> Vec<crate::Row> {
             let (mut out, mut w) = (vec![], vec![]);
             crate::log::parse(jsonl.as_bytes(), "t.jsonl", &mut out, &mut w);
@@ -242,20 +279,41 @@ mod tests {
             ..Default::default()
         };
         let logs = HashMap::from([("/w/r".to_string(), log)]);
-        // no explicit since: the oldest row, whatever its kind
+        // no usage, no explicit since: the oldest row, whatever its kind
         assert_eq!(
-            outcome_window(None, &logs),
+            outcome_window(None, &logs, None),
             crate::ts_ms("2026-10-01T00:00:00Z")
         );
-        // explicit --since wins, even when later than the oldest row
+        // usage read beats the older ledger row: one window for the screen
         assert_eq!(
-            outcome_window(crate::ts_ms("2026-10-02T12:00:00Z"), &logs),
+            outcome_window(None, &logs, crate::ts_ms("2026-10-05T00:00:00Z")),
+            crate::ts_ms("2026-10-05T00:00:00Z")
+        );
+        // explicit --since wins over both, even when later than each
+        assert_eq!(
+            outcome_window(
+                crate::ts_ms("2026-10-02T12:00:00Z"),
+                &logs,
+                crate::ts_ms("2026-10-05T00:00:00Z")
+            ),
             crate::ts_ms("2026-10-02T12:00:00Z")
         );
         // --since all cuts nothing
-        assert_eq!(outcome_window(Some(0), &logs), Some(0));
+        assert_eq!(outcome_window(Some(0), &logs, None), Some(0));
         // no row anywhere: unwindowed, never an error
-        assert_eq!(outcome_window(None, &HashMap::new()), None);
+        assert_eq!(outcome_window(None, &HashMap::new(), None), None);
+        // sources line up with the same precedence
+        assert_eq!(
+            super::window_source(crate::ts_ms("2026-10-02T00:00:00Z"), None, &logs),
+            "since"
+        );
+        assert_eq!(super::window_source(Some(0), None, &logs), "all");
+        assert_eq!(
+            super::window_source(None, crate::ts_ms("2026-10-05T00:00:00Z"), &logs),
+            "usage"
+        );
+        assert_eq!(super::window_source(None, None, &logs), "ledger");
+        assert_eq!(super::window_source(None, None, &HashMap::new()), "none");
     }
 
     #[test]
