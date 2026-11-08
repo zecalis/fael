@@ -259,7 +259,8 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
      start R's live rows are seen now — the launcher calls it while a headless client
      runs, so a long run never reads stalled)
   --cost USD   what the client reported the run cost (opencode: `opencode session export <sessionID>` `.info.cost`; claude's total_cost_usd), a
-               decimal >= 0; kept on start R's rows and shown as run.cost on the board",
+               decimal >= 0; kept on start R's rows and shown as run.cost on the board;
+               headless wrapper: R=$(fael chunk start <uid> --run <new-R> --client <c> --model <m>) && { <run the agent on \"$R\">; fael run end \"$R\" --cost <USD from the client's session export>; }",
     ),
     (
         "restore",
