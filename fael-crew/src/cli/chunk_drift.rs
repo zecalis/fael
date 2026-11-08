@@ -27,6 +27,9 @@ pub(crate) struct Moved {
     /// chunks and ledger rows closed since the start that overlap its files, and the closed
     /// rows its brief cites (the board's `stale`)
     pub closed: Vec<String>,
+    /// how long ago `origin` was last fetched; a drift of 0 is only as fresh as this
+    #[serde(skip)]
+    pub fetched: Option<String>,
 }
 
 impl Moved {
@@ -34,13 +37,42 @@ impl Moved {
         self.commits.len() + self.closed.len()
     }
 
+    fn age(&self) -> String {
+        self.fetched
+            .as_ref()
+            .map(|f| format!(" (origin fetched {f})"))
+            .unwrap_or_default()
+    }
+
+    /// One line for `chunk done` (read it before done ends the run: drift needs a live run);
+    /// None = nothing moved (silent).
+    pub(crate) fn line(&self) -> Option<String> {
+        (self.n() > 0).then(|| {
+            format!(
+                "drift: {} commit(s) on main touch this chunk's files, {} closed row(s) bear on it{} — `fael chunk status {{uid}}` lists them\n",
+                self.commits.len(),
+                self.closed.len(),
+                self.age()
+            ) + &self.next()
+        })
+    }
+
+    /// The commands to act on it — only when a commit touches the files; facts, not a verdict.
+    fn next(&self) -> String {
+        match self.commits.is_empty() {
+            true => String::new(),
+            false => "  to take it in: `git rebase origin/main`; to tell the next agent: `fael chunk note {uid} \"<text>\"`\n".into(),
+        }
+    }
+
     /// The `drift` block of `chunk status`; the lists only when there is something to list.
-    pub(crate) fn text(&self, base: &str) -> String {
+    pub(crate) fn text(&self, base: &str, uid: &str) -> String {
         let mut o = format!(
-            "  drift: main is {} commit(s) past base {base}; {} touch the files, {} closed row(s) bear on it\n",
+            "  drift: main is {} commit(s) past base {base}; {} touch the files, {} closed row(s) bear on it{}\n",
             self.behind,
             self.commits.len(),
-            self.closed.len()
+            self.closed.len(),
+            self.age()
         );
         for c in &self.commits {
             o += &format!("    {c}\n");
@@ -48,6 +80,8 @@ impl Moved {
         for c in &self.closed {
             o += &format!("    closed: {c}\n");
         }
+        o += &self.next().replace("{uid}", uid);
+        o += &self.next();
         o
     }
 }
@@ -150,6 +184,7 @@ fn moved(
         behind: log.len(),
         commits,
         closed,
+        fetched: None,
     }
 }
 
@@ -162,7 +197,36 @@ pub(crate) fn of(s: &Store, r: &Repo, uid: &str) -> Option<Moved> {
     let (title, brief, issues) = s.stale_input(uid).ok()?;
     let stale = crate::chunk_scope::stale_warnings(&title, &brief, &issues, &ledger, uid);
     let shut = s.shut_since(&live.started).ok()?;
-    Some(moved(&log, &live, &ledger, &shut, &stale))
+    let mut m = moved(&log, &live, &ledger, &shut, &stale);
+    m.fetched = fetched_ago(&r.root);
+    Some(m)
+}
+
+/// Age of the last fetch, from `FETCH_HEAD`'s mtime. None = never fetched here.
+// ponytail: FETCH_HEAD is per worktree, so a fetch from a sibling worktree reads as older
+fn fetched_ago(root: &Path) -> Option<String> {
+    let p = root.join(git(root, &["rev-parse", "--git-path", "FETCH_HEAD"])?);
+    let s = std::fs::metadata(p)
+        .ok()?
+        .modified()
+        .ok()?
+        .elapsed()
+        .ok()?
+        .as_secs();
+    Some(match s {
+        0..=89 => "just now".into(),
+        90..=5399 => format!("{}m ago", s / 60),
+        5400..=129_599 => format!("{}h ago", s / 3600),
+        _ => format!("{}d ago", s / 86400),
+    })
+}
+
+/// What `chunk done` says about drift: empty when nothing moved.
+pub(crate) fn done_line(s: &Store, r: &Repo, uid: &str) -> String {
+    of(s, r, uid)
+        .and_then(|m| m.line())
+        .unwrap_or_default()
+        .replace("{uid}", uid)
 }
 
 /// The board: sets `drift` on every running chunk that has some. `main` = `origin/HEAD`'s

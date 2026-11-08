@@ -106,7 +106,7 @@ fn text_of(all: &[Filled]) -> String {
             o += &format!("    {c}\n");
         }
         if let Some(m) = &f.moved {
-            o += &m.text(&base);
+            o += &m.text(&base, &f.side.uid);
         }
         o += "  unstaged:\n";
         if f.unstaged.is_empty() {

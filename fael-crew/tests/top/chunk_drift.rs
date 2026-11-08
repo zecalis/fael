@@ -144,3 +144,51 @@ fn main_moving_under_a_running_chunk_shows_in_status_and_on_the_board() {
         running_line(&d, &uid)
     );
 }
+
+#[test]
+fn done_says_drift_once_when_it_is_earned_and_is_silent_otherwise() {
+    let (d, o, uid) = fixture();
+    git(&d, &["fetch", "-q"]);
+    let quiet = fael(&d, &["chunk", "status", &uid]);
+    assert!(quiet.contains("origin fetched"), "{quiet}");
+
+    commit(&o, "src/x.rs", "feat: x moved (#7)");
+    git(&d, &["fetch", "-q"]);
+    let out = fael(
+        &d,
+        &[
+            "chunk",
+            "done",
+            &uid,
+            "handed over",
+            "--no-change",
+            "--left",
+            "none",
+        ],
+    );
+    assert!(
+        out.contains("drift: 1 commit(s) on main touch this chunk's files"),
+        "{out}"
+    );
+    assert!(out.contains(&format!("fael chunk status {uid}")), "{out}");
+    assert!(out.contains("git rebase origin/main"), "{out}");
+    assert!(out.contains(&format!("fael chunk note {uid}")), "{out}");
+}
+
+#[test]
+fn done_is_silent_without_drift() {
+    let (d, _o, uid) = fixture();
+    let out = fael(
+        &d,
+        &[
+            "chunk",
+            "done",
+            &uid,
+            "handed over",
+            "--no-change",
+            "--left",
+            "none",
+        ],
+    );
+    assert!(!out.contains("drift:"), "{out}");
+}
