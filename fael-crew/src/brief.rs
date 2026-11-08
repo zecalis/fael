@@ -147,6 +147,49 @@ fn avoid(o: &mut String, all: &[super::handoff::Avoid], more: usize) {
     }
 }
 
+/// Size/model/scope line plus the L-box, so `render` stays at the line ratchet.
+fn head_fields(o: &mut String, c: &Brief) {
+    let fields: Vec<String> = [("size", &c.size), ("model", &c.model)]
+        .iter()
+        .filter_map(|(k, v)| v.as_ref().map(|v| format!("{k} {v}")))
+        .chain(
+            c.scope
+                .as_ref()
+                .map(|s| format!("scope {}", s.replace('\n', ", "))),
+        )
+        .chain(
+            c.base
+                .as_deref()
+                .map(|b| format!("base {}", b.chars().take(8).collect::<String>())),
+        )
+        .collect();
+    if !fields.is_empty() {
+        let _ = writeln!(o, "{}", fields.join(" · "));
+    }
+    l_box(o, c);
+}
+
+/// L-box: a big chunk runs one Done at a time, checkpoints each step, and splits
+/// what does not fit instead of growing one PR (fael never infers, the agent judges).
+fn l_box(o: &mut String, c: &Brief) {
+    if c.size.as_deref() != Some("L") {
+        return;
+    }
+    let _ = writeln!(
+        o,
+        "L: big chunk — one Done at a time, step commit + note each step; too big? ship the passing part as this PR, `fael chunk add --brief ...` the rest and name it in `--left`"
+    );
+}
+
+/// A section updated past the run start changed mid-run: mark it.
+/// Lexicographic compare holds for RFC3339 timestamps.
+fn drift_mark(updated: &str, started: Option<&str>) -> &'static str {
+    match started {
+        Some(st) if updated > st => " *(changed since start)*",
+        _ => "",
+    }
+}
+
 /// Live + avoid in one call so `render` stays at the line ratchet.
 fn live_avoid(o: &mut String, c: &Brief) {
     live(o, &c.live, c.live_more);
@@ -203,18 +246,7 @@ impl Started {
                 "\n# {label}{} ({})\nplan {} — {}",
                 c.title, c.uid, c.plan, c.plan_title
             );
-            let fields: Vec<String> = [("size", &c.size), ("model", &c.model)]
-                .iter()
-                .filter_map(|(k, v)| v.as_ref().map(|v| format!("{k} {v}")))
-                .chain(
-                    c.scope
-                        .as_ref()
-                        .map(|s| format!("scope {}", s.replace('\n', ", "))),
-                )
-                .collect();
-            if !fields.is_empty() {
-                let _ = writeln!(o, "{}", fields.join(" · "));
-            }
+            head_fields(&mut o, c);
             if !full {
                 handoffs(&mut o, "before this, handed off", &c.after, true);
             }
@@ -390,7 +422,12 @@ impl Started {
             if !missing.is_empty() || !heads.is_empty() {
                 let _ = writeln!(o, "\n<!-- plan {} -->", c.plan);
                 for s in heads {
-                    let _ = write!(o, "\n{}", one(s));
+                    let _ = write!(
+                        o,
+                        "\n{}{}",
+                        one(s),
+                        drift_mark(&s.updated, c.started.as_deref())
+                    );
                     shown.push(&s.key);
                 }
                 for s in missing {

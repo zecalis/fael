@@ -173,11 +173,26 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     if let Ok(s) = Store::open(&db(r)) {
         for c in &st.chunks {
             crate::chunk_scope::warn(&s, r, &c.uid, true);
+            print_drift(&s, r, &c.uid);
         }
     }
     // e3 scoped board default: this plan's open rows, plus colliding chunks.
     print!("{}", scoped_board_lines(&st));
     Ok(())
+}
+
+/// Start-time drift: what `origin/HEAD` did past this run's base, and closed rows
+/// bearing on it — the same facts `chunk status` shows, fail-open and silent when
+/// there is nothing (a fresh base usually means nothing moved yet; the agent
+/// re-checks with `chunk status` before the first edit and mid-run).
+fn print_drift(s: &Store, r: &Repo, uid: &str) {
+    let line = crate::chunk_drift::of(s, r, uid)
+        .and_then(|m| m.line())
+        .unwrap_or_default()
+        .replace("{uid}", uid);
+    if !line.is_empty() {
+        print!("{line}");
+    }
 }
 
 /// e3 scoped board default: one plan's open rows plus the running chunks

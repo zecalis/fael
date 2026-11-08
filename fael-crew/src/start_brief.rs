@@ -4,6 +4,7 @@ use super::lookup::{lookup, no_chunk};
 use super::section;
 use super::start::Brief;
 use super::store::{Store, err};
+use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
 
 impl Store {
@@ -75,6 +76,8 @@ pub(super) fn brief(
                     avoid_more: 0,
                     resume: None,
                     issues: vec![],
+                    started: None,
+                    base: None,
                 };
                 Ok((b, r.get::<_, i64>(9)?, r.get::<_, String>(10)?))
             },
@@ -100,6 +103,7 @@ pub(super) fn brief(
             )
             .map_err(err)?,
     };
+    (b.started, b.base) = run_seat(tx, id, start)?;
     b.sections = section::list(tx, pid)?;
     b.reads = reads
         .lines()
@@ -134,6 +138,33 @@ pub(super) fn brief(
     (b.live, b.live_more) = super::handoff::live(tx, id, b.scope.as_deref())?;
     (b.avoid, b.avoid_more) = super::handoff::avoid(tx, id, b.scope.as_deref(), stale)?;
     Ok(b)
+}
+
+/// This run's seat (or the latest run's): the line section drift is judged
+/// against. `None` when the chunk never started.
+fn run_seat(
+    tx: &Transaction,
+    id: i64,
+    start: Option<&str>,
+) -> Result<(Option<String>, Option<String>), String> {
+    match start {
+        Some(r) => tx
+            .query_row(
+                "SELECT started, base FROM run WHERE start = ?1 AND chunk = ?2",
+                rusqlite::params![r, id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(err),
+        None => tx
+            .query_row(
+                "SELECT started, base FROM run WHERE chunk = ?1 ORDER BY id DESC LIMIT 1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(err)
+            .map(|r| r.unwrap_or((None, None))),
+    }
 }
 
 fn texts(tx: &Transaction, sql: &str, uid: &str) -> Result<Vec<String>, String> {

@@ -43,6 +43,8 @@ fn chunk(uid: &str) -> Brief {
         avoid_more: 0,
         resume: None,
         issues: vec![],
+        started: None,
+        base: None,
     }
 }
 
@@ -518,4 +520,73 @@ fn the_brief_renders_avoid_cards_with_doing_and_do() {
         assert!(t.contains(needle), "{needle} in {t}");
     }
     assert!(t.contains("wiring the form"), "{t}");
+}
+
+/// L-box: only a size-L chunk gets the big-chunk discipline line.
+#[test]
+fn only_a_size_l_chunk_gets_the_l_box() {
+    let mut c = chunk("A");
+    c.size = Some("L".into());
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    }
+    .text();
+    assert!(t.contains("L: big chunk"), "{t}");
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![chunk("B")],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    }
+    .text();
+    assert!(!t.contains("L: big chunk"), "{t}");
+}
+
+/// Section drift: a section updated past the run's start is marked, an older
+/// one is not, and a chunk that never started marks nothing.
+#[test]
+fn a_section_updated_past_the_start_is_marked() {
+    let mut c = chunk("A");
+    c.started = Some("2026-10-11T00:00:00Z".into());
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    }
+    .text();
+    assert!(t.contains("(changed since start)"), "{t}");
+    let mut c = chunk("B");
+    c.started = Some("2026-10-13T00:00:00Z".into());
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    }
+    .text();
+    assert!(!t.contains("(changed since start)"), "{t}");
+}
+
+/// The run's base rides the brief header, so the agent's verify step names it.
+#[test]
+fn the_brief_names_the_run_base_short() {
+    let mut c = chunk("A");
+    c.base = Some("abcdef1234567890".into());
+    let t = Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    }
+    .text();
+    assert!(t.contains("base abcdef12"), "{t}");
 }
