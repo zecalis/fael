@@ -483,6 +483,7 @@ pub(crate) fn done(
     let kept = st.claimed_at_end(uid, here.run);
     // the run's start, read before done ends it: held rows `start` named after it are not repeated
     let started = st.run_started(uid, here.run);
+    let drift = crate::chunk_drift::done_line(&st, r, uid);
     let mut pr = pr;
     if pr.is_none() && src.is_none() && !no_change {
         pr = auto_pr(r, branch.as_deref(), here)?;
@@ -512,7 +513,7 @@ pub(crate) fn done(
     crate::chunk_prs::say_branch(explicit, (&r.root, branch.as_deref().or(here.branch)), pr);
     print!("{}", held_hint(diff.as_ref(), started.as_deref(), &linked));
     println!("chunk {uid} → {to}");
-    print!("{}", st.drift_line(uid));
+    print!("{}{drift}", st.drift_line(uid));
     let reviewed = a.one("review").is_some();
     print!(
         "{}",
