@@ -2,15 +2,15 @@
 //! as capture → acted → outcome beside what other blocks already count
 //! (`said.finding`, `said.check`, `capture`, `context_loop`). Never inferred:
 //! a fix is a close or a commit that names its evidence, a check is a
-//! backticked path with a `/` in the close, a repeat is the agent's own
-//! `--supersedes`. Pure: kept usage rows, loaded logs and the default
-//! branch's commits (read by the caller) in.
+//! guard (backticked path with a `/`) or a don't-because in the close,
+//! a repeat is the agent's own `--supersedes`. Pure: kept usage rows,
+//! loaded logs and the default branch's commits (read by the caller) in.
 
 use super::capture::mine;
 use super::parse::Parsed;
 use super::repeat::{closed_issues, closes, pairs};
-use crate::shape::guard;
 pub use crate::shape::{CLOSE_TEMPLATE, Shape, close_shape};
+use crate::shape::{dont_because, guard};
 use crate::{Log, ts_ms};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -171,7 +171,7 @@ fn close_texts(log: &Log) -> HashMap<&str, Vec<&str>> {
 }
 
 pub(super) fn names_check(texts: &[&str]) -> bool {
-    texts.iter().any(|t| guard(t))
+    texts.iter().any(|t| guard(t) || dont_because(t))
 }
 
 /// The ids sharing `prefix`'s first `SHORT` chars, for `resolve`.

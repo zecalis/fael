@@ -689,9 +689,9 @@ fn conflict_note(dir: &Path, base: &str, b: &str) {
 /// and edges kept.
 pub(crate) fn move_to(a: &Args, s: &mut Store, uid: &str, now: &str) -> Result<(), String> {
     a.only("chunk move", &["plan"])?;
-    let plan = a
-        .one("plan")
-        .ok_or("rejected: chunk move needs --plan <p>")?;
+    let plan = a.one("plan").ok_or(format!(
+        "rejected: chunk move needs --plan <p> — try `fael chunk move {uid} --plan <p>`"
+    ))?;
     let from = s.move_to(uid, &plan, now)?;
     println!("chunk {uid} → moved from {from} to {plan}");
     Ok(())

@@ -48,7 +48,7 @@ mod tests {
         assert!(l1.text.contains("hello"));
         let seen = crate::hook::say_contract::seen("s.seen");
         let say = |l: Line| {
-            let mut out = Outbox::open(At::Edit, lock_seen(&seen));
+            let mut out = Outbox::open(At::SessionStart, lock_seen(&seen));
             out.say(l);
             out.reply().context().map(String::from)
         };

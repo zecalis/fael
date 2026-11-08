@@ -65,7 +65,8 @@ pub(super) fn seen(e: &Event) {
 pub(super) fn report(e: &Event) {
     let model = e.model.as_deref().filter(|m| !m.is_empty());
     let cost = e.cost.filter(|c| c.is_finite() && *c >= 0.0);
-    if model.is_none() && cost.is_none() {
+    let client = e.client.as_deref().filter(|c| !c.is_empty());
+    if model.is_none() && cost.is_none() && client.is_none() {
         return;
     }
     let Some(session) = e.session.as_deref().filter(|s| !s.is_empty()) else {
@@ -73,7 +74,7 @@ pub(super) fn report(e: &Event) {
     };
     // the id `chunk start` read from $CLAUDE_CODE_SESSION_ID, not the transcript path
     let session = super::state::session_id(session);
-    report_held(session, model, cost);
+    report_held(session, model, cost, client);
     let Some(r) = e
         .cwd
         .as_deref()
@@ -82,7 +83,7 @@ pub(super) fn report(e: &Event) {
         return;
     };
     let db = core::work::db_for(r.journal.as_deref(), &r.fael);
-    let _ = core::work::mark_report(&db, &r.root.to_string_lossy(), session, model, cost);
+    let _ = core::work::mark_report(&db, &r.root.to_string_lossy(), session, model, cost, client);
 }
 
 /// The run this session's `chunk start` bound, wherever the session works now: a
@@ -110,10 +111,10 @@ fn seen_held(session: &str, model: Option<&str>) {
     }
 }
 
-/// [`seen_held`]'s db for model/cost: the same held-session file, but the
+/// [`seen_held`]'s db for model/cost/client: the same held-session file, but the
 /// marker stays — a reported cost never ends the run, so it never retires
 /// the file (that is `seen_held`'s call when no live run is left).
-fn report_held(session: &str, model: Option<&str>, cost: Option<f64>) {
+fn report_held(session: &str, model: Option<&str>, cost: Option<f64>, client: Option<&str>) {
     let Some(m) = core::work::held_session_file(session) else {
         return;
     };
@@ -123,7 +124,7 @@ fn report_held(session: &str, model: Option<&str>, cost: Option<f64>) {
     else {
         return;
     };
-    let _ = core::work::mark_report_session(Path::new(&db), session, model, cost);
+    let _ = core::work::mark_report_session(Path::new(&db), session, model, cost, client);
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the turn's receipt for the user —

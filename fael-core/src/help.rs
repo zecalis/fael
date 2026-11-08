@@ -36,7 +36,8 @@ pub fn bare(cmd: &str) -> Option<&'static str> {
   wait <uid> \"<question>\" --on owner|data
   show <uid|label>          one chunk as the board has it
   add \"<title>\"             a new draft (--plan inbox|<plan>)
-one verb: fael chunk <verb> --help · all verbs: fael chunk --help",
+one verb: fael chunk <verb> --help · all verbs: fael chunk --help
+uids: fael board --open lists uids (`fael plan export <plan>` lists them per plan)",
         ),
         "plan" => Some(
             "fael plan — sections plus chunks in crew.db
@@ -45,7 +46,8 @@ one verb: fael chunk <verb> --help · all verbs: fael chunk --help",
   apply <file|-> --dry-run  change it through the bill
   new <name> \"<title>\"      a new plan
   park|unpark|done|undone|drop <plan>
-one verb: fael plan <verb> --help · all verbs: fael plan --help",
+one verb: fael plan <verb> --help · all verbs: fael plan --help
+names: fael plan list lists plans",
         ),
         _ => None,
     }

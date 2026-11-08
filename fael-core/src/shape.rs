@@ -165,7 +165,7 @@ pub(crate) fn guard(text: &str) -> bool {
 
 /// `don't <X> because <Y>` — the template's branch when no test can guard the
 /// fix. Case-insensitive; both the curly and the straight apostrophe count.
-fn dont_because(text: &str) -> bool {
+pub(crate) fn dont_because(text: &str) -> bool {
     let lower = text.to_lowercase();
     (lower.contains("don't") || lower.contains("don\u{2019}t") || lower.contains("do not"))
         && lower.contains("because")
@@ -193,7 +193,7 @@ pub fn close_rejects(text: &str, kind: &str) -> Vec<String> {
         );
     }
     if !shape.guard && !dont_because(text) {
-        r.push("close names no check — guard `<dir>/<test-file>` (a backticked path holding a `/`) or don't <X> because <Y>".into());
+        r.push("close names no check — guard `<dir>/<test-file>` (a backticked path holding a `/`) or don't <X> because <Y> (needs the word \"because\", case-insensitive)".into());
     }
     r
 }

@@ -291,12 +291,17 @@ fn check_lonely_because(o: &Start, m: &str) -> Result<(), String> {
 /// What follows a not-ready reason. A wait on the owner is the owner's to end, so the verb is
 /// named for them, never for the agent to type; `why` is `ready::ready_in`'s text.
 fn way_out(why: &str, m: &str) -> String {
-    match why.starts_with("it waits on owner") {
-        true => format!(
+    if why.contains("it waits on owner") {
+        return format!(
             "the owner's answer unblocks it (`fael chunk answer {m} \"<text>\"` or the board); the question: `fael chunk show {m}`"
-        ),
-        false => format!("try `fael chunk show {m}`"),
+        );
     }
+    if why.contains("it is draft") {
+        return format!(
+            "it is draft (added with no brief) — try `fael chunk edit {m} --brief \"<why + done>\"` then `fael chunk start {m}`; details: `fael chunk show {m}`"
+        );
+    }
+    format!("try `fael chunk show {m}`")
 }
 
 /// One run row. `loc` = (worktree, branch, base); `with` = the joint partners, first in

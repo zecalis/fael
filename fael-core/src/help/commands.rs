@@ -50,7 +50,8 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
         "fael close (<id> | --key <key>) \"<why>\" [--force]
     (an exact id or unique prefix names the row; closing twice is rejected;
      --key closes the one open row on that key, and lists them if there are several;
-     an issue's reason needs <cause> → <fix> plus guard `<test>` or don't <X> because <Y> — the reject ends with the `try` call; or pass --force)",
+     an issue's reason needs <cause> → <fix> plus guard `<test>` or don't <X> because <Y> (needs the word \"because\") — the reject ends with the `try` call; or pass --force;
+     see docs/format.md §Label for the shape table)",
     ),
     (
         "bump",

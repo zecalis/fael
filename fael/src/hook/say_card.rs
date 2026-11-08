@@ -122,18 +122,24 @@ pub(crate) fn policy(k: &Kind) -> Policy {
             ..card(SayKind::Fixed, Key, Some("fael close"), PUSH)
         },
         Kind::Overlap { .. } => card(SayKind::Overlap, Key, Some("fael chunk note"), EDIT),
-        Kind::Inbox { .. } => card(
-            SayKind::Inbox,
-            Key,
-            Some("fael chunk note"),
-            &[At::SessionStart, At::Edit],
-        ),
-        Kind::Checkpoint { .. } => card(
-            SayKind::Checkpoint,
-            Key,
-            Some("fael chunk note"),
-            &[At::Search],
-        ),
+        Kind::Inbox { .. } => Policy {
+            cut: Cut::Last(5),
+            ..card(
+                SayKind::Inbox,
+                Key,
+                Some("fael chunk note"),
+                &[At::SessionStart],
+            )
+        },
+        Kind::Checkpoint { .. } => Policy {
+            cut: Cut::First(4),
+            ..card(
+                SayKind::Checkpoint,
+                Key,
+                Some("fael chunk note"),
+                &[At::Search],
+            )
+        },
         Kind::ChunkBrief { .. } => card(
             SayKind::ChunkBrief,
             Key,
