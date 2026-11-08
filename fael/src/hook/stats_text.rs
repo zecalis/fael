@@ -237,10 +237,19 @@ fn print_warnings(s: &core::stats::Stats) {
         );
     }
     for l in s.test_leaks.iter().take(3) {
-        println!(
-            "  warning: `{}` called ×{} within a minute from one stream — looks like a test leak; set FAEL_STATE_DIR",
-            l.cmd, l.calls
-        );
+        // a repo-path stream names no session: a test run that forgot FAEL_STATE_DIR.
+        // a session-id stream is a live agent: a poll/retry loop, not a test.
+        if l.stream.starts_with('/') {
+            println!(
+                "  warning: `{}` called ×{} within a minute from one stream — looks like a test leak; set FAEL_STATE_DIR",
+                l.cmd, l.calls
+            );
+        } else {
+            println!(
+                "  warning: `{}` called ×{} within a minute in one agent session — a poll/retry loop, not a test: poll with `fael board --json --watch` or `plan export --since`, with backoff",
+                l.cmd, l.calls
+            );
+        }
     }
 }
 

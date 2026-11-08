@@ -1,8 +1,10 @@
 //! Stats self-check: one (command, flags, session) repeated `LEAK_CALLS`
-//! times inside `LEAK_WINDOW_MS` is no agent — it is a test run that forgot
-//! `FAEL_STATE_DIR` and wrote into the real `usage.jsonl` (about 83k identical
-//! `plan --help` lines once, found only by chance). Counted from `event:"call"`
-//! lines only; says that it looks like a leak, never removes anything. Pure.
+//! times inside `LEAK_WINDOW_MS` is no steady agent work — it is either a
+//! test run that forgot `FAEL_STATE_DIR` and wrote into the real `usage.jsonl`
+//! (about 83k identical `plan --help` lines once, found only by chance) or a
+//! runaway poll/retry loop in a live agent session (a session id repeating
+//! `plan export`/`find` hundreds of times a minute). Counted from
+//! `event:"call"` lines only; says what it looks like, never removes anything. Pure.
 
 use super::parse::Parsed;
 use crate::ts_ms;
