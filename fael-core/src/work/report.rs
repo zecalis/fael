@@ -7,8 +7,9 @@ use std::path::Path;
 
 /// Report what the client says its session runs as and cost so far (opencode
 /// stop/session-start): the live runs of this worktree get the reported model
-/// (actual wins over the start-time hint) and cost (last writer wins = session
-/// total). Never ends a run, never touches another worktree's rows. An RFC3339
+/// (actual wins over the start-time hint), the reporting client (fills a NULL
+/// start-time client only, never overwrites it) and cost (last writer wins =
+/// session total). Never ends a run, never touches another worktree's rows. An RFC3339
 /// hook session is never stored — like `db::mark_seen` it only matches rows
 /// that already hold it. Fail-open, never migrates.
 pub fn mark_report(
@@ -17,25 +18,33 @@ pub fn mark_report(
     session: &str,
     model: Option<&str>,
     cost: Option<f64>,
+    client: Option<&str>,
 ) -> usize {
     if !db.exists() || session.is_empty() {
         return 0;
     }
-    if model.is_none_or(|m| m.is_empty()) && cost.is_none() {
+    if model.is_none_or(|m| m.is_empty()) && cost.is_none() && client.is_none_or(|c| c.is_empty()) {
         return 0;
     }
     // fael never prices: a bad tally is dropped, never stored
     let cost = cost.filter(|c| c.is_finite() && *c >= 0.0);
-    if model.is_none_or(|m| m.is_empty()) && cost.is_none() {
+    if model.is_none_or(|m| m.is_empty()) && cost.is_none() && client.is_none_or(|c| c.is_empty()) {
         return 0;
     }
     let Ok(c) = rusqlite::Connection::open(db) else {
         return 0;
     };
     c.execute(
-        "UPDATE run SET model = COALESCE(?3, model), cost = COALESCE(?4, cost)
+        "UPDATE run SET model = COALESCE(?3, model), cost = COALESCE(?4, cost),
+                        client = COALESCE(client, ?5)
          WHERE worktree = ?1 AND ended IS NULL AND (session IS NULL OR session = ?2)",
-        rusqlite::params![worktree, session, model, cost],
+        rusqlite::params![
+            worktree,
+            session,
+            model,
+            cost,
+            client.filter(|s| !s.is_empty())
+        ],
     )
     .unwrap_or(0)
 }
@@ -48,11 +57,12 @@ pub fn mark_report_session(
     session: &str,
     model: Option<&str>,
     cost: Option<f64>,
+    client: Option<&str>,
 ) -> usize {
     if !db.exists() || session.is_empty() {
         return 0;
     }
-    if model.is_none_or(|m| m.is_empty()) && cost.is_none() {
+    if model.is_none_or(|m| m.is_empty()) && cost.is_none() && client.is_none_or(|c| c.is_empty()) {
         return 0;
     }
     if crate::ts_ms(session).is_some() {
@@ -60,16 +70,17 @@ pub fn mark_report_session(
     }
     // fael never prices: a bad tally is dropped, never stored
     let cost = cost.filter(|c| c.is_finite() && *c >= 0.0);
-    if model.is_none_or(|m| m.is_empty()) && cost.is_none() {
+    if model.is_none_or(|m| m.is_empty()) && cost.is_none() && client.is_none_or(|c| c.is_empty()) {
         return 0;
     }
     let Ok(c) = rusqlite::Connection::open(db) else {
         return 0;
     };
     c.execute(
-        "UPDATE run SET model = COALESCE(?2, model), cost = COALESCE(?3, cost)
+        "UPDATE run SET model = COALESCE(?2, model), cost = COALESCE(?3, cost),
+                        client = COALESCE(client, ?4)
          WHERE session = ?1 AND ended IS NULL",
-        rusqlite::params![session, model, cost],
+        rusqlite::params![session, model, cost, client.filter(|s| !s.is_empty())],
     )
     .unwrap_or(0)
 }
@@ -129,7 +140,14 @@ mod tests {
         let (d, db) = report_db();
         // the session-bound and the unbound live rows in this worktree land it
         assert_eq!(
-            mark_report(&db, "/wt", "ses_abc", Some("opencode-go/m"), Some(0.062652)),
+            mark_report(
+                &db,
+                "/wt",
+                "ses_abc",
+                Some("opencode-go/m"),
+                Some(0.062652),
+                None
+            ),
             2
         );
         assert_eq!(
@@ -148,11 +166,14 @@ mod tests {
         assert_eq!(reported(&db, 3), (None, None, Some("ses_abc".into())));
         assert_eq!(reported(&db, 4), (None, None, Some("ses_abc".into())));
         // last writer wins = session total: a second stop overwrites the cost
-        assert_eq!(mark_report(&db, "/wt", "ses_abc", None, Some(0.14646)), 2);
+        assert_eq!(
+            mark_report(&db, "/wt", "ses_abc", None, Some(0.14646), None),
+            2
+        );
         assert_eq!(reported(&db, 1).1, Some(0.14646));
         // the actual wins over the start-time hint on the next report
         assert_eq!(
-            mark_report(&db, "/wt", "ses_abc", Some("opencode-go/n"), None),
+            mark_report(&db, "/wt", "ses_abc", Some("opencode-go/n"), None, None),
             2
         );
         assert_eq!(reported(&db, 1).0.as_deref(), Some("opencode-go/n"));
@@ -165,7 +186,7 @@ mod tests {
         let ts = "2026-10-24T07:47:46.457Z";
         // worktree match still lands model/cost, but the timestamp is never stored
         assert_eq!(
-            mark_report(&db, "/wt", ts, Some("opencode-go/m"), Some(0.5)),
+            mark_report(&db, "/wt", ts, Some("opencode-go/m"), Some(0.5), None),
             1
         );
         assert_eq!(
@@ -174,15 +195,56 @@ mod tests {
         );
         // the session path refuses the timestamp outright
         assert_eq!(
-            mark_report_session(&db, ts, Some("opencode-go/m"), Some(0.5)),
+            mark_report_session(&db, ts, Some("opencode-go/m"), Some(0.5), None),
             0
         );
         // bad tallies are dropped, never stored — and nothing to say is a no-op
-        assert_eq!(mark_report(&db, "/wt", "ses_abc", None, Some(f64::NAN)), 0);
-        assert_eq!(mark_report(&db, "/wt", "ses_abc", None, Some(-1.0)), 0);
-        assert_eq!(mark_report(&db, "/wt", "ses_abc", None, None), 0);
-        assert_eq!(mark_report(&db, "/wt", "", Some("m"), Some(1.0)), 0);
-        assert_eq!(mark_report_session(&db, "ses_abc", None, None), 0);
+        assert_eq!(
+            mark_report(&db, "/wt", "ses_abc", None, Some(f64::NAN), None),
+            0
+        );
+        assert_eq!(
+            mark_report(&db, "/wt", "ses_abc", None, Some(-1.0), None),
+            0
+        );
+        assert_eq!(mark_report(&db, "/wt", "ses_abc", None, None, None), 0);
+        assert_eq!(mark_report(&db, "/wt", "", Some("m"), Some(1.0), None), 0);
+        assert_eq!(mark_report_session(&db, "ses_abc", None, None, None), 0);
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn report_fills_a_null_client_only() {
+        let (d, db) = report_db();
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute("UPDATE run SET client = 'opencode' WHERE id = 1", [])
+            .unwrap();
+        drop(c);
+        // client-only report still writes (model/cost absent)
+        assert_eq!(
+            mark_report(&db, "/wt", "ses_abc", None, None, Some("opencode")),
+            2
+        );
+        let c = rusqlite::Connection::open(&db).unwrap();
+        let got: (Option<String>, Option<String>) = c
+            .query_row("SELECT client, model FROM run WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(got.0.as_deref(), Some("opencode"), "preset client kept");
+        let got2: Option<String> = c
+            .query_row("SELECT client FROM run WHERE id = 2", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(got2.as_deref(), Some("opencode"), "NULL client filled");
+        // a second client never overwrites the first
+        assert_eq!(
+            mark_report(&db, "/wt", "ses_abc", None, None, Some("claude")),
+            2
+        );
+        let got3: Option<String> = c
+            .query_row("SELECT client FROM run WHERE id = 2", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(got3.as_deref(), Some("opencode"));
         let _ = std::fs::remove_dir_all(d);
     }
 
@@ -191,7 +253,7 @@ mod tests {
         let (d, db) = report_db();
         // `--no-worktree` rows match by session alone, from any cwd
         assert_eq!(
-            mark_report_session(&db, "ses_abc", Some("opencode-go/m"), Some(1.25)),
+            mark_report_session(&db, "ses_abc", Some("opencode-go/m"), Some(1.25), None),
             2
         );
         assert_eq!(

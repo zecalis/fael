@@ -165,9 +165,9 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
         ["wait", uid, text] => {
             // `--run R`: a start in another checkout's worktree (`start --worktree`) answers here
             a.only("chunk wait", &["on", "until", "option", "run"])?;
-            let on = a
-                .one("on")
-                .ok_or("rejected: chunk wait needs --on owner|data")?;
+            let on = a.one("on").ok_or(format!(
+                "rejected: chunk wait needs --on owner|data — try `fael chunk wait {uid} \"<question>\" --on owner|data`"
+            ))?;
             let (until, options) = (a.one("until"), a.many("option"));
             s()?.wait(uid, &on, text, until.as_deref(), &options, &here)?;
             crate::chunk_ask::waiting(uid, &on, text);

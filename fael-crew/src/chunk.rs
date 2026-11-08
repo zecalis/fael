@@ -65,7 +65,15 @@ pub(super) fn set(
     now: &str,
 ) -> Result<(), String> {
     if to != r.state {
-        check(r.state, to).map_err(|e| format!("{e} ({})", r.uid))?;
+        check(r.state, to).map_err(|e| {
+            let mut msg = format!("{e} ({})", r.uid);
+            if matches!(to, State::Done | State::Review)
+                && matches!(r.state, State::Open | State::Draft)
+            {
+                msg += &format!(" — start first: `fael chunk start {}`", r.uid);
+            }
+            msg
+        })?;
         tx.execute(
             "UPDATE chunk SET state = ?1 WHERE id = ?2",
             params![to.as_str(), r.id],

@@ -161,7 +161,9 @@ fn example(cmd: &str, verb: &str) -> Option<&'static str> {
         ("chunk", "unafter") => Some(
             "fael chunk unafter 01M582E4V1RQR033P5V00B4WVV 01M582E4V1RQR033P5V00B4WVV \"no longer blocked\"",
         ),
-        ("chunk", "done") => Some("fael chunk done \"verbs ship\" --left none"),
+        ("chunk", "done") => {
+            Some("fael chunk done 01M582E4V1RQR033P5V00B4WVV \"verbs ship\" --left none")
+        }
         ("chunk", "answer") => {
             Some("fael chunk answer 01M582E4V1RQR033P5V00B4WVV \"the count is 210\"")
         }
