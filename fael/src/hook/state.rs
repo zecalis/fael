@@ -23,8 +23,13 @@ pub(crate) fn session_key(s: &str) -> String {
 }
 
 /// Keyed by session + worktree so one session across two repos stays apart.
+/// The session is stemmed first: a transcript path and its bare stem are the
+/// same session, and `seen`/`shown` already stem — keying raw here would split
+/// one session's files in two when it reaches fael in both forms (decision
+/// 01M71AJMH4RSS13BZKZEWASQK8).
 pub(crate) fn edits_path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+    let id = session_id(session);
+    let key = session_key(&format!("{id}\0{}", root.to_string_lossy()));
     state_dir()
         .join("sessions")
         .join("edits")
@@ -122,15 +127,19 @@ pub(crate) fn read_retired(root: &Path, key: &str) -> Option<HashSet<String>> {
 }
 
 /// A Weak risk line stashed by stop for the next push — shown once, deleted.
+/// Stemmed like `edits_path` (decision 01M71AJMH4RSS13BZKZEWASQK8).
 pub(crate) fn risk_path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+    let id = session_id(session);
+    let key = session_key(&format!("{id}\0{}", root.to_string_lossy()));
     state_dir().join("sessions").join(format!("{key}.risk"))
 }
 
 /// A fix phrase stashed by stop for the next push (PLAN-fael-experience-loop
-/// chunk 5a) — shown once, deleted.
+/// chunk 5a) — shown once, deleted. Stemmed like `edits_path` (decision
+/// 01M71AJMH4RSS13BZKZEWASQK8).
 pub(crate) fn fixed_path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+    let id = session_id(session);
+    let key = session_key(&format!("{id}\0{}", root.to_string_lossy()));
     state_dir().join("sessions").join(format!("{key}.fixed"))
 }
 
@@ -265,6 +274,26 @@ mod tests {
         let p = super::edits_path("s", std::path::Path::new("/w"));
         assert_eq!(p.parent().unwrap().file_name().unwrap(), "edits");
         assert_eq!(p.extension().unwrap(), "jsonl");
+    }
+
+    /// Stem-once (decision 01M71AJMH4RSS13BZKZEWASQK8): a transcript path
+    /// and its bare stem address the same session files — edits/risk/fixed
+    /// stem like seen/shown already do, so one session never splits in two.
+    #[test]
+    fn session_files_agree_across_forms() {
+        let root = std::path::Path::new("/w");
+        let (path, stem) = ("/sessions/abc123.jsonl", "abc123");
+        assert_eq!(super::edits_path(path, root), super::edits_path(stem, root));
+        assert_eq!(super::risk_path(path, root), super::risk_path(stem, root));
+        assert_eq!(super::fixed_path(path, root), super::fixed_path(stem, root));
+        assert_eq!(
+            super::seen_path(path, "", root),
+            super::seen_path(stem, "", root)
+        );
+        assert_ne!(
+            super::edits_path("abc123", root),
+            super::edits_path("def456", root)
+        );
     }
 
     /// CI runs this on Windows too: a worktree's `.git` file with an absolute

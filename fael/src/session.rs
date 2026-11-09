@@ -9,6 +9,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Set once for `fael mcp`: process env belongs to the server's launcher,
 /// not its callers. Even a recorded edit cannot prove who made a request.
+/// The hook is the sole session authority; MCP stays session-less by design
+/// (decision 01M71AJMH4RSS13BZKZEWASQK8) — never read identity back out of
+/// this flag.
 static MCP_SERVER: AtomicBool = AtomicBool::new(false);
 
 /// Called by `mcp::serve` at startup, so every `add` the server handles knows
