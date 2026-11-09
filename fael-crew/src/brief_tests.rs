@@ -299,7 +299,8 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
         "{t}"
     );
     assert!(
-        !t.lines().any(|l| l.starts_with("TLDR:") && l.contains("--pr")),
+        !t.lines()
+            .any(|l| l.starts_with("TLDR:") && l.contains("--pr")),
         "TLDR must not order --pr; --pr lives only in the finish rule and the auto_pr note: {t}"
     );
     // a chunk without its own brief falls back to the title
@@ -329,16 +330,16 @@ fn the_rules_state_the_lane_contract_info_only() {
     assert!(r.contains("the owner merges every PR"), "{r}");
     assert!(r.contains("fael never enforces an order"), "{r}");
     assert!(r.contains("fael run end"), "{r}");
-    assert!(
-        r.contains("see `chunk done` and `chunk status`"),
-        "{r}"
-    );
+    assert!(r.contains("see `chunk done` and `chunk status`"), "{r}");
     for gone in [
         "outside declared scope",
         "overlaps open chunk",
         "never a refusal",
     ] {
-        assert!(!r.contains(gone), "{gone} lives at done/status with evidence, not in the lane line: {r}");
+        assert!(
+            !r.contains(gone),
+            "{gone} lives at done/status with evidence, not in the lane line: {r}"
+        );
     }
 }
 
