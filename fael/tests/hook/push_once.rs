@@ -174,3 +174,37 @@ fn budget_cut_rows_push_later_exactly_once() {
     }
     assert!(!outs[2].contains("fael mem for"), "{}", outs[2]);
 }
+
+/// Say-once across start and push: a row told in the session-start brief is
+/// not repeated on the first edit push of the same session.
+#[test]
+fn a_briefed_row_is_not_pushed_again() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "briefed login loops",
+            "--files",
+            "src/a.rs",
+            "--to",
+            "opencode",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let start = format!(
+        r#"{{"cwd":{},"session":"s1","client":"opencode"}}"#,
+        json(&d)
+    );
+    let (ok, out, _) = fael(&d, &["hook", "session-start"], &start);
+    assert!(ok && out.contains("briefed login loops"), "{out}");
+    let (ok, out) = edit(&d, "s1", "src/a.rs");
+    assert!(ok, "{out}");
+    assert!(
+        !out.contains("briefed login loops"),
+        "briefed row pushed again: {out}"
+    );
+}

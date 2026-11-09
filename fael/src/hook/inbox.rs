@@ -1,7 +1,7 @@
 //! The inbox line (lane-force-receipt l5): a `fael chunk note` left for the
 //! running chunk since its run started. The Overlap push tells A to
 //! `fael chunk note` B, but B reads it only at its next start — this says it
-//! on the next edit and session start instead. One line per note event, said
+//! on the next session start instead (SessionStart-only by design). One line per note event, said
 //! once per note id. Inform only: no edit is blocked. One read-only SQLite
 //! read, no git spawn.
 

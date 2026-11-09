@@ -55,7 +55,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let n = body.lines().filter(|l| l.starts_with("- [")).count();
     let said = &shown[..n.min(shown.len())];
     let mut ids: Vec<String> = said.iter().map(|r| r.id.clone()).collect();
-    let keys: Vec<String> = ids.iter().map(|i| format!("~start:{i}")).collect();
+    let keys: Vec<String> = ids.clone();
     let chunk = chunk_line(&c.repo, &c.session);
     let adopted = crate::journal::home(&c.repo).is_some();
     let seen = seen_path(&c.session, &c.agent, &c.repo.root);
