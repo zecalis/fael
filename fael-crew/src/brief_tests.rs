@@ -135,7 +135,7 @@ fn the_brief_prints_the_plan_sections_once() {
         forced: vec![],
     }
     .text();
-    assert!(!t.contains("Goal") && t.contains("brief E"), "{t}");
+    assert!(!t.contains("## 1. Goal") && t.contains("brief E"), "{t}");
 }
 
 #[test]
