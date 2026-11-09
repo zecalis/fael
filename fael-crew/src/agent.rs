@@ -97,6 +97,8 @@ impl Store {
 
     /// `fael chunk after <uid> <other> "<why>"`: needs `other` first. A running chunk goes
     /// back to `open` and its run ends; `blocked` follows from the edge (SPEC §2).
+    /// Mirror of planner-`after` in `apply.rs`: this agent-`after` takes `running`
+    /// and rejects `review`; planner-`after` rejects `running` and takes `review`.
     pub fn after(&mut self, uid: &str, other: &str, why: &str, here: &Here) -> Result<(), String> {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
