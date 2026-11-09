@@ -12,6 +12,7 @@ mod chunk_elsewhere;
 mod chunk_here;
 mod chunk_left;
 mod chunk_measured;
+mod chunk_observed;
 mod chunk_pr_files;
 mod chunk_prs;
 mod chunk_run;

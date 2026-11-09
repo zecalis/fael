@@ -11,6 +11,10 @@
 //! scope says nothing (a plain git merge); `chunk done` still lists it.
 //! Inform only: no edit is blocked. One read-only SQLite read, no git spawn;
 //! `docs/` and `.fael/shared` paths are nobody's, as in `Store::outside`.
+//!
+//! Scope-only by design (issue 01M6Z008): the real worktree diff is the early
+//! warning `fael chunk status` shows as `observed` + `outside declared scope`,
+//! before `done`/`run end` claim it. This hook never spawns git.
 
 use super::protocol::Ctx;
 use super::say::{Kind, Line};
