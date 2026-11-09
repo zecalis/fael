@@ -4,7 +4,8 @@
 use super::markers::{has_bug_marker, has_fix_phrase, signal_from_transcript, transcript_reply};
 use super::protocol::{Event, Reply, ctx};
 use super::state::{
-    file_birth_ms, fixed_path, now_rfc3339, risk_path, seen_path, session_key, state_dir,
+    file_birth_ms, fixed_path, now_rfc3339, risk_path, seen_path, session_id, session_key,
+    state_dir,
 };
 use crate::core;
 use std::path::Path;
@@ -277,10 +278,14 @@ fn stash(session: &str, path: &Path, marker: &str) -> bool {
     false
 }
 
+/// Per-session autosync marks, keyed by the stemmed session id like
+/// `seen`/`shown` — a transcript path and its bare stem are the same session
+/// (decision 01M71AJMH4RSS13BZKZEWASQK8).
 fn marks_path(session: &str) -> std::path::PathBuf {
+    let id = session_id(session);
     state_dir()
         .join("sync-seen")
-        .join(format!("{}.jsonl", session_key(session)))
+        .join(format!("{}.jsonl", session_key(id)))
 }
 
 /// True when this session already marked this worktree + kind (read only).
@@ -331,4 +336,18 @@ pub(super) fn seen_before(session: &str, worktree: &str, kind: &str) -> bool {
         let _ = writeln!(f, "{}{row}", if seal { "\n" } else { "" });
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    /// Stem-once (decision 01M71AJMH4RSS13BZKZEWASQK8): a transcript path
+    /// and its bare stem address the same marks file, like seen/shown.
+    #[test]
+    fn marks_path_agrees_across_forms() {
+        assert_eq!(
+            super::marks_path("/sessions/abc123.jsonl"),
+            super::marks_path("abc123")
+        );
+        assert_ne!(super::marks_path("abc123"), super::marks_path("def456"));
+    }
 }
