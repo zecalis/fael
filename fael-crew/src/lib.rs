@@ -164,7 +164,7 @@ fn allowed(from: State, to: State) -> bool {
             Open => matches!(from, Draft | Waiting | Review | Running | Parked),
             // a data wait past its date is ready (SPEC §2)
             Running => matches!(from, Open | Waiting),
-            Waiting => from == Running,
+            Waiting => matches!(from, Draft | Open | Running),
             Review => from == Running,
             // `done --pr` (the owner said push pr: that is the ok) · owner accept
             Done => matches!(from, Running | Review),
@@ -192,6 +192,8 @@ mod tests {
         for (from, to) in [
             (Draft, Open),
             (Open, Running),
+            (Draft, Waiting),
+            (Open, Waiting),
             (Running, Waiting),
             (Waiting, Running),
             (Waiting, Open),

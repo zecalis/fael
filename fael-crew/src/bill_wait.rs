@@ -2,8 +2,7 @@
 //! `chunk answer` already speak, set at plan time with no run behind it.
 
 use super::State;
-use super::agent::unwait;
-use super::chunk::{Row, is_date};
+use super::chunk::{Row, is_date, set};
 use super::store::err;
 use rusqlite::{Transaction, params};
 use serde::{Deserialize, Serialize};
@@ -65,6 +64,8 @@ impl Wait {
 }
 
 /// Gate chunk `r`: `waiting` with the question, in the bill's own transaction.
+/// Draft and open go through the state table (`chunk::set`, one event); a chunk
+/// already waiting stays a column update with its event, not a transition.
 pub(super) fn gate(tx: &Transaction, r: &Row, w: &Wait, now: &str) -> Result<String, String> {
     w.check()?;
     if !matches!(r.state, State::Open | State::Draft | State::Waiting) {
@@ -74,7 +75,6 @@ pub(super) fn gate(tx: &Transaction, r: &Row, w: &Wait, now: &str) -> Result<Str
             r.state.as_str()
         ));
     }
-    unwait(tx, r.id)?;
     let options = w
         .options
         .as_ref()
@@ -82,23 +82,28 @@ pub(super) fn gate(tx: &Transaction, r: &Row, w: &Wait, now: &str) -> Result<Str
         .map(serde_json::to_string)
         .transpose()
         .map_err(|e| e.to_string())?;
-    tx.execute(
-        "UPDATE chunk SET state = 'waiting', wait_on = ?1, wait_text = ?2, wait_until = ?3,
-           wait_options = ?4 WHERE id = ?5",
-        params![w.on, w.ask, w.until, options, r.id],
-    )
-    .map_err(err)?;
-    tx.execute(
-        "INSERT INTO event(chunk_uid, at, by, from_state, to_state, text, plan)
-         VALUES (?1, ?2, 'owner', ?3, 'waiting', ?4, (SELECT plan FROM chunk WHERE id = ?5))",
-        params![
-            r.uid,
-            now,
-            r.state.as_str(),
-            format!("wait {}: {}", w.on, w.ask),
-            r.id
-        ],
-    )
-    .map_err(err)?;
+    let text = format!("wait {}: {}", w.on, w.ask);
+    if r.state == State::Waiting {
+        tx.execute(
+            "UPDATE chunk SET wait_on = ?1, wait_text = ?2, wait_until = ?3,
+               wait_options = ?4 WHERE id = ?5",
+            params![w.on, w.ask, w.until, options, r.id],
+        )
+        .map_err(err)?;
+        tx.execute(
+            "INSERT INTO event(chunk_uid, at, by, from_state, to_state, text, plan)
+             VALUES (?1, ?2, 'owner', 'waiting', 'waiting', ?3, (SELECT plan FROM chunk WHERE id = ?4))",
+            params![r.uid, now, text, r.id],
+        )
+        .map_err(err)?;
+    } else {
+        set(tx, r, State::Waiting, "owner", Some(&text), now)?;
+        tx.execute(
+            "UPDATE chunk SET wait_on = ?1, wait_text = ?2, wait_until = ?3,
+               wait_options = ?4 WHERE id = ?5",
+            params![w.on, w.ask, w.until, options, r.id],
+        )
+        .map_err(err)?;
+    }
     Ok(format!("wait {}", w.on))
 }

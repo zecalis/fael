@@ -261,6 +261,53 @@ fn a_bill_wait_gates_start_until_the_owner_answers_and_round_trips() {
 }
 
 #[test]
+fn bill_wait_on_draft_and_open_goes_through_the_state_table_with_one_event() {
+    use super::super::{State, check};
+    assert!(check(State::Draft, State::Waiting).is_ok());
+    assert!(check(State::Open, State::Waiting).is_ok());
+    assert!(check(State::Waiting, State::Waiting).is_err());
+    let mut s = Store::open_in_memory().unwrap();
+    let d = add(&mut s, "d", None);
+    let o = add(&mut s, "o", Some("do o"));
+    assert_eq!(
+        (state(&s, &d), state(&s, &o)),
+        ("draft".into(), "open".into())
+    );
+    let before = count(
+        &s,
+        &format!("SELECT COUNT(*) FROM event WHERE chunk_uid IN ('{d}', '{o}')"),
+    );
+    let w = json!({"on": "owner", "ask": "gate?"});
+    let v = bill(
+        &s,
+        json!({}),
+        json!([{"uid": d, "wait": w}, {"uid": o, "wait": w}]),
+    );
+    let out = apply(&mut s, v, false).unwrap();
+    assert_eq!(out.len(), 2, "{out:?}");
+    assert_eq!(
+        (state(&s, &d), state(&s, &o)),
+        ("waiting".into(), "waiting".into())
+    );
+    let after = count(
+        &s,
+        &format!("SELECT COUNT(*) FROM event WHERE chunk_uid IN ('{d}', '{o}')"),
+    );
+    assert_eq!(after - before, 2, "one event per gated chunk");
+    for (uid, from) in [(&d, "draft"), (&o, "open")] {
+        let (from_state, to_state): (String, String) = s
+            .conn
+            .query_row(
+                "SELECT from_state, to_state FROM event WHERE chunk_uid = ?1 ORDER BY id DESC LIMIT 1",
+                [uid],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((from_state.as_str(), to_state.as_str()), (from, "waiting"));
+    }
+}
+
+#[test]
 fn a_bill_adds_a_gated_chunk_and_refuses_a_bad_or_running_wait() {
     let mut s = Store::open_in_memory().unwrap();
     let a = add(&mut s, "a", Some("do a"));
