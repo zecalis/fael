@@ -284,6 +284,73 @@ fn a_partner_in_another_worktree_is_checked() {
     }
 }
 
+/// Diff-aware status (issue 01M6Z008): observed worktree files outside the declared
+/// scope are named before done claims them — committed and unstaged alike.
+#[test]
+fn status_names_observed_outside_scope_before_done() {
+    let d = repo();
+    git(&d, &["update-ref", "refs/remotes/origin/main", "main"]);
+    git(
+        &d,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    let c = chunk(&d, "observed work");
+    let (ok, _, err) = fael(&d, &["chunk", "start", &c]);
+    assert!(ok, "{err}");
+    git(&d, &["switch", "-q", "-c", "lane"]);
+    std::fs::write(d.join("stray.txt"), "stray\n").unwrap();
+    git(&d, &["add", "stray.txt"]);
+    git(&d, &["commit", "-qm", "stray"]);
+    std::fs::write(d.join("unstaged.txt"), "u\n").unwrap();
+    let (ok, out, err) = fael(&d, &["chunk", "status", &c]);
+    assert!(ok, "{err}");
+    // `state/` is the test harness's own FAEL_STATE_DIR inside the repo: it also
+    // reads as observed, so assert per-file, never an exact join.
+    for needle in [
+        "outside declared scope: stray.txt",
+        "outside declared scope: unstaged.txt",
+    ] {
+        assert!(out.contains(needle), "{needle} missing in:\n{out}");
+    }
+    let widen = out
+        .lines()
+        .find(|l| l.contains("to cover them:"))
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        widen.contains("+stray.txt") && widen.contains("+unstaged.txt"),
+        "{widen}: {out}"
+    );
+    let (ok, j, err) = fael(&d, &["chunk", "status", &c, "--json"]);
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&j).unwrap();
+    let me = &v.as_array().unwrap()[0];
+    let observed: Vec<&str> = me["observed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|x| x.as_str())
+        .collect();
+    assert!(
+        observed.contains(&"stray.txt") && observed.contains(&"unstaged.txt"),
+        "{v}"
+    );
+    let files: Vec<&str> = me["outside"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|x| x["file"].as_str())
+        .collect();
+    assert!(
+        files.contains(&"stray.txt") && files.contains(&"unstaged.txt"),
+        "{v}"
+    );
+}
+
 /// A neighbour whose worktree is gone: the command still succeeds and says so.
 #[test]
 fn missing_neighbour_worktree_is_unchecked_not_a_failure() {
