@@ -324,6 +324,9 @@ fn pair(tx: &Transaction, uids: &[String], now: &str) -> Result<String, String> 
     Ok(format!("paired {}", uids.join(", ")))
 }
 
+/// Planner-`after` (`fael chunk apply`): mirror of agent-`after` in `agent.rs` —
+/// rejects `running` (via `src`), takes `review`; agent-`after` takes `running`
+/// back to `open` and rejects `review`. Same verb, mirrored rules.
 fn after(tx: &Transaction, uid: &str, on: &str, why: &str, now: &str) -> Result<String, String> {
     let a = src(tx, uid)?;
     let b = row(tx, on)?;
