@@ -269,12 +269,13 @@ fn bill_wait_on_draft_and_open_goes_through_the_state_table_with_one_event() {
     let mut s = Store::open_in_memory().unwrap();
     let d = add(&mut s, "d", None);
     let o = add(&mut s, "o", Some("do o"));
-    assert_eq!((state(&s, &d), state(&s, &o)), ("draft".into(), "open".into()));
+    assert_eq!(
+        (state(&s, &d), state(&s, &o)),
+        ("draft".into(), "open".into())
+    );
     let before = count(
         &s,
-        &format!(
-            "SELECT COUNT(*) FROM event WHERE chunk_uid IN ('{d}', '{o}')"
-        ),
+        &format!("SELECT COUNT(*) FROM event WHERE chunk_uid IN ('{d}', '{o}')"),
     );
     let w = json!({"on": "owner", "ask": "gate?"});
     let v = bill(
@@ -284,12 +285,13 @@ fn bill_wait_on_draft_and_open_goes_through_the_state_table_with_one_event() {
     );
     let out = apply(&mut s, v, false).unwrap();
     assert_eq!(out.len(), 2, "{out:?}");
-    assert_eq!((state(&s, &d), state(&s, &o)), ("waiting".into(), "waiting".into()));
+    assert_eq!(
+        (state(&s, &d), state(&s, &o)),
+        ("waiting".into(), "waiting".into())
+    );
     let after = count(
         &s,
-        &format!(
-            "SELECT COUNT(*) FROM event WHERE chunk_uid IN ('{d}', '{o}')"
-        ),
+        &format!("SELECT COUNT(*) FROM event WHERE chunk_uid IN ('{d}', '{o}')"),
     );
     assert_eq!(after - before, 2, "one event per gated chunk");
     for (uid, from) in [(&d, "draft"), (&o, "open")] {
