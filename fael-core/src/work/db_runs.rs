@@ -4,7 +4,6 @@
 use super::StatsRun;
 use super::db::readonly;
 use std::path::Path;
-
 /// An agent `done`/`review` event, as the brief's `after` rule reads it.
 const AGENT_DONE: &str = "e.by = 'agent' AND e.to_state IN ('done', 'review')";
 
@@ -43,6 +42,29 @@ pub fn flow_runs(db: &Path) -> Vec<StatsRun> {
             session: r.get(5)?,
             after_handoff: r.get(6)?,
             done: r.get(7)?,
+        })
+    })
+    .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
+    .unwrap_or_default()
+}
+
+/// Client-reported attribution per run row for the stats `models` join.
+/// Read-only, fail-open: no db, no table, or no telemetry columns gives no
+/// rows — old DBs predate the client/model/cost columns and read as
+/// unattributed, never an error.
+pub fn model_runs(db: &Path) -> Vec<super::RunAttribution> {
+    let Some(c) = readonly(db) else {
+        return Vec::new();
+    };
+    let mut q = match c.prepare("SELECT client, model, cost FROM run") {
+        Ok(q) => q,
+        Err(_) => return Vec::new(),
+    };
+    q.query_map([], |r| {
+        Ok(super::RunAttribution {
+            client: r.get(0)?,
+            model: r.get(1)?,
+            cost: r.get(2)?,
         })
     })
     .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())

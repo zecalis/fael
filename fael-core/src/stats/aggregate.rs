@@ -8,13 +8,15 @@ use super::flow::{Flow, WeekCount, flow as flow_stats, throughput as throughput_
 use super::friction::{Friction, friction};
 use super::metrics::{ask_totals, non_english_share, rows_added as count_rows_added};
 use super::outcome::{ListedPr, Outcome, outcome_windowed};
-use super::outcomes::{OUTCOMES_V, RowOutcomes, outcomes};
+use super::models::Models;
+use super::outcomes::{OUTCOMES_V, RowOutcomes};
 use super::parse::{Parsed, outcome_window};
 use super::retire::{Retired, retired};
 use super::said::{KindYield, yields};
 use super::unused::{UnusedRow, unused};
 use super::value::{Value, value};
-use crate::{Config, Log, closed, rfc3339, rfc3339_in, superseded, tz_offset_string};
+use super::rows::row_statuses;
+use crate::{Config, Log, rfc3339, rfc3339_in, tz_offset_string};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -105,6 +107,13 @@ pub struct Stats {
     pub skipped_temp: usize,
     pub by_event: BTreeMap<String, Count>,
     pub by_client: BTreeMap<String, Count>,
+    /// Model/cost attribution over this clone's crew.db runs (`models.rs`):
+    /// empty when the clone has no crew.db. The caller fills it — `aggregate`
+    /// never sees the disk — like `lifecycle` below.
+    pub models: Models,
+    /// Summed input-side `real_tokens` (in + cache-create + cache-read) per
+    /// client over the counted rows; a client with no measured row is absent.
+    pub real_by_client: BTreeMap<String, u64>,
     pub top_rows: Vec<TopRow>,
     pub asks: BTreeMap<String, AskCount>,
     pub constants: Constants,
@@ -202,6 +211,8 @@ pub fn aggregate(
         skipped_temp: parsed.skipped,
         by_event: counts(&parsed.by_event),
         by_client: counts(&parsed.by_client),
+        models: Models::default(),
+        real_by_client: real_by_client(parsed),
         top_rows: top
             .into_iter()
             .take(10)
@@ -287,59 +298,17 @@ fn counts(into: &HashMap<String, (usize, usize)>) -> BTreeMap<String, Count> {
         .collect()
 }
 
-/// Per-row push report: push counts against the row's current state and its
-/// observed outcomes, most pushed first. `noise` = pushed ≥ 10 times — the row
-/// keeps eating budget without being resolved. A repo that is gone (or never
-/// had the id) reads `unknown`. A row only ever cut has no pushes and ranks
-/// after the pushed ones.
-fn row_statuses(parsed: &Parsed, logs: &HashMap<String, Log>) -> Vec<RowStatus> {
-    const TOP: usize = 20;
-    const NOISE_PUSHES: usize = 10;
-    let mut outcomes = outcomes(parsed, logs);
-    let mut ids: Vec<(String, usize)> = parsed.by_id.iter().map(|(i, n)| (i.clone(), *n)).collect();
-    ids.extend(
-        outcomes
-            .keys()
-            .filter(|i| !parsed.by_id.contains_key(*i))
-            .map(|i| (i.clone(), 0)),
-    );
-    ids.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    ids.into_iter()
-        .take(TOP)
-        .map(|(id, pushes)| {
-            // cut-only rows never rode a push line, so `id_repos` lacks them —
-            // resolve those against every loaded log before calling them gone
-            let repos: Vec<&str> = match parsed.id_repos.get(&id) {
-                Some(rs) => rs.iter().map(String::as_str).collect(),
-                None => logs.keys().map(String::as_str).collect(),
-            };
-            let status = repos
-                .into_iter()
-                .filter_map(|repo| {
-                    let log = logs.get(repo)?;
-                    let (closed_set, superseded_set) = (closed(log), superseded(log));
-                    if closed_set.contains(id.as_str()) {
-                        Some("closed")
-                    } else if superseded_set.contains(id.as_str()) {
-                        Some("superseded")
-                    } else if log.rows.iter().any(|r| r.id == id) {
-                        Some("open")
-                    } else {
-                        None
-                    }
-                })
-                .next()
-                .unwrap_or("unknown")
-                .to_string();
-            RowStatus {
-                pushes,
-                status,
-                noise: pushes >= NOISE_PUSHES,
-                outcomes: outcomes.remove(&id).unwrap_or_default(),
-                id,
-            }
-        })
-        .collect()
+/// Summed input-side `real_tokens` per client over the counted rows —
+/// `UsageRow.real_input` already joins the transcript usage at parse time,
+/// so this is one fold, no second parse.
+fn real_by_client(parsed: &Parsed) -> BTreeMap<String, u64> {
+    let mut out: BTreeMap<String, u64> = BTreeMap::new();
+    for r in &parsed.rows {
+        if let Some(t) = r.real_input {
+            *out.entry(r.client.clone()).or_default() += t;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
