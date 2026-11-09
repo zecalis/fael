@@ -177,7 +177,7 @@ fn l_box(o: &mut String, c: &Brief) {
     }
     let _ = writeln!(
         o,
-        "L: big chunk — one Done at a time, step commit + note each step; too big? ship the passing part as this PR, `fael chunk add --brief ...` the rest and name it in `--left`"
+        "L: big chunk — one Done at a time, step commit + note each step; too big? see the ship-part rule in the chunk rules"
     );
 }
 
@@ -267,7 +267,7 @@ impl Started {
             };
             let _ = writeln!(
                 o,
-                "TLDR: do \"{task}\" then `fael chunk done {} \"<handoff>\" --pr N`",
+                "TLDR: do \"{task}\" then `fael chunk done {} \"<handoff>\" --left none`",
                 c.uid
             );
             if let Some(p) = &c.resume {
@@ -356,7 +356,7 @@ impl Started {
             };
             let _ = writeln!(
                 o,
-                "TLDR: do \"{task}\" then `fael chunk done {} \"<handoff>\" --pr N`",
+                "TLDR: do \"{task}\" then `fael chunk done {} \"<handoff>\" --left none`",
                 c.uid
             );
             if let Some(p) = &c.resume {

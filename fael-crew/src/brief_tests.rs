@@ -91,7 +91,7 @@ fn the_brief_prints_the_plan_sections_once() {
     );
     assert!(t.contains("fael chunk done A"), "{t}");
     assert!(
-        t.contains("TLDR: do \"brief A\" then `fael chunk done A \"<handoff>\" --pr N`"),
+        t.contains("TLDR: do \"brief A\" then `fael chunk done A \"<handoff>\" --left none`"),
         "{t}"
     );
     // what the agent leaves for the owner fits one board line
@@ -171,12 +171,17 @@ fn full_rules_are_the_core_plus_the_situational_ones() {
         "lane: one scope per worktree",
         "Recommend: <option> because <evidence>",
         "a wait --on data names what is measured",
-        "serve two lines of Done",
+        "two lines of Done",
+        "ship-part rule",
         "makes untrue",
     ] {
         assert!(f.contains(kept), "{kept} in {f}");
     }
-    assert!(!core.contains("serve two lines of Done"));
+    assert!(!core.contains("two lines of Done"));
+    assert!(
+        !f.contains("ship it as this chunk's PR"),
+        "ship-part said once in the core rule, situational only points at it: {f}"
+    );
 }
 
 #[test]
@@ -290,8 +295,12 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
     }
     .text();
     assert!(
-        t.contains("TLDR: do \"brief A\" then `fael chunk done A \"<handoff>\" --pr N`"),
+        t.contains("TLDR: do \"brief A\" then `fael chunk done A \"<handoff>\" --left none`"),
         "{t}"
+    );
+    assert!(
+        !t.lines().any(|l| l.starts_with("TLDR:") && l.contains("--pr")),
+        "TLDR must not order --pr; --pr lives only in the finish rule and the auto_pr note: {t}"
     );
     // a chunk without its own brief falls back to the title
     let mut bare = chunk("B");
@@ -305,7 +314,7 @@ fn the_brief_opens_each_chunk_with_a_tldr_naming_done() {
     }
     .text();
     assert!(
-        t.contains("TLDR: do \"title B\" then `fael chunk done B \"<handoff>\" --pr N`"),
+        t.contains("TLDR: do \"title B\" then `fael chunk done B \"<handoff>\" --left none`"),
         "{t}"
     );
 }
@@ -320,9 +329,17 @@ fn the_rules_state_the_lane_contract_info_only() {
     assert!(r.contains("the owner merges every PR"), "{r}");
     assert!(r.contains("fael never enforces an order"), "{r}");
     assert!(r.contains("fael run end"), "{r}");
-    assert!(r.contains("outside declared scope"), "{r}");
-    assert!(r.contains("overlaps open chunk"), "{r}");
-    assert!(r.contains("never a refusal"), "{r}");
+    assert!(
+        r.contains("see `chunk done` and `chunk status`"),
+        "{r}"
+    );
+    for gone in [
+        "outside declared scope",
+        "overlaps open chunk",
+        "never a refusal",
+    ] {
+        assert!(!r.contains(gone), "{gone} lives at done/status with evidence, not in the lane line: {r}");
+    }
 }
 
 #[test]
@@ -537,6 +554,11 @@ fn only_a_size_l_chunk_gets_the_l_box() {
     }
     .text();
     assert!(t.contains("L: big chunk"), "{t}");
+    assert!(t.contains("ship-part rule"), "{t}");
+    assert!(
+        !t.contains("ship the passing part as this PR"),
+        "L-box points at the ship-part rule, never repeats it: {t}"
+    );
     let t = Started {
         run: "R".into(),
         chunks: vec![chunk("B")],
