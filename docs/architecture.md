@@ -336,7 +336,8 @@ The stdio server has no per-request hook-session identity. Process env and a
 recorded edit do not establish the caller: MCP writes stay session-less and
 `add` needs explicit files, including each row of a batch. MCP reads and writes
 leave hook said-once state untouched. Shell CLI calls can join a verified hook
-session through their client-provided environment id.
+session through their client-provided environment id. This is the contract, not
+a gap: the hook is the sole session authority (decision 01M71AJMH4RSS13BZKZEWASQK8).
 
 `bump` is CLI-only (`fael bump`): re-routing a row is rare and mostly a human call, so its schema is not paid in every session. The server still answers a `bump` call from a client that sends one.
 
