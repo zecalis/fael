@@ -398,7 +398,8 @@ fn fields(a: &Args) -> Fields {
 }
 
 /// `chunk edit` fields: `--scope +path` appends without retyping the set (a
-/// widening keeps the owner's approval) — `+` entries join the stored scope.
+/// widening keeps the owner's approval) — any `+` entry makes the whole call
+/// append: `+` entries join the stored scope, bare ones ride along.
 fn edit_fields(a: &Args, st: &Store, uid: &str) -> Result<Fields, String> {
     let mut f = fields(a);
     if f.scope

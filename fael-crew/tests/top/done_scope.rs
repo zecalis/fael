@@ -132,6 +132,31 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
             "declared scope: l3/\noutside declared scope: stray3.txt\nto cover them: fael chunk edit {l3} --scope +stray3.txt"
         )
     );
+    // two free files: the widen line repeats the flag (`--scope` takes one
+    // value), and the line runs as is
+    let l4 = add("l4", "l4/");
+    lane(
+        &d,
+        &state,
+        &l4,
+        ("lane4", "main"),
+        "R4",
+        &["l4/a.txt", "s4a.txt", "s4b.txt"],
+    );
+    let out = f(&["chunk", "done", &l4, "h", "--left", "none", "--run", "R4"]);
+    let at = out
+        .lines()
+        .position(|l| l.starts_with("declared scope:"))
+        .unwrap();
+    let block = out.lines().skip(at).collect::<Vec<_>>().join("\n");
+    let want = format!(
+        "declared scope: l4/\noutside declared scope: s4a.txt\noutside declared scope: s4b.txt\nto cover them: fael chunk edit {l4} --scope +s4a.txt --scope +s4b.txt"
+    );
+    assert_eq!(block, want);
+    let line = block.lines().last().unwrap().to_string();
+    let edit: Vec<&str> = line.split_whitespace().skip(4).collect();
+    let out = f(&edit);
+    assert!(out.contains(&format!("chunk {l4} → edited")), "{out}");
 
     // the lead merges in the lane's own worktree, now on a wave branch: ending the run there
     // must not swap its branch for the cwd's before done reads it; all inside: no block
