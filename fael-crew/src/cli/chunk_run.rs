@@ -610,10 +610,13 @@ pub(crate) fn outside_text(r: &Repo, st: &Store, uid: &str, diff: &[String]) -> 
     }
     // a widening keeps the owner's approval (chunk edit --scope), so the line is runnable as is
     if !free.is_empty() {
-        let all = declared.iter().chain(&free).cloned().collect::<Vec<_>>();
         s += &format!(
             "to cover them: fael chunk edit {uid} --scope {}\n",
-            all.join(",")
+            free.join(",")
+                .split(',')
+                .map(|p| format!("+{}", p.trim()))
+                .collect::<Vec<_>>()
+                .join(" "),
         );
     }
     s

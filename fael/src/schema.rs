@@ -19,30 +19,30 @@ pub(crate) fn tools() -> Value {
     let mut t = json!([
         {
             "name": "find",
-            "description": "No args = the session brief; call it first only if no fael hook gave one.",
+            "description": "No args = the session brief; call it first if no fael hook gave one.",
             "annotations": {"readOnlyHint": true},
             "inputSchema": {"type": "object", "properties": {
                 "id": str_("id or prefix, pulls the body; text search: use text"),
                 "ids": files("many ids, bodies in one call"),
                 "full": {"type": "boolean", "description": "bodies under titles"},
-                "files": files("paths, dirs, globs, anchors - rows on any"),
+                "files": files("paths, dirs, globs - rows on any"),
                 "text": str_("all words, any order, in text or title"),
                 "key": str_("key glob, e.g. auth:*"),
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "all": {"type": "boolean", "description": "closed and superseded rows too"},
-                "limit": {"type": "integer", "minimum": 1, "description": "max rows"},
-                "offset": {"type": "integer", "minimum": 0, "description": "skip this many first"},
+                "limit": {"type": "integer", "minimum": 1, "description": "max"},
+                "offset": {"type": "integer", "minimum": 0, "description": "skip this many"},
             }},
         },
         {
             "name": "add",
-            "description": "File what the next session needs: a decision and why, a bug (issue), or state (note). Add it with your next tool call or final edit, never as its own turn.",
+            "description": "File what the next session needs: a decision and why, a bug (issue), or state (note). Add it with your next tool call or edit, never as its own turn.",
             "inputSchema": {"type": "object", "properties": {
                 "kind": str_("decision | issue | note, or a repo kind"),
                 "text": str_("what happened and why, standalone, one topic (no ; or · list)"),
                 "title": str_("≤15-word headline; required past 60 words/400 chars"),
                 "files": {"type": "array", "items": {"type": "string"},
-                    "description": "paths or anchors - omit for this session's edited files"},
+                    "description": "paths - omit this session's edited files"},
                 "rows": {"type": "array", "items": {"type": "object", "required": ["kind", "text"]},
                     "description": "batch rows; a bad row fails alone"},
                 "key": str_("optional colon key, e.g. auth:session"),
@@ -80,11 +80,12 @@ pub(crate) fn tools() -> Value {
                 "client": str_("client"),
                 "model": str_("model"),
                 "session": str_("session"),
-                "force": {"type": "boolean", "description": "take over"},
+                "force": {"type": "boolean", "description": "takeover"},
+                "because": str_("force receipt"),
                 "with": str_("partner"),
                 "as": str_("pair|lane|follow|stack"),
-                "pr": {"type": ["string", "integer"], "description": "PR number"},
-                "left": {"type": ["string", "array"], "description": "leftovers"},
+                "pr": {"type": ["string", "integer"], "description": "PR"},
+                "left": {"type": ["string", "array"], "description": "left"},
                 "review": str_("clean|fixed|failed"),
             }},
         },
@@ -242,7 +243,7 @@ mod tests {
             props("chunk"),
             set(&[
                 "verb", "uid", "text", "other", "on", "run", "client", "model", "session", "force",
-                "with", "as", "pr", "left", "review"
+                "because", "with", "as", "pr", "left", "review"
             ])
         );
     }

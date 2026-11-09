@@ -371,7 +371,7 @@ fn an_image_chunk_starts_without_a_worktree_and_its_shell_finishes_it() {
     );
     assert!(ok, "{err}");
     // a `review` done is not amended, so only the --review hint follows
-    let want = format!("chunk {u} → review\nno --review given: ");
+    let want = format!("chunk {u} → review\nreview skipped");
     assert!(
         out.starts_with(&want) && !out.contains("amends it"),
         "{out}"
@@ -415,6 +415,25 @@ fn a_scope_naming_nothing_is_warned_and_a_new_file_in_a_real_dir_is_not() {
         ok && err.contains(r#"scope "nope/sub/" names nothing"#),
         "{err}"
     );
+}
+
+#[test]
+fn a_plus_scope_appends_without_retyping_the_set() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["chunk", "add", "T", "--brief", "b", "--scope", "a/"]);
+    assert!(ok, "{err}");
+    let uid = out.trim().to_string();
+    let (ok, _, err) = fael(&d, &["chunk", "edit", &uid, "--scope", "+b/c.rs"]);
+    assert!(ok, "{err}");
+    let (_, json, _) = fael(&d, &["chunk", "show", &uid, "--json"]);
+    let c: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["a/", "b/c.rs"]), "{json}");
+    // re-adding a held path keeps one copy
+    let (ok, _, err) = fael(&d, &["chunk", "edit", &uid, "--scope", "+a/"]);
+    assert!(ok, "{err}");
+    let (_, json, _) = fael(&d, &["chunk", "show", &uid, "--json"]);
+    let c: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(c["scope"], serde_json::json!(["a/", "b/c.rs"]), "{json}");
 }
 
 #[test]

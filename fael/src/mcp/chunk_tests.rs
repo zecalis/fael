@@ -195,6 +195,19 @@ fn done_wait_after_without_cwd_or_run_ask_for_the_runs_seat() {
 }
 
 #[test]
+fn start_forwards_force_with_because() {
+    let a =
+        json!({"verb": "start", "uid": "U1", "force": true, "because": "seat dead, will avoid x"});
+    let args = build_args("start", "U1", &a).unwrap();
+    assert!(args.contains(&"--force".to_string()), "{args:?}");
+    assert!(args.contains(&"--because".to_string()), "{args:?}");
+    assert!(
+        unknown_note(&a, KNOWN).is_none(),
+        "because is schema, not hidden"
+    );
+}
+
+#[test]
 fn a_call_missing_verb_gets_the_whole_start_shape_once() {
     let e = super::shape_missing(&json!({"uid": "U1"}));
     assert!(

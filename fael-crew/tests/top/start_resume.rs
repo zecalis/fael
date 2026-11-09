@@ -93,14 +93,15 @@ fn start_resume_same_session_returns_live_r_short() {
 
 /// Precedence is rendering order only: run → resume/TLDR → `--full` pointer.
 /// A resumed short suppresses sections and held rows by the session invariant
-/// (already shown at the first start), never by rank.
+/// (already shown at the first start), never by rank — but notes and owner
+/// answers filed since the first brief print here, not one start late.
 #[test]
 fn start_resume_precedence_run_resume_tldr_pointer() {
     let d = repo();
     let u = add(&d);
     assert!(fael(&d, &["chunk", "start", &u, "--session", "S9"]).0);
-    // a note + owner answer exist, but the resumed short still prints neither:
-    // they stay in the first brief (session invariant).
+    // a note filed between the two starts prints in the resumed short:
+    // the agent works from fresh notes, not a stale brief.
     assert!(fael(&d, &["chunk", "note", &u, "parser done"]).0);
     let (_, second, _) = fael(&d, &["chunk", "start", &u, "--session", "S9"]);
     let (run, tldr, ptr) = (
@@ -110,8 +111,8 @@ fn start_resume_precedence_run_resume_tldr_pointer() {
     );
     assert!(run < tldr && tldr < ptr, "run → TLDR → pointer: {second}");
     assert!(
-        !second.contains("parser done"),
-        "notes stay in the first brief: {second}"
+        second.contains("parser done"),
+        "notes since the first brief print here: {second}"
     );
 }
 

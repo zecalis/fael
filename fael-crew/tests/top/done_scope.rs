@@ -22,7 +22,7 @@ fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
     // the two one-time hint lines of a real done are not what these tests assert
     let out = String::from_utf8_lossy(&o.stdout);
     let hint =
-        |l: &&str| !l.starts_with("hand-off changed after") && !l.starts_with("no --review given");
+        |l: &&str| !l.starts_with("hand-off changed after") && !l.starts_with("review skipped");
     out.lines().filter(hint).collect::<Vec<_>>().join("\n")
 }
 
@@ -96,7 +96,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
 
     // l1/a.txt is inside, Cargo.lock is shared: nobody's, never said
     let want = format!(
-        "declared scope: l1/\noutside declared scope: o/x.txt (overlaps open chunk inbox/o)\noutside declared scope: stray.txt\nto cover them: fael chunk edit {l1} --scope l1/,stray.txt"
+        "declared scope: l1/\noutside declared scope: o/x.txt (overlaps open chunk inbox/o)\noutside declared scope: stray.txt\nto cover them: fael chunk edit {l1} --scope +stray.txt"
     );
     // the lead's run end at the lane's exit says it first, before the lane lands
     let out = f(&["run", "end", "R1"]);
@@ -129,7 +129,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     assert_eq!(
         block,
         format!(
-            "declared scope: l3/\noutside declared scope: stray3.txt\nto cover them: fael chunk edit {l3} --scope l3/,stray3.txt"
+            "declared scope: l3/\noutside declared scope: stray3.txt\nto cover them: fael chunk edit {l3} --scope +stray3.txt"
         )
     );
 
@@ -380,7 +380,7 @@ fn a_test_beside_a_scope_file_is_inside_but_another_file_is_not() {
     assert_eq!(
         block,
         format!(
-            "declared scope: t/series.ts\noutside declared scope: t/other.ts\nto cover them: fael chunk edit {t} --scope t/series.ts,t/other.ts"
+            "declared scope: t/series.ts\noutside declared scope: t/other.ts\nto cover them: fael chunk edit {t} --scope +t/other.ts"
         )
     );
 }

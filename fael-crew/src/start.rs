@@ -404,6 +404,40 @@ fn seat_taken(
     )))
 }
 
+/// Freshness of the live holder for the claim reject: last seen + whether it
+/// counts as stalled, so the agent judges stale without a manual `git status`
+/// round. Live = seen within 30 min; verify the seat (`git -C <wt> status`,
+/// branch alive) before `--force`.
+fn holder_freshness(tx: &Transaction, r_id: i64, stale: &str) -> Result<String, String> {
+    let row: Option<(String, Option<String>, Option<String>)> = tx
+        .query_row(
+            "SELECT started, last_seen, session FROM run WHERE chunk = ?1 AND ended IS NULL ORDER BY id DESC LIMIT 1",
+            [r_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()
+        .map_err(super::store::err)?;
+    let Some((started, seen, session)) = row else {
+        return Ok(String::new());
+    };
+    let at = seen.clone().unwrap_or_else(|| started.clone());
+    let live = at.as_str() >= stale;
+    let when = match seen {
+        Some(s) => format!("last seen {s}"),
+        None => format!("last seen never (started {started})"),
+    };
+    let sess = session
+        .filter(|s| !s.is_empty())
+        .map_or(String::new(), |s| format!(" · session {s}"));
+    let verdict = match live {
+        true => "live — stalls after 30 min of silence",
+        false => "stalled",
+    };
+    Ok(format!(
+        " · {when}{sess} · {verdict} — holder dead? check its seat before --force"
+    ))
+}
+
 /// The event text for taking over a live holder: a stalled holder goes without
 /// `--force`, its stall as the receipt (fael:01M6CZ9G41); a live one needs
 /// `--force --because`, and the receipt rides `forced` (issue 01M6CZ0K).
@@ -431,7 +465,8 @@ fn held_takeover(
             ));
         }
         return Err(format!(
-            "rejected: chunk {m}{pair} is held by run {h} — try `fael chunk start {m} --force --because \"<what you will avoid>\"` to take it over"
+            "rejected: chunk {m}{pair} is held by run {h}{} — try `fael chunk start {m} --force --because \"<what you will avoid>\"` to take it over",
+            holder_freshness(tx, r_id, &o.stale)?
         ));
     }
     end_live(tx, r_id, now)?;
