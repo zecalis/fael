@@ -121,26 +121,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     match rest.as_slice() {
         ["show", ..] | ["status", ..] => return read(a, r, &rest),
-        ["add", title] => {
-            a.only(
-                "chunk add",
-                &[
-                    "plan", "brief", "size", "model", "client", "scope", "reads", "after", "label",
-                    "issue", "wait", "ask", "option", "until", "run",
-                ],
-            )?;
-            let f = Fields {
-                title: Some(title.to_string()),
-                issues: issues(r, &list(a, "issue"))?,
-                ..fields(a)
-            };
-            let plan = a.one("plan").unwrap_or_else(|| "inbox".into());
-            let mut st = s()?;
-            let uid = st.add(&plan, &f, &list(a, "after"), &now)?;
-            println!("{uid}");
-            crate::chunk_scope::warn(&st, r, &uid, false);
-            crate::chunk_ask::add_wait(a, &mut st, &uid, &now, &wt, &branch)?;
-        }
+        ["add", title] => add_chunk(a, r, title, &now, &wt, &branch)?,
         ["start", uid] => crate::chunk_run::start(a, r, uid, &here)?,
         ["edit", uid] => {
             a.only(
@@ -150,7 +131,8 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
                 ],
             )?;
             let mut st = s()?;
-            st.edit(uid, &fields(a), &now)?;
+            let f = edit_fields(a, &st, uid)?;
+            st.edit(uid, &f, &now)?;
             say(uid, "edited");
             if a.has("scope") || a.has("brief") {
                 crate::chunk_scope::warn(&st, r, uid, false);
@@ -209,6 +191,35 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
     }
     crate::board::register(r);
     Ok(ExitCode::SUCCESS)
+}
+
+/// `chunk add <title>`: one chunk at the end of its plan, uid printed.
+fn add_chunk(
+    a: &Args,
+    r: &Repo,
+    title: &str,
+    now: &str,
+    wt: &str,
+    branch: &Option<String>,
+) -> Result<(), String> {
+    a.only(
+        "chunk add",
+        &[
+            "plan", "brief", "size", "model", "client", "scope", "reads", "after", "label",
+            "issue", "wait", "ask", "option", "until", "run",
+        ],
+    )?;
+    let f = Fields {
+        title: Some(title.to_string()),
+        issues: issues(r, &list(a, "issue"))?,
+        ..fields(a)
+    };
+    let plan = a.one("plan").unwrap_or_else(|| "inbox".into());
+    let mut st = Store::open(&db(r))?;
+    let uid = st.add(&plan, &f, &list(a, "after"), now)?;
+    println!("{uid}");
+    crate::chunk_scope::warn(&st, r, &uid, false);
+    crate::chunk_ask::add_wait(a, &mut st, &uid, now, wt, branch)
 }
 
 /// Read-only verbs: `show` (several uids) and `status` (both sides at once).
@@ -384,6 +395,35 @@ fn fields(a: &Args) -> Fields {
         label: a.one("label"),
         issues: vec![],
     }
+}
+
+/// `chunk edit` fields: `--scope +path` appends without retyping the set (a
+/// widening keeps the owner's approval) — any `+` entry makes the whole call
+/// append: `+` entries join the stored scope, bare ones ride along.
+fn edit_fields(a: &Args, st: &Store, uid: &str) -> Result<Fields, String> {
+    let mut f = fields(a);
+    if f.scope
+        .as_deref()
+        .is_some_and(|s| s.iter().any(|p| p.starts_with('+')))
+    {
+        let mut merged: Vec<String> = st
+            .show(uid)?
+            .scope
+            .as_deref()
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect();
+        for p in f.scope.take().unwrap_or_default() {
+            let p = p.strip_prefix('+').unwrap_or(&p).trim();
+            if p.is_empty() || merged.iter().any(|q| q == p) {
+                continue;
+            }
+            merged.push(p.to_string());
+        }
+        f.scope = Some(merged);
+    }
+    Ok(f)
 }
 
 /// `--issue a,b`: each an open issue row of this repo's ledger (a unique prefix will do),

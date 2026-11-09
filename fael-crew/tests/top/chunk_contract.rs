@@ -21,7 +21,7 @@ fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
     // the two one-time hint lines of a real done are not what these tests assert
     let out = String::from_utf8_lossy(&o.stdout);
     let hint =
-        |l: &&str| !l.starts_with("hand-off changed after") && !l.starts_with("no --review given");
+        |l: &&str| !l.starts_with("hand-off changed after") && !l.starts_with("review skipped");
     out.lines().filter(hint).collect::<Vec<_>>().join("\n")
 }
 

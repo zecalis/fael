@@ -609,11 +609,12 @@ pub(crate) fn outside_text(r: &Repo, st: &Store, uid: &str, diff: &[String]) -> 
         }
     }
     // a widening keeps the owner's approval (chunk edit --scope), so the line is runnable as is
+    // (`--scope` takes one value per flag: repeated, never space-joined)
     if !free.is_empty() {
-        let all = declared.iter().chain(&free).cloned().collect::<Vec<_>>();
+        let plus: Vec<String> = free.iter().map(|p| format!("+{}", p.trim())).collect();
         s += &format!(
             "to cover them: fael chunk edit {uid} --scope {}\n",
-            all.join(",")
+            plus.join(" --scope "),
         );
     }
     s

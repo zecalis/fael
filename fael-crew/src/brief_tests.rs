@@ -371,9 +371,10 @@ fn the_default_brief_is_handoff_and_tldr_with_rules_once() {
     assert_eq!(st.text(), st.render(true, true));
 }
 
-/// c5 precedence: resumed short renders run → TLDR → resume → `--full`
-/// pointer only. Sections, answers, notes, hand-offs and held rows stay in the
-/// first brief — suppression by the session invariant, never by rank.
+/// c5 precedence: resumed short renders run → TLDR → resume → notes →
+/// `--full` pointer only. Sections, hand-offs and held rows stay in the
+/// first brief — suppression by the session invariant, never by rank;
+/// notes and owner answers filed since the first brief print here.
 #[test]
 fn start_resume_short_orders_run_tldr_resume_pointer() {
     let mut c = chunk("A");

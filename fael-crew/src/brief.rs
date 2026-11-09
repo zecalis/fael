@@ -320,8 +320,9 @@ impl Started {
     }
 
     /// Same-session retry (`reuse_live`): the live R again, short — resume + TLDR
-    /// only. Full returns with `--full`. Short is deterministic rendering, never a
-    /// rank: sections, answers, notes and hand-offs stay in the first brief.
+    /// plus the owner answers and notes filed since the first brief (a note
+    /// between two starts otherwise reads a round late). Sections and
+    /// hand-offs stay in the first brief; full returns with `--full`.
     pub fn render_short(&self) -> String {
         let mut o = String::new();
         let n = self.chunks.len();
@@ -360,6 +361,19 @@ impl Started {
             );
             if let Some(p) = &c.resume {
                 resume(&mut o, p);
+            }
+            // notes/answers since the first brief: printed here, not one start late
+            for (head, all) in [
+                ("owner said", &c.said),
+                ("notes left for this chunk", &c.notes),
+            ] {
+                if all.is_empty() {
+                    continue;
+                }
+                let _ = writeln!(o, "\n{head}:");
+                for s in all {
+                    let _ = writeln!(o, "> {}", s.replace('\n', "\n> "));
+                }
             }
         }
         let uid = self.chunks.first().map_or("<uid>", |c| &c.uid);

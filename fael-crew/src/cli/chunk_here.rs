@@ -47,7 +47,7 @@ pub(crate) fn done_hints(uid: &str, done: bool, reviewed: bool) -> String {
         );
     }
     if !reviewed {
-        s.push_str("no --review given: it records the fresh review's verdict (clean|fixed|failed); pass it on this done — an amend takes text only\n");
+        s.push_str("review skipped — no verdict to record (pass --review clean|fixed|failed when a review ran; an amend takes text only)\n");
     }
     s
 }

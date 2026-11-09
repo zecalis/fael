@@ -22,7 +22,7 @@ fn fael(dir: &Path, state: &Path, args: &[&str]) -> String {
     // the two one-time hint lines of a real done are not what these tests assert
     let out = String::from_utf8_lossy(&o.stdout);
     let hint =
-        |l: &&str| !l.starts_with("hand-off changed after") && !l.starts_with("no --review given");
+        |l: &&str| !l.starts_with("hand-off changed after") && !l.starts_with("review skipped");
     out.lines().filter(hint).collect::<Vec<_>>().join("\n")
 }
 
@@ -96,7 +96,7 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
 
     // l1/a.txt is inside, Cargo.lock is shared: nobody's, never said
     let want = format!(
-        "declared scope: l1/\noutside declared scope: o/x.txt (overlaps open chunk inbox/o)\noutside declared scope: stray.txt\nto cover them: fael chunk edit {l1} --scope l1/,stray.txt"
+        "declared scope: l1/\noutside declared scope: o/x.txt (overlaps open chunk inbox/o)\noutside declared scope: stray.txt\nto cover them: fael chunk edit {l1} --scope +stray.txt"
     );
     // the lead's run end at the lane's exit says it first, before the lane lands
     let out = f(&["run", "end", "R1"]);
@@ -129,9 +129,34 @@ fn done_from_the_wave_branch_claims_the_lanes_diff_and_says_what_left_its_scope(
     assert_eq!(
         block,
         format!(
-            "declared scope: l3/\noutside declared scope: stray3.txt\nto cover them: fael chunk edit {l3} --scope l3/,stray3.txt"
+            "declared scope: l3/\noutside declared scope: stray3.txt\nto cover them: fael chunk edit {l3} --scope +stray3.txt"
         )
     );
+    // two free files: the widen line repeats the flag (`--scope` takes one
+    // value), and the line runs as is
+    let l4 = add("l4", "l4/");
+    lane(
+        &d,
+        &state,
+        &l4,
+        ("lane4", "main"),
+        "R4",
+        &["l4/a.txt", "s4a.txt", "s4b.txt"],
+    );
+    let out = f(&["chunk", "done", &l4, "h", "--left", "none", "--run", "R4"]);
+    let at = out
+        .lines()
+        .position(|l| l.starts_with("declared scope:"))
+        .unwrap();
+    let block = out.lines().skip(at).collect::<Vec<_>>().join("\n");
+    let want = format!(
+        "declared scope: l4/\noutside declared scope: s4a.txt\noutside declared scope: s4b.txt\nto cover them: fael chunk edit {l4} --scope +s4a.txt --scope +s4b.txt"
+    );
+    assert_eq!(block, want);
+    let line = block.lines().last().unwrap().to_string();
+    let edit: Vec<&str> = line.split_whitespace().skip(4).collect();
+    let out = f(&edit);
+    assert!(out.contains(&format!("chunk {l4} → edited")), "{out}");
 
     // the lead merges in the lane's own worktree, now on a wave branch: ending the run there
     // must not swap its branch for the cwd's before done reads it; all inside: no block
@@ -380,7 +405,7 @@ fn a_test_beside_a_scope_file_is_inside_but_another_file_is_not() {
     assert_eq!(
         block,
         format!(
-            "declared scope: t/series.ts\noutside declared scope: t/other.ts\nto cover them: fael chunk edit {t} --scope t/series.ts,t/other.ts"
+            "declared scope: t/series.ts\noutside declared scope: t/other.ts\nto cover them: fael chunk edit {t} --scope +t/other.ts"
         )
     );
 }
