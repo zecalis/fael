@@ -8,7 +8,8 @@
 //!
 //! The session's seen list (per session + sub-agent + worktree, gone on
 //! compact) holds a row id per row said, `~<id>` per edit-hint ask (`~*`, the old generic clause, in older lists) and
-//! `@<id>` per in-context mark and `^<id>` per cited id (`cited`), `~start:<id>` per row session start said.
+//! `@<id>` per in-context mark and `^<id>` per cited id (`cited`); `~start:<id>`
+//! (older lists) and `~start:chunk:<uid>` per session-start line.
 //! No session = no file: every line is said, nothing remembered.
 //!
 //! Crash boundary (c3): a push counts as said when its reply persists the
@@ -83,8 +84,9 @@ pub(crate) enum Kind {
     /// The rows of a read/edit/search push (the body under `fael mem for …`).
     Row { ids: Vec<String> },
     /// The session-start hand-offs and assigned rows: said once per new,
-    /// compacted or cleared context. Its keys are `~start:<id>`, never the row
-    /// id — the next read of a briefed file may push its rows again.
+    /// compacted or cleared context. Its keys are the row ids — a row told
+    /// in the brief is not pushed again at the first edit of the same
+    /// session (say-once across start and push).
     Brief { keys: Vec<String> },
     /// Session start's pointer to the chunk run this worktree holds: split
     /// from `Brief` so row rates never carry a line that names no row.

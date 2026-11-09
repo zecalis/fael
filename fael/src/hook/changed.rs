@@ -244,11 +244,16 @@ pub(crate) struct Hint {
 
 /// The seen list split into the ids said and the keys already hinted.
 /// `@<id>` (in-context at edit) and `^<id>` (cited) lines are neither.
+/// A `~start:<id>` line is an older brief key: it counts as told.
 pub(crate) fn read_seen(old: &str) -> (HashSet<String>, HashSet<String>) {
     let (mut told, mut hinted) = (HashSet::new(), HashSet::new());
     for l in old.lines() {
         if let Some(k) = l.strip_prefix('~') {
-            hinted.insert(k.to_string());
+            if let Some(id) = k.strip_prefix("start:").filter(|id| !id.contains(':')) {
+                told.insert(id.to_string());
+            } else if !k.starts_with("start:") {
+                hinted.insert(k.to_string());
+            }
         } else if !l.starts_with(['@', '^']) {
             told.insert(l.to_string());
         }

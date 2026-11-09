@@ -170,9 +170,9 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
     // a told File row still makes its file a hub (issue push:hub-files)
     let said = tiered
         .iter()
-        .filter(|(r, t)| out.has(&r.id) && core::bucket(r, *t, &focus) == core::Bucket::File)
+        .filter(|(r, t)| was_told(&out, r) && core::bucket(r, *t, &focus) == core::Bucket::File)
         .count();
-    tiered.retain(|(r, _)| !out.has(&r.id));
+    tiered.retain(|(r, _)| !was_told(&out, r));
     let ask = Ask {
         log: &c.log,
         root: &c.repo.root,
@@ -232,6 +232,13 @@ fn hidden_notes(c: &super::protocol::Ctx, spent: &Count, sid: &str) -> HashSet<S
     let mut out = super::retired::ids(&c.repo, &c.log, false);
     out.extend(spent.retired(sid));
     out
+}
+
+/// True when the row was already told this session: spent as a bare id by a
+/// push or by a session-start brief (say-once across start and push), or under
+/// the older brief key `~start:<id>` from before the fix.
+fn was_told(out: &Outbox, r: &core::Row) -> bool {
+    out.has(&r.id) || out.has(&format!("~start:{}", r.id))
 }
 
 /// The tier-0 issues whose edit ask was actually said.

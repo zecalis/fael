@@ -26,7 +26,7 @@ pub(super) fn all() -> Vec<Line> {
         // session start: hand-offs and assigned rows, once per session
         line(
             Kind::Brief {
-                keys: vec!["~start:01BRIEF".into()],
+                keys: vec!["01BRIEF".into()],
             },
             "- [01BRIEF] note y #plan:x:handoff\n",
         ),
@@ -217,21 +217,21 @@ fn two_replies_join_in_order_and_the_first_notice_wins() {
     assert!(r.context().is_none() && r.notice.is_none());
 }
 
-/// A seen list written before the say-gate (row ids, `~id`, `~*`, `@id`)
-/// still silences what it did, and the `~count:` (dropped) / `~peek:` /
-/// `~bodies` keys (a line no hook says any more) are never read as a row this
-/// session was told.
+/// A seen list written before the say-gate (row ids, `~id`, `~*`, `@id`,
+/// `~start:<id>`) still silences what it did, and the `~count:` (dropped) /
+/// `~peek:` / `~bodies` keys (a line no hook says any more) are never read as
+/// a row this session was told.
 #[test]
 fn an_old_seen_list_reads_beside_the_new_keys() {
     let p = seen("s.seen");
     std::fs::create_dir_all(p.parent().unwrap()).unwrap();
     std::fs::write(
         &p,
-        "01OLD\n~01ASKED\n~*\n@01OLD\n~count:src/a.rs|file\n~peek:src/a.rs\n~bodies\n",
+        "01OLD\n~01ASKED\n~*\n@01OLD\n~count:src/a.rs|file\n~peek:src/a.rs\n~bodies\n~start:01BRIEF\n",
     )
     .unwrap();
     let (told, hinted) = read_seen(&std::fs::read_to_string(&p).unwrap());
-    assert_eq!(told, ["01OLD".to_string()].into());
+    assert_eq!(told, ["01OLD".to_string(), "01BRIEF".to_string()].into());
     for k in [
         "01ASKED",
         "*",
