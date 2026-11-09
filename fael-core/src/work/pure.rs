@@ -184,13 +184,13 @@ fn rules_situational() -> String {
          - {STACK_LINE}\n\
          - {WAIT_OWNER}\n\
          - {WAIT_DATA}\n\
-         - the work turns out to serve two lines of Done and the first already passes? ship it as this chunk's PR and `fael chunk add` the rest, or ask with `wait --on owner` — never grow one PR for both\n\
+         - two lines of Done with the first already passing? see the ship-part rule in the chunk rules\n\
          - a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done\n"
     )
 }
 
 /// Said by `chunk start --as lane` once it seats the lane (issue 01M5Y6H4).
-pub const LANE_LINE: &str = "lane: one scope per worktree, own branch each — land in plan order, first-listed chunk first, as a suggestion only; the owner merges every PR, fael never enforces an order or guards git flow. End your run (`fael run end <R>`) before rebasing onto a lane that already landed, so its own diff is claimed first; `chunk done` and `run end` still say `outside declared scope` (+ `(overlaps open chunk …)`) as a fact, never a refusal";
+pub const LANE_LINE: &str = "lane: one scope per worktree, own branch each — land in plan order, first-listed chunk first, as a suggestion only; the owner merges every PR, fael never enforces an order or guards git flow. End your run (`fael run end <R>`) before rebasing onto a lane that already landed, so its own diff is claimed first; for what fell outside the scope, see `chunk done` and `chunk status`";
 
 /// Said by `chunk start --as stack` once it seats the stack (overlap-fine f2):
 /// its PR merges after the partner's.

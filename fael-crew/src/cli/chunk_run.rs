@@ -140,7 +140,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     resolve_issue_rows(r, &mut st);
     for (u, t) in &st.orphaned {
         println!(
-            "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --pr N --left none|<ids>"
+            "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --left none|<ids>"
         );
     }
     // c5: same-session retry returns the live R short — sections, answers, notes,
