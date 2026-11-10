@@ -94,7 +94,8 @@ fn linked_line(id: &str, first: &str, uid: &str) -> String {
 
 /// `fael chunk start` (issue 01M5FMHQX): a chunk whose linked issue is
 /// closed, or whose brief cites a closed row, is refused before anything is
-/// claimed; the correction goes in a note, `--force` starts anyway.
+/// claimed; a `chunk note` naming the closed row cures a brief cite (provenance,
+/// e.g. "review 01M718NN", stays readable), `--force` starts anything anyway.
 pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> {
     let b = s.show(uid)?;
     if s.chunk_place(&b.uid)?
@@ -115,6 +116,9 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
             close_first_line(&log, id)
         ));
     }
+    // A brief cite the notes already name is acknowledged, not stale: the
+    // planner cites the deciding review/row on purpose, the starter read it.
+    let notes = b.notes.join("\n");
     let mut cites: Vec<String> = Vec::new();
     for (cite, first, id) in closed_cites_ids(
         &b.title,
@@ -122,7 +126,10 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
         &log,
         (&fael_core::closed(&log), &fael_core::keys(&log, None)),
     ) {
-        if !seen.insert(id) {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        if notes.contains(&id) || notes.contains(&cite) {
             continue;
         }
         cites.push(format!("  {cite} — closed: {first}"));
@@ -142,7 +149,7 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
         )
     } else {
         format!(
-            "put the correction in `fael chunk note {} \"<text>\"` (never `chunk edit`: it clears the owner's approval); `--force --because \"<what you will avoid>\"` starts anyway",
+            "name the closed row in `fael chunk note {} \"<read <id>: why it still starts>\"` (never `chunk edit`: it clears the owner's approval) and start again — no --force needed once noted; `--force --because \"<what you will avoid>\"` starts without the note",
             b.uid
         )
     };

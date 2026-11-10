@@ -50,6 +50,36 @@ fn issue(d: &Path, text: &str) -> String {
 }
 
 #[test]
+fn a_note_naming_the_closed_row_cures_a_brief_cite_without_force() {
+    let d = repo();
+    let id = issue(&d, "broken x");
+    assert!(
+        fael(
+            &d,
+            &["close", &id, "fixed in 5 → done; guard `src/a_test.rs`"]
+        )
+        .0
+    );
+    let u = chunk(&d, "Fix", &format!("fix {id} (review {id})"), &[]);
+    let (ok, _, err) = fael(&d, &["chunk", "start", &u, "--no-worktree"]);
+    assert!(!ok, "started without acknowledgement: {err}");
+    assert!(
+        fael(
+            &d,
+            &[
+                "chunk",
+                "note",
+                &u,
+                &format!("read {id}: provenance, still starts")
+            ]
+        )
+        .0
+    );
+    let (ok, _, err) = fael(&d, &["chunk", "start", &u, "--no-worktree"]);
+    assert!(ok, "{err}");
+}
+
+#[test]
 fn start_refuses_a_brief_citing_a_closed_row_until_forced() {
     let d = repo();
     let id = issue(&d, "broken x");
