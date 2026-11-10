@@ -180,26 +180,118 @@ fn session_start_ingests_a_teammates_row_and_the_stop_after_it_stays_quiet() {
     assert_eq!(tips(&remote), after_start);
 }
 
-/// No `fael.remote`: the first event marks the session "no-remote", later
-/// stops read neither git config nor the journal — a remote set afterwards
-/// waits for the next session (a journal read per turn was the cost).
+/// No `fael.remote`: the first event marks the session "no-remote" and spawns
+/// nothing; a remote set mid-session is picked up at the next event of the
+/// same session (the mark saves a journal read, never the config look).
 #[test]
-fn no_remote_is_remembered_for_the_session() {
+fn a_remote_set_mid_session_syncs_at_the_next_stop() {
     let d = repo();
     let remote = bare();
     add(&d, "filed with no remote");
     stop(&d, "s1");
+    settle();
+    assert_eq!(tips(&remote), "", "nothing was spawned");
     point(&d, &remote);
     add(&d, "filed after the remote was set");
     stop(&d, "s1");
-    settle();
-    assert_eq!(
-        tips(&remote),
-        "",
-        "same session: no second look at the remote"
-    );
-    stop(&d, "s2");
+    // the same session's next stop re-checks the remote: no wait for session two
     wait_ref(&remote);
+    let after = tips(&remote);
+    stop(&d, "s1");
+    settle();
+    assert_eq!(tips(&remote), after, "nothing new: the stop stays quiet");
+}
+
+/// Session start waits for its sync (up to the bound): a teammate's row that
+/// lands inside the wait is in the kickoff, not just in later reads.
+#[test]
+fn session_start_waits_for_sync_and_shows_the_fresh_row() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let remote = bare();
+    point(&d, &remote);
+    // a teammate: a clone with its own identity, synced by hand
+    let t = std::env::temp_dir().join(format!("fael-hook-mate-{}", fael_core::ulid()));
+    git(
+        &d,
+        &["clone", "-q", d.to_str().unwrap(), t.to_str().unwrap()],
+    );
+    git(&t, &["config", "user.email", "mate@example.com"]);
+    point(&t, &remote);
+    let (ok, _, err) = fael(
+        &t,
+        &[
+            "add",
+            "note",
+            "the teammate decided this for you",
+            "--files",
+            "src/a.rs",
+            "--to",
+            "hook-test",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&t, &["sync"], "");
+    assert!(ok, "{err}");
+
+    let ev = format!(r#"{{"cwd":{},"session":"s1"}}"#, json(&d));
+    let (ok, out, _) = fael(&d, &["hook", "session-start"], &ev);
+    assert!(ok, "{out}");
+    assert!(out.contains("the teammate decided this for you"), "{out}");
+}
+
+/// A sync that outlasts the wait does not hold the start: one
+/// `sync still running` line, and the brief as is.
+#[cfg(unix)]
+#[test]
+fn session_start_says_sync_still_running_when_sync_exceeds_the_wait() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Instant;
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "note",
+            "the local row stays",
+            "--files",
+            "src/a.rs",
+            "--to",
+            "hook-test",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    // an ssh remote whose server sleeps past the test's wait bound
+    let bin = std::env::temp_dir().join(format!("fael-hook-slow-{}", fael_core::ulid()));
+    std::fs::create_dir_all(&bin).unwrap();
+    let ssh = bin.join("ssh");
+    std::fs::write(&ssh, "#!/bin/sh\nsleep 5\nexit 255\n").unwrap();
+    std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    git(
+        &d,
+        &["config", "fael.remote", "ssh://fael.invalid/slow.git"],
+    );
+
+    let ev = format!(r#"{{"cwd":{},"session":"s-slow"}}"#, json(&d));
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let envs = [
+        ("PATH", path.as_str()),
+        ("GIT_SSH_COMMAND", "ssh"),
+        ("FAEL_SYNC_WAIT_MS", "200"),
+    ];
+    let t = Instant::now();
+    let (ok, out, _) = fael_env(&d, &["hook", "session-start"], &ev, &envs);
+    let elapsed = t.elapsed();
+    assert!(ok, "{out}");
+    assert!(out.contains("sync still running"), "{out}");
+    assert!(out.contains("the local row stays"), "{out}");
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "the start did not wait for the sync: {elapsed:?}"
+    );
 }
 
 /// The `auto-sync-<hash>.log` files in this repo's state dir.
