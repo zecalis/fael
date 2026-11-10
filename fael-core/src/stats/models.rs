@@ -69,7 +69,7 @@ pub fn models(runs: &[ModelRun]) -> Models {
         .count();
     let with_cost = runs
         .iter()
-        .filter(|r| r.cost.is_some_and(|c| c > 0.0))
+        .filter(|r| r.cost.is_some_and(|c| c.is_finite() && c > 0.0))
         .count();
     let mut by_model: BTreeMap<String, ModelRow> = BTreeMap::new();
     for r in runs {
@@ -80,7 +80,7 @@ pub fn models(runs: &[ModelRun]) -> Models {
         );
         let e = by_model.entry(key).or_default();
         e.runs += 1;
-        if r.cost.is_some_and(|c| c > 0.0) {
+        if r.cost.is_some_and(|c| c.is_finite() && c > 0.0) {
             e.cost += r.cost.unwrap_or(0.0);
         } else {
             e.missing += 1;
@@ -143,8 +143,9 @@ mod tests {
             run(Some("opencode"), Some("opencode-go/m"), Some(0.0)),
             run(Some("opencode"), Some("opencode-go/m"), Some(0.01)),
             run(Some("opencode"), Some("opencode-go/m"), Some(f64::NAN)),
+            run(Some("opencode"), Some("opencode-go/m"), Some(f64::INFINITY)),
         ]);
-        assert_eq!((m.with_cost, m.unknown_cost_pct), (1, 66.7));
-        assert_eq!(m.by_model["opencode/opencode-go/m"].unknown_cost_pct, 66.7);
+        assert_eq!((m.with_cost, m.unknown_cost_pct), (1, 75.0));
+        assert_eq!(m.by_model["opencode/opencode-go/m"].unknown_cost_pct, 75.0);
     }
 }
