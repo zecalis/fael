@@ -39,22 +39,30 @@ struct State {
     log: String,
 }
 
-fn path() -> PathBuf {
-    state_dir().join("update.json")
+fn path_at(dir: &Path) -> PathBuf {
+    dir.join("update.json")
 }
 
-fn load() -> State {
-    let s = std::fs::read_to_string(path()).unwrap_or_default();
+fn load_at(dir: &Path) -> State {
+    let s = std::fs::read_to_string(path_at(dir)).unwrap_or_default();
     serde_json::from_str(&s).unwrap_or_default()
 }
 
-fn save(s: &State) -> bool {
+fn load() -> State {
+    load_at(&state_dir())
+}
+
+fn save_at(dir: &Path, s: &State) -> bool {
     let Ok(j) = serde_json::to_string(s) else {
         return false;
     };
-    std::fs::create_dir_all(state_dir())
-        .and_then(|()| std::fs::write(path(), j))
+    std::fs::create_dir_all(dir)
+        .and_then(|()| std::fs::write(path_at(dir), j))
         .is_ok()
+}
+
+fn save(s: &State) -> bool {
+    save_at(&state_dir(), s)
 }
 
 fn now() -> u64 {
@@ -143,13 +151,19 @@ fn take_guard(dir: &Path) -> Option<TakeGuard> {
 /// Opted out, the receipt is still taken but stays silent — re-enabling says
 /// nothing stale.
 pub(crate) fn notice() -> Option<String> {
+    notice_at(&state_dir(), off())
+}
+
+/// Test-only explicit dir + opt-out: no `FAEL_*`/`XDG_*` touch, so parallel
+/// `cargo test` threads never share a receipt.
+fn notice_at(dir: &Path, off: bool) -> Option<String> {
     // a contended lock means another session is taking it right now — defer,
     // it says the line; only a lone holder takes
-    let _guard = take_guard(&state_dir())?;
-    let mut s = load();
+    let _guard = take_guard(dir)?;
+    let mut s = load_at(dir);
     let result = s.result.take()?;
-    save(&s);
-    if off() {
+    save_at(dir, &s);
+    if off {
         return None;
     }
     let (from, to) = (&s.from, &s.to);
@@ -275,7 +289,7 @@ fn newest(ls: &str, current: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::newest;
+    use super::{newest, notice_at};
 
     #[test]
     fn the_newest_release_tag_beats_the_running_version() {
@@ -285,38 +299,6 @@ mod tests {
         assert_eq!(newest(ls, "0.29.0").as_deref(), Some("0.30.0"));
         assert_eq!(newest(ls, "0.30.0"), None, "already the newest");
         assert_eq!(newest("", "0.29.0"), None, "offline reads as nothing");
-    }
-
-    /// Scoped env override (no other unit test touches these keys).
-    struct Env(&'static str, Option<std::ffi::OsString>);
-
-    impl Env {
-        fn set(key: &'static str, val: &str) -> Self {
-            let old = std::env::var_os(key);
-            unsafe {
-                std::env::set_var(key, val);
-            }
-            Self(key, old)
-        }
-
-        fn remove(key: &'static str) -> Self {
-            let old = std::env::var_os(key);
-            unsafe {
-                std::env::remove_var(key);
-            }
-            Self(key, old)
-        }
-    }
-
-    impl Drop for Env {
-        fn drop(&mut self) {
-            unsafe {
-                match &self.1 {
-                    Some(v) => std::env::set_var(self.0, v),
-                    None => std::env::remove_var(self.0),
-                }
-            }
-        }
     }
 
     /// Of two sessions starting at once only one holds the take guard; once
@@ -357,7 +339,11 @@ mod tests {
     #[test]
     fn concurrent_notices_say_a_receipt_once() {
         use std::sync::Barrier;
-        let base = std::env::temp_dir().join(format!("fael-take-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "fael-take-{}-{}",
+            std::process::id(),
+            fael_core::ulid()
+        ));
         let _ = std::fs::remove_dir_all(&base);
         let state = base.join("state");
         std::fs::create_dir_all(&state).unwrap();
@@ -366,16 +352,13 @@ mod tests {
             r#"{"checked_at":1,"seen_at":0,"from":"0.30.0","to":"99.0.0","result":"updated"}"#,
         )
         .unwrap();
-        let _state_dir = Env::set("FAEL_STATE_DIR", state.to_str().unwrap());
-        let _cfg = Env::set("XDG_CONFIG_HOME", base.join("cfg").to_str().unwrap());
-        let _opt_out = Env::remove("FAEL_NO_AUTO_UPDATE");
         let barrier = Barrier::new(8);
         std::thread::scope(|s| {
             let mut handles = vec![];
             for _ in 0..8 {
                 handles.push(s.spawn(|| {
                     barrier.wait();
-                    super::notice()
+                    notice_at(&state, false)
                 }));
             }
             let said: Vec<_> = handles

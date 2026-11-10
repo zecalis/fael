@@ -100,7 +100,11 @@ fn archives(since: Option<i64>) -> Vec<PathBuf> {
 }
 
 pub(super) fn all_archives() -> Vec<PathBuf> {
-    let mut a: Vec<PathBuf> = std::fs::read_dir(archive_dir())
+    all_archives_at(&archive_dir())
+}
+
+pub(super) fn all_archives_at(dir: &Path) -> Vec<PathBuf> {
+    let mut a: Vec<PathBuf> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()

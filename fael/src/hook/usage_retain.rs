@@ -20,16 +20,16 @@ fn cutoff(now_ms: u64) -> String {
     format!("{:04}-{:02}", t.div_euclid(12), t.rem_euclid(12) + 1)
 }
 
-fn summary_path(month: &str) -> std::path::PathBuf {
-    files::archive_dir().join(format!("{month}.sum.json"))
+fn summary_path_at(dir: &Path, month: &str) -> std::path::PathBuf {
+    dir.join(format!("{month}.sum.json"))
 }
 
 /// Write `month`'s summary (temp + rename) unless it is already there.
 // ponytail: a summary holds what the month's usage rows say; repo logs, git
 // and gh are not read (they describe the clone today, not that month), so the
 // fields joined from them read empty.
-fn summarise(raw: &Path, month: &str) -> Option<()> {
-    let sum = summary_path(month);
+fn summarise_at(dir: &Path, raw: &Path, month: &str) -> Option<()> {
+    let sum = summary_path_at(dir, month);
     if sum.is_file() {
         return Some(());
     }
@@ -58,16 +58,17 @@ fn summarise(raw: &Path, month: &str) -> Option<()> {
 }
 
 /// Delete raw archives older than the window, each only after its summary.
-pub(crate) fn retain() {
+/// Explicit dir so unit tests never touch `FAEL_STATE_DIR`.
+pub(crate) fn retain_at(dir: &Path) {
     let cut = cutoff(core::now_ms());
-    for raw in files::all_archives() {
+    for raw in files::all_archives_at(dir) {
         let old = raw
             .file_stem()
             .and_then(|s| s.to_str())
             .filter(|m| *m < cut.as_str())
             .map(String::from);
         if let Some(m) = old
-            && summarise(&raw, &m).is_some()
+            && summarise_at(dir, &raw, &m).is_some()
         {
             let _ = std::fs::remove_file(&raw);
         }
@@ -77,11 +78,15 @@ pub(crate) fn retain() {
 /// The summaries of months from `since`'s on whose raw archive is gone,
 /// oldest first. No `since` reads no summary.
 pub(crate) fn summaries(since: Option<i64>) -> Vec<(String, Value)> {
+    summaries_at(&files::archive_dir(), since)
+}
+
+/// Explicit dir (see `retain_at`).
+pub(crate) fn summaries_at(dir: &Path, since: Option<i64>) -> Vec<(String, Value)> {
     let Some(from) = since.map(|ms| files::month(ms.max(0) as u64)) else {
         return vec![];
     };
-    let dir = files::archive_dir();
-    let mut out: Vec<(String, Value)> = std::fs::read_dir(&dir)
+    let mut out: Vec<(String, Value)> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
@@ -155,13 +160,11 @@ mod tests {
         std::fs::write(a.join(format!("{recent}.jsonl")), format!("{row}\n")).unwrap();
         // 2020-02's summary cannot be written: its path is a directory
         std::fs::create_dir_all(a.join("2020-02.sum.json")).unwrap();
-        // SAFETY: nextest runs each test in its own process.
-        unsafe { std::env::set_var("FAEL_STATE_DIR", &d) };
-        retain();
+        retain_at(&a);
         assert!(!a.join("2020-01.jsonl").exists() && a.join("2020-01.sum.json").is_file());
         assert!(a.join("2020-02.jsonl").exists(), "no summary, raw stays");
         assert!(a.join(format!("{recent}.jsonl")).exists());
-        let s = summaries(Some(0));
+        let s = summaries_at(&a, Some(0));
         assert_eq!(
             s.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
             ["2020-01"]
@@ -169,7 +172,7 @@ mod tests {
         assert_eq!(s[0].1["events"], 1);
         // no repo log, git or gh: the repo-joined rows read empty, not read from disk
         assert_eq!(s[0].1["capture"]["manual_adds"], 0);
-        assert!(summaries(None).is_empty());
+        assert!(summaries_at(&a, None).is_empty());
         let _ = std::fs::remove_dir_all(&d);
     }
 }

@@ -29,15 +29,21 @@ const MAX_ENTRIES: usize = 1000;
 /// note id -> the sessions (at most `SESSIONS`) that were told it
 pub(crate) struct Count(BTreeMap<String, Vec<String>>);
 
-fn path(share: &Path) -> PathBuf {
+fn path_at(base: &Path, share: &Path) -> PathBuf {
     let key = session_key(&share.to_string_lossy());
-    state_dir().join("spent").join(format!("{key}.tsv"))
+    base.join("spent").join(format!("{key}.tsv"))
 }
 
 impl Count {
     /// One file read. A bad line is skipped.
     pub(crate) fn load(share: &Path) -> Count {
-        let s = std::fs::read_to_string(path(share)).unwrap_or_default();
+        Self::load_at(&state_dir(), share)
+    }
+
+    /// Explicit base: tests pass a temp dir so parallel `cargo test`
+    /// threads never share a file; production passes `state_dir()`.
+    pub(crate) fn load_at(base: &Path, share: &Path) -> Count {
+        let s = std::fs::read_to_string(path_at(base, share)).unwrap_or_default();
         Count(
             s.lines()
                 .filter_map(|l| l.split_once('\t'))
@@ -79,10 +85,15 @@ impl Count {
 /// moved; entries of closed or superseded notes are dropped, then the newest
 /// `MAX_ENTRIES` stay.
 pub(crate) fn record(log: &core::Log, share: &Path, session: &str, said: &[&str]) {
+    record_at(log, &state_dir(), share, session, said);
+}
+
+/// Explicit base (see `load_at`).
+fn record_at(log: &core::Log, base: &Path, share: &Path, session: &str, said: &[&str]) {
     if said.is_empty() || session.is_empty() {
         return;
     }
-    let mut c = Count::load(share);
+    let mut c = Count::load_at(base, share);
     let mut moved = false;
     for id in said {
         let v = c.0.entry(id.to_string()).or_default();
@@ -103,7 +114,7 @@ pub(crate) fn record(log: &core::Log, share: &Path, session: &str, said: &[&str]
             .take(MAX_ENTRIES)
             .map(|(id, v)| format!("{id}\t{}\n", v.join(",")))
             .collect();
-    let p = path(share);
+    let p = path_at(base, share);
     if let Some(d) = p.parent() {
         let _ = std::fs::create_dir_all(d);
     }
@@ -117,80 +128,93 @@ pub(crate) fn record(log: &core::Log, share: &Path, session: &str, said: &[&str]
 mod tests {
     use super::*;
 
-    /// A share dir of its own, so tests never meet.
-    fn share() -> PathBuf {
+    /// A state base of its own, so parallel `cargo test` threads never meet.
+    fn base() -> PathBuf {
         std::env::temp_dir().join(format!("fael-spent-{}", core::ulid()))
     }
 
-    fn told(share: &Path, id: &str, n: usize) {
+    /// Fixed share key inside that base (hashed to one file under it).
+    fn share() -> PathBuf {
+        PathBuf::from("repo")
+    }
+
+    fn told(base: &Path, share: &Path, id: &str, n: usize) {
         for i in 0..n {
-            record(&core::Log::default(), share, &format!("s{i}"), &[id]);
+            record_at(&core::Log::default(), base, share, &format!("s{i}"), &[id]);
         }
     }
 
     #[test]
     fn a_note_retires_after_five_other_sessions_never_before() {
+        let b = base();
         let sh = share();
-        told(&sh, "N1", 4);
-        assert!(Count::load(&sh).retired("s9").is_empty());
-        told(&sh, "N1", 5);
-        assert!(Count::load(&sh).retired("s9").contains("N1"));
+        told(&b, &sh, "N1", 4);
+        assert!(Count::load_at(&b, &sh).retired("s9").is_empty());
+        told(&b, &sh, "N1", 5);
+        assert!(Count::load_at(&b, &sh).retired("s9").contains("N1"));
         // the fifth session itself still sees it: four others
-        assert!(Count::load(&sh).retired("s0").is_empty());
+        assert!(Count::load_at(&b, &sh).retired("s0").is_empty());
     }
 
     #[test]
     fn the_crossing_session_is_the_fifth_distinct_one_and_only_once() {
+        let b = base();
         let sh = share();
-        told(&sh, "N1", 4);
-        assert_eq!(Count::load(&sh).crossing("s4", &["N1", "N2"]), vec!["N1"]);
-        record(&core::Log::default(), &sh, "s4", &["N1"]);
+        told(&b, &sh, "N1", 4);
+        assert_eq!(
+            Count::load_at(&b, &sh).crossing("s4", &["N1", "N2"]),
+            vec!["N1"]
+        );
+        record_at(&core::Log::default(), &b, &sh, "s4", &["N1"]);
         // said again in the same session, or by a sixth: not a crossing
-        assert!(Count::load(&sh).crossing("s4", &["N1"]).is_empty());
-        assert!(Count::load(&sh).crossing("s5", &["N1"]).is_empty());
+        assert!(Count::load_at(&b, &sh).crossing("s4", &["N1"]).is_empty());
+        assert!(Count::load_at(&b, &sh).crossing("s5", &["N1"]).is_empty());
     }
 
     #[test]
     fn one_session_counts_once_and_a_sixth_is_not_kept() {
+        let b = base();
         let sh = share();
-        told(&sh, "N1", 3);
-        told(&sh, "N1", 3);
-        assert_eq!(Count::load(&sh).0["N1"].len(), 3);
-        told(&sh, "N1", 5);
-        record(&core::Log::default(), &sh, "s7", &["N1"]);
-        assert_eq!(Count::load(&sh).0["N1"].len(), SESSIONS);
+        told(&b, &sh, "N1", 3);
+        told(&b, &sh, "N1", 3);
+        assert_eq!(Count::load_at(&b, &sh).0["N1"].len(), 3);
+        told(&b, &sh, "N1", 5);
+        record_at(&core::Log::default(), &b, &sh, "s7", &["N1"]);
+        assert_eq!(Count::load_at(&b, &sh).0["N1"].len(), SESSIONS);
     }
 
     #[test]
     fn closed_notes_are_pruned_and_the_file_is_capped() {
+        let b = base();
         let sh = share();
-        told(&sh, "N1", 1);
+        told(&b, &sh, "N1", 1);
         let mut log = core::Log::default();
         log.closes.push(core::Row {
             id: "C1".into(),
             reference: Some("N1".into()),
             ..core::Row::default()
         });
-        record(&log, &sh, "s0", &["N2"]);
-        assert!(!Count::load(&sh).0.contains_key("N1"));
+        record_at(&log, &b, &sh, "s0", &["N2"]);
+        assert!(!Count::load_at(&b, &sh).0.contains_key("N1"));
         for i in 0..MAX_ENTRIES + 5 {
-            record(&core::Log::default(), &sh, "s0", &[&format!("N{i:05}")]);
+            record_at(&core::Log::default(), &b, &sh, "s0", &[&format!("N{i:05}")]);
         }
-        let c = Count::load(&sh);
+        let c = Count::load_at(&b, &sh);
         assert_eq!(c.0.len(), MAX_ENTRIES);
         assert!(c.0.contains_key(&format!("N{:05}", MAX_ENTRIES + 4)));
     }
 
     #[test]
     fn unreadable_or_unwritable_state_fails_open() {
+        let b = base();
         let sh = share();
-        assert!(Count::load(&sh).retired("s").is_empty());
-        let p = path(&sh);
+        assert!(Count::load_at(&b, &sh).retired("s").is_empty());
+        let p = path_at(&b, &sh);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(&p, "garbage no tab\n\u{0}\n").unwrap();
-        assert!(Count::load(&sh).retired("s").is_empty());
+        assert!(Count::load_at(&b, &sh).retired("s").is_empty());
         // the tmp path is a directory: the write fails and nothing panics
         std::fs::create_dir_all(p.with_extension("tmp")).unwrap();
-        told(&sh, "N1", 2);
+        told(&b, &sh, "N1", 2);
     }
 }
