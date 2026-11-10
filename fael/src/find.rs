@@ -3,6 +3,7 @@
 //! title/body split: lists show titles, `find <id>` and `--full` show bodies.
 
 mod bases;
+mod empty;
 pub(crate) mod extra;
 mod flat_cache;
 pub(crate) mod id;
@@ -75,10 +76,10 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     };
     let (rows, budget, total) = core::query(&log, &f, &r.cfg);
     if rows.is_empty() {
-        nearest(a, &r.root, &log, &f, budget, &branch_of);
+        empty::nearest(a, &r.root, &log, &f, budget, &branch_of);
         return Ok(());
     }
-    emit_hint(a, &f);
+    empty::emit_hint(a, &f);
     // one line per row; bodies only by `find <id>` or --full
     let full = a.has("full");
     // the cut line reprints this call with the next offset — same flags, no
@@ -129,65 +130,6 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
             .for_each(|c| println!("{}", c.to_line()));
     }
     Ok(())
-}
-
-/// Regex metachars are literal AND here: hint `--key` glob or two finds.
-/// Stderr only, so `--json` stdout stays exact.
-fn emit_hint(a: &Args, f: &Filter) {
-    if !a.has("json")
-        && let Some(h) = core::regex_hint(f.text.as_deref())
-    {
-        eprintln!("fael: {h}");
-    }
-}
-
-/// An empty find: the nearest rows under their label, else why nothing
-/// matched. `--json` is the exact answer a script asked for — no guesses in it.
-fn nearest(
-    a: &Args,
-    root: &std::path::Path,
-    log: &Log,
-    f: &Filter,
-    budget: usize,
-    branch_of: &crate::journal::BranchMap,
-) {
-    let (head, near) = misses::explain(root, "cli", log, f, "--files");
-    // regex metachars are literal here (`all_words` is AND): hint `--key` glob
-    // or two finds, same text as MCP. Stays out of `--json` stdout — that path
-    // returns early with only `fael: {head}` on stderr.
-    let head = match core::regex_hint(f.text.as_deref()) {
-        Some(h) if !a.has("json") => format!("{head}\n{h}"),
-        _ => head,
-    };
-    if near.is_empty() || a.has("json") {
-        eprintln!("fael: {head}");
-        // `--json` keeps stdout exact: the hint rides stderr only.
-        if a.has("json")
-            && let Some(h) = core::regex_hint(f.text.as_deref())
-        {
-            eprintln!("fael: {h}");
-        }
-        return;
-    }
-    let full = a.has("full");
-    let out = match full {
-        true => core::render_full(log, &near, budget),
-        false => core::render(log, &near, budget),
-    };
-    let out = crate::journal::tag(out, branch_of);
-    println!("{head}");
-    print!("{out}");
-    let text = format!("{head}\n{out}");
-    let n = out.lines().filter(|l| l.starts_with("- [")).count();
-    let shown: Vec<String> = near.iter().take(n).map(|r| r.id.clone()).collect();
-    super::hook::record_found(
-        "cli",
-        "find",
-        root,
-        &text,
-        &shown,
-        (f.key.as_deref(), &f.files, None),
-    );
 }
 
 /// Show one body, then record what was shown.

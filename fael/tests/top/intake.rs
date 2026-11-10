@@ -66,11 +66,14 @@ fn line(r: &str, kind: &str, reopen: u32, closed: Option<&str>) -> String {
 }
 
 /// Every ticket row ever filed (open or closed), as `find --json` prints them.
+/// An empty find prints one `{"rows":[]}` envelope line instead of no lines —
+/// it carries no `id`, so it is not a row.
 fn rows(d: &Path) -> Vec<Value> {
     let (ok, out, err) = fael(d, &["find", "--json", "--all", "--key", "ticket:*"]);
     assert!(ok, "{err}");
     out.lines()
         .map(|l| serde_json::from_str(l).unwrap())
+        .filter(|v: &Value| v.get("id").is_some())
         .collect()
 }
 
