@@ -29,9 +29,20 @@ pub(super) fn open_row_notes(
     if let Some(p) = core::doctor_precision(log) {
         out.push(p);
     }
-    // one `gh pr list --state merged` call feeds both checks: `[Merged]` uses
-    // the branch set, `[Shipped]` the mergedAt/number per branch
-    let prs = merged::merged_prs(root).unwrap_or_default();
+    // one `gh pr list --state all` call feeds the three `gh` checks below:
+    // `[Merged]` uses the branch set, `[Shipped]` the mergedAt/number per
+    // branch, `[Orphan]` the state per branch — unknown when `gh` is
+    // unavailable, never an error
+    let prs_opt = merged::merged_prs(root);
+    if prs_opt.is_none() || orphan::unavailable() {
+        // the `gh` checks ran on no evidence: say so once, so the silence
+        // never reads as clean
+        out.push(core::Problem::info(
+            core::ProblemKind::GhOffline,
+            "gh unavailable: merged/shipped/orphan checks skipped".into(),
+        ));
+    }
+    let prs = prs_opt.unwrap_or_default();
     // landed branches: merged upstream but still sitting in this clone, so
     // the next reader keeps wondering whether the work is done
     out.extend(merged::problem(root, &prs));
@@ -175,8 +186,9 @@ fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Pr
     out
 }
 
-/// Orphan: open rows filed on a branch whose PR died unmerged. One `gh` call
-/// per branch (`orphan::rows`).
+/// Orphan: open rows filed on a branch whose PR died unmerged. One shared
+/// `gh pr list --state all` call for the whole repo (`orphan::rows`, the same
+/// list `[Merged]` and `[Shipped]` read).
 fn branch_notes(log: &core::Log) -> Vec<core::Problem> {
     let orphan = orphan::rows(log);
     if orphan.is_empty() {
@@ -229,22 +241,39 @@ fn superseded_note(log: &core::Log) -> Option<core::Problem> {
         return None;
     }
     let w = core::abbrev(log);
-    // the row that supersedes this one — kept only when its entire forward
-    // chain is closed, so a live newer version is never called stuck
+    // the row that supersedes this one — kept only when every forward path
+    // is closed, so a live newer version on any branch is never called stuck
+    // (a diamond — two rows superseding one parent — walks every child, not
+    // just the first)
     let head_closed = |id: &str| {
-        let mut newest = id;
-        let mut seen = HashSet::from([newest]);
-        while let Some(n) = log
-            .rows
-            .iter()
-            .find(|r| r.supersedes.as_deref() == Some(newest))
-        {
-            if !seen.insert(n.id.as_str()) {
-                break;
+        let mut stack = vec![id];
+        let mut seen = HashSet::from([id]);
+        let mut heads = 0;
+        while let Some(cur) = stack.pop() {
+            let children: Vec<&str> = log
+                .rows
+                .iter()
+                .filter(|r| r.supersedes.as_deref() == Some(cur))
+                .map(|r| r.id.as_str())
+                .collect();
+            if children.is_empty() {
+                // a head of the forward graph: one live head means the row
+                // still has a newer version
+                heads += 1;
+                if !closed.contains(cur) {
+                    return false;
+                }
+            } else {
+                for c in children {
+                    if seen.insert(c) {
+                        stack.push(c);
+                    }
+                }
             }
-            newest = n.id.as_str();
         }
-        closed.contains(newest)
+        // no head at all is a pure supersede cycle: never stuck (no live
+        // version, but no closable head either)
+        heads > 0
     };
     let stuck: Vec<&core::Row> = hidden
         .iter()

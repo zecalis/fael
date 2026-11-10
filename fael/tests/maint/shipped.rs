@@ -103,7 +103,7 @@ fn doctor_flags_shipped_notes() {
     // no merged PR at all: silent
     let (ok, out) = doctor(&d, "[]");
     assert!(ok && !out.contains("[Shipped"), "{out}");
-    // unparseable answer: skipped silently
+    // unparseable answer: no [Shipped] (the `gh unavailable` note covers it)
     let (ok, out) = doctor(&d, "not json");
     assert!(ok && !out.contains("[Shipped"), "{out}");
 }

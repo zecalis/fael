@@ -98,6 +98,11 @@ pub enum Kind {
     /// decides, never `--fix` closed (issue 01M4164E). Judged by the note's
     /// opening in `maintain/status.rs`, never a guess past what it says.
     ShippedKept,
+    /// `gh` was unavailable, so the `gh`-based checks (`[Merged]`, `[Shipped]`,
+    /// `[Orphan]`) were skipped — the silence is unknown, never clean.
+    /// Info-only, judged in `doctor` (which owns the `gh` call; core spawns
+    /// no processes).
+    GhOffline,
     /// open rows with a letter outside every accepted `[lang] rows` script —
     /// the add-time warning the agent skipped, repeated here so one translate
     /// batch can supersede them all (PLAN-fael-languages chunk 2); judged by

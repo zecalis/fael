@@ -35,6 +35,13 @@ pub(super) fn rows(log: &core::Log) -> Vec<(String, Vec<String>)> {
         .collect()
 }
 
+/// True when the `gh` evidence behind [`rows`] is unknown (no `gh`, it
+/// failed, or unparseable output) — the doctor caller reports one
+/// `gh unavailable` note instead of reading the silence as clean.
+pub(super) fn unavailable() -> bool {
+    dead_branches().is_none()
+}
+
 /// Branches whose PRs all closed unmerged; None = unknown (no `gh`, or it
 /// failed). `--state all` so an open PR off a branch is seen — a branch with
 /// a fresh open PR is not orphan just because an earlier PR closed unmerged.

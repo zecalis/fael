@@ -26,16 +26,18 @@ fn phantom_of(id: &str) -> String {
 #[test]
 fn doctor_notes_local_and_gone_rows() {
     let d = repo();
-    // no log yet: info only, exit 0 — the [NoLog] and [Local] notes
+    // no log yet: info only, exit 0 — the [NoLog] and [Local] notes, plus
+    // [GhOffline] (no `gh` in a remote-less repo: the `gh` checks are
+    // skipped, never silent)
     let (ok, out, _) = fael(&d, &["doctor"]);
-    assert!(ok && out.contains("2 problem(s)"), "{out}");
+    assert!(ok && out.contains("3 problem(s)"), "{out}");
     // adopted: the row sits in the journal, no union line or commit asked for
     std::fs::write(d.join("src/a.rs"), "").unwrap();
     let (ok, _, _) = fael(&d, &["add", "note", "first row", "--files", "src/a.rs"]);
     assert!(ok);
     let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(
-        ok && out.contains("1 problem(s) (0 error(s), 1 note(s))") && out.contains("note [Local]"),
+        ok && out.contains("2 problem(s) (0 error(s), 2 note(s))") && out.contains("note [Local]"),
         "{out}"
     );
     assert!(!d.join(".gitattributes").exists(), "{out}");
