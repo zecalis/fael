@@ -145,9 +145,6 @@ mod tests {
             run(Some("opencode"), Some("opencode-go/m"), Some(f64::NAN)),
         ]);
         assert_eq!((m.with_cost, m.unknown_cost_pct), (1, 66.7));
-        assert_eq!(
-            m.by_model["opencode/opencode-go/m"].unknown_cost_pct,
-            66.7
-        );
+        assert_eq!(m.by_model["opencode/opencode-go/m"].unknown_cost_pct, 66.7);
     }
 }

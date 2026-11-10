@@ -28,10 +28,27 @@ pub(super) fn models_lines(m: &core::stats::Models) -> Vec<String> {
 
 /// `, ~R real` beside a client's cost when usage measured transcript tokens
 /// for it — empty when none measured, so old output is byte-identical.
-pub(super) fn real_suffix(real: &BTreeMap<String, u64>, client: &str) -> String {
+fn real_suffix(real: &BTreeMap<String, u64>, client: &str) -> String {
     real.get(client)
         .map(|n| format!(", ~{n} real"))
         .unwrap_or_default()
+}
+
+/// One line per client (count, cost, measured real tokens beside it) plus
+/// the `models` card — the whole attribution block of `fael stats`.
+pub(super) fn print_attribution(s: &core::stats::Stats) {
+    let mut cl: Vec<_> = s.by_client.iter().collect();
+    cl.sort_by_key(|a| std::cmp::Reverse(a.1.events));
+    for (k, c) in cl {
+        let real = real_suffix(&s.real_by_client, k);
+        println!(
+            "  client {k}: ×{} (~{} tokens{real})",
+            c.events, c.est_tokens
+        );
+    }
+    for line in models_lines(&s.models) {
+        println!("{line}");
+    }
 }
 
 #[cfg(test)]
@@ -60,10 +77,14 @@ mod tests {
             lines[0],
             "  models: 2 runs · unknown model 50.0% · unknown cost 50.0%"
         );
-        assert!(lines.contains(&"  model claude/opus: 1 runs $2.170000 (unknown 0.0%)".to_string()));
-        assert!(lines.contains(
-            &"  model unknown/unknown: 1 runs $0.000000 (unknown 100.0%)".to_string()
-        ));
+        assert!(
+            lines.contains(&"  model claude/opus: 1 runs $2.170000 (unknown 0.0%)".to_string())
+        );
+        assert!(
+            lines.contains(
+                &"  model unknown/unknown: 1 runs $0.000000 (unknown 100.0%)".to_string()
+            )
+        );
     }
 
     #[test]

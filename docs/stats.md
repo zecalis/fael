@@ -108,6 +108,8 @@ shape is a breaking change: ship the reader first.
 | `skipped_temp` | u32 | rows skipped as temp-dir repos |
 | `by_event` | map name → `{events, est_tokens}` | per `event` (`read`, `edit`, `stop-work`, `capture`, …) |
 | `by_client` | map name → `{events, est_tokens}` | per `client` (`claude`, `codex`, …) |
+| `models` | `{total, with_client_model, with_cost, unknown_model_pct, unknown_cost_pct, by_model}` | model/cost attribution over this clone's crew.db runs (run-telemetry): `total` = run rows read · `with_client_model` = runs with non-null client AND model · `with_cost` = runs with cost > 0 (zero reads as unknown — it doesn't demonstrate attribution) · `unknown_model_pct`/`unknown_cost_pct` = 0-100 with one decimal, 0 when empty · `by_model` = `client/model` (missing part reads `unknown`) → `{runs, cost, unknown_cost_pct}` (cost ≤ 0 sums 0). Old NULL rows stay NULL — the unknown-% is the point. No crew.db reads all zeros. Same math as the board's `Models`, recomputed in `fael-core::stats::models` so `fael` never links `fael-crew`; the rows differ (stats: this clone only, board: every merged repo). The text prints one `models:` line (`unknown model x% · unknown cost y%`) plus one `model k:` line per group; no runs = no line |
+| `real_by_client` | map client → u64 | summed input-side `real_tokens` (in + cache-create + cache-read) per client over the counted rows; a client with no measured row is absent. The text appends `, ~R real` to that client's line; none measured = the line is byte-identical to before |
 | `top_rows` | `[{id, pushes}]` × ≤10 | most-pushed row ids, pushes desc then id asc |
 | `asks` | `{warning}` → `{events, bytes, codes}` | warning lines fael put in front of the agent, `codes` by warning code (`untitled`, `long_text`, `no_key`, `similar_key`, …; `uncoded` = a line from before codes); plain pushes never count. Rejects are in `friction` |
 | `constants` | `{skill_bytes, skill_est, mcp_schema_bytes, mcp_schema_est}` | bytes the agent pays every session before saying anything; SKILL.md is LF-normalised before measuring so the count is checkout-independent |
@@ -195,6 +197,8 @@ newest-first across repos.
 ## Changelog
 
 Newest first.
+
+- `5` (2026-11-10): added `models` (this clone's crew.db run attribution: totals with unknown-% beside every cost number, per-`client/model` sums; plan fael-session-friction chunk stats-unknown) and `real_by_client` (input-side transcript tokens per client over the counted rows) — new keys only, so no bump.
 
 - `5` (2026-11-01): `outcome` also reads with zero usage (the run repo's log is loaded even when no usage names it) and stays out of `summaries` (their fields joined from log/git/`gh` read empty by design); no new keys, no bump.
 
