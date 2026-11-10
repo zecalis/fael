@@ -78,6 +78,26 @@ pub(crate) fn merges(since_ms: Option<i64>) -> Vec<core::stats::FlowMerge> {
     out
 }
 
+/// Model/cost attribution for `fael stats` (chunk stats-unknown): this
+/// clone's run rows as `(client, model, cost)` — the caller joins them
+/// (pure) in `fael-core::stats::models`. Same db as `runs()` above; no db
+/// or no telemetry columns reads empty, never an error.
+pub(crate) fn attribution() -> Vec<core::stats::ModelRun> {
+    let db = crate::repo()
+        .ok()
+        .map(|r| core::work::db_for(r.journal.as_deref(), &r.fael))
+        .filter(|p| p.exists());
+    let Some(path) = db else { return vec![] };
+    core::work::model_runs(&path)
+        .into_iter()
+        .map(|r| core::stats::ModelRun {
+            client: r.client,
+            model: r.model,
+            cost: r.cost,
+        })
+        .collect()
+}
+
 /// Merged PRs as `(number, merged_at_ms)`, read off the one shared `gh pr
 /// list` (`maintain::gh_prs`, also behind doctor). Empty when `gh` is missing
 /// or fails — the `git log` fallback in `merges` still applies.

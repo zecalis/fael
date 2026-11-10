@@ -237,6 +237,9 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         &prs,
         prs_merged_total,
     );
+    // this clone's run attribution (client/model/cost with unknown-% beside
+    // every number); no crew.db reads empty, never an error
+    s.models = core::stats::models(&super::flow::attribution());
     if let Ok(r) = crate::repo() {
         let (log, held) = super::lifecycle::marked(&r);
         s.lifecycle = core::stats::lifecycle(&log, &held);

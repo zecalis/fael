@@ -143,6 +143,17 @@ fn stats_json_matches_golden_values() {
             serde_json::json!({"prs_merged": 0, "prs_created": 0, "prs_merged_unknown": true, "issues_filed": 0, "issues_closed": 0, "filed_to_close": {"median": 0, "p90": 0, "n": 0}, "joined_since": "", "prs_with_row": 0, "prs_without_row": 0, "window_since": "2026-09-26", "window_source": "usage"})
         )
     );
+    // also apart (same recursion limit): no crew runs here, so the
+    // attribution reads empty and no transcript tokens were measured
+    let attribution = v.as_object_mut().unwrap().remove("models");
+    assert_eq!(
+        attribution,
+        Some(
+            serde_json::json!({"total": 0, "with_client_model": 0, "with_cost": 0, "unknown_model_pct": 0.0, "unknown_cost_pct": 0.0, "by_model": {}})
+        )
+    );
+    assert_eq!(v["real_by_client"], serde_json::json!({}));
+    v.as_object_mut().unwrap().remove("real_by_client");
     // its own json! call: one literal with every kind passes the macro's recursion limit
     let said = serde_json::json!({"row": {"said": 2, "earned": 0, "by_event": {"read": {"said": 2, "earned": 0}}}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1, "by_event": {"read": {"said": 1, "earned": 1}}}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "inbox": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}, "briefdrift": {"said": 0, "earned": 0}, "retired": {"said": 0, "earned": 0}, "chunkbrief": {"said": 0, "earned": 0}});
     assert_eq!(

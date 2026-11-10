@@ -297,11 +297,7 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
             f.sessions_seen
         );
     }
-    let mut cl: Vec<_> = s.by_client.iter().collect();
-    cl.sort_by_key(|a| std::cmp::Reverse(a.1.events));
-    for (k, c) in cl {
-        println!("  client {k}: ×{} (~{} tokens)", c.events, c.est_tokens);
-    }
+    super::stats_models::print_attribution(s);
     print_unused(&s.unused_rows);
     if let Some(rows) = &s.rows {
         for r in rows {

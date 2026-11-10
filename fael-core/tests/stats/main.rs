@@ -90,9 +90,11 @@ fn json_shape_keys_and_types_are_frozen() {
             "friction",
             "handoff_runs",
             "lifecycle",
+            "models",
             "non_english_rows",
             "outcome",
             "outcomes_v",
+            "real_by_client",
             "retired",
             "rounds",
             "said",
@@ -169,6 +171,36 @@ fn json_shape_keys_and_types_are_frozen() {
     assert_eq!(top.len(), 2, "{v}");
     assert_eq!(keys(&top[0]), ["id", "pushes"], "{v}");
     assert!(top[0]["id"].is_string() && top[0]["pushes"].is_u64(), "{v}");
+}
+
+/// Chunk stats-unknown: run attribution with unknown-% beside every number,
+/// plus input-side transcript tokens per client — additions only, so the
+/// frozen key list above just gains the two keys.
+#[test]
+fn json_shape_models_attribution_is_frozen() {
+    let v = value_of(BASE_ROWS, false);
+    assert_eq!(
+        keys(&v["models"]),
+        [
+            "by_model",
+            "total",
+            "unknown_cost_pct",
+            "unknown_model_pct",
+            "with_client_model",
+            "with_cost"
+        ],
+        "{v}"
+    );
+    assert!(
+        v["models"]["total"].is_u64()
+            && v["models"]["with_client_model"].is_u64()
+            && v["models"]["with_cost"].is_u64()
+            && v["models"]["unknown_model_pct"].is_f64()
+            && v["models"]["unknown_cost_pct"].is_f64()
+            && v["models"]["by_model"].is_object(),
+        "{v}"
+    );
+    assert!(v["real_by_client"].is_object(), "{v}");
 }
 
 #[test]

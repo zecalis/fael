@@ -54,6 +54,15 @@ pub struct StatsRun {
     pub done: bool,
 }
 
+/// One run row's client-reported attribution for the stats `models` join:
+/// everything NULL-able, like the table.
+#[derive(Debug, Clone)]
+pub struct RunAttribution {
+    pub client: Option<String>,
+    pub model: Option<String>,
+    pub cost: Option<f64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EndedRun {
     pub plan: String,
@@ -68,6 +77,7 @@ pub use db::{
     linked_open_chunks, mark_model, mark_model_session, mark_seen, mark_seen_session, plan_by_name,
 };
 pub use db_runs::flow_runs;
+pub use db_runs::model_runs;
 pub use drift::{Drift, drift, in_conn as drift_in};
 pub use elsewhere::{
     Elsewhere, chunk_elsewhere, register_repo, repos as elsewhere_repos, row_elsewhere,
