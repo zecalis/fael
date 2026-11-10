@@ -27,8 +27,14 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // 2026-10-03 and its dir is garbage (issue 01M56WGH)
     let _ = std::fs::remove_dir_all(state_dir().join("stop-block"));
     mark_started(&c.session, &c.repo.root);
-    // detached and never awaited: teammates' rows reach later reads, not this start
-    super::autosync::start(e);
+    // waited up to the bound: a finished sync is re-read below so the
+    // kickoff sees it; a still-running one gets its one line at the outbox
+    let sync = super::autosync::start_session(e);
+    if matches!(sync, super::autosync::SessionSync::Done) {
+        let (log, tags) = crate::journal::read(&c.repo);
+        c.log = log;
+        c.tags = tags;
+    }
     // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
     crate::install::auto::start();
     // a compacted or cleared context lost the rows pushed into it — tell them again
@@ -83,6 +89,11 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     }
     for l in super::inbox::lines(&c) {
         out.say(l);
+    }
+    if matches!(sync, super::autosync::SessionSync::Running) {
+        out.say(Line::notice(
+            "fael: sync still running — teammates' rows arrive at the next read\n".into(),
+        ));
     }
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
         out.say(Line::notice(format!("{warn}\n")));
