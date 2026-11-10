@@ -45,24 +45,29 @@ fn prune_dir(dir: &Path, keep: impl Fn(&str) -> bool) {
 /// Session-start: prune once a day. Best-effort — every error is ignored and
 /// the next day tries again.
 pub(crate) fn prune_state() {
-    let dir = state_dir();
-    let stamp = dir.join("prune.stamp");
+    prune_state_at(&state_dir());
+}
+
+/// Test-only explicit base: no `FAEL_STATE_DIR` touch, so parallel
+/// `cargo test` threads never share a stamp or a scratch file.
+pub(crate) fn prune_state_at(base: &Path) {
+    let stamp = base.join("prune.stamp");
     if age(&stamp).is_some_and(|a| a < EVERY) {
         return;
     }
     // stamp first: a start racing this one skips instead of scanning too
-    if std::fs::create_dir_all(&dir).is_err() || std::fs::write(&stamp, "").is_err() {
+    if std::fs::create_dir_all(base).is_err() || std::fs::write(&stamp, "").is_err() {
         return;
     }
     for d in DIRS {
-        prune_dir(&dir.join(d), |_| true);
+        prune_dir(&base.join(d), |_| true);
     }
     // per-worktree last-run logs and the rebuildable git-log cache
-    prune_dir(&dir, |n| {
+    prune_dir(base, |n| {
         n.starts_with("auto-sync-") || n.starts_with("drift-")
     });
     // class B2: raw usage past 3 months, after its monthly summary is written
-    super::usage_retain::retain();
+    super::usage_retain::retain_at(&base.join("usage"));
 }
 
 #[cfg(test)]
@@ -95,15 +100,12 @@ mod tests {
         }
         aged(&d.join("sessions/new.seen"), Duration::ZERO);
         aged(&d.join("usage.jsonl"), old); // not scratch: never touched
-        // SAFETY: this crate's tests set FAEL_STATE_DIR only through this one
-        // test, and `cargo nextest` runs each test in its own process.
-        unsafe { std::env::set_var("FAEL_STATE_DIR", &d) };
-        prune_state();
+        prune_state_at(&d);
         assert!(files.iter().all(|f| !d.join(f).exists()));
         assert!(d.join("sessions/new.seen").exists() && d.join("usage.jsonl").exists());
         // the stamp skips a second pass the same day
         aged(&d.join("sessions/b.seen"), old);
-        prune_state();
+        prune_state_at(&d);
         assert!(d.join("sessions/b.seen").exists());
         let _ = std::fs::remove_dir_all(&d);
     }
