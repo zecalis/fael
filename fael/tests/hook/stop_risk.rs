@@ -194,6 +194,52 @@ fn stop_reads_reply_when_transcript_lags() {
     assert!(flagged(&d, &json(&t)));
 }
 
+/// A sub-agent's risk mention is stashed for the parent: its own push
+/// neither shows nor clears it, the parent's next push shows it once.
+#[test]
+fn subagent_risk_is_surfaced_on_parent_push_once() {
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let s = "2020-01-01T00:00:00Z";
+    let stop = format!(
+        r#"{{"cwd":{},"session":{},"agent":"a1","text":"the schema and the docs are out of sync"}}"#,
+        json(&d),
+        serde_json::to_string(s).unwrap()
+    );
+    let (ok, out, _) = fael(&d, &["hook", "stop"], &stop);
+    assert!(ok && out.contains(r#""block":false"#), "{out}");
+    // a sub-agent's own push leaves the parent stash alone
+    let sub = format!(
+        r#"{{"cwd":{},"session":{},"agent":"a1","files":["src/nothing.rs"]}}"#,
+        json(&d),
+        serde_json::to_string(s).unwrap()
+    );
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &sub);
+    assert!(ok, "{out}");
+    assert!(
+        !out.contains("possible problem"),
+        "subagent push must not show it: {out}"
+    );
+    // the parent's next push shows it once
+    let edit = format!(
+        r#"{{"cwd":{},"session":{},"files":["src/nothing.rs"]}}"#,
+        json(&d),
+        serde_json::to_string(s).unwrap()
+    );
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &edit);
+    assert!(
+        ok && out.contains("possible problem") && out.contains("out of sync"),
+        "{out}"
+    );
+    let (ok, out, _) = fael(&d, &["hook", "edit"], &edit);
+    assert!(ok && !out.contains("possible problem"), "{out}");
+}
+
 /// A tool result is a user line, not a new turn: words said before the
 /// turn's last tool call still count.
 #[test]

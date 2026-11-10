@@ -69,6 +69,7 @@ mod search;
 mod session;
 mod shape;
 mod spent_notes;
+mod stash;
 mod state;
 mod stats_handoff;
 mod stats_models;

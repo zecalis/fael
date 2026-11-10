@@ -14,9 +14,8 @@ use super::push_files::repo_files;
 use super::say::{Kind, Line, Outbox, Reply};
 use super::say_card::At;
 use super::spent_notes::{self, Count};
-use super::state::{
-    clear_stash, edited_files, edits_path, lock_seen, peek_stash, record_edits, seen_path,
-};
+use super::stash::{clear_stash, peek_all_stash};
+use super::state::{edited_files, edits_path, lock_seen, record_edits, seen_path};
 use super::usage::record_usage;
 use crate::{aliases, core};
 use std::collections::HashSet;
@@ -43,22 +42,24 @@ fn fixed_line(phrase: &str, files: &[String]) -> String {
 /// and the fix line, whether or not rows
 /// join them. Only looked at: `push` clears them once they were said, so a
 /// push with no budget left leaves them for the next. Stop stashed them for
-/// the session's own thread — a sub-agent's push leaves them there.
+/// the session's own thread plus each sub-agent's — a sub-agent's push leaves
+/// them there, the parent's next push shows them all.
 fn stashed(c: &super::protocol::Ctx, files: &[String]) -> Vec<Line> {
     if c.session.is_empty() || !c.agent.is_empty() {
         return vec![];
     }
-    let [risk, fixed] = peek_stash(&c.session, &c.repo.root);
-    let notice = risk.map(|m| Line::notice(format!("{}\n", risk_line(&m, files))));
+    let (risks, fixeds) = peek_all_stash(&c.session, &c.repo.root);
+    let notices = risks
+        .into_iter()
+        .map(|m| Line::notice(format!("{}\n", risk_line(&m, files))));
     // the fix is in what the session edited, not in the file this push is on
-    let fixed = fixed.map(|p| {
-        let edited = edited_files(&c.session, &c.repo.root, 3);
-        Line {
-            kind: Kind::Fixed,
-            text: fixed_line(&p, if edited.is_empty() { files } else { &edited }),
-        }
+    let edited = edited_files(&c.session, &c.repo.root, 3);
+    let files_for_fixed = if edited.is_empty() { files } else { &edited };
+    let fixed = fixeds.into_iter().map(|p| Line {
+        kind: Kind::Fixed,
+        text: fixed_line(&p, files_for_fixed),
     });
-    notice.into_iter().chain(fixed).collect()
+    notices.chain(fixed).collect()
 }
 
 /// Render the selected rows as one line each (`core::render_push`), capped by

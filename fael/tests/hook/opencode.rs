@@ -271,11 +271,12 @@ fn opencode_stop_empty_shapes_stay_silent() {
 }
 
 /// oc-stop: a child session's stop carries `agent` (its root), so `stop.rs`
-/// takes the subagent branch — cited ids only, no bug-rule stash that would
-/// sit orphaned under the short-lived child key. The same words on the main
-/// thread stash as before.
+/// takes the subagent branch — cited ids plus a per-agent bug-rule stash that
+/// the child's own session push shows once (peek_all surfaces every
+/// (session, agent) stash on its session's agent-less push). The same words
+/// on the main thread stash as before.
 #[test]
-fn opencode_child_stop_with_agent_skips_the_bug_stash() {
+fn opencode_child_stop_with_agent_stashes_for_its_session() {
     let d = repo();
     with_row(&d);
     let bug = "I found a bug in login";
@@ -286,8 +287,8 @@ fn opencode_child_stop_with_agent_skips_the_bug_stash() {
     let (ok, out, err) = fael(&d, &["hook", "stop"], &body);
     assert!(ok, "{err} {out}");
     assert!(
-        !flagged(&d, &format!("\"{CS}\"")),
-        "child stop stashed a bug line"
+        flagged(&d, &format!("\"{CS}\"")),
+        "child stop did not stash a bug line for its session"
     );
     // the main thread: the same words stash for the next push
     let body = serde_json::json!({"cwd": d, "client": "opencode", "session": S,
