@@ -3,10 +3,8 @@
 
 use super::markers::{has_bug_marker, has_fix_phrase, signal_from_transcript, transcript_reply};
 use super::protocol::{Event, Reply, ctx};
-use super::state::{
-    file_birth_ms, fixed_path, now_rfc3339, risk_path, seen_path, session_id, session_key,
-    state_dir,
-};
+use super::stash::{fixed_path, risk_path};
+use super::state::{file_birth_ms, now_rfc3339, seen_path, session_id, session_key, state_dir};
 use crate::core;
 use std::path::Path;
 
@@ -140,16 +138,18 @@ fn receipt(e: &Event) -> Option<String> {
     super::tally::take_receipt(&c.session, &c.repo.root, &c.log)
 }
 
-/// A sub-agent's stop only notes the ids its own reply cites: the bug rule
-/// belongs to the session's stop. No transcript fallback: only the explicit
-/// reply identifies this child's closing words.
+/// A sub-agent's stop notes the ids its own reply cites and stashes its own
+/// fix/risk signal for the parent's next push. The bug rule used to belong to
+/// the session's stop alone, but a sub-agent's closing words never reach the
+/// parent's transcript or reply — without `decide` here its fix/risk text was
+/// never stashed and the parent never saw it. The stash is keyed by
+/// (session, agent), so a sub-agent's push — which never reads the stash —
+/// neither shows nor clears it.
 pub(super) fn subagent_stop(e: &Event) -> Reply {
-    if let (Some(c), Some(reply)) = (ctx(e), &e.reply)
-        && adopted(&c)
-    {
-        super::cited::note_reply(&c, reply);
-    }
-    Reply::default()
+    // `decide` already notes the reply's cited ids (reply first, transcript
+    // fallback) and stashes per-agent when adopted; it returns the default
+    // reply — a stop never blocks and carries no context.
+    decide(e)
 }
 
 /// A log under `.fael/` or in the clone's journal — without one fael was never
@@ -182,13 +182,17 @@ fn decide(e: &Event) -> Reply {
     let fixed = signal(e, &c.log, (since_ms, stop_ms), true, &|t| {
         has_fix_phrase(t, cfg)
     });
-    if fixed.is_some_and(|p| stash_fixed(&c.session, &c.repo.root, &p)) {
+    if fixed.is_some_and(|p| stash_fixed(&c.session, &c.agent, &c.repo.root, &p)) {
         return no;
     }
     if let Some(marker) = signal(e, &c.log, (since_ms, stop_ms), false, &|t| {
         has_bug_marker(t, cfg)
     }) {
-        stash(&c.session, &risk_path(&c.session, &c.repo.root), &marker);
+        stash(
+            &c.session,
+            &risk_path(&c.session, &c.agent, &c.repo.root),
+            &marker,
+        );
     }
     no
 }
@@ -255,13 +259,15 @@ fn session_start(e: &Event) -> Option<i64> {
 
 /// Stash a fix phrase for the next push, unless this session's fix line was
 /// already said (`~fixed`, once per session) — false then, so the bug marker
-/// may still be stashed. Empty session = no stash.
-fn stash_fixed(session: &str, worktree: &Path, phrase: &str) -> bool {
+/// may still be stashed. Empty session = no stash. `agent` keys the stash
+/// file, but the once-per-session check always reads the parent thread's seen
+/// list: a sub-agent's fix surfaces on the parent, where the line is spent.
+fn stash_fixed(session: &str, agent: &str, worktree: &Path, phrase: &str) -> bool {
     let seen = std::fs::read_to_string(seen_path(session, "", worktree)).unwrap_or_default();
     if seen.lines().any(|l| l == super::say::FIXED_KEY) {
         return false;
     }
-    stash(session, &fixed_path(session, worktree), phrase)
+    stash(session, &fixed_path(session, agent, worktree), phrase)
 }
 
 /// Stash a phrase at `path`, a session file the next push in this session

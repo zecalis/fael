@@ -126,23 +126,6 @@ pub(crate) fn read_retired(root: &Path, key: &str) -> Option<HashSet<String>> {
     (k == key).then(|| ids.lines().map(String::from).collect())
 }
 
-/// A Weak risk line stashed by stop for the next push — shown once, deleted.
-/// Stemmed like `edits_path` (decision 01M71AJMH4RSS13BZKZEWASQK8).
-pub(crate) fn risk_path(session: &str, root: &Path) -> PathBuf {
-    let id = session_id(session);
-    let key = session_key(&format!("{id}\0{}", root.to_string_lossy()));
-    state_dir().join("sessions").join(format!("{key}.risk"))
-}
-
-/// A fix phrase stashed by stop for the next push (PLAN-fael-experience-loop
-/// chunk 5a) — shown once, deleted. Stemmed like `edits_path` (decision
-/// 01M71AJMH4RSS13BZKZEWASQK8).
-pub(crate) fn fixed_path(session: &str, root: &Path) -> PathBuf {
-    let id = session_id(session);
-    let key = session_key(&format!("{id}\0{}", root.to_string_lossy()));
-    state_dir().join("sessions").join(format!("{key}.fixed"))
-}
-
 /// `<seen file>.started` — left by session-start, keyed by the session id,
 /// so a row filed before the first edit can still show a hook event saw its
 /// env id in this worktree (01M4GEDR).
@@ -165,25 +148,6 @@ pub(crate) fn mark_started(session: &str, root: &Path) {
 /// beside the git-dir traversal the journal root uses too, so the two cannot
 /// drift.
 pub(crate) use crate::journal::head_branch;
-
-/// The stashed risk note and fix phrase, if any — left
-/// on disk until `clear_stash`, so a push that had no budget for them leaves
-/// them for the next.
-pub(crate) fn peek_stash(session: &str, root: &Path) -> [Option<String>; 2] {
-    let peek = |path: &Path| {
-        let s = std::fs::read_to_string(path).ok()?;
-        let s = s.trim().to_string();
-        (!s.is_empty()).then_some(s)
-    };
-    [risk_path, fixed_path].map(|p| peek(&p(session, root)))
-}
-
-/// Delete the stashes — once their line was said, never before.
-pub(crate) fn clear_stash(session: &str, root: &Path) {
-    for p in [risk_path, fixed_path] {
-        let _ = std::fs::remove_file(p(session, root));
-    }
-}
 
 /// One `{"path","at"[, "worktree","session"]}` line per edit event, in order —
 /// (path, at ms, worktree, session; None for lines written before those were).
@@ -277,15 +241,14 @@ mod tests {
     }
 
     /// Stem-once (decision 01M71AJMH4RSS13BZKZEWASQK8): a transcript path
-    /// and its bare stem address the same session files — edits/risk/fixed
-    /// stem like seen/shown already do, so one session never splits in two.
+    /// and its bare stem address the same session files — edits stem like
+    /// seen/shown already do, so one session never splits in two (risk/fixed
+    /// live in `stash.rs` now).
     #[test]
     fn session_files_agree_across_forms() {
         let root = std::path::Path::new("/w");
         let (path, stem) = ("/sessions/abc123.jsonl", "abc123");
         assert_eq!(super::edits_path(path, root), super::edits_path(stem, root));
-        assert_eq!(super::risk_path(path, root), super::risk_path(stem, root));
-        assert_eq!(super::fixed_path(path, root), super::fixed_path(stem, root));
         assert_eq!(
             super::seen_path(path, "", root),
             super::seen_path(stem, "", root)

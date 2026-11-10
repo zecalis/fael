@@ -77,6 +77,45 @@ fn a_fix_phrase_with_nothing_filed_is_said_once_per_session() {
     assert!(!push(&d, s).contains("possible problem"));
 }
 
+/// A sub-agent's fix phrase is stashed per-agent and surfaced on the parent's
+/// next push once — its own push neither shows nor clears it.
+#[test]
+fn a_subagent_fix_phrase_is_surfaced_on_parent_push_once() {
+    let d = super::repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let s = "2020-01-01T00:00:00Z";
+    let stop_sub = |text: &str| {
+        let input = format!(
+            r#"{{"cwd":{},"session":{},"agent":"a1","text":{}}}"#,
+            json(&d),
+            serde_json::to_string(s).unwrap(),
+            serde_json::to_string(text).unwrap()
+        );
+        let (ok, out, err) = fael(&d, &["hook", "stop"], &input);
+        assert!(ok && out.contains(r#""block":false"#), "{out}{err}");
+    };
+    let push_sub = || {
+        let input = format!(
+            r#"{{"cwd":{},"session":{},"agent":"a1","files":["src/nothing.rs"]}}"#,
+            json(&d),
+            serde_json::to_string(s).unwrap()
+        );
+        let (ok, out, err) = fael(&d, &["hook", "edit"], &input);
+        assert!(ok, "{err}");
+        out
+    };
+    stop_sub("Fixed the bug: the retry cap was off by one.");
+    assert!(!push_sub().contains(SAID), "subagent push must not show it");
+    let out = push(&d, s);
+    assert!(out.contains(SAID) && out.contains("fixed the bug"), "{out}");
+    assert!(!push(&d, s).contains(SAID), "shown once");
+}
+
 #[test]
 fn an_issue_or_a_close_after_the_words_clears_them_one_before_does_not() {
     let d = super::repo();
