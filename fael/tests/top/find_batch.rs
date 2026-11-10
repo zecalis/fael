@@ -200,17 +200,44 @@ fn an_empty_text_search_names_the_word_and_is_recorded() {
         err.contains("\"ranking\" ×1") && err.contains("\"vector\" ×0"),
         "{err}"
     );
-    // recorded for stats; a files-only miss is not a vocabulary miss
+    // recorded for stats; a files/key-only miss rides its own field, never
+    // the `text` vocabulary list
     let (_, _, _) = fael(&d, &["find", "--files", "src/none.rs"]);
+    let (_, _, _) = fael(&d, &["find", "--key", "nosuchkey"]);
     let (_, out, _) = fael(&d, &["stats", "--misses"]);
-    assert!(
-        out.contains("\"ranking vector index\"") && !out.contains("none.rs"),
-        "{out}"
-    );
-    assert_eq!(out.lines().count(), 1, "{out}");
+    assert!(out.contains("\"ranking vector index\""), "{out}");
+    assert!(out.contains("files:src/none.rs"), "{out}");
+    assert!(!out.contains("\"src/none.rs\""), "{out}");
+    assert!(out.contains("key:nosuchkey"), "{out}");
+    assert_eq!(out.lines().count(), 3, "{out}");
     // the plain stats page grows one line only once something missed
     let (_, out, _) = fael(&d, &["stats"]);
-    assert!(out.contains("find misses: ×1"), "{out}");
+    assert!(out.contains("find misses: ×3"), "{out}");
+}
+
+/// An empty `--json` find is one object on stdout: `rows: []` plus the
+/// hint/why a script would otherwise have to scrape from stderr.
+#[test]
+fn an_empty_json_search_prints_rows_empty_with_hint_on_stdout() {
+    let d = repo();
+    add(
+        &d,
+        "a.rs",
+        "ranking headline",
+        "ranking stays deterministic",
+    );
+    let (ok, out, err) = fael(&d, &["find", "--json", "--text", "zzqqxx-no-such-word"]);
+    assert!(ok, "{err}");
+    assert!(err.is_empty(), "{err}");
+    let v: serde_json::Value =
+        serde_json::from_str(out.trim()).expect("stdout is one JSON object: {out}");
+    assert_eq!(v["rows"], serde_json::json!([]), "{out}");
+    let hint = v["hint"].as_str().unwrap_or_default().to_string();
+    assert!(
+        !hint.is_empty() && hint.contains("zzqqxx-no-such-word"),
+        "{out}"
+    );
+    assert_eq!(v["why"].as_str().unwrap_or_default(), hint, "{out}");
 }
 
 #[test]
