@@ -87,7 +87,7 @@ fn prints_recorded_beside_now_and_edits_nothing() {
 }
 
 #[test]
-fn rejects_a_row_without_the_lines_or_from_another_writer() {
+fn rejects_a_row_without_the_lines() {
     let d = repo();
     let plain = note(&d, "223 hits");
     let (ok, _, err) = fael(&d, &["verify", &plain], "");
@@ -95,7 +95,12 @@ fn rejects_a_row_without_the_lines_or_from_another_writer() {
         !ok && err.contains("rejected") && err.contains("cmd:"),
         "{err}"
     );
-    let mine = note(&d, "hits\ncmd: touch ran\nresult: x");
+}
+
+#[test]
+fn prints_a_foreign_row_without_running_it() {
+    let d = repo();
+    let mine = note(&d, "hits\ncmd: touch ran\ndate: 2026-10-27\nresult: x");
     let git = |k, v| {
         Command::new("git")
             .args(["config", k, v])
@@ -104,8 +109,11 @@ fn rejects_a_row_without_the_lines_or_from_another_writer() {
             .unwrap();
     };
     git("user.email", "other@example.com");
-    let (ok, _, err) = fael(&d, &["verify", &mine], "");
-    assert!(!ok && err.contains("not this machine"), "{err}");
+    let (ok, out, _) = fael(&d, &["verify", &mine], "");
+    assert!(
+        ok && out.contains("recorded: x") && out.contains("cmd:") && out.contains("touch ran"),
+        "{out}"
+    );
     assert!(
         !d.join("ran").exists(),
         "a foreign row's command must not run"

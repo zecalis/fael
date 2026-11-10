@@ -2,7 +2,8 @@
 //! the recorded `result:` next to what it prints now. Reads only — the row is never edited,
 //! and fael never says which of the two is right. The command is a shell line, so it runs
 //! only for a row this machine's writer filed (a row that came by `sync`/`import` is a
-//! teammate's text), for at most `LIMIT`, in the repo root, with no stdin.
+//! teammate's text and prints `cmd:` beside `recorded:` without running, exit 0),
+//! for at most `LIMIT`, in the repo root, with no stdin.
 
 use crate::{core, read, repo, writer};
 use std::io::Read;
@@ -71,10 +72,14 @@ pub(crate) fn cmd(id: &str) -> Result<ExitCode, String> {
         ));
     };
     if row.by != writer(&r) {
-        return Err(format!(
-            "rejected: {} was filed by {}, not this machine's writer — verify runs only your own rows; run the command by hand if you trust it",
-            row.id, row.by
-        ));
+        println!("{}", row.id);
+        println!("cmd:      {cmd}");
+        if let Some(d) = field(&row.text, "date") {
+            println!("date:     {d}");
+        }
+        println!("recorded: {was}");
+        println!("foreign:  {} (not run)", row.by);
+        return Ok(ExitCode::SUCCESS);
     }
     let (now, code) = measure(cmd, &r.root)?;
     println!("{}", row.id);
