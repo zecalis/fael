@@ -5,15 +5,18 @@
 //! row cap). Core owns the shape and the pure build (`Focus::from_rows`);
 //! this module is the file.
 
-use super::state::{session_key, state_dir};
+use super::state::{session_id, session_key, state_dir};
 use crate::core;
 use std::path::{Path, PathBuf};
 
 /// `<state>/sessions/<session+worktree>.focus.json` — the same key the seen
 /// file uses, so one session's Focus follows it across repos and no two
-/// sessions share one.
+/// sessions share one. The session is stemmed first, like `seen`/`shown`:
+/// a transcript path and its bare stem are the same session (decision
+/// 01M71AJMH4RSS13BZKZEWASQK8).
 pub(crate) fn path(session: &str, root: &Path) -> PathBuf {
-    let key = session_key(&format!("{session}\0{}", root.to_string_lossy()));
+    let id = session_id(session);
+    let key = session_key(&format!("{id}\0{}", root.to_string_lossy()));
     state_dir()
         .join("sessions")
         .join(format!("{key}.focus.json"))
@@ -66,4 +69,19 @@ fn read(session: &str, root: &Path) -> Option<core::Focus> {
     }
     let body = std::fs::read_to_string(path(session, root)).ok()?;
     serde_json::from_str(&body).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    /// Stem-once (decision 01M71AJMH4RSS13BZKZEWASQK8): a transcript path
+    /// and its bare stem address the same Focus file, like seen/shown.
+    #[test]
+    fn focus_path_agrees_across_forms() {
+        let root = std::path::Path::new("/w");
+        assert_eq!(
+            super::path("/sessions/abc123.jsonl", root),
+            super::path("abc123", root)
+        );
+        assert_ne!(super::path("abc123", root), super::path("def456", root));
+    }
 }
