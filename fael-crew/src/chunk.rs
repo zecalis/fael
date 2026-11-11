@@ -34,6 +34,10 @@ pub struct Fields {
     pub label: Option<String>,
     /// `add` only: open ledger issue ids the chunk fixes, checked by the caller (l2)
     pub issues: Vec<String>,
+    /// `edit --issue` only (issue 01M75C6A9GQZN93JMSZZ0S3MTR): the ledger files
+    /// of each id in `issues`, in order — the store never reads the ledger,
+    /// so the CLI carries them for the in-scope approval check
+    pub issue_files: Vec<Vec<String>>,
 }
 
 pub(super) struct Row {
@@ -230,11 +234,46 @@ pub(super) fn add_after(tx: &Transaction, src: i64, dst: i64) -> Result<(), Stri
     Ok(())
 }
 
+/// Whether an edit keeps the owner's approval: other fields keep it only for a
+/// scope widening (or no other change), and linked issues keep it only when
+/// every new issue's files already sit under the scope. `have` is read before
+/// the link writes, or every id reads as already-linked and an outside file
+/// never clears.
+fn keep_approval(
+    tx: &Transaction,
+    chunk: i64,
+    other: &[&str],
+    f: &Fields,
+    old: &Option<String>,
+    new: &str,
+) -> Result<bool, String> {
+    let widened = other == ["scope"]
+        && old
+            .as_deref()
+            .unwrap_or("")
+            .lines()
+            .all(|p| new.lines().any(|q| super::board_math::under(p, q)));
+    let scope_lines: Vec<String> = match f.scope.as_deref() {
+        Some(_) => new.lines().map(str::to_string).collect(),
+        None => old
+            .as_deref()
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect(),
+    };
+    let have = super::issue::of(tx, chunk).map_err(|e| e.to_string())?;
+    let issues_keep = issues_in_scope(&have, f, &scope_lines);
+    Ok((other.is_empty() || widened) && (f.issues.is_empty() || issues_keep))
+}
+
 /// `fael chunk edit`: fields, and the state only to open a draft that gains a brief
 /// (issue 01M4KJQE: an inbox draft has a way out). Any change clears the approval
 /// (SPEC §8), so the queue never starts work the owner did not approve as it now reads —
 /// but a `--scope` alone that keeps every old path covered: the owner approved the work and
 /// its model, and a wider scope only lets the overlap check see more (owner, 2026-10-15).
+/// Linking issues (`--issue +<id>`, issue 01M75C6A9GQZN93JMSZZ0S3MTR) keeps the approval
+/// under the same shape: every new issue's files already sit under the chunk's scope.
 pub(super) fn edit_in(
     tx: &Transaction,
     uid: &str,
@@ -285,20 +324,20 @@ pub(super) fn edit_in(
         .map_err(err)?;
         what.push(col);
     }
-    if what.is_empty() {
+    if what.is_empty() && f.issues.is_empty() {
         return Err(
             "rejected: nothing to edit — --title, --brief, --size, --model, --client, --scope, --reads or --label; try `fael chunk edit <uid> --title \"<new title>\"`"
                 .into(),
         );
     }
     let new = scope.flatten().unwrap_or_default();
-    let widened = what == ["scope"]
-        && old
-            .as_deref()
-            .unwrap_or("")
-            .lines()
-            .all(|p| new.lines().any(|q| super::board_math::under(p, q)));
-    let n = if widened {
+    let keep = keep_approval(tx, r.id, &what, f, &old, &new)?;
+    // linked issues live in `chunk_issue`, not on the chunk row — same tx, same event
+    if !f.issues.is_empty() {
+        super::issue::link(tx, r.id, &f.issues)?;
+        what.push("issue");
+    }
+    let n = if keep {
         0
     } else {
         tx.execute(
@@ -322,12 +361,45 @@ pub(super) fn edit_in(
     Ok(text)
 }
 
+/// Only the newly linked issues judge the approval: an already-linked id is a
+/// no-op. Every new issue's files must sit under the scope — `under(file,
+/// scope_path)` on a `/` boundary, the same math the overlap check uses.
+/// `have` is what was linked before this edit (read before the link writes).
+fn issues_in_scope(have: &[String], f: &Fields, scope_lines: &[String]) -> bool {
+    if f.issues.is_empty() {
+        return true;
+    }
+    let mut fresh: Vec<usize> = Vec::new();
+    for (i, id) in f.issues.iter().enumerate() {
+        if !have.iter().any(|h| h == id) {
+            fresh.push(i);
+        }
+    }
+    if fresh.is_empty() {
+        return true;
+    }
+    for i in fresh {
+        let files = f.issue_files.get(i).cloned().unwrap_or_default();
+        for file in &files {
+            if !scope_lines
+                .iter()
+                .any(|s| super::board_math::under(file, s))
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 impl Store {
-    /// `fael chunk edit`: see [`edit_in`].
-    pub fn edit(&mut self, uid: &str, f: &Fields, now: &str) -> Result<(), String> {
+    /// `fael chunk edit`: see [`edit_in`] — returns the event text, so the caller
+    /// says whether the approval stayed or was cleared.
+    pub fn edit(&mut self, uid: &str, f: &Fields, now: &str) -> Result<String, String> {
         let tx = tx(self)?;
-        edit_in(&tx, uid, f, now)?;
-        tx.commit().map_err(err)
+        let text = edit_in(&tx, uid, f, now)?;
+        tx.commit().map_err(err)?;
+        Ok(text)
     }
 
     /// `fael chunk unafter`: `uid` stops waiting on `other` — the planner's undo of an

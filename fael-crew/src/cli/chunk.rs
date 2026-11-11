@@ -128,13 +128,13 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             a.only(
                 "chunk edit",
                 &[
-                    "title", "brief", "size", "model", "client", "scope", "reads", "label",
+                    "title", "brief", "size", "model", "client", "scope", "reads", "label", "issue",
                 ],
             )?;
             let mut st = s()?;
-            let f = edit_fields(a, &st, uid)?;
-            st.edit(uid, &f, &now)?;
-            say(uid, "edited");
+            let f = edit_fields(a, r, &st, uid)?;
+            let text = st.edit(uid, &f, &now)?;
+            say(uid, &text);
             if a.has("scope") || a.has("brief") {
                 crate::chunk_scope::warn(&st, r, uid, false);
             }
@@ -409,13 +409,18 @@ fn fields(a: &Args) -> Fields {
         reads: a.has("reads").then(|| list(a, "reads")),
         label: a.one("label"),
         issues: vec![],
+        issue_files: vec![],
     }
 }
 
 /// `chunk edit` fields: `--scope +path` appends without retyping the set (a
 /// widening keeps the owner's approval) — any `+` entry makes the whole call
 /// append: `+` entries join the stored scope, bare ones ride along.
-fn edit_fields(a: &Args, st: &Store, uid: &str) -> Result<Fields, String> {
+/// `--issue +<id>` links open ledger issues (hidden, workflow tier — the start
+/// block names it): each id must resolve, be kind issue and be open, like
+/// `add --issue`; the store keeps the approval when every new issue's files
+/// already sit under the scope.
+fn edit_fields(a: &Args, r: &Repo, st: &Store, uid: &str) -> Result<Fields, String> {
     let mut f = fields(a);
     if f.scope
         .as_deref()
@@ -437,6 +442,32 @@ fn edit_fields(a: &Args, st: &Store, uid: &str) -> Result<Fields, String> {
             merged.push(p.to_string());
         }
         f.scope = Some(merged);
+    }
+    if a.has("issue") {
+        let raw = list(a, "issue");
+        if raw.is_empty() {
+            return Err(format!(
+                "rejected: --issue needs +<id> — try `fael chunk edit {uid} --issue +<id>`"
+            ));
+        }
+        let mut ids: Vec<String> = Vec::new();
+        for tok in &raw {
+            let id = tok.strip_prefix('+').ok_or_else(|| {
+                format!(
+                    "rejected: --issue {tok:?} — link with +<id>: try `fael chunk edit {uid} --issue +{tok}`"
+                )
+            })?;
+            let id = id.trim();
+            if id.is_empty() {
+                return Err(format!(
+                    "rejected: --issue needs +<id> — try `fael chunk edit {uid} --issue +<id>`"
+                ));
+            }
+            ids.push(id.to_string());
+        }
+        let (linked, files) = edit_issues(r, &ids)?;
+        f.issues = linked;
+        f.issue_files = files;
     }
     Ok(f)
 }
@@ -467,4 +498,35 @@ fn issues(r: &Repo, ids: &[String]) -> Result<Vec<String>, String> {
             Ok(row.id.clone())
         })
         .collect()
+}
+
+/// `edit --issue +a,+b`: the same open-issue check as `add --issue`, plus each
+/// issue's files for the store's in-scope approval check (the store never reads
+/// the ledger). Returns full ids with their files, in order.
+fn edit_issues(r: &Repo, ids: &[String]) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
+    if ids.is_empty() {
+        return Ok((vec![], vec![]));
+    }
+    let log = crate::read(r);
+    let open = core::find(&log, &core::Filter::default());
+    let mut out_ids = Vec::new();
+    let mut out_files = Vec::new();
+    for id in ids {
+        let row = core::resolve_row(&log, id)?;
+        if row.kind != "issue" {
+            return Err(format!(
+                "rejected: {} is a {}, not an issue",
+                row.id, row.kind
+            ));
+        }
+        if !open.iter().any(|o| o.id == row.id) {
+            return Err(format!(
+                "rejected: issue {} is closed or superseded — link an open one (fael find)",
+                row.id
+            ));
+        }
+        out_files.push(row.files.clone());
+        out_ids.push(row.id.clone());
+    }
+    Ok((out_ids, out_files))
 }

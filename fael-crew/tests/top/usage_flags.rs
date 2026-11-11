@@ -60,7 +60,8 @@ const HIDDEN: &[(&str, &str)] = &[
     ("start", "session"),
     ("note", "session"),
     ("accept", "merged"),
-    ("show", "full"), // issue 01M6DVP4M: named by the brief's plan-sections hint
+    ("show", "full"),  // issue 01M6DVP4M: named by the brief's plan-sections hint
+    ("edit", "issue"), // issue 01M75C6A9GQZN93JMSZZ0S3MTR: named by the start block
 ];
 
 /// The invocation lines of `fael chunk <verb> --help`, without the example line.

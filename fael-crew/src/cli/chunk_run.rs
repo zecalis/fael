@@ -230,23 +230,48 @@ fn scoped_board_lines(st: &fael_crew::Started) -> String {
     o
 }
 
-/// Each linked issue's id → its row, so the agent reads what to fix without a find.
+/// Each linked issue's id → its row with its live state, so the agent reads what
+/// to fix without a find: `<id> — open|closed: <first line>|superseded → <succ> — …`.
+/// An id the ledger cannot resolve prints `<id> — not found in the ledger`.
+/// The store never reads the ledger — this runs after `Store::start`.
 fn resolve_issue_rows(r: &Repo, st: &mut fael_crew::Started) {
     if !st.chunks.iter().any(|c| !c.issues.is_empty()) {
         return;
     }
     let log = crate::read(r);
+    let shut = core::closed(&log);
+    let gone = core::superseded(&log);
+    let succ = core::successors(&log);
     for id in st.chunks.iter_mut().flat_map(|c| &mut c.issues) {
-        if let Ok(row) = core::resolve_row(&log, id) {
-            let title = row.title.as_deref().map(|t| format!("{t}\n"));
-            let tag = row.from_report().then_some("(from report, unchecked)\n");
-            *id = format!(
-                "{} {}{}{}",
-                row.id,
-                tag.unwrap_or_default(),
-                title.unwrap_or_default(),
-                row.text
-            );
+        let bare = id.clone();
+        match core::resolve_row(&log, &bare) {
+            Err(_) => {
+                *id = format!("{bare} — not found in the ledger");
+            }
+            Ok(row) => {
+                let state = if gone.contains(row.id.as_str()) {
+                    let to = succ.get(row.id.as_str()).copied().unwrap_or("?");
+                    format!("superseded → {to}")
+                } else if shut.contains(row.id.as_str()) {
+                    let first = crate::chunk_scope::close_first_line(&log, &row.id);
+                    match first.is_empty() {
+                        true => "closed".to_string(),
+                        false => format!("closed: {first}"),
+                    }
+                } else {
+                    "open".to_string()
+                };
+                let title = row.title.as_deref().map(|t| format!("{t}\n"));
+                let tag = row.from_report().then_some("(from report, unchecked)\n");
+                *id = format!(
+                    "{} — {} — {}{}{}",
+                    row.id,
+                    state,
+                    tag.unwrap_or_default(),
+                    title.unwrap_or_default(),
+                    row.text
+                );
+            }
         }
     }
 }
