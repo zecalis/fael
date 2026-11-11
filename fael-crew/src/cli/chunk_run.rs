@@ -136,6 +136,8 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
         let _ = m.parent().map(std::fs::create_dir_all);
         let _ = std::fs::write(m, db(r).to_string_lossy().as_bytes());
     }
+    // ids before the rows replace them: start names only the unlinked open issues
+    let linked: Vec<String> = st.chunks.iter().flat_map(|c| c.issues.clone()).collect();
     // each linked issue's id → its row, so the agent reads what to fix without a find
     resolve_issue_rows(r, &mut st);
     resolve_cited_rows(r, &mut st);
@@ -167,7 +169,9 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             .flat_map(str::lines)
             .map(String::from)
             .collect();
-        print!("{}", crate::fael_bin::held("start", &scope));
+        let out = crate::fael_bin::held("start", &scope, &linked);
+        // the link call names the chunk it was started for
+        print!("{}", out.replace("{uid}", uid));
     }
     // the declared scope may name a re-export while the work lives elsewhere
     // (th.ts spreads start.ts): warn now, not only at done's outside report.
@@ -359,7 +363,7 @@ fn flag_of(a: &Args, f: &str) -> Option<String> {
 /// Crew holds only the ids (`chunk add --issue`, `issue::of`), so the ledger judges
 /// through `fael held done` (stdin `---issues---` section, no new command or flag).
 fn refuse_open_linked(a: &Args, uid: &str, handoff: &str, linked: &[String]) -> Result<(), String> {
-    if let Err(e) = crate::fael_bin::held_done_checked(&[], None, linked) {
+    if let Err(e) = crate::fael_bin::held_done_checked(&[], &[], None, linked) {
         return Err(with_retype(
             format!("rejected: chunk {uid} done refuses — {e}"),
             uid,
@@ -406,9 +410,14 @@ fn covers(id: &str, l: &str) -> bool {
 /// when nothing is stale), printed above the done line — never a no-op status
 /// block with no command after it. Carries the linked ids (e2) so the warn
 /// lists unlinked issues only (linked already gated above).
-fn held_hint(diff: Option<&Vec<String>>, started: Option<&str>, linked: &[String]) -> String {
-    diff.map(|d| crate::fael_bin::held_done_checked(d, started, linked).unwrap_or_default())
-        .unwrap_or_default()
+fn held_hint(
+    diff: Option<&Vec<String>>,
+    scope: &[String],
+    started: Option<&str>,
+    linked: &[String],
+) -> String {
+    let files = diff.map_or(&[][..], Vec::as_slice);
+    crate::fael_bin::held_done_checked(files, scope, started, linked).unwrap_or_default()
 }
 
 /// `chunk note`: the word is kept; a brief edited since the start is said too.
@@ -561,13 +570,22 @@ pub(crate) fn done(
     }
     let unclaimed = empty(&diff);
     let outside = diff.as_ref().map(|d| outside_text(r, &st, uid, d));
+    // read before `claim` swaps it for the diff: an open issue under the declared scope
+    // warns at done even on a file the diff skipped
+    let scope = st
+        .outside(uid, &[], &[])
+        .map(|(d, _)| d)
+        .unwrap_or_default();
     if let Some(d) = &diff {
         let _ = st.claim(uid, d);
     }
     let to = if pr.is_some() { "done" } else { "review" };
     let explicit = a.has("pr") && earlier.is_empty();
     crate::chunk_prs::say_branch(explicit, (&r.root, branch.as_deref().or(here.branch)), pr);
-    print!("{}", held_hint(diff.as_ref(), started.as_deref(), &linked));
+    print!(
+        "{}",
+        held_hint(diff.as_ref(), &scope, started.as_deref(), &linked)
+    );
     println!("chunk {uid} → {to}");
     print!("{}{drift}", st.drift_line(uid));
     let reviewed = a.one("review").is_some();

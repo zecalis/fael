@@ -100,6 +100,61 @@ fn start_lists_the_open_rows_under_its_scope() {
 }
 
 #[test]
+fn start_lists_open_unlinked_issues_under_its_scope_newest_five_then_a_count() {
+    let (d, state) = init();
+    let f = |args: &[&str]| fael(&d, &state, args);
+    let first = |out: String| out.split_whitespace().next().unwrap().to_string();
+    let ids: Vec<String> = (0..7)
+        .map(|i| {
+            let t = format!("bug number {i}");
+            let out = f(&[
+                "add", "issue", &t, "--files", "w/a.txt", "--title", &t, "--force",
+            ]);
+            let w = out
+                .split_whitespace()
+                .find(|w| w.starts_with("01"))
+                .unwrap();
+            w.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+                .to_string()
+        })
+        .collect();
+    f(&[
+        "add",
+        "issue",
+        "elsewhere",
+        "--files",
+        "other/x.txt",
+        "--title",
+        "elsewhere",
+        "--force",
+    ]);
+    // the newest is linked: it shows in the linked block, not in the unlinked one
+    let u = first(f(&[
+        "chunk", "add", "u", "--brief", "b", "--scope", "w/", "--issue", &ids[6],
+    ]));
+    let out = f(&["chunk", "start", &u]);
+    let at = out.find("open issues on this scope").expect(&out);
+    let block = &out[at..];
+    // newest first, five of the six unlinked: 5 down to 1, then +1 more (0)
+    for i in 1..=5 {
+        assert!(block.contains(&format!("bug number {i}")), "{i}: {block}");
+    }
+    assert!(!block.contains("bug number 0"), "{block}");
+    assert!(
+        block.contains(&format!(
+            "fael chunk edit {u} --issue +{}",
+            said_id(block, &ids[5]).unwrap()
+        )),
+        "{block}"
+    );
+    assert!(
+        block.contains("+1 more: fael find --files w/ --kind issue"),
+        "{block}"
+    );
+    assert!(!block.contains("elsewhere"), "{block}");
+}
+
+#[test]
 fn start_on_a_clean_scope_prints_nothing_extra() {
     let (d, state) = init();
     let f = |args: &[&str]| fael(&d, &state, args);

@@ -44,7 +44,11 @@ fn chunk(d: &Path, title: &str, brief: &str, more: &[&str]) -> String {
 }
 
 fn issue(d: &Path, text: &str) -> String {
-    let (ok, out, err) = fael(d, &["add", "issue", text, "--files", "a.rs"]);
+    issue_on(d, text, "a.rs")
+}
+
+fn issue_on(d: &Path, text: &str, file: &str) -> String {
+    let (ok, out, err) = fael(d, &["add", "issue", text, "--files", file]);
     assert!(ok, "{err}");
     out.split_whitespace().next().unwrap().to_string()
 }
@@ -383,8 +387,8 @@ fn golden_repo() -> (PathBuf, PathBuf) {
 }
 
 /// The golden's rows: one open + one closed-with-note cite, one linked issue,
-/// one `after` chunk done with a PR number. Returns (open, shut, link, a, b).
-fn golden_chunks(d: &Path) -> (String, String, String, String, String) {
+/// one `after` chunk done with a PR number. Returns [open, shut, link, scoped (open, unlinked, on the scope), a, b].
+fn golden_chunks(d: &Path) -> [String; 6] {
     let open = issue(d, "open problem");
     let shut = issue(d, "was broken");
     assert!(
@@ -395,6 +399,8 @@ fn golden_chunks(d: &Path) -> (String, String, String, String, String) {
         .0
     );
     let link = issue(d, "linked bug");
+    // open on the scope's file and not linked: start names it with the link call
+    let scoped = issue_on(d, "scope bug", "src/a.rs");
     let a = chunk(d, "Prev", "prev work", &[]);
     assert!(fael(d, &["chunk", "start", &a, "--no-worktree", "--run", "R0"]).0);
     assert!(
@@ -433,7 +439,7 @@ fn golden_chunks(d: &Path) -> (String, String, String, String, String) {
         )
         .0
     );
-    (open, shut, link, a, b)
+    [open, shut, link, scoped, a, b]
 }
 
 /// The whole `chunk start` output pinned by a golden file: a fixture chunk
@@ -444,7 +450,7 @@ fn golden_chunks(d: &Path) -> (String, String, String, String, String) {
 fn start_output_matches_golden() {
     let snap = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/start-v1.txt");
     let (tmp, d) = golden_repo();
-    let (open, shut, link, a, b) = golden_chunks(&d);
+    let [open, shut, link, scoped, a, b] = golden_chunks(&d);
     let (ok, out, err) = fael(&d, &["chunk", "start", &b, "--no-worktree", "--full"]);
     assert!(ok, "{err}");
     let run = out
@@ -459,6 +465,7 @@ fn start_output_matches_golden() {
         (open, "<OPEN>"),
         (shut, "<SHUT>"),
         (link, "<LINK>"),
+        (scoped, "<SCOPED>"),
         (a, "<CHUNK-A>"),
         (b, "<CHUNK-B>"),
         (run, "<RUN>"),

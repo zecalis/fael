@@ -3,7 +3,8 @@
 //! It needs this binary's session state and said-once outbox, so fael-crew asks (FAEL_BIN)
 //! instead of copying it. Files arrive one per line on stdin; when the chunk links ledger
 //! issues, a `---issues---` line follows the files and one linked id per line after it
-//! (e2: the done gate's only new input — no new command or flag). Stdout is the finished
+//! (e2: the done gate's only new input — no new command or flag); done also takes a
+//! `---scope---` section before it, the chunk's declared scope lines. Stdout is the finished
 //! text; a done with linked issues still open is an error naming each `fael close`.
 
 use crate::{core, hook};
@@ -17,11 +18,20 @@ pub(crate) fn cmd(kind: &str, since: Option<String>) -> Result<ExitCode, String>
     std::io::stdin()
         .read_to_string(&mut raw)
         .map_err(|e| format!("held: stdin: {e}"))?;
-    let (files, linked) = hook::held_done_gate::parse_stdin(&raw);
+    let hook::held_done_gate::Input {
+        files,
+        scope,
+        linked,
+    } = hook::held_done_gate::parse_stdin(&raw);
     match kind {
         "start" => {
             contracts(&r, &files);
             print!("{}", hook::held_start(&r, &files));
+            let log = crate::read(&r);
+            print!(
+                "{}",
+                hook::held_done_gate::start_text(&log, &files, &linked)
+            );
         }
         "done" => {
             let since = since.as_deref().and_then(core::ts_ms);
@@ -32,10 +42,8 @@ pub(crate) fn cmd(kind: &str, since: Option<String>) -> Result<ExitCode, String>
             print!("{}", hook::held_text(&r, &files, since));
             print!("{}", hook::held_own_notes(&r, since));
             let log = crate::read(&r);
-            print!(
-                "{}",
-                hook::held_done_gate::warn_text(&log, &files, &linked, since)
-            );
+            let both: Vec<String> = files.iter().chain(&scope).cloned().collect();
+            print!("{}", hook::held_done_gate::warn_text(&log, &both, &linked));
         }
         _ => return Err(format!("held: unknown kind {kind:?} — start|done")),
     }

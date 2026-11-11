@@ -44,8 +44,16 @@ pub(crate) fn run(args: &[&str], stdin: &str) -> Result<String, String> {
 /// The held-rows text for a chunk `start` (`"start"`, scope paths) or `done` (`"done"`, the
 /// paths the branch touched): contracts and open decisions on those files, exactly as `fael`
 /// words them. Empty when there is nothing, or when `fael` cannot be run (a hint, not a gate).
-pub(crate) fn held(kind: &str, files: &[String]) -> String {
-    run(&["held", kind], &files.join("\n")).unwrap_or_default()
+///
+/// `start` also takes the chunk's linked issue ids (same `---issues---` section as done):
+/// open issues under the scope that are not linked get named, with the link call.
+pub(crate) fn held(kind: &str, files: &[String], linked: &[String]) -> String {
+    let mut stdin = files.join("\n");
+    if !linked.is_empty() {
+        stdin.push_str("\n---issues---\n");
+        stdin.push_str(&linked.join("\n"));
+    }
+    run(&["held", kind], &stdin).unwrap_or_default()
 }
 
 /// The held-rows text for a chunk `done` (the paths the branch touched), leaving out
@@ -57,16 +65,15 @@ pub(crate) fn held(kind: &str, files: &[String]) -> String {
 /// unlinked-issue warn, printed as before.
 pub(crate) fn held_done_checked(
     files: &[String],
+    scope: &[String],
     since: Option<&str>,
     linked: &[String],
 ) -> Result<String, String> {
     let mut stdin = files.join("\n");
-    if !linked.is_empty() {
-        if !stdin.is_empty() {
-            stdin.push('\n');
+    for (marker, ids) in [("---scope---", scope), ("---issues---", linked)] {
+        if !ids.is_empty() {
+            stdin.push_str(&format!("\n{marker}\n{}", ids.join("\n")));
         }
-        stdin.push_str("---issues---\n");
-        stdin.push_str(&linked.join("\n"));
     }
     let mut args = vec!["held", "done"];
     args.extend(since.into_iter().flat_map(|s| ["--since", s]));
