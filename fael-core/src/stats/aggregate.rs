@@ -44,7 +44,7 @@ pub struct AskCount {
 /// Schema of the `Stats` JSON shape below. Bump it only when a field is
 /// removed, renamed, retyped or redefined — adding a field never bumps
 /// (readers skip unknown keys), it just gets a `docs/stats.md` changelog line.
-pub const STATS_SCHEMA: u32 = 6;
+pub const STATS_SCHEMA: u32 = 7;
 
 /// Bytes the agent pays every session before saying anything — measured by
 /// the caller (CLI), never estimated here.
@@ -112,9 +112,13 @@ pub struct Stats {
     /// empty when the clone has no crew.db. The caller fills it — `aggregate`
     /// never sees the disk — like `lifecycle` below.
     pub models: Models,
-    /// Summed input-side `real_tokens` (in + cache-create + cache-read) per
-    /// client over the counted rows; a client with no measured row is absent.
-    pub real_by_client: BTreeMap<String, u64>,
+    /// Context size at hook: the prompt size (in + cache-create + cache-read)
+    /// each hook firing's transcript `usage` showed, summed per client over
+    /// the counted rows — the whole prompt counted again at every firing, not
+    /// what fael injected and not what was billed. A client with no measured
+    /// row is absent. Not in the default text; per-session billed-side totals
+    /// are `sessions[].tokens`.
+    pub context_by_client: BTreeMap<String, u64>,
     pub top_rows: Vec<TopRow>,
     pub asks: BTreeMap<String, AskCount>,
     pub constants: Constants,
@@ -220,7 +224,7 @@ pub fn aggregate(
         by_event: counts(&parsed.by_event),
         by_client: counts(&parsed.by_client),
         models: Models::default(),
-        real_by_client: real_by_client(parsed),
+        context_by_client: context_by_client(parsed),
         top_rows: top
             .into_iter()
             .take(10)
@@ -308,10 +312,10 @@ fn counts(into: &HashMap<String, (usize, usize)>) -> BTreeMap<String, Count> {
         .collect()
 }
 
-/// Summed input-side `real_tokens` per client over the counted rows —
+/// Context size at hook per client: summed input-side `real_tokens` over the counted rows —
 /// `UsageRow.real_input` already joins the transcript usage at parse time,
 /// so this is one fold, no second parse.
-fn real_by_client(parsed: &Parsed) -> BTreeMap<String, u64> {
+fn context_by_client(parsed: &Parsed) -> BTreeMap<String, u64> {
     let mut out: BTreeMap<String, u64> = BTreeMap::new();
     for r in &parsed.rows {
         if let Some(t) = r.real_input {

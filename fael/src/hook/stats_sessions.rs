@@ -20,10 +20,32 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
     let pr = match (&v.branch, &v.pr) {
         (None, _) => "no branch (it never edited)".to_string(),
         (_, None) => "no PR listed".to_string(),
-        (_, Some(p)) => match &p.merged {
-            Some(d) => format!("PR #{} merged {d}", p.number),
-            None => format!("PR #{} not merged", p.number),
-        },
+        (_, Some(p)) => format!(
+            "PR #{} {} (its branch's PR; it may hold other sessions' edits too)",
+            p.number,
+            p.merged
+                .as_ref()
+                .map_or("not merged".into(), |d| format!("merged {d}"))
+        ),
+    };
+    // pushed est tokens against the transcript's input side (in + cache); the
+    // two are different measures (est is once, cache reads recount per turn)
+    let tokens = match &v.tokens {
+        None => "  session tokens: n/a (no transcript total from this client)".to_string(),
+        Some(t) => {
+            let cache = t.cache_creation + t.cache_read;
+            format!(
+                "  session tokens: in {} · cache {cache} · out {}",
+                t.input, t.output
+            )
+        }
+    };
+    let pct = match &v.tokens {
+        Some(t) if t.input + t.cache_creation + t.cache_read > 0 => format!(
+            " ({:.2}% of input)",
+            total as f64 * 100.0 / (t.input + t.cache_creation + t.cache_read) as f64
+        ),
+        _ => String::new(),
     };
     vec![
         format!("session {} ({})", v.session, v.repo),
@@ -37,9 +59,10 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
                 .map(|b| format!(" · branch {b}"))
                 .unwrap_or_default()
         ),
-        format!("  {pr} (its branch's PR; the PR may hold other sessions' edits too)"),
+        tokens,
+        format!("  {pr}"),
         format!(
-            "  pushed ~{total} tokens{}",
+            "  fael pushed: {total} est tokens{pct}{}",
             if by_event.is_empty() {
                 String::new()
             } else {

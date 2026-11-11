@@ -137,7 +137,7 @@ fn stats_json_matches_golden_values() {
         Some(serde_json::json!([{
             "session": "s1", "repo": "/work/real", "client": "claude",
             "first": "2026-09-26T00:01:00.000Z", "last": "2026-09-26T00:03:00.000Z",
-            "branch": null, "pr": null, "edits": 0, "pushed_tokens": {"read": 5},
+            "branch": null, "pr": null, "edits": 0, "pushed_tokens": {"read": 5}, "tokens": null,
             "shown": 2, "scored": 0, "in_context": 0, "acted": 0,
             "calls": 0, "rejects": 0, "rows_filed": null, "in_run": false
         }]))
@@ -174,14 +174,14 @@ fn stats_json_matches_golden_values() {
             serde_json::json!({"total": 0, "with_client_model": 0, "hint_only": 0, "none": 0, "with_cost": 0, "unknown_model_pct": 0.0, "unknown_cost_pct": 0.0, "by_model": {}})
         )
     );
-    assert_eq!(v["real_by_client"], serde_json::json!({}));
-    v.as_object_mut().unwrap().remove("real_by_client");
+    assert_eq!(v["context_by_client"], serde_json::json!({}));
+    v.as_object_mut().unwrap().remove("context_by_client");
     // its own json! call: one literal with every kind passes the macro's recursion limit
     let said = serde_json::json!({"row": {"said": 2, "earned": 0, "by_event": {"read": {"said": 2, "earned": 0}}}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1, "by_event": {"read": {"said": 1, "earned": 1}}}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "peer": {"said": 0, "earned": 0}, "inbox": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}, "briefdrift": {"said": 0, "earned": 0}, "retired": {"said": 0, "earned": 0}, "chunkbrief": {"said": 0, "earned": 0}});
     assert_eq!(
         v,
         serde_json::json!({
-            "schema": 6, "outcomes_v": 1,
+            "schema": 7, "outcomes_v": 1,
             "events": 3, "bytes": 60, "est_tokens": 15, "skipped_temp": 0,
             "by_event": {"read": {"events": 2, "est_tokens": 8}, "edit": {"events": 1, "est_tokens": 7}},
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},

@@ -17,6 +17,7 @@ pub(crate) fn stop(e: &Event) -> Reply {
     super::autosync::start(e);
     seen(e);
     report(e);
+    super::asks::record_session_tokens(e);
     r.notice = receipt(e);
     r
 }

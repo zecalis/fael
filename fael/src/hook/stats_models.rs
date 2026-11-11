@@ -3,7 +3,6 @@
 //! (file-size ratchet); `--json` is the contract, this text is unstable.
 
 use crate::core;
-use std::collections::BTreeMap;
 
 /// `models: N runs · reported a · hint only b · none c` plus one line per
 /// `client/model` group (hint-model rows excluded — they count under
@@ -29,25 +28,13 @@ pub(super) fn models_lines(m: &core::stats::Models) -> Vec<String> {
     out
 }
 
-/// `, ~R real` beside a client's cost when usage measured transcript tokens
-/// for it — empty when none measured, so old output is byte-identical.
-fn real_suffix(real: &BTreeMap<String, u64>, client: &str) -> String {
-    real.get(client)
-        .map(|n| format!(", ~{n} real"))
-        .unwrap_or_default()
-}
-
-/// One line per client (count, cost, measured real tokens beside it) plus
+/// One line per client (count, est tokens) plus
 /// the `models` card — the whole attribution block of `fael stats`.
 pub(super) fn print_attribution(s: &core::stats::Stats) {
     let mut cl: Vec<_> = s.by_client.iter().collect();
     cl.sort_by_key(|a| std::cmp::Reverse(a.1.events));
     for (k, c) in cl {
-        let real = real_suffix(&s.real_by_client, k);
-        println!(
-            "  client {k}: ×{} (~{} tokens{real})",
-            c.events, c.est_tokens
-        );
+        println!("  client {k}: ×{} (~{} tokens)", c.events, c.est_tokens);
     }
     for line in models_lines(&s.models) {
         println!("{line}");
@@ -93,10 +80,5 @@ mod tests {
     #[test]
     fn no_runs_is_no_line() {
         assert!(models_lines(&core::stats::Models::default()).is_empty());
-        assert_eq!(real_suffix(&BTreeMap::new(), "claude"), "");
-        assert_eq!(
-            real_suffix(&BTreeMap::from([("claude".to_string(), 150)]), "claude"),
-            ", ~150 real"
-        );
     }
 }

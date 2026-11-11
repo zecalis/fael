@@ -29,6 +29,60 @@ pub(crate) fn transcript_usage(session: &str) -> Option<RealTokens> {
     tail.lines().rev().take(300).find_map(usage_in_line)
 }
 
+/// The whole Claude transcript summed: every assistant round's `usage`, once
+/// per `message.id` (Claude writes one line per content block of a message, all
+/// carrying that message's usage — the last line of an id wins; a line with no
+/// id counts as its own message). Streamed line by line, never held whole;
+/// fail-open — a missing file, a Codex or OpenCode session or no `usage` at
+/// all reads `None`, never 0.
+pub(crate) fn transcript_sum(session: &str) -> Option<RealTokens> {
+    use std::io::BufRead;
+    if session.is_empty() {
+        return None;
+    }
+    let f = std::io::BufReader::new(std::fs::File::open(session).ok()?);
+    let mut by_id: std::collections::HashMap<String, RealTokens> = Default::default();
+    let mut anon = RealTokens::default();
+    let mut any = false;
+    for line in f.split(b'\n').map_while(Result::ok) {
+        // cheap gate: most lines (user turns, tool results) hold no usage
+        if !line.windows(7).any(|w| w == b"\"usage\"") {
+            continue;
+        }
+        let Ok(line) = std::str::from_utf8(&line) else {
+            continue;
+        };
+        let Some(t) = usage_in_line(line) else {
+            continue;
+        };
+        any = true;
+        match message_id(line) {
+            Some(id) => {
+                by_id.insert(id, t);
+            }
+            None => anon = anon.plus(&t),
+        }
+    }
+    any.then(|| by_id.values().fold(anon, |a, t| a.plus(t)))
+}
+
+fn message_id(line: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    Some(v.get("message")?.get("id")?.as_str()?.to_string())
+}
+
+impl RealTokens {
+    fn plus(&self, o: &RealTokens) -> RealTokens {
+        RealTokens {
+            input_tokens: self.input_tokens + o.input_tokens,
+            cache_creation_input_tokens: self.cache_creation_input_tokens
+                + o.cache_creation_input_tokens,
+            cache_read_input_tokens: self.cache_read_input_tokens + o.cache_read_input_tokens,
+            output_tokens: self.output_tokens + o.output_tokens,
+        }
+    }
+}
+
 /// One transcript line → its `usage`, Claude-shaped (`message.usage` or a
 /// top-level `usage`). Only `input_tokens` is required — a partial object
 /// still beats no data, the missing sides read 0.
@@ -109,7 +163,10 @@ fn tail_bytes(path: &Path, n: u64) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RealTokens, model_in_line, transcript_model, transcript_usage, usage_in_line};
+    use super::{
+        RealTokens, model_in_line, transcript_model, transcript_sum, transcript_usage,
+        usage_in_line,
+    };
 
     fn usage_line(input: u64, create: u64, read: u64, output: u64) -> String {
         serde_json::json!({
@@ -138,6 +195,44 @@ mod tests {
         );
         assert!(usage_in_line(r#"{"type":"user","message":"hi"}"#).is_none());
         assert!(usage_in_line("not json").is_none());
+    }
+
+    #[test]
+    fn transcript_sum_counts_a_message_once_and_none_is_none() {
+        let dir = std::env::temp_dir().join(format!("fael-asks-{}", crate::core::ulid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("transcript.jsonl");
+        // m1 spans two lines (two content blocks), m2 and an id-less turn are one each
+        let with_id = |id: &str, i, o| {
+            let mut v: serde_json::Value =
+                serde_json::from_str(&usage_line(i, 10, 100, o)).unwrap();
+            v["message"]["id"] = id.into();
+            v.to_string()
+        };
+        std::fs::write(
+            &p,
+            format!(
+                "{}\n{{\"type\":\"user\"}}\n{}\n{}\n{}\n",
+                with_id("m1", 1, 5),
+                with_id("m1", 1, 5),
+                with_id("m2", 2, 7),
+                usage_line(3, 0, 0, 1),
+            ),
+        )
+        .unwrap();
+        let t = transcript_sum(p.to_str().unwrap()).unwrap();
+        assert_eq!(
+            t,
+            RealTokens {
+                input_tokens: 6,
+                cache_creation_input_tokens: 20,
+                cache_read_input_tokens: 200,
+                output_tokens: 13,
+            }
+        );
+        std::fs::write(&p, "{\"type\":\"user\"}\n").unwrap();
+        assert!(transcript_sum(p.to_str().unwrap()).is_none());
+        assert!(transcript_sum(dir.join("missing.jsonl").to_str().unwrap()).is_none());
     }
 
     #[test]
