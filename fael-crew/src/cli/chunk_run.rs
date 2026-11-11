@@ -374,6 +374,19 @@ fn refuse_open_linked(a: &Args, uid: &str, handoff: &str, linked: &[String]) -> 
     Ok(())
 }
 
+/// Issue 01M63XC1: no branch diff and a PR not merged yet — the open PR's files, through gh.
+fn pr_fallback(
+    r: &Repo,
+    diff: Option<Vec<String>>,
+    trunk: Option<&str>,
+    pr: Option<i64>,
+) -> Option<Vec<String>> {
+    match (trunk, pr) {
+        (Some(t), Some(n)) => crate::chunk_pr_files::pr_files(&r.root, t, n, "gh").or(diff),
+        _ => diff,
+    }
+}
+
 /// A chunk is optional, but a chunk that pushed a PR must name it: done without
 /// `--pr` takes it from the run's branch when `gh` finds the branch's open PR
 /// (explicit `--pr N` — or `--pr N,M,...`, last is the board's — wins when given).
@@ -411,13 +424,20 @@ fn covers(id: &str, l: &str) -> bool {
 /// block with no command after it. Carries the linked ids (e2) so the warn
 /// lists unlinked issues only (linked already gated above).
 fn held_hint(
+    st: &Store,
+    uid: &str,
     diff: Option<&Vec<String>>,
-    scope: &[String],
     started: Option<&str>,
     linked: &[String],
 ) -> String {
+    // the declared scope rides along, read before `claim` swaps it for the diff: an open
+    // issue under it warns at done even on a file the diff skipped
+    let scope = st
+        .outside(uid, &[], &[])
+        .map(|(d, _)| d)
+        .unwrap_or_default();
     let files = diff.map_or(&[][..], Vec::as_slice);
-    crate::fael_bin::held_done_checked(files, scope, started, linked).unwrap_or_default()
+    crate::fael_bin::held_done_checked(files, &scope, started, linked).unwrap_or_default()
 }
 
 /// `chunk note`: the word is kept; a brief edited since the start is said too.
@@ -562,30 +582,19 @@ pub(crate) fn done(
     // issue 01M5QF7Q: no branch diff, a PR: the squash commit on the trunk is the work
     let named = trunk.clone().or(head.clone());
     let empty = |d: &Option<Vec<String>>| d.as_ref().is_none_or(|d| d.is_empty());
-    if empty(&diff)
-        && let (Some(t), Some(n)) = (&named, pr)
-    {
-        // issue 01M63XC1: not merged yet — the open PR's files, through gh
-        diff = crate::chunk_pr_files::pr_files(&r.root, t, n, "gh").or(diff);
+    if empty(&diff) {
+        diff = pr_fallback(r, diff, named.as_deref(), pr);
     }
     let unclaimed = empty(&diff);
     let outside = diff.as_ref().map(|d| outside_text(r, &st, uid, d));
-    // read before `claim` swaps it for the diff: an open issue under the declared scope
-    // warns at done even on a file the diff skipped
-    let scope = st
-        .outside(uid, &[], &[])
-        .map(|(d, _)| d)
-        .unwrap_or_default();
+    let hint = held_hint(&st, uid, diff.as_ref(), started.as_deref(), &linked);
     if let Some(d) = &diff {
         let _ = st.claim(uid, d);
     }
     let to = if pr.is_some() { "done" } else { "review" };
     let explicit = a.has("pr") && earlier.is_empty();
     crate::chunk_prs::say_branch(explicit, (&r.root, branch.as_deref().or(here.branch)), pr);
-    print!(
-        "{}",
-        held_hint(diff.as_ref(), &scope, started.as_deref(), &linked)
-    );
+    print!("{hint}");
     println!("chunk {uid} → {to}");
     print!("{}{drift}", st.drift_line(uid));
     let reviewed = a.one("review").is_some();

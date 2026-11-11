@@ -230,11 +230,14 @@ mod tests {
             rows,
             ..Log::default()
         };
-        let t = start_text(&log, &["w/".to_string()], &[linked.clone()]);
+        let t = start_text(&log, &["w/".to_string()], std::slice::from_ref(&linked));
         assert!(t.contains("open issues on this scope"), "{t}");
         assert!(t.contains("--issue +01ISS00000000000000000000005"), "{t}");
         assert!(!t.contains(&linked), "linked stays out: {t}");
-        assert!(!t.contains("01ISS00000000000000000000000"), "oldest cut: {t}");
+        assert!(
+            !t.contains("01ISS00000000000000000000000"),
+            "oldest cut: {t}"
+        );
         assert!(
             t.contains("+1 more: fael find --files w/ --kind issue"),
             "{t}"
