@@ -10,7 +10,7 @@ use super::capture::{by_time, filed, spans};
 use super::friction::{is_agent_call, is_gate_reject};
 use super::parse::{Parsed, session_stem};
 use super::value::{acted_pairs, pairs};
-use crate::{Log, rfc3339};
+use crate::{Log, rfc3339, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -122,7 +122,10 @@ pub fn sessions(
         if a.client.is_empty() {
             a.client = v["client"].as_str().unwrap_or("");
         }
-        if is_gate_reject(v) || !matches!(v["outcome"].as_str(), Some("ok" | "reject" | "help")) {
+        if is_gate_reject(v)
+            || v["ts"].as_str().and_then(ts_ms).is_none()
+            || !matches!(v["outcome"].as_str(), Some("ok" | "reject" | "help"))
+        {
             continue;
         }
         a.calls += 1;

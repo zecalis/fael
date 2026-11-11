@@ -115,7 +115,7 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
             continue;
         };
         let reason = v["reason"].as_str().unwrap_or("unknown");
-        if outcome == Outcome::Reject && reason == SHAPE_GATE {
+        if is_gate_reject(v) {
             out.shape_gate += 1;
             for r in v["rules"].as_array().into_iter().flatten() {
                 *out.shape_gate_rules
