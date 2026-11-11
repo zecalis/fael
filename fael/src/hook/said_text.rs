@@ -63,6 +63,23 @@ pub(super) fn said_line_top(said: &Said, n: usize) -> Option<String> {
 /// stays in `--json` (`said.<kind>.by_event`).
 const PUSH_EVENTS: [&str; 2] = ["edit", "shell-edit"];
 
+/// `notes: said to a recipient 3 · at an edit 1 · at session start 2`: how many
+/// `fael chunk note` lines reached the running agent, split by the hook event
+/// that said them. From existing `said.inbox.by_event` only — no new usage
+/// field. Says nothing about whether the recipient acted on the note.
+pub(super) fn notes_line(said: &Said) -> Option<String> {
+    let y = said.get("inbox")?;
+    if y.said == 0 {
+        return None;
+    }
+    let edit = y.by_event.get("edit").map(|e| e.said).unwrap_or(0);
+    let start = y.by_event.get("session-start").map(|e| e.said).unwrap_or(0);
+    Some(format!(
+        "  notes: said to a recipient {} · at an edit {edit} · at session start {start}",
+        y.said
+    ))
+}
+
 /// `row [edit 2/8 ~300 tok, shell-edit 1/2]` per kind: earned/said at the
 /// `edit` and `shell-edit` events, those a kind was said at. No such entry =
 /// no line.
@@ -139,5 +156,35 @@ mod tests {
                 "  said by event: row [edit 2/8 ~300 tok, shell-edit 1/2 ~20 tok] · ask [edit 1/4]"
             )
         );
+    }
+
+    #[test]
+    fn notes_line_counts_inbox_by_event() {
+        use crate::core::stats::EventYield;
+        let ev = |said| EventYield {
+            said,
+            earned: 0,
+            tokens: 0,
+        };
+        let mut s = Said::new();
+        assert_eq!(notes_line(&s), None);
+        s.insert(
+            "inbox".into(),
+            KindYield {
+                said: 3,
+                by_event: [
+                    ("edit".to_string(), ev(1)),
+                    ("session-start".to_string(), ev(2)),
+                ]
+                .into(),
+                ..KindYield::default()
+            },
+        );
+        assert_eq!(
+            notes_line(&s).as_deref(),
+            Some("  notes: said to a recipient 3 · at an edit 1 · at session start 2")
+        );
+        s.insert("inbox".into(), KindYield::default());
+        assert_eq!(notes_line(&s), None, "zero said = no line");
     }
 }

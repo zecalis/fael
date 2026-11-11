@@ -225,6 +225,12 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
     lines.extend(retired_lines(&c, &spent, sid, &shown));
     lines.extend(super::overlap::lines(&c, &files));
     lines.extend(super::drift::line(&c));
+    // a note left for the running chunk while its agent runs: said once at
+    // the next edit (SessionStart-only before). ShellEdit stays silent: the
+    // card admits Edit only, so a shell-edit push drops it in say_within.
+    if at == At::Edit {
+        lines.extend(super::inbox::lines(&c));
+    }
     lines.extend(notes);
     // the hint and the stashed notice share the budget the rows left
     if out.say_within(policy.budget, lines) && has_notes {

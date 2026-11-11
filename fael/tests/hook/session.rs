@@ -261,3 +261,69 @@ fn own_note_stays_silent_while_another_session_note_shows() {
     );
     assert!(!out.contains("from s1"), "own note silent: {out}");
 }
+
+/// A note written while the agent runs appears at its next edit, once, and
+/// the agent's own note never does. ShellEdit stays silent (card admits Edit
+/// only).
+#[test]
+fn inbox_note_appears_at_next_edit_once() {
+    let d = repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = fael(&d, &["chunk", "add", "T", "--brief", "b"], "");
+    assert!(ok, "{err}");
+    let uid = out.trim().to_string();
+    let (ok, _, err) = fael(&d, &["chunk", "start", &uid, "--run", "R1"], "");
+    assert!(ok, "{err}");
+    let note_as = |text: &str, sess: &str| {
+        let (ok, _, err) = super::fael_env(
+            &d,
+            &["chunk", "note", &uid, text],
+            "",
+            &[("FAEL_SESSION", sess)],
+        );
+        assert!(ok, "{err}");
+    };
+    let start = |session: &str| {
+        let input = format!(
+            r#"{{"cwd":{},"session_id":"{session}","source":"startup"}}"#,
+            json(&d)
+        );
+        let (ok, out, err) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+        assert!(ok, "{err} {out}");
+        out
+    };
+    let edit = |session: &str| {
+        let f = d.join("src/a.rs");
+        let input = format!(
+            r#"{{"cwd":{},"session_id":"{session}","tool_input":{{"file_path":{}}}}}"#,
+            json(&d),
+            json(&f)
+        );
+        let (ok, out, err) = fael(&d, &["hook", "edit", "--client", "claude"], &input);
+        assert!(ok, "{err} {out}");
+        out
+    };
+    note_as("first from other", "other");
+    let out = start("s1");
+    assert!(out.contains("first from other"), "{out}");
+    // a note written while s1 runs: the next edit says it, once
+    note_as("second while running", "other");
+    let out = edit("s1");
+    assert!(
+        out.contains("second while running") && out.contains(&format!("fael chunk show {uid}")),
+        "edit says the live note once: {out}"
+    );
+    assert!(
+        !out.contains("first from other"),
+        "already seen stays silent: {out}"
+    );
+    let out = edit("s1");
+    assert!(
+        !out.contains("second while running") && !out.contains("new note for chunk"),
+        "second edit silent: {out}"
+    );
+    // the agent's own note never reaches it, at start or at edit
+    note_as("own note", "s1");
+    let out = edit("s1");
+    assert!(!out.contains("own note"), "own note silent at edit: {out}");
+}

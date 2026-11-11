@@ -131,7 +131,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
                 SayKind::Inbox,
                 Key,
                 Some("fael chunk note"),
-                &[At::SessionStart],
+                &[At::SessionStart, At::Edit],
             )
         },
         Kind::Checkpoint { .. } => Policy {
