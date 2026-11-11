@@ -328,8 +328,8 @@ impl Outbox {
     /// Say `lines` in order within `budget` tokens; a kind whose card says
     /// `Cut::Never` (rows) is never cut. Over budget the lines go
     /// whole, lowest cut rank first (the stashed notice, then the stashed fix,
-    /// then the edit hint, then the overlap and drift lines, then the
-    /// commit-cite hint and the checkpoint, then the inbox). A cut line keeps its
+    /// then the edit hint, then the commit-cite hint and the checkpoint, then
+    /// the inbox, then the overlap and drift lines). A cut line keeps its
     /// keys for a later push. True when a stashed line was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.admit(l)).collect();
