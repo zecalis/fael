@@ -380,3 +380,21 @@ fn check_leaves_neighbour_git_status_unchanged() {
     assert!(status(&d, &w1, &a).contains("conflict"));
     assert_eq!((st(&w2), st(&w1)), (before, before1));
 }
+
+/// No uid reads this worktree's live run; none or two reject with the retype.
+#[test]
+fn status_without_uid_reads_the_worktrees_live_run() {
+    let d = repo();
+    let (ok, _, err) = fael(&d, &["chunk", "status"]);
+    assert!(!ok && err.contains("fael chunk status <uid>"), "{err}");
+    let c = chunk(&d, "solo here");
+    let (ok, _, err) = fael(&d, &["chunk", "start", &c]);
+    assert!(ok, "{err}");
+    let (ok, out, err) = fael(&d, &["chunk", "status"]);
+    assert!(ok && out.contains(&c), "{err}{out}");
+    let e = chunk(&d, "second");
+    let (ok, _, err) = fael(&d, &["chunk", "start", &e, "--with", &c, "--as", "pair"]);
+    assert!(ok, "{err}");
+    let (ok, _, err) = fael(&d, &["chunk", "status"]);
+    assert!(!ok && err.contains(&c) && err.contains(&e), "{err}");
+}
