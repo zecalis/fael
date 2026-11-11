@@ -182,6 +182,27 @@ fn a_brief_citing_a_superseded_row_prints_its_successor() {
     );
 }
 
+/// Section drift on a first start: a plan section edited after the chunk's brief was
+/// written is marked, even though no run started yet.
+#[test]
+fn a_section_edited_after_the_brief_shows_drift_on_first_start() {
+    let d = repo();
+    let u = chunk(&d, "Fix", "fix it", &[]);
+    assert!(
+        fael(
+            &d,
+            &[
+                "plan", "edit", "pl", "--section", "2", "--replace", "**Do:**", "--with",
+                "**Do:** one thing.",
+            ]
+        )
+        .0
+    );
+    let (ok, out, err) = fael(&d, &["chunk", "start", &u, "--no-worktree", "--full"]);
+    assert!(ok, "{err}");
+    assert!(out.contains("(changed since start)"), "{out}");
+}
+
 /// A blocked or not-ready start prints one exact next call with the real uid:
 /// a blocked start keeps its `--force --because` retype, and a draft names the
 /// owner or planner — never a placeholder, never an agent `try edit`.

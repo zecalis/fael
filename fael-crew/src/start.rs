@@ -96,9 +96,11 @@ pub struct Brief {
     /// `cited rows now` (cli layer fills after `Store::start`): one line per ledger row the
     /// title or brief cites, with its live state — the store never reads the ledger
     pub cited: Vec<String>,
-    /// this run's start time and base sha (None when never started) — the line
-    /// section drift is judged against (a section updated past it changed mid-run)
+    /// section drift baseline: the later of the chunk's last `edited brief` event (its
+    /// creation when never edited) and the previous run's start (None when neither
+    /// exists) — a plan section updated past it changed after the brief was written
     pub started: Option<String>,
+    /// this run's base sha (None when never started) — where `done`'s diff begins
     pub base: Option<String>,
 }
 
