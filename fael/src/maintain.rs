@@ -5,6 +5,7 @@
 mod alive;
 pub(crate) use fael_core::drift;
 mod fat;
+mod hooks_seen;
 mod merged;
 mod noverdict;
 mod orphan;
@@ -66,6 +67,7 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
             ),
         ));
     }
+    rep.problems.extend(hooks_seen::notes());
     rep.problems.extend(shared::notes(&r.root));
     // Gone is judged through the resolver: a file that was renamed still
     // exists under its new path, so its rows still push and are not gone.
