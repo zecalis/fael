@@ -76,7 +76,9 @@ fn has_verify(row: &fael_core::Row) -> bool {
         if t.strip_prefix("cmd:").is_some_and(|v| !v.trim().is_empty()) {
             cmd = true;
         }
-        if t.strip_prefix("result:").is_some_and(|v| !v.trim().is_empty()) {
+        if t.strip_prefix("result:")
+            .is_some_and(|v| !v.trim().is_empty())
+        {
             result = true;
         }
     }
@@ -131,10 +133,7 @@ mod tests {
 
     #[test]
     fn a_cmd_result_row_adds_verify() {
-        let r = row(
-            "01M0000000000000000000001",
-            "hit\ncmd: echo 1\nresult: 1",
-        );
+        let r = row("01M0000000000000000000001", "hit\ncmd: echo 1\nresult: 1");
         let log = fael_core::Log {
             rows: vec![r],
             ..Default::default()

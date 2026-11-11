@@ -131,10 +131,7 @@ fn start_refuses_a_linked_closed_issue_until_forced() {
     assert!(!ok, "started");
     assert!(err.contains(&format!("{id} — closed: fixed in 5")), "{err}");
     assert!(!err.contains("more"), "first line only: {err}");
-    assert!(
-        err.contains(&format!("fael chunk drop {u}")),
-        "{err}"
-    );
+    assert!(err.contains(&format!("fael chunk drop {u}")), "{err}");
     let (_, shown, _) = fael(&d, &["chunk", "show", &u, "--json"]);
     assert!(
         shown.contains("\"state\": \"open\"") || shown.contains("\"state\":\"open\""),
@@ -168,7 +165,15 @@ fn a_brief_citing_a_superseded_row_prints_its_successor() {
     let old = issue(&d, "old way");
     let (ok, out, err) = fael(
         &d,
-        &["add", "issue", "new way", "--files", "a.rs", "--supersedes", &old],
+        &[
+            "add",
+            "issue",
+            "new way",
+            "--files",
+            "a.rs",
+            "--supersedes",
+            &old,
+        ],
     );
     assert!(ok, "{err}");
     let new = out.split_whitespace().next().unwrap().to_string();
@@ -192,7 +197,14 @@ fn a_section_edited_after_the_brief_shows_drift_on_first_start() {
         fael(
             &d,
             &[
-                "plan", "edit", "pl", "--section", "2", "--replace", "**Do:**", "--with",
+                "plan",
+                "edit",
+                "pl",
+                "--section",
+                "2",
+                "--replace",
+                "**Do:**",
+                "--with",
                 "**Do:** one thing.",
             ]
         )

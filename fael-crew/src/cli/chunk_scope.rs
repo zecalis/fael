@@ -461,14 +461,7 @@ mod tests {
             both[0]
         );
         // at start the remedy is a note, never an edit (which clears approval)
-        let started = stale_warnings(
-            "t",
-            "Fixes test:cash-basis-edges",
-            &[],
-            &log,
-            uid,
-            true,
-        );
+        let started = stale_warnings("t", "Fixes test:cash-basis-edges", &[], &log, uid, true);
         assert_eq!(started.len(), 1, "{started:?}");
         assert!(
             started[0].contains(&format!("fael chunk note {uid}"))
@@ -494,7 +487,14 @@ mod tests {
             false,
         );
         assert!(silent.is_empty(), "{silent:?}");
-        let open_only = stale_warnings("t", "see test:open-topic, deferred work", &[], &log, uid, false);
+        let open_only = stale_warnings(
+            "t",
+            "see test:open-topic, deferred work",
+            &[],
+            &log,
+            uid,
+            false,
+        );
         assert!(open_only.is_empty(), "{open_only:?}");
         // an id token of the closed row warns too, with the close's first line only
         let by_id = stale_warnings("t", "see 01M0000000000000000000001", &[], &log, uid, false);
@@ -529,7 +529,14 @@ mod tests {
             linked[0]
         );
         // the same row cited in the brief too: said once
-        let dup = stale_warnings("t", "see 01M0000000000000000000001", &[shut], &log, uid, false);
+        let dup = stale_warnings(
+            "t",
+            "see 01M0000000000000000000001",
+            &[shut],
+            &log,
+            uid,
+            false,
+        );
         assert_eq!(dup.len(), 1, "{dup:?}");
         // an open linked issue stays silent
         let open = stale_warnings(
