@@ -12,6 +12,7 @@ pub(crate) mod args;
 pub(crate) mod bump;
 pub(crate) mod chunk;
 mod chunk_misplaced;
+mod chunk_retype;
 pub(crate) mod close;
 pub(crate) mod find;
 pub(crate) mod roots;

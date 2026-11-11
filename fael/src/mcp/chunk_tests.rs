@@ -217,3 +217,31 @@ fn a_call_missing_verb_gets_the_whole_start_shape_once() {
     let e = super::shape_missing(&json!({}));
     assert!(e.contains("verb + uid is required"), "{e}");
 }
+
+#[test]
+fn done_without_left_names_the_mcp_key_not_the_flag() {
+    let e = "rejected: chunk done needs --left none or --left <id|uid>,… — how\ntry: fael chunk done U1 \"h\" --left none|<ids>".to_string();
+    let got = super::with_cwd_hint(e);
+    let line = got
+        .lines()
+        .find(|l| l.contains("left: \"none\"") && l.contains("left: \"<id|uid>\""))
+        .expect(&got);
+    assert!(!line.contains("--left"), "{got}");
+    assert!(line.contains("U1"), "{got}");
+}
+
+#[test]
+fn start_without_because_names_force_and_because_as_mcp_keys() {
+    let e = "rejected: --force needs --because \"<what you will avoid>\" — try `fael chunk start U1 --force --because \"<what you will avoid>\"`".to_string();
+    let got = super::with_cwd_hint(e);
+    assert!(got.contains("force: true, because: \""), "{got}");
+    assert!(got.contains("uid: \"U1\""), "{got}");
+    let line = got
+        .lines()
+        .find(|l| l.contains("force: true, because: \""))
+        .expect(&got);
+    assert!(
+        !line.contains("--force") && !line.contains("--because"),
+        "{got}"
+    );
+}
