@@ -398,7 +398,13 @@ fn avoid_card_shows_who_class_files_where_when_doing_do() {
         card.do_cmd
     );
     assert!(card.do_cmd.contains("fael chunk status"), "{}", card.do_cmd);
-    assert!(!card.do_cmd.contains("--with"), "{}", card.do_cmd);
+    // the card ends with the start call that joins that run; a dir overlap is a lane (01M73C4G)
+    assert!(
+        card.do_cmd
+            .ends_with(&format!("join: fael chunk start {me} --with {a} --as lane")),
+        "{}",
+        card.do_cmd
+    );
 }
 
 /// l3 doing priority: touch --msg beats note beats nothing-handed-off-yet.
@@ -521,11 +527,21 @@ fn avoid_class_is_exact_for_the_same_file_and_prefix_for_a_dir() {
     let bme = s.show(&me).unwrap();
     let card = &bme.avoid[0];
     assert_eq!(card.class, "exact");
+    assert!(
+        card.do_cmd.ends_with(&format!("--with {a} --as pair")),
+        "{}",
+        card.do_cmd
+    );
     let me2 = scoped(&mut s, "src/");
     // me2 is a different chunk with dir scope; a still running on the same file
     let bme2 = s.show(&me2).unwrap();
     let card2 = bme2.avoid.iter().find(|c| c.uid == a).unwrap();
     assert_eq!(card2.class, "prefix");
+    assert!(
+        card2.do_cmd.ends_with(&format!("--with {a} --as lane")),
+        "{}",
+        card2.do_cmd
+    );
 }
 
 #[test]
