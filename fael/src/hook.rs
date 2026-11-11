@@ -76,6 +76,7 @@ mod stats_handoff;
 mod stats_models;
 mod stats_outcome;
 mod stats_select;
+mod stats_sessions;
 mod stats_text;
 mod stop;
 mod tally;

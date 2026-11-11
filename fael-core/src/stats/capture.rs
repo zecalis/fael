@@ -48,12 +48,14 @@ pub struct Capture {
     pub no_row_sessions: Vec<Silent>,
 }
 
-pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
-    // (repo, session) → (first event, last event, edited?, edit branch).
-    // Call lines ride apart in `parsed.calls`: a session's span covers them
-    // (the row-filed window below reads first/last), so they chain in — min
-    // and max never depend on slice order.
-    type Span<'a> = (i64, i64, bool, Option<&'a str>);
+/// A session's span: first event, last event, edited?, last edit branch.
+pub(super) type Span<'a> = (i64, i64, bool, Option<&'a str>);
+
+/// (repo, session) → span, over every usage line that names both. Call lines
+/// ride apart in `parsed.calls`: a session's span covers them (the row-filed
+/// window reads first/last), so they chain in — min and max never depend on
+/// slice order.
+pub(super) fn spans(parsed: &Parsed) -> HashMap<(&str, &str), Span<'_>> {
     let mut sessions: HashMap<(&str, &str), Span> = HashMap::new();
     for v in parsed.kept.iter().chain(parsed.calls.iter()) {
         let (Some(repo), Some(session), Some(ms)) = (
@@ -73,6 +75,27 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
             s.3 = v["branch"].as_str().or(s.3);
         }
     }
+    sessions
+}
+
+/// Each repo's rows by time, parsed once; each session slices its window.
+pub(super) fn by_time(logs: &HashMap<String, Log>) -> HashMap<&str, Vec<(i64, &Row)>> {
+    logs.iter()
+        .map(|(repo, l)| {
+            let mut v: Vec<_> = l
+                .rows
+                .iter()
+                .filter(|r| !r.kind.is_empty())
+                .filter_map(|r| Some((ts_ms(&r.ts)?, r)))
+                .collect();
+            v.sort_by_key(|(ms, _)| *ms);
+            (repo.as_str(), v)
+        })
+        .collect()
+}
+
+pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
+    let sessions = spans(parsed);
     let mut seen: HashSet<&str> = HashSet::new();
     let mut manual = 0usize;
     for (repo, first) in &parsed.first_seen {
@@ -90,20 +113,7 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
         .iter()
         .filter(|((repo, _), _)| !logs.contains_key(*repo))
         .count();
-    // Each repo's rows by time, parsed once; each session slices its window.
-    let by_ms: HashMap<&str, Vec<(i64, &Row)>> = logs
-        .iter()
-        .map(|(repo, l)| {
-            let mut v: Vec<_> = l
-                .rows
-                .iter()
-                .filter(|r| !r.kind.is_empty())
-                .filter_map(|r| Some((ts_ms(&r.ts)?, r)))
-                .collect();
-            v.sort_by_key(|(ms, _)| *ms);
-            (repo.as_str(), v)
-        })
-        .collect();
+    let by_ms = by_time(logs);
     let filed_by: Vec<_> = edited
         .iter()
         .map(|&(k, s)| (k, s, by_ms.get(k.0).map(|v| filed(v, k.1, s))))
@@ -142,10 +152,10 @@ pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
 
 /// The rows a session filed: in its window (+10 min) and its own. `rows` is
 /// one repo's kept rows sorted by time.
-fn filed<'a>(
+pub(super) fn filed<'a>(
     rows: &[(i64, &'a Row)],
     session: &str,
-    (first, last, _, branch): &(i64, i64, bool, Option<&str>),
+    (first, last, _, branch): &Span,
 ) -> Vec<&'a Row> {
     let lo = rows.partition_point(|(ms, _)| ms < first);
     let hi = rows.partition_point(|(ms, _)| *ms <= last + SLACK_MS);

@@ -20,6 +20,10 @@ pub struct UsageRow {
     pub toks: usize,
     pub ids: Vec<String>,
     pub real_input: Option<u64>,
+    /// The usage event (`read`, `edit`, …) and the session stem ("" = none):
+    /// the per-session view sums tokens by event (`sessions.rs`).
+    pub event: String,
+    pub session: String,
 }
 
 /// Everything `aggregate` needs, straight from the usage text.
@@ -165,6 +169,8 @@ pub fn parse_since(
                 toks: t,
                 ids: ids_of(&v),
                 real_input: real_in(&v).map(|q| q[0] + q[1] + q[2]),
+                event: ev.clone(),
+                session: v["session"].as_str().unwrap_or("").to_string(),
             });
         }
         count(&mut p.by_event, ev, t);

@@ -70,6 +70,11 @@ fn keys(v: &serde_json::Value) -> Vec<&str> {
 }
 
 #[test]
+fn schema_version_is_pinned() {
+    assert_eq!(value_of(BASE_ROWS, false)["schema"], 6);
+}
+
+#[test]
 fn json_shape_keys_and_types_are_frozen() {
     let v = value_of(BASE_ROWS, false);
     assert_eq!(
@@ -99,6 +104,8 @@ fn json_shape_keys_and_types_are_frozen() {
             "rounds",
             "said",
             "schema",
+            "session_splits",
+            "sessions",
             "skipped_temp",
             "throughput",
             "top_rows",
@@ -108,7 +115,6 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    assert_eq!(v["schema"], 5, "{v}");
     // every kind listed, zeros included
     assert_eq!(
         keys(&v["said"]).join(" "),

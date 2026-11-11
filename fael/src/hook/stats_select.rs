@@ -12,9 +12,11 @@ use std::path::Path;
 /// `fael stats --all` prints all. The sections partition the full page — every
 /// line it prints belongs to exactly one — so their union is the old default,
 /// line for line. The short default prints one short line per story instead,
-/// each ending in its section name.
+/// each ending in its section name. `sessions` is named only: it is no part of
+/// the old page, so `--all` stays line for line what it was.
 pub(super) const SECTIONS: &[&str] = &[
     "rows", "value", "outcome", "across", "models", "capture", "said", "friction", "warnings",
+    "sessions",
 ];
 
 fn usage_line(s: &core::stats::Stats, path: &Path) -> String {
@@ -277,6 +279,9 @@ pub(super) fn print_section(
                 .for_each(|l| println!("{l}"));
         }
         "warnings" => stats_text::print_warnings(s),
+        "sessions" => super::stats_sessions::split_lines(&s.session_splits)
+            .iter()
+            .for_each(|l| println!("{l}")),
         _ => {}
     }
 }

@@ -43,6 +43,8 @@ const REJECTS: &[(&str, &str)] = &[
     ("is not an id", "id_not_shaped"),
     ("ids not shown", "id_partial"),
     ("no row with id", "id_missing"),
+    ("no session in the window", "id_missing"),
+    ("sessions — longer prefix", "id_ambiguous"),
     (" rows (", "id_ambiguous"),
     ("is a ledger", "not_a_chunk"),
     ("lists its roots", "no_root"),

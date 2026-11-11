@@ -128,6 +128,27 @@ fn stats_json_matches_golden_values() {
         days,
         Some(serde_json::json!([{"day": "2026-09-26", "events": 3, "est_tokens": 15}]))
     );
+    // also apart (same recursion limit): the one session s1 was handed A and B
+    // (`shown` 2, none scored: no `in-context` line opens the window), edited
+    // nothing, so both split tables are empty
+    let sessions = v.as_object_mut().unwrap().remove("sessions");
+    assert_eq!(
+        sessions,
+        Some(serde_json::json!([{
+            "session": "s1", "repo": "/work/real", "client": "claude",
+            "first": "2026-09-26T00:01:00.000Z", "last": "2026-09-26T00:03:00.000Z",
+            "branch": null, "edits": 0, "pushed_tokens": {"read": 5},
+            "shown": 2, "scored": 0, "in_context": 0, "acted": 0,
+            "calls": 0, "rejects": 0, "rows_filed": null, "in_run": false
+        }]))
+    );
+    let group = serde_json::json!({"sessions": 0, "edits": 0, "calls": 0, "rejects": 0, "rows_filed": 0, "no_row": 0});
+    let split = serde_json::json!({"with": group, "without": group});
+    let splits = v.as_object_mut().unwrap().remove("session_splits");
+    assert_eq!(
+        splits,
+        Some(serde_json::json!({"pushed": split, "in_run": split}))
+    );
     // also apart (same recursion limit): no crew runs here, so both groups are empty
     let side = serde_json::json!({"runs": 0, "joined": 0, "done": 0, "finds": 0, "refinds": 0, "rejects": 0});
     let handoff = v.as_object_mut().unwrap().remove("handoff_runs");
@@ -160,7 +181,7 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         v,
         serde_json::json!({
-            "schema": 5, "outcomes_v": 1,
+            "schema": 6, "outcomes_v": 1,
             "events": 3, "bytes": 60, "est_tokens": 15, "skipped_temp": 0,
             "by_event": {"read": {"events": 2, "est_tokens": 8}, "edit": {"events": 1, "est_tokens": 7}},
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},

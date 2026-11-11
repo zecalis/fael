@@ -223,12 +223,12 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     for present in ["--json", "--since", "--all", "[section]"] {
         assert!(out.contains(present), "{present} missing: {out}");
     }
-    for hidden in ["--rows", "--day", "--misses"] {
+    for hidden in ["--rows", "--day", "--misses", "--session"] {
         assert!(!out.contains(hidden), "{hidden} leaks: {out}");
     }
     let (ok, full, err) = fael(&d, &["stats", "--help", "--all"]);
     assert!(ok, "{err}");
-    for hidden in ["--rows", "--day", "--misses"] {
+    for hidden in ["--rows", "--day", "--misses", "--session"] {
         assert!(full.contains(hidden), "{hidden} missing: {full}");
     }
     // no core override: close/claim show the same text either way;

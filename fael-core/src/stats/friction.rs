@@ -89,15 +89,22 @@ fn repeat(calls: &[Call], i: usize) -> bool {
             })
 }
 
+/// A call line from an agent session: `who: "human"` and `"auto"` (pollers)
+/// are usage, never friction.
+pub(super) fn is_agent_call(v: &serde_json::Value) -> bool {
+    v["who"] != "human" && v["who"] != "auto"
+}
+
+/// A reject of the pre-write gate: a round asked for on purpose, in no count.
+pub(super) fn is_gate_reject(v: &serde_json::Value) -> bool {
+    v["outcome"] == "reject" && v["reason"].as_str().unwrap_or("unknown") == SHAPE_GATE
+}
+
 pub(super) fn friction(parsed: &Parsed) -> Friction {
     let mut streams: HashMap<String, Vec<Call>> = HashMap::new();
     let mut out = Friction::default();
     // `who: "human"` is a call outside an agent session — usage, never friction
-    for v in parsed
-        .calls
-        .iter()
-        .filter(|v| v["who"] != "human" && v["who"] != "auto")
-    {
+    for v in parsed.calls.iter().filter(|v| is_agent_call(v)) {
         let outcome = match v["outcome"].as_str() {
             Some("ok") => Outcome::Ok,
             Some("reject") => Outcome::Reject,
