@@ -44,7 +44,7 @@ pub struct AskCount {
 /// Schema of the `Stats` JSON shape below. Bump it only when a field is
 /// removed, renamed, retyped or redefined — adding a field never bumps
 /// (readers skip unknown keys), it just gets a `docs/stats.md` changelog line.
-pub const STATS_SCHEMA: u32 = 5;
+pub const STATS_SCHEMA: u32 = 6;
 
 /// Bytes the agent pays every session before saying anything — measured by
 /// the caller (CLI), never estimated here.
@@ -160,6 +160,12 @@ pub struct Stats {
     pub handoff_runs: super::HandoffRuns,
     /// Push events and fael tokens per UTC day over the window (`days.rs`).
     pub days: Vec<super::days::DayCount>,
+    /// One row per session in the window (`sessions.rs`): what it was handed
+    /// and what it did. MCP lines carry no session and are not here.
+    pub sessions: Vec<super::SessionView>,
+    /// Edited sessions split by rows pushed and by chunk run — described,
+    /// never an effect (`sessions.rs`).
+    pub session_splits: super::Splits,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -198,6 +204,7 @@ pub fn aggregate(
     let (row_total, foreign_rows) = non_english_share(logs, cfg);
     let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
     let value = value(parsed, logs);
+    let (sessions, session_splits) = super::sessions::sessions(parsed, logs, runs);
     // One window for the whole screen (see parse); flow and outcome share it.
     let first_seen = parsed.first_seen.values().copied().min();
     let window = outcome_window(since, logs, first_seen);
@@ -251,6 +258,8 @@ pub fn aggregate(
         throughput: throughput_stats(runs, window),
         handoff_runs: super::handoff_runs(parsed, runs),
         days: super::days::days(parsed),
+        sessions,
+        session_splits,
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }

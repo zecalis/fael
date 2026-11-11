@@ -197,6 +197,14 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
             super::stats_select::SECTIONS.join(", ")
         ));
     }
+    let session = a.one("session");
+    if session.is_some()
+        && (all || section.is_some() || day_view || a.has("days") || a.has("misses"))
+    {
+        return Err(
+            "rejected: --session is its own view — drop --all/section/--day/--days/--misses".into(),
+        );
+    }
     if (all || section.is_some()) && (json || day_view || a.has("days") || a.has("misses")) {
         return Err(
             "rejected: --all and sections are text-only — drop --json/--day/--days/--misses".into(),
@@ -212,6 +220,9 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         return Ok(());
     }
     let u = load_text(&super::usage_files::read(since), since, &|_| true);
+    if let Some(q) = session {
+        return session_view(&q, json, &u);
+    }
     if day_view {
         return day(json, &u);
     }
@@ -265,6 +276,22 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
     // the short default skips the misses count line; `--all` keeps it
     if all || is_section {
         misses();
+    }
+    Ok(())
+}
+
+/// `fael stats --session <stem|prefix> [--json]`: one session's row from the
+/// parse, the logs and this clone's runs — no git, no gh.
+fn session_view(q: &str, json: bool, u: &Usage) -> Result<(), String> {
+    let (list, _) = core::stats::sessions(&u.parsed, &u.logs, &super::flow::runs());
+    for v in core::stats::find_session(&list, q)? {
+        if json {
+            println!("{}", serde_json::to_string(v).map_err(|e| e.to_string())?);
+        } else {
+            super::stats_sessions::session_lines(v)
+                .iter()
+                .for_each(|l| println!("{l}"));
+        }
     }
     Ok(())
 }

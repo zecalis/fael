@@ -140,6 +140,26 @@ pub(super) fn pairs(parsed: &Parsed, windowed: bool) -> Pairs<'_> {
     (pushed, in_context)
 }
 
+/// The pushed pairs the session acted on: in context at an edit, or cited,
+/// found by id, or whose file it touched (`touch.rs`) — the one rule behind
+/// `EventValue::acted` and the per-session view.
+pub(super) fn acted_pairs<'a>(
+    parsed: &'a Parsed,
+    logs: &HashMap<String, Log>,
+    pushed: &HashMap<(&'a str, &'a str, &'a str), &'a str>,
+    in_window: &HashSet<(&'a str, &'a str, &'a str)>,
+) -> HashSet<(&'a str, &'a str, &'a str)> {
+    let touches = super::touch::Touches::index(parsed);
+    pushed
+        .keys()
+        .copied()
+        .filter(|&(repo, session, id)| {
+            in_window.contains(&(repo, session, id))
+                || touches.acted(repo, session, id, logs.get(repo))
+        })
+        .collect()
+}
+
 pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
     let (_, in_context) = pairs(parsed, false);
     let (pushed, in_window) = pairs(parsed, true);
@@ -154,13 +174,8 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
             .or_default()
             .in_context_at_edit += 1;
     }
-    let touches = super::touch::Touches::index(parsed);
-    for (&(repo, session, id), event) in &pushed {
-        if in_window.contains(&(repo, session, id))
-            || touches.acted(repo, session, id, logs.get(repo))
-        {
-            by_event.entry(event.to_string()).or_default().acted += 1;
-        }
+    for k in acted_pairs(parsed, logs, &pushed, &in_window) {
+        by_event.entry(pushed[&k].to_string()).or_default().acted += 1;
     }
     // repos in one clone share the journal: dedup closes and rows by id
     let mut closed: HashSet<&str> = HashSet::new();

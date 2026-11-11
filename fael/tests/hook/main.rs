@@ -59,6 +59,7 @@ mod stats_coherence;
 mod stats_golden;
 mod stats_handoff;
 mod stats_models;
+mod stats_sessions;
 mod stop;
 mod stop_lang;
 mod stop_risk;

@@ -38,6 +38,7 @@ mod said;
 #[cfg(test)]
 mod said_tests;
 mod said_yield;
+mod sessions;
 mod span;
 mod touch;
 mod unused;
@@ -78,6 +79,7 @@ pub use parse::{Parsed, UsageRow, parse, parse_since, session_stem};
 pub use repeat::{ContextLoop, context_loop};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{ASK_SPLIT, EventYield, KindYield};
+pub use sessions::{Group, SessionView, Split, Splits, find_session, sessions};
 pub use span::Span;
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
