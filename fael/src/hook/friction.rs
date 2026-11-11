@@ -41,9 +41,8 @@ const AGENT_CMDS: [&str; 12] = [
     "board",
 ];
 
-/// The `chunk`/`plan` verb a call used, when it is a real one: `chunk start`
-/// and `chunk add` fail for different reasons, so stats keep them apart.
-/// `shape` reuses it for the call row's `verb` — the one closed vocabulary.
+/// The `chunk`/`plan` verb a call used (`chunk start` vs `add` fail apart).
+/// `shape` reuses it for the row's `verb`. Flags first: skip flags to the verb.
 pub(crate) fn sub<'a>(cmd: &str, argv: &'a [String]) -> Option<&'a str> {
     let verbs: &[&str] = match cmd {
         "chunk" => crate::core::work::CHUNK_VERBS,
@@ -52,17 +51,20 @@ pub(crate) fn sub<'a>(cmd: &str, argv: &'a [String]) -> Option<&'a str> {
     };
     argv.iter()
         .skip_while(|a| *a != cmd)
-        .nth(1)
+        .skip(1)
         .map(String::as_str)
-        .filter(|v| verbs.contains(v))
+        .find(|v| !v.starts_with('-') && verbs.contains(v))
 }
 
-/// An MCP `chunk` call names its verb in `verb`, not in an argv: without it every MCP chunk
-/// reject lands in one bucket no verb's fix can be read from. Same closed vocabulary as `sub`.
+/// An MCP `chunk` names its verb in `verb`; missing/unknown buckets `(no verb)`.
 fn mcp_sub<'a>(cmd: &str, args: &'a Value) -> Option<&'a str> {
-    args["verb"]
-        .as_str()
-        .filter(|v| cmd == "chunk" && crate::core::work::CHUNK_VERBS.contains(v))
+    if cmd != "chunk" {
+        return None;
+    }
+    match args["verb"].as_str() {
+        Some(v) if crate::core::work::CHUNK_VERBS.contains(&v) => Some(v),
+        _ => Some("(no verb)"),
+    }
 }
 
 /// The real command an unknown one was a near miss of (`did you mean X?`) —
@@ -335,6 +337,8 @@ mod tests {
         assert_eq!(sub("plan", &argv("plan show p")), Some("show"));
         assert_eq!(sub("chunk", &argv("chunk 01M4AAAA")), None);
         assert_eq!(sub("find", &argv("find x")), None);
+        assert_eq!(sub("chunk", &argv("chunk --plan p start X")), Some("start"));
+        assert_eq!(sub("chunk", &argv("chunk --plan p")), None);
         let e = "rejected: unknown command \"fnd\" — did you mean find?";
         assert_eq!(near(e), Some("find"));
         let usage = crate::core::work::CHUNK_VERBS.join("|");
@@ -351,7 +355,9 @@ mod tests {
         assert_eq!(mcp_sub("chunk", &a), Some("note"));
         assert_eq!(mcp_sub("find", &a), None);
         let bad = serde_json::json!({"verb": "zzz"});
-        assert_eq!(mcp_sub("chunk", &bad), None);
+        assert_eq!(mcp_sub("chunk", &bad), Some("(no verb)"));
+        let missing = serde_json::json!({"uid": "u"});
+        assert_eq!(mcp_sub("chunk", &missing), Some("(no verb)"));
     }
 
     #[test]

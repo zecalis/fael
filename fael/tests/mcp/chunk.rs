@@ -116,6 +116,50 @@ fn chunk_done_forwards_pr_and_left() {
     assert!(is_err && out.contains("--review"), "{out}");
 }
 
+/// MCP `done` without `left` answers with the MCP key, not the CLI flag —
+/// one line carries `left: "none"` and `left: "<id|uid>"`, and itself has no `--left`.
+#[test]
+fn chunk_done_without_left_names_the_mcp_key() {
+    let (_, wt) = main_and_worktree();
+    let (ok, uid, err) = cli(&wt, &["chunk", "add", "Post", "--brief", "Write it"]);
+    assert!(ok, "{err}");
+    let uid = uid.trim().to_string();
+    let r = mcp_tool(
+        &wt,
+        "chunk",
+        &[serde_json::json!({"verb": "done", "uid": uid, "text": "did it"})],
+    );
+    assert_eq!(r[0]["result"]["isError"], true, "{r:?}");
+    let out = text_of(&r);
+    let line = out
+        .lines()
+        .find(|l| l.contains("left: \"none\"") && l.contains("left: \"<id|uid>\""))
+        .expect(&out);
+    assert!(!line.contains("--left"), "{out}");
+}
+
+/// MCP `start` with `force` but no `because` answers with MCP keys —
+/// `force: true, because: "…"` with the real uid, never a placeholder.
+#[test]
+fn chunk_start_without_because_names_mcp_keys() {
+    let (_, wt) = main_and_worktree();
+    let (ok, uid, err) = cli(&wt, &["chunk", "add", "Post", "--brief", "Write it"]);
+    assert!(ok, "{err}");
+    let uid = uid.trim().to_string();
+    // first start holds the run so the second needs --force --because
+    let (ok, _, err) = cli(&wt, &["chunk", "start", &uid]);
+    assert!(ok, "{err}");
+    let r = mcp_tool(
+        &wt,
+        "chunk",
+        &[serde_json::json!({"verb": "start", "uid": uid, "force": true})],
+    );
+    assert_eq!(r[0]["result"]["isError"], true, "{r:?}");
+    let out = text_of(&r);
+    assert!(out.contains("force: true, because: \""), "{out}");
+    assert!(out.contains(&format!("uid: \"{uid}\"")), "{out}");
+}
+
 /// A client that declares `roots` and names a worktree other than the server's launch dir
 /// gives `chunk start` its seat with no `cwd` (issue 01M6BKHZP); the server asks for roots
 /// after `initialized`.

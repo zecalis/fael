@@ -5,6 +5,7 @@
 
 use super::args::{repo_for, s, unknown_note, with_notes};
 use super::chunk_misplaced::misplaced_note;
+use super::chunk_retype::retype as mcp_retype;
 use crate::Repo;
 use serde_json::Value;
 
@@ -332,15 +333,18 @@ fn show_elsewhere(r: &Repo, uid: &str, e: String) -> Result<String, String> {
 /// the `lives in` prose match stays only for old binaries.
 fn with_cwd_hint(e: String) -> String {
     if e.contains("same command with --run ") {
-        return e.replace("same command with --run ", "same call with run: ");
+        return mcp_retype(e.replace("same command with --run ", "same call with run: "));
     }
     if let Some(cwd) = elsewhere_cwd(&e) {
-        return format!("{e}\nMCP: re-run this call with \"cwd\": \"{cwd}\" set to that repo root");
+        return mcp_retype(format!(
+            "{e}\nMCP: re-run this call with \"cwd\": \"{cwd}\" set to that repo root"
+        ));
     }
-    match e.contains("lives in") {
+    let base = match e.contains("lives in") {
         true => format!("{e}\nMCP: re-run this call with \"cwd\" set to that repo root"),
         false => e,
-    }
+    };
+    mcp_retype(base)
 }
 
 /// The machine line's root, if present — everything after `cwd=`, trimmed.
