@@ -315,8 +315,8 @@ pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[Strin
     print_capture(&s.capture);
     if s.retired.pushed > 0 {
         println!(
-            "  retired at touch: {} of {} pushed row(s) closed or superseded within a day of a push",
-            s.retired.at_touch, s.retired.pushed
+            "  retired at touch: {} of {} pushed row(s) closed or superseded within a day of a push · bumped {}",
+            s.retired.at_touch, s.retired.pushed, s.retired.bumped
         );
     }
     for line in [said_line(&s.said), said_events_line(&s.said)]

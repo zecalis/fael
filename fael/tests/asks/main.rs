@@ -8,6 +8,7 @@
 mod concurrent;
 mod counting;
 mod friction;
+mod friction_auto;
 mod replay;
 
 use std::io::Write;

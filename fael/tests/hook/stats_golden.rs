@@ -75,7 +75,7 @@ fn stats_text_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push · bumped 0\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -91,7 +91,7 @@ fn stats_rows_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown) · shown 1\n  row B: pushed ×2 (unknown) · shown 1 · pulled 1 (+0 fael-induced)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown) · shown 1\n  row B: pushed ×2 (unknown) · shown 1 · pulled 1 (+0 fael-induced)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push · bumped 0\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -171,7 +171,7 @@ fn stats_json_matches_golden_values() {
             "non_english_rows": {"rows": 0, "non_english": 0},
             "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},
             "capture": {"manual_adds": 0, "sessions_with_edits": 0, "sessions_with_edits_no_row": 0, "sessions_with_edits_gone": 0, "edit_session_issues": 0, "no_row_sessions": []},
-            "retired": {"pushed": 2, "at_touch": 0},
+            "retired": {"pushed": 2, "at_touch": 0, "bumped": 0},
             "context_loop": {"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0},
             "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0},
             "unused_rows": [],
@@ -230,6 +230,42 @@ fn stats_empty_matches_golden() {
     assert_eq!(
         v["rounds"],
         serde_json::json!({"rows_added": 0, "since": "", "since_utc": "", "since_local": "", "tz_offset": "+00:00"}),
+        "{out}"
+    );
+}
+
+/// A row pushed then bumped within a day counts under `bumped`, not
+/// `retired at touch`.
+#[test]
+fn a_bumped_row_counts_under_bumped_not_retired() {
+    let d = super::repo();
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    let (ok, out, err) = super::fael(
+        &d,
+        &["add", "decision", "keep it", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = out.split_whitespace().next().unwrap().to_string();
+    let edit = format!(
+        r#"{{"cwd":{},"session":"s1","files":["src/a.rs"]}}"#,
+        super::json(&d)
+    );
+    let (ok, _, err) = super::fael(&d, &["hook", "edit"], &edit);
+    assert!(ok, "{err}");
+    let (ok, _, err) = super::fael(&d, &["bump", &id], "");
+    assert!(ok, "{err}");
+    let state = d.join("state");
+    let (ok, out, err) = fael_at(&state, &d, &["stats", "--json"], "");
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["retired"]["pushed"], 1, "{out}");
+    assert_eq!(v["retired"]["at_touch"], 0, "{out}");
+    assert_eq!(v["retired"]["bumped"], 1, "{out}");
+    let (ok, out, err) = fael_at(&state, &d, &["stats"], "");
+    assert!(ok, "{err}");
+    assert!(
+        out.contains("retired at touch: 0 of 1 pushed row(s) closed or superseded within a day of a push · bumped 1"),
         "{out}"
     );
 }

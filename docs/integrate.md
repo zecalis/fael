@@ -103,6 +103,11 @@ contract tests alone do not establish full parity.
 
 Any error, missing field or repo without `.fael/` is `{"block": false}`. Integration cannot break the agent.
 
+Polling fael from an app or a loop is not agent use: set `FAEL_FROM=<app-name>`
+on those calls (`doctor --json`, `sync`, `stats`, `chunk show --json`). fael
+records them as `who: "auto"` — counted in `stats.usage.by_flag`, never in
+`friction`. Without it a poller looks like a human and drowns the human count.
+
 Also register `fael mcp` (stdio, tools `find` / `add` / `close`, plus `chunk` for fael crew). If the agent can load skills,
 use the one `fael install` writes (`~/.claude/skills/fael/SKILL.md`).
 

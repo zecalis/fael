@@ -42,10 +42,17 @@ pub(super) fn outcome_line(s: &core::stats::Stats) -> Option<String> {
         } else {
             format!(" since {}", o.joined_since)
         };
-        segs.push(format!(
-            "{listed} listed{since} ({} with row · {} without)",
-            o.prs_with_row, o.prs_without_row
-        ));
+        if !o.prs_merged_unknown && listed < o.prs_merged as usize {
+            segs.push(format!(
+                "listed {} of {}{since} ({} with row · {} without)",
+                listed, o.prs_merged, o.prs_with_row, o.prs_without_row
+            ));
+        } else {
+            segs.push(format!(
+                "{listed} listed{since} ({} with row · {} without)",
+                o.prs_with_row, o.prs_without_row
+            ));
+        }
     }
     if o.issues_filed + o.issues_closed > 0 {
         segs.push(format!(
@@ -167,7 +174,7 @@ mod tests {
         assert_eq!(
             outcome_line(&stats_with(o, f, t)).as_deref(),
             Some(
-                "outcome: 594 PRs merged · window 2026-10-01 (usage; --since 2026-10-01) · 200 listed since 2026-10-19 (41 with row · 159 without) \
+                "outcome: 594 PRs merged · window 2026-10-01 (usage; --since 2026-10-01) · listed 200 of 594 since 2026-10-19 (41 with row · 159 without) \
                  · issues 12 filed / 9 closed · filed→close med 2h p90 9h (n=9) \
                  · done→merge med 30m p90 1h (n=3 · 105/136 runs with PR) · 4 dones week of 2026-10-26"
             )
@@ -211,5 +218,37 @@ mod tests {
             seg("2026-09-25", "ledger"),
             "window 2026-09-25 (oldest log row; --since 2026-09-25 to align)"
         );
+    }
+
+    #[test]
+    fn a_short_list_names_its_gap_but_a_full_list_does_not() {
+        let short = Outcome {
+            prs_merged: 450,
+            prs_created: 200,
+            joined_since: "2026-10-01".into(),
+            prs_with_row: 41,
+            prs_without_row: 159,
+            window_since: "2026-10-01".into(),
+            window_source: "usage".into(),
+            ..Default::default()
+        };
+        let line = outcome_line(&stats_with(short, Flow::default(), vec![])).unwrap();
+        assert!(
+            line.contains("listed 200 of 450 since 2026-10-01"),
+            "{line}"
+        );
+        let full = Outcome {
+            prs_merged: 200,
+            prs_created: 200,
+            joined_since: "2026-10-01".into(),
+            prs_with_row: 41,
+            prs_without_row: 159,
+            window_since: "2026-10-01".into(),
+            window_source: "usage".into(),
+            ..Default::default()
+        };
+        let line = outcome_line(&stats_with(full, Flow::default(), vec![])).unwrap();
+        assert!(line.contains("200 listed since 2026-10-01"), "{line}");
+        assert!(!line.contains("of 200"), "{line}");
     }
 }

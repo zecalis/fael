@@ -101,7 +101,7 @@ fn record(
     cmd: &str,
     root: Option<&Path>,
     session: &str,
-    (o, empty, human): (Outcome, bool, bool),
+    (o, empty, who): (Outcome, bool, &str),
     sig: String,
     (argv, sub): (Option<&[String]>, Option<&str>),
 ) -> Value {
@@ -119,8 +119,8 @@ fn record(
     );
     row["cmd"] = cmd.into();
     row["sig"] = sig.into();
-    if human {
-        row["who"] = "human".into();
+    if !who.is_empty() {
+        row["who"] = who.into();
     }
     if let Some(s) = sub {
         row["sub"] = s.into();
@@ -193,8 +193,11 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
     // help and rejects too, or a `stats` read would show 100 per 100 with no
     // clean call to dilute it; `?` stays the agent's (an unknown command is
     // friction). Only in a real repo (`repo_at` falls back to the cwd), so the
-    // app's `board` run from `/` stays unrecorded
-    let human = session.is_empty() || (cmd != "?" && !AGENT_CMDS.contains(&cmd));
+    // app's `board` run from `/` stays unrecorded. `FAEL_FROM` marks auto.
+    let auto = std::env::var("FAEL_FROM").is_ok_and(|v| !v.is_empty());
+    let human = !auto && (session.is_empty() || (cmd != "?" && !AGENT_CMDS.contains(&cmd)));
+    // 0 = agent, 1 = human, 2 = auto (`human` is false when `auto` holds).
+    let who = ["", "human", "auto"][(auto as usize) * 2 + (human as usize)];
     if human && !(root.join(".git").exists() || root.join(".fael").exists()) {
         return;
     }
@@ -203,7 +206,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         cmd,
         Some(&root),
         &session,
-        (outcome, empty, human),
+        (outcome, empty, who),
         sig(argv),
         (Some(argv), sub(cmd, argv)),
     ));
@@ -235,7 +238,7 @@ pub(crate) fn record_mcp_call(
         cmd,
         root,
         "",
-        (outcome, empty, false),
+        (outcome, empty, ""),
         sig(args.to_string()),
         (None, verb),
     );

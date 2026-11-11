@@ -20,7 +20,10 @@ pub(super) fn lines(u: &FlagUsage) -> Vec<String> {
                 Some(n) => format!("{} --{n}", f.cmd),
                 None => f.cmd.clone(),
             };
-            format!("{name} ×{} ({} agent, {} human)", f.calls, f.agent, f.human)
+            format!(
+                "{name} ×{} ({} agent, {} human, {} auto)",
+                f.calls, f.agent, f.human, f.auto
+            )
         })
         .collect();
     vec![format!(
