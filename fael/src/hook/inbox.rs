@@ -31,7 +31,7 @@ fn one(uid: &str, id: i64, text: &str) -> Line {
 /// True when the note's writer is the reader: its session stems to the hook
 /// session (a transcript path and its stem are the same session, an RFC3339
 /// opencode session is itself). Old notes with no session still show.
-fn is_own(writer: Option<&str>, reader: &str) -> bool {
+pub(crate) fn is_own(writer: Option<&str>, reader: &str) -> bool {
     let Some(w) = writer.map(str::trim).filter(|s| !s.is_empty()) else {
         return false;
     };

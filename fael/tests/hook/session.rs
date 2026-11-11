@@ -262,6 +262,64 @@ fn own_note_stays_silent_while_another_session_note_shows() {
     assert!(!out.contains("from s1"), "own note silent: {out}");
 }
 
+/// Start-stopped: a worktree holding a run whose last note is "stopped at
+/// step 3" — a new session of another client gets one line
+/// `last note (<client>, <age>): stopped at step 3` under the chunk line,
+/// within the kickoff budget. Same card (ChunkBrief), same key: said once.
+#[test]
+fn session_start_shows_held_chunks_last_note_under_the_chunk_line() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["chunk", "add", "T", "--brief", "b"], "");
+    assert!(ok, "{err}");
+    let uid = out.trim().to_string();
+    let (ok, _, err) = fael(
+        &d,
+        &["chunk", "start", &uid, "--run", "R1", "--client", "claude"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let (ok, _, err) = super::fael_env(
+        &d,
+        &["chunk", "note", &uid, "stopped at step 3"],
+        "",
+        &[("FAEL_SESSION", "writer")],
+    );
+    assert!(ok, "{err}");
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"s2","source":"startup","client":"opencode"}}"#,
+        json(&d)
+    );
+    let (ok, out, err) = fael(&d, &["hook", "session-start"], &input);
+    assert!(ok, "{err} {out}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let ctx = v
+        .pointer("/hookSpecificOutput/additionalContext")
+        .and_then(|c| c.as_str())
+        .or_else(|| v.get("context").and_then(|c| c.as_str()))
+        .unwrap_or("");
+    let chunk_pos = ctx
+        .find(&format!("this worktree runs chunk {uid}"))
+        .unwrap_or_else(|| panic!("chunk line: {out}"));
+    let note_pos = ctx
+        .find("last note (claude,")
+        .unwrap_or_else(|| panic!("last note with writer client: {out}"));
+    assert!(
+        note_pos > chunk_pos,
+        "last note under the chunk line: {out}"
+    );
+    assert!(ctx.contains("stopped at step 3"), "note text: {out}");
+    let note_line = ctx
+        .lines()
+        .find(|l| l.contains("last note (claude,"))
+        .unwrap();
+    assert_eq!(note_line.lines().count(), 1, "one line: {note_line}");
+    let toks = fael_core::est_tokens(ctx);
+    assert!(
+        toks <= 800,
+        "session-start context {toks} tokens over kickoff budget 800: {out}"
+    );
+}
+
 /// A note written while the agent runs appears at its next edit, once, and
 /// the agent's own note never does. ShellEdit stays silent (card admits Edit
 /// only).
