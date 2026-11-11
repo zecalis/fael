@@ -160,19 +160,56 @@ fn start_rows<'a>(
     out
 }
 
+/// Threshold trial: the chunk line shows the held run's last checkpoint note as
+/// one line under it — the first 160 chars, so a new session sees where work
+/// stopped within the kickoff budget.
+pub(crate) const LAST_NOTE_CHARS: usize = 160;
+
 /// The live chunk run this worktree holds (`fael chunk start` here, maybe in
-/// another session): its uid and the line that points at its brief. No
-/// crew.db, no run = `None`.
+/// another session): its uid and the line that points at its brief, plus the
+/// run's last checkpoint note since it started. No crew.db, no run = `None`.
 fn chunk_line(repo: &crate::Repo, session: &str) -> Option<(String, String)> {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
-    let held = crate::core::work::held(&db, &repo.root.to_string_lossy(), session);
-    let (uid, title, _) = held.into_iter().next()?;
-    Some((
-        uid.clone(),
-        format!(
-            "fael: this worktree runs chunk {uid} \"{title}\" — its brief and hand-offs: fael chunk show {uid}\n"
-        ),
-    ))
+    let worktree = repo.root.to_string_lossy().to_string();
+    let (uid, title, _) = crate::core::work::held(&db, &worktree, session)
+        .into_iter()
+        .next()?;
+    let mut text = format!(
+        "fael: this worktree runs chunk {uid} \"{title}\" — its brief and hand-offs: fael chunk show {uid}\n"
+    );
+    if let Some((note_uid, Some((_, note, at, client, writer)))) =
+        crate::core::work::last_note(&db, &worktree, session)
+    {
+        // the reader's own checkpoint stays silent here, like the inbox: a new
+        // session of another client reads where work stopped, a resume does
+        // not echo itself.
+        if note_uid == uid && !super::inbox::is_own(writer.as_deref(), session) {
+            let who = client.trim();
+            let who = if who.is_empty() { "agent" } else { who };
+            let single = note.replace('\n', " ");
+            let short: String = single.chars().take(LAST_NOTE_CHARS).collect();
+            let short = short.trim();
+            if !short.is_empty() {
+                text.push_str(&format!("last note ({who}, {}): {short}\n", note_age(&at)));
+            }
+        }
+    }
+    Some((uid.clone(), text))
+}
+
+/// How long ago the note's `at` timestamp was, from `now`: `just now`, `Nm
+/// ago`, `Nh ago` or `Nd ago` — the same bands `FETCH_HEAD` age uses, so a new
+/// session reads where work stopped without parsing a timestamp.
+fn note_age(at: &str) -> String {
+    let now = crate::core::now_ms() as i64;
+    let then = crate::core::ts_ms(at).unwrap_or(now);
+    let secs = (now - then).max(0) / 1000;
+    match secs {
+        0..=89 => "just now".into(),
+        90..=5399 => format!("{}m ago", secs / 60),
+        5400..=129_599 => format!("{}h ago", secs / 3600),
+        _ => format!("{}d ago", secs / 86400),
+    }
 }
 
 /// PLAN-fael-visible-secretary chunk 4: the brief's line for the user — the
