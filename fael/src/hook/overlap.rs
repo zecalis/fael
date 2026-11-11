@@ -39,6 +39,27 @@ fn at(db: &Path, root: &Path, session: &str, files: &[String]) -> Vec<Line> {
     }
 }
 
+/// `live` when `COALESCE(last_seen, started)` is within 30 min, else
+/// `stalled Nm` — the board's rule (`holder::live_in_worktree`). Empty when
+/// the chunk never ran (no `started`/`last_seen`): declared-scope overlap of
+/// a chunk that never ran stays as it was. A stalled run still shows (its
+/// files are still changed), labelled.
+fn live_label(o: &work::Other) -> String {
+    let Some(at) = o.last_seen.as_deref().or(o.since.as_deref()) else {
+        return String::new();
+    };
+    let now = crate::core::now_ms();
+    let stale = crate::core::rfc3339(now.saturating_sub(30 * 60 * 1000));
+    if at >= stale.as_str() {
+        return "live".to_string();
+    }
+    let mins = match crate::core::ts_ms(at) {
+        Some(ms) => ((now as i64 - ms).max(0) / 60_000).max(1),
+        None => 1,
+    };
+    format!("stalled {mins}m")
+}
+
 fn about(s: &work::Scopes, shared: &[String], files: &[String]) -> Vec<Line> {
     let mut by: Vec<(&work::Other, Vec<&str>, Vec<&str>)> = vec![];
     for f in files {
@@ -74,17 +95,24 @@ fn about(s: &work::Scopes, shared: &[String], files: &[String]) -> Vec<Line> {
             }
             // the scope files are this chunk's work? widen its scope: a superset keeps the approval
             let wider: Vec<&str> = s.declared.iter().map(String::as_str).chain(sfs.iter().copied()).collect();
+            let live = live_label(o);
+            let inside = if live.is_empty() {
+                o.state.clone()
+            } else {
+                format!("{live} {}", o.state)
+            };
             let scope = format!(
                 "{} outside chunk {}'s scope, inside {} chunk {}'s",
                 sfs.join(", "),
                 s.uid,
-                o.state,
+                inside,
                 o.name
             );
             let text = if tfs.is_empty() {
                 scope
             } else {
-                format!("{} touched by live {} chunk {}'s{} + {scope}", tfs.join(", "), o.state, o.name, detail(o))
+                let live = if live.is_empty() { "live".to_string() } else { live };
+                format!("{} touched by {} {} chunk {}'s{} + {scope}", tfs.join(", "), live, o.state, o.name, detail(o))
             };
             Line {
                 kind: Kind::Overlap { owner: o.uid.clone() },
@@ -122,9 +150,12 @@ fn detail(o: &work::Other) -> String {
 /// The touched-only line: the partner's live files, with its branch, what
 /// it said it is doing and since when.
 fn touched_text(o: &work::Other, fs: &[&str]) -> String {
+    let live = live_label(o);
+    let live = if live.is_empty() { "live".to_string() } else { live };
     format!(
-        "fael: {} touched by live {} chunk {}'s{} — coordinate: fael chunk note {} \"<text>\" · or go on; said once per chunk, chunk done lists every file\n",
+        "fael: {} touched by {} {} chunk {}'s{} — coordinate: fael chunk note {} \"<text>\" · or go on; said once per chunk, chunk done lists every file\n",
         fs.join(", "),
+        live,
         o.state,
         o.name,
         detail(o),
@@ -151,9 +182,18 @@ mod tests {
                 branch: None,
                 doing: None,
                 since: None,
+                last_seen: None,
                 touched: Vec::new(),
             }],
         }
+    }
+
+    fn live_seen() -> String {
+        crate::core::rfc3339(crate::core::now_ms().saturating_sub(2 * 60 * 1000))
+    }
+
+    fn stalled_seen() -> String {
+        crate::core::rfc3339(crate::core::now_ms().saturating_sub(31 * 60 * 1000))
     }
 
     fn touched_scopes() -> work::Scopes {
@@ -168,6 +208,7 @@ mod tests {
                 branch: Some("feat-x".into()),
                 doing: Some("wiring auth".into()),
                 since: Some("2026-10-11T09:05:00Z".into()),
+                last_seen: Some(live_seen()),
                 touched: vec!["src/a/x.rs".into()],
             }],
         }
@@ -228,25 +269,33 @@ mod tests {
 
     #[test]
     fn a_mixed_edit_names_each_file_for_what_it_is() {
+        let s = touched_scopes();
+        let since = s.others[0].since.clone().unwrap();
         let ls = about(
-            &touched_scopes(),
+            &s,
             &[],
             &["src/a/x.rs".into(), "src/b/y.rs".into()],
         );
         assert_eq!(ls.len(), 1);
         assert_eq!(
             ls[0].text,
-            "fael: src/a/x.rs touched by live running chunk p/b's (on feat-x · doing wiring auth · since 2026-10-11T09:05:00Z) + src/b/y.rs outside chunk U1's scope, inside running chunk p/b's — coordinate: fael chunk note U2 \"<text>\" · yours? fael chunk edit U1 --scope src/a/,src/b/y.rs (a superset keeps approval) · or go on; said once per chunk, chunk done lists every file\n"
+            format!(
+                "fael: src/a/x.rs touched by live running chunk p/b's (on feat-x · doing wiring auth · since {since}) + src/b/y.rs outside chunk U1's scope, inside live running chunk p/b's — coordinate: fael chunk note U2 \"<text>\" · yours? fael chunk edit U1 --scope src/a/,src/b/y.rs (a superset keeps approval) · or go on; said once per chunk, chunk done lists every file\n"
+            )
         );
     }
 
     #[test]
     fn a_touched_file_inside_my_scope_says_branch_doing_and_since() {
-        let ls = about(&touched_scopes(), &[], &["src/a/x.rs".into()]);
+        let s = touched_scopes();
+        let since = s.others[0].since.clone().unwrap();
+        let ls = about(&s, &[], &["src/a/x.rs".into()]);
         assert_eq!(ls.len(), 1);
         assert_eq!(
             ls[0].text,
-            "fael: src/a/x.rs touched by live running chunk p/b's (on feat-x · doing wiring auth · since 2026-10-11T09:05:00Z) — coordinate: fael chunk note U2 \"<text>\" · or go on; said once per chunk, chunk done lists every file\n"
+            format!(
+                "fael: src/a/x.rs touched by live running chunk p/b's (on feat-x · doing wiring auth · since {since}) — coordinate: fael chunk note U2 \"<text>\" · or go on; said once per chunk, chunk done lists every file\n"
+            )
         );
     }
 
@@ -263,6 +312,34 @@ mod tests {
             ls[0].text,
             "fael: src/a/x.rs touched by live running chunk p/b's — coordinate: fael chunk note U2 \"<text>\" · or go on; said once per chunk, chunk done lists every file\n"
         );
+    }
+
+    #[test]
+    fn a_stalled_run_shows_stalled_minutes_not_live() {
+        let mut s = touched_scopes();
+        s.others[0].last_seen = Some(stalled_seen());
+        s.others[0].since = Some(stalled_seen());
+        let ls = about(&s, &[], &["src/a/x.rs".into()]);
+        assert_eq!(ls.len(), 1);
+        assert!(
+            ls[0].text.contains("stalled 31m"),
+            "stalled label: {}",
+            ls[0].text
+        );
+        assert!(
+            !ls[0].text.contains("live"),
+            "no live for a stalled run: {}",
+            ls[0].text
+        );
+    }
+
+    #[test]
+    fn a_live_run_shows_live() {
+        let s = touched_scopes();
+        let ls = about(&s, &[], &["src/a/x.rs".into()]);
+        assert_eq!(ls.len(), 1);
+        assert!(ls[0].text.contains("live"), "{}", ls[0].text);
+        assert!(!ls[0].text.contains("stalled"), "{}", ls[0].text);
     }
 
     #[test]
