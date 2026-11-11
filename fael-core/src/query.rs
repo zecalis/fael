@@ -26,7 +26,7 @@ mod stale;
 mod wide;
 
 pub use chunks::{PLAN_KICKOFF_ROWS, handoff_first};
-pub use explain::{closed_fallback, json_note, nearest, why_empty};
+pub use explain::{closed_fallback, file_stem_fallback, json_note, nearest, why_empty};
 pub use focus::{
     Background, Bucket, CUT_BUDGET, CUT_CAP, CUT_HUB_PEEK, Focus, Hidden, PUSH_BACKGROUND,
     PUSH_HUB_PEEK, PUSH_HUB_ROWS, Prior, PushPolicy, Selection, bucket, on_work, select,

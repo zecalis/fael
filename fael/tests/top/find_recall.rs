@@ -89,3 +89,31 @@ fn an_unknown_recall_value_exits_1() {
     let (ok, _, err) = fael(&d, &["find", "a row", "--recall", "broad"]);
     assert!(!ok && err.contains("recall"), "{err}");
 }
+
+#[test]
+fn miss_on_file_stem_shows_rows_on_that_file() {
+    let d = repo();
+    let file = "fael-crew/src/cli/chunk_scope.rs";
+    std::fs::create_dir_all(d.join("fael-crew/src/cli")).unwrap();
+    add(&d, "board handoff state", file, None);
+    let (ok, out, err) = fael(&d, &["find", "chunk_scope"]);
+    assert!(ok, "{err}{out}");
+    assert!(
+        out.contains(&format!("rows on {file}:")),
+        "{err}{out}"
+    );
+    assert!(out.contains("board handoff state"), "{err}{out}");
+}
+
+#[test]
+fn thai_query_says_rows_are_english() {
+    let d = repo();
+    add(&d, "board handoff state", "src/x.rs", None);
+    let (ok, out, err) = fael(&d, &["find", "สวัสดี"]);
+    assert!(ok, "{err}{out}");
+    let both = format!("{out}{err}");
+    assert!(
+        both.contains("rows are written in English"),
+        "{err}{out}"
+    );
+}

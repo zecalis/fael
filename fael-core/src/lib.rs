@@ -66,7 +66,7 @@ pub use query::{
     KeyUse, MdRef, NO_ROW_WITH_ID, PLAN_KICKOFF_ROWS, PUSH_BACKGROUND, PUSH_HUB_PEEK,
     PUSH_HUB_ROWS, PUSH_TITLE_CHARS, Prior, PushPolicy, Ref, Selection, Urgent, UrgentChange,
     abbrev, add_gate, backtick_paths, brief, bucket, chunk_stem, closed, closed_fallback, cmp_rows,
-    code_spans, due, est_tokens, fat_reasons, find, fix_close, followers, fresh_ts, freshness,
+    code_spans, due, est_tokens, fat_reasons, file_stem_fallback, find, fix_close, followers, fresh_ts, freshness,
     glob, gone, gone_files, handoff_first, has_regex_chars, id_tokens, is_date, json_note,
     key_hints, keys, kickoff, levenshtein, names_key, nearest, on_work, page, parse_recall,
     phantom_md_refs, phantom_refs, plan_anchor, push, push_line, push_tiered, push_title, query,
