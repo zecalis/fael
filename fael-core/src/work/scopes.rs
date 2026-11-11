@@ -20,6 +20,8 @@ pub struct Other {
     pub scope: Vec<String>,
     /// The live run's branch, if it has one.
     pub branch: Option<String>,
+    /// The live run's client, if reported (e.g. `claude`, `opencode`).
+    pub client: Option<String>,
     /// `run.touch_msg`: what the partner said it is doing, if reported.
     pub doing: Option<String>,
     /// The live run's `started`, for the `since` the edit line shows.
@@ -95,12 +97,13 @@ fn others(
         Option<String>,
         Option<String>,
         Option<String>,
+        Option<String>,
     );
     let live = "r.id = (SELECT x.id FROM run x WHERE x.chunk = c.id
         AND x.ended IS NULL ORDER BY x.started DESC LIMIT 1)";
     let rest = format!(
         "{TEAM} SELECT c.uid, p.name || '/' || COALESCE(c.label, c.uid), c.state, c.scope,
-          r.branch, r.touch_msg, r.touched, r.started, r.last_seen
+          r.branch, r.client, r.touch_msg, r.touched, r.started, r.last_seen
          FROM chunk c JOIN plan p ON p.id = c.plan
          LEFT JOIN run r ON {live}
          WHERE c.state NOT IN ('done', 'replaced', 'dropped')
@@ -119,6 +122,7 @@ fn others(
                 r.get(6)?,
                 r.get(7)?,
                 r.get(8)?,
+                r.get(9)?,
             ))
         })
         .and_then(|rows| rows.collect::<Result<Vec<Row>, _>>())
@@ -126,7 +130,7 @@ fn others(
         return Some(
             rows.into_iter()
                 .map(
-                    |(uid, name, state, s, branch, doing, touched, since, last_seen)| Other {
+                    |(uid, name, state, s, branch, client, doing, touched, since, last_seen)| Other {
                         uid,
                         name,
                         state,
@@ -135,6 +139,7 @@ fn others(
                             .filter(|p| !shared.iter().any(|s| under(p, s)))
                             .collect(),
                         branch: branch.filter(|b| !b.is_empty()),
+                        client: client.filter(|c| !c.is_empty()),
                         doing: doing.filter(|d| !d.is_empty()),
                         since: since.filter(|s| !s.is_empty()),
                         last_seen: last_seen.filter(|s| !s.is_empty()),
@@ -176,6 +181,7 @@ fn others(
                 .filter(|p| !shared.iter().any(|s| under(p, s)))
                 .collect(),
             branch: None,
+            client: None,
             doing: None,
             since: None,
             last_seen: None,

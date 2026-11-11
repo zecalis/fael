@@ -8,7 +8,7 @@ fn db(rows: &str) -> std::path::PathBuf {
          CREATE TABLE chunk(id INTEGER PRIMARY KEY, uid TEXT, label TEXT, plan INTEGER,
            seq INTEGER, scope TEXT, state TEXT);
          CREATE TABLE run(id INTEGER PRIMARY KEY, chunk INTEGER, worktree TEXT, ended TEXT,
-           session TEXT, branch TEXT, touched TEXT, touch_msg TEXT, started TEXT, last_seen TEXT);
+           session TEXT, branch TEXT, client TEXT, touched TEXT, touch_msg TEXT, started TEXT, last_seen TEXT);
          CREATE TABLE edge(src INTEGER, dst INTEGER, kind TEXT);
          INSERT INTO plan VALUES (1, 'p');
          {rows}"
@@ -24,6 +24,7 @@ fn other(uid: &str, scope: &[&str]) -> Other {
         state: "running".into(),
         scope: scope.iter().map(|s| s.to_string()).collect(),
         branch: None,
+        client: None,
         doing: None,
         since: None,
         last_seen: None,
@@ -40,8 +41,8 @@ fn reads_held_scope_and_other_unfinished_scopes() {
           (4,'U4',NULL,1,4,'src/d/','ready'),
           (5,'U5','e',1,5,'src/e/','review');
          INSERT INTO run VALUES
-           (10,1,'/wt',NULL,'S',NULL,NULL,NULL,'2026-10-11T09:00:00Z',NULL),
-           (30,3,'/wt','2026-01-01',NULL,NULL,NULL,NULL,'2026-10-11T08:00:00Z',NULL);
+           (10,1,'/wt',NULL,'S',NULL,NULL,NULL,NULL,'2026-10-11T09:00:00Z',NULL),
+           (30,3,'/wt','2026-01-01',NULL,NULL,NULL,NULL,NULL,'2026-10-11T08:00:00Z',NULL);
          INSERT INTO edge VALUES (1,5,'pair');",
     );
     let s = scopes(&p, "/wt", "", &["shared/".into()]).unwrap();
@@ -74,14 +75,15 @@ fn reads_a_live_partner_touch_with_branch_doing_and_since() {
         "INSERT INTO chunk VALUES (1,'U1','a',1,1,'src/a/','running'),
           (2,'U2','b',1,2,'src/b/','running');
          INSERT INTO run VALUES
-           (10,1,'/w1',NULL,'S1','mine','src/a/x.rs','wiring mine','2026-10-11T09:00:00Z',NULL),
-           (20,2,'/w2',NULL,'S2','feat-x','src/a/x.rs','wiring auth','2026-10-11T09:05:00Z','2026-10-11T09:06:00Z');",
+           (10,1,'/w1',NULL,'S1','mine',NULL,'src/a/x.rs','wiring mine','2026-10-11T09:00:00Z',NULL),
+           (20,2,'/w2',NULL,'S2','feat-x','claude','src/a/x.rs','wiring auth','2026-10-11T09:05:00Z','2026-10-11T09:06:00Z');",
     );
     let s = scopes(&p, "/w1", "", &[]).unwrap();
     assert_eq!(s.others.len(), 1);
     let o = &s.others[0];
     assert_eq!(o.touched, ["src/a/x.rs"]);
     assert_eq!(o.branch.as_deref(), Some("feat-x"));
+    assert_eq!(o.client.as_deref(), Some("claude"));
     assert_eq!(o.doing.as_deref(), Some("wiring auth"));
     assert_eq!(o.since.as_deref(), Some("2026-10-11T09:05:00Z"));
     assert_eq!(o.last_seen.as_deref(), Some("2026-10-11T09:06:00Z"));
@@ -139,6 +141,7 @@ fn overlap_names_only_an_open_owner_outside_my_scope() {
             state: "open".into(),
             scope: vec!["src/b/".into()],
             branch: None,
+            client: None,
             doing: None,
             since: None,
             last_seen: None,
