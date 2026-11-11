@@ -3,7 +3,7 @@
 //! nothing a clock or a model could change.
 
 use super::{Filter, est_tokens, matching::all_words, select::find};
-use crate::{Log, Row};
+use crate::{Log, Row, looks_like_id};
 
 /// `--json` is the machine shape and is never cut — truncating it would hand a
 /// script fewer rows than it asked for without a word. A caller that did not
@@ -38,7 +38,7 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
         })
         .collect();
     if let Some(s) = honest_no_mention(f, &words, &word_ns, files_flag) {
-        return s;
+        return with_english(f, s);
     }
     let mut parts: Vec<String> = vec![];
     for (w, n) in words.iter().zip(word_ns.iter()) {
@@ -120,7 +120,78 @@ pub fn why_empty(log: &Log, f: &Filter, files_flag: &str) -> String {
     {
         s.push_str(&format!(" · a key? use --key {k}"));
     }
+    with_english(f, s)
+}
+
+/// A non-ASCII text query on an English ledger: one line saying rows are
+/// English, so the agent retries in English instead of retrying the same
+/// words. Pure text check — no language detection, just ASCII.
+fn with_english(f: &Filter, mut s: String) -> String {
+    let foreign = f.text.as_deref().is_some_and(|t| !t.is_ascii());
+    if foreign {
+        s.push_str("\nrows are written in English");
+    }
     s
+}
+
+/// A miss whose text is one token equal to a filed file's stem: the rows on
+/// that file, under `rows on <path>:`. Deterministic file-stem match, no
+/// text ranking — the agent typed a file name, not words. `None` for
+/// anything else (multi-word, other filters narrowing by file/key, paging,
+/// or id-shaped tokens, which stay typed misses per plan fael-id-refs).
+pub fn file_stem_fallback<'a>(log: &'a Log, f: &Filter) -> Option<(String, Vec<&'a Row>)> {
+    if f.offset > 0 || !f.files.is_empty() || f.key.is_some() {
+        return None;
+    }
+    let q = f.text.as_deref().map(str::trim).filter(|t| !t.is_empty())?;
+    if q.split_whitespace().count() != 1 || looks_like_id(q) {
+        return None;
+    }
+    let want = q.to_lowercase();
+    let mut files: Vec<&str> = vec![];
+    for r in &log.rows {
+        for p in &r.files {
+            if stem(p).to_lowercase() == want && !files.contains(&p.as_str()) {
+                files.push(p.as_str());
+            }
+        }
+    }
+    if files.is_empty() {
+        return None;
+    }
+    files.sort_unstable();
+    let hits = find(
+        log,
+        &Filter {
+            text: None,
+            files: files.iter().map(|s| s.to_string()).collect(),
+            key: None,
+            kind: f.kind.clone(),
+            since: f.since.clone(),
+            by: f.by.clone(),
+            to: f.to.clone(),
+            revisit: f.revisit.clone(),
+            recall: None,
+            all: f.all,
+            limit: None,
+            offset: 0,
+        },
+    );
+    if hits.is_empty() {
+        return None;
+    }
+    Some((format!("rows on {}:", files.join(", ")), hits))
+}
+
+/// A filed path's stem: basename without its extension (`a/b/x.rs` →
+/// `x`). No extension (or an empty stem, like `.gitignore`) keeps the
+/// basename, so every path still has a stem to match against.
+fn stem(path: &str) -> &str {
+    let base = path.rsplit('/').next().unwrap_or(path);
+    match base.rsplit_once('.') {
+        Some((s, _)) if !s.is_empty() => s,
+        _ => base,
+    }
 }
 
 /// A text-only search none of whose words any row uses: the cross-product

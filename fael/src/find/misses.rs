@@ -32,6 +32,12 @@ pub(crate) fn explain<'a>(
     match core::nearest(log, f) {
         Some(near) => near,
         None => {
+            // a file name typed as words: the rows on that file, not a miss
+            if let Some((label, rows)) = core::file_stem_fallback(log, f)
+                && !rows.is_empty()
+            {
+                return (label, rows);
+            }
             // still nothing, even closed: the miss is real, so record it — a
             // fallback answer above is no miss and stays out of the log
             let why = core::why_empty(log, f, files_flag);
