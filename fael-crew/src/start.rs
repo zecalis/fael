@@ -93,6 +93,9 @@ pub struct Brief {
     pub resume: Option<Prev>,
     /// the ledger issue ids it fixes (`add --issue`); the CLI swaps each for its row's text
     pub issues: Vec<String>,
+    /// `cited rows now` (cli layer fills after `Store::start`): one line per ledger row the
+    /// title or brief cites, with its live state — the store never reads the ledger
+    pub cited: Vec<String>,
     /// this run's start time and base sha (None when never started) — the line
     /// section drift is judged against (a section updated past it changed mid-run)
     pub started: Option<String>,

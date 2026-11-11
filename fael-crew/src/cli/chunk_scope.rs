@@ -95,10 +95,10 @@ fn linked_line(id: &str, first: &str, uid: &str) -> String {
     )
 }
 
-/// `fael chunk start` (issue 01M5FMHQX): a chunk whose linked issue is
-/// closed, or whose brief cites a closed row, is refused before anything is
-/// claimed; a `chunk note` naming the closed row cures a brief cite (provenance,
-/// e.g. "review 01M718NN", stays readable), `--force` starts anything anyway.
+/// `fael chunk start` (issue 01M5FMHQX): a chunk whose linked issue is closed is
+/// refused before anything is claimed. A brief cite of a closed row is not refused:
+/// `cited rows now` prints its live state with the close text, so the agent reads what
+/// is true at start. `--force` starts anything anyway.
 pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> {
     let b = s.show(uid)?;
     if s.chunk_place(&b.uid)?
@@ -108,10 +108,9 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
     }
     let log = crate::read(r);
     let shut = fael_core::closed(&log);
-    let mut seen: HashSet<String> = HashSet::new();
     let mut linked: Vec<String> = Vec::new();
     for id in &b.issues {
-        if !shut.contains(id.as_str()) || !seen.insert(id.clone()) {
+        if !shut.contains(id.as_str()) {
             continue;
         }
         linked.push(format!(
@@ -119,47 +118,20 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
             close_first_line(&log, id)
         ));
     }
-    // A brief cite the notes already name is acknowledged, not stale: the
-    // planner cites the deciding review/row on purpose, the starter read it.
-    let notes = b.notes.join("\n");
-    let mut cites: Vec<String> = Vec::new();
-    for (cite, first, id) in closed_cites_ids(
-        &b.title,
-        &b.brief,
-        &log,
-        (&fael_core::closed(&log), &fael_core::keys(&log, None)),
-    ) {
-        if !seen.insert(id.clone()) {
-            continue;
-        }
-        if notes.contains(&id) || notes.contains(&cite) {
-            continue;
-        }
-        cites.push(format!("  {cite} — closed: {first}"));
-    }
-    if linked.is_empty() && cites.is_empty() {
+    if linked.is_empty() {
         return Ok(());
     }
-    let mut lines = linked;
-    lines.extend(cites);
     // A linked issue closed means the work landed elsewhere: the way out is drop,
-    // not a note + restart (the note only corrects a stale brief cite). Name both
-    // so the agent does not "fix" a done chunk by starting it again.
-    let action = if lines.iter().any(|l| l.starts_with("  linked issue")) {
-        format!(
-            "done elsewhere? `fael chunk drop {}` — a deliberate reopen first notes the reason (`fael chunk note {} \"<text>\"`, never `chunk edit`: it clears the owner's approval), then `fael chunk start {} --force --because \"<what you will avoid>\"`",
-            b.uid, b.uid, b.uid
-        )
-    } else {
-        format!(
-            "name the closed row in `fael chunk note {} \"<read <id>: why it still starts>\"` (never `chunk edit`: it clears the owner's approval) and start again — no --force needed once noted; `--force --because \"<what you will avoid>\"` starts without the note",
-            b.uid
-        )
-    };
+    // not a note + restart. Name it so the agent does not "fix" a done chunk by
+    // starting it again.
+    let action = format!(
+        "done elsewhere? `fael chunk drop {}` — a deliberate reopen first notes the reason (`fael chunk note {} \"<text>\"`, never `chunk edit`: it clears the owner's approval), then `fael chunk start {} --force --because \"<what you will avoid>\"`",
+        b.uid, b.uid, b.uid
+    );
     Err(format!(
         "rejected: chunk {} cites closed rows:\n{}\n{}",
         b.uid,
-        lines.join("\n"),
+        linked.join("\n"),
         action
     ))
 }
@@ -217,7 +189,7 @@ fn closed_line(cite: &str, first: &str, uid: &str) -> String {
 
 /// The text a row was closed with, first line: the newest close row wins, else the folded
 /// `closed.text` a compacted row carries.
-fn close_first_line(log: &fael_core::Log, id: &str) -> String {
+pub(crate) fn close_first_line(log: &fael_core::Log, id: &str) -> String {
     let from_close = log
         .closes
         .iter()

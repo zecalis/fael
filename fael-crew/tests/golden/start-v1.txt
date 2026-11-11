@@ -7,6 +7,10 @@ TLDR: do "fix <OPEN> (review <SHUT>)" then `fael chunk done <CHUNK-B> "<handoff>
 
 fix <OPEN> (review <SHUT>)
 
+cited rows now:
+- <OPEN> — open — open problem
+- <SHUT> — closed: was broken → fixed; guard `src/a_test.rs` — was broken
+
 ledger issues this chunk fixes — once the fix holds, close each with `fael close <id> "<cause> → <fix>; guard \`<test path>\`"` (done never closes them):
 > <LINK> linked bug
 

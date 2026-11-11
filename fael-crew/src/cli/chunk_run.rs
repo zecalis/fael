@@ -138,6 +138,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     }
     // each linked issue's id → its row, so the agent reads what to fix without a find
     resolve_issue_rows(r, &mut st);
+    resolve_cited_rows(r, &mut st);
     for (u, t) in &st.orphaned {
         println!(
             "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --left none|<ids>"
@@ -247,6 +248,15 @@ fn resolve_issue_rows(r: &Repo, st: &mut fael_crew::Started) {
                 row.text
             );
         }
+    }
+}
+
+/// Each brief/title cite → its live line, so the agent reads what is true at start
+/// without a find. The store never reads the ledger — this runs after `Store::start`.
+fn resolve_cited_rows(r: &Repo, st: &mut fael_crew::Started) {
+    let log = crate::read(r);
+    for c in st.chunks.iter_mut() {
+        c.cited = crate::chunk_scope_cited::cited_lines(&c.title, &c.brief, &log);
     }
 }
 

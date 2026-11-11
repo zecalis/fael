@@ -87,7 +87,7 @@ fn stack_tree(names: &[&str]) -> (PathBuf, Vec<PathBuf>) {
 }
 
 #[test]
-fn a_note_naming_the_closed_row_cures_a_brief_cite_without_force() {
+fn a_brief_citing_a_closed_row_starts_with_its_close_text_in_cited_rows_now() {
     let d = repo();
     let id = issue(&d, "broken x");
     assert!(
@@ -98,28 +98,21 @@ fn a_note_naming_the_closed_row_cures_a_brief_cite_without_force() {
         .0
     );
     let u = chunk(&d, "Fix", &format!("fix {id} (review {id})"), &[]);
-    let (ok, _, err) = fael(&d, &["chunk", "start", &u, "--no-worktree"]);
-    assert!(!ok, "started without acknowledgement: {err}");
-    assert!(
-        fael(
-            &d,
-            &[
-                "chunk",
-                "note",
-                &u,
-                &format!("read {id}: provenance, still starts")
-            ]
-        )
-        .0
-    );
-    let (ok, _, err) = fael(&d, &["chunk", "start", &u, "--no-worktree"]);
+    let (ok, out, err) = fael(&d, &["chunk", "start", &u, "--no-worktree"]);
     assert!(ok, "{err}");
+    assert!(out.contains("cited rows now"), "{out}");
+    assert!(
+        out.contains(&format!("{id} — closed: fixed in 5 → done")),
+        "{out}"
+    );
 }
 
 #[test]
-fn start_refuses_a_brief_citing_a_closed_row_until_forced() {
+fn start_refuses_a_linked_closed_issue_until_forced() {
     let d = repo();
     let id = issue(&d, "broken x");
+    let u = chunk(&d, "Fix", "fix it", &["--issue", &id]);
+    // close after linking: the link was open at add, closed at start
     assert!(
         fael(
             &d,
@@ -131,13 +124,12 @@ fn start_refuses_a_brief_citing_a_closed_row_until_forced() {
         )
         .0
     );
-    let u = chunk(&d, "Fix", &format!("fix {id}"), &[]);
     let (ok, _, err) = fael(&d, &["chunk", "start", &u, "--no-worktree"]);
     assert!(!ok, "started");
     assert!(err.contains(&format!("{id} — closed: fixed in 5")), "{err}");
     assert!(!err.contains("more"), "first line only: {err}");
     assert!(
-        err.contains(&format!("fael chunk note {u}")) && err.contains("never `chunk edit`"),
+        err.contains(&format!("fael chunk drop {u}")),
         "{err}"
     );
     let (_, shown, _) = fael(&d, &["chunk", "show", &u, "--json"]);
@@ -165,6 +157,26 @@ fn start_refuses_a_brief_citing_a_closed_row_until_forced() {
         ],
     );
     assert!(ok, "{err}");
+}
+
+#[test]
+fn a_brief_citing_a_superseded_row_prints_its_successor() {
+    let d = repo();
+    let old = issue(&d, "old way");
+    let (ok, out, err) = fael(
+        &d,
+        &["add", "issue", "new way", "--files", "a.rs", "--supersedes", &old],
+    );
+    assert!(ok, "{err}");
+    let new = out.split_whitespace().next().unwrap().to_string();
+    let u = chunk(&d, "Fix", &format!("fix {old}"), &[]);
+    let (ok, out, err) = fael(&d, &["chunk", "start", &u, "--no-worktree"]);
+    assert!(ok, "{err}");
+    assert!(out.contains("cited rows now"), "{out}");
+    assert!(
+        out.contains(&format!("{old} — superseded → {new}")),
+        "{out}"
+    );
 }
 
 /// A blocked or not-ready start prints one exact next call with the real uid:
