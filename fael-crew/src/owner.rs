@@ -67,8 +67,12 @@ pub(super) fn owner_in(
     text: Option<&str>,
     by: &str,
     now: &str,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let r = row(tx, uid)?;
+    // T2-style noop (close_row pattern): a repeat accept writes no event.
+    if cmd == Owner::Accept && r.state == State::Done {
+        return Ok(false);
+    }
     let to = match cmd {
         Owner::Answer | Owner::Unpark => State::Open,
         Owner::Accept => State::Done,
@@ -100,21 +104,23 @@ pub(super) fn owner_in(
         super::agent::unwait(tx, r.id)?;
     }
     end_live(tx, r.id, now)?;
-    Ok(())
+    Ok(true)
 }
 
 impl Store {
-    /// See [`owner_in`]; the owner writes it.
+    /// See [`owner_in`]; the owner writes it. Returns whether it changed
+    /// (`false` = already done — nothing changed, no event).
     pub fn owner(
         &mut self,
         uid: &str,
         cmd: Owner,
         text: Option<&str>,
         now: &str,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
         let tx = tx(self)?;
-        owner_in(&tx, uid, cmd, text, "owner", now)?;
-        tx.commit().map_err(err)
+        let changed = owner_in(&tx, uid, cmd, text, "owner", now)?;
+        tx.commit().map_err(err)?;
+        Ok(changed)
     }
 
     /// `fael chunk approve <uid> [--model M] [--client C]` / `unapprove` (None): the approved
@@ -194,7 +200,9 @@ impl Store {
 
     /// `fael plan new <name> "<title>"`: an active plan whose text starts as the four
     /// skeleton sections every brief reads, under `parent` when given (`plan::parent`). A taken
-    /// `app/name` is refused.
+    /// `app/name` with another title is refused; the same title is a noop (T2-style,
+    /// like a repeat close: ok, changed nothing, no event).
+    /// Returns whether it created (`false` = already exists with the same title).
     pub fn new_plan(
         &mut self,
         app: &str,
@@ -203,7 +211,7 @@ impl Store {
         area: &str,
         parent: Option<&str>,
         now: &str,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
         let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
         if name.is_empty() || !name.chars().all(ok) || name == "inbox" {
             return Err(format!(
@@ -224,6 +232,16 @@ impl Store {
             )
             .map_err(err)?;
         if n == 0 {
+            let existing: String = tx
+                .query_row(
+                    "SELECT title FROM plan WHERE app = ?1 AND name = ?2",
+                    params![app, name],
+                    |r| r.get(0),
+                )
+                .map_err(err)?;
+            if existing == title.trim() {
+                return Ok(false);
+            }
             return Err(format!(
                 "rejected: plan {name} already exists — try `fael plan export {name}` to see it"
             ));
@@ -241,7 +259,8 @@ impl Store {
         for (key, title, body) in super::section::SKELETON {
             super::section::put(&tx, pid, key, Some(title), Some(body), now)?;
         }
-        tx.commit().map_err(err)
+        tx.commit().map_err(err)?;
+        Ok(true)
     }
 
     /// `fael plan park|unpark|done|undone|drop <plan>`: the owner moves `plan.state`.

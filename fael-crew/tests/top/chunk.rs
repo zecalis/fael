@@ -460,3 +460,36 @@ fn a_wait_on_the_owner_offers_its_options() {
         serde_json::json!(["Warm, plain", "Dry"])
     );
 }
+
+#[test]
+fn accept_on_a_done_chunk_is_a_noop_without_an_event() {
+    let d = repo();
+    let u = add(&d);
+    assert!(fael(&d, &["chunk", "start", &u, "--run", "R1"]).0);
+    assert!(fael(&d, &["chunk", "done", &u, "h", "--left", "none"]).0);
+    let (ok, out, err) = fael(&d, &["chunk", "accept", &u]);
+    assert!(ok, "{err}");
+    assert_eq!(out, format!("chunk {u} → done\n"));
+    let head = |d: &Path| {
+        let (ok, out, err) = fael(d, &["plan", "export", "--since", "0"]);
+        assert!(ok, "{err}");
+        serde_json::from_str::<serde_json::Value>(&out)
+            .unwrap()["head"]
+            .as_i64()
+            .unwrap()
+    };
+    let before = head(&d);
+    let (ok, out, err) = fael(&d, &["chunk", "accept", &u]);
+    assert!(ok, "{err}");
+    assert_eq!(out, format!("chunk {u} → already done — nothing changed\n"));
+    assert_eq!(head(&d), before, "a repeat accept writes no event");
+    // a running chunk still rejects
+    let r = add(&d);
+    assert!(fael(&d, &["chunk", "start", &r, "--run", "R2"]).0);
+    let (ok, _, err) = fael(&d, &["chunk", "accept", &r]);
+    assert!(!ok, "accept on running stays a reject");
+    assert!(
+        err.contains("`accept` takes a chunk in review"),
+        "{err}"
+    );
+}

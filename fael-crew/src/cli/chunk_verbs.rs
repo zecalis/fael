@@ -133,8 +133,11 @@ pub(crate) fn accept(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(),
     let mut s = Store::open(&crate::plan::db(r))?;
     if uids.len() == 1 {
         let uid = resolve(&s, plan.as_deref(), uids[0])?;
-        s.owner(&uid, Owner::Accept, None, now)?;
-        println!("chunk {uid} → done");
+        if s.owner(&uid, Owner::Accept, None, now)? {
+            println!("chunk {uid} → done");
+        } else {
+            println!("chunk {uid} → already done — nothing changed");
+        }
         return Ok(());
     }
     let mut bad = 0;
@@ -145,7 +148,8 @@ pub(crate) fn accept(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(),
                 println!("{}", failed(r, e));
             }
             Ok(uid) => match s.owner(&uid, Owner::Accept, None, now) {
-                Ok(()) => println!("chunk {uid} → done"),
+                Ok(true) => println!("chunk {uid} → done"),
+                Ok(false) => println!("chunk {uid} → already done — nothing changed"),
                 Err(e) => {
                     bad += 1;
                     println!("{}", failed(r, e));
