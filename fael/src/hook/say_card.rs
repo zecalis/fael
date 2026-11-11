@@ -125,6 +125,10 @@ pub(crate) fn policy(k: &Kind) -> Policy {
             cut: Cut::Last(6),
             ..card(SayKind::Overlap, Key, Some("fael chunk note"), EDIT)
         },
+        Kind::Peer { .. } => Policy {
+            cut: Cut::Last(8),
+            ..card(SayKind::Peer, Key, Some("fael add note"), EDIT)
+        },
         Kind::Inbox { .. } => Policy {
             cut: Cut::Last(5),
             ..card(

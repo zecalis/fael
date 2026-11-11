@@ -62,6 +62,12 @@ pub(super) fn all() -> Vec<Line> {
             "fael: a.rs — p/x (agent, open) · fael chunk note 01D \"<text>\" · yours? fael chunk status\n",
         ),
         line(
+            Kind::Peer {
+                file: "a.rs".into(),
+            },
+            "fael: a.rs also edited by claude on feat-x 2m ago — leave them a word: fael add note \"…\" --files a.rs\n",
+        ),
+        line(
             Kind::Inbox {
                 id: "7".into(),
                 uid: "01C".into(),
@@ -101,11 +107,12 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Notice => 5,
         Kind::Fixed => 6,
         Kind::Overlap { .. } => 7,
-        Kind::Inbox { .. } => 8,
-        Kind::Checkpoint { .. } => 9,
-        Kind::BriefDrift { .. } => 10,
-        Kind::Retired { .. } => 11,
-        Kind::ChunkBrief { .. } => 12,
+        Kind::Peer { .. } => 8,
+        Kind::Inbox { .. } => 9,
+        Kind::Checkpoint { .. } => 10,
+        Kind::BriefDrift { .. } => 11,
+        Kind::Retired { .. } => 12,
+        Kind::ChunkBrief { .. } => 13,
     }
 }
 
@@ -342,6 +349,7 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "notice",
             "fixed",
             "overlap",
+            "peer",
             "inbox",
             "checkpoint",
             "briefdrift",

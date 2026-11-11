@@ -67,7 +67,7 @@ fn rows_survive_overlap_and_drift_and_a_commit_reply_cuts_in_card_order() {
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| est_tokens(&l.text)).sum() };
     // rows + overlap + drift at the edit: the push stays within budget with
     // the rows intact (rows are Never-cut, overlap Last(6), drift First(7)).
-    let lines = pick(&[0, 7, 10]);
+    let lines = pick(&[0, 7, 11]);
     let keep = cost(&pick(&[0]));
     let run_edit = |budget: usize| {
         let p = seen("s.seen");
@@ -94,8 +94,8 @@ fn rows_survive_overlap_and_drift_and_a_commit_reply_cuts_in_card_order() {
     );
     // a commit reply with Cited + Checkpoint over budget cuts in card order:
     // Cited (First(3)) goes before Checkpoint (First(4)).
-    let commit = pick(&[3, 9]);
-    let checkpoint_cost = cost(&pick(&[9]));
+    let commit = pick(&[3, 10]);
+    let checkpoint_cost = cost(&pick(&[10]));
     let run_search = |budget: usize| {
         let p = seen("s.seen");
         let mut out = Outbox::open(At::Search, lock_seen(&p));

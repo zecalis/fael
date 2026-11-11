@@ -87,10 +87,13 @@ fn cut_body(
 /// Only adopted repos record an edit — `add` derives files from this list only there.
 fn note_edit(c: &super::protocol::Ctx, files: &[String]) {
     if !c.session.is_empty() && crate::journal::home(&c.repo).is_some() {
+        let branch = super::state::head_branch(&c.repo.root);
         record_edits(
             &edits_path(&c.session, &c.repo.root),
             &c.repo.root.to_string_lossy(),
             &c.session,
+            &c.client,
+            branch.as_deref(),
             files,
         );
     }
@@ -223,7 +226,7 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
         text: format!("{}\n", h.text),
     }));
     lines.extend(retired_lines(&c, &spent, sid, &shown));
-    lines.extend(super::overlap::lines(&c, &files));
+    lines.extend(super::peer::overlap_and_peer(&c, &files));
     lines.extend(super::drift::line(&c));
     // a note left for the running chunk while its agent runs: said once at
     // the next edit (SessionStart-only before). ShellEdit stays silent: the

@@ -149,8 +149,10 @@ pub(crate) fn mark_started(session: &str, root: &Path) {
 /// drift.
 pub(crate) use crate::journal::head_branch;
 
-/// One `{"path","at"[, "worktree","session"]}` line per edit event, in order —
-/// (path, at ms, worktree, session; None for lines written before those were).
+/// One `{"path","at"[, "worktree","session","client","branch"]}` line per edit
+/// event, in order — (path, at ms, worktree, session; None for lines written
+/// before those were). `client`/`branch` ride along since the peer line (the
+/// same-file warning when no chunk runs) names them; old lines lack them.
 /// A torn or unreadable line is skipped; any error is an empty list.
 pub(crate) type Edit = (String, i64, Option<String>, Option<String>);
 pub(crate) fn session_edits(path: &Path) -> Vec<Edit> {
@@ -188,8 +190,17 @@ pub(crate) fn edited_files(session: &str, root: &Path, n: usize) -> Vec<String> 
 
 /// Append one line per file. Fails open like record_usage. Worktree and
 /// session ride along so `fael add` without `--files` can tell which session
-/// files are its own, in its repo (the filename hash is one-way).
-pub(crate) fn record_edits(path: &Path, worktree: &str, session: &str, files: &[String]) {
+/// files are its own, in its repo (the filename hash is one-way). Client and
+/// branch ride too, so the peer same-file line can name who was there and
+/// where without a git spawn at read time.
+pub(crate) fn record_edits(
+    path: &Path,
+    worktree: &str,
+    session: &str,
+    client: &str,
+    branch: Option<&str>,
+    files: &[String],
+) {
     let Some(at) = now_rfc3339() else { return };
     crate::session::forget_sessions();
     if let Some(parent) = path.parent()
@@ -201,7 +212,7 @@ pub(crate) fn record_edits(path: &Path, worktree: &str, session: &str, files: &[
             .map(|f| {
                 format!(
                     "{}\n",
-                    serde_json::json!({"path": f, "at": at, "worktree": worktree, "session": session})
+                    serde_json::json!({"path": f, "at": at, "worktree": worktree, "session": session, "client": client, "branch": branch})
                 )
             })
             .collect();

@@ -128,6 +128,18 @@ pub fn root(repo_root: &Path) -> Option<PathBuf> {
     Some(common.join("fael"))
 }
 
+/// The main checkout for `worktree` (parent of the common git dir): linked
+/// worktrees share it, a gone path keeps its raw path (lower bound). No spawn.
+pub fn main_of(worktree: &Path) -> PathBuf {
+    let main = root(worktree).and_then(|j| j.parent()?.parent().map(Path::to_path_buf));
+    match main {
+        Some(m) => m.canonicalize().unwrap_or(m),
+        None => worktree
+            .canonicalize()
+            .unwrap_or_else(|_| worktree.to_path_buf()),
+    }
+}
+
 /// The dir whose `log/` holds this clone's rows: the tree's `.fael/` when it
 /// has a row file, else the journal (`store = "local"`, or a fresh worktree
 /// with no `.fael/` of its own). `None` = fael was never adopted here.
@@ -340,7 +352,7 @@ pub fn tag(out: String, branch_of: &BranchMap) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::work_branch;
+    use super::{main_of, work_branch};
 
     /// The default branch names no work: `main` or `master` when
     /// `origin/HEAD` is unset, the branch it points at when set.
@@ -363,6 +375,23 @@ mod tests {
         .unwrap();
         assert_eq!(on("dev"), None);
         assert_eq!(on("main").as_deref(), Some("main"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Linked worktrees share the main; a gone path keeps raw (lower bound).
+    #[test]
+    fn main_of_maps_linked_worktrees_together_and_gone_paths_stay_raw() {
+        let d = std::env::temp_dir().join(format!("fael-mainof-{}", crate::ulid()));
+        let (main, wt) = (d.join("main"), d.join("wt"));
+        std::fs::create_dir_all(main.join(".git/worktrees/wt")).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join(".git"), "gitdir: ../main/.git/worktrees/wt\n").unwrap();
+        let want = main.canonicalize().unwrap();
+        assert_eq!([main_of(&main), main_of(&wt)], [want.clone(), want]);
+        assert_eq!(main_of(&d.join("gone-wt")), d.join("gone-wt"));
+        let plain = d.join("plain");
+        std::fs::create_dir_all(&plain).unwrap();
+        assert_eq!(main_of(&plain), plain.canonicalize().unwrap());
         let _ = std::fs::remove_dir_all(&d);
     }
 }

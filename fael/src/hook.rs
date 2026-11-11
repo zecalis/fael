@@ -49,6 +49,7 @@ mod lifecycle;
 mod markers;
 mod opencode;
 mod overlap;
+mod peer;
 mod prompt;
 mod protocol;
 mod prune;

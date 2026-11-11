@@ -115,6 +115,9 @@ fn opencode_notice_beside_context_never_inside() {
         "notice leaked into model context: {on}"
     );
     std::fs::write(d.join(".fael/config.toml"), "[notify]\nuser = false\n").unwrap();
+    // a fresh session: the seen list would hide the row otherwise; drop the
+    // edit lists too, or peer same-file would change the context under test
+    let _ = std::fs::remove_dir_all(state(&d).join("sessions").join("edits"));
     // a fresh session: the seen list would hide the row otherwise
     let off = edit("2026-01-03T00:00:00Z");
     assert!(off["notice"].is_null(), "{off}");
@@ -175,11 +178,16 @@ fn adapter_matches_neutral_byte_for_byte() {
         ("prompt", json!({"text": "check the adapter wiring"})),
     ];
     for (hook, mut base) in cases {
+        // separate sessions so neither run's seen list leaks into the other;
+        // drop the edit lists before each run too, or the peer same-file
+        // line would make the second edit of the pair differ by design
+        let _ = std::fs::remove_dir_all(state(&d).join("sessions").join("edits"));
         let mut plain = base.clone();
         plain["cwd"] = json!(&d);
         plain["session"] = json!("s-neutral");
         let (ok, want, err) = fael(&d, &["hook", hook], &plain.to_string());
         assert!(ok, "{hook}: {err}");
+        let _ = std::fs::remove_dir_all(state(&d).join("sessions").join("edits"));
         base["cwd"] = json!(&d);
         base["session"] = json!("s-opencode");
         base["client"] = json!("opencode");

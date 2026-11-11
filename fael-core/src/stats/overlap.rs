@@ -1,11 +1,15 @@
 //! Sessions editing one file at about the same time (01M411WF step 2),
 //! counted from the `files` that edit usage lines carry. Deterministic only:
-//! two distinct sessions, one repo path, one file, edit lines no further apart
-//! than `OVERLAP_WINDOW_MS`. Never a verdict that anyone collided, and never a guess at
-//! a session whose lines name no file. Pure: parsed usage in.
+//! two distinct sessions, one file in one clone, edit lines no further apart
+//! than `OVERLAP_WINDOW_MS`. Worktrees share their clone's main checkout
+//! (`journal::main_of`, same `gitdir:` read as the journal; a gone worktree
+//! keeps its raw path), so the same repo-relative file in two worktrees
+//! counts. Never a verdict that anyone collided, and never a guess at
+//! a session whose lines name no file. Reads `.git` for the main (no spawn).
 
 use super::parse::Parsed;
 use super::parse::session_stem as stem;
+use crate::journal::main_of;
 use crate::ts_ms;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -27,18 +31,21 @@ pub struct SameFile {
     /// Distinct sessions with at least one edit line naming a file — the
     /// base the other two read against; 0 means nothing could be counted yet.
     pub sessions_seen: usize,
-    /// Distinct (repo path, file) pairs two sessions edited within the window.
-    /// Worktrees have their own repo path, so a file edited in two worktrees
-    /// is never matched.
+    /// Distinct (main checkout, file) pairs two sessions edited within the
+    /// window. Two worktrees of one clone share the main, so the same
+    /// repo-relative file in both counts; a gone worktree keeps its raw path
+    /// and never falsely merges (a lower bound).
     pub files: usize,
     /// Distinct unordered session pairs concurrent on at least one file.
     pub session_pairs: usize,
 }
 
 pub(super) fn same_file(parsed: &Parsed) -> SameFile {
-    // (repo, file) → (ms, session) per edit line
-    let mut edits: HashMap<(&str, &str), Vec<(i64, &str)>> = HashMap::new();
+    // (main, file) → (ms, session) per edit line; the main collapses
+    // worktrees of one clone (gone paths stay raw).
+    let mut edits: HashMap<(String, String), Vec<(i64, &str)>> = HashMap::new();
     let mut seen: HashSet<&str> = HashSet::new();
+    let mut mains: HashMap<&str, String> = HashMap::new();
     let edit_lines = parsed.kept.iter().filter(|v| {
         v["event"]
             .as_str()
@@ -54,8 +61,19 @@ pub(super) fn same_file(parsed: &Parsed) -> SameFile {
             continue;
         };
         let session = stem(session);
+        let main = mains
+            .entry(repo)
+            .or_insert_with(|| {
+                main_of(std::path::Path::new(repo))
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .clone();
         for f in files.iter().filter_map(|f| f.as_str()) {
-            edits.entry((repo, f)).or_default().push((ms, session));
+            edits
+                .entry((main.clone(), f.to_string()))
+                .or_default()
+                .push((ms, session));
             seen.insert(session);
         }
     }
@@ -171,5 +189,36 @@ mod tests {
             + &line("2026-10-04T00:09:00.000Z", "edit", "s2", "/w", a);
         let c = count(&u);
         assert_eq!((c.sessions_seen, c.files, c.session_pairs), (3, 1, 2));
+    }
+
+    #[test]
+    fn two_worktrees_of_one_clone_count_as_one_pair() {
+        let d = std::env::temp_dir().join(format!("fael-overlap-wt-{}", crate::ulid()));
+        let (main, wt) = (d.join("main"), d.join("wt"));
+        let git = main.join(".git");
+        std::fs::create_dir_all(git.join("worktrees/wt")).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        let fwd = git
+            .join("worktrees/wt")
+            .to_string_lossy()
+            .replace('\\', "/");
+        std::fs::write(wt.join(".git"), format!("gitdir: {fwd}\n")).unwrap();
+        let (m, w) = (
+            main.to_string_lossy().into_owned(),
+            wt.to_string_lossy().into_owned(),
+        );
+        let a = "\"src/a.rs\"";
+        let u = line("2026-10-04T00:00:00.000Z", "edit", "s1", &m, a)
+            + &line("2026-10-04T00:05:00.000Z", "edit", "s2", &w, a);
+        let c = count(&u);
+        assert_eq!((c.sessions_seen, c.files, c.session_pairs), (2, 1, 1));
+        // a gone worktree keeps its raw path: no false merge
+        let gone = d.join("gone");
+        let g = gone.to_string_lossy().into_owned();
+        let u = line("2026-10-04T00:00:00.000Z", "edit", "s1", &m, a)
+            + &line("2026-10-04T00:05:00.000Z", "edit", "s2", &g, a);
+        let c = count(&u);
+        assert_eq!((c.sessions_seen, c.files, c.session_pairs), (2, 0, 0));
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
