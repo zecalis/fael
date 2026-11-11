@@ -61,7 +61,7 @@ fael: this turn — reminded 10 (01K00000000000000000AAA002, 01K0000000000000000
 ## 25 search {"session":"2025-12-01T00:00:00Z","tool":"Grep","tool_input":{"path":"src/c.rs"}}
 ## 26 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"printf x >> src/b.rs"}}
 context:
-fael mem for src/b.rs (1 of 15):
+fael mem for src/b.rs:
 - issue: b leaks a handle (01K00000000000000000B)
 fael note: this session mentioned a possible problem ("out of sync") — file an issue if it holds up: fael add issue "<what is at risk>" --files src/b.rs
 
@@ -86,5 +86,5 @@ fael mem for src/c.rs (1 of 15):
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-15 lines · ~708 tokens
+15 lines · ~705 tokens
 silent-start edit in-context edit in-context edit in-context edit silent-start shell-edit outcome search silent-start silent-start edit

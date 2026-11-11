@@ -110,16 +110,16 @@ pub(crate) fn push_call(e: &Event, tool: &str, input: &Value, _response: &Value)
     out.and(commit_reply(e, tool, input))
 }
 
-/// The checkpoint ask of a step commit: the held chunk's uid. Keyed on its last
-/// note's event id, so it is asked once per gap between notes. No crew.db, no
+/// The checkpoint ask of a step commit: the held chunk's uid. Keyed on the run
+/// uid only, so it is asked once per run per session (the seen list is per
+/// session: a new session asks again once). No crew.db, no
 /// run = nothing.
 fn checkpoint(repo: &crate::Repo, session: &str) -> Option<super::say::Line> {
     let db = crate::core::work::db_for(repo.journal.as_deref(), &repo.fael);
-    let (uid, last) = crate::core::work::last_note(&db, &repo.root.to_string_lossy(), session)?;
-    let id = last.map_or(0, |(id, _)| id);
+    let (uid, _) = crate::core::work::last_note(&db, &repo.root.to_string_lossy(), session)?;
     Some(super::say::Line {
         kind: super::say::Kind::Checkpoint {
-            key: format!("~checkpoint:{uid}:{id}"),
+            key: format!("~checkpoint:{uid}"),
         },
         text: format!(
             "fael: checkpoint — after this commit: fael chunk note {uid} \"<done; next>\" — the next chunk start resumes from it\n"
@@ -171,13 +171,14 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
             format!("fael: {id} cited in a commit — `(fael:{id})` in its message links the fix on main; done? `fael close {id} \"<why>\"`\n")
         })
         .collect();
-    out.say(super::say::Line {
+    let mut lines = vec![super::say::Line {
         kind: super::say::Kind::Cited { ids: fresh.clone() },
         text,
-    });
+    }];
     if let Some(line) = checkpoint(&c.repo, &c.session) {
-        out.say(line);
+        lines.push(line);
     }
+    out.say_within(c.repo.cfg.push_tokens, lines);
     let r = out.reply();
     if let Some(context) = r.context() {
         let meta = super::asks::UsageMeta {

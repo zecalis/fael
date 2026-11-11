@@ -121,7 +121,10 @@ pub(crate) fn policy(k: &Kind) -> Policy {
             stash: true,
             ..card(SayKind::Fixed, Key, Some("fael close"), PUSH)
         },
-        Kind::Overlap { .. } => card(SayKind::Overlap, Key, Some("fael chunk note"), EDIT),
+        Kind::Overlap { .. } => Policy {
+            cut: Cut::Last(6),
+            ..card(SayKind::Overlap, Key, Some("fael chunk note"), EDIT)
+        },
         Kind::Inbox { .. } => Policy {
             cut: Cut::Last(5),
             ..card(
@@ -146,7 +149,10 @@ pub(crate) fn policy(k: &Kind) -> Policy {
             Some("fael chunk show"),
             &[At::SessionStart],
         ),
-        Kind::BriefDrift { .. } => card(SayKind::BriefDrift, Key, Some("fael chunk show"), EDIT),
+        Kind::BriefDrift { .. } => Policy {
+            cut: Cut::First(7),
+            ..card(SayKind::BriefDrift, Key, Some("fael chunk show"), EDIT)
+        },
         Kind::Retired { .. } => card(SayKind::Retired, Key, Some("fael add decision"), PUSH),
         // a session-start warning, or a stashed risk at a push
         Kind::Notice => Policy {

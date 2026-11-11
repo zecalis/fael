@@ -142,6 +142,12 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
     };
     let al = aliases::load(&c.repo, &c.log, false);
     let mut tiered = core::push_tiered(&c.log, &files, &al, false);
+    // a shell edit names files on the command line without opening them: only
+    // the file itself (tier 0) pushes — same-dir and shared-key rows stay on
+    // the edit path (row yield 38% at shell-edit vs 74% at edit).
+    if at == At::ShellEdit {
+        tiered.retain(|(_, t)| *t == 0);
+    }
     // an edit is where a row goes stale: the agent is changing the code the
     // row describes, with both in front of it — the one moment to retire it.
     // The candidates are the tier-0 rows (an issue about a neighbouring file

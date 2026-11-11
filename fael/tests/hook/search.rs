@@ -65,10 +65,12 @@ fn a_shell_write_pushes_as_an_edit() {
     let cmd =
         "python3 - <<'EOF'\np='src/a.rs'\nopen(p,'w').write(open(p).read())\nq=\"src/b.rs\"\nEOF";
     let out = bash(&d, "w1", cmd, "");
-    // b.rs was named, not written — its row may still come through the
-    // edit's same-directory tier, never as an edited file
-    assert!(out.contains(r"fael mem for src/a.rs (1 of 2):\n"), "{out}");
+    // b.rs was named, not written — at a shell edit only the written file's
+    // own rows (tier 0) push; the edit's same-directory tier stays on the edit
+    assert!(out.contains(r"fael mem for src/a.rs:\n"), "{out}");
+    assert!(!out.contains("(1 of 2)"), "{out}");
     assert!(out.contains("login loops"), "{out}");
+    assert!(!out.contains("retry storms"), "{out}");
     // the stale-row ask is said at an edit only: 6 of 95 earned at a shell edit
     assert!(
         !out.contains("fael close"),
@@ -93,7 +95,8 @@ fn a_shell_write_and_read_push_only_the_write() {
     let (ok, _, err) = fael(&d, &["add", "issue", "cache misses", "--files", "c.rs"], "");
     assert!(ok, "{err}");
     let out = bash(&d, "wr", "sed -i '' s/x/y/ src/a.rs && cat c.rs", "");
-    assert!(out.contains(r"fael mem for src/a.rs (1 of 2):\n"), "{out}");
+    assert!(out.contains(r"fael mem for src/a.rs:\n"), "{out}");
+    assert!(!out.contains("(1 of 2)"), "{out}");
     assert!(!out.contains("fael close"), "no ask at a shell edit: {out}");
     assert!(
         !out.contains("cache misses"),

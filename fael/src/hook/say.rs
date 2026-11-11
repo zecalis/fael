@@ -115,7 +115,8 @@ pub(crate) enum Kind {
     BriefDrift { key: String },
     /// A step commit in a worktree holding a chunk: ask for the checkpoint
     /// note a resume reads. The key
-    /// names the last note's event id, so it is asked once per gap between notes.
+    /// names the run uid, so it is asked once per run per session (the seen
+    /// list is per session: a new session asks again once).
     Checkpoint { key: String },
     /// A note said in its last session (`spent_notes`): file it as a decision, or let it go.
     Retired { id: String },
@@ -327,7 +328,8 @@ impl Outbox {
     /// Say `lines` in order within `budget` tokens; a kind whose card says
     /// `Cut::Never` (rows) is never cut. Over budget the lines go
     /// whole, lowest cut rank first (the stashed notice, then the stashed fix,
-    /// then the edit hint, then the commit-cite hint). A cut line keeps its
+    /// then the edit hint, then the commit-cite hint and the checkpoint, then
+    /// the inbox, then the overlap and drift lines). A cut line keeps its
     /// keys for a later push. True when a stashed line was said (caller unstashes).
     pub(crate) fn say_within(&mut self, budget: usize, lines: Vec<Line>) -> bool {
         let mut keep: Vec<Line> = lines.into_iter().filter(|l| self.admit(l)).collect();

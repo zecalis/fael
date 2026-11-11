@@ -2,7 +2,7 @@
 //! `budget.push_rows` rows push, an open issue always shows, and the header
 //! names the cut (`(shown of total)`).
 
-use super::{fael, json, repo, strip_fh};
+use super::{fael, git, json, repo, strip_fh};
 use std::path::Path;
 
 /// An issue plus `n` decisions on `src/a.rs`; past `PUSH_HUB_ROWS` (8)
@@ -299,4 +299,64 @@ fn a_push_says_its_rows_and_no_bodies_pointer() {
         "{a}"
     );
     assert!(!a.contains("bodies:"), "{a}");
+}
+
+/// A shell write pushes only its own file's rows (tier 0): the same edit
+/// through the edit hook still shows every tier.
+#[test]
+fn a_shell_edit_pushes_only_its_files_tier_0() {
+    let d = repo();
+    git(&d, &["checkout", "-q", "-b", "feat/shell-tier"]);
+    std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
+    std::fs::write(d.join("src/b.rs"), "// b\n").unwrap();
+    std::fs::create_dir_all(d.join("lib")).unwrap();
+    std::fs::write(d.join("lib/z.rs"), "// z\n").unwrap();
+    for (kind, text, file) in [
+        ("issue", "on a", "src/a.rs"),
+        ("decision", "neighbour", "src/b.rs"),
+        ("note", "elsewhere", "lib/z.rs"),
+    ] {
+        let (ok, _, err) = fael(
+            &d,
+            &[
+                "add",
+                kind,
+                text,
+                "--files",
+                file,
+                "--key",
+                "auth:session",
+                "--force",
+            ],
+            "",
+        );
+        assert!(ok, "{err}");
+    }
+    // session-start writes the Focus holding the shared key, so the same-dir
+    // and shared-key rows are Now and render on the edit
+    for session in ["shell-tier-edit", "shell-tier-shell"] {
+        let input = format!(r#"{{"cwd":{},"session":"{session}"}}"#, json(&d));
+        let (ok, _, err) = fael(&d, &["hook", "session-start"], &input);
+        assert!(ok, "{err}");
+    }
+    let input = format!(
+        r#"{{"cwd":{},"session":"shell-tier-edit","files":["src/a.rs"]}}"#,
+        json(&d)
+    );
+    let (ok, out, err) = fael(&d, &["hook", "edit"], &input);
+    assert!(ok, "{err}");
+    assert!(out.contains("on a"), "{out}");
+    assert!(out.contains("neighbour"), "{out}");
+    assert!(out.contains("elsewhere"), "{out}");
+    // the shell wrote a.rs just now: only its own tier-0 row pushes
+    std::fs::write(d.join("src/a.rs"), "// a edited\n").unwrap();
+    let payload = format!(
+        r#"{{"cwd":{},"session_id":"shell-tier-shell","tool_name":"Bash","tool_input":{{"command":"sed -i s/a/b/ src/a.rs"}},"tool_response":{{}}}}"#,
+        json(&d),
+    );
+    let (ok, out, err) = fael(&d, &["hook", "search", "--client", "claude"], &payload);
+    assert!(ok, "{err}");
+    assert!(out.contains("on a"), "{out}");
+    assert!(!out.contains("neighbour"), "{out}");
+    assert!(!out.contains("elsewhere"), "{out}");
 }
