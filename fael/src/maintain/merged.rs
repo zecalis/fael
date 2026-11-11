@@ -123,33 +123,59 @@ pub(super) fn merged_prs(root: &Path) -> Option<BTreeMap<String, Vec<Merge>>> {
     parse_merged(&json)
 }
 
-/// The one `gh pr list --state all` call per process, shared by `[Merged]`
-/// and `[Orphan]` (each used to spawn its own, ~1.5 s apiece). The union of
-/// fields both read; None = no `gh` or it failed.
-// ponytail: newest 200 PRs of any state: ~0.7 s per 100 PRs, so a larger limit
-// costs back what sharing saves. Doctor coverage is equal in practice; stats lost
-// the older merged PRs (was --state merged --limit 500), which its `git log (#N)`
-// fallback still covers by commit date. Raise --limit if a repo outgrows it.
+/// Shared `gh pr list --state all` (doctor keeps 200; stats pages below).
 pub(crate) fn gh_prs(root: &Path) -> Option<String> {
-    static ALL: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-    ALL.get_or_init(|| {
-        let out = crate::hook::flow::gh_raw(
-            root,
-            "gh-prs.json",
-            &[
-                "pr",
-                "list",
-                "--state",
-                "all",
-                "--json",
-                "headRefName,state,mergedAt,number,createdAt",
-                "--limit",
-                "200",
-            ],
-        )?;
-        Some(String::from_utf8_lossy(&out).into_owned())
-    })
-    .clone()
+    gh_prs_limit(root, 200, "gh-prs.json")
+}
+
+/// One `gh pr list` call with an explicit limit (disk cache 600 s in `gh_raw`).
+fn gh_prs_limit(root: &Path, limit: u32, name: &str) -> Option<String> {
+    let lim = limit.to_string();
+    let out = crate::hook::flow::gh_raw(
+        root,
+        name,
+        &[
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--json",
+            "headRefName,state,mergedAt,number,createdAt",
+            "--limit",
+            &lim,
+        ],
+    )?;
+    Some(String::from_utf8_lossy(&out).into_owned())
+}
+
+/// Paged list to 1000 until oldest reaches window; a failed page keeps last good.
+pub(crate) fn gh_prs_windowed(root: &Path, window_ms: Option<i64>) -> Option<String> {
+    let mut best = gh_prs(root);
+    let window = window_ms.unwrap_or(0);
+    if window == 0 || best.as_deref().is_some_and(|j| reaches_window(j, window)) {
+        return best;
+    }
+    for limit in [400u32, 600, 800, 1000] {
+        let name = format!("gh-prs-{limit}.json");
+        let Some(j) = gh_prs_limit(root, limit, &name) else {
+            break;
+        };
+        let done = reaches_window(&j, window);
+        best = Some(j);
+        if done {
+            break;
+        }
+    }
+    best
+}
+
+/// True when the oldest readable PR time reaches back to `window_ms`.
+fn reaches_window(json: &str, window_ms: i64) -> bool {
+    listed_prs(json)
+        .iter()
+        .filter_map(|p| p.created_ms.or(p.merged_ms))
+        .min()
+        .is_some_and(|m| m <= window_ms)
 }
 
 /// `(number, merged_at_ms)` of every merged PR in a `gh_prs` list; unparseable
@@ -167,7 +193,11 @@ pub(crate) fn merged_times(json: &str) -> Vec<(i64, i64)> {
 /// Merged PR count for `range` (`YYYY-MM-DD..YYYY-MM-DD`) from one
 /// `gh api search/issues` call — the whole range, not the 200-row list.
 /// None = unknown (no `gh`, offline, bad output), never an error.
+/// Tests fake it with `FAEL_GH_COUNT`.
 pub(crate) fn prs_merged_count(root: &Path, range: &str) -> Option<u64> {
+    if let Ok(fake) = std::env::var("FAEL_GH_COUNT") {
+        return fake.trim().parse().ok();
+    }
     let q = format!(
         "search/issues?q=repo:{{owner}}/{{repo}}+type:pr+is:merged+merged:{range}&per_page=1"
     );
@@ -226,7 +256,8 @@ pub(crate) fn range_for(window_ms: i64, now_ms: i64, tz_min: i32) -> Option<Stri
 
 /// Outcome gh inputs for `aggregate`: the listed PRs plus the search-count
 /// total over the outcome window's range (`window-day..today`). No repo, no
-/// `gh` or offline reads empty + unknown, never an error.
+/// `gh` or offline reads empty + unknown, never an error. Stats pages to the
+/// window (up to 1000); doctor/orphan keep 200.
 pub(crate) fn outcome_inputs(
     since: Option<i64>,
     logs: &std::collections::HashMap<String, core::Log>,
@@ -236,12 +267,13 @@ pub(crate) fn outcome_inputs(
     let Ok(r) = crate::repo() else {
         return (vec![], None);
     };
+    let window = core::stats::outcome_window(since, logs, first_seen);
     // `FAEL_GH_JSON` (tests only, see orphan's) stands in for the PR list
     let list = std::env::var("FAEL_GH_JSON")
         .ok()
-        .or_else(|| gh_prs(&r.root));
+        .or_else(|| gh_prs_windowed(&r.root, window));
     let prs = list.map(|j| listed_prs(&j)).unwrap_or_default();
-    let total = core::stats::outcome_window(since, logs, first_seen)
+    let total = window
         .and_then(|w| range_for(w, core::now_ms() as i64, tz_min))
         .and_then(|range| prs_merged_count(&r.root, &range));
     (prs, total)
@@ -354,5 +386,15 @@ mod tests {
             .as_deref(),
             Some("2026-10-01..2026-10-31")
         );
+    }
+
+    #[test]
+    fn window_reached_only_when_oldest_pr_covers_it() {
+        let j = r#"[{"number":1,"headRefName":"a","createdAt":"2026-10-10T00:00:00Z"},{"number":2,"headRefName":"b","createdAt":"2026-10-20T00:00:00Z"}]"#;
+        let old = crate::core::ts_ms("2026-10-15T00:00:00Z").unwrap();
+        let older = crate::core::ts_ms("2026-10-05T00:00:00Z").unwrap();
+        assert!(!super::reaches_window(j, old));
+        assert!(super::reaches_window(j, older));
+        assert!(!super::reaches_window("nope", older));
     }
 }

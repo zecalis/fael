@@ -96,7 +96,7 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
     for v in parsed
         .kept
         .iter()
-        .filter(|v| v["event"] == "call" && v["who"] != "human")
+        .filter(|v| v["event"] == "call" && v["who"] != "human" && v["who"] != "auto")
     {
         let outcome = match v["outcome"].as_str() {
             Some("ok") => Outcome::Ok,

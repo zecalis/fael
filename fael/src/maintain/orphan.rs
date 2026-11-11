@@ -50,8 +50,9 @@ pub(super) fn unavailable() -> bool {
 /// Windows `CreateProcess` never resolves a `.bat` fake off PATH, and CI
 /// runners ship a real `gh` that answers on its own, so no fake survives
 /// there; cf. `FAEL_STATE_DIR`).
-// ponytail: newest 200 PRs (see `gh_prs`); a branch whose PRs all fell out is
-// unknown (silent), not orphan.
+// doctor keeps the newest 200 PRs (`gh_prs`); a branch whose PRs all fell
+// out is unknown (silent), not orphan. Stats pages past 200 via
+// `gh_prs_windowed`; doctor stays capped for speed.
 fn dead_branches() -> Option<HashSet<String>> {
     if let Ok(fake) = std::env::var("FAEL_GH_JSON") {
         return parse_dead(&fake);

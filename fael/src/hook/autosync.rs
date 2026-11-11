@@ -141,6 +141,7 @@ fn spawn(repo: &crate::Repo) -> Option<Child> {
     sync.arg("sync")
         .current_dir(&repo.root)
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("FAEL_FROM", "autosync")
         .stdin(Stdio::null())
         .stdout(out)
         .stderr(err)

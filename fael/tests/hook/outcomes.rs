@@ -238,3 +238,58 @@ fn a_sub_agent_cites_from_its_own_reply_and_seen_list() {
     );
     assert_eq!(cited(&d), [json!([id])]);
 }
+
+/// 450 listed PRs over two pages hold all 450 in the join.
+#[test]
+fn a_paged_pr_list_holds_all_450() {
+    let d = repo();
+    // two pages: 200 + 250, newest first
+    let mut prs = vec![];
+    for n in 1..=450 {
+        let day = 1 + (n % 28);
+        prs.push(format!(
+            r#"{{"number":{n},"headRefName":"feat/{n}","state":"MERGED","createdAt":"2026-10-{day:02}T00:00:00Z","mergedAt":"2026-10-{day:02}T01:00:00Z"}}"#
+        ));
+    }
+    let page1 = format!("[{}]", prs[..200].join(","));
+    let page2 = format!("[{}]", prs[200..].join(","));
+    // the join reads one list: pages concatenated hold all 450
+    let combined: Vec<serde_json::Value> = [page1, page2]
+        .iter()
+        .flat_map(|p| serde_json::from_str::<Vec<serde_json::Value>>(p).unwrap())
+        .collect();
+    assert_eq!(combined.len(), 450);
+    let all = serde_json::to_string(&combined).unwrap();
+    let (ok, out, err) = fael_env(
+        &d,
+        &["stats", "--json"],
+        "",
+        &[("FAEL_GH_JSON", all.as_str()), ("FAEL_GH_COUNT", "450")],
+    );
+    assert!(ok, "{err}");
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let listed = v["outcome"]["prs_with_row"].as_u64().unwrap_or(0)
+        + v["outcome"]["prs_without_row"].as_u64().unwrap_or(0);
+    assert_eq!(listed, 450, "{out}");
+}
+
+/// When the list is shorter than the search total the text names the gap.
+#[test]
+fn a_short_list_prints_listed_n_of_m() {
+    let d = repo();
+    let mut prs = vec![];
+    for n in 1..=200 {
+        prs.push(format!(
+            r#"{{"number":{n},"headRefName":"feat/{n}","state":"MERGED","createdAt":"2026-10-10T00:00:00Z","mergedAt":"2026-10-10T01:00:00Z"}}"#
+        ));
+    }
+    let all = format!("[{}]", prs.join(","));
+    let (ok, out, err) = fael_env(
+        &d,
+        &["stats", "--since", "2026-10-01"],
+        "",
+        &[("FAEL_GH_JSON", all.as_str()), ("FAEL_GH_COUNT", "450")],
+    );
+    assert!(ok, "{err}");
+    assert!(out.contains("listed 200 of 450"), "{out}");
+}

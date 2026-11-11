@@ -242,9 +242,11 @@ fn json_shape_flow_and_throughput_are_frozen() {
 #[test]
 fn json_shape_retired_value_and_verdict_are_frozen() {
     let v = value_of(BASE_ROWS, false);
-    assert_eq!(keys(&v["retired"]), ["at_touch", "pushed"], "{v}");
+    assert_eq!(keys(&v["retired"]), ["at_touch", "bumped", "pushed"], "{v}");
     assert!(
-        v["retired"]["pushed"].is_u64() && v["retired"]["at_touch"].is_u64(),
+        v["retired"]["pushed"].is_u64()
+            && v["retired"]["at_touch"].is_u64()
+            && v["retired"]["bumped"].is_u64(),
         "{v}"
     );
     let value = ["handoffs_picked_up", "in_context_at_edit", "issues_closed"];

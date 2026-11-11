@@ -1,6 +1,7 @@
 //! Rows retired where they were pushed: of the distinct rows a read or edit
-//! push handed an agent, how many were closed, superseded or bumped (a bump
-//! event names the row) within `RETIRE_WINDOW_MS` after one of those pushes. The measure
+//! push handed an agent, how many were closed or superseded (a bump event
+//! names the row but leaves it open, counted under `bumped`) within
+//! `RETIRE_WINDOW_MS` after one of those pushes. The measure
 //! of the edit-push ask — a row the code outgrew should go while the agent has
 //! the code in front of it. Pure: usage rows in, logs in, counts out.
 
@@ -24,13 +25,15 @@ pub struct Retired {
     pub pushed: usize,
     /// Of those, closed or superseded within the window after a push.
     pub at_touch: usize,
+    /// Of those, bumped within the window after a push (stays open).
+    #[serde(default)]
+    pub bumped: usize,
 }
 
-/// Every time a row was handled, per repo: its close, the row that
-/// superseded it (reverted edges skipped), or a bump event — a bump keeps the
-/// row open but is the check the ask asked for, as the supersede it replaced
-/// was. One entry per event, a row bumped twice has two.
-pub(super) fn retire_events(log: &Log) -> Vec<(&str, i64)> {
+/// Every time a row was closed or superseded, per repo: its close, or the row
+/// that superseded it (reverted edges skipped). Bumps ride apart in
+/// `bump_events` — they keep the row open.
+pub(super) fn close_events(log: &Log) -> Vec<(&str, i64)> {
     let rev = reverted(log);
     log.closes
         .iter()
@@ -40,18 +43,20 @@ pub(super) fn retire_events(log: &Log) -> Vec<(&str, i64)> {
             (!rev.contains(r.id.as_str())).then_some(())?;
             Some((t, ts_ms(&r.ts)?))
         }))
-        .chain(
-            log.rows
-                .iter()
-                .filter_map(|r| Some((r.bumps.as_deref()?, ts_ms(&r.ts)?))),
-        )
         .collect()
 }
 
-/// When each row was first handled: the earliest of `retire_events`.
-pub(super) fn retire_times(log: &Log) -> HashMap<&str, i64> {
+/// Every bump event, per repo: one entry per event, a row bumped twice has two.
+pub(super) fn bump_events(log: &Log) -> Vec<(&str, i64)> {
+    log.rows
+        .iter()
+        .filter_map(|r| Some((r.bumps.as_deref()?, ts_ms(&r.ts)?)))
+        .collect()
+}
+
+fn earliest(evs: Vec<(&str, i64)>) -> HashMap<&str, i64> {
     let mut out: HashMap<&str, i64> = HashMap::new();
-    for (id, ms) in retire_events(log) {
+    for (id, ms) in evs {
         out.entry(id)
             .and_modify(|m| *m = (*m).min(ms))
             .or_insert(ms);
@@ -59,12 +64,33 @@ pub(super) fn retire_times(log: &Log) -> HashMap<&str, i64> {
     out
 }
 
+/// Every time a row was handled, per repo: its close, the row that
+/// superseded it (reverted edges skipped), or a bump event — a bump keeps the
+/// row open but is the check the ask asked for, as the supersede it replaced
+/// was. One entry per event, a row bumped twice has two. Kept for the earned
+/// rule (`said`, `outcomes`): a bump answers the ask.
+pub(super) fn retire_events(log: &Log) -> Vec<(&str, i64)> {
+    let mut out = close_events(log);
+    out.extend(bump_events(log));
+    out
+}
+
+/// When each row was first handled: the earliest of `retire_events`.
+/// Earned rule: close, supersede or bump all count.
+pub(super) fn retire_times(log: &Log) -> HashMap<&str, i64> {
+    earliest(retire_events(log))
+}
+
 pub(super) fn retired(parsed: &Parsed, logs: &HashMap<String, Log>) -> Retired {
-    let times: HashMap<&str, HashMap<&str, i64>> = logs
+    let closed: HashMap<&str, HashMap<&str, i64>> = logs
         .iter()
-        .map(|(repo, log)| (repo.as_str(), retire_times(log)))
+        .map(|(repo, log)| (repo.as_str(), earliest(close_events(log))))
         .collect();
-    let (mut pushed, mut at_touch) = (HashSet::new(), HashSet::new());
+    let bumped_m: HashMap<&str, HashMap<&str, i64>> = logs
+        .iter()
+        .map(|(repo, log)| (repo.as_str(), earliest(bump_events(log))))
+        .collect();
+    let (mut pushed, mut at_touch, mut bumped) = (HashSet::new(), HashSet::new(), HashSet::new());
     for v in &parsed.kept {
         if !matches!(v["event"].as_str(), Some("read" | "edit")) {
             continue;
@@ -79,15 +105,21 @@ pub(super) fn retired(parsed: &Parsed, logs: &HashMap<String, Log>) -> Retired {
             .filter_map(|i| i.as_str())
         {
             pushed.insert(id);
-            let gone = times.get(repo).and_then(|t| t.get(id));
+            let gone = closed.get(repo).and_then(|t| t.get(id));
             if gone.is_some_and(|g| *g >= ms && *g - ms <= RETIRE_WINDOW_MS) {
                 at_touch.insert(id);
+            } else {
+                let b = bumped_m.get(repo).and_then(|t| t.get(id));
+                if b.is_some_and(|g| *g >= ms && *g - ms <= RETIRE_WINDOW_MS) {
+                    bumped.insert(id);
+                }
             }
         }
     }
     Retired {
         pushed: pushed.len(),
         at_touch: at_touch.len(),
+        bumped: bumped.len(),
     }
 }
 
@@ -131,7 +163,7 @@ mod tests {
         let parsed = super::super::parse::parse(usage, std::path::Path::new("/s/usage.jsonl"), &[]);
         let logs = HashMap::from([("/work/r".to_string(), log)]);
         let r = super::retired(&parsed, &logs);
-        // A, B, D, E pushed (session-start is no push); B and E within a day
-        assert_eq!((r.pushed, r.at_touch), (4, 2));
+        // A, B, D, E pushed (session-start is no push); B closed/superseded, E bumped
+        assert_eq!((r.pushed, r.at_touch, r.bumped), (4, 1, 1));
     }
 }

@@ -1,7 +1,8 @@
 //! Calls per command and flag (PLAN cli-tiers chunk measure): which flags are
 //! really used, read from the `event:"call"` lines that carry a `shape`
 //! (`flags` — names only, never a value). `who: "human"` marks a call made
-//! outside an agent session; it is counted here and nowhere in `friction`.
+//! outside an agent session; `who: "auto"` a poller/autosync call (`FAEL_FROM`);
+//! both are counted here and nowhere in `friction`.
 //! Pure: the parsed lines in, one struct out. Counts show use, not value.
 
 use super::parse::Parsed;
@@ -17,6 +18,8 @@ pub struct FlagUse {
     pub calls: usize,
     pub agent: usize,
     pub human: usize,
+    #[serde(default)]
+    pub auto: usize,
     pub ok: usize,
     pub help: usize,
     pub reject: usize,
@@ -59,6 +62,8 @@ pub(super) fn usage(parsed: &Parsed) -> FlagUsage {
             e.calls += 1;
             if v["who"] == "human" {
                 e.human += 1;
+            } else if v["who"] == "auto" {
+                e.auto += 1;
             } else {
                 e.agent += 1;
             }
@@ -98,5 +103,25 @@ mod tests {
         assert_eq!(u.by_flag.len(), 2);
         let f = u.by_flag.iter().find(|x| x.flag.is_some()).unwrap();
         assert_eq!((f.calls, f.agent, f.human, f.ok, f.reject), (2, 1, 1, 1, 1));
+    }
+
+    #[test]
+    fn auto_calls_count_apart_from_agent_and_human() {
+        let text = [
+            r#"{"ts":"2026-10-19T00:00:00.000Z","repo":"/w/r","client":"cli","event":"call","cmd":"doctor","outcome":"ok","who":"auto","flags":[],"npos":0}"#,
+            r#"{"ts":"2026-10-19T00:01:00.000Z","repo":"/w/r","client":"cli","event":"call","cmd":"doctor","outcome":"ok","who":"human","flags":[],"npos":0}"#,
+            r#"{"ts":"2026-10-19T00:02:00.000Z","repo":"/w/r","client":"cli","event":"call","cmd":"doctor","outcome":"ok","flags":[],"npos":0}"#,
+        ]
+        .join("\n");
+        let p = parse(
+            &text,
+            Path::new("/w/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        let u = super::usage(&p);
+        let f = u.by_flag.iter().find(|x| x.cmd == "doctor").unwrap();
+        assert_eq!((f.calls, f.agent, f.human, f.auto), (3, 1, 1, 1));
+        let fr = super::super::friction::friction(&p);
+        assert_eq!(fr.total.calls, 1, "{fr:?}");
     }
 }
