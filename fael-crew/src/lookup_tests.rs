@@ -90,7 +90,7 @@ fn a_label_in_two_plans_asks_for_the_uid() {
 fn show_prints_what_the_next_start_will() {
     let mut s = Store::open_in_memory().unwrap();
     let a = add(&mut s, "a", Some("the brief"));
-    s.note(&a, "first", NOW).unwrap();
+    s.note(&a, "first", NOW, None).unwrap();
     assert_eq!(s.show(&a).unwrap().notes, ["first"]);
     s.start(&a, &Start::default(), &here("/w")).unwrap();
     // running: the notes its start printed
@@ -179,7 +179,7 @@ fn a_unique_uid_prefix_of_8_names_the_chunk_for_every_verb() {
         s.show("01aaaaaaaa0").unwrap().uid,
         "01AAAAAAAA0000000000000000"
     );
-    s.note("01AAAAAAAA0", "n", NOW).unwrap();
+    s.note("01AAAAAAAA0", "n", NOW, None).unwrap();
     s.start("01AAAAAAAA0", &Start::default(), &here("/w"))
         .unwrap();
     assert_eq!(state(&s, "01AAAAAAAA0000000000000000"), "running");

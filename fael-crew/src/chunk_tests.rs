@@ -352,8 +352,8 @@ fn notes_and_the_handoff_before_reach_the_next_brief() {
     let b = s.add("inbox", &f, std::slice::from_ref(&a), NOW).unwrap();
     start(&mut s, &a, "/a").unwrap();
     // from another worktree, on a running chunk: no fence, no state change, not a start
-    s.note(&b, "use the v2 fixture", NOW).unwrap();
-    s.note(&a, "too late for a's brief", NOW).unwrap();
+    s.note(&b, "use the v2 fixture", NOW, None).unwrap();
+    s.note(&a, "too late for a's brief", NOW, None).unwrap();
     assert_eq!(state(&s, &a), "running");
     s.done(
         &a,
@@ -364,7 +364,7 @@ fn notes_and_the_handoff_before_reach_the_next_brief() {
     )
     .unwrap();
     assert!(
-        s.note(&a, "follow-up polish", NOW).is_ok(),
+        s.note(&a, "follow-up polish", NOW, None).is_ok(),
         "a done chunk takes a follow-up note"
     );
     assert!(
@@ -385,7 +385,7 @@ fn notes_and_the_handoff_before_reach_the_next_brief() {
             String::new()
         )]
     );
-    s.note(&b, "mid-run word", NOW).unwrap();
+    s.note(&b, "mid-run word", NOW, None).unwrap();
     s.done(&b, "h", None, None, &here("/b")).unwrap();
     s.owner(&b, Owner::Answer, Some("redo"), NOW).unwrap();
     // the second start: only what came since the first, the mid-run note is not a start

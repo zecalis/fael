@@ -78,26 +78,32 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     }
     out.say(Line {
         kind: brief,
-        text: body,
+        text: body.clone(),
     });
+    // every other session-start line shares what the brief left of the kickoff
+    // budget (Brief itself is Never-cut, like Row): over budget the notice goes
+    // first, then the warnings — Inbox keeps its card rank (Last) so a held
+    // chunk's note is the last to go.
+    let used = core::est_tokens(&body);
+    let leftover = c.repo.cfg.kickoff_tokens.saturating_sub(used);
+    let mut rest: Vec<Line> = vec![];
     // its own line: it names no row, so it never sits in the row hand-off's rate
     if let Some((uid, text)) = chunk {
-        out.say(Line {
+        rest.push(Line {
             kind: Kind::ChunkBrief { uid },
             text,
         });
     }
-    for l in super::inbox::lines(&c) {
-        out.say(l);
-    }
+    rest.extend(super::inbox::lines(&c));
     if matches!(sync, super::autosync::SessionSync::Running) {
-        out.say(Line::notice(
+        rest.push(Line::notice(
             "fael: sync still running — teammates' rows arrive at the next read\n".into(),
         ));
     }
     for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
-        out.say(Line::notice(format!("{warn}\n")));
+        rest.push(Line::notice(format!("{warn}\n")));
     }
+    out.say_within(leftover, rest);
     let mut r = out.reply();
     // the session just began — no round completed yet, so no real tokens. A
     // start that said nothing lands too, as `SILENT_START`: the say-gate

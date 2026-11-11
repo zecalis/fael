@@ -423,7 +423,7 @@ fn avoid_doing_prefers_touch_msg_then_note_then_nothing() {
         "nothing handed off yet"
     );
     // a note feeds doing
-    s.note(&a, "working on the form", NOW).unwrap();
+    s.note(&a, "working on the form", NOW, None).unwrap();
     assert_eq!(s.show(&me).unwrap().avoid[0].doing, "working on the form");
     // touch --msg beats the note
     s.touch(

@@ -96,6 +96,7 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("run", "base", "TEXT"),
     ("run", "force_reason", "TEXT"),
     ("run", "touch_msg", "TEXT"),
+    ("event", "session", "TEXT"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open

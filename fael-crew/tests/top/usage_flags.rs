@@ -58,6 +58,7 @@ const HIDDEN: &[(&str, &str)] = &[
     ("start", "as"),
     ("start", "because"),
     ("start", "session"),
+    ("note", "session"),
     ("accept", "merged"),
     ("show", "full"), // issue 01M6DVP4M: named by the brief's plan-sections hint
 ];

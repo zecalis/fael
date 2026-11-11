@@ -377,8 +377,14 @@ fn held_hint(diff: Option<&Vec<String>>, started: Option<&str>, linked: &[String
 }
 
 /// `chunk note`: the word is kept; a brief edited since the start is said too.
-pub(crate) fn note(st: &mut Store, uid: &str, text: &str, now: &str) -> Result<(), String> {
-    st.note(uid, text, now)?;
+pub(crate) fn note(
+    st: &mut Store,
+    uid: &str,
+    text: &str,
+    now: &str,
+    session: Option<String>,
+) -> Result<(), String> {
+    st.note(uid, text, now, session.as_deref())?;
     println!("chunk {uid} → noted for the next start");
     print!("{}", st.drift_line(uid));
     Ok(())

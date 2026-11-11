@@ -65,7 +65,7 @@ pub(super) fn all() -> Vec<Line> {
                 id: "7".into(),
                 uid: "01C".into(),
             },
-            "fael: new note for chunk 01C: use v2 — reply: fael chunk note 01C \"<text>\" (said once per note)\n",
+            "fael: new note for chunk 01C: use v2 — reply: fael chunk note 01C \"<text>\" · full: fael chunk show 01C\n",
         ),
         line(
             Kind::Checkpoint {
