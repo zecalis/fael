@@ -35,10 +35,12 @@ impl Owner {
 
     /// Does this command take a chunk in `s`? The one rule `owner()` rejects by and the
     /// board's `owner_actions` lists, so the app keeps no copy of it.
+    /// `Accept` also takes `Done` as a T2-style noop (repeat close): ok, changed
+    /// nothing, no event.
     pub fn takes(self, s: State) -> bool {
         match self {
             Owner::Answer => matches!(s, State::Waiting | State::Review),
-            Owner::Accept => s == State::Review,
+            Owner::Accept => matches!(s, State::Review | State::Done),
             Owner::Unpark => s == State::Parked,
             Owner::Park => allowed(s, State::Parked),
             Owner::Drop => allowed(s, State::Dropped),
