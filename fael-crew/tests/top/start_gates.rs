@@ -49,6 +49,43 @@ fn issue(d: &Path, text: &str) -> String {
     out.split_whitespace().next().unwrap().to_string()
 }
 
+fn git(d: &Path, args: &[&str]) {
+    let st = Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+        .args(args)
+        .current_dir(d)
+        .status()
+        .unwrap();
+    assert!(st.success(), "git {args:?}");
+}
+
+fn is_ancestor(d: &Path, tip: &str, head: &str) -> bool {
+    Command::new("git")
+        .args(["merge-base", "--is-ancestor", tip, head])
+        .current_dir(d)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// A repo with one commit plus the worktrees `names`; returns (main, worktrees).
+fn stack_tree(names: &[&str]) -> (PathBuf, Vec<PathBuf>) {
+    let d = std::env::temp_dir().join(format!("fael-stack-{}", fael_core::ulid()));
+    let main = d.join("main");
+    std::fs::create_dir_all(&main).unwrap();
+    git(&main, &["init", "-q", "-b", "main"]);
+    git(&main, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    assert!(fael(&main, &["plan", "new", "pl", "PL"]).0);
+    let mut out = Vec::new();
+    for n in names {
+        let w = d.join(n);
+        let arg = w.to_string_lossy().replacen(r"\\?\", "", 1);
+        git(&main, &["worktree", "add", "-q", "-b", n, &arg]);
+        out.push(w.canonicalize().unwrap());
+    }
+    (main.canonicalize().unwrap(), out)
+}
+
 #[test]
 fn a_note_naming_the_closed_row_cures_a_brief_cite_without_force() {
     let d = repo();
@@ -202,4 +239,36 @@ fn a_finished_note_carries_the_statement_as_a_left_line() {
         &["chunk", "done", &a, "x\nleft: none", "--left", "none"],
     );
     assert!(!ok && err.contains("once"), "{err}");
+}
+
+/// A stacked start is proven on a real tree: B cut from A's branch starts,
+/// its HEAD containing A's tip; a start whose HEAD lacks the tip is rejected.
+#[test]
+fn stack_start_needs_partner_tip_on_a_real_tree() {
+    let (main, w) = stack_tree(&["wa", "wb"]);
+    let (wa, wb) = (&w[0], &w[1]);
+    let a = chunk(&main, "A", "do a", &[]);
+    let b = chunk(&main, "B", "do b", &[]);
+    assert!(fael(wa, &["chunk", "start", &a]).0);
+    git(wa, &["commit", "-q", "--allow-empty", "-m", "a-tip"]);
+    let tip = Command::new("git")
+        .args(["rev-parse", "wa"])
+        .current_dir(wb)
+        .output()
+        .unwrap();
+    let tip = String::from_utf8_lossy(&tip.stdout).trim().to_string();
+    assert!(!is_ancestor(wb, &tip, "HEAD"), "wb lacks A's tip");
+    let (ok, _, err) = fael(wb, &["chunk", "start", &b, "--with", &a, "--as", "stack"]);
+    assert!(!ok, "stack started without the tip: {err}");
+    assert!(err.contains("stacks on") && err.contains(&a), "{err}");
+    assert!(err.contains("does not contain"), "{err}");
+    let wc = main.parent().unwrap().join("wc");
+    let arg = wc.to_string_lossy().replacen(r"\\?\", "", 1);
+    git(&main, &["worktree", "add", "-q", "-b", "wc", &arg, "wa"]);
+    let wc = wc.canonicalize().unwrap();
+    assert!(is_ancestor(&wc, &tip, "HEAD"), "wc holds A's tip");
+    let (ok, out, err) = fael(&wc, &["chunk", "start", &b, "--with", &a, "--as", "stack"]);
+    assert!(ok, "{out}{err}");
+    assert!(out.contains(&format!("joint stack with {a}")), "{out}");
+    assert!(out.contains("stack:"), "{out}");
 }
