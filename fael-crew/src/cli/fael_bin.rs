@@ -41,6 +41,18 @@ pub(crate) fn run(args: &[&str], stdin: &str) -> Result<String, String> {
     }
 }
 
+/// `fael held` stdin: files, then optional `---scope---` and `---issues---` sections.
+fn stdin_of(files: &[String], scope: &[String], linked: &[String]) -> String {
+    let mut parts = vec![files.join("\n")];
+    for (marker, ids) in [("---scope---", scope), ("---issues---", linked)] {
+        if !ids.is_empty() {
+            parts.push(format!("{marker}\n{}", ids.join("\n")));
+        }
+    }
+    parts.retain(|p| !p.is_empty());
+    parts.join("\n")
+}
+
 /// The held-rows text for a chunk `start` (`"start"`, scope paths) or `done` (`"done"`, the
 /// paths the branch touched): contracts and open decisions on those files, exactly as `fael`
 /// words them. Empty when there is nothing, or when `fael` cannot be run (a hint, not a gate).
@@ -48,12 +60,7 @@ pub(crate) fn run(args: &[&str], stdin: &str) -> Result<String, String> {
 /// `start` also takes the chunk's linked issue ids (same `---issues---` section as done):
 /// open issues under the scope that are not linked get named, with the link call.
 pub(crate) fn held(kind: &str, files: &[String], linked: &[String]) -> String {
-    let mut stdin = files.join("\n");
-    if !linked.is_empty() {
-        stdin.push_str("\n---issues---\n");
-        stdin.push_str(&linked.join("\n"));
-    }
-    run(&["held", kind], &stdin).unwrap_or_default()
+    run(&["held", kind], &stdin_of(files, &[], linked)).unwrap_or_default()
 }
 
 /// The held-rows text for a chunk `done` (the paths the branch touched), leaving out
@@ -69,12 +76,7 @@ pub(crate) fn held_done_checked(
     since: Option<&str>,
     linked: &[String],
 ) -> Result<String, String> {
-    let mut stdin = files.join("\n");
-    for (marker, ids) in [("---scope---", scope), ("---issues---", linked)] {
-        if !ids.is_empty() {
-            stdin.push_str(&format!("\n{marker}\n{}", ids.join("\n")));
-        }
-    }
+    let stdin = stdin_of(files, scope, linked);
     let mut args = vec!["held", "done"];
     args.extend(since.into_iter().flat_map(|s| ["--since", s]));
     run(&args, &stdin)

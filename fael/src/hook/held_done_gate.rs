@@ -30,8 +30,8 @@ pub(crate) fn parse_stdin(raw: &str) -> Input {
         match line.trim() {
             SCOPE_MARKER => section = 1,
             LINKED_MARKER => section = 2,
-            _ if section == 0 => inp.files.push(line.to_string()),
             "" => {}
+            _ if section == 0 => inp.files.push(line.to_string()),
             tok => [&mut inp.files, &mut inp.scope, &mut inp.linked][section].push(tok.to_string()),
         }
     }
@@ -105,8 +105,9 @@ pub(crate) fn gate_error(log: &core::Log, linked: &[String]) -> Option<String> {
 /// Warn text for open unlinked issues on the touched files and the chunk's scope.
 /// Empty when none — a hint, never a refusal.
 pub(crate) fn warn_text(log: &core::Log, files: &[String], linked: &[String]) -> String {
+    let found = unlinked_open(log, files, linked);
     let mut s = String::new();
-    for r in unlinked_open(log, files, linked) {
+    for r in found.iter().take(START_ISSUES_MAX) {
         s.push_str(&format!(
             "warn: open issue {} \"{}\" on {} not linked to this chunk — fael find {}\n",
             r.id,
@@ -115,10 +116,17 @@ pub(crate) fn warn_text(log: &core::Log, files: &[String], linked: &[String]) ->
             r.id
         ));
     }
+    if found.len() > START_ISSUES_MAX {
+        s.push_str(&format!(
+            "+{} more: fael find --files {} --kind issue\n",
+            found.len() - START_ISSUES_MAX,
+            files.join(",")
+        ));
+    }
     s
 }
 
-/// Most issues `chunk start` names; the rest ride a count and the find line.
+/// Most issues `chunk start` and `chunk done` name; the rest ride a count and the find line.
 const START_ISSUES_MAX: usize = 5;
 
 /// `chunk start`: the open issues on files under the scope that the chunk does not

@@ -171,7 +171,17 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
             .collect();
         let out = crate::fael_bin::held("start", &scope, &linked);
         // the link call names the chunk it was started for
-        print!("{}", out.replace("{uid}", uid));
+        // only the issues block carries the placeholder; a held row's text stays as written
+        let (head, issues) = out
+            .split_once("\nopen issues on this scope")
+            .unwrap_or((&out, ""));
+        match issues.is_empty() {
+            true => print!("{out}"),
+            false => print!(
+                "{head}\nopen issues on this scope{}",
+                issues.replace("{uid}", uid)
+            ),
+        }
     }
     // the declared scope may name a re-export while the work lives elsewhere
     // (th.ts spreads start.ts): warn now, not only at done's outside report.
