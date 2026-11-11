@@ -9,30 +9,33 @@ use crate::core;
 
 /// The stdin separator between touched files and linked issue ids.
 pub(crate) const LINKED_MARKER: &str = "---issues---";
+/// The stdin separator before the chunk's declared scope lines (done only: start's
+/// files already are the scope).
+pub(crate) const SCOPE_MARKER: &str = "---scope---";
 
-/// Split raw stdin into (files, linked issue ids). No marker = old callers:
-///
-/// every line is a file, no linked check.
-pub(crate) fn parse_stdin(raw: &str) -> (Vec<String>, Vec<String>) {
-    let mut files = Vec::new();
-    let mut linked = Vec::new();
-    let mut after = false;
+/// Parsed `fael held` stdin.
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct Input {
+    pub files: Vec<String>,
+    pub scope: Vec<String>,
+    pub linked: Vec<String>,
+}
+
+/// Split raw stdin into files, scope and linked issue ids. No marker = old
+/// callers: every line is a file, no scope, no linked check.
+pub(crate) fn parse_stdin(raw: &str) -> Input {
+    let mut inp = Input::default();
+    let mut section = 0; // 0 files, 1 scope, 2 linked
     for line in raw.lines() {
-        if line.trim() == LINKED_MARKER {
-            after = true;
-            continue;
-        }
-        let target = if after { &mut linked } else { &mut files };
-        let tok = line.trim();
-        if after {
-            if !tok.is_empty() {
-                target.push(tok.to_string());
-            }
-        } else {
-            target.push(line.to_string());
+        match line.trim() {
+            SCOPE_MARKER => section = 1,
+            LINKED_MARKER => section = 2,
+            "" => {}
+            _ if section == 0 => inp.files.push(line.to_string()),
+            tok => [&mut inp.files, &mut inp.scope, &mut inp.linked][section].push(tok.to_string()),
         }
     }
-    (files, linked)
+    inp
 }
 
 /// True for a row neither closed nor superseded.
@@ -61,25 +64,22 @@ pub(crate) fn linked_open<'a>(log: &'a core::Log, linked: &[String]) -> Vec<&'a 
     out
 }
 
-/// Open unlinked issues naming a file of `files` and filed at or after
-/// `since` (None = no start recorded, so every open unlinked one). Ledger
-/// order, so the warn reads oldest first.
+/// Open unlinked issues naming a file of `files`, whenever filed — an older one
+/// on the same files is as unfinished as one filed this run. Ledger order, so the
+/// warn reads oldest first.
 pub(crate) fn unlinked_open<'a>(
     log: &'a core::Log,
     files: &[String],
     linked: &[String],
-    since: Option<i64>,
 ) -> Vec<&'a core::Row> {
     if files.iter().all(|f| f.trim().is_empty()) {
         return vec![];
     }
-    let linked_ids: Vec<&str> = linked.iter().map(String::as_str).collect();
     log.rows
         .iter()
         .filter(|r| r.kind == "issue" && open(log, &r.id))
-        .filter(|r| !linked_ids.iter().any(|l| r.id == **l))
+        .filter(|r| !linked.contains(&r.id))
         .filter(|r| core::overlap(&r.files, files))
-        .filter(|r| since.is_none_or(|t| core::ts_ms(&r.ts).is_none_or(|ms| ms >= t)))
         .collect()
 }
 
@@ -102,26 +102,56 @@ pub(crate) fn gate_error(log: &core::Log, linked: &[String]) -> Option<String> {
     Some(s)
 }
 
-/// Warn text for open unlinked issues on the touched files. Empty when none —
-/// a hint, never a refusal.
-pub(crate) fn warn_text(
-    log: &core::Log,
-    files: &[String],
-    linked: &[String],
-    since: Option<i64>,
-) -> String {
-    let open = unlinked_open(log, files, linked, since);
-    if open.is_empty() {
+/// Warn text for open unlinked issues on the touched files and the chunk's scope.
+/// Empty when none — a hint, never a refusal.
+pub(crate) fn warn_text(log: &core::Log, files: &[String], linked: &[String]) -> String {
+    let found = unlinked_open(log, files, linked);
+    let mut s = String::new();
+    for r in found.iter().take(START_ISSUES_MAX) {
+        s.push_str(&format!(
+            "warn: open issue {} \"{}\" on {} not linked to this chunk — fael find {}\n",
+            r.id,
+            r.title.clone().unwrap_or_else(|| r.display_title()),
+            r.files.join(","),
+            r.id
+        ));
+    }
+    if found.len() > START_ISSUES_MAX {
+        s.push_str(&format!(
+            "+{} more: fael find --files {} --kind issue\n",
+            found.len() - START_ISSUES_MAX,
+            files.join(",")
+        ));
+    }
+    s
+}
+
+/// Most issues `chunk start` and `chunk done` name; the rest ride a count and the find line.
+const START_ISSUES_MAX: usize = 5;
+
+/// `chunk start`: the open issues on files under the scope that the chunk does not
+/// link, newest first, each with the call that links it; `{uid}` is the caller's
+/// to fill. Empty when none. A fact list — fael never says an issue is the
+/// chunk's to fix.
+pub(crate) fn start_text(log: &core::Log, scope: &[String], linked: &[String]) -> String {
+    let found = unlinked_open(log, scope, linked);
+    if found.is_empty() {
         return String::new();
     }
-    let mut s = String::new();
-    for r in open {
-        let files = r.files.join(",");
+    let mut s = String::from("\nopen issues on this scope (not linked):\n");
+    for r in found.iter().rev().take(START_ISSUES_MAX) {
         s.push_str(&format!(
-            "warn: open issue {} \"{}\" on {files} filed after the run started — fael find {}\n",
+            "- {} \"{}\" — link: fael chunk edit {{uid}} --issue +{}\n",
             r.id,
             r.title.clone().unwrap_or_else(|| r.display_title()),
             r.id
+        ));
+    }
+    if found.len() > START_ISSUES_MAX {
+        s.push_str(&format!(
+            "+{} more: fael find --files {} --kind issue\n",
+            found.len() - START_ISSUES_MAX,
+            scope.join(",")
         ));
     }
     s
@@ -145,16 +175,17 @@ mod tests {
 
     #[test]
     fn stdin_without_marker_is_files_only() {
-        let (files, linked) = parse_stdin("src/a.rs\nsrc/b.rs");
-        assert_eq!(files, vec!["src/a.rs", "src/b.rs"]);
-        assert!(linked.is_empty());
+        let inp = parse_stdin("src/a.rs\nsrc/b.rs");
+        assert_eq!(inp.files, vec!["src/a.rs", "src/b.rs"]);
+        assert!(inp.linked.is_empty() && inp.scope.is_empty());
     }
 
     #[test]
     fn stdin_with_marker_splits_linked_ids() {
-        let (files, linked) = parse_stdin("src/a.rs\n---issues---\n01AAA\n01BBB\n");
-        assert_eq!(files, vec!["src/a.rs"]);
-        assert_eq!(linked, vec!["01AAA", "01BBB"]);
+        let inp = parse_stdin("src/a.rs\n---scope---\nsrc/\n---issues---\n01AAA\n01BBB\n");
+        assert_eq!(inp.files, vec!["src/a.rs"]);
+        assert_eq!(inp.scope, vec!["src/"]);
+        assert_eq!(inp.linked, vec!["01AAA", "01BBB"]);
     }
 
     #[test]
@@ -189,11 +220,36 @@ mod tests {
             ..Log::default()
         };
         let files = vec!["src/a.rs".to_string()];
-        let warn = warn_text(&log, &files, std::slice::from_ref(&linked.id), None);
+        let warn = warn_text(&log, &files, std::slice::from_ref(&linked.id));
         assert!(warn.contains(&fresh.id), "{warn}");
         assert!(warn.contains("fael find"), "{warn}");
         assert!(!warn.contains(&linked.id), "linked stays out: {warn}");
         assert!(!warn.contains(&other.id), "other files stay out: {warn}");
-        assert!(warn_text(&log, &[], std::slice::from_ref(&linked.id), None).is_empty());
+        assert!(warn_text(&log, &[], std::slice::from_ref(&linked.id)).is_empty());
+    }
+
+    #[test]
+    fn start_text_names_newest_five_unlinked_then_a_count() {
+        let rows: Vec<Row> = (0..7)
+            .map(|i| issue(&format!("01ISS{i:023}"), "w/a.rs"))
+            .collect();
+        let linked = rows[6].id.clone();
+        let log = Log {
+            rows,
+            ..Log::default()
+        };
+        let t = start_text(&log, &["w/".to_string()], std::slice::from_ref(&linked));
+        assert!(t.contains("open issues on this scope"), "{t}");
+        assert!(t.contains("--issue +01ISS00000000000000000000005"), "{t}");
+        assert!(!t.contains(&linked), "linked stays out: {t}");
+        assert!(
+            !t.contains("01ISS00000000000000000000000"),
+            "oldest cut: {t}"
+        );
+        assert!(
+            t.contains("+1 more: fael find --files w/ --kind issue"),
+            "{t}"
+        );
+        assert!(start_text(&log, &["x/".to_string()], &[]).is_empty());
     }
 }

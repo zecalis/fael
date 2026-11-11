@@ -53,4 +53,7 @@ section 3 (3. Done criteria) is still blank — fill it: `fael plan export pl --
 - two lines of Done with the first already passing? see the ship-part rule in the chunk rules
 - a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done
 - the rest (lane, wait format, plan sections): `fael chunk start <CHUNK-B> --full`
+
+open issues on this scope (not linked):
+- <SCOPED> "scope bug" — link: fael chunk edit <CHUNK-B> --issue +<SCOPED>
 running overlaps: none

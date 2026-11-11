@@ -355,9 +355,17 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     ] {
         assert!(out.contains(&want), "{want}: {out}");
     }
-    for id in [&ids[5], &issue, &other, &asleep] {
+    for id in [&ids[5], &other, &asleep] {
         assert!(said_id(&out, id).is_none(), "{id}: {out}");
     }
+    // an issue filed before the run, on a touched file, is warned — not held as a decision
+    assert!(
+        out.contains(&format!(
+            "warn: open issue {}",
+            said_id(&out, &issue).unwrap()
+        )),
+        "{out}"
+    );
     // a chunk whose diff touches nothing with rows: the e3 one-liner, then done
     git(&d, &["switch", "-q", "main"]);
     f(&["chunk", "start", &v]);
@@ -365,12 +373,56 @@ fn done_lists_the_open_rows_on_touched_files_with_their_verdicts() {
     std::fs::write(d.join("w/c.txt"), "v1").unwrap();
     git(&d, &["add", "w/c.txt"]);
     git(&d, &["commit", "-qm", "quiet"]);
-    assert_eq!(
-        f(&["chunk", "done", &v, "h", "--left", "none"]),
-        format!(
-            "0 open rows touch edited files - none stale; fael find --files w/c.txt\nchunk {v} → review"
-        )
+    // the still-open issue sits under v's scope (w/), so it is warned though v left w/a.txt alone
+    let out = f(&["chunk", "done", &v, "h", "--left", "none"]);
+    let want = format!(
+        "0 open rows touch edited files - none stale; fael find --files w/c.txt\nwarn: open issue {} \"issue on w/a.txt #7\" on w/a.txt not linked to this chunk — fael find {}\nchunk {v} → review",
+        said_id(&out, &issue).unwrap(),
+        said_id(&out, &issue).unwrap(),
     );
+    assert!(out.starts_with(&want), "{out}");
+}
+
+/// An open issue filed before the run on a file under the scope — touched or not — is warned
+/// at done unless the chunk links it; the warning never refuses.
+#[test]
+fn done_warns_on_an_older_unlinked_issue_under_the_scope() {
+    let (d, state) = init();
+    let f = |args: &[&str]| fael(&d, &state, args);
+    std::fs::create_dir_all(d.join("w")).unwrap();
+    for p in ["w/a.txt", "w/b.txt"] {
+        std::fs::write(d.join(p), "v1").unwrap();
+    }
+    git(&d, &["add", "w"]);
+    git(&d, &["commit", "-qm", "w"]);
+    let id_of = |out: String| {
+        let w = out
+            .split_whitespace()
+            .find(|w| w.starts_with("01"))
+            .unwrap();
+        w.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+            .to_string()
+    };
+    let add = |text: &str, file: &str| {
+        id_of(f(&[
+            "add", "issue", text, "--files", file, "--title", text, "--force",
+        ]))
+    };
+    let (untouched, linked) = (add("older one", "w/b.txt"), add("linked one", "w/b.txt"));
+    let u = f(&[
+        "chunk", "add", "u", "--brief", "b", "--scope", "w/", "--issue", &linked,
+    ]);
+    let u = u.split_whitespace().next().unwrap().to_string();
+    f(&["chunk", "start", &u]);
+    git(&d, &["switch", "-q", "-c", "touch"]);
+    std::fs::write(d.join("w/a.txt"), "v2").unwrap();
+    git(&d, &["commit", "-qam", "touch"]);
+    f(&["close", &linked, "fixed", "--force"]);
+    let out = f(&["chunk", "done", &u, "h", "--left", "none"]);
+    let short = said_id(&out, &untouched).unwrap_or_default();
+    assert!(out.contains(&format!("warn: open issue {short}")), "{out}");
+    assert!(out.contains("not linked to this chunk"), "{out}");
+    assert!(said_id(&out, &linked).is_none(), "linked stays out: {out}");
 }
 
 /// The short id `out` names `id` by — fael abbreviates, and no other row's
