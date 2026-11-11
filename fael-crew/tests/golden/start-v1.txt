@@ -1,0 +1,52 @@
+fael run <RUN> · 1 chunk
+
+# Fix (<CHUNK-B>)
+plan pl — Plan Title
+scope src/a.rs
+TLDR: do "fix <OPEN> (review <SHUT>)" then `fael chunk done <CHUNK-B> "<handoff>" --left none`
+
+fix <OPEN> (review <SHUT>)
+
+ledger issues this chunk fixes — once the fix holds, close each with `fael close <id> "<cause> → <fix>; guard \`<test path>\`"` (done never closes them):
+> <LINK> linked bug
+
+notes left for this chunk:
+> read <SHUT>: provenance, still starts
+
+Prev (#7), before this, handed off:
+> prev shipped
+> left: none
+files it touched: none claimed
+
+<!-- plan pl -->
+
+## 2. Scope
+> section 2 · updated <DATE>
+
+**Do:** one thing.
+**Don't:**
+
+section 1 (1. Goal (why)) is still blank — fill it: `fael plan export pl --json`, edit `sections`, `fael plan apply`
+
+section 3 (3. Done criteria) is still blank — fill it: `fael plan export pl --json`, edit `sections`, `fael plan apply`
+
+## chunk rules
+- chunks and plans are optional, your call: no chunk? ship directly — one-session/small work with nothing for the next session to pick up needs no plan or chunk (commit, push PR, report the number). Start a chunk only when the work outlives the session, needs a handoff, or the owner put it on the board.
+- state moves only through fael, never by editing a plan file:
+  finished → from this worktree: `fael chunk done "<result>" --left none|<ids>` (PR found from the run's branch; `--pr N` — or `--pr N,M,…` over several PRs, last is the board's — to name it explicitly, or `--out <path>` for a file, image or video): done with a PR, review for a file the owner accepts; when you pushed a PR, done takes its number from the run's branch — pass `--pr` explicitly to correct it; `-` as the text reads a long hand-off from stdin (`fael chunk done - --left none <<'EOF' … EOF`); after done, `fael chunk done <CHUNK-B> "<new>"` amends the hand-off (no `--pr` keeps the PR, `--pr N[,M...]` corrects a wrong number); the done text is the hand-off: first sentence = the outcome (what works or exists now), then what the owner checks
+  need the owner → `fael chunk wait <CHUNK-B> --on owner "<question>"` · need data → `--on data "<what>" --until YYYY-MM-DD`
+  needs another chunk first → `fael chunk after <CHUNK-B> <other> "<why>"`
+- never merge, the owner does
+- via MCP, pass `cwd` (your working directory) on `chunk start` — it records your seat; done, wait and after find the run's seat themselves
+- leftovers are rows, not PR prose: file each first (`fael add issue "<one topic, no ; list>" --title "<≤15 words>" --files <f>` or `fael chunk add "<title>" --plan <plan> --brief "…"`), then `fael chunk done` takes `--left none` or `--left <id|uid>,…` — done refuses without it, but a still-open linked issue named in `--left` rides the next chunk instead of blocking done; a number you measured goes on a hand-off line `measured: <what> · cmd: <shell line that prints it> · result: <printed>` (fael adds date:), which a chunk that lists this one in its `--left` prints in its brief; a word for a chunk not yet run → `fael chunk note <uid> "<text>"`; a fact the next session needs → `fael add note "<state>" --title "<≤15 words>" --files <f>`
+- before done: a fresh session (a subagent, not you) checks your output — the diff, or the `--out` file — against this brief's Done and Scope, a Done criterion left undone is a major; fix what it finds and record its verdict with `--review clean|fixed|failed` (size S: check it yourself against Done; a review level this repo's own ship doc sets for the change, e.g. docs/SHIP.md, wins over this line — then omit `--review`)
+- after each step that passes: a step commit (Conventional Commits, says what the step did, e.g. `feat(x): …`; never `WIP:`) + `fael chunk note <CHUNK-B> "<done; next>"` — the checkpoint a resume reads; brief is intent, code is truth: before the first edit run `fael chunk status <CHUNK-B>` — brief contradicts code → follow code; Scope/Goal/Done/reads wrong → fix fael now, else the next session pays again; only detail differs → proceed and note it in the done hand-off
+- the context was compacted, nothing to do, or the chunk will not finish this session? stop at the last passing step: nothing to do or cut wrong never ships as `done` — `wait --on owner` with the evidence and what should happen to it (drop it, or its split titles + scopes for the planner to apply); a part that passes Done on its own ships as this chunk's PR, the rest `fael chunk add`ed and named in `--left`; otherwise a step commit + checkpoint note and end the session — the next `chunk start` resumes it
+- lane: one scope per worktree, own branch each — land in plan order, first-listed chunk first, as a suggestion only; the owner merges every PR, fael never enforces an order or guards git flow. End your run (`fael run end <R>`) before rebasing onto a lane that already landed, so its own diff is claimed first; for what fell outside the scope, see `chunk done` and `chunk status`
+- stack: one scope per worktree, own branch each, cut from the partner's branch — your PR merges after the partner's, never before; the owner merges in order, fael never rebases for you
+- a wait --on owner is one question the owner answers in one line: options inline (`A or B?`), first line <= 100 chars, the action asked for — not preconditions that may be stale when it is read; then one clause per option on what it leads to, and end `Recommend: <option> because <evidence>` — you hold the most context now
+- a wait --on data names what is measured, the command that measures it and the bar that ends the wait
+- two lines of Done with the first already passing? see the ship-part rule in the chunk rules
+- a section you read that your change makes untrue: update it in this chunk through the bill (`fael plan export <plan> --json`, edit its `sections`, `fael plan apply`) before done
+- the rest (lane, wait format, plan sections): `fael chunk start <CHUNK-B> --full`
+running overlaps: none

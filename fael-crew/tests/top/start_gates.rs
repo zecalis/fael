@@ -272,3 +272,129 @@ fn stack_start_needs_partner_tip_on_a_real_tree() {
     assert!(out.contains(&format!("joint stack with {a}")), "{out}");
     assert!(out.contains("stack:"), "{out}");
 }
+
+/// Fixture for the start golden: a repo with one file, plan `pl` whose
+/// Scope section carries a fixed body (the one printed plan section).
+fn golden_repo() -> (PathBuf, PathBuf) {
+    let tmp = std::env::temp_dir().join(format!("fael-start-golden-{}", fael_core::ulid()));
+    let d = tmp.join("repo");
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    git(&d, &["init", "-q", "-b", "main"]);
+    std::fs::write(d.join("src/a.rs"), "v1\n").unwrap();
+    git(&d, &["add", "src/a.rs"]);
+    git(&d, &["commit", "-qm", "init"]);
+    assert!(fael(&d, &["plan", "new", "pl", "Plan Title"]).0);
+    assert!(
+        fael(
+            &d,
+            &[
+                "plan",
+                "edit",
+                "pl",
+                "--section",
+                "2",
+                "--replace",
+                "**Do:**",
+                "--with",
+                "**Do:** one thing."
+            ]
+        )
+        .0
+    );
+    (tmp, d)
+}
+
+/// The golden's rows: one open + one closed-with-note cite, one linked issue,
+/// one `after` chunk done with a PR number. Returns (open, shut, link, a, b).
+fn golden_chunks(d: &Path) -> (String, String, String, String, String) {
+    let open = issue(d, "open problem");
+    let shut = issue(d, "was broken");
+    assert!(
+        fael(
+            d,
+            &["close", &shut, "was broken → fixed; guard `src/a_test.rs`"]
+        )
+        .0
+    );
+    let link = issue(d, "linked bug");
+    let a = chunk(d, "Prev", "prev work", &[]);
+    assert!(fael(d, &["chunk", "start", &a, "--no-worktree", "--run", "R0"]).0);
+    assert!(
+        fael(
+            d,
+            &[
+                "chunk",
+                "done",
+                &a,
+                "prev shipped",
+                "--left",
+                "none",
+                "--pr",
+                "7",
+                "--run",
+                "R0"
+            ]
+        )
+        .0
+    );
+    let b = chunk(
+        d,
+        "Fix",
+        &format!("fix {open} (review {shut})"),
+        &["--scope", "src/a.rs", "--issue", &link, "--after", &a],
+    );
+    assert!(
+        fael(
+            d,
+            &[
+                "chunk",
+                "note",
+                &b,
+                &format!("read {shut}: provenance, still starts")
+            ]
+        )
+        .0
+    );
+    (open, shut, link, a, b)
+}
+
+/// The whole `chunk start` output pinned by a golden file: a fixture chunk
+/// whose brief cites one open and one closed-with-note row, one linked issue,
+/// one `after` chunk with a done text and one filled plan section.
+/// Re-bless on purpose with `FAEL_BLESS=1`; production code stays untouched.
+#[test]
+fn start_output_matches_golden() {
+    let snap = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/start-v1.txt");
+    let (tmp, d) = golden_repo();
+    let (open, shut, link, a, b) = golden_chunks(&d);
+    let (ok, out, err) = fael(&d, &["chunk", "start", &b, "--no-worktree", "--full"]);
+    assert!(ok, "{err}");
+    let run = out
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .split_whitespace()
+        .nth(2)
+        .unwrap_or_default()
+        .to_string();
+    let ids = [
+        (open, "<OPEN>"),
+        (shut, "<SHUT>"),
+        (link, "<LINK>"),
+        (a, "<CHUNK-A>"),
+        (b, "<CHUNK-B>"),
+        (run, "<RUN>"),
+    ];
+    let owned: Vec<(String, &str)> = ids.into_iter().collect();
+    let got = crate::common::normalise_start(out.trim(), &tmp, &owned) + "\n";
+    if std::env::var_os("FAEL_BLESS").is_some() {
+        std::fs::create_dir_all(std::path::Path::new(snap).parent().unwrap()).unwrap();
+        std::fs::write(snap, &got).unwrap();
+        return;
+    }
+    let want = std::fs::read_to_string(snap).unwrap_or_default();
+    assert!(
+        got == want,
+        "golden start drifted — FAEL_BLESS=1 to re-bless on purpose\n--- got\n{got}"
+    );
+}
