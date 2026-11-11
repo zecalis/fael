@@ -71,7 +71,7 @@ fn a_session_row_reads_the_aggregates_rules() {
         session: Some("/p/s2.jsonl".into()),
         ..Default::default()
     };
-    let (list, sp) = sessions(&fixture(), &HashMap::new(), &[run], &[]);
+    let (list, sp) = sessions(&fixture(), &HashMap::new(), &[run]);
     let s1 = list.iter().find(|v| v.session == "s1").unwrap();
     assert_eq!((s1.shown, s1.scored, s1.in_context, s1.acted), (1, 1, 1, 1));
     assert_eq!((s1.edits, s1.calls, s1.rejects), (1, 2, 1));
@@ -100,7 +100,11 @@ fn two_sessions_on_one_branch_both_show_its_pr() {
         branch: Some("feat/x".into()),
         ..Default::default()
     };
-    let (list, _) = sessions(&fixture(), &HashMap::new(), &[], std::slice::from_ref(&p));
+    let (mut list, _) = sessions(&fixture(), &HashMap::new(), &[]);
+    // another repo's sessions are never joined, whatever the branch says
+    link_prs(&mut list, std::slice::from_ref(&p), "/w/other");
+    assert!(list.iter().all(|v| !v.pr_checked && v.pr.is_none()));
+    link_prs(&mut list, std::slice::from_ref(&p), "/w/r");
     let s1 = list.iter().find(|v| v.session == "s1").unwrap();
     assert_eq!(
         s1.pr,
@@ -109,26 +113,31 @@ fn two_sessions_on_one_branch_both_show_its_pr() {
             merged: None
         })
     );
-    assert!(
-        list.iter()
-            .find(|v| v.session == "s2")
-            .unwrap()
-            .pr
-            .is_none()
-    );
+    let s2 = list.iter().find(|v| v.session == "s2").unwrap();
+    assert!(s2.pr_checked && s2.pr.is_none());
     p.merged_ms = ts_ms("2026-10-05T00:00:00Z");
-    let (list, sp) = sessions(&fixture(), &HashMap::new(), &[], &[p]);
+    let sp = link_prs(&mut list, &[p.clone()], "/w/r");
     let s1 = list.iter().find(|v| v.session == "s1").unwrap();
     assert_eq!(
         s1.pr.as_ref().unwrap().merged.as_deref(),
         Some("2026-10-05")
     );
     assert_eq!(sp.pushed.with.merged_pr, 1);
+    // merged before the session began: a reused branch name, not its PR
+    p.merged_ms = ts_ms("2026-10-01T00:00:00Z");
+    link_prs(&mut list, &[p], "/w/r");
+    assert!(
+        list.iter()
+            .find(|v| v.session == "s1")
+            .unwrap()
+            .pr
+            .is_none()
+    );
 }
 
 #[test]
 fn a_unique_prefix_finds_one_and_an_ambiguous_one_names_the_stems() {
-    let (list, _) = sessions(&fixture(), &HashMap::new(), &[], &[]);
+    let (list, _) = sessions(&fixture(), &HashMap::new(), &[]);
     assert_eq!(find_session(&list, "s1").unwrap().len(), 1);
     assert_eq!(
         find_session(&list, "/h/x/s2.jsonl").unwrap()[0].session,

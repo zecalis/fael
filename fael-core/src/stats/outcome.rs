@@ -167,10 +167,13 @@ fn link_branch<'a>(
 }
 
 /// The listed PR a branch ships as: a merged one wins, else the highest
-/// number (a branch reopened as a new PR). `None` when no listed PR has that head.
-pub fn pr_for_branch<'a>(prs: &'a [ListedPr], branch: &str) -> Option<&'a ListedPr> {
+/// number (a branch reopened as a new PR). A PR merged before `since_ms` is
+/// skipped — it cannot hold work done after (a reused branch name). `None`
+/// when no listed PR has that head.
+pub fn pr_for_branch<'a>(prs: &'a [ListedPr], branch: &str, since_ms: i64) -> Option<&'a ListedPr> {
     prs.iter()
         .filter(|p| p.branch.as_deref() == Some(branch))
+        .filter(|p| p.merged_ms.is_none_or(|m| m >= since_ms))
         .max_by_key(|p| (p.merged_ms.is_some(), p.number))
 }
 
@@ -337,9 +340,12 @@ mod tests {
         let mut merged = pr(5, "feat/a", "2026-10-01T00:00:00Z");
         merged.merged_ms = crate::ts_ms("2026-10-02T00:00:00Z");
         let prs = vec![merged, pr(9, "feat/a", "2026-10-03T00:00:00Z")];
-        assert_eq!(pr_for_branch(&prs, "feat/a").unwrap().number, 5);
-        assert_eq!(pr_for_branch(&prs[1..], "feat/a").unwrap().number, 9);
-        assert!(pr_for_branch(&prs, "feat/zzz").is_none());
+        assert_eq!(pr_for_branch(&prs, "feat/a", 0).unwrap().number, 5);
+        assert_eq!(pr_for_branch(&prs[1..], "feat/a", 0).unwrap().number, 9);
+        assert!(pr_for_branch(&prs, "feat/zzz", 0).is_none());
+        // a session that began after #5 merged is not #5's
+        let after = crate::ts_ms("2026-10-04T00:00:00Z").unwrap();
+        assert_eq!(pr_for_branch(&prs, "feat/a", after).unwrap().number, 9);
     }
 
     #[test]

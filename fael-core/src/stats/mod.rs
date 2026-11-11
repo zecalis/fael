@@ -82,7 +82,7 @@ pub use repeat::{ContextLoop, context_loop};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{ASK_SPLIT, EventYield, KindYield};
 pub use sessions::{
-    Group, SessionPr, SessionTokens, SessionView, Split, Splits, find_session, sessions,
+    Group, SessionPr, SessionTokens, SessionView, Split, Splits, find_session, link_prs, sessions,
 };
 pub use span::Span;
 pub use unused::{UNUSED_PUSHES, UnusedRow};

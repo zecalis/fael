@@ -137,7 +137,7 @@ fn stats_json_matches_golden_values() {
         Some(serde_json::json!([{
             "session": "s1", "repo": "/work/real", "client": "claude",
             "first": "2026-09-26T00:01:00.000Z", "last": "2026-09-26T00:03:00.000Z",
-            "branch": null, "pr": null, "edits": 0, "pushed_tokens": {"read": 5}, "tokens": null,
+            "branch": null, "pr": null, "pr_checked": false, "edits": 0, "pushed_tokens": {"read": 5}, "tokens": null,
             "shown": 2, "scored": 0, "in_context": 0, "acted": 0,
             "calls": 0, "rejects": 0, "rows_filed": null, "in_run": false
         }]))

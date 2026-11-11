@@ -52,11 +52,14 @@ pub(crate) fn transcript_sum(session: &str) -> Option<RealTokens> {
         let Ok(line) = std::str::from_utf8(&line) else {
             continue;
         };
-        let Some(t) = usage_in_line(line) else {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let Some(t) = usage_of(&v) else {
             continue;
         };
         any = true;
-        match message_id(line) {
+        match message_id(&v) {
             Some(id) => {
                 by_id.insert(id, t);
             }
@@ -66,8 +69,7 @@ pub(crate) fn transcript_sum(session: &str) -> Option<RealTokens> {
     any.then(|| by_id.values().fold(anon, |a, t| a.plus(t)))
 }
 
-fn message_id(line: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+fn message_id(v: &serde_json::Value) -> Option<String> {
     Some(v.get("message")?.get("id")?.as_str()?.to_string())
 }
 
@@ -87,7 +89,10 @@ impl RealTokens {
 /// top-level `usage`). Only `input_tokens` is required — a partial object
 /// still beats no data, the missing sides read 0.
 fn usage_in_line(line: &str) -> Option<RealTokens> {
-    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    usage_of(&serde_json::from_str(line).ok()?)
+}
+
+fn usage_of(v: &serde_json::Value) -> Option<RealTokens> {
     let u = v.get("usage").or_else(|| v.get("message")?.get("usage"))?;
     Some(RealTokens {
         input_tokens: u.get("input_tokens")?.as_u64()?,

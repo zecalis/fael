@@ -303,7 +303,7 @@ fn a_session_shows_the_pr_its_branch_heads() {
     let line = |ts: &str, s: &str, branch: &str| {
         format!(
             r#"{{"ts":"{ts}","repo":{},"client":"claude","session":"{s}","event":"edit","bytes":0,"est_tokens":0,"ids":[],"branch":"{branch}","files":["a.rs"]}}"#,
-            json(&d)
+            json(&d.canonicalize().unwrap())
         )
     };
     let body = [

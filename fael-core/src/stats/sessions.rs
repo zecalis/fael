@@ -47,6 +47,10 @@ pub struct SessionView {
     pub branch: Option<String>,
     /// The listed PR whose `headRefName` is `branch`; absent when none is listed.
     pub pr: Option<SessionPr>,
+    /// `pr` was looked up: the session's repo is the clone whose PR list was
+    /// read. False = unknown (another repo, or no list), which `pr: null` alone
+    /// would hide.
+    pub pr_checked: bool,
     pub edits: usize,
     /// Est tokens fael pushed into the session, by usage event.
     pub pushed_tokens: BTreeMap<String, usize>,
@@ -125,7 +129,6 @@ pub fn sessions(
     parsed: &Parsed,
     logs: &HashMap<String, Log>,
     runs: &[FlowRun],
-    prs: &[ListedPr],
 ) -> (Vec<SessionView>, Splits) {
     let spans = spans(parsed);
     let (all, _) = pairs(parsed, false);
@@ -189,12 +192,6 @@ pub fn sessions(
                 .iter()
                 .max_by_key(|&(b, n)| (*n, *b))
                 .map(|(b, _)| *b);
-            let pr = branch
-                .and_then(|b| pr_for_branch(prs, b))
-                .map(|p| SessionPr {
-                    number: p.number,
-                    merged: p.merged_ms.map(|ms| at(ms)[..10].to_string()),
-                });
             Some(SessionView {
                 session: k.1.to_string(),
                 repo: k.0.to_string(),
@@ -202,7 +199,8 @@ pub fn sessions(
                 first: at(span.0),
                 last: at(span.1),
                 branch: branch.map(String::from),
-                pr,
+                pr: None,
+                pr_checked: false,
                 edits: a.edits,
                 tokens: tokens_of(parsed, k),
                 pushed_tokens: a.toks,
@@ -232,6 +230,31 @@ fn tokens_of(parsed: &Parsed, k: (&str, &str)) -> Option<SessionTokens> {
         cache_read,
         output,
     })
+}
+
+/// Join each session of `repo` to the listed PR its branch heads, then
+/// recount the splits (they hold `merged_pr`). Sessions of any other repo stay
+/// unchecked: the list is one clone's `gh pr list`, and a branch name alone
+/// would match another repo's PR. A PR merged before the session's first line
+/// cannot hold its edits (a reused branch name), so it is skipped. Pure.
+pub fn link_prs(list: &mut [SessionView], prs: &[ListedPr], repo: &str) -> Splits {
+    if !prs.is_empty() {
+        for v in list.iter_mut().filter(|v| v.repo == repo) {
+            let first = ts_ms(&v.first).unwrap_or(0);
+            v.pr_checked = true;
+            v.pr = v
+                .branch
+                .as_deref()
+                .and_then(|b| pr_for_branch(prs, b, first))
+                .map(|p| SessionPr {
+                    number: p.number,
+                    merged: p
+                        .merged_ms
+                        .map(|ms| rfc3339(ms.max(0) as u64)[..10].to_string()),
+                });
+        }
+    }
+    splits(list)
 }
 
 fn splits(list: &[SessionView]) -> Splits {

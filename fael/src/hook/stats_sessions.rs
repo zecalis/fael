@@ -19,6 +19,7 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
         .join(", ");
     let pr = match (&v.branch, &v.pr) {
         (None, _) => "no branch (it never edited)".to_string(),
+        _ if !v.pr_checked => "PR unknown (no PR list read for this session's repo)".to_string(),
         (_, None) => "no PR listed".to_string(),
         (_, Some(p)) => format!(
             "PR #{} {} (its branch's PR; it may hold other sessions' edits too)",
@@ -31,7 +32,8 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
     // pushed est tokens against the transcript's input side (in + cache); the
     // two are different measures (est is once, cache reads recount per turn)
     let tokens = match &v.tokens {
-        None => "  session tokens: n/a (no transcript total from this client)".to_string(),
+        None => "  session tokens: n/a (no transcript total: not a Claude session, or no stop yet)"
+            .to_string(),
         Some(t) => {
             let cache = t.cache_creation + t.cache_read;
             format!(

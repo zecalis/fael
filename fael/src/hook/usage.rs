@@ -163,6 +163,10 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         &prs,
         prs_merged_total,
     );
+    // sessions of this clone join its PR list (other repos stay unknown)
+    if let Ok(r) = crate::repo() {
+        s.session_splits = core::stats::link_prs(&mut s.sessions, &prs, &r.root.to_string_lossy());
+    }
     // this clone's run attribution (client/model/cost with unknown-% beside
     // every number); no crew.db reads empty, never an error
     s.models = core::stats::models(&super::flow::attribution());
@@ -281,10 +285,16 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
 }
 
 /// `fael stats --session <stem|prefix> [--json]`: one session's row from the
-/// parse, the logs, this clone's runs and the cached PR list — no git, no new gh call.
+/// parse, the logs, this clone's runs and the clone's PR list (`gh_prs`: newest 200, cached 600 s — it may run `gh` once when stale).
 fn session_view(q: &str, json: bool, u: &Usage) -> Result<(), String> {
-    let prs = crate::maintain::cached_prs();
-    let (list, _) = core::stats::sessions(&u.parsed, &u.logs, &super::flow::runs(), &prs);
+    let (mut list, _) = core::stats::sessions(&u.parsed, &u.logs, &super::flow::runs());
+    if let Ok(r) = crate::repo() {
+        core::stats::link_prs(
+            &mut list,
+            &crate::maintain::cached_prs(),
+            &r.root.to_string_lossy(),
+        );
+    }
     for v in core::stats::find_session(&list, q)? {
         if json {
             println!("{}", serde_json::to_string(v).map_err(|e| e.to_string())?);
