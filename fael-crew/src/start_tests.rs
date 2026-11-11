@@ -522,6 +522,75 @@ fn a_start_on_an_owner_wait_names_who_unblocks_it() {
     );
 }
 
+/// A blocked or not-ready start prints one exact next call with the real uid —
+/// never a placeholder (first-call start-retype).
+#[test]
+fn a_blocked_start_retype_carries_the_real_uid() {
+    let mut s = Store::open_in_memory().unwrap();
+    let first = add(&mut s, "first", Some("f"));
+    let shipped = add(&mut s, "shipped", Some("s"));
+    s.conn
+        .execute(
+            "INSERT INTO edge(src, dst, kind) SELECT x.id, y.id, 'after'
+             FROM chunk x, chunk y WHERE x.uid = ?1 AND y.uid = ?2",
+            params![shipped, first],
+        )
+        .unwrap();
+    let e = start(&mut s, &shipped, "/w").unwrap_err();
+    assert!(e.contains("is blocked"), "{e}");
+    assert!(
+        e.contains(&format!("fael chunk start {shipped} --force --because")),
+        "{e}"
+    );
+    assert!(!e.contains("<uid>"), "{e}");
+}
+
+/// A draft chunk's reject says who makes it startable (the owner or planner),
+/// not a flag the agent types — with the real uid.
+#[test]
+fn a_draft_start_names_owner_or_planner_with_the_real_uid() {
+    let mut s = Store::open_in_memory().unwrap();
+    let f = Fields {
+        title: Some("t".into()),
+        ..Fields::default()
+    };
+    let c = s.add("inbox", &f, &[], NOW).unwrap();
+    let e = start(&mut s, &c, "/w").unwrap_err();
+    assert!(e.contains("it is draft"), "{e}");
+    assert!(e.contains("owner or planner"), "{e}");
+    assert!(!e.contains("try `fael chunk edit"), "{e}");
+    assert!(
+        e.contains(&format!("fael chunk edit {c} --brief"))
+            && e.contains(&format!("fael chunk start {c}")),
+        "{e}"
+    );
+}
+
+/// A reused R names the real uid, never a placeholder.
+#[test]
+fn a_reused_run_retype_carries_the_real_uid() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    let o = Start {
+        run: Some("R1".into()),
+        ..Start::default()
+    };
+    s.start(&a, &o, &here("/w")).unwrap();
+    let b = add(&mut s, "b", Some("b"));
+    let e = s
+        .start(
+            &b,
+            &Start {
+                run: Some("R1".into()),
+                ..Start::default()
+            },
+            &here("/w2"),
+        )
+        .unwrap_err();
+    assert!(e.contains(&format!("fael chunk start {b} --run")), "{e}");
+    assert!(!e.contains("<uid>"), "{e}");
+}
+
 /// A stalled holder of the same chunk is no refusal (fael:01M6CZ9G41): starting
 /// it again from another worktree takes it over with an automatic receipt —
 /// no --force, no --because.

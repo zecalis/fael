@@ -167,6 +167,36 @@ fn start_refuses_a_brief_citing_a_closed_row_until_forced() {
     assert!(ok, "{err}");
 }
 
+/// A blocked or not-ready start prints one exact next call with the real uid:
+/// a blocked start keeps its `--force --because` retype, and a draft names the
+/// owner or planner — never a placeholder, never an agent `try edit`.
+#[test]
+fn a_blocked_or_draft_start_retype_carries_the_real_uid() {
+    let d = repo();
+    let a = chunk(&d, "A", "do a", &[]);
+    let b = chunk(&d, "B", "do b", &["--after", &a]);
+    let (ok, _, err) = fael(&d, &["chunk", "start", &b, "--no-worktree"]);
+    assert!(!ok, "blocked started");
+    assert!(
+        err.contains(&format!("fael chunk start {b} --force --because")),
+        "{err}"
+    );
+    assert!(!err.contains("<uid>"), "{err}");
+    // a draft (no brief) names who makes it startable, with the real uid
+    let (ok, draft, err) = fael(&d, &["chunk", "add", "Draft", "--plan", "pl"]);
+    assert!(ok, "{err}");
+    let draft = draft.trim().to_string();
+    let (ok, _, err) = fael(&d, &["chunk", "start", &draft, "--no-worktree"]);
+    assert!(!ok, "draft started");
+    assert!(err.contains("owner or planner"), "{err}");
+    assert!(!err.contains("try `fael chunk edit"), "{err}");
+    assert!(
+        err.contains(&format!("fael chunk edit {draft} --brief"))
+            && err.contains(&format!("fael chunk start {draft}")),
+        "{err}"
+    );
+}
+
 #[test]
 fn done_names_its_leftovers_and_the_next_brief_prints_them() {
     let d = repo();
