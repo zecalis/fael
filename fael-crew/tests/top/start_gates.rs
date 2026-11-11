@@ -422,7 +422,9 @@ fn start_output_matches_golden() {
         std::fs::write(snap, &got).unwrap();
         return;
     }
-    let want = std::fs::read_to_string(snap).unwrap_or_default();
+    let want = std::fs::read_to_string(snap)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
     assert!(
         got == want,
         "golden start drifted — FAEL_BLESS=1 to re-bless on purpose\n--- got\n{got}"
