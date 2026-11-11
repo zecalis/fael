@@ -198,3 +198,28 @@ fn session_start_in_a_scratch_repo_leaves_a_real_home_alone() {
     assert!(!home.join(".claude/skills").exists());
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A client that calls fael but whose hooks never fire (Codex, untrusted):
+/// doctor names it, and goes quiet once a hook event of that client lands.
+#[test]
+fn doctor_names_a_client_whose_hooks_never_fire() {
+    let (home, repo) = scratch();
+    let state = home.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    let ts = fael_core::rfc3339(fael_core::now_ms());
+    let line = |event: &str| {
+        format!(
+            "{{\"ts\":\"{ts}\",\"repo\":\"/r\",\"client\":\"codex\",\"event\":\"{event}\",\"session\":\"s\"}}\n"
+        )
+    };
+    let usage = state.join("usage.jsonl");
+    std::fs::write(&usage, line("call").repeat(100)).unwrap();
+    let out = fael(&home, &repo, &["doctor"]);
+    assert!(
+        out.contains("codex: 100 calls, 0 hook events — hooks are not firing; in Codex run /hooks and trust fael"),
+        "{out}"
+    );
+    std::fs::write(&usage, line("call").repeat(100) + &line("silent-start")).unwrap();
+    let out = fael(&home, &repo, &["doctor"]);
+    assert!(!out.contains("hooks are not firing"), "{out}");
+}
