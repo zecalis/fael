@@ -2,14 +2,12 @@
 //! number comes from `fael-core::stats`. Split out of `usage.rs` (file-size
 //! ratchet); `--json` is the contract, this text is unstable by design.
 
-use super::said_text::{said_events_line, said_line};
 use crate::core;
-use std::path::Path;
 
 /// What fael gave back, ahead of what it cost (PLAN-fael-visible-secretary
 /// chunk 5) — every number from `--json`, zero parts left out, nothing to
 /// say = no line.
-fn value_line(s: &core::stats::Stats) -> Option<String> {
+pub(super) fn value_line(s: &core::stats::Stats) -> Option<String> {
     let v = &s.value;
     let parts: Vec<String> = [
         ("in context at edit", v.in_context_at_edit),
@@ -42,7 +40,7 @@ fn hit_suffix(s: &core::stats::Stats, event: &str) -> String {
 }
 
 /// One line per usage event: count, cost, and the hit rate beside it.
-fn print_events(s: &core::stats::Stats) {
+pub(super) fn print_events(s: &core::stats::Stats) {
     let mut ev: Vec<_> = s.by_event.iter().collect();
     ev.sort_by_key(|a| std::cmp::Reverse(a.1.events));
     for (k, c) in ev {
@@ -54,7 +52,7 @@ fn print_events(s: &core::stats::Stats) {
 /// PLAN-fael-context-loop §3, read together: repeats over the edits after
 /// a close (an upper bound, `ContextLoop`), useful shows per 1k tokens;
 /// nothing counted = no line.
-fn loop_line(s: &core::stats::Stats) -> Option<String> {
+pub(super) fn loop_line(s: &core::stats::Stats) -> Option<String> {
     let c = &s.context_loop;
     let none = c.confirmed_repeats + c.edits_after_close + c.useful_shows == 0;
     (!none).then(|| format!(
@@ -67,7 +65,7 @@ fn loop_line(s: &core::stats::Stats) -> Option<String> {
 }
 
 /// One line on rows that crossed agents; nothing to say = no line.
-fn cross_line(s: &core::stats::Stats) -> Option<String> {
+pub(super) fn cross_line(s: &core::stats::Stats) -> Option<String> {
     let c = &s.value.cross_agent;
     let part = |label: &str, r: &core::stats::Reuse| {
         format!(
@@ -171,7 +169,7 @@ fn short_list(items: &[String], pre: &str, post: &str) -> String {
 
 /// Open rows pushed over and over, never in context at an edit — the human's
 /// to-do (report only: what a push says does not change).
-fn print_unused(rows: &[core::stats::UnusedRow]) {
+pub(super) fn print_unused(rows: &[core::stats::UnusedRow]) {
     for r in rows.iter().take(10) {
         println!(
             "  unused {} {}: pushed ×{}, never in context at an edit — fael close {} \"<why>\" · or re-file: fael add {} \"<text>\" --files <files> --supersedes {}",
@@ -183,23 +181,47 @@ fn print_unused(rows: &[core::stats::UnusedRow]) {
     }
 }
 
-fn print_capture(c: &core::stats::Capture) {
+pub(super) fn print_capture(c: &core::stats::Capture) {
+    if let Some(l) = capture_line(c) {
+        println!("{l}");
+    }
+}
+
+/// The capture line as a value, so the short default can tag it.
+pub(super) fn capture_line(c: &core::stats::Capture) -> Option<String> {
     if c.manual_adds + c.sessions_with_edits == 0 {
-        return;
+        return None;
     }
     let gone = match c.sessions_with_edits_gone {
         0 => String::new(),
         n => format!(" ({n} in removed worktrees, not judged)"),
     };
-    println!(
+    Some(format!(
         "  capture: adds ×{} · {} of {} edited session(s) left no row{gone}",
         c.manual_adds, c.sessions_with_edits_no_row, c.sessions_with_edits
-    );
+    ))
 }
+
+/// The short default's warnings line: the count alone, no codes — the codes
+/// live in the warnings section.
+pub(super) fn warnings_line(s: &core::stats::Stats) -> Option<String> {
+    s.asks
+        .get(core::stats::ASK_WARN)
+        .filter(|w| w.events > 0)
+        .map(|w| format!("  warnings ×{} ({} bytes)", w.events, w.bytes))
+}
+
+
+
+
+
+
+
+
 
 /// The human `fael stats` text — format only, every number comes from core.
 /// ` · shown 2 · cut cap×1 · cited 1 · …`: only the outcomes the row has.
-fn outcomes_text(o: &core::stats::RowOutcomes) -> String {
+pub(super) fn outcomes_text(o: &core::stats::RowOutcomes) -> String {
     let cut: Vec<String> = o.cut.iter().map(|(r, n)| format!("{r}×{n}")).collect();
     let parts = [
         (o.shown, format!("shown {}", o.shown)),
@@ -227,7 +249,7 @@ fn outcomes_text(o: &core::stats::RowOutcomes) -> String {
 }
 
 /// Warning lines by code, most first — none, no line.
-fn print_warnings(s: &core::stats::Stats) {
+pub(super) fn print_warnings(s: &core::stats::Stats) {
     if let Some(w) = s.asks.get(core::stats::ASK_WARN).filter(|w| w.events > 0) {
         println!(
             "  warnings ×{} ({} bytes): {}",
@@ -253,104 +275,8 @@ fn print_warnings(s: &core::stats::Stats) {
     }
 }
 
-pub(super) fn print_text(s: &core::stats::Stats, path: &Path, lang_rows: &[String]) {
-    super::lifecycle::print(&s.lifecycle);
-    if let Some(line) = value_line(s) {
-        println!("{line}");
-    }
-    if let Some(line) = super::stats_outcome::outcome_line(s) {
-        println!("{line}");
-    }
-    println!(
-        "fael usage ({}): {} injections · {} bytes · ~{} tokens into context",
-        path.display(),
-        s.events,
-        s.bytes,
-        s.est_tokens
-    );
-    if s.skipped_temp > 0 {
-        println!(
-            "  skipped ×{} from temp repos (benchmarks, tests)",
-            s.skipped_temp
-        );
-    }
-    print_events(s);
-    if let Some(line) = loop_line(s) {
-        println!("{line}");
-    }
-    for line in super::experience_text::experience_lines(s) {
-        println!("{line}");
-    }
-    if let Some(line) = cross_line(s) {
-        println!("{line}");
-    }
-    if let Some(line) = super::stats_handoff::handoff_line(&s.handoff_runs) {
-        println!("{line}");
-    }
-    let f = &s.value.cross_agent.same_file;
-    if f.files > 0 {
-        println!(
-            "  same file within {} min: {} files · {} session pairs (of {} sessions with edits seen)",
-            core::stats::OVERLAP_WINDOW_MS / 60_000,
-            f.files,
-            f.session_pairs,
-            f.sessions_seen
-        );
-    }
-    super::stats_models::print_attribution(s);
-    print_unused(&s.unused_rows);
-    if let Some(rows) = &s.rows {
-        for r in rows {
-            println!(
-                "  row {}: pushed ×{} ({}){}{}",
-                r.id,
-                r.pushes,
-                r.status,
-                if r.noise { " noise?" } else { "" },
-                outcomes_text(&r.outcomes)
-            );
-        }
-    }
-    print_warnings(s);
-    print_capture(&s.capture);
-    if s.retired.pushed > 0 {
-        println!(
-            "  retired at touch: {} of {} pushed row(s) closed or superseded within a day of a push · bumped {}",
-            s.retired.at_touch, s.retired.pushed, s.retired.bumped
-        );
-    }
-    for line in [said_line(&s.said), said_events_line(&s.said)]
-        .into_iter()
-        .flatten()
-    {
-        println!("{line}");
-    }
-    super::friction::lines(&s.friction)
-        .iter()
-        .for_each(|l| println!("{l}"));
-    super::flag_usage::lines(&s.usage)
-        .iter()
-        .for_each(|l| println!("{l}"));
-    println!(
-        "  constants per session: SKILL.md {} bytes (~{} est) + MCP schema {} bytes (~{} est)",
-        s.constants.skill_bytes,
-        s.constants.skill_est,
-        s.constants.mcp_schema_bytes,
-        s.constants.mcp_schema_est
-    );
-    if s.non_english_rows.rows > 0 && !lang_rows.is_empty() {
-        let langs = lang_rows.join("/");
-        let label = if langs == "english" {
-            "English".to_string()
-        } else {
-            langs
-        };
-        println!(
-            "  rows not in {label}: {} of {}",
-            s.non_english_rows.non_english, s.non_english_rows.rows
-        );
-    }
-}
+
+
 
 #[cfg(test)]
 mod tests {

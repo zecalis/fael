@@ -207,7 +207,7 @@ fn joined_since_str(prs: &[ListedPr]) -> String {
 
 /// Stamp the joined window onto the outcome (see `parse`): name + source.
 pub fn with_window(mut o: Outcome, window: Option<i64>, source: &str) -> Outcome {
-    o.window_since = super::window_str(window);
+    o.window_since = super::window::window_str(window);
     o.window_source = source.into();
     o
 }
@@ -222,13 +222,13 @@ pub fn outcome_windowed(
     first_seen: Option<i64>,
 ) -> Outcome {
     let window = super::outcome_window(since, logs, first_seen);
-    let source = super::parse::window_source(since, first_seen, logs);
+    let source = super::window::window_source(since, first_seen, logs);
     with_window(outcome(logs, prs, total, commits, window), window, source)
 }
 
 /// Join ledger rows to the listed PRs. `prs_merged_total` is the
 /// `gh api search/issues` count for the range (`None` = offline/no `gh`,
-/// reads unknown, never an error). `window` is `parse::outcome_window`:
+/// reads unknown, never an error). `window` is `window::outcome_window`:
 /// row ends outside it do not count; PR links are over the listed PRs
 /// whatever the window, with `joined_since` naming the list's reach.
 pub fn outcome(

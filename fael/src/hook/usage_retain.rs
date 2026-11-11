@@ -5,7 +5,7 @@
 //! distinct count (sessions, unique rows) cannot be summed across months, so
 //! they are never merged, only listed.
 
-use super::{usage, usage_files as files};
+use super::{usage_files as files, usage_load};
 use crate::core;
 use serde_json::Value;
 use std::path::Path;
@@ -25,15 +25,17 @@ fn summary_path_at(dir: &Path, month: &str) -> std::path::PathBuf {
 }
 
 /// Write `month`'s summary (temp + rename) unless it is already there.
+/// `pub(crate)`: `rotate` writes the just-closed month's summary at rotation;
+// retain_at below for the older months.
 // ponytail: a summary holds what the month's usage rows say; repo logs, git
 // and gh are not read (they describe the clone today, not that month), so the
 // fields joined from them read empty.
-fn summarise_at(dir: &Path, raw: &Path, month: &str) -> Option<()> {
+pub(crate) fn summarise_at(dir: &Path, raw: &Path, month: &str) -> Option<()> {
     let sum = summary_path_at(dir, month);
     if sum.is_file() {
         return Some(());
     }
-    let parsed = usage::parse_text(&std::fs::read_to_string(raw).ok()?);
+    let parsed = usage_load::parse_text(&std::fs::read_to_string(raw).ok()?);
     let s = core::stats::aggregate(
         &parsed,
         &Default::default(),

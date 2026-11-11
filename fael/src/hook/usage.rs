@@ -4,11 +4,11 @@
 
 use super::asks::{self, UsageMeta};
 use super::state::{head_branch, now_rfc3339};
-use super::stats_text::{print_day, print_text};
+use super::stats_text::print_day;
 use super::usage_commits::{commits, commits_by_clone};
+use super::usage_load::{Usage, load_text, load_where, repo_log};
 use crate::core;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Every injection into context, per machine — never in git. Fails open:
 /// a usage write never fails the command it rode along with. Asks (reject /
@@ -120,97 +120,8 @@ pub(crate) fn usage_row(
     row
 }
 
-/// The log a stats row's repo has now — the tree + journal union the hooks
-/// read, so a `store = "local"` repo (journal only) is not read as empty.
-/// A repo path that no longer resolves falls back to its tree.
-fn repo_log(repo: &str) -> core::Log {
-    crate::repo_at(Path::new(repo))
-        .map(|r| crate::read(&r))
-        .unwrap_or_else(|_| core::fold_bumps(core::read(&Path::new(repo).join(".fael"))))
-}
-
-/// What `fael stats` and `fael report` read: `usage.jsonl` cut to `since`,
-/// parsed, plus the log of every repo it names — finding repos and reading
-/// journals stays with the caller (CLI or app); core joins the loaded logs,
-/// never the filesystem.
-pub(crate) struct Usage {
-    pub(crate) path: PathBuf,
-    pub(crate) empty: bool,
-    pub(crate) parsed: core::stats::Parsed,
-    pub(crate) logs: HashMap<String, core::Log>,
-    /// The explicit `--since` ms (`Some(0)` = all, `None` = absent): the
-    /// outcome window for the flow/outcome joins, else the oldest log row.
-    pub(crate) since: Option<i64>,
-}
-
-pub(crate) fn load(since: Option<i64>) -> Usage {
-    load_where(since, &|_| true)
-}
-
-/// `load`, keeping only the lines (and logs) of repos `keep` accepts — a repo's
-/// evaluator never reads another repo's usage (SPEC-fael-learn-loop §E).
-pub(crate) fn load_where(since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
-    load_text(&super::usage_files::read(since), since, keep)
-}
-
-/// Usage text → `Parsed`, touching no repo log, git or gh.
-pub(crate) fn parse_text(s: &str) -> core::stats::Parsed {
-    parse_since_text(s, None)
-}
-
-/// `parse_text` with the window cut in the same pass — one parse per line
-/// (`parse_since` in core; `since`'s second parse of every line is gone).
-fn parse_since_text(s: &str, window: Option<i64>) -> core::stats::Parsed {
-    // benchmark/test repos live in the OS temp dir (01M3CRR6A) — the boundary
-    // rides in as a parameter, so core stays pure. `/tmp` too: on macOS the
-    // OS temp dir is under /var/folders, but agent scratchpads use /tmp
-    let tmp = [
-        std::env::temp_dir(),
-        std::env::temp_dir().canonicalize().unwrap_or_default(),
-        PathBuf::from("/tmp"),
-        Path::new("/tmp").canonicalize().unwrap_or_default(),
-    ];
-    core::stats::parse_since(s, &super::usage_files::live(), &tmp, window)
-}
-
-/// `load_where` over usage text the caller already read.
-pub(crate) fn load_text(s: &str, since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
-    let path = super::usage_files::live();
-    // `--since all` (0) cuts nothing; any other window cuts in the parse pass
-    let window = since.filter(|&ms| ms > 0);
-    let mut parsed = parse_since_text(s, window);
-    // blank text reads empty; a window that cut every line does too (torn
-    // lines alone never did — they are text, so the text path still says how
-    // many temp rows were skipped)
-    let empty = s.trim().is_empty()
-        || (window.is_some()
-            && parsed.kept.is_empty()
-            && parsed.calls.is_empty()
-            && parsed.skipped == 0);
-    parsed.kept.retain(|v| v["repo"].as_str().is_some_and(keep));
-    parsed.calls.retain(|v| v["repo"].as_str().is_some_and(keep));
-    let mut logs: HashMap<String, core::Log> = HashMap::new();
-    // a removed worktree's path no longer leads to its journal: leave it out,
-    // so stats read it as unknown, not as a log with no rows (01M4D7N4)
-    for repo in parsed.repos().into_iter().filter(|r| keep(r)) {
-        if Path::new(repo).exists() {
-            logs.entry(repo.to_string())
-                .or_insert_with(|| repo_log(repo));
-        }
-    }
-    Usage {
-        path,
-        empty,
-        parsed,
-        logs,
-        since,
-    }
-}
-
 /// The `Stats` `fael stats --json` prints — `fael report` renders the same one.
 pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stats::Stats {
-    let prof = std::env::var_os("FAEL_PROFILE").is_some();
-    let t_all = std::time::Instant::now();
     // The repo `fael stats` runs in is read even when no usage line names it,
     // so a fresh clone's outcome reads log + git + gh alone (outcome-dayone).
     let cwd = crate::repo()
@@ -228,23 +139,16 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     };
     let first_seen = u.parsed.first_seen.values().copied().min();
     let window = core::stats::outcome_window(u.since, logs, first_seen);
-    let t = std::time::Instant::now();
     let mut commit_map = commits_by_clone(u);
     if let Some(k) = &cwd {
         let found = commits(Path::new(k), window.unwrap_or(0));
         commit_map.insert(k.clone(), found.into_iter().map(|(_, c)| c).collect());
     }
-    let dt_commits = t.elapsed();
-    let t = std::time::Instant::now();
     let constants = asks::constants().into();
     let runs = super::flow::runs();
     let merges = super::flow::merges(window);
-    let dt_flow = t.elapsed();
     let tz = local_tz_offset_min();
-    let t = std::time::Instant::now();
     let (prs, prs_merged_total) = crate::maintain::outcome_inputs(u.since, logs, tz, first_seen);
-    let dt_gh = t.elapsed();
-    let t = std::time::Instant::now();
     let mut s = core::stats::aggregate(
         &u.parsed,
         logs,
@@ -259,39 +163,48 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
         &prs,
         prs_merged_total,
     );
-    let dt_core = t.elapsed();
     // this clone's run attribution (client/model/cost with unknown-% beside
     // every number); no crew.db reads empty, never an error
-    let t = std::time::Instant::now();
     s.models = core::stats::models(&super::flow::attribution());
-    let dt_models = t.elapsed();
-    let t = std::time::Instant::now();
     if let Ok(r) = crate::repo() {
         let (log, held) = super::lifecycle::marked(&r);
         s.lifecycle = core::stats::lifecycle(&log, &held);
         s.value.decision_by_state =
             core::stats::decision_by_state(&u.parsed, &log, &held, crate::write::cap::MAX_LIVE);
     }
-    let dt_life = t.elapsed();
-    if prof {
-        eprintln!(
-            "aggregate: commits {:.2}s · flow {:.2}s · gh {:.2}s · core {:.2}s · models {:.2}s · lifecycle {:.2}s · total {:.2}s",
-            dt_commits.as_secs_f64(),
-            dt_flow.as_secs_f64(),
-            dt_gh.as_secs_f64(),
-            dt_core.as_secs_f64(),
-            dt_models.as_secs_f64(),
-            dt_life.as_secs_f64(),
-            t_all.elapsed().as_secs_f64(),
-        );
-    }
     s
 }
 
 pub fn stats(a: &crate::Args) -> Result<(), String> {
-    let prof = std::env::var_os("FAEL_PROFILE").is_some();
-    let t0 = std::time::Instant::now();
     let (json, rows, day_view) = (a.has("json"), a.has("rows"), a.has("day"));
+    // text selection: the short default, `--all` (today's full page), or one
+    // section (`fael stats friction`). `--json` is already the full machine
+    // shape, `--day`/`--days`/`--misses` are their own views — combining them
+    // with a text selection rejects instead of guessing.
+    let all = a.has("all");
+    let section = a.pos.get(1).cloned();
+    if all && section.is_some() {
+        return Err(
+            "rejected: --all and a section pick one — try 'fael stats --all' or 'fael stats friction'"
+                .into(),
+        );
+    }
+    if let Some(sec) = &section
+        && !super::stats_select::SECTIONS.contains(&sec.as_str())
+    {
+        return Err(format!(
+            "rejected: unknown stats section {sec:?} — try {} (or --all)",
+            super::stats_select::SECTIONS.join(", ")
+        ));
+    }
+    if (all || section.is_some())
+        && (json || day_view || a.has("days") || a.has("misses"))
+    {
+        return Err(
+            "rejected: --all and sections are text-only — drop --json/--day/--days/--misses"
+                .into(),
+        );
+    }
     // `--days --json`: the per-day series alone, from the parse — no repo logs,
     // git or gh (issue 01M5S63N follow-up: a board refresh paid ~4 s for it)
     let since = crate::report::since(a)?;
@@ -301,12 +214,7 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         println!("{}", serde_json::json!({ "days": days }));
         return Ok(());
     }
-    let t_read = std::time::Instant::now();
-    let text = super::usage_files::read(since);
-    let dt_read = t_read.elapsed();
-    let t_load = std::time::Instant::now();
-    let u = load_text(&text, since, &|_| true);
-    let dt_load = t_load.elapsed();
+    let u = load_text(&super::usage_files::read(since), since, &|_| true);
     if day_view {
         return day(json, &u);
     }
@@ -342,27 +250,25 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         return Ok(());
     }
     let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
-    let t_agg = std::time::Instant::now();
     let stats = aggregate(&u, &cfg, rows);
-    let dt_agg = t_agg.elapsed();
-    if prof {
-        eprintln!(
-            "profile: read {:.2}s · load(parse+logs) {:.2}s · aggregate {:.2}s · total {:.2}s · repos {} · kept {}",
-            dt_read.as_secs_f64(),
-            dt_load.as_secs_f64(),
-            dt_agg.as_secs_f64(),
-            t0.elapsed().as_secs_f64(),
-            u.logs.len(),
-            u.parsed.kept.len(),
-        );
-    }
     if json {
         println!("{}", super::usage_retain::json(&stats, sums)?);
         return Ok(());
     }
-    print_text(&stats, &u.path, &cfg.lang_rows);
+    // `--rows` rides every selection: the per-row detail under the page.
+    let is_section = section.is_some();
+    match (all, section) {
+        (true, _) => super::stats_select::print_all(&stats, &u.path, &cfg.lang_rows),
+        (false, Some(sec)) => {
+            super::stats_select::print_section(&stats, &u.path, &cfg.lang_rows, &sec)
+        }
+        (false, None) => super::stats_select::print_default(&stats, &u.path),
+    }
     super::usage_retain::print(&sums);
-    misses();
+    // the short default skips the misses count line; `--all` keeps it
+    if all || is_section {
+        misses();
+    }
     Ok(())
 }
 

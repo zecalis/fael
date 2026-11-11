@@ -79,8 +79,11 @@ const CORE: &[(&str, &str)] = &[
     ),
     (
         "stats",
-        "fael stats [--json] [--since d]
-    (tokens fael has put into context, per machine;
+        "fael stats [--all] [section] [--json] [--since d]
+    (tokens fael has put into context, per machine; default = one short line
+     per story, each ending in its section name; --all = the full page, a
+     section (rows, value, outcome, across, models, capture, said, friction,
+     warnings) prints one part;
      --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on,
      all = every month; default = this and last month)",
     ),

@@ -305,7 +305,7 @@ fn stats_counts_rows_by_state_per_kind() {
     assert_eq!(l["decision"]["held"], 1, "{l}");
     assert_eq!(l["decision"]["live"], 1, "{l}");
     assert_eq!(l["issue"]["retired"], 1, "{l}");
-    assert!(f(&["stats"]).starts_with("rows (this repo):\n  decision: live 1 · held 1"));
+    assert!(f(&["stats", "--all"]).starts_with("rows (this repo):\n  decision: live 1 · held 1"));
 }
 
 /// `fael hook edit` on `a.txt` as session `session`: what the push says.

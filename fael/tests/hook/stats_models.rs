@@ -62,7 +62,7 @@ fn hint_fixture() -> std::path::PathBuf {
 fn stats_names_unknown_model_and_cost() {
     let d = fixture();
     let state = d.join("state");
-    let (ok, out, err) = fael_at(&state, &d, &["stats"], "");
+    let (ok, out, err) = fael_at(&state, &d, &["stats", "--all"], "");
     assert!(ok, "{err}");
     assert!(
         out.contains("  models: 2 runs · reported 1 · hint only 0 · none 1"),
@@ -107,7 +107,7 @@ fn stats_names_unknown_model_and_cost() {
 fn size_hint_counts_under_hint_only_not_a_model() {
     let d = hint_fixture();
     let state = d.join("state");
-    let (ok, out, err) = fael_at(&state, &d, &["stats"], "");
+    let (ok, out, err) = fael_at(&state, &d, &["stats", "--all"], "");
     assert!(ok, "{err}");
     assert!(
         out.contains("  models: 5 runs · reported 1 · hint only 3 · none 1"),

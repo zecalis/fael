@@ -70,7 +70,7 @@ fn stats_text_matches_golden() {
     let state = golden_state();
     // not under the repo: the lifecycle panel reads the repo `fael stats` runs in
     let dir = &std::env::temp_dir();
-    let (ok, out, err) = fael_at(&state, dir, &["stats"], "");
+    let (ok, out, err) = fael_at(&state, dir, &["stats", "--all"], "");
     assert!(ok, "{err}");
     assert_eq!(
         normalize(&out, &state),
@@ -86,7 +86,7 @@ fn stats_rows_matches_golden() {
     let state = golden_state();
     // not under the repo: the lifecycle panel reads the repo `fael stats` runs in
     let dir = &std::env::temp_dir();
-    let (ok, out, err) = fael_at(&state, dir, &["stats", "--rows"], "");
+    let (ok, out, err) = fael_at(&state, dir, &["stats", "--all", "--rows"], "");
     assert!(ok, "{err}");
     assert_eq!(
         normalize(&out, &state),
@@ -262,7 +262,7 @@ fn a_bumped_row_counts_under_bumped_not_retired() {
     assert_eq!(v["retired"]["pushed"], 1, "{out}");
     assert_eq!(v["retired"]["at_touch"], 0, "{out}");
     assert_eq!(v["retired"]["bumped"], 1, "{out}");
-    let (ok, out, err) = fael_at(&state, &d, &["stats"], "");
+    let (ok, out, err) = fael_at(&state, &d, &["stats", "--all"], "");
     assert!(ok, "{err}");
     assert!(
         out.contains("retired at touch: 0 of 1 pushed row(s) closed or superseded within a day of a push · bumped 1"),

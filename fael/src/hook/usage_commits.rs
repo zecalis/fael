@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 /// recall), read by `fael stats`, never on a push. Worktrees of one clone
 /// share its object store, so the clone gets one `git log` from its earliest
 /// first usage and each worktree keeps the commits since its own.
-pub(super) fn commits_by_clone(u: &super::usage::Usage) -> core::stats::Commits {
+pub(super) fn commits_by_clone(u: &super::usage_load::Usage) -> core::stats::Commits {
     let mut clones: HashMap<PathBuf, Vec<(&String, i64)>> = HashMap::new();
     for repo in u.logs.keys() {
         if let Some(&since) = u.parsed.first_seen.get(repo) {

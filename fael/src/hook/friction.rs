@@ -246,11 +246,6 @@ pub(crate) fn record_mcp_call(
     append_row(row);
 }
 
-/// `per 100 calls`, one decimal.
-fn per100(n: usize, calls: usize) -> String {
-    format!("{:.1}", n as f64 * 100.0 / calls as f64)
-}
-
 /// `a ×3, b ×1` — most first, so the cause to fix leads.
 pub(super) fn counts(m: &std::collections::BTreeMap<String, usize>) -> String {
     let mut v: Vec<_> = m.iter().collect();
@@ -260,19 +255,11 @@ pub(super) fn counts(m: &std::collections::BTreeMap<String, usize>) -> String {
 }
 
 fn tally_text(t: &core::stats::Tally) -> String {
-    let (c, bad) = (t.calls, t.rejects + t.help + t.find_repeat);
     let why = match t.reasons.is_empty() {
         true => String::new(),
         false => format!(" · rejects: {}", counts(&t.reasons)),
     };
-    format!(
-        "{} — reject {} · help {} · find repeat {} · first-call success {}%{why}",
-        per100(bad, c),
-        per100(t.rejects, c),
-        per100(t.help, c),
-        per100(t.find_repeat, c),
-        t.first_call_ok * 100 / c
-    )
+    format!("{}{why}", super::stats_select::tally_rate(t))
 }
 
 /// The `fael stats` friction lines: the total per 100 calls, the reject

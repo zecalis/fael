@@ -216,10 +216,11 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     let (ok, full, err) = fael(&d, &["doctor", "--help", "--all"]);
     assert!(ok, "{err}");
     assert!(full.contains("--fat"), "{full}");
-    // stats: --rows/--day/--misses hide, --json/--since stay
+    // stats: --rows/--day/--misses hide, --json/--since/--all stay (--all is
+    // public core: the short default names the section it came from)
     let (ok, out, err) = fael(&d, &["stats", "--help"]);
     assert!(ok, "{err}");
-    for present in ["--json", "--since"] {
+    for present in ["--json", "--since", "--all", "[section]"] {
         assert!(out.contains(present), "{present} missing: {out}");
     }
     for hidden in ["--rows", "--day", "--misses"] {

@@ -210,8 +210,8 @@ fn an_empty_text_search_names_the_word_and_is_recorded() {
     assert!(!out.contains("\"src/none.rs\""), "{out}");
     assert!(out.contains("key:nosuchkey"), "{out}");
     assert_eq!(out.lines().count(), 3, "{out}");
-    // the plain stats page grows one line only once something missed
-    let (_, out, _) = fael(&d, &["stats"]);
+    // the full stats page grows one line only once something missed
+    let (_, out, _) = fael(&d, &["stats", "--all"]);
     assert!(out.contains("find misses: ×3"), "{out}");
 }
 

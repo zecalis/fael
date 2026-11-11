@@ -4,7 +4,7 @@
 //! itself is scratch (01M3CRR6A). The caller passes both sides in, so there
 //! is no clock, env or filesystem read here.
 
-use crate::{Log, ts_ms};
+use crate::ts_ms;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -195,83 +195,6 @@ pub fn parse_since(
     p
 }
 
-/// `--since`: the usage lines stamped at or after `ms`, cut before `parse`
-/// so every number downstream — first use per repo, rows added, capture —
-/// reads as that window. A line with no readable `ts` falls outside it.
-pub fn since(text: &str, ms: i64) -> String {
-    text.lines()
-        .filter(|l| {
-            serde_json::from_str::<serde_json::Value>(l)
-                .ok()
-                .and_then(|v| v["ts"].as_str().and_then(ts_ms))
-                .is_some_and(|t| t >= ms)
-        })
-        .flat_map(|l| [l, "\n"])
-        .collect()
-}
-
-/// A `--since` value in `tz_min` minutes east of UTC: `YYYY-MM-DD` is that
-/// day's local midnight (a BKK `2026-10-30` is `2026-10-29T17:00:00Z`), a
-/// full RFC 3339 time keeps its own zone and ignores `tz_min`.
-pub fn since_arg(s: &str, tz_min: i32) -> Option<i64> {
-    match s.len() {
-        10 => ts_ms(&format!("{s}T00:00:00Z")).map(|ms| ms - tz_min as i64 * 60_000),
-        _ => ts_ms(s),
-    }
-}
-
-/// One window for the whole screen: explicit `--since` (`Some(0)` = all),
-/// else the oldest usage read, else the oldest log row (fresh clone).
-/// `None` = nothing to window on; joins read unwindowed, never error.
-pub fn outcome_window(
-    since: Option<i64>,
-    logs: &HashMap<String, Log>,
-    first_seen: Option<i64>,
-) -> Option<i64> {
-    if let Some(ms) = since {
-        return Some(ms);
-    }
-    if let Some(ms) = first_seen {
-        return Some(ms);
-    }
-    logs.values()
-        .flat_map(|log| log.rows.iter().chain(log.closes.iter()))
-        .filter_map(|r| ts_ms(&r.ts))
-        .min()
-}
-
-/// Where the outcome window came from — printed beside the numbers so two
-/// `since` lines on one screen can never be mistaken for one window.
-pub fn window_source(
-    since: Option<i64>,
-    first_seen: Option<i64>,
-    logs: &HashMap<String, Log>,
-) -> &'static str {
-    if let Some(ms) = since {
-        return if ms == 0 { "all" } else { "since" };
-    }
-    if first_seen.is_some() {
-        return "usage";
-    }
-    let any = logs
-        .values()
-        .flat_map(|log| log.rows.iter().chain(log.closes.iter()))
-        .any(|r| ts_ms(&r.ts).is_some());
-    if any { "ledger" } else { "none" }
-}
-
-/// `YYYY-MM-DD` of `outcome_window` (`"all"` / `""`), beside it by design.
-pub fn window_str(window: Option<i64>) -> String {
-    match window {
-        Some(0) => "all".to_string(),
-        Some(ms) => crate::rfc3339(ms.max(0) as u64)
-            .get(..10)
-            .unwrap_or("")
-            .to_string(),
-        None => String::new(),
-    }
-}
-
 /// Ids one usage event handed to the agent — shared by the push counts
 /// above and the day view's delivered panel, so the two cannot drift.
 fn ids_of(v: &serde_json::Value) -> Vec<String> {
@@ -294,8 +217,8 @@ fn count(into: &mut HashMap<String, (usize, usize)>, key: String, toks: usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::outcome_window;
     use super::parse;
+    use crate::stats::window::{outcome_window, since, since_arg, window_source};
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
 
@@ -346,16 +269,16 @@ mod tests {
         assert_eq!(outcome_window(None, &HashMap::new(), None), None);
         // sources line up with the same precedence
         assert_eq!(
-            super::window_source(crate::ts_ms("2026-10-02T00:00:00Z"), None, &logs),
+            window_source(crate::ts_ms("2026-10-02T00:00:00Z"), None, &logs),
             "since"
         );
-        assert_eq!(super::window_source(Some(0), None, &logs), "all");
+        assert_eq!(window_source(Some(0), None, &logs), "all");
         assert_eq!(
-            super::window_source(None, crate::ts_ms("2026-10-05T00:00:00Z"), &logs),
+            window_source(None, crate::ts_ms("2026-10-05T00:00:00Z"), &logs),
             "usage"
         );
-        assert_eq!(super::window_source(None, None, &logs), "ledger");
-        assert_eq!(super::window_source(None, None, &HashMap::new()), "none");
+        assert_eq!(window_source(None, None, &logs), "ledger");
+        assert_eq!(window_source(None, None, &HashMap::new()), "none");
     }
 
     #[test]
@@ -385,13 +308,13 @@ mod tests {
         let line =
             |ts: &str| format!("{{\"ts\":\"{ts}\",\"repo\":\"/work/real\",\"event\":\"read\"}}\n");
         let text = line("2026-09-29T23:59:59.000Z") + &line("2026-09-30T09:00:00.000Z") + "torn\n";
-        let day = super::since_arg("2026-09-30", 0).unwrap();
-        assert_eq!(super::since(&text, day), line("2026-09-30T09:00:00.000Z"));
+        let day = since_arg("2026-09-30", 0).unwrap();
+        assert_eq!(since(&text, day), line("2026-09-30T09:00:00.000Z"));
         assert_eq!(
-            super::since_arg("2026-09-30T09:00:00Z", 0),
+            since_arg("2026-09-30T09:00:00Z", 0),
             Some(day + 9 * 3_600_000)
         );
-        assert_eq!(super::since_arg("last week", 0), None);
+        assert_eq!(since_arg("last week", 0), None);
     }
 
     #[test]
@@ -399,15 +322,15 @@ mod tests {
         // BKK (+07:00) 2026-09-30 starts at 2026-09-29T17:00:00Z; a full
         // timestamp keeps its own zone whatever the offset is.
         assert_eq!(
-            super::since_arg("2026-09-30", 420),
+            since_arg("2026-09-30", 420),
             super::ts_ms("2026-09-29T17:00:00.000Z")
         );
         assert_eq!(
-            super::since_arg("2026-09-30T09:00:00Z", 420),
-            super::since_arg("2026-09-30T09:00:00Z", 0)
+            since_arg("2026-09-30T09:00:00Z", 420),
+            since_arg("2026-09-30T09:00:00Z", 0)
         );
         assert_eq!(
-            super::since_arg("2026-09-30", 0),
+            since_arg("2026-09-30", 0),
             super::ts_ms("2026-09-30T00:00:00.000Z")
         );
     }
