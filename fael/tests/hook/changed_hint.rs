@@ -239,7 +239,9 @@ fn a_hub_of_decisions_earns_no_ask() {
     let out = edit(&d, "s0", "src/a.rs");
     assert!(out.contains("3 of 14"), "{out}");
     assert!(named(&out).is_empty(), "{out}");
-    // every one changed unjudged: all dormant, the push says nothing
+    // every one changed unjudged: all dormant, the push says nothing; drop
+    // the edit lists, or peer same-file (s0 on this file) would say instead
+    let _ = std::fs::remove_dir_all(d.join("state/sessions/edits"));
     std::fs::write(d.join("src/a.rs"), "// v2 changed\n").unwrap();
     assert_eq!(edit_or_silent(&d, "s1", "src/a.rs"), "");
 }

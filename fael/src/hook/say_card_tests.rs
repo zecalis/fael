@@ -66,7 +66,7 @@ fn a_line_said_at_another_event_is_dropped() {
 }
 
 /// Over budget a push drops lines by cut rank, so two kinds never share one
-/// (the order would be a coin flip); only the six cuttable ones are.
+/// (the order would be a coin flip); only the cuttable ones are.
 #[test]
 fn cut_ranks_are_unique_per_kind() {
     let mut ranks: Vec<u8> = all()
@@ -81,7 +81,7 @@ fn cut_ranks_are_unique_per_kind() {
     ranks.dedup();
     assert_eq!(ranks.len(), n);
     assert_eq!(
-        n, 8,
-        "notice, fixed, ask, cited, checkpoint, inbox, overlap, briefdrift"
+        n, 9,
+        "notice, fixed, ask, cited, checkpoint, inbox, overlap, briefdrift, peer"
     );
 }

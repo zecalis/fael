@@ -116,6 +116,9 @@ fn codex_and_notify_off_print_no_user_line() {
     let on = edit(&d, "codex").unwrap();
     assert!(on["systemMessage"].is_null(), "{on}");
     std::fs::write(d.join(".fael/config.toml"), "[notify]\nuser = false\n").unwrap();
+    // a fresh session: the seen list would hide the row otherwise; drop the
+    // edit lists too, or peer same-file would change the context under test
+    let _ = std::fs::remove_dir_all(d.join("state/sessions/edits"));
     // a fresh session: the seen list would hide the row otherwise
     let input = format!(
         r#"{{"cwd":{},"session_id":"s2","tool_name":"Edit","tool_input":{{"file_path":"src/a.rs"}}}}"#,
