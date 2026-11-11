@@ -6,6 +6,7 @@
 use super::args::{repo_for, s, unknown_note, with_notes};
 use super::chunk_misplaced::misplaced_note;
 use super::chunk_retype::retype as mcp_retype;
+use super::chunk_shape::shape_missing_with_live;
 use crate::Repo;
 use serde_json::Value;
 
@@ -101,7 +102,7 @@ fn with_start_seat(a: &Value) -> (Value, Option<String>) {
 fn chunk_checked(a: &Value) -> Result<String, String> {
     let (a, seat) = with_start_seat(a);
     let (Some(verb), Some(uid)) = (s(&a, "verb"), s(&a, "uid")) else {
-        return Err(shape_missing(&a));
+        return Err(shape_missing_with_live(&a));
     };
     let r = repo_for(&a)?;
     let args = build_args(&verb, &uid, &a)?;
@@ -111,19 +112,6 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
         Err(e) => Err(with_cwd_hint(e)),
     };
     with_notes(res, vec![seat])
-}
-
-/// Every required key missing, said once with the whole call shape — `start` is the widest
-/// shape (it needs `cwd`), so a caller that forgot `verb` is not sent back a round per key.
-fn shape_missing(a: &Value) -> String {
-    let what = match (s(a, "verb").is_none(), s(a, "uid").is_none()) {
-        (true, true) => "verb + uid",
-        (true, false) => "verb",
-        _ => "uid",
-    };
-    format!(
-        "rejected: {what} is required for chunk — verb: show|status|start|note|done|wait|after; try chunk {{verb: \"start\", uid: \"<uid>\", cwd: \"<your working directory>\"}} (cwd only on start)"
-    )
 }
 
 /// The argv `chunk_checked` runs — pure, so unit tests pin the contract without

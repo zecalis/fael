@@ -292,3 +292,64 @@ fn app_contract_matches_swift_and_golden() {
         "APP_CONTRACT has duplicates"
     );
 }
+
+/// `fael chunk --help` opens with the agent's verbs: the first 15 lines hold
+/// one runnable example each for start, note, done, status, show and wait;
+/// owner and planner verbs follow under their own heading. Threshold trial:
+/// the page never grows past its baseline (4595 B, 39 lines on 2026-11-11).
+#[test]
+fn chunk_help_opens_with_the_agents_verbs() {
+    let out = std::process::Command::new(crate::common::fael_bin())
+        .env(
+            "FAEL_STATE_DIR",
+            std::env::temp_dir().join("fael-crew-help-probe"),
+        )
+        .args(["chunk", "--help"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    assert!(!out.is_empty(), "fael chunk --help printed nothing");
+    let first: Vec<&str> = out.lines().take(15).collect();
+    assert_eq!(first.len(), 15, "chunk --help shrank past 15 lines:\n{out}");
+    for verb in ["start", "note", "done", "status", "show", "wait"] {
+        assert!(
+            first
+                .iter()
+                .any(|l| l.contains(&format!("fael chunk {verb}"))),
+            "first 15 lines lack a runnable `fael chunk {verb}` example:\n{}",
+            first.join("\n")
+        );
+    }
+    // `status` takes no uid in a worktree that holds one live run.
+    assert!(
+        out.contains("fael chunk status [<uid>]"),
+        "status line lost its optional uid:\n{out}"
+    );
+    // owner and planner verbs ride under their own headings, after the agents'.
+    let owner = out.find("owner:").expect("chunk --help lacks `owner:`");
+    let planner = out.find("planner:").expect("chunk --help lacks `planner:`");
+    assert!(
+        owner < planner,
+        "owner heading must precede planner:\n{out}"
+    );
+    for verb in ["answer", "accept"] {
+        let at = out.find(&format!("fael chunk {verb}")).unwrap_or_else(|| {
+            out.find(verb)
+                .unwrap_or_else(|| panic!("chunk --help lacks {verb}:\n{out}"))
+        });
+        assert!(at > owner, "`{verb}` must follow `owner:`:\n{out}");
+    }
+    for verb in ["apply", "approve"] {
+        let at = out.find(&format!("fael chunk {verb}")).unwrap_or_else(|| {
+            out.find(verb)
+                .unwrap_or_else(|| panic!("chunk --help lacks {verb}:\n{out}"))
+        });
+        assert!(at > planner, "`{verb}` must follow `planner:`:\n{out}");
+    }
+    // threshold trial: the page does not grow in bytes (baseline 4595 B).
+    assert!(
+        out.len() <= 4595,
+        "chunk --help grew to {} B past its 4595 B baseline",
+        out.len()
+    );
+}

@@ -160,6 +160,45 @@ fn chunk_start_without_because_names_mcp_keys() {
     assert!(out.contains(&format!("uid: \"{uid}\"")), "{out}");
 }
 
+/// Missing `uid` echoes what was sent and fills the one live run's uid —
+/// `sent: verb, text · missing: uid` with no run, the real uid with one.
+#[test]
+fn missing_uid_echoes_sent_and_fills_the_live_run() {
+    let (main, wt) = main_and_worktree();
+    let (ok, uid, err) = cli(&wt, &["chunk", "add", "Post", "--brief", "Write it"]);
+    assert!(ok, "{err}");
+    let uid = uid.trim().to_string();
+    // no run yet: the shape names what was sent and what is missing
+    let r = mcp_tool(
+        &wt,
+        "chunk",
+        &[serde_json::json!({"verb": "note", "text": "x"})],
+    );
+    assert_eq!(r[0]["result"]["isError"], true, "{r:?}");
+    let out = text_of(&r);
+    assert!(out.contains("sent: verb, text"), "{out}");
+    assert!(out.contains("missing: uid"), "{out}");
+    // one live run here: the retype names it, never a placeholder
+    let (ok, _, err) = cli(&wt, &["chunk", "start", &uid]);
+    assert!(ok, "{err}");
+    let r = mcp_tool(
+        &wt,
+        "chunk",
+        &[serde_json::json!({"verb": "note", "text": "x"})],
+    );
+    let out = text_of(&r);
+    assert!(out.contains(&format!("uid: \"{uid}\"")), "{out}");
+    assert!(!out.contains("<uid>"), "{out}");
+    // elsewhere with no live run: still the sent/missing line
+    let r = mcp_tool(
+        &main,
+        "chunk",
+        &[serde_json::json!({"verb": "note", "text": "x"})],
+    );
+    let out = text_of(&r);
+    assert!(out.contains("sent: verb, text · missing: uid"), "{out}");
+}
+
 /// A client that declares `roots` and names a worktree other than the server's launch dir
 /// gives `chunk start` its seat with no `cwd` (issue 01M6BKHZP); the server asks for roots
 /// after `initialized`.

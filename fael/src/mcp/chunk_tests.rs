@@ -1,5 +1,6 @@
 //! `chunk` arg contract: what MCP forwards, what it notes, never rejects.
 
+use super::super::chunk_shape::shape_missing;
 use super::{KNOWN, build_args, misplaced_note, unknown_note, unknown_verb};
 
 #[test]
@@ -240,13 +241,23 @@ fn start_forwards_force_with_because() {
 
 #[test]
 fn a_call_missing_verb_gets_the_whole_start_shape_once() {
-    let e = super::shape_missing(&json!({"uid": "U1"}));
+    let e = shape_missing(&json!({"uid": "U1"}));
     assert!(
         e.contains("verb is required") && e.contains("cwd: \""),
         "{e}"
     );
-    let e = super::shape_missing(&json!({}));
+    let e = shape_missing(&json!({}));
     assert!(e.contains("verb + uid is required"), "{e}");
+}
+
+#[test]
+fn missing_uid_echoes_sent_and_names_the_verb_in_the_retype() {
+    let e = shape_missing(&json!({"verb": "note", "text": "x"}));
+    assert!(e.contains("sent: verb, text"), "{e}");
+    assert!(e.contains("missing: uid"), "{e}");
+    assert!(e.contains("verb: \"note\""), "{e}");
+    assert!(e.contains("uid: \"<uid>\""), "{e}");
+    assert!(!e.contains("verb + uid"), "{e}");
 }
 
 #[test]
