@@ -178,6 +178,7 @@ pub(super) fn print_all(s: &core::stats::Stats, path: &Path, lang_rows: &[String
     for line in [
         super::said_text::said_line(&s.said),
         super::said_text::said_events_line(&s.said),
+        super::said_text::notes_line(&s.said),
     ]
     .into_iter()
     .flatten()
@@ -259,6 +260,7 @@ pub(super) fn print_section(
             for line in [
                 super::said_text::said_line(&s.said),
                 super::said_text::said_events_line(&s.said),
+                super::said_text::notes_line(&s.said),
             ]
             .into_iter()
             .flatten()
