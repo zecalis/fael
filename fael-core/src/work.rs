@@ -18,6 +18,7 @@ mod pure;
 mod ready;
 mod report;
 mod scopes;
+mod touch;
 
 /// A chunk's brief, as `chunk show` prints the fields core reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,3 +91,4 @@ pub use pure::{
 pub use ready::{first_ready, kickoff_text, ready_in};
 pub use report::{mark_report, mark_report_session};
 pub use scopes::{Other, Scopes, scopes};
+pub use touch::mark_touched;

@@ -57,8 +57,9 @@ pub(super) fn all() -> Vec<Line> {
         line(
             Kind::Overlap {
                 owner: "01D".into(),
+                file: "a.rs".into(),
             },
-            "fael: a.rs outside chunk 01C's scope, inside open chunk p/x's — coordinate: fael chunk note 01D \"<text>\", or go on\n",
+            "fael: a.rs — p/x (agent, open) · fael chunk note 01D \"<text>\" · yours? fael chunk status\n",
         ),
         line(
             Kind::Inbox {
