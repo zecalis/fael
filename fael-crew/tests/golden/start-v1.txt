@@ -12,7 +12,7 @@ cited rows now:
 - <SHUT> — closed: was broken → fixed; guard `src/a_test.rs` — was broken
 
 ledger issues this chunk fixes — once the fix holds, close each with `fael close <id> "<cause> → <fix>; guard \`<test path>\`"` (done never closes them):
-> <LINK> linked bug
+> <LINK> — open — linked bug
 
 notes left for this chunk:
 > read <SHUT>: provenance, still starts
