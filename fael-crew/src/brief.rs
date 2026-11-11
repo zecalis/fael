@@ -276,6 +276,12 @@ impl Started {
             if c.brief != c.title {
                 let _ = writeln!(o, "\n{}", c.brief.trim_end());
             }
+            if !c.cited.is_empty() {
+                let _ = writeln!(o, "\ncited rows now:");
+                for line in &c.cited {
+                    let _ = writeln!(o, "- {line}");
+                }
+            }
             let quote = |o: &mut String, head: &str, all: &[String]| {
                 if !all.is_empty() {
                     let _ = writeln!(o, "\n{head}:");

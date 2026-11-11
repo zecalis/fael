@@ -33,7 +33,7 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str, at_start: bool) {
         }
     }
     let log = crate::read(r);
-    for w in stale_warnings(&b.title, &b.brief, &b.issues, &log, &b.uid) {
+    for w in stale_warnings(&b.title, &b.brief, &b.issues, &log, &b.uid, at_start) {
         eprintln!("{w}");
     }
     for w in super::chunk_scope_report::warnings(&b.title, &b.brief, &log) {
@@ -47,16 +47,18 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str, at_start: bool) {
 /// Linked issues plus brief cites whose row is closed: the board's `stale`.
 /// A linked `--issue` id closed in the ledger is primary (done elsewhere);
 /// a brief mention is secondary. Deduped by row id — a link already said
-/// stays silent in the brief scan.
+/// stays silent in the brief scan. `at_start`: the running agent reads it, so the
+/// remedy is a note, never an edit (which clears the owner's approval).
 pub(crate) fn stale_warnings(
     title: &str,
     brief: &str,
     issues: &[String],
     log: &fael_core::Log,
     uid: &str,
+    at_start: bool,
 ) -> Vec<String> {
     let (shut, keys) = (fael_core::closed(log), fael_core::keys(log, None));
-    stale_warnings_in(title, brief, issues, log, uid, (&shut, &keys))
+    stale_warnings_in(title, brief, issues, log, uid, (&shut, &keys), at_start)
 }
 
 /// `stale_warnings` with the log's closed set and key list passed in: the board asks it
@@ -68,6 +70,7 @@ pub(crate) fn stale_warnings_in(
     log: &fael_core::Log,
     uid: &str,
     (shut, keys): (&HashSet<&str>, &[fael_core::KeyUse]),
+    at_start: bool,
 ) -> Vec<String> {
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut out = Vec::new();
@@ -81,7 +84,7 @@ pub(crate) fn stale_warnings_in(
         if !seen.insert(id) {
             continue;
         }
-        out.push(closed_line(&cite, &first, uid));
+        out.push(closed_line(&cite, &first, uid, at_start));
     }
     out
 }
@@ -95,10 +98,10 @@ fn linked_line(id: &str, first: &str, uid: &str) -> String {
     )
 }
 
-/// `fael chunk start` (issue 01M5FMHQX): a chunk whose linked issue is
-/// closed, or whose brief cites a closed row, is refused before anything is
-/// claimed; a `chunk note` naming the closed row cures a brief cite (provenance,
-/// e.g. "review 01M718NN", stays readable), `--force` starts anything anyway.
+/// `fael chunk start` (issue 01M5FMHQX): a chunk whose linked issue is closed is
+/// refused before anything is claimed. A brief cite of a closed row is not refused:
+/// `cited rows now` prints its live state with the close text, so the agent reads what
+/// is true at start. `--force` starts anything anyway.
 pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> {
     let b = s.show(uid)?;
     if s.chunk_place(&b.uid)?
@@ -108,10 +111,9 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
     }
     let log = crate::read(r);
     let shut = fael_core::closed(&log);
-    let mut seen: HashSet<String> = HashSet::new();
     let mut linked: Vec<String> = Vec::new();
     for id in &b.issues {
-        if !shut.contains(id.as_str()) || !seen.insert(id.clone()) {
+        if !shut.contains(id.as_str()) {
             continue;
         }
         linked.push(format!(
@@ -119,47 +121,20 @@ pub(crate) fn gate(s: &Store, r: &crate::Repo, uid: &str) -> Result<(), String> 
             close_first_line(&log, id)
         ));
     }
-    // A brief cite the notes already name is acknowledged, not stale: the
-    // planner cites the deciding review/row on purpose, the starter read it.
-    let notes = b.notes.join("\n");
-    let mut cites: Vec<String> = Vec::new();
-    for (cite, first, id) in closed_cites_ids(
-        &b.title,
-        &b.brief,
-        &log,
-        (&fael_core::closed(&log), &fael_core::keys(&log, None)),
-    ) {
-        if !seen.insert(id.clone()) {
-            continue;
-        }
-        if notes.contains(&id) || notes.contains(&cite) {
-            continue;
-        }
-        cites.push(format!("  {cite} — closed: {first}"));
-    }
-    if linked.is_empty() && cites.is_empty() {
+    if linked.is_empty() {
         return Ok(());
     }
-    let mut lines = linked;
-    lines.extend(cites);
     // A linked issue closed means the work landed elsewhere: the way out is drop,
-    // not a note + restart (the note only corrects a stale brief cite). Name both
-    // so the agent does not "fix" a done chunk by starting it again.
-    let action = if lines.iter().any(|l| l.starts_with("  linked issue")) {
-        format!(
-            "done elsewhere? `fael chunk drop {}` — a deliberate reopen first notes the reason (`fael chunk note {} \"<text>\"`, never `chunk edit`: it clears the owner's approval), then `fael chunk start {} --force --because \"<what you will avoid>\"`",
-            b.uid, b.uid, b.uid
-        )
-    } else {
-        format!(
-            "name the closed row in `fael chunk note {} \"<read <id>: why it still starts>\"` (never `chunk edit`: it clears the owner's approval) and start again — no --force needed once noted; `--force --because \"<what you will avoid>\"` starts without the note",
-            b.uid
-        )
-    };
+    // not a note + restart. Name it so the agent does not "fix" a done chunk by
+    // starting it again.
+    let action = format!(
+        "done elsewhere? `fael chunk drop {}` — a deliberate reopen first notes the reason (`fael chunk note {} \"<text>\"`, never `chunk edit`: it clears the owner's approval), then `fael chunk start {} --force --because \"<what you will avoid>\"`",
+        b.uid, b.uid, b.uid
+    );
     Err(format!(
         "rejected: chunk {} cites closed rows:\n{}\n{}",
         b.uid,
-        lines.join("\n"),
+        linked.join("\n"),
         action
     ))
 }
@@ -211,13 +186,21 @@ fn closed_cites_ids(
 }
 
 /// One closed-ref warning: the close text's first line, so the planner sees why it settled.
-fn closed_line(cite: &str, first: &str, uid: &str) -> String {
-    format!("warning: brief cites {cite} — closed: {first} — fael chunk edit {uid} --brief …")
+/// At start the remedy is a note (the running agent never edits the brief); elsewhere the
+/// owner or planner edits it.
+fn closed_line(cite: &str, first: &str, uid: &str, at_start: bool) -> String {
+    if at_start {
+        format!(
+            "warning: brief cites {cite} — closed: {first} — fael chunk note {uid} \"<what changed>\""
+        )
+    } else {
+        format!("warning: brief cites {cite} — closed: {first} — fael chunk edit {uid} --brief …")
+    }
 }
 
 /// The text a row was closed with, first line: the newest close row wins, else the folded
 /// `closed.text` a compacted row carries.
-fn close_first_line(log: &fael_core::Log, id: &str) -> String {
+pub(crate) fn close_first_line(log: &fael_core::Log, id: &str) -> String {
     let from_close = log
         .closes
         .iter()
@@ -467,6 +450,7 @@ mod tests {
             &[],
             &log,
             uid,
+            false,
         );
         assert_eq!(both.len(), 1, "{both:?}");
         assert!(
@@ -475,6 +459,15 @@ mod tests {
                 && both[0].contains(&format!("fael chunk edit {uid} --brief")),
             "{}",
             both[0]
+        );
+        // at start the remedy is a note, never an edit (which clears approval)
+        let started = stale_warnings("t", "Fixes test:cash-basis-edges", &[], &log, uid, true);
+        assert_eq!(started.len(), 1, "{started:?}");
+        assert!(
+            started[0].contains(&format!("fael chunk note {uid}"))
+                && !started[0].contains("chunk edit"),
+            "{}",
+            started[0]
         );
         // a missing key, an unknown id and a key shared by two rows stay silent
         let mut dup = log.clone();
@@ -491,12 +484,20 @@ mod tests {
             &[],
             &dup,
             uid,
+            false,
         );
         assert!(silent.is_empty(), "{silent:?}");
-        let open_only = stale_warnings("t", "see test:open-topic, deferred work", &[], &log, uid);
+        let open_only = stale_warnings(
+            "t",
+            "see test:open-topic, deferred work",
+            &[],
+            &log,
+            uid,
+            false,
+        );
         assert!(open_only.is_empty(), "{open_only:?}");
         // an id token of the closed row warns too, with the close's first line only
-        let by_id = stale_warnings("t", "see 01M0000000000000000000001", &[], &log, uid);
+        let by_id = stale_warnings("t", "see 01M0000000000000000000001", &[], &log, uid, false);
         assert_eq!(by_id.len(), 1, "{by_id:?}");
         assert!(
             by_id[0].contains("shipped in v2") && !by_id[0].contains("more detail"),
@@ -517,6 +518,7 @@ mod tests {
             std::slice::from_ref(&shut),
             &log,
             uid,
+            false,
         );
         assert_eq!(linked.len(), 1, "{linked:?}");
         assert!(
@@ -527,7 +529,14 @@ mod tests {
             linked[0]
         );
         // the same row cited in the brief too: said once
-        let dup = stale_warnings("t", "see 01M0000000000000000000001", &[shut], &log, uid);
+        let dup = stale_warnings(
+            "t",
+            "see 01M0000000000000000000001",
+            &[shut],
+            &log,
+            uid,
+            false,
+        );
         assert_eq!(dup.len(), 1, "{dup:?}");
         // an open linked issue stays silent
         let open = stale_warnings(
@@ -536,6 +545,7 @@ mod tests {
             &["01M0000000000000000000002".to_string()],
             &log,
             uid,
+            false,
         );
         assert!(open.is_empty(), "{open:?}");
     }

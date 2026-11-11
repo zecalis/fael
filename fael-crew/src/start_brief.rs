@@ -76,6 +76,7 @@ pub(super) fn brief(
                     avoid_more: 0,
                     resume: None,
                     issues: vec![],
+                    cited: vec![],
                     started: None,
                     base: None,
                 };
@@ -104,6 +105,11 @@ pub(super) fn brief(
             .map_err(err)?,
     };
     (b.started, b.base) = run_seat(tx, id, start)?;
+    // section drift is judged against the brief's age, not this run's: the later of the
+    // chunk's last `edited brief` event (its first event when never edited) and the
+    // previous run's start — otherwise an edit between `chunk add` and the first start
+    // is invisible even though the brief was written against the older text
+    b.started = drift_baseline(tx, id, &b.uid, start, b.started.clone())?;
     b.sections = section::list(tx, pid)?;
     b.reads = reads
         .lines()
@@ -165,6 +171,50 @@ fn run_seat(
             .map_err(err)
             .map(|r| r.unwrap_or((None, None))),
     }
+}
+
+/// Section drift baseline: the later of the chunk's last `edited brief` event (its first
+/// event — `chunk add` — when never edited) and the previous run's start. `run_started`
+/// is this start's run (or the latest run for the still-to-come start `show` previews):
+/// for a start it is always later than both, so the previous run is read instead.
+/// Lexicographic compare holds for RFC3339 timestamps.
+fn drift_baseline(
+    tx: &Transaction,
+    id: i64,
+    uid: &str,
+    start: Option<&str>,
+    run_started: Option<String>,
+) -> Result<Option<String>, String> {
+    let prev: Option<String> = match start {
+        Some(r) => tx
+            .query_row(
+                "SELECT started FROM run WHERE chunk = ?1 AND start != ?2 ORDER BY id DESC LIMIT 1",
+                rusqlite::params![id, r],
+                |q| q.get(0),
+            )
+            .optional()
+            .map_err(err)?,
+        None => run_started,
+    };
+    let last_edit: Option<String> = tx
+        .query_row(
+            "SELECT MAX(at) FROM event WHERE chunk_uid = ?1 AND text LIKE 'edited%brief%'",
+            [uid],
+            |q| q.get(0),
+        )
+        .map_err(err)?;
+    let first: Option<String> = tx
+        .query_row(
+            "SELECT MIN(at) FROM event WHERE chunk_uid = ?1",
+            [uid],
+            |q| q.get(0),
+        )
+        .map_err(err)?;
+    Ok(match (last_edit.or(first), prev) {
+        (Some(b), Some(p)) => Some(b.max(p)),
+        (b, None) => b,
+        (None, p) => p,
+    })
 }
 
 fn texts(tx: &Transaction, sql: &str, uid: &str) -> Result<Vec<String>, String> {
