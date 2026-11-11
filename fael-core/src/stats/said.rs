@@ -15,9 +15,9 @@
 //! - `fixed` / `fixcommit` (experience-loop chunk 5) — the session filed an issue after it
 //!   (`fixcommit` is legacy: no hook says it now)
 //! - `notice` — the session filed a row after it
-//! - `overlap` / `checkpoint` / `briefdrift` — the session ran `fael chunk
-//!   note` after it (a chunk note is no ledger row; its `call` usage line is
-//!   the evidence)
+//! - `overlap` / `inbox` / `checkpoint` / `briefdrift` — the session ran
+//!   `fael chunk note` within 30 minutes after it (a chunk note is no ledger
+//!   row; its `call` usage line is the evidence)
 //! - `retired` — the session filed a decision after it
 //! - `held` — no hook says it now; old entries earn like `ask`
 //!
@@ -46,7 +46,7 @@ use super::acted::count as acted_count;
 use super::capture::mine;
 use super::kind::{Earned, SayKind};
 use super::parse::Parsed;
-use super::retire::{RETIRE_WINDOW_MS, retire_times};
+use super::retire::{CHUNK_NOTE_WINDOW_MS, RETIRE_WINDOW_MS, retire_times};
 use super::said_yield::tally;
 pub use super::said_yield::{EventYield, KindYield};
 use super::touch::Touches;
@@ -139,32 +139,36 @@ fn chunk_note_ms(v: &serde_json::Value, any: bool) -> Option<i64> {
 }
 
 /// What each session did, read off its usage lines: ids in context at an
-/// edit, pulls, and the time of its last accepted `fael chunk note`.
+/// edit, pulls, the accepted `fael chunk note` times, and the time of its
+/// last accepted `fael chunk` call.
 #[allow(clippy::type_complexity)]
 fn index(
     parsed: &Parsed,
 ) -> (
     HashSet<(Session<'_>, &str)>,
     HashMap<Session<'_>, Vec<Pull<'_>>>,
-    HashMap<Session<'_>, i64>,
+    HashMap<Session<'_>, Vec<i64>>,
     HashMap<Session<'_>, i64>,
 ) {
     let mut in_ctx: HashSet<(Session, &str)> = HashSet::new();
     let mut pulls: HashMap<Session, Vec<Pull>> = HashMap::new();
-    // the latest accepted chunk note per session
-    let mut last_note: HashMap<Session, i64> = HashMap::new();
+    // every accepted chunk note per session: a note earns at most the lines
+    // said inside the window before it
+    let mut notes: HashMap<Session, Vec<i64>> = HashMap::new();
     // and the latest accepted chunk call of any verb
     let mut last_chunk: HashMap<Session, i64> = HashMap::new();
     for v in &parsed.kept {
         let (Some(repo), Some(s)) = (v["repo"].as_str(), session(v)) else {
             continue;
         };
-        for (any, last) in [(false, &mut last_note), (true, &mut last_chunk)] {
-            if let Some(ms) = chunk_note_ms(v, any) {
-                last.entry((repo, s))
-                    .and_modify(|m| *m = (*m).max(ms))
-                    .or_insert(ms);
-            }
+        if let Some(ms) = chunk_note_ms(v, false) {
+            notes.entry((repo, s)).or_default().push(ms);
+        }
+        if let Some(ms) = chunk_note_ms(v, true) {
+            last_chunk
+                .entry((repo, s))
+                .and_modify(|m| *m = (*m).max(ms))
+                .or_insert(ms);
         }
         if v["event"] == "in-context" {
             let ids = strs(v, "in_context").chain(strs(v, "in_context_notes"));
@@ -181,7 +185,7 @@ fn index(
             });
         }
     }
-    (in_ctx, pulls, last_note, last_chunk)
+    (in_ctx, pulls, notes, last_chunk)
 }
 
 /// Each repo's note ids, so a `row` said entry joins by lookup, not by scan.
@@ -195,7 +199,7 @@ fn note_ids(logs: &HashMap<String, Log>) -> HashMap<&str, HashSet<&str>> {
 }
 
 pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<String, KindYield> {
-    let (in_ctx, pulls, last_note, last_chunk) = index(parsed);
+    let (in_ctx, pulls, chunk_notes, last_chunk) = index(parsed);
     let touches = Touches::index(parsed);
     let gone: HashMap<&str, HashMap<&str, i64>> = logs
         .iter()
@@ -220,7 +224,10 @@ pub(super) fn yields(parsed: &Parsed, logs: &HashMap<String, Log>) -> BTreeMap<S
                 .and_then(|t| t.get(id))
                 .is_some_and(|g| *g >= ms && *g - ms <= RETIRE_WINDOW_MS)
         };
-        let noted = s.and_then(|s| last_note.get(&s)).is_some_and(|n| *n >= ms);
+        let noted = s.and_then(|s| chunk_notes.get(&s)).is_some_and(|ns| {
+            ns.iter()
+                .any(|n| *n >= ms && *n - ms <= CHUNK_NOTE_WINDOW_MS)
+        });
         let pulled = |hit: &dyn Fn(&Pull) -> bool| {
             s.and_then(|s| pulls.get(&s))
                 .is_some_and(|ps| ps.iter().any(|p| p.ms >= ms && hit(p)))

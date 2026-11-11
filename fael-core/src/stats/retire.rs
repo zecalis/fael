@@ -13,6 +13,11 @@ use std::collections::{HashMap, HashSet};
 /// push carry no session on every client; a per-session join when they do.
 pub const RETIRE_WINDOW_MS: i64 = 24 * 3600 * 1000;
 
+/// A `fael chunk note` earns an `overlap` / `inbox` / `checkpoint` /
+/// `briefdrift` line only inside this window after the line (trial): one
+/// late note no longer earns every such line said earlier in the session.
+pub const CHUNK_NOTE_WINDOW_MS: i64 = 30 * 60 * 1000;
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Retired {
     /// Distinct rows handed over by a read or edit push.
