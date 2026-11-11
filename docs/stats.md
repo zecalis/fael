@@ -22,6 +22,11 @@ Every number comes from two inputs, joined as pure functions in
   whose context the push landed in — absent on the session's own thread),
   `real_tokens` on some rows, and `row` on an add's `warning` (the id just
   filed — not in `ids`, which count pushes; `session` there is its writer).
+  A CLI `close`'s `warning` carries the calling session from the env
+  (`FAEL_SESSION`, `CLAUDE_CODE_SESSION_ID` or `CODEX_THREAD_ID`, stemmed at
+  write) — even before the session's first recorded edit; an `mcp-close`
+  warning carries none (the MCP server's env is inherited at spawn, never per
+  call).
   A line leaves out a zero or empty `bytes`, `est_tokens`, `ids` and `npos`:
   absent = 0 / empty (`flags` stays on a call line — its presence is the window
   `usage.by_flag` counts over). An edit writes one 0-byte `event: "in-context"` row when decisions or issues
@@ -54,7 +59,9 @@ Every number comes from two inputs, joined as pure functions in
   chunk 2): `cited` lists the ids from the session's seen list that a tool input or
   the closing reply typed, once per id per session. So is a `call` row
   (PLAN-fael-agent-ergonomics chunk 1, the `friction` field below): one per agent
-  call, `cmd` and `outcome` only. So is a `silent-start` row (PLAN-fael-say-gate
+  call, `cmd` and `outcome` only, plus the calling session from the env on CLI
+  calls (stemmed at write; absent outside any session) and never on MCP calls.
+  So is a `silent-start` row (PLAN-fael-say-gate
   chunk 4c): a session-start that said nothing, 0 bytes, so a count per
   session-start sees every start. A reject is counted once, by its `call` row;
   a batch with several bad items is one reject (`partial`). Torn lines are
