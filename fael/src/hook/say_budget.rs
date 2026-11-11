@@ -106,7 +106,10 @@ fn rows_survive_overlap_and_drift_and_a_commit_reply_cuts_in_card_order() {
         (said, keys)
     };
     let both = run_search(usize::MAX).0;
-    assert!(both.contains("01CITED") && both.contains("checkpoint"), "{both}");
+    assert!(
+        both.contains("01CITED") && both.contains("checkpoint"),
+        "{both}"
+    );
     let (said, keys_cut) = run_search(checkpoint_cost);
     assert!(said.contains("checkpoint"), "{said}");
     assert!(!said.contains("01CITED"), "{said}");

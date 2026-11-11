@@ -151,12 +151,7 @@ pub(crate) fn policy(k: &Kind) -> Policy {
         ),
         Kind::BriefDrift { .. } => Policy {
             cut: Cut::First(7),
-            ..card(
-                SayKind::BriefDrift,
-                Key,
-                Some("fael chunk show"),
-                EDIT,
-            )
+            ..card(SayKind::BriefDrift, Key, Some("fael chunk show"), EDIT)
         },
         Kind::Retired { .. } => card(SayKind::Retired, Key, Some("fael add decision"), PUSH),
         // a session-start warning, or a stashed risk at a push
