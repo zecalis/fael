@@ -373,11 +373,11 @@ pub(super) fn avoid(
     if mine.is_empty() {
         return Ok((vec![], 0));
     }
-    let app: String = tx
+    let (app, me): (String, String) = tx
         .query_row(
-            "SELECT p.app FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
+            "SELECT p.app, c.uid FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.id = ?1",
             [id],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .map_err(err)?;
     let mut out = Vec::new();
@@ -386,6 +386,8 @@ pub(super) fn avoid(
     {
         let stalled = seen.as_deref().unwrap_or(&started) < stale;
         let live = doing(tx, &uid, touch_msg)?;
+        // same files -> pair, a directory overlap -> lane; the mode rules stay in `joint::gate`
+        let mode = if class == "exact" { "pair" } else { "lane" };
         out.push(Avoid {
             uid: uid.clone(),
             title,
@@ -399,7 +401,7 @@ pub(super) fn avoid(
             stalled,
             doing: live,
             do_cmd: format!(
-                "tell it what you will take: fael chunk note {uid} \"<text>\"; real conflicts: fael chunk status"
+                "tell it what you will take: fael chunk note {uid} \"<text>\"; real conflicts: fael chunk status; join: fael chunk start {me} --with {uid} --as {mode}"
             ),
         });
     }

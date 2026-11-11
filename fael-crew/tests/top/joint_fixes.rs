@@ -137,9 +137,10 @@ fn an_overlap_starts_and_names_who_to_note() {
     assert!(out.contains(&format!("avoid: {a}")), "{out}");
     assert!(out.contains(&format!("fael chunk note {a} ")), "{out}");
     assert!(out.contains("fael chunk status"), "{out}");
+    // the card ends with the join call; the same file is a pair (01M73C4G)
     assert!(
-        !out.contains("--with"),
-        "no joint offered as the way out: {out}"
+        out.contains(&format!("join: fael chunk start {b} --with {a} --as pair")),
+        "{out}"
     );
     // `--with --as lane` over the same file still works, and prints the lane rules
     let c = chunk(&w[0], "C");
