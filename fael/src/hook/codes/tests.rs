@@ -107,12 +107,24 @@ fn start_refusals_read_apart_from_state_moves() {
             "held",
         ),
         (
+            "rejected: chunk 01M5AAAA is blocked — after 01M5BBBB first, or try `fael chunk start 01M5AAAA --force --because \"<what you will avoid>\"` to start it anyway",
+            "blocked",
+        ),
+        (
             "rejected: chunk 01M5AAAA is not ready: it waits on owner — the owner's answer unblocks it (`fael chunk answer 01M5AAAA \"<text>\"` or the board); the question: `fael chunk show 01M5AAAA`",
-            "chunk_state",
+            "not_ready",
+        ),
+        (
+            "rejected: chunk 01M5AAAA cites closed rows:\n  linked issue 01M0000000000000000000001 — closed: shipped",
+            "closed_cite",
         ),
         (
             "rejected: chunk 01M5AAAA is held by run 01M5RRRR — try `fael chunk start 01M5AAAA --force` to take it over",
             "held",
+        ),
+        (
+            "rejected: no plan 'umbrella' to be the parent of page-a — a parent is a plan of the same app; try `fael plan list` to pick one",
+            "no_plan",
         ),
     ] {
         assert_eq!(reject(msg), want, "{msg}");
