@@ -149,7 +149,7 @@ fn prev(tx: &Transaction, id: i64) -> Result<Option<Prev>, String> {
 }
 
 /// A reused R is rejected: one R per start.
-fn check_fresh(tx: &Transaction, run: &str) -> Result<(), String> {
+fn check_fresh(tx: &Transaction, run: &str, uid: &str) -> Result<(), String> {
     let reused: bool = tx
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM run WHERE start = ?1)",
@@ -159,7 +159,7 @@ fn check_fresh(tx: &Transaction, run: &str) -> Result<(), String> {
         .map_err(err)?;
     if reused {
         return Err(format!(
-            "rejected: run {run} was already used — one R per start — try `fael chunk start <uid> --run <a new R>`"
+            "rejected: run {run} was already used — one R per start — try `fael chunk start {uid} --run <a new R>`"
         ));
     }
     Ok(())
@@ -288,8 +288,9 @@ fn check_lonely_because(o: &Start, m: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// What follows a not-ready reason. A wait on the owner is the owner's to end, so the verb is
-/// named for them, never for the agent to type; `why` is `ready::ready_in`'s text.
+/// What follows a not-ready reason. A wait on the owner is the owner's to end, and a
+/// draft needs the owner or planner's brief — so the verb is named for them,
+/// never for the agent to type; `why` is `ready::ready_in`'s text.
 fn way_out(why: &str, m: &str) -> String {
     if why.contains("it waits on owner") {
         return format!(
@@ -298,7 +299,7 @@ fn way_out(why: &str, m: &str) -> String {
     }
     if why.contains("it is draft") {
         return format!(
-            "it is draft (added with no brief) — try `fael chunk edit {m} --brief \"<why + done>\"` then `fael chunk start {m}`; details: `fael chunk show {m}`"
+            "it is draft (added with no brief) — the owner or planner adds a brief (`fael chunk edit {m} --brief \"<why + done>\"`), then `fael chunk start {m}`; details: `fael chunk show {m}`"
         );
     }
     format!("try `fael chunk show {m}`")
@@ -633,7 +634,7 @@ impl Store {
                     p.base.clone(),
                 )
             }
-            None => check_fresh(&tx, &run)?,
+            None => check_fresh(&tx, &run, uid)?,
         }
         let joined = partners
             .iter()

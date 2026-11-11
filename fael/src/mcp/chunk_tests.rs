@@ -276,3 +276,23 @@ fn start_without_because_names_force_and_because_as_mcp_keys() {
         "{got}"
     );
 }
+
+/// A start blocked by `after X` answers in MCP form with the real uid —
+/// one line carries `{verb: "start", uid, force: true, because}` and itself
+/// has no `--force`/`--because` flags.
+#[test]
+fn start_blocked_names_mcp_keys_with_the_real_uid() {
+    let e = "rejected: chunk 01M5AAAA is blocked — after 01M5BBBB first, or try `fael chunk start 01M5AAAA --force --because \"<what you will avoid>\"` to start it anyway".to_string();
+    let got = super::with_cwd_hint(e);
+    let line = got
+        .lines()
+        .find(|l| l.contains("force: true, because: \""))
+        .expect(&got);
+    assert!(line.contains("verb: \"start\""), "{got}");
+    assert!(line.contains("uid: \"01M5AAAA\""), "{got}");
+    assert!(
+        !line.contains("--force") && !line.contains("--because"),
+        "{got}"
+    );
+    assert!(!got.contains("<uid>"), "{got}");
+}
