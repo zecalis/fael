@@ -95,7 +95,11 @@ fn about(s: &work::Scopes, shared: &[String], files: &[String]) -> Vec<Line> {
 fn short_text(o: &work::Other, file: &str) -> String {
     let client = o.client.as_deref().unwrap_or("agent");
     let live = live_label(o);
-    let live = if live.is_empty() { o.state.clone() } else { live };
+    let live = if live.is_empty() {
+        o.state.clone()
+    } else {
+        live
+    };
     format!(
         "fael: {file} — {} ({client}, {live}) · fael chunk note {} \"<text>\" · yours? fael chunk status\n",
         o.name, o.uid,

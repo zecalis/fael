@@ -82,7 +82,8 @@ pub fn mark_touched(db: &Path, worktree: &str, session: &str, files: &[String]) 
         }
     }
     // The session's runs wherever they work now (`--no-worktree` half).
-    if let Ok(mut q) = c.prepare("SELECT id, touched FROM run WHERE session = ?1 AND ended IS NULL") {
+    if let Ok(mut q) = c.prepare("SELECT id, touched FROM run WHERE session = ?1 AND ended IS NULL")
+    {
         let rows: Vec<(i64, Option<String>)> = q
             .query_map([session], |r| Ok((r.get(0)?, r.get(1)?)))
             .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())

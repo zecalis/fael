@@ -96,6 +96,19 @@ fn note_edit(c: &super::protocol::Ctx, files: &[String]) {
     }
 }
 
+/// Auto-touch (overlap-broker f5): the edit feeds `run.touched` itself, so
+/// the next edit's touched-overlap fires with no `chunk touch` call. Same
+/// db write path as the `last_seen` stamp, fail-silent, never blocks.
+fn autotouch(c: &super::protocol::Ctx, files: &[String]) {
+    let db = core::work::db_for(c.repo.journal.as_deref(), &c.repo.fael);
+    let _ = core::work::mark_touched(
+        &db,
+        &c.repo.root.to_string_lossy(),
+        super::state::session_id(&c.session),
+        files,
+    );
+}
+
 /// The push of one hook event, `At::Edit` or `At::ShellEdit` (a shell call that
 /// wrote a file is an edit; only its usage label and its ask differ). Any
 /// other event is no push: it says nothing.
@@ -113,18 +126,7 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
         return no();
     }
     note_edit(&c, &files);
-    // auto-touch (overlap-broker f5): the edit feeds `run.touched` itself, so
-    // the next edit's touched-overlap fires with no `chunk touch` call. Same
-    // db write path as the `last_seen` stamp, fail-silent, never blocks.
-    {
-        let db = core::work::db_for(c.repo.journal.as_deref(), &c.repo.fael);
-        let _ = core::work::mark_touched(
-            &db,
-            &c.repo.root.to_string_lossy(),
-            super::state::session_id(&c.session),
-            &files,
-        );
-    }
+    autotouch(&c, &files);
     // L1 gather (renames resolve through the L1 cache only), then L3/L4 rank
     // + select against the session Focus: one small file read, no git spawn
     // on this path (one spawn is ~9 ms against a 5 ms ceiling) — session-start

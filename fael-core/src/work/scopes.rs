@@ -127,31 +127,52 @@ fn others(
         })
         .and_then(|rows| rows.collect::<Result<Vec<Row>, _>>())
     }) {
-        return Some(
-            rows.into_iter()
-                .map(
-                    |(uid, name, state, s, branch, client, doing, touched, since, last_seen)| Other {
-                        uid,
-                        name,
-                        state,
-                        scope: lines(s)
-                            .into_iter()
-                            .filter(|p| !shared.iter().any(|s| under(p, s)))
-                            .collect(),
-                        branch: branch.filter(|b| !b.is_empty()),
-                        client: client.filter(|c| !c.is_empty()),
-                        doing: doing.filter(|d| !d.is_empty()),
-                        since: since.filter(|s| !s.is_empty()),
-                        last_seen: last_seen.filter(|s| !s.is_empty()),
-                        touched: lines(touched)
-                            .into_iter()
-                            .filter(|p| !shared.iter().any(|s| under(p, s)))
-                            .collect(),
-                    },
-                )
-                .collect(),
-        );
+        return Some(rows.into_iter().map(|r| to_other(r, shared)).collect());
     }
+    fallback(c, worktree, session, shared)
+}
+
+type OtherRow = (
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+fn to_other(row: OtherRow, shared: &[String]) -> Other {
+    let (uid, name, state, s, branch, client, doing, touched, since, last_seen) = row;
+    Other {
+        uid,
+        name,
+        state,
+        scope: lines(s)
+            .into_iter()
+            .filter(|p| !shared.iter().any(|s| under(p, s)))
+            .collect(),
+        branch: branch.filter(|b| !b.is_empty()),
+        client: client.filter(|c| !c.is_empty()),
+        doing: doing.filter(|d| !d.is_empty()),
+        since: since.filter(|s| !s.is_empty()),
+        last_seen: last_seen.filter(|s| !s.is_empty()),
+        touched: lines(touched)
+            .into_iter()
+            .filter(|p| !shared.iter().any(|s| under(p, s)))
+            .collect(),
+    }
+}
+
+fn fallback(
+    c: &rusqlite::Connection,
+    worktree: &str,
+    session: &str,
+    shared: &[String],
+) -> Option<Vec<Other>> {
     let rest = format!(
         "{TEAM} SELECT c.uid, p.name || '/' || COALESCE(c.label, c.uid), c.state, c.scope
          FROM chunk c JOIN plan p ON p.id = c.plan

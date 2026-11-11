@@ -77,7 +77,6 @@ pub use db::{
     all_plans, brief_row, chunk_brief, db_at, db_for, ended_runs, has_held, held, is_chunk,
     linked_open_chunks, mark_model, mark_model_session, mark_seen, mark_seen_session, plan_by_name,
 };
-pub use touch::mark_touched;
 pub use db_runs::flow_runs;
 pub use db_runs::model_runs;
 pub use drift::{Drift, drift, in_conn as drift_in};
@@ -92,3 +91,4 @@ pub use pure::{
 pub use ready::{first_ready, kickoff_text, ready_in};
 pub use report::{mark_report, mark_report_session};
 pub use scopes::{Other, Scopes, scopes};
+pub use touch::mark_touched;
