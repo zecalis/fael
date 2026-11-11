@@ -162,6 +162,17 @@ fn ask_row(
     if ask == ASK_WARN {
         v["code"] = super::codes::warning(text).into();
     }
+    // a CLI close's warnings belong to the calling session: the env names it
+    // even before the session's first recorded edit, so the line joins the
+    // per-session metrics (`slim` stems it at write). `mcp-close` rides a
+    // different event and the MCP server's env reads empty — those lines stay
+    // session-less by design.
+    if event == "close" {
+        let s = crate::session::env_session();
+        if !s.is_empty() {
+            v["session"] = s.into();
+        }
+    }
     v
 }
 

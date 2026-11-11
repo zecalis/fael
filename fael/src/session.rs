@@ -42,7 +42,13 @@ fn mcp_server() -> bool {
 /// Codex exposes `CODEX_THREAD_ID` to its shell tool executions (but not to
 /// stdio MCP servers: openai/codex#19937), so a `fael add` from a Codex shell
 /// joins the same way.
-fn env_session() -> String {
+///
+/// Usage rows (`close`, `call`) read this directly: whenever the env names a
+/// session the line carries it (stemmed at write by `asks::slim`), so a close
+/// before the session's first recorded edit still joins per-session metrics.
+/// The MCP server's env is inherited at spawn, never per call — it reads empty
+/// here, so MCP lines stay session-less by design.
+pub(crate) fn env_session() -> String {
     if mcp_server() {
         return String::new();
     }
