@@ -5,15 +5,18 @@
 use crate::core;
 use std::collections::BTreeMap;
 
-/// `models: N runs · unknown model x% · unknown cost y%` plus one line per
-/// `client/model` group — nothing at all when the clone has no crew.db runs.
+/// `models: N runs · reported a · hint only b · none c` plus one line per
+/// `client/model` group (hint-model rows excluded — they count under
+/// `hint only`, never under a model) — nothing at all when the clone has
+/// no crew.db runs. The unknown-model share is `(b + c) / N`: hints count
+/// as unknown.
 pub(super) fn models_lines(m: &core::stats::Models) -> Vec<String> {
     if m.total == 0 {
         return Vec::new();
     }
     let mut out = vec![format!(
-        "  models: {} runs · unknown model {:.1}% · unknown cost {:.1}%",
-        m.total, m.unknown_model_pct, m.unknown_cost_pct
+        "  models: {} runs · reported {} · hint only {} · none {}",
+        m.total, m.with_client_model, m.hint_only, m.none
     )];
     let mut by: Vec<(&String, &core::stats::ModelRow)> = m.by_model.iter().collect();
     by.sort_by_key(|(_, r)| std::cmp::Reverse(r.runs));
@@ -75,7 +78,7 @@ mod tests {
         let lines = models_lines(&models());
         assert_eq!(
             lines[0],
-            "  models: 2 runs · unknown model 50.0% · unknown cost 50.0%"
+            "  models: 2 runs · reported 1 · hint only 0 · none 1"
         );
         assert!(
             lines.contains(&"  model claude/opus: 1 runs $2.170000 (unknown 0.0%)".to_string())

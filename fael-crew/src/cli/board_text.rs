@@ -119,13 +119,15 @@ fn models_card(b: &Board) -> String {
     let mut out = String::from("models\n");
     if hide_cost {
         out.push_str(&format!(
-            "  runs {} · with model {} (unknown {:.1}%) · cost hidden (unknown {:.1}% > {:.0}%)\n",
-            m.total, m.with_client_model, m.unknown_model_pct, m.unknown_cost_pct, COST_HIDE_PCT
+            "  runs {} · reported {} · hint only {} · none {} (unknown {:.1}%) · cost hidden (unknown {:.1}% > {:.0}%)\n",
+            m.total, m.with_client_model, m.hint_only, m.none,
+            m.unknown_model_pct, m.unknown_cost_pct, COST_HIDE_PCT
         ));
     } else {
         out.push_str(&format!(
-            "  runs {} · with model {} (unknown {:.1}%) · with cost {} (unknown {:.1}%)\n",
-            m.total, m.with_client_model, m.unknown_model_pct, m.with_cost, m.unknown_cost_pct
+            "  runs {} · reported {} · hint only {} · none {} (unknown {:.1}%) · with cost {} (unknown {:.1}%)\n",
+            m.total, m.with_client_model, m.hint_only, m.none,
+            m.unknown_model_pct, m.with_cost, m.unknown_cost_pct
         ));
     }
     let mut by: Vec<(&String, &fael_crew::ModelRow)> = m.by_model.iter().collect();
@@ -308,6 +310,8 @@ mod tests {
         fael_crew::Models {
             total,
             with_client_model: total,
+            hint_only: 0,
+            none: 0,
             with_cost,
             unknown_model_pct: 0.0,
             unknown_cost_pct,

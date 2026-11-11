@@ -149,7 +149,7 @@ fn stats_json_matches_golden_values() {
     assert_eq!(
         attribution,
         Some(
-            serde_json::json!({"total": 0, "with_client_model": 0, "with_cost": 0, "unknown_model_pct": 0.0, "unknown_cost_pct": 0.0, "by_model": {}})
+            serde_json::json!({"total": 0, "with_client_model": 0, "hint_only": 0, "none": 0, "with_cost": 0, "unknown_model_pct": 0.0, "unknown_cost_pct": 0.0, "by_model": {}})
         )
     );
     assert_eq!(v["real_by_client"], serde_json::json!({}));

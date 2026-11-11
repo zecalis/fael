@@ -31,22 +31,47 @@ pub struct ModelRow {
     pub missing: usize,
 }
 
+/// A size hint is not a reported model: `run.model` is set at start from
+/// `--model`, else `approved_model`, else `model_hint`, and the hooks only
+/// overwrite it with the transcript-reported model for live runs they match.
+/// A bare size word (`S`/`M`/`L`, `small`/`medium`/`large` in any case) therefore
+/// means no client ever reported a model — it must not count as known.
+/// Fixed list, shared with the board (`fael-crew` calls this fn so the two
+/// cannot drift on the definition, only on the rows each side reads).
+pub fn is_hint(model: &str) -> bool {
+    matches!(
+        model.trim().to_ascii_lowercase().as_str(),
+        "s" | "m" | "l" | "small" | "medium" | "large"
+    )
+}
+
 /// The `models` key of `fael stats --json`: totals with unknown-% beside
 /// every cost number, per-model sums. Old NULL rows stay NULL — the
-/// unknown-% is the point, not a gap to fill.
+/// unknown-% is the point, not a gap to fill. A size hint (`is_hint`) is not
+/// a reported model: `with_client_model` needs client AND a non-hint model,
+/// `hint_only` counts every hint-model row (any client) under `hint only`
+/// instead of under a `client/model` group, and `none` is the remainder
+/// (model NULL, or a real model with no client) — so
+/// `reported + hint_only + none == total` and
+/// `unknown_model_pct == (hint_only + none) / total`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct Models {
     /// Every run row read.
     pub total: usize,
-    /// Runs with non-null client AND model.
+    /// Runs with non-null client AND a non-hint model (the reported share).
     pub with_client_model: usize,
+    /// Runs whose model is a size hint (`is_hint`), any client — counted
+    /// under `hint only`, never under a `client/model` group.
+    pub hint_only: usize,
+    /// The rest: model NULL, or a non-hint model with no client.
+    pub none: usize,
     /// Runs with cost > 0.
     pub with_cost: usize,
-    /// 0-100, one decimal: runs lacking client+model / total (0 when empty).
+    /// 0-100, one decimal: runs lacking client+reported-model / total (0 when empty).
     pub unknown_model_pct: f64,
     /// 0-100, one decimal: runs without cost > 0 / total (0 when empty).
     pub unknown_cost_pct: f64,
-    /// `client/model` → runs and summed USD.
+    /// `client/model` → runs and summed USD, hint-model rows excluded.
     pub by_model: BTreeMap<String, ModelRow>,
 }
 
@@ -61,18 +86,28 @@ fn pct(missing: usize, total: usize) -> f64 {
 /// Aggregate run rows into the `models` read. A zero or negative cost reads
 /// as unknown for the metric; a NaN or infinite cost is dropped, never stored
 /// (the write side already filters those, this just never trusts the table).
+/// A hint-model row (`is_hint`) counts under `hint_only`, never under a
+/// `client/model` group and never as reported — the unknown-model share
+/// counts it as unknown. Stored rows are left alone (no backfill).
 pub fn models(runs: &[ModelRun]) -> Models {
     let total = runs.len();
-    let with_client_model = runs
+    let reported =
+        |r: &&ModelRun| r.client.is_some() && r.model.as_deref().is_some_and(|m| !is_hint(m));
+    let with_client_model = runs.iter().filter(reported).count();
+    let hint_only = runs
         .iter()
-        .filter(|r| r.client.is_some() && r.model.is_some())
+        .filter(|r| r.model.as_deref().is_some_and(is_hint))
         .count();
+    let none = total.saturating_sub(with_client_model + hint_only);
     let with_cost = runs
         .iter()
         .filter(|r| r.cost.is_some_and(|c| c.is_finite() && c > 0.0))
         .count();
     let mut by_model: BTreeMap<String, ModelRow> = BTreeMap::new();
     for r in runs {
+        if r.model.as_deref().is_some_and(is_hint) {
+            continue;
+        }
         let key = format!(
             "{}/{}",
             r.client.as_deref().unwrap_or("unknown"),
@@ -92,6 +127,8 @@ pub fn models(runs: &[ModelRun]) -> Models {
     Models {
         total,
         with_client_model,
+        hint_only,
+        none,
         with_cost,
         unknown_model_pct: pct(total - with_client_model, total),
         unknown_cost_pct: pct(total - with_cost, total),
@@ -119,12 +156,47 @@ mod tests {
             run(None, None, None),
         ]);
         assert_eq!((m.total, m.with_client_model, m.with_cost), (3, 2, 1));
+        assert_eq!((m.hint_only, m.none), (0, 1));
         assert_eq!((m.unknown_model_pct, m.unknown_cost_pct), (33.3, 66.7));
         let opus = &m.by_model["claude/opus"];
         assert_eq!((opus.runs, opus.unknown_cost_pct), (1, 0.0));
         assert!((opus.cost - 2.17).abs() < 1e-9);
         let bare = &m.by_model["unknown/unknown"];
         assert_eq!((bare.runs, bare.unknown_cost_pct), (1, 100.0));
+    }
+
+    #[test]
+    fn size_hint_counts_as_hint_only_not_a_model() {
+        for hint in ["small", "M", "large", "S", "L", "medium", "SMALL"] {
+            assert!(is_hint(hint), "{hint}");
+        }
+        for real in [
+            "opus",
+            "sonnet",
+            "haiku",
+            "opencode-go/m",
+            "claude-sonnet-5-5",
+            "",
+        ] {
+            assert!(!is_hint(real), "{real}");
+        }
+        let m = models(&[
+            run(Some("claude"), Some("small"), None),
+            run(Some("claude"), Some("M"), None),
+            run(None, Some("large"), None),
+            run(Some("claude"), Some("opus"), Some(1.0)),
+            run(None, None, None),
+        ]);
+        assert_eq!((m.total, m.with_client_model), (5, 1));
+        assert_eq!((m.hint_only, m.none), (3, 1));
+        assert_eq!(m.unknown_model_pct, 80.0);
+        assert!(
+            !m.by_model
+                .keys()
+                .any(|k| { k.ends_with("/small") || k.ends_with("/M") || k.ends_with("/large") })
+        );
+        assert_eq!(m.by_model["claude/opus"].runs, 1);
+        assert_eq!(m.by_model["unknown/unknown"].runs, 1);
     }
 
     #[test]
