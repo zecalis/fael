@@ -120,6 +120,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
     let say = |uid: &str, what: &str| println!("chunk {uid} → {what}");
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     match rest.as_slice() {
+        ["status"] => return crate::chunk_here::status(a, r, &here),
         ["show", ..] | ["status", ..] => return read(a, r, &rest),
         ["add", title] => add_chunk(a, r, title, &now, &wt, &branch)?,
         ["start", uid] => crate::chunk_run::start(a, r, uid, &here)?,

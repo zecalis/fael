@@ -1,15 +1,16 @@
-//! `fael chunk done "<result>"` with no uid (plan fael-chunk-close): the chunk is the live
-//! run of this worktree, and the PR comes from the run's branch when `--pr` is absent.
+//! `fael chunk done "<result>"` with no uid (plan fael-chunk-close) and `fael chunk
+//! status` with no uid (chunk status-here): the chunk is the live run of this
+//! worktree, and the PR comes from the run's branch when `--pr` is absent.
 
 use crate::{Args, Repo};
 use fael_crew::{Here, Store};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, ExitCode};
 
 /// `chunk done "<result>"`: the uid and, without `--pr`/`--out`, the PR come from this worktree.
 pub(crate) fn done(a: &Args, r: &Repo, handoff: &str, here: &Here) -> Result<(), String> {
     let st = Store::open(&crate::plan::db(r))?;
-    let uid = uid(&st, here)?;
+    let uid = uid(&st, here, "done")?;
     // `--no-change` names no PR: the branch's own is not the work reviewed (issue 01M62XEX)
     let pr = if a.has("pr") || a.has("out") || a.has("no-change") {
         None
@@ -52,20 +53,27 @@ pub(crate) fn done_hints(uid: &str, done: bool, reviewed: bool) -> String {
     s
 }
 
+/// `chunk status` with no uid: the uid is the live run of this worktree.
+pub(crate) fn status(a: &Args, r: &Repo, here: &Here) -> Result<ExitCode, String> {
+    let st = Store::open(&crate::plan::db(r))?;
+    let uid = uid(&st, here, "status")?;
+    drop(st);
+    super::chunk_status::status(a, r, &uid)
+}
+
 /// The uid of the one chunk this worktree holds, or why there is none.
-pub(crate) fn uid(st: &Store, here: &Here) -> Result<String, String> {
+pub(crate) fn uid(st: &Store, here: &Here, verb: &str) -> Result<String, String> {
     let held = st.held(here.worktree)?;
     match held.as_slice() {
-        [] => Err(
+        [] => Err(format!(
             "rejected: no chunk run in this worktree — `fael board` lists the chunks; \
-                   run `fael chunk done <uid> …` from the worktree that started it"
-                .into(),
-        ),
+                   run `fael chunk {verb} <uid> …` from the worktree that started it"
+        )),
         [(uid, ..)] => Ok(uid.clone()),
         many => {
             let list: Vec<String> = many.iter().map(|(u, t, _)| format!("  {u} {t}")).collect();
             Err(format!(
-                "rejected: more than one chunk runs in this worktree ({}) — name one: `fael chunk done <uid> …`\n{}",
+                "rejected: more than one chunk runs in this worktree ({}) — name one: `fael chunk {verb} <uid> …`\n{}",
                 many.len(),
                 list.join("\n")
             ))
