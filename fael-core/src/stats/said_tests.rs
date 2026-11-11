@@ -212,6 +212,27 @@ fn overlap_and_checkpoint_earn_on_a_later_chunk_note_call() {
     assert_eq!(earned(call(3, "s1", "reject")), (0, 0), "rejected");
 }
 
+/// A `chunk note` earns an `overlap` line only inside 30 minutes after it:
+/// a note 31 minutes later is too late, one 5 minutes later earns.
+#[test]
+fn chunk_note_earns_overlap_only_inside_thirty_minutes() {
+    let said = "{\"ts\":\"2026-09-26T00:02:00.000Z\",\"repo\":\"/w/r\",\"client\":\"claude\",\"session\":\"/t/s1.jsonl\",\"event\":\"edit\",\"ids\":[],\"said\":[{\"kind\":\"overlap\",\"key\":\"U\"}]}\n";
+    let earned = |call_ts: &str| {
+        let call = format!(
+            "{{\"ts\":\"{call_ts}\",\"repo\":\"/w/r\",\"client\":\"claude\",\"event\":\"call\",\"session\":\"/t/s1.jsonl\",\"cmd\":\"chunk\",\"sub\":\"note\",\"outcome\":\"ok\"}}\n"
+        );
+        let p = super::parse::parse(
+            &(said.to_string() + &call),
+            Path::new("/w/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        let y = yields(&p, &HashMap::new());
+        y["overlap"].earned
+    };
+    assert_eq!(earned("2026-09-26T00:07:00.000Z"), 1, "5 min after");
+    assert_eq!(earned("2026-09-26T00:33:00.000Z"), 0, "31 min after");
+}
+
 /// Issue 01M5ZH6V: `briefdrift` and `retired` entries were said but fell into
 /// the tally's catch-all and vanished. Each now tallies, earns on its own act
 /// (a chunk note / a decision filed after it), and an old `count` entry is
