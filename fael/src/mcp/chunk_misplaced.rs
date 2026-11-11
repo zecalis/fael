@@ -9,7 +9,9 @@ use serde_json::Value;
 /// `option` / `options` ride only on `wait` (c5 shape), `full` only on `start` and `show`.
 fn tables(verb: &str) -> Option<(&'static [&'static str], &'static [&'static str])> {
     Some(match verb {
-        "show" => (
+        // `status` shares `show`'s read-only shape; its extra `full` note lives
+        // in `misplaced_note` (CLI `status` takes no `--full`, `show` does).
+        "show" | "status" => (
             &["text", "run"],
             &[
                 "other",
@@ -105,6 +107,9 @@ pub(super) fn misplaced_note(a: &Value, verb: &str) -> Option<String> {
     let has_force = a.get("force").and_then(Value::as_bool).unwrap_or(false);
     let (none, foreign) = tables(verb)?;
     let mut fell: Vec<String> = vec![];
+    if verb == "status" && has("full") {
+        fell.push("`full` (only its verb takes it)".into());
+    }
     fell.extend(
         none.iter()
             .filter(|k| filled(k))

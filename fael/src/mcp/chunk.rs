@@ -1,5 +1,5 @@
 //! The MCP `chunk` tool — the CLI `chunk` verbs agents need without
-//! switching screens: show, start, note, done, wait, after. One tool with a
+//! switching screens: show, status, start, note, done, wait, after. One tool with a
 //! `verb`, so the served schema stays small. The verbs run in `fael-crew`
 //! (`crew::capture`): the same call, the same text.
 
@@ -107,7 +107,7 @@ fn chunk_checked(a: &Value) -> Result<String, String> {
     let args = build_args(&verb, &uid, &a)?;
     let res = match crate::crew::capture(&args, &r.root) {
         Ok(t) => Ok(t),
-        Err(e) if verb == "show" => show_elsewhere(&r, &uid, e),
+        Err(e) if verb == "show" || verb == "status" => show_elsewhere(&r, &uid, e),
         Err(e) => Err(with_cwd_hint(e)),
     };
     with_notes(res, vec![seat])
@@ -122,7 +122,7 @@ fn shape_missing(a: &Value) -> String {
         _ => "uid",
     };
     format!(
-        "rejected: {what} is required for chunk — verb: show|start|note|done|wait|after; try chunk {{verb: \"start\", uid: \"<uid>\", cwd: \"<your working directory>\"}} (cwd only on start)"
+        "rejected: {what} is required for chunk — verb: show|status|start|note|done|wait|after; try chunk {{verb: \"start\", uid: \"<uid>\", cwd: \"<your working directory>\"}} (cwd only on start)"
     )
 }
 
@@ -139,7 +139,7 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
     };
     let mut args: Vec<String> = vec!["chunk".into(), verb.to_string(), uid.to_string()];
     match verb {
-        "show" | "start" => {}
+        "show" | "status" | "start" => {}
         "note" => {
             if text.is_empty() {
                 return Err(format!(
@@ -187,7 +187,8 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
         }
         v => return Err(unknown_verb(v, uid)),
     }
-    if let Some(run) = s(a, "run").filter(|_| verb != "show" && verb != "note") {
+    if let Some(run) = s(a, "run").filter(|_| verb != "show" && verb != "status" && verb != "note")
+    {
         args.extend(["--run".into(), run]);
     }
     if verb == "start" {
@@ -355,7 +356,7 @@ fn elsewhere_cwd(e: &str) -> Option<&str> {
         .filter(|s| !s.is_empty())
 }
 
-/// An MCP verb outside `show|start|note|done|wait|after`: the closed list, and for a real
+/// An MCP verb outside `show|status|start|note|done|wait|after`: the closed list, and for a real
 /// `fael chunk` verb the MCP lacks, the CLI line to run instead (a fact, never a guess).
 fn unknown_verb(v: &str, uid: &str) -> String {
     let tail = if crate::core::work::CHUNK_VERBS.contains(&v) {
@@ -363,7 +364,7 @@ fn unknown_verb(v: &str, uid: &str) -> String {
     } else {
         format!("try chunk {{verb: \"show\", uid: \"{uid}\"}}")
     };
-    format!("rejected: unknown chunk verb {v} — show|start|note|done|wait|after; {tail}")
+    format!("rejected: unknown chunk verb {v} — show|status|start|note|done|wait|after; {tail}")
 }
 
 #[cfg(test)]
