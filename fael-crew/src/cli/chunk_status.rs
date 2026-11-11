@@ -67,7 +67,18 @@ pub(crate) fn status(a: &Args, r: &Repo, key: &str) -> Result<ExitCode, String> 
     }
     print!("{}", text_of(&filled));
     print!("{}", conflicts::text_of(&hits));
+    print!("{}", pr_open_note(&st, r, &uid, &filled));
     Ok(ExitCode::SUCCESS)
+}
+
+/// pr-cross: `status` names done chunks whose still-open PR meets this run's files.
+/// Same read as `done`: DB + base log, `gh` only when a done PR is still open.
+fn pr_open_note(st: &Store, r: &Repo, uid: &str, filled: &[Filled]) -> String {
+    let Some(me) = filled.iter().find(|f| f.side.uid == uid) else {
+        return String::new();
+    };
+    let mine = union_files(&effective(&me.side), &me.observed);
+    super::chunk_pr_open::open_lines(st, &r.root, uid, &mine)
 }
 
 fn json_of(f: &Filled) -> serde_json::Value {

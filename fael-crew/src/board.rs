@@ -1009,6 +1009,40 @@ impl Store {
         out.sort_by(|a, b| a.uid.cmp(&b.uid));
         Ok(out)
     }
+
+    /// Done chunks with a PR, self left out: uid, title, PR number, run start.
+    /// DB only — no git, no gh — so callers decide open vs merged without a fetch.
+    pub fn done_prs(&self, exclude: &str) -> Result<Vec<DonePr>, String> {
+        let mut q = self
+            .conn
+            .prepare(
+                "SELECT c.uid, c.title, r.pr, r.started FROM chunk c
+                 JOIN run r ON r.id = (SELECT MAX(id) FROM run WHERE chunk = c.id)
+                 WHERE c.state = 'done' AND r.pr IS NOT NULL AND c.uid != ?1
+                 ORDER BY c.uid",
+            )
+            .map_err(err)?;
+        q.query_map([exclude], |r| {
+            Ok(DonePr {
+                uid: r.get(0)?,
+                title: r.get(1)?,
+                pr: r.get(2)?,
+                started: r.get(3)?,
+            })
+        })
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)
+    }
+}
+
+/// A done chunk's open PR: uid, title, number and when its run started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DonePr {
+    pub uid: String,
+    pub title: String,
+    pub pr: i64,
+    pub started: String,
 }
 
 #[cfg(test)]
