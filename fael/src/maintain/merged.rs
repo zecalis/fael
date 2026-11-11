@@ -125,12 +125,13 @@ pub(super) fn merged_prs(root: &Path) -> Option<BTreeMap<String, Vec<Merge>>> {
 
 /// Shared `gh pr list --state all` (doctor keeps 200; stats pages below).
 pub(crate) fn gh_prs(root: &Path) -> Option<String> {
-    gh_prs_limit(root, 200, "gh-prs.json")
+    static ALL: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    ALL.get_or_init(|| gh_prs_limit(root, 200, "gh-prs.json"))
+        .clone()
 }
 
 /// One `gh pr list` call with an explicit limit (disk cache 600 s in `gh_raw`).
 fn gh_prs_limit(root: &Path, limit: u32, name: &str) -> Option<String> {
-    let lim = limit.to_string();
     let out = crate::hook::flow::gh_raw(
         root,
         name,
@@ -142,7 +143,7 @@ fn gh_prs_limit(root: &Path, limit: u32, name: &str) -> Option<String> {
             "--json",
             "headRefName,state,mergedAt,number,createdAt",
             "--limit",
-            &lim,
+            &limit.to_string(),
         ],
     )?;
     Some(String::from_utf8_lossy(&out).into_owned())
@@ -152,12 +153,11 @@ fn gh_prs_limit(root: &Path, limit: u32, name: &str) -> Option<String> {
 pub(crate) fn gh_prs_windowed(root: &Path, window_ms: Option<i64>) -> Option<String> {
     let mut best = gh_prs(root);
     let window = window_ms.unwrap_or(0);
-    if window == 0 || best.as_deref().is_some_and(|j| reaches_window(j, window)) {
+    if window == 0 || best.as_deref().is_none_or(|j| reaches_window(j, window)) {
         return best;
     }
     for limit in [400u32, 600, 800, 1000] {
-        let name = format!("gh-prs-{limit}.json");
-        let Some(j) = gh_prs_limit(root, limit, &name) else {
+        let Some(j) = gh_prs_limit(root, limit, &format!("gh-prs-{limit}.json")) else {
             break;
         };
         let done = reaches_window(&j, window);
@@ -391,10 +391,10 @@ mod tests {
     #[test]
     fn window_reached_only_when_oldest_pr_covers_it() {
         let j = r#"[{"number":1,"headRefName":"a","createdAt":"2026-10-10T00:00:00Z"},{"number":2,"headRefName":"b","createdAt":"2026-10-20T00:00:00Z"}]"#;
-        let old = crate::core::ts_ms("2026-10-15T00:00:00Z").unwrap();
+        let mid = crate::core::ts_ms("2026-10-15T00:00:00Z").unwrap();
         let older = crate::core::ts_ms("2026-10-05T00:00:00Z").unwrap();
-        assert!(!super::reaches_window(j, old));
-        assert!(super::reaches_window(j, older));
+        assert!(super::reaches_window(j, mid));
+        assert!(!super::reaches_window(j, older));
         assert!(!super::reaches_window("nope", older));
     }
 }
