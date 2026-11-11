@@ -33,7 +33,7 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str, at_start: bool) {
         }
     }
     let log = crate::read(r);
-    for w in stale_warnings(&b.title, &b.brief, &b.issues, &log, &b.uid) {
+    for w in stale_warnings(&b.title, &b.brief, &b.issues, &log, &b.uid, at_start) {
         eprintln!("{w}");
     }
     for w in super::chunk_scope_report::warnings(&b.title, &b.brief, &log) {
@@ -47,16 +47,18 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str, at_start: bool) {
 /// Linked issues plus brief cites whose row is closed: the board's `stale`.
 /// A linked `--issue` id closed in the ledger is primary (done elsewhere);
 /// a brief mention is secondary. Deduped by row id — a link already said
-/// stays silent in the brief scan.
+/// stays silent in the brief scan. `at_start`: the running agent reads it, so the
+/// remedy is a note, never an edit (which clears the owner's approval).
 pub(crate) fn stale_warnings(
     title: &str,
     brief: &str,
     issues: &[String],
     log: &fael_core::Log,
     uid: &str,
+    at_start: bool,
 ) -> Vec<String> {
     let (shut, keys) = (fael_core::closed(log), fael_core::keys(log, None));
-    stale_warnings_in(title, brief, issues, log, uid, (&shut, &keys))
+    stale_warnings_in(title, brief, issues, log, uid, (&shut, &keys), at_start)
 }
 
 /// `stale_warnings` with the log's closed set and key list passed in: the board asks it
@@ -68,6 +70,7 @@ pub(crate) fn stale_warnings_in(
     log: &fael_core::Log,
     uid: &str,
     (shut, keys): (&HashSet<&str>, &[fael_core::KeyUse]),
+    at_start: bool,
 ) -> Vec<String> {
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut out = Vec::new();
@@ -81,7 +84,7 @@ pub(crate) fn stale_warnings_in(
         if !seen.insert(id) {
             continue;
         }
-        out.push(closed_line(&cite, &first, uid));
+        out.push(closed_line(&cite, &first, uid, at_start));
     }
     out
 }
@@ -183,8 +186,16 @@ fn closed_cites_ids(
 }
 
 /// One closed-ref warning: the close text's first line, so the planner sees why it settled.
-fn closed_line(cite: &str, first: &str, uid: &str) -> String {
-    format!("warning: brief cites {cite} — closed: {first} — fael chunk edit {uid} --brief …")
+/// At start the remedy is a note (the running agent never edits the brief); elsewhere the
+/// owner or planner edits it.
+fn closed_line(cite: &str, first: &str, uid: &str, at_start: bool) -> String {
+    if at_start {
+        format!(
+            "warning: brief cites {cite} — closed: {first} — fael chunk note {uid} \"<what changed>\""
+        )
+    } else {
+        format!("warning: brief cites {cite} — closed: {first} — fael chunk edit {uid} --brief …")
+    }
 }
 
 /// The text a row was closed with, first line: the newest close row wins, else the folded
@@ -439,6 +450,7 @@ mod tests {
             &[],
             &log,
             uid,
+            false,
         );
         assert_eq!(both.len(), 1, "{both:?}");
         assert!(
@@ -447,6 +459,22 @@ mod tests {
                 && both[0].contains(&format!("fael chunk edit {uid} --brief")),
             "{}",
             both[0]
+        );
+        // at start the remedy is a note, never an edit (which clears approval)
+        let started = stale_warnings(
+            "t",
+            "Fixes test:cash-basis-edges",
+            &[],
+            &log,
+            uid,
+            true,
+        );
+        assert_eq!(started.len(), 1, "{started:?}");
+        assert!(
+            started[0].contains(&format!("fael chunk note {uid}"))
+                && !started[0].contains("chunk edit"),
+            "{}",
+            started[0]
         );
         // a missing key, an unknown id and a key shared by two rows stay silent
         let mut dup = log.clone();
@@ -463,12 +491,13 @@ mod tests {
             &[],
             &dup,
             uid,
+            false,
         );
         assert!(silent.is_empty(), "{silent:?}");
-        let open_only = stale_warnings("t", "see test:open-topic, deferred work", &[], &log, uid);
+        let open_only = stale_warnings("t", "see test:open-topic, deferred work", &[], &log, uid, false);
         assert!(open_only.is_empty(), "{open_only:?}");
         // an id token of the closed row warns too, with the close's first line only
-        let by_id = stale_warnings("t", "see 01M0000000000000000000001", &[], &log, uid);
+        let by_id = stale_warnings("t", "see 01M0000000000000000000001", &[], &log, uid, false);
         assert_eq!(by_id.len(), 1, "{by_id:?}");
         assert!(
             by_id[0].contains("shipped in v2") && !by_id[0].contains("more detail"),
@@ -489,6 +518,7 @@ mod tests {
             std::slice::from_ref(&shut),
             &log,
             uid,
+            false,
         );
         assert_eq!(linked.len(), 1, "{linked:?}");
         assert!(
@@ -499,7 +529,7 @@ mod tests {
             linked[0]
         );
         // the same row cited in the brief too: said once
-        let dup = stale_warnings("t", "see 01M0000000000000000000001", &[shut], &log, uid);
+        let dup = stale_warnings("t", "see 01M0000000000000000000001", &[shut], &log, uid, false);
         assert_eq!(dup.len(), 1, "{dup:?}");
         // an open linked issue stays silent
         let open = stale_warnings(
@@ -508,6 +538,7 @@ mod tests {
             &["01M0000000000000000000002".to_string()],
             &log,
             uid,
+            false,
         );
         assert!(open.is_empty(), "{open:?}");
     }

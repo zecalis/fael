@@ -195,7 +195,7 @@ pub(crate) fn of(s: &Store, r: &Repo, uid: &str) -> Option<Moved> {
     let log = main_log(&r.root, &main, live.base.as_deref()?)?;
     let ledger = crate::read(r);
     let (title, brief, issues) = s.stale_input(uid).ok()?;
-    let stale = crate::chunk_scope::stale_warnings(&title, &brief, &issues, &ledger, uid);
+    let stale = crate::chunk_scope::stale_warnings(&title, &brief, &issues, &ledger, uid, false);
     let shut = s.shut_since(&live.started).ok()?;
     let mut m = moved(&log, &live, &ledger, &shut, &stale);
     m.fetched = fetched_ago(&r.root);

@@ -333,6 +333,7 @@ fn fill_left_stale(s: &Store, r: &crate::Repo, chunks: &mut [BoardChunk], main: 
                 &log,
                 &c.uid,
                 (&shut, &keys),
+                false,
             );
         }
     }

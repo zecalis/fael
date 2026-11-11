@@ -105,6 +105,9 @@ fn a_brief_citing_a_closed_row_starts_with_its_close_text_in_cited_rows_now() {
         out.contains(&format!("{id} — closed: fixed in 5 → done")),
         "{out}"
     );
+    // at start the stderr remedy is a note, never an edit (which clears approval)
+    assert!(!err.contains("chunk edit"), "{err}");
+    assert!(err.contains(&format!("fael chunk note {u}")), "{err}");
 }
 
 #[test]

@@ -100,12 +100,13 @@ mod tests {
     fn open_closed_and_superseded_lines() {
         let open = row("01M0000000000000000000001", "keep this");
         let shut = row("01M0000000000000000000002", "was broken");
-        let mut next = row("01M0000000000000000000003", "new way");
-        next.supersedes = Some(shut.id.clone());
+        let old = row("01M0000000000000000000003", "old way");
+        let mut next = row("01M0000000000000000000004", "new way");
+        next.supersedes = Some(old.id.clone());
         let mut close = fael_core::Row::new("x", "note", "was broken → fixed", vec![]);
         close.reference = Some(shut.id.clone());
         let log = fael_core::Log {
-            rows: vec![open, shut, next],
+            rows: vec![open, shut, old, next],
             closes: vec![close],
             ..Default::default()
         };
@@ -122,7 +123,7 @@ mod tests {
             lines[1]
         );
         assert!(
-            lines[2].contains("— superseded → 01M0000000000000000000003"),
+            lines[2].contains("— superseded → 01M0000000000000000000004"),
             "{}",
             lines[2]
         );
