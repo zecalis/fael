@@ -34,8 +34,17 @@ pub struct Parsed {
     /// Repos each row id was pushed from — row statuses resolve through
     /// those repos' logs.
     pub id_repos: HashMap<String, Vec<String>>,
-    /// Kept rows feed the ask metrics in `aggregate`.
+    /// Kept rows feed the ask metrics in `aggregate` — every in-window,
+    /// non-temp line except `event: "call"` (those ride in `calls`, below).
     pub kept: Vec<serde_json::Value>,
+    /// `event: "call"` lines, in file order — one per agent call, 3 of 4
+    /// usage lines on a busy machine. `friction`, `by_flag` and `leak` read
+    /// only these; `said` (chunk-note earn), `handoff` (rejects), `capture`
+    /// (session spans) and `cross` (session first-ms, repos, client) chain
+    /// them after `kept` — every other consumer skips call lines (no `ids`,
+    /// `said`, `cited`, `q` or `files` on one), so splitting the one scan
+    /// into two slices changes no number, only the rows each pass visits.
+    pub calls: Vec<serde_json::Value>,
     /// Per-event rows feed the day view in `day`.
     pub rows: Vec<UsageRow>,
     /// First usage ts per repo — the "rows added since" denominator.
@@ -66,6 +75,22 @@ pub fn session_stem(s: &str) -> &str {
 
 /// Parse one `usage.jsonl` file's text. Torn lines are skipped, never an error.
 pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
+    parse_since(text, state_path, tmp_dirs, None)
+}
+
+/// `parse`, cutting lines stamped before `since_ms` in the same pass — one
+/// parse per line. `since()` above did that cut as a second parse of every
+/// line (a JSON parse per line to read its `ts`, then `parse`'s own parse
+/// into `Value`); `load_text` calls this instead, so `--since` pays one.
+/// `None` cuts nothing (the default window); `Some(0)` (`--since all`) keeps
+/// every line with a readable `ts`, like `since` with `ms = 0`.
+/// A line with no readable `ts` falls outside any window, torn or not.
+pub fn parse_since(
+    text: &str,
+    state_path: &Path,
+    tmp_dirs: &[PathBuf],
+    since_ms: Option<i64>,
+) -> Parsed {
     let mut p = Parsed {
         n: 0,
         bytes: 0,
@@ -76,6 +101,7 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
         by_id: HashMap::new(),
         id_repos: HashMap::new(),
         kept: vec![],
+        calls: vec![],
         rows: vec![],
         first_seen: HashMap::new(),
     };
@@ -90,6 +116,16 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
             Ok(v) => v,
             Err(_) => continue,
         };
+        // the window cut, in this pass: what `since` kept, line for line —
+        // a readable `ts` at or after the window start, else outside it.
+        if since_ms.is_some_and(|w| {
+            v["ts"]
+                .as_str()
+                .and_then(ts_ms)
+                .is_none_or(|t| t < w)
+        }) {
+            continue;
+        }
         // old lines hold the transcript path, new ones its stem: group by stem
         if let Some(s) = v["session"].as_str().map(session_stem).map(String::from) {
             v["session"] = s.into();
@@ -98,12 +134,18 @@ pub fn parse(text: &str, state_path: &Path, tmp_dirs: &[PathBuf]) -> Parsed {
             p.skipped += 1;
             continue;
         }
+        // a call line is no injection (see `friction.rs`): it rides apart in
+        // `calls`, so the dozen passes over `kept` skip the 3-in-4 lines
+        // none of them reads.
+        if v["event"] == "call" {
+            p.calls.push(v);
+            continue;
+        }
         // nothing reached any context: `value` reads it, no count does — nor
         // a pull's outcome line (`found`, say-gate chunk 3): the yield reads it
-        // — nor an observed outcome (`outcome`, learn-loop chunk 2) — nor a call
-        // (`friction.rs`: one line per agent call, whatever it injected) — nor
-        // a session-start that said nothing (`SILENT_START`)
-        if matches!(v["event"].as_str(), Some("in-context" | "outcome" | "call"))
+        // — nor an observed outcome (`outcome`, learn-loop chunk 2) — nor a
+        // session-start that said nothing (`SILENT_START`)
+        if matches!(v["event"].as_str(), Some("in-context" | "outcome"))
             || v["event"] == super::SILENT_START
             || v.get("found").is_some()
         {

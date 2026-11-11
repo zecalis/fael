@@ -58,11 +58,17 @@ pub(super) fn cross_agent(
     pushed: &HashMap<Key<'_>, &str>,
     in_context: &HashSet<Key<'_>>,
 ) -> CrossAgent {
-    // session → first usage ms, and the worktrees it ran in
+    // session → first usage ms, and the worktrees it ran in. Call lines ride
+    // apart in `parsed.calls` and chain in: a call-only session still ran.
+    // First-ms, the repo set and the client all read across the chain; only
+    // the client's first-wins pick could differ from file order, and only
+    // for a session whose earliest line is a call of another client than its
+    // earliest kept line — no such session on record, and the JSON diff in
+    // the shipping PR re-checks it on real data.
     let mut first: HashMap<&str, i64> = HashMap::new();
     let mut repos: HashMap<&str, HashSet<&str>> = HashMap::new();
     let mut clients: HashMap<&str, &str> = HashMap::new();
-    for v in &parsed.kept {
+    for v in parsed.kept.iter().chain(parsed.calls.iter()) {
         let (Some(s), Some(r)) = (v["session"].as_str(), v["repo"].as_str()) else {
             continue;
         };

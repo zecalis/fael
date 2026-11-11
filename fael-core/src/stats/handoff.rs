@@ -58,7 +58,10 @@ pub fn handoff_runs(parsed: &Parsed, runs: &[FlowRun]) -> HandoffRuns {
         by_session.entry(stem).or_default().push(i);
     }
     let mut lines: Vec<Vec<Line>> = (0..eligible.len()).map(|_| vec![]).collect();
-    for v in &parsed.kept {
+    // call lines ride apart in `parsed.calls`: rejects are counted below, so
+    // they chain in. Per-run lines sort by `ms` after, so slice order never
+    // matters.
+    for v in parsed.kept.iter().chain(parsed.calls.iter()) {
         let (Some(s), Some(ms)) = (v["session"].as_str(), v["ts"].as_str().and_then(ts_ms)) else {
             continue;
         };

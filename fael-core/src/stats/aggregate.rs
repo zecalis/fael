@@ -202,6 +202,36 @@ pub fn aggregate(
     let window = outcome_window(since, logs, first_seen);
     let mut top: Vec<(&String, &usize)> = parsed.by_id.iter().collect();
     top.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+    // TEMP-PROFILE: per-phase timing behind FAEL_PROFILE, removed before ship.
+    let prof = std::env::var_os("FAEL_PROFILE").is_some();
+    macro_rules! ph {
+        ($name:expr, $e:expr) => {{
+            let t = std::time::Instant::now();
+            let v = $e;
+            if prof {
+                eprintln!("core {:<12} {:.2}s", $name, t.elapsed().as_secs_f64());
+            }
+            v
+        }};
+    }
+    let asks = ph!("asks", ask_totals(&parsed.kept));
+    let unused_rows = ph!("unused", unused(parsed, logs));
+    let said = ph!("said", yields(parsed, logs));
+    let friction = ph!("friction", friction(parsed));
+    let usage = ph!("by_flag", super::by_flag::usage(parsed));
+    let test_leaks = ph!("leaks", super::leak::leaks(parsed));
+    let context_loop = ph!("repeat", super::repeat::context_loop(parsed, logs));
+    let experience = ph!("experience", experience(parsed, logs, commits));
+    let flow = ph!("flow", flow_stats(logs, runs, merges, window));
+    let outcome = ph!(
+        "outcome",
+        outcome_windowed(logs, prs, prs_merged_total, commits, since, first_seen)
+    );
+    let throughput = ph!("throughput", throughput_stats(runs, window));
+    let handoff_runs = ph!("handoff", super::handoff_runs(parsed, runs));
+    let days = ph!("days", super::days::days(parsed));
+    let rows = ph!("rows", with_rows.then(|| row_statuses(parsed, logs)));
+    let real_by_client = ph!("real", real_by_client(parsed));
     Stats {
         schema: STATS_SCHEMA,
         outcomes_v: OUTCOMES_V,
@@ -212,7 +242,7 @@ pub fn aggregate(
         by_event: counts(&parsed.by_event),
         by_client: counts(&parsed.by_client),
         models: Models::default(),
-        real_by_client: real_by_client(parsed),
+        real_by_client,
         top_rows: top
             .into_iter()
             .take(10)
@@ -221,7 +251,7 @@ pub fn aggregate(
                 pushes: *c,
             })
             .collect(),
-        asks: ask_totals(&parsed.kept),
+        asks,
         constants,
         rounds: Rounds {
             rows_added,
@@ -237,20 +267,20 @@ pub fn aggregate(
         capture,
         retired,
         value,
-        unused_rows: unused(parsed, logs),
-        said: yields(parsed, logs),
-        friction: friction(parsed),
-        usage: super::by_flag::usage(parsed),
-        test_leaks: super::leak::leaks(parsed),
-        context_loop: super::repeat::context_loop(parsed, logs),
-        experience: experience(parsed, logs, commits),
+        unused_rows,
+        said,
+        friction,
+        usage,
+        test_leaks,
+        context_loop,
+        experience,
         lifecycle: Default::default(),
-        flow: flow_stats(logs, runs, merges, window),
-        outcome: outcome_windowed(logs, prs, prs_merged_total, commits, since, first_seen),
-        throughput: throughput_stats(runs, window),
-        handoff_runs: super::handoff_runs(parsed, runs),
-        days: super::days::days(parsed),
-        rows: with_rows.then(|| row_statuses(parsed, logs)),
+        flow,
+        outcome,
+        throughput,
+        handoff_runs,
+        days,
+        rows,
     }
 }
 

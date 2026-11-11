@@ -157,7 +157,11 @@ fn index(
     let mut notes: HashMap<Session, Vec<i64>> = HashMap::new();
     // and the latest accepted chunk call of any verb
     let mut last_chunk: HashMap<Session, i64> = HashMap::new();
-    for v in &parsed.kept {
+    // call lines ride apart in `parsed.calls`: chain them here — the chunk
+    // note times and last-chunk call below read only those, everything else
+    // reads only `kept`. Order across the two slices never matters: notes
+    // are matched with `any` and the last call with `max`.
+    for v in parsed.kept.iter().chain(parsed.calls.iter()) {
         let (Some(repo), Some(s)) = (v["repo"].as_str(), session(v)) else {
             continue;
         };
