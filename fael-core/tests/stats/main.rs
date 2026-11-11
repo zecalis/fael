@@ -173,9 +173,10 @@ fn json_shape_keys_and_types_are_frozen() {
     assert!(top[0]["id"].is_string() && top[0]["pushes"].is_u64(), "{v}");
 }
 
-/// Chunk stats-unknown: run attribution with unknown-% beside every number,
-/// plus input-side transcript tokens per client — additions only, so the
-/// frozen key list above just gains the two keys.
+/// Chunk stats-unknown + hint-split: run attribution with reported / hint-only
+/// / none split and unknown-% beside every number, plus input-side transcript
+/// tokens per client — additions only, so the frozen key list above just gains
+/// the keys.
 #[test]
 fn json_shape_models_attribution_is_frozen() {
     let v = value_of(BASE_ROWS, false);
@@ -183,6 +184,8 @@ fn json_shape_models_attribution_is_frozen() {
         keys(&v["models"]),
         [
             "by_model",
+            "hint_only",
+            "none",
             "total",
             "unknown_cost_pct",
             "unknown_model_pct",
@@ -194,6 +197,8 @@ fn json_shape_models_attribution_is_frozen() {
     assert!(
         v["models"]["total"].is_u64()
             && v["models"]["with_client_model"].is_u64()
+            && v["models"]["hint_only"].is_u64()
+            && v["models"]["none"].is_u64()
             && v["models"]["with_cost"].is_u64()
             && v["models"]["unknown_model_pct"].is_f64()
             && v["models"]["unknown_cost_pct"].is_f64()

@@ -69,7 +69,7 @@ pub use kind::{Earned, SayKind};
 pub use leak::{LEAK_CALLS, LEAK_WINDOW_MS, Leak};
 pub use lifecycle::{Lifecycle, States, lifecycle};
 pub use metrics::ASK_ORDER;
-pub use models::{ModelRow, ModelRun, Models, models};
+pub use models::{ModelRow, ModelRun, Models, is_hint, models};
 pub use outcome::{ListedPr, Outcome, outcome};
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};

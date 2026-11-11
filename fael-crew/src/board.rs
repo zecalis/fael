@@ -219,22 +219,32 @@ pub struct Handoff {
 /// client-reported attribution t2+t3 write, and where the money went.
 /// Old rows stay NULL (never backfilled); every cost number rides with its
 /// unknown-% so a reader never mistakes a partial sum for a total.
+/// A size hint (`fael_core::stats::is_hint`) is not a reported model:
+/// `with_client_model` needs client AND a non-hint model, `hint_only` counts
+/// every hint-model row under `hint only` instead of under a `client/model`
+/// group, and `none` is the remainder — so the board uses the same
+/// reported / hint-only / none split as `fael stats`.
 /// The `session` on each `Run` is the usage join key where joinable.
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Models {
     /// every run row in crew.db, oldest first for the window below
     pub total: usize,
-    /// runs with non-null client AND model (the t5 model share numerator)
+    /// runs with non-null client AND a non-hint model (the t5 model share numerator)
     pub with_client_model: usize,
+    /// runs whose model is a size hint, any client — never under a `client/model` group
+    pub hint_only: usize,
+    /// the rest: model NULL, or a non-hint model with no client
+    pub none: usize,
     /// runs with cost > 0 (the t5 cost share numerator; a zero-cost run
     /// reads as unknown for the metric — it doesn't demonstrate attribution)
     pub with_cost: usize,
-    /// 0-100, one decimal: runs lacking client+model / total (0 when empty)
+    /// 0-100, one decimal: runs lacking client+reported-model / total (0 when empty)
     pub unknown_model_pct: f64,
     /// 0-100, one decimal: runs without cost > 0 / total (0 when empty)
     pub unknown_cost_pct: f64,
-    /// `client/model` (missing part reads `unknown`) → runs and summed USD;
-    /// cost ≤ 0 adds 0 to the sum but counts in `unknown_cost_pct`
+    /// `client/model` (missing part reads `unknown`) → runs and summed USD,
+    /// hint-model rows excluded; cost ≤ 0 adds 0 to the sum but counts in
+    /// `unknown_cost_pct`
     pub by_model: BTreeMap<String, ModelRow>,
     /// the agreed verdict window (Decision 2026-10-24, kept 80/50/30)
     pub window: CostWindow,
@@ -280,6 +290,7 @@ impl Models {
         for m in all {
             out.total += m.total;
             out.with_client_model += m.with_client_model;
+            out.hint_only += m.hint_only;
             out.with_cost += m.with_cost;
             for (k, r) in &m.by_model {
                 let e = out.by_model.entry(k.clone()).or_default();
@@ -291,6 +302,9 @@ impl Models {
                 out.window = m.window.clone();
             }
         }
+        out.none = out
+            .total
+            .saturating_sub(out.with_client_model + out.hint_only);
         out.unknown_model_pct = pct(out.total - out.with_client_model, out.total);
         out.unknown_cost_pct = pct(out.total - out.with_cost, out.total);
         for e in out.by_model.values_mut() {
@@ -761,11 +775,17 @@ fn is_opencode(client: &Option<String>, model: &Option<String>) -> bool {
 /// oldest first. Agent-started = a worktree is recorded (every `chunk
 /// start` binds one; board-launched launcher rows may lack it).
 fn summarize(rows: &[ModelRowIn]) -> Models {
+    let is_hint = fael_core::stats::is_hint;
     let total = rows.len();
     let with_client_model = rows
         .iter()
-        .filter(|(c, m, _, _, _)| c.is_some() && m.is_some())
+        .filter(|(c, m, _, _, _)| c.is_some() && m.as_deref().is_some_and(|m| !is_hint(m)))
         .count();
+    let hint_only = rows
+        .iter()
+        .filter(|(_, m, _, _, _)| m.as_deref().is_some_and(is_hint))
+        .count();
+    let none = total.saturating_sub(with_client_model + hint_only);
     let with_cost = rows
         .iter()
         .filter(|(_, _, k, _, _)| k.as_ref().is_some_and(|k| *k > 0.0))
@@ -773,6 +793,9 @@ fn summarize(rows: &[ModelRowIn]) -> Models {
     let mut by_model: BTreeMap<String, ModelRow> = BTreeMap::new();
     let mut missing_by_key: HashMap<String, usize> = HashMap::new();
     for (client, model, cost, _, _) in rows {
+        if model.as_deref().is_some_and(is_hint) {
+            continue;
+        }
         let key = format!(
             "{}/{}",
             client.as_deref().unwrap_or("unknown"),
@@ -804,7 +827,7 @@ fn summarize(rows: &[ModelRowIn]) -> Models {
     } else {
         let with = windowed
             .iter()
-            .filter(|(c, m, _, _, _)| c.is_some() && m.is_some())
+            .filter(|(c, m, _, _, _)| c.is_some() && m.as_deref().is_some_and(|m| !is_hint(m)))
             .count();
         let model_pct = share(with, n);
         let opencode_n = windowed
@@ -831,6 +854,8 @@ fn summarize(rows: &[ModelRowIn]) -> Models {
     Models {
         total,
         with_client_model,
+        hint_only,
+        none,
         with_cost,
         unknown_model_pct: pct(total - with_client_model, total),
         unknown_cost_pct: pct(total - with_cost, total),
@@ -1032,6 +1057,7 @@ mod models_tests {
         let m = summarize(&rows);
         assert_eq!(m.total, 4);
         assert_eq!(m.with_client_model, 2);
+        assert_eq!((m.hint_only, m.none), (0, 2));
         assert_eq!(m.with_cost, 2);
         assert_eq!(m.unknown_model_pct, 50.0);
         assert_eq!(m.unknown_cost_pct, 50.0);
@@ -1045,6 +1071,31 @@ mod models_tests {
         assert_eq!(
             (m.window.model_pct, m.window.cost_pct, m.window.pass),
             (None, None, None)
+        );
+    }
+
+    #[test]
+    fn size_hint_counts_as_hint_only_not_a_model() {
+        let rows = vec![
+            row(Some("claude"), Some("small"), None, "2026-10-10T08:00:00Z"),
+            row(Some("claude"), Some("M"), None, "2026-10-10T09:00:00Z"),
+            row(None, Some("large"), None, "2026-10-10T10:00:00Z"),
+            row(
+                Some("claude"),
+                Some("opus"),
+                Some(1.0),
+                "2026-10-10T11:00:00Z",
+            ),
+            row(None, None, None, "2026-10-10T12:00:00Z"),
+        ];
+        let m = summarize(&rows);
+        assert_eq!((m.total, m.with_client_model), (5, 1));
+        assert_eq!((m.hint_only, m.none), (3, 1));
+        assert_eq!(m.unknown_model_pct, 80.0);
+        assert!(
+            !m.by_model
+                .keys()
+                .any(|k| { k.ends_with("/small") || k.ends_with("/M") || k.ends_with("/large") })
         );
     }
 
@@ -1119,6 +1170,7 @@ mod models_tests {
         let b = summarize(&[row(None, None, None, "2026-10-10T10:00:00Z")]);
         let m = Models::merge(&[a, b]);
         assert_eq!((m.total, m.with_client_model, m.with_cost), (3, 2, 1));
+        assert_eq!((m.hint_only, m.none), (0, 1));
         assert_eq!((m.unknown_model_pct, m.unknown_cost_pct), (33.3, 66.7));
         let opus = &m.by_model["claude/opus"];
         assert_eq!(opus.runs, 2);

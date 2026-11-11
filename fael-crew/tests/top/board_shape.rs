@@ -382,9 +382,10 @@ fn board_v1_shape() {
     }
 }
 
-/// Models read (run-telemetry t5): every block's totals equal the sum of its
-/// groups, and the outer block is the merge of the projects' — so the golden
-/// cannot teach totals ≠ groups or outer ≠ merge.
+/// Models read (run-telemetry t5 + hint-split): every block's total equals
+/// the sum of its groups plus `hint_only` (hints never sit under a model),
+/// `reported + hint_only + none == total`, and the outer block is the merge
+/// of the projects' — so the golden cannot teach totals ≠ groups or outer ≠ merge.
 fn models_coherent(b: &Value) {
     let sum_runs = |m: &Value| {
         m["by_model"]
@@ -397,7 +398,20 @@ fn models_coherent(b: &Value) {
     let projects = b["projects"].as_array().unwrap();
     for p in projects {
         let m = &p["models"];
-        assert_eq!(m["total"].as_u64().unwrap(), sum_runs(m), "{}", p["name"]);
+        assert_eq!(
+            m["total"].as_u64().unwrap(),
+            sum_runs(m) + m["hint_only"].as_u64().unwrap(),
+            "{}",
+            p["name"]
+        );
+        assert_eq!(
+            m["total"].as_u64().unwrap(),
+            m["with_client_model"].as_u64().unwrap()
+                + m["hint_only"].as_u64().unwrap()
+                + m["none"].as_u64().unwrap(),
+            "{}",
+            p["name"]
+        );
     }
     let outer = &b["models"];
     let total: u64 = projects
@@ -411,7 +425,7 @@ fn models_coherent(b: &Value) {
     );
     assert_eq!(
         outer["total"].as_u64().unwrap(),
-        sum_runs(outer),
+        sum_runs(outer) + outer["hint_only"].as_u64().unwrap(),
         "outer groups sum"
     );
 }

@@ -57,6 +57,8 @@
   "models": {
     "total": 4,
     "with_client_model": 2,
+    "hint_only": 0,
+    "none": 2,
     "with_cost": 2,
     "unknown_model_pct": 50.0,
     "unknown_cost_pct": 50.0,
@@ -708,6 +710,8 @@
       "models": {
         "total": 2,
         "with_client_model": 1,
+        "hint_only": 0,
+        "none": 1,
         "with_cost": 1,
         "unknown_model_pct": 50.0,
         "unknown_cost_pct": 50.0,
@@ -1013,6 +1017,8 @@
       "models": {
         "total": 2,
         "with_client_model": 1,
+        "hint_only": 0,
+        "none": 1,
         "with_cost": 1,
         "unknown_model_pct": 50.0,
         "unknown_cost_pct": 50.0,
