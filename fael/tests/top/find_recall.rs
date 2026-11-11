@@ -98,10 +98,7 @@ fn miss_on_file_stem_shows_rows_on_that_file() {
     add(&d, "board handoff state", file, None);
     let (ok, out, err) = fael(&d, &["find", "chunk_scope"]);
     assert!(ok, "{err}{out}");
-    assert!(
-        out.contains(&format!("rows on {file}:")),
-        "{err}{out}"
-    );
+    assert!(out.contains(&format!("rows on {file}:")), "{err}{out}");
     assert!(out.contains("board handoff state"), "{err}{out}");
 }
 
@@ -112,8 +109,5 @@ fn thai_query_says_rows_are_english() {
     let (ok, out, err) = fael(&d, &["find", "สวัสดี"]);
     assert!(ok, "{err}{out}");
     let both = format!("{out}{err}");
-    assert!(
-        both.contains("rows are written in English"),
-        "{err}{out}"
-    );
+    assert!(both.contains("rows are written in English"), "{err}{out}");
 }
