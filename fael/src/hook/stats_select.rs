@@ -2,6 +2,7 @@
 //! total line. Split out of `stats_text.rs` (file-size ratchet) — the small
 //! per-story line builders stay there; this file only selects and prints.
 //! `--json` is the contract, this text is unstable by design.
+//! New surface for issue 01M74SGCWBWT0M2PQ9N0AKHRVR (`--all` + sections).
 
 use super::stats_text;
 use crate::core;
