@@ -39,6 +39,9 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str, at_start: bool) {
     for w in super::chunk_scope_report::warnings(&b.title, &b.brief, &log) {
         eprintln!("{w}");
     }
+    for w in super::chunk_scope_dead::warnings(&b.title, &b.brief, &log, s) {
+        eprintln!("{w}");
+    }
 }
 
 /// Linked issues plus brief cites whose row is closed: the board's `stale`.

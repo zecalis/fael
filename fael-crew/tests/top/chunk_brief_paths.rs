@@ -47,6 +47,12 @@ fn add(d: &Path, plan: &str, brief: &str, scope: &str, label: &str) -> (String, 
     (out.trim().to_string(), err)
 }
 
+fn issue(d: &Path, text: &str) -> String {
+    let (ok, out, err) = fael(d, &["add", "issue", text, "--files", "src/x.rs"]);
+    assert!(ok, "{err}");
+    out.split_whitespace().next().unwrap().to_string()
+}
+
 #[test]
 fn a_brief_path_outside_the_scope_warns_and_the_scope_is_unchanged() {
     let d = repo();
@@ -139,4 +145,52 @@ fn start_never_offers_chunk_edit_and_names_the_holder_to_note() {
         "{err}"
     );
     assert!(!err.contains("fael chunk edit"), "{err}");
+}
+
+#[test]
+fn a_dead_cite_warns_at_add_and_at_start() {
+    let d = repo();
+    let fake = "01ZZZZ9999";
+    let brief = format!("edit src/x.rs per {fake}");
+    let (uid, err) = add(&d, "inbox", &brief, "src/", "dead1");
+    assert!(
+        err.contains(&format!("cites {fake} — no such row")),
+        "{err}"
+    );
+    let (ok, _, err) = fael(&d, &["chunk", "start", &uid]);
+    assert!(ok, "{err}");
+    assert!(
+        err.contains(&format!("cites {fake} — no such row")),
+        "{err}"
+    );
+    assert!(!err.contains("fael chunk edit"), "{err}");
+}
+
+#[test]
+fn an_ambiguous_cite_warns_with_both_ids() {
+    let d = repo();
+    let mut ids = Vec::new();
+    for i in 0..6 {
+        ids.push(issue(&d, &format!("ambiguous {i}")));
+    }
+    let mut by_prefix: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for id in &ids {
+        by_prefix
+            .entry(id[..8].to_string())
+            .or_default()
+            .push(id.clone());
+    }
+    let (prefix, pair) = by_prefix
+        .into_iter()
+        .find(|(_, v)| v.len() >= 2)
+        .expect("two rows share an 8-char prefix");
+    let brief = format!("edit src/x.rs per {prefix}");
+    let (uid, err) = add(&d, "inbox", &brief, "src/", "dead2");
+    assert!(err.contains(&format!("cites {prefix}")), "{err}");
+    assert!(err.contains(&pair[0]) && err.contains(&pair[1]), "{err}");
+    let (ok, _, err) = fael(&d, &["chunk", "start", &uid]);
+    assert!(ok, "{err}");
+    assert!(err.contains(&format!("cites {prefix}")), "{err}");
+    assert!(err.contains(&pair[0]) && err.contains(&pair[1]), "{err}");
 }
