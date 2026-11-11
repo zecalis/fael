@@ -20,6 +20,19 @@ use crate::{Args, core, repo};
 pub(crate) use alive::BranchFiles;
 pub(crate) use merged::{default_branch, gh_prs, head_branch, merged_times, outcome_inputs};
 
+/// The listed PRs from the one cached `gh pr list` (`gh_prs`, 600 s on disk) —
+/// no paging, no search call. `FAEL_GH_JSON` stands in under test.
+pub(crate) fn cached_prs() -> Vec<core::stats::ListedPr> {
+    let Ok(r) = crate::repo() else {
+        return vec![];
+    };
+    std::env::var("FAEL_GH_JSON")
+        .ok()
+        .or_else(|| merged::gh_prs(&r.root))
+        .map(|j| merged::listed_prs(&j))
+        .unwrap_or_default()
+}
+
 /// Full ids of `rows` whose every file is gone from `root` — through the
 /// alias resolver, and never a file alive on the row's own unmerged branch
 /// (same judgement as `doctor [Gone]`). The `[Gone]` tag for the issue

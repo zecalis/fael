@@ -17,6 +17,38 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
         .map(|(e, t)| format!("{e} ~{t}"))
         .collect::<Vec<_>>()
         .join(", ");
+    let pr = match (&v.branch, &v.pr) {
+        (None, _) => "no branch (it never edited)".to_string(),
+        _ if !v.pr_checked => "PR unknown (no PR list read for this session's repo)".to_string(),
+        (_, None) => "no PR listed".to_string(),
+        (_, Some(p)) => format!(
+            "PR #{} {} (its branch's PR; it may hold other sessions' edits too)",
+            p.number,
+            p.merged
+                .as_ref()
+                .map_or("not merged".into(), |d| format!("merged {d}"))
+        ),
+    };
+    // pushed est tokens against the transcript's input side (in + cache); the
+    // two are different measures (est is once, cache reads recount per turn)
+    let tokens = match &v.tokens {
+        None => "  session tokens: n/a (no transcript total: not a Claude session, or no stop yet)"
+            .to_string(),
+        Some(t) => {
+            let cache = t.cache_creation + t.cache_read;
+            format!(
+                "  session tokens: in {} · cache {cache} · out {}",
+                t.input, t.output
+            )
+        }
+    };
+    let pct = match &v.tokens {
+        Some(t) if t.input + t.cache_creation + t.cache_read > 0 => format!(
+            " ({:.2}% of input)",
+            total as f64 * 100.0 / (t.input + t.cache_creation + t.cache_read) as f64
+        ),
+        _ => String::new(),
+    };
     vec![
         format!("session {} ({})", v.session, v.repo),
         format!(
@@ -29,8 +61,10 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
                 .map(|b| format!(" · branch {b}"))
                 .unwrap_or_default()
         ),
+        tokens,
+        format!("  {pr}"),
         format!(
-            "  pushed ~{total} tokens{}",
+            "  fael pushed: {total} est tokens{pct}{}",
             if by_event.is_empty() {
                 String::new()
             } else {
@@ -59,8 +93,8 @@ fn group_line(label: &str, g: &Group) -> String {
         format!("{:.1}", g.rejects as f64 * 100.0 / g.calls as f64)
     };
     format!(
-        "  {label}: sessions {} · edits {} · rejects per 100 calls {rate} ({} calls) · rows filed {} · no row {}",
-        g.sessions, g.edits, g.calls, g.rows_filed, g.no_row
+        "  {label}: sessions {} · edits {} · rejects per 100 calls {rate} ({} calls) · rows filed {} · no row {} · with a merged PR {}",
+        g.sessions, g.edits, g.calls, g.rows_filed, g.no_row, g.merged_pr
     )
 }
 

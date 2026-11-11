@@ -5,7 +5,7 @@
 //! tokens, metrics) lives in `askstats`; estimates stay labelled `est`, never
 //! `token`.
 
-use super::askstats::{RealTokens, transcript_usage};
+use super::askstats::{RealTokens, transcript_sum, transcript_usage};
 use super::protocol::Ctx;
 use super::state::now_rfc3339;
 use crate::core;
@@ -88,6 +88,37 @@ pub(crate) fn hook_meta<'a>(c: &'a Ctx, ask: Option<&'a str>, real: bool) -> Usa
         files: &[],
         decision: None,
     }
+}
+
+/// At a session's stop: its whole transcript summed once, on one
+/// `session-tokens` line (the last per session wins in stats; the session
+/// total rides `real_tokens`). Nothing is written for a client whose
+/// transcript carries no Claude `usage` (Codex, OpenCode): stats reads that as
+/// unknown, never 0. Fail-open like every usage write.
+pub(crate) fn record_session_tokens(e: &super::protocol::Event) {
+    let (Some(session), Some(cwd)) = (
+        e.session.as_deref().filter(|s| !s.is_empty()),
+        e.cwd.as_deref(),
+    ) else {
+        return;
+    };
+    let (Some(t), Ok(repo)) = (transcript_sum(session), crate::repo_at(Path::new(cwd))) else {
+        return;
+    };
+    let meta = UsageMeta {
+        session: Some(session),
+        real: Some(t),
+        ..UsageMeta::default()
+    };
+    let client = e.client.as_deref().unwrap_or("neutral");
+    append_row(super::usage::usage_row(
+        client,
+        "session-tokens",
+        &repo.root,
+        "",
+        &[],
+        &meta,
+    ));
 }
 
 /// This hook event's session for usage rows — absent outside hooks, so

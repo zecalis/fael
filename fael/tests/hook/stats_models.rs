@@ -76,10 +76,7 @@ fn stats_names_unknown_model_and_cost() {
         out.contains("  model unknown/unknown: 1 runs $0.000000 (unknown 100.0%)"),
         "{out}"
     );
-    assert!(
-        out.contains("  client claude: ×1 (~3 tokens, ~150 real)"),
-        "{out}"
-    );
+    assert!(out.contains("  client claude: ×1 (~3 tokens)"), "{out}");
     let (ok, out, err) = fael_at(&state, &d, &["stats", "--json"], "");
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
@@ -97,7 +94,7 @@ fn stats_names_unknown_model_and_cost() {
         "{out}"
     );
     assert_eq!(
-        v["real_by_client"],
+        v["context_by_client"],
         serde_json::json!({"claude": 150}),
         "{out}"
     );

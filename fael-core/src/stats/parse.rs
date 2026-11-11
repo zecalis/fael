@@ -51,6 +51,10 @@ pub struct Parsed {
     pub calls: Vec<serde_json::Value>,
     /// Per-event rows feed the day view in `day`.
     pub rows: Vec<UsageRow>,
+    /// The `session-tokens` line a stop wrote, per (repo, session stem): the
+    /// session's transcript summed `[input, cache-create, cache-read, output]`.
+    /// File order, so the last line of a session wins; no count reads it.
+    pub session_tokens: HashMap<(String, String), [u64; 4]>,
     /// First usage ts per repo — the "rows added since" denominator.
     pub first_seen: HashMap<String, i64>,
 }
@@ -108,6 +112,7 @@ pub fn parse_since(
         calls: vec![],
         rows: vec![],
         first_seen: HashMap::new(),
+        session_tokens: HashMap::new(),
     };
     let in_tmp = |q: &Path| {
         tmp_dirs
@@ -138,6 +143,15 @@ pub fn parse_since(
         // none of them reads.
         if v["event"] == "call" {
             p.calls.push(v);
+            continue;
+        }
+        // a session's token total, not an injection: kept apart, counted nowhere
+        if v["event"] == "session-tokens" {
+            if let (Some(r), Some(s), Some(q)) =
+                (v["repo"].as_str(), v["session"].as_str(), real_in(&v))
+            {
+                p.session_tokens.insert((r.into(), s.into()), q);
+            }
             continue;
         }
         // nothing reached any context: `value` reads it, no count does — nor

@@ -56,7 +56,7 @@ fn session_prints_one_session_by_prefix() {
     for want in [
         "session sess-a1 (",
         "client claude · 2026-10-02T00:00:00.000Z → 2026-10-02T00:03:00.000Z · branch feat/x",
-        "pushed ~7 tokens: edit ~4, session-start ~3",
+        "fael pushed: 7 est tokens: edit ~4, session-start ~3",
         "rows shown 1 · of 1 scored: in context at an edit 1 · acted 1",
         "edits 1 · calls 2 · rejects 1 · rows filed 0",
     ] {
@@ -83,7 +83,7 @@ fn json_lists_every_session_and_sessions_prints_the_two_tables() {
     let (ok, out, err) = fael_at(&state, &d, &["stats", "--json"], "");
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(v["schema"], 6, "{out}");
+    assert_eq!(v["schema"], 7, "{out}");
     let names: Vec<_> = v["sessions"]
         .as_array()
         .unwrap()

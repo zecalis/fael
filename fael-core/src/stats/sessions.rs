@@ -8,11 +8,30 @@
 use super::FlowRun;
 use super::capture::{by_time, filed, spans};
 use super::friction::{is_agent_call, is_gate_reject};
+use super::outcome::{ListedPr, pr_for_branch};
 use super::parse::{Parsed, session_stem};
 use super::value::{acted_pairs, pairs};
 use crate::{Log, rfc3339, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
+
+/// The listed PR a session's branch heads. A branch can carry several
+/// sessions, and this never says the PR holds this session's edits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SessionPr {
+    pub number: i64,
+    /// `YYYY-MM-DD` UTC; absent while the PR is not merged.
+    pub merged: Option<String>,
+}
+
+/// A session's transcript summed at its last stop (Claude only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SessionTokens {
+    pub input: u64,
+    pub cache_creation: u64,
+    pub cache_read: u64,
+    pub output: u64,
+}
 
 /// One session's numbers, keyed by (repo, session stem).
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -24,11 +43,20 @@ pub struct SessionView {
     /// First and last usage line of the session, RFC 3339 UTC.
     pub first: String,
     pub last: String,
-    /// Branch of the session's last edit; absent when it never edited.
+    /// Branch seen on most of its edit lines (ties: the later name); absent when it never edited.
     pub branch: Option<String>,
+    /// The listed PR whose `headRefName` is `branch`; absent when none is listed.
+    pub pr: Option<SessionPr>,
+    /// `pr` was looked up: the session's repo is the clone whose PR list was
+    /// read. False = unknown (another repo, or no list), which `pr: null` alone
+    /// would hide.
+    pub pr_checked: bool,
     pub edits: usize,
     /// Est tokens fael pushed into the session, by usage event.
     pub pushed_tokens: BTreeMap<String, usize>,
+    /// Billed-side tokens from the transcript at the session's last stop, each
+    /// assistant message once; `None` = unknown (Codex, OpenCode, no stop yet), never 0.
+    pub tokens: Option<SessionTokens>,
     /// Distinct rows a push handed over.
     pub shown: usize,
     /// …of those, the ones pushed at or after the client's first `in-context`
@@ -55,6 +83,8 @@ pub struct Group {
     pub calls: usize,
     pub rejects: usize,
     pub rows_filed: usize,
+    /// Sessions whose branch heads a merged listed PR.
+    pub merged_pr: usize,
     /// Sessions whose log was loaded and that filed no row.
     pub no_row: usize,
 }
@@ -81,6 +111,7 @@ struct Acc<'a> {
     toks: BTreeMap<String, usize>,
     calls: usize,
     rejects: usize,
+    branches: HashMap<&'a str, usize>,
 }
 
 /// Pairs per (repo, session).
@@ -112,7 +143,12 @@ pub fn sessions(
         if a.client.is_empty() {
             a.client = v["client"].as_str().unwrap_or("");
         }
-        a.edits += usize::from(v["event"] == "edit");
+        if v["event"] == "edit" {
+            a.edits += 1;
+            if let Some(b) = v["branch"].as_str() {
+                *a.branches.entry(b).or_default() += 1;
+            }
+        }
     }
     for v in parsed.calls.iter().filter(|v| is_agent_call(v)) {
         let (Some(repo), Some(s)) = (v["repo"].as_str(), v["session"].as_str()) else {
@@ -151,14 +187,22 @@ pub fn sessions(
         .into_iter()
         .filter_map(|(k, a)| {
             let span = spans.get(&k)?;
+            let branch = a
+                .branches
+                .iter()
+                .max_by_key(|&(b, n)| (*n, *b))
+                .map(|(b, _)| *b);
             Some(SessionView {
                 session: k.1.to_string(),
                 repo: k.0.to_string(),
                 client: a.client.to_string(),
                 first: at(span.0),
                 last: at(span.1),
-                branch: span.3.map(String::from),
+                branch: branch.map(String::from),
+                pr: None,
+                pr_checked: false,
                 edits: a.edits,
+                tokens: tokens_of(parsed, k),
                 pushed_tokens: a.toks,
                 shown: n(&shown, k),
                 scored: n(&scored_n, k),
@@ -176,6 +220,43 @@ pub fn sessions(
     (out, splits)
 }
 
+fn tokens_of(parsed: &Parsed, k: (&str, &str)) -> Option<SessionTokens> {
+    let &[input, cache_creation, cache_read, output] = parsed
+        .session_tokens
+        .get(&(k.0.to_string(), k.1.to_string()))?;
+    Some(SessionTokens {
+        input,
+        cache_creation,
+        cache_read,
+        output,
+    })
+}
+
+/// Join each session of `repo` to the listed PR its branch heads, then
+/// recount the splits (they hold `merged_pr`). Sessions of any other repo stay
+/// unchecked: the list is one clone's `gh pr list`, and a branch name alone
+/// would match another repo's PR. A PR merged before the session's first line
+/// cannot hold its edits (a reused branch name), so it is skipped. Pure.
+pub fn link_prs(list: &mut [SessionView], prs: &[ListedPr], repo: &str) -> Splits {
+    if !prs.is_empty() {
+        for v in list.iter_mut().filter(|v| v.repo == repo) {
+            let first = ts_ms(&v.first).unwrap_or(0);
+            v.pr_checked = true;
+            v.pr = v
+                .branch
+                .as_deref()
+                .and_then(|b| pr_for_branch(prs, b, first))
+                .map(|p| SessionPr {
+                    number: p.number,
+                    merged: p
+                        .merged_ms
+                        .map(|ms| rfc3339(ms.max(0) as u64)[..10].to_string()),
+                });
+        }
+    }
+    splits(list)
+}
+
 fn splits(list: &[SessionView]) -> Splits {
     let mut s = Splits::default();
     for v in list.iter().filter(|v| v.edits > 0) {
@@ -191,6 +272,7 @@ fn splits(list: &[SessionView]) -> Splits {
             g.rejects += v.rejects;
             g.rows_filed += v.rows_filed.unwrap_or(0);
             g.no_row += usize::from(v.rows_filed == Some(0));
+            g.merged_pr += usize::from(v.pr.as_ref().is_some_and(|p| p.merged.is_some()));
         }
     }
     s
@@ -220,113 +302,5 @@ pub fn find_session<'a>(list: &'a [SessionView], q: &str) -> Result<Vec<&'a Sess
                 s.join(", ")
             ))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::stats::parse::parse;
-    use std::path::Path;
-
-    fn line(ts: &str, session: &str, rest: &str) -> String {
-        format!(r#"{{"ts":"{ts}","repo":"/w/r","client":"claude","session":"{session}",{rest}}}"#)
-    }
-
-    /// s1: pushed row A, edited its file (a hit), one ok and one rejected
-    /// call; s2: edited, was handed nothing.
-    fn fixture() -> Parsed {
-        let lines = [
-            line(
-                "2026-10-01T00:00:00.000Z",
-                "s0",
-                r#""event":"in-context","in_context":["Z"],"files":[]"#,
-            ),
-            line(
-                "2026-10-02T00:00:00.000Z",
-                "s1",
-                r#""event":"session-start","bytes":9,"est_tokens":3,"ids":["A"]"#,
-            ),
-            line(
-                "2026-10-02T00:01:00.000Z",
-                "s1",
-                r#""event":"edit","bytes":9,"est_tokens":4,"ids":[],"branch":"feat/x","files":["a.rs"]"#,
-            ),
-            line(
-                "2026-10-02T00:01:00.000Z",
-                "s1",
-                r#""event":"in-context","in_context":["A"],"files":["a.rs"]"#,
-            ),
-            line(
-                "2026-10-02T00:02:00.000Z",
-                "s1",
-                r#""event":"call","cmd":"add","outcome":"ok""#,
-            ),
-            line(
-                "2026-10-02T00:03:00.000Z",
-                "s1",
-                r#""event":"call","cmd":"add","outcome":"reject","reason":"x""#,
-            ),
-            line(
-                "2026-10-02T00:03:30.000Z",
-                "s1",
-                r#""event":"call","cmd":"add","outcome":"reject","reason":"shape_gate""#,
-            ),
-            line(
-                "2026-10-02T00:04:00.000Z",
-                "s1",
-                r#""event":"call","cmd":"add","outcome":"ok","who":"human""#,
-            ),
-            line(
-                "2026-10-03T00:00:00.000Z",
-                "s2",
-                r#""event":"edit","bytes":0,"est_tokens":0,"ids":[]"#,
-            ),
-        ];
-        parse(&lines.join("\n"), Path::new("/state"), &[])
-    }
-
-    #[test]
-    fn a_session_row_reads_the_aggregates_rules() {
-        let run = FlowRun {
-            session: Some("/p/s2.jsonl".into()),
-            ..Default::default()
-        };
-        let (list, sp) = sessions(&fixture(), &HashMap::new(), &[run]);
-        let s1 = list.iter().find(|v| v.session == "s1").unwrap();
-        assert_eq!((s1.shown, s1.scored, s1.in_context, s1.acted), (1, 1, 1, 1));
-        assert_eq!((s1.edits, s1.calls, s1.rejects), (1, 2, 1));
-        assert_eq!(s1.pushed_tokens["session-start"], 3);
-        assert_eq!(s1.branch.as_deref(), Some("feat/x"));
-        assert_eq!(s1.first, "2026-10-02T00:00:00.000Z");
-        assert_eq!(s1.rows_filed, None); // no log loaded
-        // newest first
-        assert_eq!(list[0].session, "s2");
-        assert!(list[0].in_run && !s1.in_run);
-        assert_eq!(
-            (sp.pushed.with.sessions, sp.pushed.without.sessions),
-            (1, 1)
-        );
-        assert_eq!(
-            (sp.in_run.with.sessions, sp.in_run.without.sessions),
-            (1, 1)
-        );
-        assert_eq!(sp.pushed.with.rejects, 1);
-    }
-
-    #[test]
-    fn a_unique_prefix_finds_one_and_an_ambiguous_one_names_the_stems() {
-        let (list, _) = sessions(&fixture(), &HashMap::new(), &[]);
-        assert_eq!(find_session(&list, "s1").unwrap().len(), 1);
-        assert_eq!(
-            find_session(&list, "/h/x/s2.jsonl").unwrap()[0].session,
-            "s2"
-        );
-        assert!(find_session(&list, "s").unwrap_err().contains("s0, s1, s2"));
-        assert!(
-            find_session(&list, "zz")
-                .unwrap_err()
-                .contains("no session")
-        );
     }
 }

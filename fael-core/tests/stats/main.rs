@@ -71,7 +71,7 @@ fn keys(v: &serde_json::Value) -> Vec<&str> {
 
 #[test]
 fn schema_version_is_pinned() {
-    assert_eq!(value_of(BASE_ROWS, false)["schema"], 6);
+    assert_eq!(value_of(BASE_ROWS, false)["schema"], 7);
 }
 
 #[test]
@@ -86,6 +86,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "bytes",
             "capture",
             "constants",
+            "context_by_client",
             "context_loop",
             "days",
             "est_tokens",
@@ -99,7 +100,6 @@ fn json_shape_keys_and_types_are_frozen() {
             "non_english_rows",
             "outcome",
             "outcomes_v",
-            "real_by_client",
             "retired",
             "rounds",
             "said",
@@ -211,7 +211,7 @@ fn json_shape_models_attribution_is_frozen() {
             && v["models"]["by_model"].is_object(),
         "{v}"
     );
-    assert!(v["real_by_client"].is_object(), "{v}");
+    assert!(v["context_by_client"].is_object(), "{v}");
 }
 
 #[test]
