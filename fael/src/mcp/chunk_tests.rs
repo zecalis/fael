@@ -9,6 +9,37 @@ fn an_unknown_verb_names_the_cli_when_it_is_one_there() {
     let e = unknown_verb("zzz", "U1");
     assert!(e.contains("try chunk {verb: \"show\""), "{e}");
     assert!(e.starts_with("rejected: unknown chunk verb zzz"), "{e}");
+    // the closed list names `status` now that MCP serves it
+    assert!(e.contains("show|status|start|note|done|wait|after"), "{e}");
+}
+
+#[test]
+fn status_builds_like_show_read_only() {
+    let a = json!({"verb": "status", "uid": "U1"});
+    assert_eq!(
+        build_args("status", "U1", &a).unwrap(),
+        vec!["chunk", "status", "U1"]
+    );
+    // read-only: no run, no seat, no full
+    for extra in [json!({"run": "R1"}), json!({"full": true})] {
+        let mut b = a.clone();
+        b.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        let args = build_args("status", "U1", &b).unwrap();
+        assert!(!args.contains(&"--run".to_string()), "{args:?}");
+        assert!(!args.contains(&"--seat".to_string()), "{args:?}");
+        assert!(!args.contains(&"--full".to_string()), "{args:?}");
+    }
+    // `full` rides only on start/show
+    assert!(
+        misplaced_note(
+            &json!({"verb": "status", "uid": "U1", "full": true}),
+            "status"
+        )
+        .unwrap()
+        .contains("`full`")
+    );
 }
 use serde_json::json;
 
