@@ -473,8 +473,7 @@ fn accept_on_a_done_chunk_is_a_noop_without_an_event() {
     let head = |d: &Path| {
         let (ok, out, err) = fael(d, &["plan", "export", "--since", "0"]);
         assert!(ok, "{err}");
-        serde_json::from_str::<serde_json::Value>(&out)
-            .unwrap()["head"]
+        serde_json::from_str::<serde_json::Value>(&out).unwrap()["head"]
             .as_i64()
             .unwrap()
     };
@@ -488,8 +487,5 @@ fn accept_on_a_done_chunk_is_a_noop_without_an_event() {
     assert!(fael(&d, &["chunk", "start", &r, "--run", "R2"]).0);
     let (ok, _, err) = fael(&d, &["chunk", "accept", &r]);
     assert!(!ok, "accept on running stays a reject");
-    assert!(
-        err.contains("`accept` takes a chunk in review"),
-        "{err}"
-    );
+    assert!(err.contains("`accept` takes a chunk in review"), "{err}");
 }

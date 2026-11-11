@@ -77,8 +77,7 @@ fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     let now = fael_core::rfc3339(fael_core::now_ms());
     in_repo(r)?;
     let mut s = Store::open(&db(r))?;
-    let created =
-        s.new_plan(&app, name, title, &area, a.one("parent").as_deref(), &now)?;
+    let created = s.new_plan(&app, name, title, &area, a.one("parent").as_deref(), &now)?;
     let key = if app.is_empty() {
         name.to_string()
     } else {

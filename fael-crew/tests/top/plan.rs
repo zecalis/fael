@@ -374,8 +374,7 @@ fn plan_new_with_the_same_title_is_a_noop_without_an_event() {
     let head = |d: &Path| {
         let (ok, out, err) = fael(d, &["plan", "export", "--since", "0"]);
         assert!(ok, "{err}");
-        serde_json::from_str::<serde_json::Value>(&out)
-            .unwrap()["head"]
+        serde_json::from_str::<serde_json::Value>(&out).unwrap()["head"]
             .as_i64()
             .unwrap()
     };
@@ -390,8 +389,7 @@ fn plan_new_with_the_same_title_is_a_noop_without_an_event() {
     let (ok, _, err) = fael(&d, &["plan", "new", "p", "Other"]);
     assert!(!ok, "another title stays a reject");
     assert!(
-        err.contains("plan p already exists")
-            && err.contains("fael plan export p"),
+        err.contains("plan p already exists") && err.contains("fael plan export p"),
         "{err}"
     );
 }
