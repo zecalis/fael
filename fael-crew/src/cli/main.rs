@@ -17,6 +17,7 @@ mod chunk_pr_files;
 mod chunk_prs;
 mod chunk_run;
 mod chunk_scope;
+mod chunk_scope_dead;
 mod chunk_scope_gone;
 mod chunk_scope_report;
 mod chunk_scope_skip;
