@@ -281,9 +281,10 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
 }
 
 /// `fael stats --session <stem|prefix> [--json]`: one session's row from the
-/// parse, the logs and this clone's runs — no git, no gh.
+/// parse, the logs, this clone's runs and the cached PR list — no git, no new gh call.
 fn session_view(q: &str, json: bool, u: &Usage) -> Result<(), String> {
-    let (list, _) = core::stats::sessions(&u.parsed, &u.logs, &super::flow::runs());
+    let prs = crate::maintain::cached_prs();
+    let (list, _) = core::stats::sessions(&u.parsed, &u.logs, &super::flow::runs(), &prs);
     for v in core::stats::find_session(&list, q)? {
         if json {
             println!("{}", serde_json::to_string(v).map_err(|e| e.to_string())?);

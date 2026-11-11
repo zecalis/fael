@@ -204,7 +204,7 @@ pub fn aggregate(
     let (row_total, foreign_rows) = non_english_share(logs, cfg);
     let (capture, retired) = (capture(parsed, logs), retired(parsed, logs));
     let value = value(parsed, logs);
-    let (sessions, session_splits) = super::sessions::sessions(parsed, logs, runs);
+    let (sessions, session_splits) = super::sessions::sessions(parsed, logs, runs, prs);
     // One window for the whole screen (see parse); flow and outcome share it.
     let first_seen = parsed.first_seen.values().copied().min();
     let window = outcome_window(since, logs, first_seen);

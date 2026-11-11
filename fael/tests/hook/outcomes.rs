@@ -293,3 +293,39 @@ fn a_short_list_prints_listed_n_of_m() {
     assert!(ok, "{err}");
     assert!(out.contains("listed 200 of 450"), "{out}");
 }
+
+/// `fael stats --session` ties a session to the listed PR whose head is the
+/// branch on its edit lines: two sessions on one branch both show it, a
+/// branch with no listed PR says so, and the split tables count merged ones.
+#[test]
+fn a_session_shows_the_pr_its_branch_heads() {
+    let d = repo();
+    let line = |ts: &str, s: &str, branch: &str| {
+        format!(
+            r#"{{"ts":"{ts}","repo":{},"client":"claude","session":"{s}","event":"edit","bytes":0,"est_tokens":0,"ids":[],"branch":"{branch}","files":["a.rs"]}}"#,
+            json(&d)
+        )
+    };
+    let body = [
+        line("2026-10-02T00:00:00.000Z", "sess-a1", "feat/x"),
+        line("2026-10-03T00:00:00.000Z", "sess-a2", "feat/x"),
+        line("2026-10-04T00:00:00.000Z", "sess-c3", "feat/none"),
+    ]
+    .join("\n");
+    std::fs::create_dir_all(d.join("state")).unwrap();
+    std::fs::write(d.join("state/usage.jsonl"), body + "\n").unwrap();
+    let prs = r#"[{"number":41,"headRefName":"feat/x","state":"MERGED","createdAt":"2026-10-02T00:00:00Z","mergedAt":"2026-10-05T01:00:00Z"}]"#;
+    let env = [("FAEL_GH_JSON", prs)];
+    for (s, want) in [
+        ("sess-a1", "PR #41 merged 2026-10-05"),
+        ("sess-a2", "PR #41 merged 2026-10-05"),
+        ("sess-c3", "no PR listed"),
+    ] {
+        let (ok, out, err) = fael_env(&d, &["stats", "--session", s], "", &env);
+        assert!(ok, "{err}");
+        assert!(out.contains(want), "{s}: {want} missing: {out}");
+    }
+    let (ok, out, err) = fael_env(&d, &["stats", "sessions"], "", &env);
+    assert!(ok, "{err}");
+    assert!(out.contains("with a merged PR 2"), "{out}");
+}

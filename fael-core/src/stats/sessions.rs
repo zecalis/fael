@@ -8,11 +8,21 @@
 use super::FlowRun;
 use super::capture::{by_time, filed, spans};
 use super::friction::{is_agent_call, is_gate_reject};
+use super::outcome::{ListedPr, pr_for_branch};
 use super::parse::{Parsed, session_stem};
 use super::value::{acted_pairs, pairs};
 use crate::{Log, rfc3339, ts_ms};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
+
+/// The listed PR a session's branch heads. A branch can carry several
+/// sessions, and this never says the PR holds this session's edits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SessionPr {
+    pub number: i64,
+    /// `YYYY-MM-DD` UTC; absent while the PR is not merged.
+    pub merged: Option<String>,
+}
 
 /// One session's numbers, keyed by (repo, session stem).
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -24,8 +34,10 @@ pub struct SessionView {
     /// First and last usage line of the session, RFC 3339 UTC.
     pub first: String,
     pub last: String,
-    /// Branch of the session's last edit; absent when it never edited.
+    /// Branch seen on most of its edit lines (ties: the later name); absent when it never edited.
     pub branch: Option<String>,
+    /// The listed PR whose `headRefName` is `branch`; absent when none is listed.
+    pub pr: Option<SessionPr>,
     pub edits: usize,
     /// Est tokens fael pushed into the session, by usage event.
     pub pushed_tokens: BTreeMap<String, usize>,
@@ -55,6 +67,8 @@ pub struct Group {
     pub calls: usize,
     pub rejects: usize,
     pub rows_filed: usize,
+    /// Sessions whose branch heads a merged listed PR.
+    pub merged_pr: usize,
     /// Sessions whose log was loaded and that filed no row.
     pub no_row: usize,
 }
@@ -81,6 +95,7 @@ struct Acc<'a> {
     toks: BTreeMap<String, usize>,
     calls: usize,
     rejects: usize,
+    branches: HashMap<&'a str, usize>,
 }
 
 /// Pairs per (repo, session).
@@ -98,6 +113,7 @@ pub fn sessions(
     parsed: &Parsed,
     logs: &HashMap<String, Log>,
     runs: &[FlowRun],
+    prs: &[ListedPr],
 ) -> (Vec<SessionView>, Splits) {
     let spans = spans(parsed);
     let (all, _) = pairs(parsed, false);
@@ -112,7 +128,12 @@ pub fn sessions(
         if a.client.is_empty() {
             a.client = v["client"].as_str().unwrap_or("");
         }
-        a.edits += usize::from(v["event"] == "edit");
+        if v["event"] == "edit" {
+            a.edits += 1;
+            if let Some(b) = v["branch"].as_str() {
+                *a.branches.entry(b).or_default() += 1;
+            }
+        }
     }
     for v in parsed.calls.iter().filter(|v| is_agent_call(v)) {
         let (Some(repo), Some(s)) = (v["repo"].as_str(), v["session"].as_str()) else {
@@ -151,13 +172,25 @@ pub fn sessions(
         .into_iter()
         .filter_map(|(k, a)| {
             let span = spans.get(&k)?;
+            let branch = a
+                .branches
+                .iter()
+                .max_by_key(|&(b, n)| (*n, *b))
+                .map(|(b, _)| *b);
+            let pr = branch
+                .and_then(|b| pr_for_branch(prs, b))
+                .map(|p| SessionPr {
+                    number: p.number,
+                    merged: p.merged_ms.map(|ms| at(ms)[..10].to_string()),
+                });
             Some(SessionView {
                 session: k.1.to_string(),
                 repo: k.0.to_string(),
                 client: a.client.to_string(),
                 first: at(span.0),
                 last: at(span.1),
-                branch: span.3.map(String::from),
+                branch: branch.map(String::from),
+                pr,
                 edits: a.edits,
                 pushed_tokens: a.toks,
                 shown: n(&shown, k),
@@ -191,6 +224,7 @@ fn splits(list: &[SessionView]) -> Splits {
             g.rejects += v.rejects;
             g.rows_filed += v.rows_filed.unwrap_or(0);
             g.no_row += usize::from(v.rows_filed == Some(0));
+            g.merged_pr += usize::from(v.pr.as_ref().is_some_and(|p| p.merged.is_some()));
         }
     }
     s
@@ -292,7 +326,7 @@ mod tests {
             session: Some("/p/s2.jsonl".into()),
             ..Default::default()
         };
-        let (list, sp) = sessions(&fixture(), &HashMap::new(), &[run]);
+        let (list, sp) = sessions(&fixture(), &HashMap::new(), &[run], &[]);
         let s1 = list.iter().find(|v| v.session == "s1").unwrap();
         assert_eq!((s1.shown, s1.scored, s1.in_context, s1.acted), (1, 1, 1, 1));
         assert_eq!((s1.edits, s1.calls, s1.rejects), (1, 2, 1));
@@ -315,8 +349,41 @@ mod tests {
     }
 
     #[test]
+    fn two_sessions_on_one_branch_both_show_its_pr() {
+        let mut p = ListedPr {
+            number: 7,
+            branch: Some("feat/x".into()),
+            ..Default::default()
+        };
+        let (list, _) = sessions(&fixture(), &HashMap::new(), &[], std::slice::from_ref(&p));
+        let s1 = list.iter().find(|v| v.session == "s1").unwrap();
+        assert_eq!(
+            s1.pr,
+            Some(SessionPr {
+                number: 7,
+                merged: None
+            })
+        );
+        assert!(
+            list.iter()
+                .find(|v| v.session == "s2")
+                .unwrap()
+                .pr
+                .is_none()
+        );
+        p.merged_ms = ts_ms("2026-10-05T00:00:00Z");
+        let (list, sp) = sessions(&fixture(), &HashMap::new(), &[], &[p]);
+        let s1 = list.iter().find(|v| v.session == "s1").unwrap();
+        assert_eq!(
+            s1.pr.as_ref().unwrap().merged.as_deref(),
+            Some("2026-10-05")
+        );
+        assert_eq!(sp.pushed.with.merged_pr, 1);
+    }
+
+    #[test]
     fn a_unique_prefix_finds_one_and_an_ambiguous_one_names_the_stems() {
-        let (list, _) = sessions(&fixture(), &HashMap::new(), &[]);
+        let (list, _) = sessions(&fixture(), &HashMap::new(), &[], &[]);
         assert_eq!(find_session(&list, "s1").unwrap().len(), 1);
         assert_eq!(
             find_session(&list, "/h/x/s2.jsonl").unwrap()[0].session,

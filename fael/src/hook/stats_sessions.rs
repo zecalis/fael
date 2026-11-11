@@ -17,6 +17,14 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
         .map(|(e, t)| format!("{e} ~{t}"))
         .collect::<Vec<_>>()
         .join(", ");
+    let pr = match (&v.branch, &v.pr) {
+        (None, _) => "no branch (it never edited)".to_string(),
+        (_, None) => "no PR listed".to_string(),
+        (_, Some(p)) => match &p.merged {
+            Some(d) => format!("PR #{} merged {d}", p.number),
+            None => format!("PR #{} not merged", p.number),
+        },
+    };
     vec![
         format!("session {} ({})", v.session, v.repo),
         format!(
@@ -29,6 +37,7 @@ pub(super) fn session_lines(v: &SessionView) -> Vec<String> {
                 .map(|b| format!(" · branch {b}"))
                 .unwrap_or_default()
         ),
+        format!("  {pr} (its branch's PR; the PR may hold other sessions' edits too)"),
         format!(
             "  pushed ~{total} tokens{}",
             if by_event.is_empty() {
@@ -59,8 +68,8 @@ fn group_line(label: &str, g: &Group) -> String {
         format!("{:.1}", g.rejects as f64 * 100.0 / g.calls as f64)
     };
     format!(
-        "  {label}: sessions {} · edits {} · rejects per 100 calls {rate} ({} calls) · rows filed {} · no row {}",
-        g.sessions, g.edits, g.calls, g.rows_filed, g.no_row
+        "  {label}: sessions {} · edits {} · rejects per 100 calls {rate} ({} calls) · rows filed {} · no row {} · with a merged PR {}",
+        g.sessions, g.edits, g.calls, g.rows_filed, g.no_row, g.merged_pr
     )
 }
 

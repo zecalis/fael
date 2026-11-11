@@ -137,12 +137,12 @@ fn stats_json_matches_golden_values() {
         Some(serde_json::json!([{
             "session": "s1", "repo": "/work/real", "client": "claude",
             "first": "2026-09-26T00:01:00.000Z", "last": "2026-09-26T00:03:00.000Z",
-            "branch": null, "edits": 0, "pushed_tokens": {"read": 5},
+            "branch": null, "pr": null, "edits": 0, "pushed_tokens": {"read": 5},
             "shown": 2, "scored": 0, "in_context": 0, "acted": 0,
             "calls": 0, "rejects": 0, "rows_filed": null, "in_run": false
         }]))
     );
-    let group = serde_json::json!({"sessions": 0, "edits": 0, "calls": 0, "rejects": 0, "rows_filed": 0, "no_row": 0});
+    let group = serde_json::json!({"sessions": 0, "edits": 0, "calls": 0, "rejects": 0, "rows_filed": 0, "merged_pr": 0, "no_row": 0});
     let split = serde_json::json!({"with": group, "without": group});
     let splits = v.as_object_mut().unwrap().remove("session_splits");
     assert_eq!(
