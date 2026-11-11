@@ -179,3 +179,85 @@ fn id_rule_rides_the_reject_not_the_session_start() {
     let (ok, out, _) = fael(&d, &["doctor", "--help"], "");
     assert!(ok && out.contains("[Phantom]"), "{out}");
 }
+
+/// Chunk start-budget: a held chunk with a 2000-char note — the session-start
+/// context stays within `kickoff_tokens` (800) and the note shows as one line
+/// ending in `fael chunk show <uid>`.
+#[test]
+fn session_start_fits_a_long_note_in_one_line() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["chunk", "add", "T", "--brief", "b"], "");
+    assert!(ok, "{err}");
+    let uid = out.trim().to_string();
+    let (ok, _, err) = fael(&d, &["chunk", "start", &uid, "--run", "R1"], "");
+    assert!(ok, "{err}");
+    // token-heavy: an id-like run costs 1 token per 2 chars, so 2000 chars
+    // would blow the 800-token kickoff budget if inlined whole
+    let long = "A1".repeat(1000);
+    assert_eq!(long.len(), 2000);
+    let (ok, _, err) = fael(&d, &["chunk", "note", &uid, &long], "");
+    assert!(ok, "{err}");
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"s1","source":"startup"}}"#,
+        json(&d)
+    );
+    let (ok, out, err) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+    assert!(ok, "{err} {out}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let ctx = v
+        .pointer("/hookSpecificOutput/additionalContext")
+        .and_then(|c| c.as_str())
+        .unwrap_or("");
+    assert!(!ctx.is_empty(), "inbox said: {out}");
+    let toks = fael_core::est_tokens(ctx);
+    assert!(
+        toks <= 800,
+        "session-start context {toks} tokens over kickoff budget 800: {out}"
+    );
+    let note_lines: Vec<&str> = ctx
+        .lines()
+        .filter(|l| l.contains("new note for chunk"))
+        .collect();
+    assert_eq!(note_lines.len(), 1, "one inbox line: {out}");
+    assert_eq!(note_lines[0].lines().count(), 1);
+    assert!(
+        note_lines[0]
+            .trim_end()
+            .ends_with(&format!("fael chunk show {uid}")),
+        "ends in show: {}",
+        note_lines[0]
+    );
+    assert!(!ctx.contains(&long[..200]), "full note not inlined");
+}
+
+/// Step 1 (own-note): the session that wrote a note resumes — its own note
+/// stays silent, another session's note still shows.
+#[test]
+fn own_note_stays_silent_while_another_session_note_shows() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["chunk", "add", "T", "--brief", "b"], "");
+    assert!(ok, "{err}");
+    let uid = out.trim().to_string();
+    let (ok, _, err) = fael(&d, &["chunk", "start", &uid, "--run", "R1"], "");
+    assert!(ok, "{err}");
+    for (text, sess) in [("from other", "other"), ("from s1", "s1")] {
+        let (ok, _, err) = super::fael_env(
+            &d,
+            &["chunk", "note", &uid, text],
+            "",
+            &[("FAEL_SESSION", sess)],
+        );
+        assert!(ok, "{err}");
+    }
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"s1","source":"startup"}}"#,
+        json(&d)
+    );
+    let (ok, out, err) = fael(&d, &["hook", "session-start", "--client", "claude"], &input);
+    assert!(ok, "{err} {out}");
+    assert!(
+        out.contains("from other"),
+        "other session's note shows: {out}"
+    );
+    assert!(!out.contains("from s1"), "own note silent: {out}");
+}

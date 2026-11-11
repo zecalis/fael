@@ -212,6 +212,9 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
             args.extend(["--as".into(), m]);
         }
     }
+    if verb == "note" {
+        note_session(&mut args, a);
+    }
     // no cwd, no `run`: the call answers from the live run's seat, which fael holds
     // (issue 01M6BK561); a pinned server has one workspace and no seat to look up
     if matches!(verb, "done" | "wait" | "after")
@@ -236,6 +239,14 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
         args.push("--full".into());
     }
     Ok(args)
+}
+
+/// Own-note filter: the writer session rides as hidden --session (RFC3339
+/// kept — opencode's FAEL_SESSION is its hook session, unlike start's bind).
+fn note_session(args: &mut Vec<String>, a: &Value) {
+    if let Some(sess) = s(a, "session").filter(|v| !v.trim().is_empty()) {
+        args.extend(["--session".into(), sess]);
+    }
 }
 
 /// `wait --option`: one string, or many — `option` plus `options[]`, comma-split

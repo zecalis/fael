@@ -7,9 +7,13 @@
 use super::db::readonly;
 use std::path::Path;
 
-/// The live chunk's uid and its notes since the run started: `(event id, text)`.
+/// One inbox note: its event id, text and writer session (`None` on old dbs
+/// or notes filed outside any session).
+pub type Note = (i64, String, Option<String>);
+
+/// The live chunk's uid and its notes since the run started.
 /// `None` with no db, no tables or no live run; empty notes = nothing new.
-pub fn notes(db: &Path, worktree: &str, session: &str) -> Option<(String, Vec<(i64, String)>)> {
+pub fn notes(db: &Path, worktree: &str, session: &str) -> Option<(String, Vec<Note>)> {
     let c = readonly(db)?;
     let (uid, started): (String, String) = c
         .query_row(
@@ -20,6 +24,29 @@ pub fn notes(db: &Path, worktree: &str, session: &str) -> Option<(String, Vec<(i
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .ok()?;
+    // event.session rides COLUMNS (no VERSION bump): old dbs lack it — fall back
+    // to the session-less read so a shared db opens both ways (issue 01M4MN60).
+    let with_session = c
+        .prepare(
+            "SELECT id, COALESCE(text, ''), session FROM event
+             WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
+               AND COALESCE(text, '') != '' ORDER BY id",
+        )
+        .ok();
+    if let Some(mut q) = with_session {
+        let out = q
+            .query_map(rusqlite::params![uid, started], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, Option<String>>(2)?,
+                ))
+            })
+            .ok()?
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        return Some((uid, out));
+    }
     let mut q = c
         .prepare(
             "SELECT id, COALESCE(text, '') FROM event
@@ -29,7 +56,7 @@ pub fn notes(db: &Path, worktree: &str, session: &str) -> Option<(String, Vec<(i
         .ok()?;
     let out = q
         .query_map(rusqlite::params![uid, started], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, None))
         })
         .ok()?
         .collect::<Result<Vec<_>, _>>()
@@ -70,7 +97,7 @@ mod tests {
         assert_eq!(uid, "U1");
         assert_eq!(
             ns,
-            vec![(3, "hello".to_string())],
+            vec![(3, "hello".to_string(), None)],
             "before start and empty left out, agent start is not a note"
         );
         assert_eq!(

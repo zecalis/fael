@@ -417,7 +417,13 @@ impl Store {
     /// the outcome stays, `chunk show <uid>` prints the note beside the hand-off; an outcome
     /// change is still a `done` amend, a new scope a new chunk. Dropped and replaced chunks
     /// are history and take no note.
-    pub fn note(&mut self, uid: &str, text: &str, now: &str) -> Result<(), String> {
+    pub fn note(
+        &mut self,
+        uid: &str,
+        text: &str,
+        now: &str,
+        session: Option<&str>,
+    ) -> Result<(), String> {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         if r.state.terminal() && r.state != State::Done {
@@ -427,6 +433,13 @@ impl Store {
             ));
         }
         set(&tx, &r, r.state, "note", Some(text), now)?;
+        if let Some(s) = session.filter(|s| !s.is_empty()) {
+            // fail-open: old dbs without the column (readonly side) keep the note
+            let _ = tx.execute(
+                "UPDATE event SET session = ?1 WHERE id = ?2",
+                rusqlite::params![s, tx.last_insert_rowid()],
+            );
+        }
         tx.commit().map_err(err)
     }
 

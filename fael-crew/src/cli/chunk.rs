@@ -140,8 +140,22 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
         }
         ["move", uid] => crate::chunk_run::move_to(a, &mut s()?, uid, &now)?,
         ["note", uid, text] => {
-            a.only("chunk note", &[])?;
-            crate::chunk_run::note(&mut s()?, uid, text, &now)?;
+            a.only("chunk note", &["session"])?;
+            // writer session for the inbox own-note filter: explicit --session
+            // (MCP, hidden) first, else the client env — RFC3339 kept (opencode's
+            // FAEL_SESSION is its hook session),unlike start's native-only bind.
+            let explicit = a.one("session");
+            let session = explicit
+                .filter(|v| !v.trim().is_empty())
+                .map(|v| v.trim().to_string())
+                .or_else(|| {
+                    ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"]
+                        .iter()
+                        .filter_map(|k| std::env::var(k).ok())
+                        .map(|s| s.trim().to_string())
+                        .find(|s| !s.is_empty())
+                });
+            crate::chunk_run::note(&mut s()?, uid, text, &now, session)?;
         }
         ["touch", uid, files @ ..] => touch(a, r, &mut s()?, uid, files, &here)?,
         ["wait", uid, text] => {

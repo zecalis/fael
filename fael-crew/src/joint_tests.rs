@@ -111,7 +111,7 @@ fn follow_prints_the_read_only_contract_and_the_partner_handoff() {
         t.contains("read-only") && t.contains("handed off nothing yet"),
         "{t}"
     );
-    s.note(&a, "api shape is frozen", "2026-10-11T09:30:00Z")
+    s.note(&a, "api shape is frozen", "2026-10-11T09:30:00Z", None)
         .unwrap();
     s.start(&b, &with(&a, Joint::Follow), &here("/w2")).unwrap();
     let t = s.follow_text(&a).unwrap();

@@ -86,9 +86,9 @@ fn export_prints_the_label_and_the_notes_the_next_brief_will() {
         .conn
         .query_row("SELECT plan FROM chunk WHERE uid = ?1", [&a], |r| r.get(0))
         .unwrap();
-    s.note(&a, "read before start", NOW).unwrap();
+    s.note(&a, "read before start", NOW, None).unwrap();
     start(&mut s, &a, "/w").unwrap();
-    s.note(&a, "line one\nline two", NOW).unwrap();
+    s.note(&a, "line one\nline two", NOW, None).unwrap();
     let md = super::export(&s, plan).unwrap();
     assert!(
         md.contains(&format!("  uid {a} · label b10 · running")),

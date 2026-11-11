@@ -44,7 +44,7 @@ fn move_keeps_uid_runs_notes_and_edges() {
     let e = s.move_to(&a, "p2", NOW).unwrap_err();
     assert!(e.contains("is running"), "{e}");
     s.owner(&a, Owner::Park, Some("later"), NOW).unwrap();
-    s.note(&a, "a word for the next start", NOW).unwrap();
+    s.note(&a, "a word for the next start", NOW, None).unwrap();
     let inbox = s
         .plans()
         .unwrap()
