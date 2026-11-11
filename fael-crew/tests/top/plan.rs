@@ -364,3 +364,32 @@ fn plan_edit_replaces_one_passage_of_a_section_through_the_bill() {
     let (_, out, _) = fael(&d, &["plan", "export", "n", "--section", "1"]);
     assert!(out.ends_with("\nship n (now)\nship m\nship m\n"), "{out}");
 }
+
+#[test]
+fn plan_new_with_the_same_title_is_a_noop_without_an_event() {
+    let d = repo();
+    let (ok, out, err) = fael(&d, &["plan", "new", "p", "T"]);
+    assert!(ok, "{err}");
+    assert!(out.contains("plan p created"), "{out}");
+    let head = |d: &Path| {
+        let (ok, out, err) = fael(d, &["plan", "export", "--since", "0"]);
+        assert!(ok, "{err}");
+        serde_json::from_str::<serde_json::Value>(&out).unwrap()["head"]
+            .as_i64()
+            .unwrap()
+    };
+    let before = head(&d);
+    let (ok, out, err) = fael(&d, &["plan", "new", "p", "T"]);
+    assert!(ok, "{err}");
+    assert_eq!(
+        out,
+        "plan p already exists with the same title — nothing changed\n"
+    );
+    assert_eq!(head(&d), before, "a repeat plan new writes no event");
+    let (ok, _, err) = fael(&d, &["plan", "new", "p", "Other"]);
+    assert!(!ok, "another title stays a reject");
+    assert!(
+        err.contains("plan p already exists") && err.contains("fael plan export p"),
+        "{err}"
+    );
+}

@@ -32,8 +32,8 @@ fn a_pair_member_command_ends_only_its_own_run() {
                 "wait" => s.wait(m, "owner", "q", None, &[], &h),
                 "after" => s.after(m, &other, "why", &h),
                 "done" => s.done(m, "h", Some(3), None, &h),
-                "drop" => s.owner(m, Owner::Drop, Some("no"), NOW),
-                _ => s.owner(m, Owner::Park, Some("later"), NOW),
+                "drop" => s.owner(m, Owner::Drop, Some("no"), NOW).map(|_| ()),
+                _ => s.owner(m, Owner::Park, Some("later"), NOW).map(|_| ()),
             }
             .unwrap();
             let at = format!(

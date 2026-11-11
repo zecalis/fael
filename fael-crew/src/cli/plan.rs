@@ -77,13 +77,17 @@ fn create(a: &Args, r: &Repo, name: &str, title: &str) -> Result<(), String> {
     let now = fael_core::rfc3339(fael_core::now_ms());
     in_repo(r)?;
     let mut s = Store::open(&db(r))?;
-    s.new_plan(&app, name, title, &area, a.one("parent").as_deref(), &now)?;
+    let created = s.new_plan(&app, name, title, &area, a.one("parent").as_deref(), &now)?;
     let key = if app.is_empty() {
         name.to_string()
     } else {
         format!("{app}/{name}")
     };
     crate::board::register(r);
+    if !created {
+        println!("plan {key} already exists with the same title — nothing changed");
+        return Ok(());
+    }
     println!("plan {key} created (Goal/Scope/Done/Constraints sections: every brief reads them)");
     println!(
         "fill them: fael plan export {key} --json > bill.json, edit \"sections\", fael plan apply bill.json"
