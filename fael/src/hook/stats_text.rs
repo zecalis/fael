@@ -211,14 +211,6 @@ pub(super) fn warnings_line(s: &core::stats::Stats) -> Option<String> {
         .map(|w| format!("  warnings ×{} ({} bytes)", w.events, w.bytes))
 }
 
-
-
-
-
-
-
-
-
 /// The human `fael stats` text — format only, every number comes from core.
 /// ` · shown 2 · cut cap×1 · cited 1 · …`: only the outcomes the row has.
 pub(super) fn outcomes_text(o: &core::stats::RowOutcomes) -> String {
@@ -274,9 +266,6 @@ pub(super) fn print_warnings(s: &core::stats::Stats) {
         }
     }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {

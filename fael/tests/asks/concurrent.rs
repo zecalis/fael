@@ -84,11 +84,14 @@ fn parallel_first_writes_of_a_month_archive_once_and_lose_no_row() {
             });
         }
     });
-    let archives: Vec<_> = std::fs::read_dir(state.join("usage"))
+    let mut archives: Vec<_> = std::fs::read_dir(state.join("usage"))
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
         .collect();
-    assert_eq!(archives, ["2020-03.jsonl"]);
+    archives.sort();
+    // rotation archives the live file and writes the just-closed month's
+    // summary beside it, once each
+    assert_eq!(archives, ["2020-03.jsonl", "2020-03.sum.json"]);
     // a row lands in the file of its own month: the archive holds the old row only
     let old = std::fs::read_to_string(state.join("usage/2020-03.jsonl")).unwrap();
     assert_eq!(old.lines().count(), 1, "misfiled into the archive: {old}");

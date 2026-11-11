@@ -77,7 +77,9 @@ pub(crate) fn load_text(s: &str, since: Option<i64>, keep: &dyn Fn(&str) -> bool
             && parsed.calls.is_empty()
             && parsed.skipped == 0);
     parsed.kept.retain(|v| v["repo"].as_str().is_some_and(keep));
-    parsed.calls.retain(|v| v["repo"].as_str().is_some_and(keep));
+    parsed
+        .calls
+        .retain(|v| v["repo"].as_str().is_some_and(keep));
     let mut logs: HashMap<String, core::Log> = HashMap::new();
     // a removed worktree's path no longer leads to its journal: leave it out,
     // so stats read it as unknown, not as a log with no rows (01M4D7N4)

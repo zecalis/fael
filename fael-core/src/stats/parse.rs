@@ -118,12 +118,7 @@ pub fn parse_since(
         };
         // the window cut, in this pass: what `since` kept, line for line —
         // a readable `ts` at or after the window start, else outside it.
-        if since_ms.is_some_and(|w| {
-            v["ts"]
-                .as_str()
-                .and_then(ts_ms)
-                .is_none_or(|t| t < w)
-        }) {
+        if since_ms.is_some_and(|w| v["ts"].as_str().and_then(ts_ms).is_none_or(|t| t < w)) {
             continue;
         }
         // old lines hold the transcript path, new ones its stem: group by stem

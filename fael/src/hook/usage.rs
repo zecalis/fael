@@ -197,12 +197,9 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
             super::stats_select::SECTIONS.join(", ")
         ));
     }
-    if (all || section.is_some())
-        && (json || day_view || a.has("days") || a.has("misses"))
-    {
+    if (all || section.is_some()) && (json || day_view || a.has("days") || a.has("misses")) {
         return Err(
-            "rejected: --all and sections are text-only — drop --json/--day/--days/--misses"
-                .into(),
+            "rejected: --all and sections are text-only — drop --json/--day/--days/--misses".into(),
         );
     }
     // `--days --json`: the per-day series alone, from the parse — no repo logs,

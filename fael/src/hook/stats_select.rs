@@ -13,15 +13,7 @@ use std::path::Path;
 /// line for line. The short default prints one short line per story instead,
 /// each ending in its section name.
 pub(super) const SECTIONS: &[&str] = &[
-    "rows",
-    "value",
-    "outcome",
-    "across",
-    "models",
-    "capture",
-    "said",
-    "friction",
-    "warnings",
+    "rows", "value", "outcome", "across", "models", "capture", "said", "friction", "warnings",
 ];
 
 fn usage_line(s: &core::stats::Stats, path: &Path) -> String {
