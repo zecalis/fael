@@ -40,21 +40,32 @@ fn is_held(w: &core::Row, r: &crate::Repo, al: &core::Aliases, blobs: &mut Blobs
 /// The panel `fael stats` leads with: one line per kind, `decisions: live 4 · held 1 ·
 /// dormant 7 · retired 12`. No rows at all = no panel.
 pub(super) fn print(l: &core::stats::Lifecycle) {
-    if l.is_empty() {
-        return;
+    for line in lines(l) {
+        println!("{line}");
     }
-    println!("rows (this repo):");
+}
+
+/// The same panel as lines, so the short default can tag each with its section.
+pub(super) fn lines(l: &core::stats::Lifecycle) -> Vec<String> {
+    if l.is_empty() {
+        return vec![];
+    }
+    let mut out = vec!["rows (this repo):".to_string()];
     for (kind, s) in [
         ("decision", &l.decision),
         ("issue", &l.issue),
         ("note", &l.note),
     ] {
-        println!(
+        out.push(format!(
             "  {kind}: live {} · held {} · dormant {} · retired {}",
             s.live, s.held, s.dormant, s.retired
-        );
+        ));
     }
     if l.report_closed > 0 {
-        println!("  issues from a report, closed: {}", l.report_closed);
+        out.push(format!(
+            "  issues from a report, closed: {}",
+            l.report_closed
+        ));
     }
+    out
 }

@@ -67,6 +67,11 @@ fn the_first_write_of_a_new_month_archives_the_live_file_by_its_last_month() {
     assert!(!ok && err.contains("rejected"), "{err}");
     let old = std::fs::read_to_string(s.join("usage/2020-03.jsonl")).unwrap();
     assert!(old.contains("2020-03-10"), "{old}");
+    // rotation also writes the just-closed month's summary at once
+    assert!(
+        s.join("usage/2020-03.sum.json").is_file(),
+        "rotation writes the summary with the archive"
+    );
     let now = std::fs::read_to_string(&live).unwrap();
     assert!(
         !now.contains("2020-03-10") && now.contains("\"outcome\":\"reject\""),

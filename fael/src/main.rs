@@ -127,7 +127,7 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
             find::misses::print_recent(20);
             Ok(ExitCode::SUCCESS)
         }
-        ("stats", []) => hook::stats(&a).map(|()| ExitCode::SUCCESS),
+        ("stats", [] | [_]) => hook::stats(&a).map(|()| ExitCode::SUCCESS),
         ("report", []) => report::report(&a).map(|()| ExitCode::SUCCESS),
         ("intake", [] | [_]) => intake::cmd(&a, rest.first()),
         ("doctor", []) => maintain::doctor(&a),

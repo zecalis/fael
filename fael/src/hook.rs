@@ -74,12 +74,14 @@ mod state;
 mod stats_handoff;
 mod stats_models;
 mod stats_outcome;
+mod stats_select;
 mod stats_text;
 mod stop;
 mod tally;
 mod usage;
 mod usage_commits;
 pub(crate) mod usage_files;
+mod usage_load;
 mod usage_retain;
 
 pub(crate) use asks::{ASK_WARN, record_asks, record_row_asks};
@@ -90,7 +92,8 @@ pub(crate) use held::{
 };
 pub(crate) use held_own::text as held_own_notes;
 pub(crate) use protocol::cmd;
-pub(crate) use usage::{aggregate, load, local_tz_offset_min, record_found, stats};
+pub(crate) use usage::{aggregate, local_tz_offset_min, record_found, stats};
+pub(crate) use usage_load::load;
 
 // What the binary shares: `write` reads session edits and checks anchors,
 // `maintain` asks where the gitignore rule comes from.

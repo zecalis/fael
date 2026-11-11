@@ -42,6 +42,7 @@ mod span;
 mod touch;
 mod unused;
 mod value;
+mod window;
 
 pub use acted::ActedCounts;
 pub use aggregate::{
@@ -73,16 +74,14 @@ pub use models::{ModelRow, ModelRun, Models, is_hint, models};
 pub use outcome::{ListedPr, Outcome, outcome};
 pub use outcomes::{OUTCOMES_V, Pulled, RowOutcomes};
 pub use overlap::{OVERLAP_WINDOW_MS, SameFile};
-pub use parse::{
-    Parsed, UsageRow, outcome_window, parse, session_stem, since, since_arg, window_source,
-    window_str,
-};
+pub use parse::{Parsed, UsageRow, parse, parse_since, session_stem};
 pub use repeat::{ContextLoop, context_loop};
 pub use retire::{RETIRE_WINDOW_MS, Retired};
 pub use said::{ASK_SPLIT, EventYield, KindYield};
 pub use span::Span;
 pub use unused::{UNUSED_PUSHES, UnusedRow};
 pub use value::{EventValue, Value};
+pub use window::{outcome_window, since, since_arg, window_source, window_str};
 
 /// The ask kind stored under `ask` in `usage.jsonl` — the vocabulary the
 /// `asks` JSON map and the recording side share, so the two cannot drift.

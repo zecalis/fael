@@ -58,7 +58,7 @@ fn stats_prints_the_after_handoff_line_from_crew_runs_and_usage() {
     ]
     .join("\n");
     std::fs::write(state.join("usage.jsonl"), body + "\n").unwrap();
-    let (ok, out, err) = fael_at(&state, &d, &["stats"], "");
+    let (ok, out, err) = fael_at(&state, &d, &["stats", "--all"], "");
     assert!(ok, "{err}");
     assert!(
         out.contains("  after-handoff runs: with 1 (done 1 · re-finds 1/2 finds · rejects 0) · without 1 (done 0 · re-finds 0/0 finds · rejects 1)"),

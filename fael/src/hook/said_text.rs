@@ -18,6 +18,12 @@ fn tok(n: usize) -> String {
     }
 }
 
+/// `row 3/10 (30%)` for one kind.
+fn kind_part(k: &str, y: &KindYield) -> String {
+    let rate = y.earned * 100 / y.said;
+    format!("{k} {}/{} ({rate}%){}", y.earned, y.said, tok(y.tokens))
+}
+
 /// `row 3/10 (30%) ~420 tok` per kind, in `SayKind::buckets` order, the kinds
 /// never said left out; nothing said = no line.
 pub(super) fn said_line(said: &Said) -> Option<String> {
@@ -25,12 +31,31 @@ pub(super) fn said_line(said: &Said) -> Option<String> {
         .chain(core::stats::ASK_SPLIT)
         .filter_map(|k| said.get(k).map(|y| (k, y)))
         .filter(|(_, y)| y.said > 0)
-        .map(|(k, y)| {
-            let rate = y.earned * 100 / y.said;
-            format!("{k} {}/{} ({rate}%){}", y.earned, y.said, tok(y.tokens))
-        })
+        .map(|(k, y)| kind_part(k, y))
         .collect();
     (!parts.is_empty()).then(|| format!("  acted on after said: {}", parts.join(" · ")))
+}
+
+/// The short default's said line: the top `n` kinds by said, then `+M more`.
+/// Buckets order breaks ties (stable sort over buckets order).
+pub(super) fn said_line_top(said: &Said, n: usize) -> Option<String> {
+    let mut parts: Vec<(usize, String)> = core::SayKind::buckets()
+        .chain(core::stats::ASK_SPLIT)
+        .filter_map(|k| said.get(k).map(|y| (k, y)))
+        .filter(|(_, y)| y.said > 0)
+        .map(|(k, y)| (y.said, kind_part(k, y)))
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    parts.sort_by_key(|(said, _)| std::cmp::Reverse(*said));
+    let more = parts.len().saturating_sub(n);
+    let shown: Vec<String> = parts.into_iter().take(n).map(|(_, s)| s).collect();
+    let mut line = format!("  acted on after said: {}", shown.join(" · "));
+    if more > 0 {
+        line += &format!(" · +{more} more");
+    }
+    Some(line)
 }
 
 /// The two events a push puts rows and hints in front of the agent at (rows

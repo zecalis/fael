@@ -49,10 +49,13 @@ pub struct Capture {
 }
 
 pub(super) fn capture(parsed: &Parsed, logs: &HashMap<String, Log>) -> Capture {
-    // (repo, session) → (first event, last event, edited?, edit branch)
+    // (repo, session) → (first event, last event, edited?, edit branch).
+    // Call lines ride apart in `parsed.calls`: a session's span covers them
+    // (the row-filed window below reads first/last), so they chain in — min
+    // and max never depend on slice order.
     type Span<'a> = (i64, i64, bool, Option<&'a str>);
     let mut sessions: HashMap<(&str, &str), Span> = HashMap::new();
-    for v in &parsed.kept {
+    for v in parsed.kept.iter().chain(parsed.calls.iter()) {
         let (Some(repo), Some(session), Some(ms)) = (
             v["repo"].as_str(),
             v["session"].as_str().filter(|s| !s.is_empty()),

@@ -303,8 +303,13 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "stats",
         "tokens fael has put into context",
-        "fael stats [--json] [--rows] [--day] [--days] [--misses] [--since d]
+        "fael stats [--all] [section] [--json] [--rows] [--day] [--days] [--misses] [--since d]
     (tokens fael has put into context, per machine;
+     default = one short line per story (rows, value, outcome, said, friction,
+     capture, warnings), each ending in its section name;
+     --all = the full page the default used to print; a section prints one
+     part (rows, value, outcome, across, models, capture, said, friction,
+     warnings); --rows rides every selection as per-row detail;
      --since = only usage from that day (YYYY-MM-DD, UTC) or RFC 3339 time on,
      all = every month; default = this and last month;
      --rows = per-row pushes against open/closed/superseded, flagging noise?, plus

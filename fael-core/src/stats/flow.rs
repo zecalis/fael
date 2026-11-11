@@ -2,7 +2,7 @@
 //! takes to close, a chunk to finish, a done chunk to merge — and how many
 //! chunks land per week. Pure: loaded logs, run spans and merge times, plus
 //! the outcome window, in — numbers out. The window arrives as an argument
-//! (`parse::outcome_window`): never the first usage, so zero usage still
+//! (`window::outcome_window`): never the first usage, so zero usage still
 //! reads the ledger.
 //!
 //! Three spans, each `{median, p90, n}` in whole seconds, never a mean:
@@ -189,7 +189,7 @@ pub fn throughput(runs: &[FlowRun], window: Option<i64>) -> Vec<WeekCount> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::parse::outcome_window;
+    use super::super::window::outcome_window;
     use super::*;
     use std::path::Path;
 

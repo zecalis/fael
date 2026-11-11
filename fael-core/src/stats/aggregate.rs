@@ -10,12 +10,13 @@ use super::metrics::{ask_totals, non_english_share, rows_added as count_rows_add
 use super::models::Models;
 use super::outcome::{ListedPr, Outcome, outcome_windowed};
 use super::outcomes::{OUTCOMES_V, RowOutcomes};
-use super::parse::{Parsed, outcome_window};
+use super::parse::Parsed;
 use super::retire::{Retired, retired};
 use super::rows::row_statuses;
 use super::said::{KindYield, yields};
 use super::unused::{UnusedRow, unused};
 use super::value::{Value, value};
+use super::window::outcome_window;
 use crate::{Config, Log, rfc3339, rfc3339_in, tz_offset_string};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};

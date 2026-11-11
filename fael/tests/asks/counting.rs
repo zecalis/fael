@@ -141,7 +141,7 @@ fn stats_text_shows_warning_codes_and_constants() {
         &["add", "note", &text, "--files", "src/a.rs", "--force"],
         "",
     );
-    let (ok, out, err) = fael(&d, &["stats"], "");
+    let (ok, out, err) = fael(&d, &["stats", "--all"], "");
     assert!(ok, "{err}");
     assert!(
         out.contains("warnings ×1") && out.contains("untitled ×1"),

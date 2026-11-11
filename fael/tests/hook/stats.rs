@@ -191,7 +191,7 @@ fn stats_lists_open_rows_pushed_often_and_never_in_context() {
         }
     }
     std::fs::write(state.join("usage.jsonl"), body).unwrap();
-    let (ok, out, _) = fael_at(&state, &d, &["stats"], "");
+    let (ok, out, _) = fael_at(&state, &d, &["stats", "--all"], "");
     assert!(ok, "{out}");
     assert!(
         out.contains(&format!(
@@ -226,7 +226,7 @@ fn stats_counts_rows_not_in_english() {
         json(&d)
     );
     std::fs::write(state.join("usage.jsonl"), format!("{line}\n")).unwrap();
-    let (ok, out, _) = fael_at(&state, &d, &["stats"], "");
+    let (ok, out, _) = fael_at(&state, &d, &["stats", "--all"], "");
     assert!(ok, "{out}");
     assert!(out.contains("rows not in English: 1 of 2"), "{out}");
     assert!(!out.contains("rows with Thai"), "{out}");
@@ -262,7 +262,7 @@ fn stats_rows_follows_lang_rows_so_doctor_agrees() {
         json(&d)
     );
     std::fs::write(state.join("usage.jsonl"), format!("{line}\n")).unwrap();
-    let (ok, out, _) = fael_at(&state, &d, &["stats"], "");
+    let (ok, out, _) = fael_at(&state, &d, &["stats", "--all"], "");
     assert!(ok, "{out}");
     assert!(out.contains("rows not in english/thai: 0 of 2"), "{out}");
     let (_, doctor, _) = fael_at(&state, &d, &["doctor"], "");
@@ -338,7 +338,7 @@ fn edit_after_the_row_was_said_counts_in_context_at_edit() {
     let (ok, out, _) = fael(&d, &["stats", "--json"], "");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(ok && v["value"]["in_context_at_edit"] == 1, "{out}");
-    let (ok, out, _) = fael(&d, &["stats"], "");
+    let (ok, out, _) = fael(&d, &["stats", "--all"], "");
     let first = out
         .lines()
         .find(|l| l.starts_with("fael since "))

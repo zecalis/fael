@@ -37,7 +37,7 @@ pub struct FlagUsage {
 pub(super) fn usage(parsed: &Parsed) -> FlagUsage {
     let mut m: BTreeMap<(String, Option<String>), FlagUse> = BTreeMap::new();
     let mut since = String::new();
-    for v in parsed.kept.iter().filter(|v| v["event"] == "call") {
+    for v in &parsed.calls {
         let (Some(flags), Some(cmd), Some(ts)) =
             (v["flags"].as_array(), v["cmd"].as_str(), v["ts"].as_str())
         else {

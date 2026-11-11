@@ -94,9 +94,9 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
     let mut out = Friction::default();
     // `who: "human"` is a call outside an agent session — usage, never friction
     for v in parsed
-        .kept
+        .calls
         .iter()
-        .filter(|v| v["event"] == "call" && v["who"] != "human" && v["who"] != "auto")
+        .filter(|v| v["who"] != "human" && v["who"] != "auto")
     {
         let outcome = match v["outcome"].as_str() {
             Some("ok") => Outcome::Ok,

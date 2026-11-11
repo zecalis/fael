@@ -2,8 +2,12 @@
 
 > **Status:** `schema: 5` — `fael stats --json` prints one `fael-core::stats::Stats`
 > struct as-is, so the CLI, the desktop app and any outside reader share the
-> shape by construction. The human text (`fael stats`) is unstable by design;
-> only `--json` is a contract.
+> shape by construction. The human text (`fael stats`) is short by default —
+> one line per story (rows, value, outcome, said, friction, capture,
+> warnings), each ending in its section name; `fael stats --all` prints the
+> full page and `fael stats <section>` one part (rows, value, outcome,
+> across, models, capture, said, friction, warnings). The text is unstable
+> by design; only `--json` is a contract.
 
 ## Source
 

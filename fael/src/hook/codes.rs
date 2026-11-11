@@ -54,6 +54,7 @@ const REJECTS: &[(&str, &str)] = &[
     ("is in another plan", "chunk_other_plan"),
     ("is in plan", "chunk_other_plan"),
     ("no section", "no_section"),
+    ("unknown stats section", "no_section"),
     (".fael/sources.json", "no_source"),
     ("names one plan", "usage"),
     ("try 'fael chunk --help'", "usage"),

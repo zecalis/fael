@@ -31,7 +31,7 @@ pub struct Leak {
 pub(super) fn leaks(parsed: &Parsed) -> Vec<Leak> {
     type Key = (String, Vec<String>, String);
     let mut by: HashMap<Key, Vec<i64>> = HashMap::new();
-    for v in parsed.kept.iter().filter(|v| v["event"] == "call") {
+    for v in &parsed.calls {
         let (Some(cmd), Some(ms)) = (v["cmd"].as_str(), v["ts"].as_str().and_then(ts_ms)) else {
             continue;
         };

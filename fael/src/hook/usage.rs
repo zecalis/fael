@@ -4,11 +4,11 @@
 
 use super::asks::{self, UsageMeta};
 use super::state::{head_branch, now_rfc3339};
-use super::stats_text::{print_day, print_text};
+use super::stats_text::print_day;
 use super::usage_commits::{commits, commits_by_clone};
+use super::usage_load::{Usage, load_text, load_where, repo_log};
 use crate::core;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Every injection into context, per machine — never in git. Fails open:
 /// a usage write never fails the command it rode along with. Asks (reject /
@@ -120,80 +120,6 @@ pub(crate) fn usage_row(
     row
 }
 
-/// The log a stats row's repo has now — the tree + journal union the hooks
-/// read, so a `store = "local"` repo (journal only) is not read as empty.
-/// A repo path that no longer resolves falls back to its tree.
-fn repo_log(repo: &str) -> core::Log {
-    crate::repo_at(Path::new(repo))
-        .map(|r| crate::read(&r))
-        .unwrap_or_else(|_| core::fold_bumps(core::read(&Path::new(repo).join(".fael"))))
-}
-
-/// What `fael stats` and `fael report` read: `usage.jsonl` cut to `since`,
-/// parsed, plus the log of every repo it names — finding repos and reading
-/// journals stays with the caller (CLI or app); core joins the loaded logs,
-/// never the filesystem.
-pub(crate) struct Usage {
-    pub(crate) path: PathBuf,
-    pub(crate) empty: bool,
-    pub(crate) parsed: core::stats::Parsed,
-    pub(crate) logs: HashMap<String, core::Log>,
-    /// The explicit `--since` ms (`Some(0)` = all, `None` = absent): the
-    /// outcome window for the flow/outcome joins, else the oldest log row.
-    pub(crate) since: Option<i64>,
-}
-
-pub(crate) fn load(since: Option<i64>) -> Usage {
-    load_where(since, &|_| true)
-}
-
-/// `load`, keeping only the lines (and logs) of repos `keep` accepts — a repo's
-/// evaluator never reads another repo's usage (SPEC-fael-learn-loop §E).
-pub(crate) fn load_where(since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
-    load_text(super::usage_files::read(since), since, keep)
-}
-
-/// Usage text → `Parsed`, touching no repo log, git or gh.
-pub(crate) fn parse_text(s: &str) -> core::stats::Parsed {
-    // benchmark/test repos live in the OS temp dir (01M3CRR6A) — the boundary
-    // rides in as a parameter, so core stays pure. `/tmp` too: on macOS the
-    // OS temp dir is under /var/folders, but agent scratchpads use /tmp
-    let tmp = [
-        std::env::temp_dir(),
-        std::env::temp_dir().canonicalize().unwrap_or_default(),
-        PathBuf::from("/tmp"),
-        Path::new("/tmp").canonicalize().unwrap_or_default(),
-    ];
-    core::stats::parse(s, &super::usage_files::live(), &tmp)
-}
-
-/// `load_where` over usage text the caller already read.
-pub(crate) fn load_text(mut s: String, since: Option<i64>, keep: &dyn Fn(&str) -> bool) -> Usage {
-    let path = super::usage_files::live();
-    // `--since all` (0) cuts nothing: skip the second parse of every line
-    if let Some(ms) = since.filter(|&ms| ms > 0) {
-        s = core::stats::since(&s, ms);
-    }
-    let mut parsed = parse_text(&s);
-    parsed.kept.retain(|v| v["repo"].as_str().is_some_and(keep));
-    let mut logs: HashMap<String, core::Log> = HashMap::new();
-    // a removed worktree's path no longer leads to its journal: leave it out,
-    // so stats read it as unknown, not as a log with no rows (01M4D7N4)
-    for repo in parsed.repos().into_iter().filter(|r| keep(r)) {
-        if Path::new(repo).exists() {
-            logs.entry(repo.to_string())
-                .or_insert_with(|| repo_log(repo));
-        }
-    }
-    Usage {
-        path,
-        empty: s.trim().is_empty(),
-        parsed,
-        logs,
-        since,
-    }
-}
-
 /// The `Stats` `fael stats --json` prints — `fael report` renders the same one.
 pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stats::Stats {
     // The repo `fael stats` runs in is read even when no usage line names it,
@@ -251,6 +177,31 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
 
 pub fn stats(a: &crate::Args) -> Result<(), String> {
     let (json, rows, day_view) = (a.has("json"), a.has("rows"), a.has("day"));
+    // text selection: the short default, `--all` (today's full page), or one
+    // section (`fael stats friction`). `--json` is already the full machine
+    // shape, `--day`/`--days`/`--misses` are their own views — combining them
+    // with a text selection rejects instead of guessing.
+    let all = a.has("all");
+    let section = a.pos.get(1).cloned();
+    if all && section.is_some() {
+        return Err(
+            "rejected: --all and a section pick one — try 'fael stats --all' or 'fael stats friction'"
+                .into(),
+        );
+    }
+    if let Some(sec) = &section
+        && !super::stats_select::SECTIONS.contains(&sec.as_str())
+    {
+        return Err(format!(
+            "rejected: unknown stats section {sec:?} — try {} (or --all)",
+            super::stats_select::SECTIONS.join(", ")
+        ));
+    }
+    if (all || section.is_some()) && (json || day_view || a.has("days") || a.has("misses")) {
+        return Err(
+            "rejected: --all and sections are text-only — drop --json/--day/--days/--misses".into(),
+        );
+    }
     // `--days --json`: the per-day series alone, from the parse — no repo logs,
     // git or gh (issue 01M5S63N follow-up: a board refresh paid ~4 s for it)
     let since = crate::report::since(a)?;
@@ -260,7 +211,7 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         println!("{}", serde_json::json!({ "days": days }));
         return Ok(());
     }
-    let u = load(since);
+    let u = load_text(&super::usage_files::read(since), since, &|_| true);
     if day_view {
         return day(json, &u);
     }
@@ -301,9 +252,20 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         println!("{}", super::usage_retain::json(&stats, sums)?);
         return Ok(());
     }
-    print_text(&stats, &u.path, &cfg.lang_rows);
+    // `--rows` rides every selection: the per-row detail under the page.
+    let is_section = section.is_some();
+    match (all, section) {
+        (true, _) => super::stats_select::print_all(&stats, &u.path, &cfg.lang_rows),
+        (false, Some(sec)) => {
+            super::stats_select::print_section(&stats, &u.path, &cfg.lang_rows, &sec)
+        }
+        (false, None) => super::stats_select::print_default(&stats, &u.path),
+    }
     super::usage_retain::print(&sums);
-    misses();
+    // the short default skips the misses count line; `--all` keeps it
+    if all || is_section {
+        misses();
+    }
     Ok(())
 }
 

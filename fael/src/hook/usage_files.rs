@@ -1,6 +1,8 @@
 //! Where usage lives so a read stays bounded: `usage.jsonl` is the live file,
 //! and at the first write of a new month it moves to `usage/<YYYY-MM>.jsonl`,
-//! named by the month of its last write. An archive therefore holds rows up to
+//! named by the month of its last write. Rotation also writes that month's
+//! `<YYYY-MM>.sum.json` summary at once, so a later read can add the closed
+//! month from it where the stat is additive. An archive therefore holds rows up to
 //! its month and after the previous archive's — a read from a month on opens
 //! only the archives named from it. A row lands in the file of its own month:
 //! `append` holds one lock across rotate+open+write, so no writer holds a
@@ -72,6 +74,12 @@ fn rotate() {
     if std::fs::create_dir_all(&dir).is_ok()
         && std::fs::hard_link(&live, dir.join(format!("{last}.jsonl"))).is_ok()
     {
+        // the month just closed: write its summary now, while the raw lines
+        // are at hand, so a later read can add the closed month from it
+        // where the stat is additive. Best effort — `retain_at` rewrites a
+        // missing summary before deleting the archive anyway.
+        let raw = dir.join(format!("{last}.jsonl"));
+        super::usage_retain::summarise_at(&dir, &raw, &last);
         let _ = std::fs::remove_file(&live);
     }
 }
