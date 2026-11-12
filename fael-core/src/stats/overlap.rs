@@ -107,8 +107,13 @@ mod tests {
     use super::*;
 
     fn line(ts: &str, event: &str, session: &str, repo: &str, files: &str) -> String {
+        // repo/session ride through JSON: a Windows path carries backslashes,
+        // which a raw format! would leave unescaped and serde_json would drop
+        // the whole line (the Windows-only (0, 0, 0) failure).
+        let repo = serde_json::to_string(repo).unwrap();
+        let session = serde_json::to_string(session).unwrap();
         format!(
-            "{{\"ts\":\"{ts}\",\"repo\":\"{repo}\",\"client\":\"claude\",\"event\":\"{event}\",\"bytes\":9,\"est_tokens\":2,\"ids\":[],\"session\":\"{session}\",\"files\":[{files}]}}\n"
+            "{{\"ts\":\"{ts}\",\"repo\":{repo},\"client\":\"claude\",\"event\":\"{event}\",\"bytes\":9,\"est_tokens\":2,\"ids\":[],\"session\":{session},\"files\":[{files}]}}\n"
         )
     }
 
