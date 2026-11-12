@@ -98,8 +98,12 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     // else the client env; native ids only (an RFC3339 hook session is never stored;
     // seen() writes last_seen-only).
     let no_run = a.one("run").is_none();
-    let session =
-        crate::start_session::resolve_session(a.one("session"), |k| std::env::var(k).ok(), no_run);
+    let session = crate::start_session::resolve_session(
+        a.one("session"),
+        |k| std::env::var(k).ok(),
+        no_run,
+        Some(&r.root),
+    );
     let mut o = Start {
         run: a.one("run"),
         client: a.one("client"),

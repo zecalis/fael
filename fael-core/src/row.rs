@@ -138,6 +138,13 @@ impl Row {
         self.extra.get("session").and_then(|v| v.as_str())
     }
 
+    /// The agent client that filed this row: `extra.client` (`claude`/`codex`/
+    /// `opencode`), stamped alongside the session. MCP rows carry a client
+    /// but no session; absent for `cli`/unknown and on rows filed before it.
+    pub fn writer_client(&self) -> Option<&str> {
+        self.extra.get("client").and_then(|v| v.as_str())
+    }
+
     /// The file hashes this row carries: `extra.fh`, a map from each real
     /// file in `files` to its 12-hex git blob id at write time
     /// (PLAN-fael-file-hash chunk 1). `None` on rows written before `fh`,
@@ -310,6 +317,10 @@ pub struct Stamp {
     /// The writer session (`extra.session`), from the hook session when one
     /// saw this worktree — absent outside one. Set by the adapter, not core.
     pub session: Option<String>,
+    /// The writer client (`extra.client`): the agent client that filed the row
+    /// (`claude`/`codex`/`opencode`), absent for `cli`/unknown. Set by the
+    /// adapter alongside the session; MCP rows carry a client but no session.
+    pub client: Option<String>,
     /// Where the retired row was shown (`extra.shown`): the sorted unique
     /// sources (`held`, `done`, later `add`/`start`) whose line named the
     /// target in this session. Absent when none — never an empty list.
@@ -326,6 +337,9 @@ impl Stamp {
         }
         if let Some(s) = &self.session {
             row.extra.insert("session".into(), s.clone().into());
+        }
+        if let Some(c) = &self.client {
+            row.extra.insert("client".into(), c.clone().into());
         }
         if let Some(shown) = &self.shown
             && !shown.is_empty()

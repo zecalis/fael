@@ -97,3 +97,40 @@ fn mcp_never_uses_an_editors_identity_or_files_as_caller_evidence() {
     assert!(!log.contains("\"session\":"), "{log}");
     assert!(!log.contains("unbound"), "{log}");
 }
+
+/// MCP `initialize` with `clientInfo.name` stamps the writer client but never
+/// the session: `claude-code` → `claude`, session stays unset.
+#[test]
+fn mcp_initialize_clientinfo_stamps_writer_client_not_session() {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+    let (_, wt) = main_and_worktree();
+    let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .arg("mcp")
+        .env("FAEL_STATE_DIR", wt.join("../state"))
+        .env_remove("FAEL_SESSION")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
+        .current_dir(&wt)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let lines = [
+        serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "claude-code", "version": "0"}}}),
+        serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "add", "arguments": {"kind": "note", "text": "mcp client row", "files": ["src/a.rs"]}}}),
+    ];
+    let body: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+    c.stdin
+        .take()
+        .unwrap()
+        .write_all((body.join("\n") + "\n").as_bytes())
+        .unwrap();
+    let out = String::from_utf8(c.wait_with_output().unwrap().stdout).unwrap();
+    assert!(out.contains("recorded"), "{out}");
+    let log = texts(&wt);
+    assert!(log.contains("mcp client row"), "{log}");
+    assert!(log.contains(r#""client":"claude""#), "{log}");
+    assert!(!log.contains("\"session\":"), "{log}");
+}

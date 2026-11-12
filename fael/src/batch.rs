@@ -36,10 +36,14 @@ pub(crate) fn launch_line(row: &Row) -> Option<String> {
     let task = format!(
         "fael claim {id}, do what fael find {id} says, then fael close {id} '<what you did, how>'"
     );
+    // The receiver runs this from the sender's shell, whose client vars are
+    // still set: clear the other clients so the new turn stamps its own.
     let cmd = match row.to_who()? {
-        "opencode" => format!("opencode run \"{task}\""),
-        "codex" => format!("codex exec \"{task}\""),
-        "claude" => format!("claude -p \"{task}\""),
+        "opencode" => {
+            format!("env -u CLAUDE_CODE_SESSION_ID -u CODEX_THREAD_ID opencode run \"{task}\"")
+        }
+        "codex" => format!("env -u FAEL_SESSION -u CLAUDE_CODE_SESSION_ID codex exec \"{task}\""),
+        "claude" => format!("env -u FAEL_SESSION -u CODEX_THREAD_ID claude -p \"{task}\""),
         _ => return None,
     };
     Some(format!("start it: {cmd}"))

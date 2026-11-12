@@ -1,7 +1,6 @@
 //! `bump_row` — moves an open row under its own id: one bump event appended,
-//! routing/urgency/revisit change, text/files/key never do, and
-//! `fold_bumps` lays the newest event onto the row. Supersede chains (an
-//! `add --supersedes`, or a bump from before events) close as one.
+//! routing/urgency/revisit change, text/files/key never do; `fold_bumps` lays
+//! the newest event onto the row. Supersede chains close as one.
 use fael_core::*;
 use std::path::{Path, PathBuf};
 
@@ -13,6 +12,7 @@ fn setup(tag: &str) -> (PathBuf, Config, Stamp) {
         branch: None,
         sha: None,
         session: None,
+        client: None,
         shown: None,
     };
     (dir, Config::default(), st)

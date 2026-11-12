@@ -10,6 +10,7 @@ fn stamp() -> Stamp {
         branch: Some("feat/x".into()),
         sha: None,
         session: None,
+        client: None,
         shown: None,
     }
 }

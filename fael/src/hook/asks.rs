@@ -199,7 +199,7 @@ fn ask_row(
     // different event and the MCP server's env reads empty — those lines stay
     // session-less by design.
     if event == "close" {
-        let s = crate::session::env_session();
+        let s = crate::session::env_session_for(repo);
         if !s.is_empty() {
             v["session"] = s.into();
         }

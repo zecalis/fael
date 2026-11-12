@@ -54,6 +54,7 @@ fn stamp() -> core::Stamp {
         branch: Some("main".to_string()),
         sha: None,
         session: None,
+        client: None,
         shown: None,
     }
 }

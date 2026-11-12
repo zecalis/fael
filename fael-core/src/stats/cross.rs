@@ -16,10 +16,11 @@ pub struct Reuse {
     pub in_context_at_edit: usize,
 }
 
-/// Only rows that name their writer session count (`fael add` inside a hook
-/// session tags it; older rows and rows filed outside a session do not), over
-/// the same window as `by_event`. Each field is a subset of the one above it
-/// in meaning, not in count: a pair can be in both of the last two.
+/// Only rows that name their writer session or writer client count (`fael
+/// add` inside a hook session tags both; MCP tags the client alone; older
+/// rows and rows filed outside a session name neither), over the same window
+/// as `by_event`. Each field is a subset of the one above it in meaning, not
+/// in count: a pair can be in both of the last two.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct CrossAgent {
     /// The row was written by another session than the one handed it.
@@ -35,9 +36,10 @@ pub struct CrossAgent {
     pub other_client: Reuse,
     /// `other_client` split by `"<writer client>→<receiver client>"`.
     pub by_client: BTreeMap<String, Reuse>,
-    /// Pushed pairs whose row names no writer session, so none of the above
-    /// can place them: rows from clients that give `fael add` no session id,
-    /// and rows older than the tag.
+    /// Pushed pairs whose row names neither writer session nor writer client,
+    /// so none of the above can place them: rows older than the tags and rows
+    /// filed outside any session by `cli`/unknown. MCP rows carry a client but
+    /// no session, so they skip this and count under the client joins.
     pub writer_unknown: usize,
     /// Sessions that edited one file within `OVERLAP_WINDOW_MS` of each other,
     /// from the `files` on edit usage lines (see `SameFile`).
@@ -102,11 +104,39 @@ pub(super) fn cross_agent(
         let Some(row) = by_id.get(repo).and_then(|m| m.get(id)) else {
             continue;
         };
-        let Some(writer) = row.extra.get("session").and_then(|w| w.as_str()) else {
-            out.writer_unknown += 1;
-            continue;
+        let row_client = row
+            .extra
+            .get("client")
+            .and_then(|v| v.as_str())
+            .filter(|c| is_agent(c));
+        let writer = match row.extra.get("session").and_then(|w| w.as_str()) {
+            Some(w) => Some(stem(w)),
+            None => {
+                // Session-less but client-stamped (MCP): client joins, never unknown.
+                let Some(wc) = row_client else {
+                    out.writer_unknown += 1;
+                    continue;
+                };
+                let hit = usize::from(in_context.contains(key));
+                let add = |r: &mut Reuse| {
+                    r.pushed += 1;
+                    r.in_context_at_edit += hit;
+                };
+                add(&mut out.other_session);
+                let started = first.get(session);
+                if ts_ms(&row.ts).zip(started).is_some_and(|(w, s)| w >= *s) {
+                    add(&mut out.written_during_session);
+                }
+                if let Some(r) = clients.get(session)
+                    && wc != *r
+                {
+                    add(&mut out.other_client);
+                    add(out.by_client.entry(format!("{wc}→{r}")).or_default());
+                }
+                continue;
+            }
         };
-        let writer = stem(writer);
+        let writer = writer.expect("session some");
         if writer == session {
             continue;
         }
@@ -124,8 +154,9 @@ pub(super) fn cross_agent(
         if ts_ms(&row.ts).zip(started).is_some_and(|(w, s)| w >= *s) {
             add(&mut out.written_during_session);
         }
-        if let (Some(w), Some(r)) = (clients.get(writer), clients.get(session))
-            && w != r
+        let wc = row_client.or_else(|| clients.get(writer).copied());
+        if let (Some(w), Some(r)) = (wc, clients.get(session))
+            && w != *r
         {
             add(&mut out.other_client);
             add(out.by_client.entry(format!("{w}→{r}")).or_default());
@@ -217,6 +248,97 @@ mod tests {
         );
         assert_eq!(c.by_client["opencode→claude"].pushed, 1);
         // R3 names no writer
+        assert_eq!(c.writer_unknown, 1);
+    }
+}
+
+#[cfg(test)]
+mod mcp_client_tests {
+    use super::super::parse::parse;
+    use super::super::value::value;
+    use crate::Log;
+    use std::collections::HashMap;
+
+    fn row(id: &str, ts: &str, extra: &str) -> String {
+        format!(
+            "{{\"v\":1,\"id\":\"{id}\",\"ts\":\"{ts}\",\"by\":\"w\",\"kind\":\"decision\",\"text\":\"t\",\"files\":[\"a.rs\"]{extra}}}\n"
+        )
+    }
+
+    fn line(
+        ts: &str,
+        repo: &str,
+        client: &str,
+        event: &str,
+        session: &str,
+        ids: &str,
+        ctx: &str,
+    ) -> String {
+        format!(
+            "{{\"ts\":\"{ts}\",\"repo\":\"{repo}\",\"client\":\"{client}\",\"event\":\"{event}\",\"bytes\":9,\"est_tokens\":2,\"ids\":[{ids}],\"in_context\":[{ctx}],\"session\":\"{session}\"}}\n"
+        )
+    }
+
+    #[test]
+    fn sessionless_client_row_counts_under_by_client_not_unknown() {
+        let (mut rows, mut w) = (vec![], vec![]);
+        // MCP row: no session, writer client opencode
+        let text = row("R5", "2026-09-26T00:00:30.000Z", ",\"client\":\"opencode\"")
+            + &row("R6", "2026-09-26T00:00:30.000Z", "");
+        crate::log::parse(text.as_bytes(), "t.jsonl", &mut rows, &mut w);
+        let log = Log {
+            rows,
+            ..Default::default()
+        };
+        let r1 = "/p/r1.jsonl";
+        let a = "/work/a";
+        let usage = line(
+            "2026-09-25T00:00:00.000Z",
+            a,
+            "claude",
+            "in-context",
+            "s0",
+            "",
+            "\"Z9\"",
+        ) + &line(
+            "2026-09-26T00:00:00.000Z",
+            a,
+            "claude",
+            "session-start",
+            r1,
+            "",
+            "",
+        ) + &line(
+            "2026-09-26T00:01:00.000Z",
+            a,
+            "claude",
+            "read",
+            r1,
+            "\"R5\",\"R6\"",
+            "",
+        ) + &line(
+            "2026-09-26T00:02:00.000Z",
+            a,
+            "claude",
+            "in-context",
+            r1,
+            "",
+            "\"R5\"",
+        );
+        let parsed = parse(&usage, std::path::Path::new("/s/usage.jsonl"), &[]);
+        let logs = HashMap::from([("/work/a".to_string(), log)]);
+        let v = value(&parsed, &logs);
+        let c = v.cross_agent;
+        // R5: other session + written during + opencode→claude; R6: unknown
+        assert_eq!(
+            (c.other_session.pushed, c.other_session.in_context_at_edit),
+            (1, 1)
+        );
+        assert_eq!(c.by_client["opencode→claude"].pushed, 1);
+        assert_eq!(
+            (c.other_client.pushed, c.other_client.in_context_at_edit),
+            (1, 1)
+        );
         assert_eq!(c.writer_unknown, 1);
     }
 }

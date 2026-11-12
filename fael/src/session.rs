@@ -24,66 +24,34 @@ fn mcp_server() -> bool {
     MCP_SERVER.load(Ordering::Relaxed)
 }
 
-/// Chunk 6e: the hook session string behind this call — the same key the push
-/// reads. Resolved like `derive()`: the recorded session equal to the env
-/// session or its stem; else the raw value (clients that key
-/// by it directly); empty = outside any hook session, seen-ids stay off.
-///
-/// The raw fallback matters before the session's first recorded edit: an `add`
-/// only knows the env id while the hook keys by transcript path, and the two
-/// meet through the stem. A stranger's id in a per-session file is harmless —
-/// nothing real ever reads it — so this stays lenient; row stamps do not
-/// (see `writer_session`).
-///
-/// The env is `$FAEL_SESSION` first, then `$CLAUDE_CODE_SESSION_ID`, then
-/// `$CODEX_THREAD_ID` — the OpenCode plugin's `shell.env` hook sets the former
-/// inside OpenCode's own shell commands only, so it is the fresher signal; the
-/// Claude one can be inherited when opencode runs inside a Claude Code shell.
-/// Codex exposes `CODEX_THREAD_ID` to its shell tool executions (but not to
-/// stdio MCP servers: openai/codex#19937), so a `fael add` from a Codex shell
-/// joins the same way.
-///
-/// Usage rows (`close`, `call`) read this directly: whenever the env names a
-/// session the line carries it (stemmed at write by `asks::slim`), so a close
-/// before the session's first recorded edit still joins per-session metrics.
-/// The MCP server's env is inherited at spawn, never per call — it reads empty
-/// here, so MCP lines stay session-less by design.
-pub(crate) fn env_session() -> String {
+pub(crate) fn is_mcp() -> bool {
+    mcp_server()
+}
+
+pub(crate) fn mark_mcp_client(name: Option<&str>) {
+    crate::session_env::mark_mcp_client(name);
+}
+
+pub(crate) fn env_session_for(root: Option<&Path>) -> String {
     if mcp_server() {
         return String::new();
     }
-    for k in ["FAEL_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] {
-        let v = std::env::var(k).unwrap_or_default();
-        if !v.is_empty() {
-            return v;
-        }
-    }
-    String::new()
+    crate::session_env::pick(root).1
 }
 
-/// The client behind a CLI call, by the same env keys `env_session` reads and
-/// nothing else: `FAEL_SESSION` is OpenCode's, then Claude's, then Codex's;
-/// none = a plain `cli`.
-pub(crate) fn env_client() -> &'static str {
+pub(crate) fn env_client_for(root: Option<&Path>) -> &'static str {
     if mcp_server() {
         return "cli";
     }
-    client_of(|k| std::env::var(k).unwrap_or_default())
+    crate::session_env::pick(root).0.unwrap_or("cli")
 }
 
-fn client_of(get: impl Fn(&str) -> String) -> &'static str {
-    [
-        ("FAEL_SESSION", "opencode"),
-        ("CLAUDE_CODE_SESSION_ID", "claude"),
-        ("CODEX_THREAD_ID", "codex"),
-    ]
-    .into_iter()
-    .find(|(k, _)| !get(k).is_empty())
-    .map_or("cli", |(_, c)| c)
+pub(crate) fn writer_client(root: &Path) -> Option<String> {
+    crate::session_env::writer_client(root)
 }
 
 pub(crate) fn hook_session(root: &Path) -> String {
-    let env = env_session();
+    let env = env_session_for(Some(root));
     if env.is_empty() {
         return String::new();
     }
@@ -112,7 +80,7 @@ fn recorded(root: &Path, env: &str) -> Option<String> {
 /// worktree) stamps nothing. The MCP server's env is inherited at spawn,
 /// never per call — so it supplies no caller identity, even after an edit.
 pub(crate) fn writer_session(root: &Path) -> Option<String> {
-    let env = env_session();
+    let env = env_session_for(Some(root));
     if env.is_empty() {
         return None;
     }
@@ -142,6 +110,8 @@ pub(crate) fn tag_writer(root: &Path, row: &mut core::Row) {
     let session = writer_session(root);
     row.extra
         .extend(session.clone().map(|s| ("session".into(), s.into())));
+    row.extra
+        .extend(writer_client(root).map(|c| ("client".into(), c.into())));
     let target = row
         .reference
         .as_deref()
@@ -162,6 +132,7 @@ pub(crate) fn tag_writer(root: &Path, row: &mut core::Row) {
 /// sources for that id. No session = no stamp; no sources = session only.
 /// Fail open, never blocks.
 pub(crate) fn tag_stamp(root: &Path, target: &str, stamp: &mut core::Stamp) {
+    stamp.client = writer_client(root);
     let Some(s) = writer_session(root) else {
         return;
     };
@@ -302,7 +273,7 @@ pub(crate) fn derive(root: &Path, log: &core::Log) -> Vec<String> {
         return vec![];
     }
     let mut sessions = active_sessions(root);
-    let id = env_session();
+    let id = env_session_for(Some(root));
     let mine = if !id.is_empty() {
         sessions.into_iter().find(|e| {
             e.iter().any(|(.., s)| {
@@ -337,7 +308,16 @@ pub(crate) fn derive(root: &Path, log: &core::Log) -> Vec<String> {
 
 #[cfg(test)]
 mod client_tests {
-    use super::client_of;
+    fn client_of(get: impl Fn(&str) -> String) -> &'static str {
+        [
+            ("FAEL_SESSION", "opencode"),
+            ("CLAUDE_CODE_SESSION_ID", "claude"),
+            ("CODEX_THREAD_ID", "codex"),
+        ]
+        .into_iter()
+        .find(|(k, _)| !get(k).is_empty())
+        .map_or("cli", |(_, c)| c)
+    }
 
     #[test]
     fn client_follows_the_env_key() {
