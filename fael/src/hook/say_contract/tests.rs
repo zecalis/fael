@@ -1,0 +1,273 @@
+//! The contract tests: every fixture loops over every kind, so a new kind
+//! fails here until it has a fixture, a card and a wire name.
+
+use super::super::changed::read_seen;
+use super::super::say::{Kind, Line, Outbox, Reply};
+use super::super::say_card::{At, Once, policy};
+use super::super::state::lock_seen;
+use super::{all, at_of, said, seen, slot};
+
+#[test]
+fn every_kind_has_a_fixture() {
+    let slots: Vec<usize> = all().iter().map(|l| slot(&l.kind)).collect();
+    assert_eq!(slots, (0..slots.len()).collect::<Vec<_>>());
+}
+
+#[test]
+fn nothing_to_say_is_silent() {
+    assert!(Outbox::open(At::Edit, None).reply().context().is_none());
+    for l in all() {
+        let empty = Line {
+            text: String::new(),
+            ..l
+        };
+        assert_eq!(said(None, empty), None);
+    }
+}
+
+#[test]
+fn a_key_once_kind_is_not_said_twice_in_a_session() {
+    for l in all() {
+        let p = seen("s.seen");
+        let first = said(lock_seen(&p), l.clone());
+        assert_eq!(first.as_deref(), Some(l.text.as_str()), "{:?}", l.kind);
+        let again = said(lock_seen(&p), l.clone());
+        match policy(&l.kind).once {
+            Once::Key => assert_eq!(again, None, "{:?} said twice", l.kind),
+            // its event fires once (a stash taken off disk);
+            // it spends no key another kind could be silenced by
+            Once::Event => assert_eq!(std::fs::read_to_string(&p).unwrap(), ""),
+        }
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+}
+
+#[test]
+fn a_line_without_its_command_is_dropped() {
+    for l in all() {
+        let Some(command) = policy(&l.kind).command else {
+            continue;
+        };
+        let without = Line {
+            text: l.text.replace(command, "fael nowhere"),
+            ..l.clone()
+        };
+        assert_eq!(said(None, without), None, "{:?}", l.kind);
+        assert!(said(None, l).is_some());
+    }
+}
+
+/// A spent mark (the hub peek's) says nothing and is in the seen list the
+/// next push opens.
+#[test]
+fn a_spent_mark_says_nothing_and_is_seen_next_time() {
+    let p = seen("s.seen");
+    let mut out = Outbox::open(At::Edit, lock_seen(&p));
+    out.spend("~peek:x".into());
+    assert!(out.reply().context().is_none());
+    assert!(Outbox::open(At::Edit, lock_seen(&p)).has("~peek:x"));
+    let _ = std::fs::remove_dir_all(p.parent().unwrap());
+}
+
+#[test]
+fn no_session_says_every_time() {
+    for l in all() {
+        assert!(said(None, l.clone()).is_some());
+        assert!(said(None, l).is_some());
+    }
+}
+
+/// A shell call's edit side, then its commit side: the contexts in that
+/// order, the edit side's notice kept.
+#[test]
+fn two_replies_join_in_order_and_the_first_notice_wins() {
+    let reply = |text: &str, notice: Option<&str>| {
+        let mut out = Outbox::open(At::Edit, None);
+        out.say(Line::notice(text.into()));
+        let mut r = out.reply();
+        r.notice = notice.map(String::from);
+        r
+    };
+    let r = reply("edit\n", Some("edit side")).and(reply("commit\n", Some("commit side")));
+    assert_eq!(r.context(), Some("edit\ncommit\n"));
+    assert_eq!(r.notice.as_deref(), Some("edit side"));
+    let r = reply("", None).and(reply("commit\n", Some("commit side")));
+    assert_eq!(r.context(), Some("commit\n"));
+    assert_eq!(r.notice.as_deref(), Some("commit side"));
+    let r = Reply::default().and(Reply::default());
+    assert!(r.context().is_none() && r.notice.is_none());
+}
+
+/// A seen list written before the say-gate (row ids, `~id`, `~*`, `@id`,
+/// `~start:<id>`) still silences what it did, and the `~count:` (dropped) /
+/// `~peek:` / `~bodies` keys (a line no hook says any more) are never read as
+/// a row this session was told.
+#[test]
+fn an_old_seen_list_reads_beside_the_new_keys() {
+    let p = seen("s.seen");
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(
+        &p,
+        "01OLD\n~01ASKED\n~*\n@01OLD\n~count:src/a.rs|file\n~peek:src/a.rs\n~bodies\n~start:01BRIEF\n",
+    )
+    .unwrap();
+    let (told, hinted) = read_seen(&std::fs::read_to_string(&p).unwrap());
+    assert_eq!(told, ["01OLD".to_string(), "01BRIEF".to_string()].into());
+    for k in [
+        "01ASKED",
+        "*",
+        "count:src/a.rs|file",
+        "peek:src/a.rs",
+        "bodies",
+    ] {
+        assert!(hinted.contains(k), "{k} not hinted");
+    }
+    let line = |kind: Kind, text: &str| Line {
+        kind,
+        text: text.into(),
+    };
+    let mut out = Outbox::open(At::Edit, lock_seen(&p));
+    for (l, said) in [
+        (
+            line(
+                Kind::Row {
+                    ids: vec!["01OLD".into()],
+                },
+                "- [01OLD] x\n",
+            ),
+            false,
+        ),
+        (
+            line(
+                Kind::Row {
+                    ids: vec!["01NEW".into()],
+                },
+                "- [01NEW] y\n",
+            ),
+            true,
+        ),
+        (
+            line(
+                Kind::Ask {
+                    ids: vec!["01ASKED".into()],
+                },
+                "fael close 01ASKED\n",
+            ),
+            false,
+        ),
+        (
+            line(
+                Kind::Ask {
+                    ids: vec!["*".into()],
+                },
+                "fael close <id>\n",
+            ),
+            false,
+        ),
+        (
+            line(
+                Kind::Ask {
+                    ids: vec!["01OLD".into()],
+                },
+                "fael close 01OLD\n",
+            ),
+            true,
+        ),
+    ] {
+        let before = out.fresh(&l.kind);
+        assert_eq!(before, said, "{:?}", l.kind);
+        out.say(l);
+    }
+    assert_eq!(
+        out.reply().context(),
+        Some("- [01NEW] y\nfael close 01OLD\n")
+    );
+    let _ = std::fs::remove_dir_all(p.parent().unwrap());
+}
+
+/// Usage records what was said (chunk 3): a said line names its kind, a
+/// dropped one names nothing, and `Reply::and` (a shell call's edit side, then
+/// its commit side) keeps both sides' entries in order.
+#[test]
+fn said_names_each_line_said_and_and_keeps_both_sides() {
+    let kinds = |r: &Reply| -> Vec<String> {
+        let v = serde_json::to_value(r.said()).unwrap();
+        let k = |e: &serde_json::Value| e["kind"].as_str().unwrap().to_string();
+        v.as_array().unwrap().iter().map(k).collect()
+    };
+    let (mut both, mut want) = (Reply::default(), vec![]);
+    for l in all() {
+        let mut out = Outbox::open(at_of(&l), None);
+        out.say(Line {
+            text: String::new(),
+            ..l.clone()
+        });
+        assert!(out.reply().said().is_empty(), "{:?}", l.kind);
+        let mut out = Outbox::open(at_of(&l), None);
+        out.say(l);
+        let r = out.reply();
+        want.extend(kinds(&r));
+        both = both.and(r);
+    }
+    assert_eq!(kinds(&both), want);
+    want.dedup();
+    assert_eq!(
+        want,
+        [
+            "row",
+            "brief",
+            "ask",
+            "cited",
+            "finding",
+            "notice",
+            "fixed",
+            "overlap",
+            "peer",
+            "inbox",
+            "checkpoint",
+            "handoff",
+            "briefdrift",
+            "retired",
+            "chunkbrief"
+        ]
+    );
+}
+
+/// A said line's tokens ride on its entries (`t`): the entries of one line sum
+/// to its `est_tokens`, the remainder on the first, for every kind and for a
+/// line that names several keys.
+#[test]
+fn said_entries_of_one_line_sum_to_its_est_tokens() {
+    let sum = |l: Line| {
+        let want = crate::core::est_tokens(&l.text);
+        let mut out = Outbox::open(at_of(&l), None);
+        out.say(l);
+        let r = out.reply();
+        let v = serde_json::to_value(r.said()).unwrap();
+        let t: Vec<u64> = v
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["t"].as_u64().unwrap_or(0))
+            .collect();
+        (want as u64, t)
+    };
+    for l in all() {
+        let (want, t) = sum(l);
+        assert_eq!(t.iter().sum::<u64>(), want);
+    }
+    let text = "fael mem for a.rs:\n- [A] decision x\n- [B] decision y\n- [C] note z\n";
+    let (want, t) = sum(Line {
+        kind: Kind::Row {
+            ids: vec!["A".into(), "B".into(), "C".into()],
+        },
+        text: text.into(),
+    });
+    assert!(want > 3, "long enough to split: {want}");
+    assert_eq!(t.len(), 3);
+    assert_eq!(t.iter().sum::<u64>(), want);
+    assert!(
+        t[0] >= t[1] && t[1] == t[2],
+        "remainder on the first: {t:?}"
+    );
+}

@@ -40,6 +40,9 @@ pub enum SayKind {
     Inbox,
     /// A step commit in a worktree holding a chunk: ask for the checkpoint note.
     Checkpoint,
+    /// A commit in a session that edited and filed nothing: ask for the
+    /// hand-off note the next session needs.
+    Handoff,
     /// Legacy: no hook says it now (the held-chunk line went), old usage still holds it.
     Held,
     /// The held chunk's brief, scope or title was edited after its run started.
@@ -79,7 +82,7 @@ pub enum Earned {
 
 impl SayKind {
     /// Every kind, in `fael stats` order (`buckets` adds `note` after `row`).
-    pub const ALL: [SayKind; 18] = [
+    pub const ALL: [SayKind; 19] = [
         SayKind::Row,
         SayKind::Brief,
         SayKind::Ask,
@@ -94,6 +97,7 @@ impl SayKind {
         SayKind::Peer,
         SayKind::Inbox,
         SayKind::Checkpoint,
+        SayKind::Handoff,
         SayKind::Held,
         SayKind::BriefDrift,
         SayKind::Retired,
@@ -117,6 +121,7 @@ impl SayKind {
             SayKind::Peer => "peer",
             SayKind::Inbox => "inbox",
             SayKind::Checkpoint => "checkpoint",
+            SayKind::Handoff => "handoff",
             SayKind::Held => "held",
             SayKind::BriefDrift => "briefdrift",
             SayKind::Retired => "retired",
@@ -147,7 +152,7 @@ impl SayKind {
             SayKind::Fixed | SayKind::FixCommit => Earned::FiledIssue,
             // it offers `fael add decision`: the session filed one after it
             SayKind::Retired => Earned::FiledDecision,
-            SayKind::Notice | SayKind::Peer => Earned::FiledAny,
+            SayKind::Notice | SayKind::Peer | SayKind::Handoff => Earned::FiledAny,
             // a chunk note is no ledger row: its `call` usage line is the act.
             // `briefdrift` offers `fael chunk show`, but no usage line of a
             // `show` is indexed — the nearest recorded act on that chunk is
@@ -193,10 +198,11 @@ mod tests {
             SayKind::Peer => 11,
             SayKind::Inbox => 12,
             SayKind::Checkpoint => 13,
-            SayKind::Held => 14,
-            SayKind::BriefDrift => 15,
-            SayKind::Retired => 16,
-            SayKind::ChunkBrief => 17,
+            SayKind::Handoff => 14,
+            SayKind::Held => 15,
+            SayKind::BriefDrift => 16,
+            SayKind::Retired => 17,
+            SayKind::ChunkBrief => 18,
         }
     }
 
@@ -236,6 +242,7 @@ mod tests {
                 "peer",
                 "inbox",
                 "checkpoint",
+                "handoff",
                 "held",
                 "briefdrift",
                 "retired",

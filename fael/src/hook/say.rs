@@ -122,6 +122,9 @@ pub(crate) enum Kind {
     /// names the run uid, so it is asked once per run per session (the seen
     /// list is per session: a new session asks again once).
     Checkpoint { key: String },
+    /// A commit in a session that edited files and filed no row: ask for the
+    /// hand-off note once per session.
+    Handoff,
     /// A note said in its last session (`spent_notes`): file it as a decision, or let it go.
     Retired { id: String },
     /// A line fael raises on its own: a stashed risk or capture reject, a
@@ -146,6 +149,7 @@ impl Kind {
             Kind::Peer { file } => vec![format!("~peer:{file}")],
             Kind::Inbox { id, uid } => vec![format!("~inbox:{uid}:{id}")],
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
+            Kind::Handoff => vec!["~handoff".into()],
             Kind::Retired { id } => vec![format!("~retired:{id}")],
             Kind::Brief { keys } => keys.clone(),
             Kind::ChunkBrief { uid } => vec![format!("~start:chunk:{uid}")],
@@ -190,7 +194,7 @@ impl Kind {
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![id.clone()],
             Kind::ChunkBrief { uid } => vec![uid.clone()],
-            Kind::Brief { .. } | Kind::Fixed | Kind::Notice => vec![],
+            Kind::Brief { .. } | Kind::Fixed | Kind::Notice | Kind::Handoff => vec![],
         }
     }
 

@@ -68,6 +68,7 @@ fael note: this session mentioned a possible problem ("out of sync") — file an
 ## 27 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001'"}}
 context:
 fael: 01K00000000000000000B cited in a commit — `(fael:01K00000000000000000B)` in its message links the fix on main; done? `fael close 01K00000000000000000B "<why>"`
+fael: nothing filed this session — what must the next session know? fael add note "…" --files src/b.rs,src/hub.rs,src/a.rs
 
 ## 28 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'fix 01K00000000000000000BBB001 again'"}}
 ## 29 search {"session":"2025-12-01T00:00:00Z","tool":"Bash","tool_input":{"command":"git commit -m 'note 01K00000000000000000AAA001'"}}
@@ -86,5 +87,5 @@ fael mem for src/c.rs (1 of 15):
 ## 38 stop {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"wired the adapter","reply":"wired the adapter"}
 ## 39 prompt {"session":"2026-01-02T00:00:00Z","client":"opencode","text":"check the adapter wiring"}
 ## usage
-15 lines · ~705 tokens
+15 lines · ~737 tokens
 silent-start edit in-context edit in-context edit in-context edit silent-start shell-edit outcome search silent-start silent-start edit
