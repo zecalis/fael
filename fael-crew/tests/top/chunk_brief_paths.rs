@@ -194,3 +194,55 @@ fn an_ambiguous_cite_warns_with_both_ids() {
     assert!(err.contains(&format!("cites {prefix}")), "{err}");
     assert!(err.contains(&pair[0]) && err.contains(&pair[1]), "{err}");
 }
+
+#[test]
+fn a_missing_symbol_warns_at_add_edit_and_start() {
+    let d = repo();
+    std::fs::write(d.join("src/x.rs"), "fn present_fn() {}\n").unwrap();
+    let (_, err) = add(
+        &d,
+        "inbox",
+        "call `present_fn` and `no_such_fn`",
+        "src/",
+        "s1",
+    );
+    assert!(
+        err.contains("brief names no_such_fn — no match under scope"),
+        "{err}"
+    );
+    assert!(!err.contains("present_fn — no match"), "{err}");
+    let (uid, _) = add(&d, "inbox", "init", "src/", "s2");
+    let (ok, _, err) = fael(&d, &["chunk", "edit", &uid, "--brief", "call `no_such_fn`"]);
+    assert!(
+        ok && err.contains("brief names no_such_fn — no match under scope"),
+        "{err}"
+    );
+    let (ok, _, err) = fael(&d, &["chunk", "start", &uid]);
+    assert!(ok, "{err}");
+    assert!(
+        err.contains("brief names no_such_fn — no match under scope"),
+        "{err}"
+    );
+    assert!(!err.contains("fael chunk edit"), "{err}");
+}
+
+#[test]
+fn a_present_symbol_path_command_and_leave_alone_do_not_warn() {
+    let d = repo();
+    std::fs::write(d.join("src/x.rs"), "fn present_fn() {}\n").unwrap();
+    for (i, brief) in [
+        "call `present_fn` now",
+        "call `crate::present_fn` now",
+        "edit `src/x.rs` now",
+        "run `cargo test -p x` now",
+        "Check: run `no_such_fn` green",
+        "leave alone `no_such_fn` here",
+        "Add helper `brand_new_fn`",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let (_, err) = add(&d, "inbox", brief, "src/", &format!("s{i}"));
+        assert!(!err.contains("no match under scope"), "{brief}: {err}");
+    }
+}
