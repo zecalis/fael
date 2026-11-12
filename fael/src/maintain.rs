@@ -18,7 +18,7 @@ mod unstamped;
 
 use crate::{Args, core, repo};
 pub(crate) use alive::BranchFiles;
-pub(crate) use merged::{default_branch, gh_prs, head_branch, merged_times, outcome_inputs};
+pub(crate) use merged::{default_branch, gh_prs, head_branch, merged_times, outcome_inputs, range_for};
 
 /// The listed PRs from the one cached `gh pr list` (`gh_prs`, 600 s on disk) —
 /// no paging, no search call. `FAEL_GH_JSON` stands in under test.

@@ -16,7 +16,7 @@ use std::path::Path;
 /// the old page, so `--all` stays line for line what it was.
 pub(super) const SECTIONS: &[&str] = &[
     "rows", "value", "outcome", "across", "models", "capture", "said", "friction", "warnings",
-    "sessions",
+    "sessions", "provenance",
 ];
 
 fn usage_line(s: &core::stats::Stats, path: &Path) -> String {
@@ -282,7 +282,17 @@ pub(super) fn print_section(
         "sessions" => super::stats_sessions::split_lines(&s.session_splits)
             .iter()
             .for_each(|l| println!("{l}")),
+        "provenance" => print_provenance(s),
         _ => {}
+    }
+}
+
+/// `fael stats provenance`: field path → the exact shell line with this
+/// run's range filled in (plan proof chunk `provenance`). One line per
+/// field, sorted by path; empty when core alone built the stats.
+fn print_provenance(s: &core::stats::Stats) {
+    for (k, v) in &s.provenance {
+        println!("{k}: {v}");
     }
 }
 
