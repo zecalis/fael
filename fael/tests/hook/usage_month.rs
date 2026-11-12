@@ -1,6 +1,7 @@
 //! Usage stays bounded: the live `usage.jsonl` moves to `usage/<YYYY-MM>.jsonl`
-//! at the first write of a new month, and a read with no `--since` opens only
-//! the newest archive and the live file.
+//! at the first write of a new month, and a read with no `--since` covers the
+//! live file plus the newest archive's `<month>.sum.json` for additive
+//! counters — the archive raw is skipped once its summary exists.
 
 use super::{fael_at, fael_at_env, repo};
 use std::path::{Path, PathBuf};
@@ -35,6 +36,29 @@ fn a_read_with_no_since_opens_only_the_newest_archive_and_the_live_file() {
     assert_eq!(events(&s, &["--since", "2020-01-15"]), 2);
     let (ok, _, err) = fael_at(&s, &s, &["stats", "--since", "nope"], "");
     assert!(!ok && err.contains("or all"), "{err}");
+}
+
+#[test]
+fn a_default_read_merges_the_closed_month_summary_for_additive_counters() {
+    let s = state_dir("usage-merge");
+    std::fs::write(s.join("usage/2020-02.jsonl"), line("2020-02-10T00:00:00Z")).unwrap();
+    std::fs::write(s.join("usage.jsonl"), line("2020-03-10T00:00:00Z")).unwrap();
+    // no summary yet: the default still reads the archive raw
+    assert_eq!(events(&s, &[]), 2);
+    // the run above backstopped the missing summary for the next run
+    assert!(
+        s.join("usage/2020-02.sum.json").is_file(),
+        "missing closed summary is written for the next run"
+    );
+    // now the default skips the archive raw and merges its summary instead:
+    // additive counters stay whole, the month rides listed in `summaries`
+    let args = ["stats", "--json"];
+    let (ok, out, err) = fael_at(&s, &s, &args, "");
+    assert!(ok, "{out}{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["events"], 2);
+    assert_eq!(v["by_event"]["read"]["events"], 2);
+    assert_eq!(v["summaries"]["2020-02"]["events"], 1);
 }
 
 #[test]

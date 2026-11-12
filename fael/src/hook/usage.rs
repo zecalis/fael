@@ -236,7 +236,10 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         println!("{}", serde_json::json!({ "days": days }));
         return Ok(());
     }
-    let u = load_text(&super::usage_files::read(since), since, &|_| true);
+    // Default window: live raw + closed-month summary for additive counters;
+    // repeat/cross/handoff stay live-only, distinct counts listed, not merged.
+    let (raw_text, closed) = super::usage_retain::default_window(since);
+    let u = load_text(&raw_text, since, &|_| true);
     if let Some(q) = session {
         return session_view(&q, json, &u);
     }
@@ -250,8 +253,11 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
             println!("{l}");
         }
     };
-    let sums = super::usage_retain::summaries(since);
-    if !json && !sums.is_empty() && (u.empty || u.parsed.n == 0) {
+    let mut sums = super::usage_retain::summaries(since);
+    // Past windows with no raw left list their summaries; the default window
+    // aggregates live raw and merges the closed month below, so its
+    // empty-live case still shows merged totals, not summaries alone.
+    if since.is_some() && !json && !sums.is_empty() && (u.empty || u.parsed.n == 0) {
         super::usage_retain::print(&sums);
         misses();
         return Ok(());
@@ -275,7 +281,15 @@ pub fn stats(a: &crate::Args) -> Result<(), String> {
         return Ok(());
     }
     let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
-    let stats = aggregate(&u, &cfg, rows);
+    let mut stats = aggregate(&u, &cfg, rows);
+    if let Some((m, v)) = closed {
+        super::usage_retain::merge_closed(&mut stats, &v);
+        sums.push((m, v));
+    } else if since.is_none() {
+        // No summary to merge this run (the archive raw was read instead):
+        // write it now so the next run skips the raw.
+        super::usage_retain::ensure_closed_summary();
+    }
     if json {
         println!("{}", super::usage_retain::json(&stats, sums)?);
         return Ok(());
