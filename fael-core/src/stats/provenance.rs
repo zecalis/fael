@@ -13,7 +13,8 @@ use std::collections::BTreeMap;
 /// The `gh pr list` call behind the listed-PR joins: the source of
 /// `prs_created`, `prs_with_row`/`without` and `joined_since`. Capped at
 /// 1000 (the stats window pages to the window start; doctor keeps 200).
-const PR_LIST: &str = "gh pr list --state all --json number,headRefName,createdAt,mergedAt --limit 1000";
+const PR_LIST: &str =
+    "gh pr list --state all --json number,headRefName,createdAt,mergedAt --limit 1000";
 
 /// Field path → the exact shell line with this run's range filled in.
 ///

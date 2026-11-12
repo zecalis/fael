@@ -15,8 +15,17 @@ use std::path::Path;
 /// each ending in its section name. `sessions` is named only: it is no part of
 /// the old page, so `--all` stays line for line what it was.
 pub(super) const SECTIONS: &[&str] = &[
-    "rows", "value", "outcome", "across", "models", "capture", "said", "friction", "warnings",
-    "sessions", "provenance",
+    "rows",
+    "value",
+    "outcome",
+    "across",
+    "models",
+    "capture",
+    "said",
+    "friction",
+    "warnings",
+    "sessions",
+    "provenance",
 ];
 
 fn usage_line(s: &core::stats::Stats, path: &Path) -> String {
