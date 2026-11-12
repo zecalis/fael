@@ -6,7 +6,8 @@
 //! runs the same core on the result. Anything the adapter leaves alone
 //! replies byte-identical: this module moves the rules home, it changes no
 //! reply. The differences the wire already resolved stay in the JS
-//! (session-start time as RFC 3339, stop text/reply strings); the adapter
+//! (native session id with RFC 3339 `session_start` beside it, stop
+//! text/reply strings); the adapter
 //! owns their contract and proves both shapes flow (fixtures), so the later
 //! chunks (prompt, notice, stop, shell-session) can resolve server-side here.
 
