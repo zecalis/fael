@@ -79,3 +79,111 @@ fn docs_cite_only_code_that_exists() {
         dead.join("\n")
     );
 }
+
+/// Docs cite fields, not figures (plan proof chunk `provenance`): a number
+/// followed by `%` or `×` in README.md or docs/ must sit in a block that
+/// names a `fael stats` field, cites an external page (a link in the same
+/// block), or is marked `one-off measurement, <date>`.
+#[test]
+fn docs_numbers_cite_a_field_or_a_dated_one_off() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut files = vec![root.join("README.md")];
+    for e in std::fs::read_dir(root.join("docs")).unwrap().flatten() {
+        if e.path().extension().is_some_and(|x| x == "md") {
+            files.push(e.path());
+        }
+    }
+    let mut bad = vec![];
+    for doc in &files {
+        let md = std::fs::read_to_string(doc).unwrap();
+        // fenced code is an example, never a claim
+        let mut prose = String::new();
+        for (i, part) in md.split("```").enumerate() {
+            if i % 2 == 0 {
+                prose.push_str(part);
+                prose.push('\n');
+            }
+        }
+        for block in prose.split("\n\n") {
+            if block.trim().is_empty() {
+                continue;
+            }
+            // inline code is a name, never a claim — scan the rest
+            let mut clean = String::new();
+            for (i, part) in block.split('`').enumerate() {
+                if i % 2 == 0 {
+                    clean.push_str(part);
+                }
+            }
+            // a block that names the numbers' source, links it, or dates it
+            if block.contains("fael stats")
+                || block.contains("outcome.")
+                || block.contains("experience.")
+                || block.contains("context_loop.")
+                || block.contains("provenance")
+                || block.contains("https://")
+                || block.contains("http://")
+                || dated_one_off(block)
+            {
+                continue;
+            }
+            for hit in flagged_numbers(&clean) {
+                bad.push(format!(
+                    "{}: `{hit}` in {:?}",
+                    doc.display(),
+                    block.lines().next().unwrap_or("").trim()
+                ));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "docs state numbers with no field behind them:\n{}",
+        bad.join("\n")
+    );
+}
+
+/// `one-off measurement, <YYYY-MM-DD>` in the block.
+fn dated_one_off(block: &str) -> bool {
+    let mark = "one-off measurement,";
+    let Some(at) = block.find(mark) else {
+        return false;
+    };
+    block[at + mark.len()..]
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .take(10)
+        .collect::<String>()
+        .chars()
+        .enumerate()
+        .all(|(i, c)| match i {
+            4 | 7 => c == '-',
+            _ => c.is_ascii_digit(),
+        })
+}
+
+/// Number snippets followed by `%` or `×`: `18.5%`, `±20%`, `2.4×`.
+fn flagged_numbers(text: &str) -> Vec<String> {
+    let mut out = vec![];
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_digit() {
+            let start = i;
+            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                i += 1;
+            }
+            let mut j = i;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            if j < chars.len() && (chars[j] == '%' || chars[j] == '×') {
+                out.push(chars[start..=j].iter().collect());
+                i = j + 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    out
+}

@@ -329,3 +329,56 @@ fn a_session_shows_the_pr_its_branch_heads() {
     assert!(ok, "{err}");
     assert!(out.contains("with a merged PR 2"), "{out}");
 }
+
+/// `fael stats --json | jq .provenance` maps the git-backed numbers to a
+/// shell line; the `prs_merged` line rerun against a stub `gh` prints the
+/// field's value (plan proof chunk `provenance`).
+#[test]
+fn provenance_prs_merged_recomputes_the_field() {
+    let d = repo();
+    let line = format!(
+        r#"{{"ts":"2026-10-01T00:00:00.000Z","repo":{},"client":"claude","session":"s1","event":"edit","bytes":0,"est_tokens":0,"ids":[]}}"#,
+        json(&d.canonicalize().unwrap())
+    );
+    std::fs::create_dir_all(d.join("state")).unwrap();
+    std::fs::write(d.join("state/usage.jsonl"), line + "\n").unwrap();
+    let prs = r#"[{"number":7,"headRefName":"feat/a","state":"MERGED","createdAt":"2026-10-01T00:00:00Z","mergedAt":"2026-10-02T00:00:00Z"}]"#;
+    let env = [("FAEL_GH_JSON", prs), ("FAEL_GH_COUNT", "7")];
+    let (ok, out, err) = fael_env(&d, &["stats", "--json"], "", &env);
+    assert!(ok, "{err}");
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["outcome"]["prs_merged"], 7, "{out}");
+    for k in [
+        "outcome.prs_merged",
+        "outcome.prs_with_row",
+        "experience.fix_commits_linked",
+        "context_loop.repeats",
+    ] {
+        assert!(v["provenance"][k].is_string(), "{k} missing: {out}");
+    }
+    let cmd = v["provenance"]["outcome.prs_merged"].as_str().unwrap();
+    assert!(cmd.contains("merged:2026-10-01.."), "{cmd}");
+    // a stub `gh` that answers the search count, first on PATH
+    let bin = d.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("gh"), "#!/bin/sh\necho 7\n").unwrap();
+    let st = std::process::Command::new("chmod")
+        .arg("+x")
+        .arg(bin.join("gh"))
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let rerun = std::process::Command::new("sh")
+        .args(["-c", cmd])
+        .env("PATH", path)
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    assert!(
+        rerun.status.success(),
+        "{cmd}: {}",
+        String::from_utf8_lossy(&rerun.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&rerun.stdout).trim(), "7", "{cmd}");
+}

@@ -170,6 +170,19 @@ pub(crate) fn aggregate(u: &Usage, cfg: &core::Config, rows: bool) -> core::stat
     // this clone's run attribution (client/model/cost with unknown-% beside
     // every number); no crew.db reads empty, never an error
     s.models = core::stats::models(&super::flow::attribution());
+    // provenance: field path → the exact shell line with this run's range
+    // filled in (plan proof chunk `provenance`); the range is the same
+    // string `prs_merged_total` was counted over
+    {
+        let now = core::now_ms() as i64;
+        let range = window.and_then(|w| crate::maintain::range_for(w, now, tz));
+        let git_since = core::rfc3339(window.unwrap_or(0).max(0) as u64);
+        let branch = crate::repo()
+            .map(|r| crate::maintain::default_branch(&r.root))
+            .unwrap_or_else(|_| "main".into());
+        let day = core::stats::window_str(window);
+        s.provenance = core::stats::provenance(range.as_deref(), &git_since, &branch, &day);
+    }
     if let Ok(r) = crate::repo() {
         let (log, held) = super::lifecycle::marked(&r);
         s.lifecycle = core::stats::lifecycle(&log, &held);

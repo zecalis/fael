@@ -170,6 +170,13 @@ pub struct Stats {
     /// Edited sessions split by rows pushed and by chunk run — described,
     /// never an effect (`sessions.rs`).
     pub session_splits: super::Splits,
+    /// How to recompute every git/gh-backed number (`provenance.rs`): field
+    /// path → the exact shell line with this run's range filled in.
+    /// Numbers from `usage.jsonl` alone read `from usage lines, see
+    /// docs/stats.md#<field>`. Set by the caller (it knows the range and
+    /// the default branch); empty from core alone, never an error.
+    #[serde(default)]
+    pub provenance: std::collections::BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rows: Option<Vec<RowStatus>>,
 }
@@ -264,6 +271,7 @@ pub fn aggregate(
         days: super::days::days(parsed),
         sessions,
         session_splits,
+        provenance: Default::default(),
         rows: with_rows.then(|| row_statuses(parsed, logs)),
     }
 }

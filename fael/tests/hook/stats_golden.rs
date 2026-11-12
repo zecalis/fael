@@ -176,6 +176,27 @@ fn stats_json_matches_golden_values() {
     );
     assert_eq!(v["context_by_client"], serde_json::json!({}));
     v.as_object_mut().unwrap().remove("context_by_client");
+    // also apart: provenance carries this run's recompute commands — the
+    // window is the usage day, the range its day..today in the viewer zone
+    let provenance = v.as_object_mut().unwrap().remove("provenance");
+    {
+        let p = provenance.as_ref().unwrap().as_object().unwrap();
+        for k in [
+            "outcome.prs_merged",
+            "outcome.prs_with_row",
+            "experience.fix_commits_linked",
+            "context_loop.repeats",
+        ] {
+            assert!(p.contains_key(k), "{k} missing: {provenance:?}");
+        }
+        // FAEL_TZ_OFFSET=+00:00 above, so the range is the usage day..today
+        assert!(
+            p["outcome.prs_merged"]
+                .as_str()
+                .is_some_and(|s| s.contains("merged:2026-09-26..")),
+            "{provenance:?}"
+        );
+    }
     // its own json! call: one literal with every kind passes the macro's recursion limit
     let said = serde_json::json!({"row": {"said": 2, "earned": 0, "by_event": {"read": {"said": 2, "earned": 0}}}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1, "by_event": {"read": {"said": 1, "earned": 1}}}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "peer": {"said": 0, "earned": 0}, "inbox": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}, "briefdrift": {"said": 0, "earned": 0}, "retired": {"said": 0, "earned": 0}, "chunkbrief": {"said": 0, "earned": 0}});
     assert_eq!(

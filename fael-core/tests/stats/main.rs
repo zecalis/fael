@@ -58,6 +58,15 @@ fn capture_and_experience_shapes_are_frozen() {
     );
 }
 
+/// `provenance` (plan proof chunk `provenance`): field path → shell line,
+/// empty from core alone (the caller fills this run's range).
+#[test]
+fn provenance_key_is_present_and_empty_from_core() {
+    let v = value_of(BASE_ROWS, false);
+    assert!(v["provenance"].is_object(), "{v}");
+    assert!(v["provenance"].as_object().unwrap().is_empty(), "{v}");
+}
+
 const BASE_ROWS: &str = concat!(
     "{\"ts\":\"2026-09-26T00:00:00.000Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"event\":\"read\",\"bytes\":10,\"est_tokens\":3,\"ids\":[\"A\"]}\n",
     "{\"ts\":\"2026-09-26T00:01:00.000Z\",\"repo\":\"/work/real\",\"client\":\"codex\",\"event\":\"edit\",\"bytes\":20,\"est_tokens\":5,\"ids\":[\"A\",\"B\"]}\n",
@@ -100,6 +109,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "non_english_rows",
             "outcome",
             "outcomes_v",
+            "provenance",
             "retired",
             "rounds",
             "said",
@@ -115,7 +125,6 @@ fn json_shape_keys_and_types_are_frozen() {
         ],
         "{v}"
     );
-    // every kind listed, zeros included
     assert_eq!(
         keys(&v["said"]).join(" "),
         "ask bodies brief briefdrift checkpoint chunkbrief cited finding fixcommit fixed held inbox note notice overlap peer pointer retired row",
@@ -152,13 +161,8 @@ fn json_shape_keys_and_types_are_frozen() {
         "{v}"
     );
     assert_eq!(
-        keys(&v["constants"]),
-        [
-            "mcp_schema_bytes",
-            "mcp_schema_est",
-            "skill_bytes",
-            "skill_est"
-        ],
+        keys(&v["constants"]).join(" "),
+        "mcp_schema_bytes mcp_schema_est skill_bytes skill_est",
         "{v}"
     );
     assert_eq!(
