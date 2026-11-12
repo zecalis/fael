@@ -22,6 +22,7 @@ mod chunk_scope_dead;
 mod chunk_scope_gone;
 mod chunk_scope_report;
 mod chunk_scope_skip;
+mod chunk_scope_symbols;
 mod chunk_seat;
 mod chunk_show;
 mod chunk_status;

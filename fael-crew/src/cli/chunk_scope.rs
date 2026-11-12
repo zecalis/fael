@@ -42,6 +42,16 @@ pub(crate) fn warn(s: &Store, r: &crate::Repo, key: &str, at_start: bool) {
     for w in super::chunk_scope_dead::warnings(&b.title, &b.brief, &log, s) {
         eprintln!("{w}");
     }
+    let scope: Vec<String> = b
+        .scope
+        .as_deref()
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    for w in super::chunk_scope_symbols::warnings(root, &scope, &b.title, &b.brief) {
+        eprintln!("{w}");
+    }
 }
 
 /// Linked issues plus brief cites whose row is closed: the board's `stale`.
@@ -328,7 +338,7 @@ fn outside_line(
 
 /// A brief line split at sentence ends: a `Check:` clause mid-paragraph is still
 /// a run mention. Paths hold no spaces, so no path breaks across a split.
-fn clauses(line: &str) -> Vec<&str> {
+pub(crate) fn clauses(line: &str) -> Vec<&str> {
     let mut out = vec![line];
     for sep in [". ", "; ", "? ", "! "] {
         out = out.iter().flat_map(|s| s.split(sep)).collect();
@@ -338,7 +348,7 @@ fn clauses(line: &str) -> Vec<&str> {
 
 /// A verification line names commands to run, not files to edit: `Check:`,
 /// `Run:`, `Verify:` (case-insensitive, after any `>`, `-`, `*` quote).
-fn is_check_line(line: &str) -> bool {
+pub(crate) fn is_check_line(line: &str) -> bool {
     let t = line
         .trim_start()
         .trim_start_matches(['>', '-', '*', '#'])
