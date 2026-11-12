@@ -8,6 +8,7 @@
 
 mod day;
 mod outcome;
+mod value;
 
 use fael_core::Config;
 use fael_core::stats::{aggregate, parse};
@@ -247,26 +248,6 @@ fn json_shape_flow_and_throughput_are_frozen() {
     );
     assert!(v["throughput"].is_array(), "{v}");
     assert_eq!(v["days"][0]["day"], "2026-09-26", "{v}");
-}
-
-#[test]
-fn json_shape_retired_value_and_verdict_are_frozen() {
-    let v = value_of(BASE_ROWS, false);
-    assert_eq!(keys(&v["retired"]), ["at_touch", "bumped", "pushed"], "{v}");
-    assert!(
-        v["retired"]["pushed"].is_u64()
-            && v["retired"]["at_touch"].is_u64()
-            && v["retired"]["bumped"].is_u64(),
-        "{v}"
-    );
-    let value = ["handoffs_picked_up", "in_context_at_edit", "issues_closed"];
-    let mut value_keys = value.to_vec();
-    value_keys.insert(0, "by_event");
-    value_keys.insert(1, "cross_agent");
-    value_keys.insert(2, "decision_by_state");
-    assert_eq!(keys(&v["value"]), value_keys, "{v}");
-    assert!(value.iter().all(|k| v["value"][k].is_u64()), "{v}");
-    assert!(v["value"]["by_event"].is_object(), "{v}");
 }
 
 #[test]

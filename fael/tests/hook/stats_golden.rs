@@ -110,6 +110,28 @@ fn stats_days_json_is_the_series_alone() {
     );
 }
 
+/// The zero `value` block, checked apart: one more nested map passes the
+/// `json!` recursion limit, so it never stays inline in the golden test.
+fn assert_value_zero(value: &serde_json::Value, out: &str) {
+    assert_eq!(value["in_context_at_edit"], 0, "{out}");
+    assert_eq!(value["issues_closed"], 0, "{out}");
+    assert_eq!(value["handoffs_picked_up"], 0, "{out}");
+    assert_eq!(value["handoffs_by_client"], serde_json::json!({}), "{out}");
+    assert_eq!(value["handoffs_same_client"], 0, "{out}");
+    assert_eq!(value["handoffs_writer_unknown"], 0, "{out}");
+    assert_eq!(value["by_event"], serde_json::json!({}), "{out}");
+    assert_eq!(
+        value["cross_agent"],
+        serde_json::json!({"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}),
+        "{out}"
+    );
+    assert_eq!(
+        value["decision_by_state"],
+        serde_json::json!({"live": {"pushed": 0, "in_context_at_edit": 0}, "held": {"pushed": 0, "in_context_at_edit": 0}, "live_per_file": {"1": 0, "2": 0, "3": 0, ">3": 0}}),
+        "{out}"
+    );
+}
+
 #[test]
 fn stats_json_matches_golden_values() {
     // Maps (by_event/by_client) iterate a HashMap — compare values, not bytes.
@@ -176,27 +198,40 @@ fn stats_json_matches_golden_values() {
     );
     assert_eq!(v["context_by_client"], serde_json::json!({}));
     v.as_object_mut().unwrap().remove("context_by_client");
-    // also apart: provenance carries this run's recompute commands — the
-    // window is the usage day, the range its day..today in the viewer zone
+    assert_provenance_window(&mut v, &out);
+    // also apart (same recursion limit): value carries the handoff split —
+    // one more nested map passes the limit, so it is checked in pieces
+    let value = v.as_object_mut().unwrap().remove("value").unwrap();
+    assert_value_zero(&value, &out);
+    assert_rest_zero(v, &out);
+}
+
+/// Provenance carries this run's recompute commands — the window is the
+/// usage day, the range its day..today in the viewer zone.
+fn assert_provenance_window(v: &mut serde_json::Value, _out: &str) {
     let provenance = v.as_object_mut().unwrap().remove("provenance");
-    {
-        let p = provenance.as_ref().unwrap().as_object().unwrap();
-        for k in [
-            "outcome.prs_merged",
-            "outcome.prs_with_row",
-            "experience.fix_commits_linked",
-            "context_loop.repeats",
-        ] {
-            assert!(p.contains_key(k), "{k} missing: {provenance:?}");
-        }
-        // FAEL_TZ_OFFSET=+00:00 above, so the range is the usage day..today
-        assert!(
-            p["outcome.prs_merged"]
-                .as_str()
-                .is_some_and(|s| s.contains("merged:2026-09-26..")),
-            "{provenance:?}"
-        );
+    let p = provenance.as_ref().unwrap().as_object().unwrap();
+    for k in [
+        "outcome.prs_merged",
+        "outcome.prs_with_row",
+        "experience.fix_commits_linked",
+        "context_loop.repeats",
+    ] {
+        assert!(p.contains_key(k), "{k} missing: {provenance:?}");
     }
+    // FAEL_TZ_OFFSET=+00:00 above, so the range is the usage day..today
+    assert!(
+        p["outcome.prs_merged"]
+            .as_str()
+            .is_some_and(|s| s.contains("merged:2026-09-26..")),
+        "{provenance:?}"
+    );
+}
+
+/// Everything left after the apart-checked keys: `said` plus the top-level
+/// shape. Its own `json!` call — one literal with every kind passes the
+/// macro's recursion limit.
+fn assert_rest_zero(v: serde_json::Value, out: &str) {
     // its own json! call: one literal with every kind passes the macro's recursion limit
     let said = serde_json::json!({"row": {"said": 2, "earned": 0, "by_event": {"read": {"said": 2, "earned": 0}}}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1, "by_event": {"read": {"said": 1, "earned": 1}}}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "peer": {"said": 0, "earned": 0}, "inbox": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}, "handoff": {"said": 0, "earned": 0}, "briefdrift": {"said": 0, "earned": 0}, "retired": {"said": 0, "earned": 0}, "chunkbrief": {"said": 0, "earned": 0}});
     assert_eq!(
@@ -222,7 +257,6 @@ fn stats_json_matches_golden_values() {
             "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "by_client": {}, "shape_gate": 0, "shape_gate_rules": {}},
             "usage": {"since": "", "by_flag": []},
             "said": said,
-            "value": {"in_context_at_edit": 0, "issues_closed": 0, "handoffs_picked_up": 0, "by_event": {}, "cross_agent": {"other_session": {"pushed": 0, "in_context_at_edit": 0}, "other_worktree": {"pushed": 0, "in_context_at_edit": 0}, "written_during_session": {"pushed": 0, "in_context_at_edit": 0}, "other_client": {"pushed": 0, "in_context_at_edit": 0}, "by_client": {}, "writer_unknown": 0, "same_file": {"sessions_seen": 0, "files": 0, "session_pairs": 0}}, "decision_by_state": {"live": {"pushed": 0, "in_context_at_edit": 0}, "held": {"pushed": 0, "in_context_at_edit": 0}, "live_per_file": {"1": 0, "2": 0, "3": 0, ">3": 0}}},
         }),
         "{out}"
     );
