@@ -189,6 +189,7 @@ fn bump_keeps_sets_and_clears_revisit() {
         branch: None,
         sha: None,
         session: None,
+        client: None,
         shown: None,
     };
     let mut r = Row::new("tester-0000", "note", "sleeper", vec!["src/a.rs".into()]);

@@ -136,6 +136,7 @@ fn handle(line: &str) -> Option<Value> {
     let result = match msg["method"].as_str().unwrap_or("") {
         "initialize" => {
             roots::declare(&params);
+            crate::session::mark_mcp_client(params["clientInfo"]["name"].as_str());
             json!({
             // ponytail: echo the client's version — the tools use nothing version-specific
             "protocolVersion": params["protocolVersion"].as_str().unwrap_or(VERSION),

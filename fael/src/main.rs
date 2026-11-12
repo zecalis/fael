@@ -27,6 +27,7 @@ mod restore;
 mod schema;
 mod selfheal;
 mod session;
+mod session_env;
 mod sync;
 mod synonyms;
 mod unmerged;
@@ -214,6 +215,7 @@ pub(crate) fn stamp(r: &Repo) -> core::Stamp {
         branch: maintain::head_branch(&r.root),
         sha: git(&r.root, &["rev-parse", "--short", "HEAD"]),
         session: None,
+        client: None,
         shown: None,
     }
 }

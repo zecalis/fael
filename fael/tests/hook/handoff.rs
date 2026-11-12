@@ -30,7 +30,9 @@ fn session_start_lists_an_issue_routed_to_the_agent_client() {
         "fael claim {id}, do what fael find {id} says, then fael close {id} '<what you did, how>'"
     );
     assert!(
-        out.contains(&format!("start it: opencode run \"{task}\"")),
+        out.contains(&format!(
+            "start it: env -u CLAUDE_CODE_SESSION_ID -u CODEX_THREAD_ID opencode run \"{task}\""
+        )),
         "{out}"
     );
     assert!(

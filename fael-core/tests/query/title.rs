@@ -158,6 +158,7 @@ fn bump_keeps_the_title() {
             branch: None,
             sha: None,
             session: None,
+            client: None,
             shown: None,
         },
     );

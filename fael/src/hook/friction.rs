@@ -187,7 +187,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
     else {
         return;
     };
-    let session = crate::session::env_session();
+    let session = crate::session::env_session_for(Some(root.as_path()));
     // a call outside an agent session, or any call to a command no agent asks
     // an answer from, is a human's: counted as usage, never as friction — its
     // help and rejects too, or a `stats` read would show 100 per 100 with no
@@ -202,7 +202,7 @@ pub(crate) fn record_cli(argv: &[String], res: &Result<ExitCode, String>) {
         return;
     }
     append_row(record(
-        crate::session::env_client(),
+        crate::session::env_client_for(Some(root.as_path())),
         cmd,
         Some(&root),
         &session,

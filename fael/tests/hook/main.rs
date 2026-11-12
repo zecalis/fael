@@ -68,6 +68,7 @@ mod turn;
 mod usage_month;
 mod worktree_push;
 mod writer;
+mod writer_dual;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

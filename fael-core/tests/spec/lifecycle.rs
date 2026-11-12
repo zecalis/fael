@@ -13,6 +13,7 @@ fn setup(tag: &str) -> (PathBuf, Config, Stamp) {
         branch: None,
         sha: None,
         session: None,
+        client: None,
         shown: None,
     };
     (dir, Config::default(), st)

@@ -103,5 +103,7 @@ pub(crate) use changed::{
     PUSH_MAX_BYTES, files_changed, mark_dormant, mark_dormant_files, mark_dormant_start,
 };
 pub(crate) use fael_core::is_anchor;
-pub(crate) use state::{Edit, note_seen, now_rfc3339, session_edits, started_path, state_dir};
+pub(crate) use state::{
+    Edit, edits_path, note_seen, now_rfc3339, session_edits, started_path, state_dir,
+};
 pub(crate) use tally::{note_closed, note_filed};
