@@ -43,7 +43,7 @@ pub fn provenance(
     out.insert(
         "outcome.joined_since".into(),
         format!(
-            "{PR_LIST} --jq -r '[.[].createdAt, .[].mergedAt] | map(select(. != null)) | min | .[0:10]'"
+            "{PR_LIST} --jq '[.[].createdAt, .[].mergedAt] | map(select(. != null)) | min | .[0:10]'"
         ),
     );
     out.insert(
@@ -61,13 +61,13 @@ pub fn provenance(
     out.insert(
         "experience.fix_commits".into(),
         format!(
-            "git log origin/{default_branch} --no-merges --since={git_since} --format=%s | grep -c -E '^fix(\\(|:'"
+            "git log origin/{default_branch} --no-merges --since={git_since} --format=%s | grep -c -E '^fix(\\(|:)'"
         ),
     );
     out.insert(
         "experience.fix_commits_linked".into(),
         format!(
-            "git log origin/{default_branch} --no-merges --since={git_since} --format=%H\\ %s | grep -E '^\\S+ fix(\\(|:' | grep -E '\\(fael:|\\(#[0-9]+\\)' | wc -l # linked subset: message names a row id, or a close names its sha/(#N); full rule in fael-core/src/stats/experience.rs"
+            "git log origin/{default_branch} --no-merges --since={git_since} --format=%H\\ %s | grep -E '^\\S+ fix(\\(|:)' | grep -E '\\(fael:|\\(#[0-9]+\\)' | wc -l # linked subset: message names a row id, or a close names its sha/(#N); full rule in fael-core/src/stats/experience.rs"
         ),
     );
     out.insert(
@@ -89,9 +89,9 @@ pub fn provenance(
 fn prs_merged(range: Option<&str>) -> String {
     match range {
         Some(r) => format!(
-            "gh api \"search/issues?q=repo:{{{{owner}}}}/{{{{repo}}}}+type:pr+is:merged+merged:{r}&per_page=1\" --jq .total_count"
+            "gh api \"search/issues?q=repo:{{owner}}/{{repo}}+type:pr+is:merged+merged:{r}&per_page=1\" --jq .total_count"
         ),
-        None => "gh api \"search/issues?q=repo:{{owner}}/{{repo}}+type:pr+is:merged+merged:<YYYY-MM-DD..YYYY-MM-DD>&per_page=1\" --jq .total_count # unwindowed: pass --since YYYY-MM-DD to set <range>".into(),
+        None => "gh api \"search/issues?q=repo:{owner}/{repo}+type:pr+is:merged+merged:<YYYY-MM-DD..YYYY-MM-DD>&per_page=1\" --jq .total_count # unwindowed: pass --since YYYY-MM-DD to set <range>".into(),
     }
 }
 
@@ -144,5 +144,49 @@ mod tests {
     fn unwindowed_keeps_a_template_not_an_empty_string() {
         let p = provenance(None, "1970-01-01T00:00:00Z", "main", "");
         assert!(p["outcome.prs_merged"].contains("<YYYY-MM-DD..YYYY-MM-DD>"));
+    }
+
+    /// Placeholders are gh's single-brace `{owner}`, and `--jq` takes the
+    /// expression itself (no `-r`).
+    #[test]
+    fn gh_lines_use_single_brace_placeholders_and_no_jq_flag_r() {
+        for p in [
+            provenance(Some("2026-10-01..2026-11-12"), "x", "main", "2026-10-01"),
+            provenance(None, "x", "main", ""),
+        ] {
+            let m = &p["outcome.prs_merged"];
+            assert!(m.contains("{owner}/{repo}") && !m.contains("{{"), "{m}");
+            assert!(!p["outcome.joined_since"].contains("--jq -r"));
+        }
+    }
+
+    /// The fix-commit lines run: a real repo, real `git` and `grep`.
+    #[test]
+    fn fix_commit_lines_run_and_count() {
+        let d = std::env::temp_dir().join(format!("fael-prov-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let sh = |c: &str| {
+            let o = std::process::Command::new("sh")
+                .args(["-c", c])
+                .current_dir(&d)
+                .output()
+                .unwrap();
+            assert!(
+                o.status.success(),
+                "{c}: {}",
+                String::from_utf8_lossy(&o.stderr)
+            );
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+        sh("git init -q && git config user.email a@b && git config user.name n");
+        for m in ["fix: a", "fix(x): b (#3)", "feat: c"] {
+            sh(&format!("git commit -q --allow-empty -m '{m}'"));
+        }
+        sh("git update-ref refs/remotes/origin/main HEAD");
+        let p = provenance(None, "1970-01-01T00:00:00Z", "main", "");
+        assert_eq!(sh(&p["experience.fix_commits"]), "2");
+        assert_eq!(sh(&p["experience.fix_commits_linked"]), "1");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
