@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
+mod sections;
+
 /// What a pushed row is, looked up in the log of a repo it was pushed from.
 pub(crate) struct Info {
     pub(crate) kind: String,
@@ -153,6 +155,9 @@ pub(crate) fn render(s: &Stats, info: &HashMap<String, Info>, window: &str, flag
     delivered(&mut h, s, info);
     noise(&mut h, s, info);
     friction(&mut h, s);
+    sections::splits(&mut h, s);
+    sections::recent(&mut h, s);
+    sections::provenance(&mut h, s);
     h.push_str(
         "<footer><p>Offline, no scripts. Estimates carry ~ — they come from text length, \
          not a tokenizer.</p></footer>\n</main></body></html>\n",
@@ -303,8 +308,9 @@ mod tests {
     #[test]
     fn report_matches_the_golden_page() {
         let text = concat!(
-            "{\"ts\":\"2026-09-30T09:00:00.000Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"event\":\"read\",\"bytes\":40,\"est_tokens\":10,\"ids\":[\"A\",\"B\"]}\n",
-            "{\"ts\":\"2026-09-30T09:01:00.000Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"event\":\"edit\",\"bytes\":20,\"est_tokens\":5,\"ids\":[\"A\"]}\n",
+            "{\"ts\":\"2026-09-30T09:00:00.000Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"session\":\"abc123\",\"event\":\"read\",\"bytes\":40,\"est_tokens\":10,\"ids\":[\"A\",\"B\"]}\n",
+            "{\"ts\":\"2026-09-30T09:01:00.000Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"session\":\"abc123\",\"event\":\"edit\",\"bytes\":20,\"est_tokens\":5,\"ids\":[\"A\"],\"branch\":\"feat/x\",\"files\":[\"src/a.rs\"]}\n",
+            "{\"ts\":\"2026-09-30T09:01:30.000Z\",\"repo\":\"/work/real\",\"client\":\"claude\",\"session\":\"abc123\",\"event\":\"session-tokens\",\"real_tokens\":{\"input_tokens\":100,\"cache_creation_input_tokens\":20,\"cache_read_input_tokens\":30,\"output_tokens\":10}}\n",
             "{\"ts\":\"2026-09-30T09:02:00.000Z\",\"repo\":\"/work/real\",\"client\":\"cli\",\"event\":\"add\",\"ask\":\"warning\",\"bytes\":8,\"est_tokens\":2,\"ids\":[]}\n",
         );
         let p = core::stats::parse(text, std::path::Path::new("/work/state/usage.jsonl"), &[]);
@@ -327,6 +333,7 @@ mod tests {
             r.status = "open".into();
             r.noise = r.id == "A";
         }
+        s.provenance.insert("outcome.prs_merged".into(), "gh api \"search/issues?q=repo:{owner}/{repo}+type:pr+is:merged+merged:2026-09-30..2026-09-30&per_page=1\" --jq .total_count".into());
         let info = HashMap::from([(
             "A".to_string(),
             Info {
