@@ -9,16 +9,35 @@ use crate::core;
 /// say = no line.
 pub(super) fn value_line(s: &core::stats::Stats) -> Option<String> {
     let v = &s.value;
-    let parts: Vec<String> = [
-        ("in context at edit", v.in_context_at_edit),
-        ("issues closed", v.issues_closed),
-        ("handoffs picked up", v.handoffs_picked_up),
-        ("retired at touch", s.retired.at_touch),
-    ]
-    .iter()
-    .filter(|(_, n)| *n > 0)
-    .map(|(k, n)| format!("{k} ×{n}"))
-    .collect();
+    let mut parts: Vec<String> = Vec::new();
+    if v.in_context_at_edit > 0 {
+        parts.push(format!("in context at edit ×{}", v.in_context_at_edit));
+    }
+    if v.issues_closed > 0 {
+        parts.push(format!("issues closed ×{}", v.issues_closed));
+    }
+    if v.handoffs_picked_up > 0 {
+        let mut detail: Vec<String> = v
+            .handoffs_by_client
+            .iter()
+            .map(|(pair, n)| format!("{pair} {n}"))
+            .collect();
+        if v.handoffs_same_client > 0 {
+            detail.push(format!("same client {}", v.handoffs_same_client));
+        }
+        if v.handoffs_writer_unknown > 0 {
+            detail.push(format!("writer unknown {}", v.handoffs_writer_unknown));
+        }
+        let base = format!("handoffs picked up ×{}", v.handoffs_picked_up);
+        if detail.is_empty() {
+            parts.push(base);
+        } else {
+            parts.push(format!("{base} — {}", detail.join(" · ")));
+        }
+    }
+    if s.retired.at_touch > 0 {
+        parts.push(format!("retired at touch ×{}", s.retired.at_touch));
+    }
     (!parts.is_empty()).then(|| format!("fael since {}: {}", s.rounds.since, parts.join(" · ")))
 }
 

@@ -22,6 +22,7 @@ mod experience_tests;
 mod flow;
 mod friction;
 mod handoff;
+mod handoff_pair;
 mod kind;
 mod leak;
 mod lifecycle;

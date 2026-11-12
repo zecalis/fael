@@ -20,6 +20,15 @@ pub struct Value {
     pub issues_closed: usize,
     /// Distinct `*:handoff` rows a push handed to an agent.
     pub handoffs_picked_up: usize,
+    /// Those handoffs split by `"<writer>→<receiver>"` when both clients
+    /// are known and differ (writer from the row, receiver from the pushed
+    /// session — the same two resolutions as `cross.rs`).
+    pub handoffs_by_client: BTreeMap<String, usize>,
+    /// Of those, writer and receiver ran the same client.
+    pub handoffs_same_client: usize,
+    /// Of those, either side names no agent client (old rows, `cli` pushes,
+    /// session-less lines) so no pair can be placed.
+    pub handoffs_writer_unknown: usize,
     /// Which push event earns its tokens: each (session, row) pair is
     /// attributed once, to the event of the push that first handed it over,
     /// counting only lines stamped at or after the client's first `in-context`
@@ -195,31 +204,15 @@ pub(super) fn value(parsed: &Parsed, logs: &HashMap<String, Log>) -> Value {
                 .map(|r| r.id.as_str()),
         );
     }
-    let handoff_ids: HashMap<&str, HashSet<&str>> = logs
-        .iter()
-        .map(|(repo, log)| {
-            let h = log
-                .rows
-                .iter()
-                .filter(|r| r.key.as_deref().is_some_and(|k| k.ends_with(":handoff")));
-            (repo.as_str(), h.map(|r| r.id.as_str()).collect())
-        })
-        .collect();
-    let handoffs = parsed
-        .id_repos
-        .iter()
-        .filter(|(id, repos)| {
-            repos.iter().any(|repo| {
-                handoff_ids
-                    .get(repo.as_str())
-                    .is_some_and(|h| h.contains(id.as_str()))
-            })
-        })
-        .count();
+    let (handoffs, handoffs_by_client, handoffs_same_client, handoffs_writer_unknown) =
+        super::handoff_pair::handoff_split(parsed, logs);
     Value {
         in_context_at_edit: in_context.len(),
         issues_closed: closed.len(),
         handoffs_picked_up: handoffs,
+        handoffs_by_client,
+        handoffs_same_client,
+        handoffs_writer_unknown,
         by_event,
         cross_agent,
         decision_by_state: Default::default(),
@@ -300,6 +293,10 @@ mod tests {
             (v.in_context_at_edit, v.issues_closed, v.handoffs_picked_up),
             (3, 2, 1)
         );
+        // H1 names no writer: unknown, not a pair
+        assert!(v.handoffs_by_client.is_empty());
+        assert_eq!(v.handoffs_same_client, 0);
+        assert_eq!(v.handoffs_writer_unknown, 1);
         // s1: H1 and D1 came from session-start, I1 from read; s2: D1 from
         // read. Hits: (s1,D1) session-start, (s1,I1) and (s2,D1) read.
         let ev = |e: &str| (v.by_event[e].pushed, v.by_event[e].in_context_at_edit);
