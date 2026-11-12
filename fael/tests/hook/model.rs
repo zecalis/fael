@@ -98,6 +98,30 @@ fn codex_turn_context_model_stamps_the_live_run() {
     assert_eq!(run_model(&d).0.as_deref(), Some("gpt-6-luna"));
 }
 
+/// Codex keeps identity (`session_id`) as the thread id and the rollout path
+/// in `transcript_path`: a stop without `model` whose transcript tail holds
+/// `turn_context` still stamps that model on the thread's live run.
+#[test]
+fn codex_thread_id_with_transcript_path_stamps_model() {
+    let d = repo();
+    let t = d.join("rollout.jsonl");
+    std::fs::write(
+        &t,
+        serde_json::json!({"type": "turn_context", "payload": {"model": "gpt-6-luna"}}).to_string(),
+    )
+    .unwrap();
+    live_run(&d, "thread_1", None);
+    let input = format!(
+        r#"{{"cwd":{},"session_id":"thread_1","transcript_path":{}}}"#,
+        json(&wt(&d)),
+        json(&t)
+    );
+    let (ok, out, err) = fael(&d, &["hook", "stop", "--client", "codex"], &input);
+    assert!(ok, "{err}");
+    assert!(out.is_empty(), "stop says nothing: {out}");
+    assert_eq!(run_model(&d).0.as_deref(), Some("gpt-6-luna"));
+}
+
 #[test]
 fn a_start_time_model_always_wins() {
     let d = repo();

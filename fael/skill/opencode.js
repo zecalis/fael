@@ -215,12 +215,15 @@ const cost_of_messages = (msgs) => {
 
 // OpenCode 1: a function returning hooks, one object with a key per event.
 export const Fael = async ({ client, directory }) => {
-  // session start as RFC 3339 — the `session` string stop needs, and the same
-  // string edit sends so both key one edit list
+  // the native session id (`Session.Info.id` — V1 `data.id`, the event's
+  // `sessionID`) keys the edit list, the run row and FAEL_SESSION; the RFC 3339
+  // creation time (`data.time.created` as ISO) rides beside it as
+  // `session_start` for stop's issue-rule window. Old usage lines carry the
+  // RFC 3339 form in `session` — no rewrite, still read via `session`.
   const starts = new Map();
   const parents = new Map();
   const models = new Map();
-  const start = async (id) => {
+  const ensure = async (id) => {
     if (!starts.has(id)) {
       let t = Date.now();
       let p = null;
@@ -235,6 +238,13 @@ export const Fael = async ({ client, directory }) => {
       parents.set(id, p);
       models.set(id, m);
     }
+  };
+  const start = async (id) => {
+    await ensure(id);
+    return id;
+  };
+  const start_time = async (id) => {
+    await ensure(id);
     return starts.get(id);
   };
   // the cached model for tool/session hooks (no fetch on the hot path); stop
@@ -268,7 +278,7 @@ export const Fael = async ({ client, directory }) => {
       const id = input?.sessionID;
       if (!id) return;
       if (!briefs.has(id)) {
-        const r = hook("session-start", { cwd: directory, session: await start(id), model: await model(id) });
+        const r = hook("session-start", { cwd: directory, session: await start(id), session_start: await start_time(id), model: await model(id) });
         say(r);
         briefs.set(id, r.context ?? "");
       }
@@ -276,8 +286,9 @@ export const Fael = async ({ client, directory }) => {
     },
 
     // bash tool env: OpenCode exports no session id to the shell, so hand
-    // `fael add` its hook session (the same RFC 3339 `start(id)` string the
-    // usage lines use) via FAEL_SESSION. PTY shells carry no sessionID — no-op.
+    // `fael add` its native session id via FAEL_SESSION (chunk start stores
+    // it on the run; old RFC 3339 lines stay as they were). PTY shells carry
+    // no sessionID — no-op.
     "shell.env": async (input, output) => {
       const id = input?.sessionID;
       if (!id) return;
@@ -289,12 +300,14 @@ export const Fael = async ({ client, directory }) => {
 
     "tool.execute.after": async (input, output) => {
       const session = await start(input.sessionID);
+      const session_start = await start_time(input.sessionID);
       if (SEARCH.has(input.tool)) {
         // grep/glob/bash reads push like a shell read: the raw call goes to
         // `fael hook search`, which resolves the touched files server-side
         const r = hook("search", {
           cwd: directory,
           session,
+          session_start,
           model: await model(input.sessionID),
           tool: input.tool,
           tool_input: input.args ?? {},
@@ -307,7 +320,7 @@ export const Fael = async ({ client, directory }) => {
       const event = input.tool === "read" ? "read" : EDIT.has(input.tool) ? "edit" : null;
       const files = paths(input.tool, input.args);
       if (!event || files.length === 0) return;
-      const r = hook(event, { cwd: directory, session, model: await model(input.sessionID), files });
+      const r = hook(event, { cwd: directory, session, session_start, model: await model(input.sessionID), files });
       if (r.context) output.output += `\n\n${r.context}`;
       say(r);
     },
@@ -325,7 +338,7 @@ export const Fael = async ({ client, directory }) => {
       if (event.type === "session.compacted") {
         const root = await root_of(id, starts, parents, (x) => client.session.get({ path: { id: x } }));
         if (!root) return;
-        const e = { cwd: directory, session: await start(id), model: await model(id), source: "compact" };
+        const e = { cwd: directory, session: await start(id), session_start: await start_time(id), model: await model(id), source: "compact" };
         briefs.set(id, hook("session-start", e).context ?? "");
         return;
       }
@@ -347,6 +360,7 @@ export const Fael = async ({ client, directory }) => {
       const r = hook("stop", {
         cwd: directory,
         session: await start(id),
+        session_start: await start_time(id),
         model: m,
         cost,
         text,
@@ -366,12 +380,15 @@ export default {
   async setup(ctx) {
     const directory = ctx.location.directory;
 
-    // session start as RFC 3339 — the `session` string read/edit/search/stop
-    // need, and the same string edit sends so both key one edit list
+    // the native session id (`Session.Info.id`, the event's `sessionID`)
+    // keys the edit list, the run row and FAEL_SESSION; the RFC 3339 creation
+    // time (`time.created` as ISO) rides beside it as `session_start` for
+    // stop's issue-rule window. Old usage lines carry the RFC 3339 form in
+    // `session` — no rewrite, still read via `session`.
     const starts = new Map();
     const parents = new Map();
     const models = new Map();
-    const start = async (id) => {
+    const ensure = async (id) => {
       if (!starts.has(id)) {
         let t = Date.now();
         let p = null;
@@ -387,6 +404,13 @@ export default {
         parents.set(id, p);
         models.set(id, m);
       }
+    };
+    const start = async (id) => {
+      await ensure(id);
+      return id;
+    };
+    const start_time = async (id) => {
+      await ensure(id);
       return starts.get(id);
     };
     // the cached model for tool/session hooks (no fetch on the hot path); stop
@@ -425,7 +449,7 @@ export default {
       const id = event.sessionID;
       if (!id) return;
       if (!briefs.has(id)) {
-        const r = hook("session-start", { cwd: directory, session: await start(id), model: await model(id) });
+        const r = hook("session-start", { cwd: directory, session: await start(id), session_start: await start_time(id), model: await model(id) });
         say(id, r);
         briefs.set(id, r.context ?? "");
       }
@@ -442,7 +466,7 @@ export default {
       const id = event.sessionID;
       const text = event.prompt?.text;
       if (!id || !text) return;
-      const r = hook("prompt", { cwd: directory, session: await start(id), model: await model(id), text });
+      const r = hook("prompt", { cwd: directory, session: await start(id), session_start: await start_time(id), model: await model(id), text });
       if (r.context) event.prompt.text += `\n\n${r.context}`;
     });
 
@@ -495,12 +519,14 @@ export default {
 
     await ctx.tool.hook("execute.after", async (event) => {
       const session = await start(event.sessionID);
+      const session_start = await start_time(event.sessionID);
       if (SEARCH.has(event.tool)) {
         // grep/glob/shell reads push like a shell read: the raw call goes to
         // `fael hook search`, which resolves the touched files server-side
         const r = hook("search", {
           cwd: directory,
           session,
+          session_start,
           model: await model(event.sessionID),
           tool: event.tool,
           tool_input: event.input ?? {},
@@ -513,7 +539,7 @@ export default {
       const name = event.tool === "read" ? "read" : EDIT.has(event.tool) ? "edit" : null;
       const files = paths(event.tool, event.input);
       if (!name || files.length === 0) return;
-      const r = hook(name, { cwd: directory, session, model: await model(event.sessionID), files });
+      const r = hook(name, { cwd: directory, session, session_start, model: await model(event.sessionID), files });
       append(event, r.context);
       say(event.sessionID, r);
     });
@@ -539,7 +565,7 @@ export default {
         // compaction dropped the pushed rows from context: `source: "compact"`
         // makes fael forget what it said there, so the next read tells them again
         if (event.type === "session.compacted") {
-          const e = { cwd: directory, session: await start(id), model: await model(id), source: "compact" };
+          const e = { cwd: directory, session: await start(id), session_start: await start_time(id), model: await model(id), source: "compact" };
           briefs.set(id, hook("session-start", e).context ?? "");
           continue;
         }
@@ -558,6 +584,7 @@ export default {
         say(id, hook("stop", {
           cwd: directory,
           session: await start(id),
+          session_start: await start_time(id),
           model: m,
           cost: msgCost ?? c,
           text,
