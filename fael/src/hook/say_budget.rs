@@ -67,7 +67,7 @@ fn rows_survive_overlap_and_drift_and_a_commit_reply_cuts_in_card_order() {
     let cost = |ls: &[Line]| -> usize { ls.iter().map(|l| est_tokens(&l.text)).sum() };
     // rows + overlap + drift at the edit: the push stays within budget with
     // the rows intact (rows are Never-cut, overlap Last(6), drift First(7)).
-    let lines = pick(&[0, 7, 11]);
+    let lines = pick(&[0, 7, 12]);
     let keep = cost(&pick(&[0]));
     let run_edit = |budget: usize| {
         let p = seen("s.seen");

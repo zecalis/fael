@@ -81,7 +81,7 @@ fn cut_ranks_are_unique_per_kind() {
     ranks.dedup();
     assert_eq!(ranks.len(), n);
     assert_eq!(
-        n, 9,
-        "notice, fixed, ask, cited, checkpoint, inbox, overlap, briefdrift, peer"
+        n, 10,
+        "notice, fixed, ask, cited, checkpoint, inbox, overlap, briefdrift, peer, handoff"
     );
 }

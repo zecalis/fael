@@ -147,6 +147,10 @@ pub(crate) fn policy(k: &Kind) -> Policy {
                 &[At::Search],
             )
         },
+        Kind::Handoff => Policy {
+            cut: Cut::First(9),
+            ..card(SayKind::Handoff, Key, Some("fael add note"), &[At::Search])
+        },
         Kind::ChunkBrief { .. } => card(
             SayKind::ChunkBrief,
             Key,
