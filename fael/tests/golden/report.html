@@ -28,10 +28,35 @@ th{color:var(--mute);font-weight:500}td.n{text-align:right}</style></head><body>
 <section><h2>3. Did fael add friction?</h2>
 <ul>
 <li>Rows written (<code>add</code> over CLI or MCP, imported and synced rows included): 0</li>
-<li>Sessions that edited files: 0, of which 0 left no row</li>
+<li>Sessions that edited files: 1, of which 0 left no row (1 in removed worktrees, not judged)</li>
 <li>Rejects (agent calls): 0 · shape gate ×0 · warnings ×1</li>
 </ul>
 <p>fael never blocks a turn, so it adds no round after the agent is done.</p>
+</section>
+<section><h2>4. Sessions with an edit, split two ways</h2>
+<p>rows pushed ≥1 against none:</p>
+<div class="wrap"><table><thead><tr><th>group</th><th>sessions</th><th>edits</th><th>calls</th><th>rejects/100</th><th>rows filed</th><th>no row</th><th>merged PR</th></tr></thead><tbody>
+<tr><td>rows pushed</td><td class="n">1</td><td class="n">1</td><td class="n">0</td><td class="n">n/a</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+<tr><td>none pushed</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">n/a</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+</tbody></table></div>
+<p class="none">does not show: an effect of fael — the groups differ in task, client and repo</p>
+<p>inside a chunk run against outside:</p>
+<div class="wrap"><table><thead><tr><th>group</th><th>sessions</th><th>edits</th><th>calls</th><th>rejects/100</th><th>rows filed</th><th>no row</th><th>merged PR</th></tr></thead><tbody>
+<tr><td>inside a run</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">n/a</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+<tr><td>outside</td><td class="n">1</td><td class="n">1</td><td class="n">0</td><td class="n">n/a</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+</tbody></table></div>
+<p class="none">does not show: an effect of fael — the groups differ in task, client and repo</p>
+</section>
+<section><h2>5. Ten most recent sessions</h2>
+<div class="wrap"><table><thead><tr><th>session</th><th>pushed</th><th>rows</th><th>PR</th><th>transcript</th></tr></thead><tbody>
+<tr><td>abc123 (claude)<br>2026-09-30T09:00:00.000Z → 2026-09-30T09:01:00.000Z</td><td>15 est: edit ~5, read ~10</td><td>shown 2 · scored 0 · in context 0 · acted 0 · edits 1 · calls 0 · rejects 0</td><td>PR unknown (no PR list for this repo)</td><td>in 100 · cache 50 · out 10</td></tr>
+</tbody></table></div>
+</section>
+<section><h2>6. Provenance</h2>
+<p>How to recompute every git/gh-backed number.</p>
+<div class="wrap"><table><thead><tr><th>field</th><th>shell line</th></tr></thead><tbody>
+<tr><td><code>outcome.prs_merged</code></td><td><code>gh api &quot;search/issues?q=repo:{owner}/{repo}+type:pr+is:merged+merged:2026-09-30..2026-09-30&amp;per_page=1&quot; --jq .total_count</code></td></tr>
+</tbody></table></div>
 </section>
 <footer><p>Offline, no scripts. Estimates carry ~ — they come from text length, not a tokenizer.</p></footer>
 </main></body></html>

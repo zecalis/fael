@@ -54,6 +54,14 @@ fn report_writes_the_window_it_was_asked_for() {
     assert!(!page.contains("fael find OLD"), "{page}");
     assert!(page.contains("fael stats --json --since 2026-09-30"));
     assert!(!page.contains("<script"));
+    assert!(
+        page.contains("Sessions with an edit, split two ways"),
+        "{page}"
+    );
+    assert!(page.contains("does not show: an effect of fael"), "{page}");
+    assert!(page.contains("Ten most recent sessions"), "{page}");
+    assert!(page.contains("Provenance"), "{page}");
+    assert!(page.contains("outcome.prs_merged"), "{page}");
 }
 
 #[test]
