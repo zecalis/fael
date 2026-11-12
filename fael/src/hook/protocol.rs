@@ -15,11 +15,19 @@ use std::process::ExitCode;
 pub(crate) struct Event {
     #[serde(default)]
     pub(crate) cwd: Option<String>,
-    /// stop: a transcript path (birthtime = session start) or an RFC 3339
-    /// start time · edit: send the same string as stop — it keys the session's
-    /// edit list · read: unused (reuse suppression is the client's job)
+    /// stop: a transcript path (birthtime = session start), an RFC 3339
+    /// start time (old OpenCode wire), or a native session id (Claude stem,
+    /// Codex thread id, OpenCode `Session.Info.id` — V1 `data.id`, V2 `id`).
+    /// edit: send the same string as stop — it keys the session's edit list.
+    /// read: unused (reuse suppression is the client's job)
     #[serde(default)]
     pub(crate) session: Option<String>,
+    /// OpenCode's RFC 3339 creation time (`Session.Info.time.created` as ISO),
+    /// sent beside the native `session` id. `stop::session_start` reads it for
+    /// the issue-rule window — the native id alone carries no timestamp.
+    /// Old wire (RFC 3339 in `session`) still reads via `session`.
+    #[serde(default)]
+    pub(crate) session_start: Option<String>,
     /// Adapter-only transcript for Codex's Stop start-time evidence. Identity
     /// stays the thread id. Not a field in the neutral wire protocol.
     #[serde(skip)]

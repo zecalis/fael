@@ -1,5 +1,7 @@
 //! OpenCode adapter: V1 + V2 tool shapes record their files, and the
 //! adapter replies what neutral does, byte for byte.
+//! Native sessions (`Session.Info.id`) join to runs from 0.115.0 — old
+//! RFC 3339 wire in `session` still reads, never stored.
 
 use super::{fael, flagged, repo, state};
 
@@ -305,4 +307,61 @@ fn opencode_child_stop_with_agent_stashes_for_its_session() {
     let (ok, out, err) = fael(&d, &["hook", "stop"], &body);
     assert!(ok, "{err} {out}");
     assert!(flagged(&d, &format!("\"{S}\"")), "main stop did not stash");
+}
+
+/// oc-native: the plugin sends the native id (`Session.Info.id` — V1
+/// `data.id`, V2 `id`, the event's `sessionID`) as `session` and its RFC 3339
+/// creation time as `session_start`. The stop report lands model/cost/client
+/// on the run `chunk start` bound to that id, and the fix line still fires.
+#[test]
+fn opencode_native_session_updates_run_and_still_fires_fix() {
+    let d = repo();
+    with_row(&d);
+    let wt = d.canonicalize().unwrap_or_else(|_| d.clone());
+    let db = d.join(".git/fael/crew.db");
+    std::fs::create_dir_all(db.parent().unwrap()).unwrap();
+    let c = rusqlite::Connection::open(&db).unwrap();
+    c.execute_batch(
+        "CREATE TABLE run(id INTEGER PRIMARY KEY, worktree TEXT, session TEXT,
+          ended TEXT, last_seen TEXT, model TEXT, cost REAL, client TEXT);",
+    )
+    .unwrap();
+    c.execute(
+        "INSERT INTO run(worktree, session, ended, model, cost, client)
+         VALUES (?1, ?2, NULL, NULL, NULL, NULL)",
+        rusqlite::params![wt.to_string_lossy(), "ses_opencode_123"],
+    )
+    .unwrap();
+    drop(c);
+    // model + cost land on the session-bound run
+    let body = serde_json::json!({"cwd": d, "client": "opencode",
+        "session": "ses_opencode_123", "session_start": "2026-01-02T00:00:00Z",
+        "model": "opencode-go/m", "cost": 0.5,
+        "text": "wired", "reply": "wired"})
+    .to_string();
+    let (ok, out, err) = fael(&d, &["hook", "stop"], &body);
+    assert!(ok, "{err} {out}");
+    let c = rusqlite::Connection::open(&db).unwrap();
+    let (model, cost, client, seen): (Option<String>, Option<f64>, Option<String>, Option<String>) =
+        c.query_row("SELECT model, cost, client, last_seen FROM run", [], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        })
+        .unwrap();
+    assert_eq!(model.as_deref(), Some("opencode-go/m"), "{model:?}");
+    assert_eq!(cost, Some(0.5));
+    assert_eq!(client.as_deref(), Some("opencode"));
+    assert!(seen.is_some(), "liveness still stamped");
+    drop(c);
+    // the fix line still fires for a native session id
+    let bug = "I found a bug in login";
+    let body = serde_json::json!({"cwd": d, "client": "opencode",
+        "session": "ses_opencode_123", "session_start": "2026-01-02T00:00:00Z",
+        "text": bug, "reply": bug})
+    .to_string();
+    let (ok, out, err) = fael(&d, &["hook", "stop"], &body);
+    assert!(ok, "{err} {out}");
+    assert!(
+        flagged(&d, "\"ses_opencode_123\""),
+        "native stop did not stash a bug line"
+    );
 }

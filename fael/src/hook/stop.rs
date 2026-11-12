@@ -34,10 +34,18 @@ pub(super) fn seen(e: &Event) {
     // the model this turn ran: stdin first (explicit), else the transcript
     // tail — both client-reported, never inferred. Stamps live runs whose
     // model is still NULL, so a start-time --model/approval/hint always wins.
+    // Codex keeps identity (`session`) as the thread id and the rollout path
+    // in `transcript`: try the path first, else the session (Claude's path,
+    // old OpenCode RFC3339 — never a timestamp).
     let model = e.model.clone().filter(|m| !m.is_empty()).or_else(|| {
-        e.session
+        e.transcript
             .as_deref()
             .and_then(super::askstats::transcript_model)
+            .or_else(|| {
+                e.session
+                    .as_deref()
+                    .and_then(super::askstats::transcript_model)
+            })
     });
     seen_held(session, model.as_deref());
     let Some(r) = e
@@ -251,10 +259,16 @@ fn signal(
 }
 
 /// The session start in ms: an RFC 3339 time (neutral callers without a
-/// transcript), or a transcript file's birthtime (fallback: mtime). `None` =
-/// no usable session.
+/// transcript, old OpenCode wire in `session`, new OpenCode wire in
+/// `session_start`), or a transcript file's birthtime (fallback: mtime).
+/// `None` = no usable session. Codex keeps the thread id in `session` and
+/// the rollout path in `transcript`, so the path is read first.
 fn session_start(e: &Event) -> Option<i64> {
-    let s = e.transcript.as_deref().or(e.session.as_deref())?;
+    let s = e
+        .transcript
+        .as_deref()
+        .or(e.session_start.as_deref())
+        .or(e.session.as_deref())?;
     core::ts_ms(s).or_else(|| file_birth_ms(Path::new(s)).map(|m| m as i64))
 }
 
