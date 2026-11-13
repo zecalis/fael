@@ -40,10 +40,9 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ("SessionStart", None, "session-start"),
     // a prompt naming an open key gets one pointer line (01M3WCK7N)
     ("UserPromptSubmit", None, "prompt"),
-    ("PostToolUse", Some("Read"), "read"),
-    // fresh agents read through search tools and the shell: files a grep,
-    // glob or cat/sed touched push too
-    ("PostToolUse", Some("Glob|Grep|Bash"), "search"),
+    // the shell only: a cat/sed touch pushes, a commit or shell write speaks.
+    // Read/Glob/Grep say nothing, so they spawn no process.
+    ("PostToolUse", Some("Bash"), "search"),
     // every file-writing tool, or stop sees no edits (only the git fallback)
     (
         "PostToolUse",
@@ -52,6 +51,13 @@ const CLAUDE_HOOKS: &[(&str, Option<&str>, &str)] = &[
     ),
     // a review's findings, each as a ready `fael add issue` (Claude Code only)
     ("PostToolUse", Some("ReportFindings"), "review"),
+];
+/// Claude wiring older installs left that no longer fires: (event, matcher, fael
+/// hook event). `hooks_json` drops fael's entry from that group, then the
+/// current table adds the new one.
+const CLAUDE_RETIRED: &[(&str, &str, &str)] = &[
+    ("PostToolUse", "Read", "read"),
+    ("PostToolUse", "Glob|Grep|Bash", "search"),
 ];
 /// Codex reads through the shell — no read hook; file edits are apply_patch.
 /// Shell calls match as `Bash`, so the search hook fires there like on Claude.
@@ -289,13 +295,20 @@ fn run(c: &Ctx, targets: &[&str]) -> Result<(), String> {
                     &c.home.join(".claude/settings.json"),
                     "claude",
                     CLAUDE_HOOKS,
+                    CLAUDE_RETIRED,
                 )?;
                 skills.push(c.home.join(".claude/skills"));
             }
             "codex" => {
                 codex::codex_mcp(c)?;
                 let before = c.changed.get();
-                hooks::hooks_json(c, &c.home.join(".codex/hooks.json"), "codex", CODEX_HOOKS)?;
+                hooks::hooks_json(
+                    c,
+                    &c.home.join(".codex/hooks.json"),
+                    "codex",
+                    CODEX_HOOKS,
+                    &[],
+                )?;
                 // only a changed hook file needs a fresh trust
                 if c.changed.get() > before {
                     out!(

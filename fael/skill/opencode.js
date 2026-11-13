@@ -33,8 +33,8 @@ function hook(event, e) {
 // (`shell`, `patch`, `path`). `fael` matches shell names case-insensitively and
 // knows both, so one set covers the two.
 const EDIT = new Set(["edit", "write", "patch", "apply_patch"]);
-const SEARCH = new Set(["grep", "glob", "shell", "bash"]);
-// shell tools only, so the shell env below never picks a grep's session
+// shell tools only: read/grep/glob say nothing, so they spawn no `fael` (the
+// shell env below also never picks a grep's session)
 const SHELL = new Set(["shell", "bash"]);
 
 // patch carries no file path: read the paths off the patch headers, the same
@@ -301,8 +301,8 @@ export const Fael = async ({ client, directory }) => {
     "tool.execute.after": async (input, output) => {
       const session = await start(input.sessionID);
       const session_start = await start_time(input.sessionID);
-      if (SEARCH.has(input.tool)) {
-        // grep/glob/bash reads push like a shell read: the raw call goes to
+      if (SHELL.has(input.tool)) {
+        // a shell read pushes: the raw call goes to
         // `fael hook search`, which resolves the touched files server-side
         const r = hook("search", {
           cwd: directory,
@@ -317,7 +317,7 @@ export const Fael = async ({ client, directory }) => {
         say(r);
         return;
       }
-      const event = input.tool === "read" ? "read" : EDIT.has(input.tool) ? "edit" : null;
+      const event = EDIT.has(input.tool) ? "edit" : null;
       const files = paths(input.tool, input.args);
       if (!event || files.length === 0) return;
       const r = hook(event, { cwd: directory, session, session_start, model: await model(input.sessionID), files });
@@ -520,8 +520,8 @@ export default {
     await ctx.tool.hook("execute.after", async (event) => {
       const session = await start(event.sessionID);
       const session_start = await start_time(event.sessionID);
-      if (SEARCH.has(event.tool)) {
-        // grep/glob/shell reads push like a shell read: the raw call goes to
+      if (SHELL.has(event.tool)) {
+        // a shell read pushes: the raw call goes to
         // `fael hook search`, which resolves the touched files server-side
         const r = hook("search", {
           cwd: directory,
@@ -536,7 +536,7 @@ export default {
         say(event.sessionID, r);
         return;
       }
-      const name = event.tool === "read" ? "read" : EDIT.has(event.tool) ? "edit" : null;
+      const name = EDIT.has(event.tool) ? "edit" : null;
       const files = paths(event.tool, event.input);
       if (!name || files.length === 0) return;
       const r = hook(name, { cwd: directory, session, session_start, model: await model(event.sessionID), files });

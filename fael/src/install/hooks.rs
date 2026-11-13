@@ -19,6 +19,7 @@ pub(crate) fn hooks_json(
     path: &Path,
     client: &str,
     want: &[(&str, Option<&str>, &str)],
+    retired: &[(&str, &str, &str)],
 ) -> Result<(), String> {
     let mut root: Value = match std::fs::read_to_string(path) {
         Ok(s) => match serde_json::from_str(&s) {
@@ -47,6 +48,14 @@ pub(crate) fn hooks_json(
         return Ok(());
     };
     let mut changed = vec![];
+    for (event, matcher, sub) in retired {
+        let Some(groups) = hooks.get_mut(*event).and_then(Value::as_array_mut) else {
+            continue;
+        };
+        if retire_hook(groups, matcher, sub, client) {
+            changed.push(format!("{event}({matcher}) retired"));
+        }
+    }
     for (event, matcher, sub) in want {
         let cmd = c.command(sub, client);
         let list = hooks.entry(*event).or_insert_with(|| json!([]));
@@ -65,6 +74,28 @@ pub(crate) fn hooks_json(
     c.write(path, &body)?;
     c.say(&format!("hooks {}", changed.join(", ")), path);
     Ok(())
+}
+
+/// Drop fael's `sub` hook from the groups whose matcher is exactly `matcher`
+/// (wiring an older install left); other hooks in those groups stay. True when
+/// it removed one.
+fn retire_hook(groups: &mut Vec<Value>, matcher: &str, sub: &str, client: &str) -> bool {
+    let suffix = format!(" hook {sub} --client {client}");
+    let bare = format!(" hook {sub}");
+    let mut removed = false;
+    for g in groups.iter_mut().filter(|g| g["matcher"] == json!(matcher)) {
+        if let Some(hs) = g["hooks"].as_array_mut() {
+            let n = hs.len();
+            hs.retain(|h| {
+                !h["command"].as_str().is_some_and(|s| {
+                    s.contains("fael") && (s.ends_with(&suffix) || s.ends_with(&bare))
+                })
+            });
+            removed |= hs.len() != n;
+        }
+    }
+    groups.retain(|g| g["hooks"].as_array().is_none_or(|h| !h.is_empty()));
+    removed
 }
 
 /// Point this event's fael hook at `cmd`, wherever it sits in `groups`:
