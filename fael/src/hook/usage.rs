@@ -22,7 +22,11 @@ pub(crate) fn record_usage(
     ids: &[String],
     meta: &UsageMeta,
 ) {
-    asks::append_row(usage_row(client, event, repo, text, ids, meta));
+    let mut row = usage_row(client, event, repo, text, ids, meta);
+    if let Some(ms) = super::protocol::elapsed_ms() {
+        row["ms"] = ms.into();
+    }
+    asks::append_row(row);
 }
 
 /// A pull that showed rows (`find`, `mcp-find`, `kickoff`; PLAN-fael-say-gate

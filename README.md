@@ -70,7 +70,7 @@ How it behaves:
   conflict on. No server, no account. `fael sync` carries rows between clones through your own
   git remote (`refs/fael/*`, never on code branches); `fael import` moves a log by hand.
 
-Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; a hook call takes about 10 ms on a repo with a thousand rows (a session start, once, about 100 ms).
+Works with **Claude Code, Codex and OpenCode**, and any MCP host. One small binary; a hook call that put something in context took 26 ms at p50 and 37 ms at p95 at an edit (n 12), a session start 64 / 70 ms (n 6) — `cmd: fael stats --json | jq -c .latency`, date: 2026-11-13, a small sample, wall time of the fael process, silent hooks not counted; your own number is in `fael stats` (`hook time`).
 
 ## What you get
 

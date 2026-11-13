@@ -79,7 +79,16 @@ pub(crate) struct Event {
     pub(crate) source: Option<String>,
 }
 
+static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// Milliseconds since `cmd` was entered — the `ms` a usage row carries.
+/// `None` outside a hook process.
+pub(crate) fn elapsed_ms() -> Option<u64> {
+    START.get().map(|t| t.elapsed().as_millis() as u64)
+}
+
 pub(crate) fn cmd(event: &str, client: Option<String>) -> ExitCode {
+    let _ = START.set(std::time::Instant::now());
     let mut stdin = String::new();
     if std::io::stdin().read_to_string(&mut stdin).is_err() {
         return fail_open(event, client.as_deref());

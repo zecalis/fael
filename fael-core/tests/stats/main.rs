@@ -105,6 +105,7 @@ fn json_shape_keys_and_types_are_frozen() {
             "flow",
             "friction",
             "handoff_runs",
+            "latency",
             "lifecycle",
             "models",
             "non_english_rows",

@@ -129,6 +129,10 @@ pub struct Stats {
     pub retired: Retired,
     /// The value line `fael stats` prints first (`value.rs`).
     pub value: Value,
+    /// Wall time of the fael process per hook event, ms (`latency.rs`): only
+    /// hooks that put something in context write a row, so silent hooks are
+    /// not counted. Not the client's own time.
+    pub latency: BTreeMap<String, super::Latency>,
     /// Open decisions/issues pushed ≥ `UNUSED_PUSHES` times, never in context
     /// at an edit — for a human to close or bump (`unused.rs`).
     pub unused_rows: Vec<UnusedRow>,
@@ -256,6 +260,7 @@ pub fn aggregate(
         capture,
         retired,
         value,
+        latency: super::latency(parsed),
         unused_rows: unused(parsed, logs),
         said: yields(parsed, logs),
         friction: friction(parsed),
