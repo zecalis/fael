@@ -1,0 +1,22 @@
+{
+  "session_id": "<session-id>",
+  "transcript_path": "/redacted/projects/<session-id>.jsonl",
+  "cwd": "<redacted-cwd>",
+  "scratchpad_dir": "<redacted-scratchpad>",
+  "prompt_id": "<redacted-prompt-id>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "<redacted-cwd>/src/a.rs",
+    "old_string": "// a\n",
+    "new_string": "// a\n// probe\n",
+    "replace_all": false
+  },
+  "tool_response": "<redacted-tool-response>",
+  "tool_use_id": "<redacted-tool-use-id>",
+  "duration_ms": 9
+}

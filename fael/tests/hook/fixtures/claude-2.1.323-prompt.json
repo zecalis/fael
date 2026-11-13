@@ -1,0 +1,10 @@
+{
+  "session_id": "<session-id>",
+  "transcript_path": "/redacted/projects/<session-id>.jsonl",
+  "cwd": "<redacted-cwd>",
+  "scratchpad_dir": "<redacted-scratchpad>",
+  "prompt_id": "<redacted-prompt-id>",
+  "permission_mode": "acceptEdits",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "<redacted-prompt>"
+}
