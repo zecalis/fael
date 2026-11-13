@@ -627,8 +627,8 @@ pub(crate) fn done(
         let t = named.as_deref().unwrap_or("the trunk");
         print!("{}", crate::chunk_pr_files::none_claimed(t, pr, uid));
     }
-    print!("{}", outside.unwrap_or_default());
-    print!("{}", dodge_note(r, &st, uid, diff.as_ref(), pr, handoff));
+    let notes = done_notes(r, &st, uid, diff.as_ref(), pr, handoff, outside);
+    print!("{notes}");
     if let (Some(trunk), Some(_)) = (trunk, pr) {
         conflict_note(&r.root, &trunk, here.branch.unwrap_or_default());
     }
@@ -652,6 +652,33 @@ fn dodge_note(
     st.dodge(uid, d, &shared)
         .map(|hits| crate::chunk_prs::dodge_text(&hits, handoff))
         .unwrap_or_default()
+}
+
+/// pr-cross: `done` against done chunks whose PR is still open. Warn only,
+/// never blocks done. No `gh` call unless a done PR is still open.
+fn pr_open_note(r: &Repo, st: &Store, uid: &str, diff: Option<&Vec<String>>) -> String {
+    let Some(d) = diff else {
+        return String::new();
+    };
+    super::chunk_pr_open::open_lines(st, &r.root, uid, d)
+}
+
+/// The tail of `done`: outside-scope fact plus live-run dodge plus open done PRs.
+fn done_notes(
+    r: &Repo,
+    st: &Store,
+    uid: &str,
+    diff: Option<&Vec<String>>,
+    pr: Option<i64>,
+    handoff: &str,
+    outside: Option<String>,
+) -> String {
+    format!(
+        "{}{}{}",
+        outside.unwrap_or_default(),
+        dodge_note(r, st, uid, diff, pr, handoff),
+        pr_open_note(r, st, uid, diff)
+    )
 }
 
 /// What `uid`'s run on `branch` touched (None = the cwd's HEAD): its trunk diff since the

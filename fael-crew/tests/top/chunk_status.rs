@@ -398,3 +398,47 @@ fn status_without_uid_reads_the_worktrees_live_run() {
     let (ok, _, err) = fael(&d, &["chunk", "status"]);
     assert!(!ok && err.contains(&c) && err.contains(&e), "{err}");
 }
+
+/// pr-cross: `status` names a done chunk's still-open PR touching this run's files.
+#[test]
+fn status_names_open_done_prs_touching_same_files() {
+    let d = repo();
+    git(&d, &["update-ref", "refs/remotes/origin/main", "main"]);
+    git(
+        &d,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    let a = chunk(&d, "a work");
+    let b = chunk(&d, "b work");
+    let (ok, _, err) = fael(&d, &["chunk", "start", &a]);
+    assert!(ok, "{err}");
+    git(&d, &["switch", "-q", "-c", "lane-a"]);
+    std::fs::write(d.join("src/x.rs"), "a\n").unwrap();
+    git(&d, &["add", "src/x.rs"]);
+    git(&d, &["commit", "-qm", "a touch"]);
+    let (ok, _, err) = fael(
+        &d,
+        &["chunk", "done", &a, "did a", "--left", "none", "--pr", "7"],
+    );
+    assert!(ok, "{err}");
+    git(&d, &["switch", "-q", "main"]);
+    let (ok, _, err) = fael(&d, &["chunk", "start", &b]);
+    assert!(ok, "{err}");
+    let out = Command::new(crate::common::fael_bin())
+        .args(["chunk", "status", &b])
+        .current_dir(&d)
+        .env("FAEL_STATE_DIR", d.join("state"))
+        .env("FAEL_GH_PR_FILES", "src/x.rs")
+        .env_remove("FAEL_DIR")
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        out.contains(&format!("also in PR #7 ({a}): src/x.rs")),
+        "{out}"
+    );
+}
