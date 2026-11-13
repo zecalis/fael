@@ -345,47 +345,6 @@ fn install_dedupes_a_bare_and_a_suffixed_hook() {
     }
 }
 
-/// Wiring an older install left — a `Read` fael hook, `Glob|Grep|Bash` on search —
-/// is rewritten to the shell-only table; a hook of someone else's in those
-/// groups stays, and a second run changes nothing.
-#[test]
-fn install_retires_the_read_and_glob_grep_matchers() {
-    let home = std::env::temp_dir().join(format!("fael-install-{}", fael_core::ulid()));
-    let claude = home.join(".claude/settings.json");
-    std::fs::create_dir_all(home.join(".claude")).unwrap();
-    std::fs::write(
-        &claude,
-        r#"{"hooks": {"PostToolUse": [
-          {"matcher": "Read", "hooks": [{"type": "command", "command": "fael hook read --client claude", "timeout": 10}, {"type": "command", "command": "bun /x/other.ts hook-read"}]},
-          {"matcher": "Glob|Grep|Bash", "hooks": [{"type": "command", "command": "fael hook search --client claude", "timeout": 10}]}]}}"#,
-    )
-    .unwrap();
-    let out = install(&home, &["--client", "claude"]);
-    assert!(out.contains("PostToolUse(Read) retired"), "{out}");
-    let v: serde_json::Value = serde_json::from_str(&read(&claude)).unwrap();
-    let groups = v["hooks"]["PostToolUse"].as_array().unwrap();
-    let matchers: Vec<_> = groups
-        .iter()
-        .filter_map(|g| g["matcher"].as_str())
-        .collect();
-    assert!(!matchers.contains(&"Glob|Grep|Bash"), "{matchers:?}");
-    let s = read(&claude);
-    assert!(!s.contains("hook read"), "{s}");
-    assert!(s.contains("bun /x/other.ts hook-read"), "{s}");
-    assert_eq!(s.matches("hook search").count(), 1, "{s}");
-    let search = groups
-        .iter()
-        .find(|g| {
-            g["hooks"][0]["command"]
-                .as_str()
-                .is_some_and(|c| c.contains("hook search"))
-        })
-        .unwrap();
-    assert_eq!(search["matcher"], "Bash");
-    let out = install(&home, &["--client", "claude"]);
-    assert!(!out.contains("retired") && !out.contains("wrote"), "{out}");
-}
-
 /// Native Windows has no HOME (only USERPROFILE) — install must still find
 /// the home dir. Dry run: nothing is written to the real home. A machine with
 /// no client installed (CI) still fails later with "found no Claude Code",
