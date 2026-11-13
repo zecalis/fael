@@ -255,7 +255,7 @@ fn assert_rest_zero(v: serde_json::Value, out: &str) {
             "unused_rows": [],
             "flow": {"filed_to_close": {"median": 0, "p90": 0, "n": 0}, "start_to_done": {"median": 0, "p90": 0, "n": 0}, "done_to_merge": {"median": 0, "p90": 0, "n": 0}, "runs_with_pr": 0, "runs_total": 0},
             "throughput": [],
-            "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "by_client": {}, "shape_gate": 0, "shape_gate_rules": {}},
+            "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "by_client": {}, "shape_gate": 0, "shape_gate_rules": {}, "last_7d": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}}},
             "usage": {"since": "", "by_flag": []},
             "said": said,
         }),

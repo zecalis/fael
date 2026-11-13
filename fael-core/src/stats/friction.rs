@@ -56,6 +56,9 @@ pub struct Friction {
     pub shape_gate: usize,
     /// The faults those gates named (untitled, topic_list, …; one gate can name several).
     pub shape_gate_rules: BTreeMap<String, usize>,
+    /// The same totals for calls of the last 7 days, whatever the window —
+    /// rejects fixed weeks ago do not hide today's rate.
+    pub last_7d: Tally,
 }
 
 #[derive(PartialEq)]
@@ -101,6 +104,11 @@ pub(super) fn is_gate_reject(v: &serde_json::Value) -> bool {
 }
 
 pub(super) fn friction(parsed: &Parsed) -> Friction {
+    friction_at(parsed, crate::now_ms() as i64)
+}
+
+fn friction_at(parsed: &Parsed, now: i64) -> Friction {
+    let cutoff = now - 7 * 86_400_000;
     let mut streams: HashMap<String, Vec<Call>> = HashMap::new();
     let mut out = Friction::default();
     // `who: "human"` is a call outside an agent session — usage, never friction
@@ -156,7 +164,11 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
                 && (i..calls.len().min(i + 1 + FIRST_CALL_WINDOW)).all(|j| !bad(j));
             let by = out.by_command.entry(c.by.clone()).or_default();
             let cl = out.by_client.entry(c.client.to_string()).or_default();
-            for t in [&mut out.total, by, cl] {
+            let recent = (c.ms >= cutoff).then_some(&mut out.last_7d);
+            for t in [Some(&mut out.total), Some(by), Some(cl), recent]
+                .into_iter()
+                .flatten()
+            {
                 t.calls += 1;
                 if c.outcome == Outcome::Reject {
                     t.rejects += 1;
@@ -214,6 +226,25 @@ mod tests {
         format!(
             "{{\"ts\":\"2026-10-07T00:{m:02}:00.000Z\",\"repo\":\"/work/r\",\"client\":\"{client}\",\"event\":\"call\",{session}\"cmd\":\"{cmd}\",\"outcome\":\"{outcome}\",\"empty\":{empty},\"sig\":\"{sig}\"}}\n"
         )
+    }
+
+    #[test]
+    fn last_7d_counts_only_calls_within_a_week_of_now() {
+        let l = [
+            line(0, "s", "cli", "find", "ok", false, "a"),
+            line(1, "s", "cli", "add", "reject", false, "b"),
+        ];
+        let p = parse(
+            &l.concat(),
+            Path::new("/work/state/usage.jsonl"),
+            &[PathBuf::from("/tmp")],
+        );
+        let day = 86_400_000;
+        let t = crate::ts_ms("2026-10-07T00:00:00.000Z").unwrap();
+        let near = super::friction_at(&p, t + 6 * day).last_7d;
+        assert_eq!((near.calls, near.rejects), (2, 1));
+        let far = super::friction_at(&p, t + 8 * day);
+        assert_eq!((far.last_7d.calls, far.total.calls), (0, 2));
     }
 
     fn of(lines: &[String]) -> super::Friction {

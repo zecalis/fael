@@ -107,7 +107,7 @@ fn row_line(r: &core::stats::RowStatus) -> String {
 }
 
 /// `per 100 calls`, one decimal.
-fn per100(n: usize, calls: usize) -> String {
+pub(super) fn per100(n: usize, calls: usize) -> String {
     format!("{:.1}", n as f64 * 100.0 / calls as f64)
 }
 
