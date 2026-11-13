@@ -66,6 +66,20 @@ pub(super) fn print_events(s: &core::stats::Stats) {
         let hit = hit_suffix(s, k);
         println!("  {k}: ×{} (~{} tokens){hit}", c.events, c.est_tokens);
     }
+    if let Some(l) = latency_line(s) {
+        println!("{l}");
+    }
+}
+
+/// Hook wall time, p50/p95 with n per event — only hooks that put something
+/// in context are timed. Nothing timed = no line.
+pub(super) fn latency_line(s: &core::stats::Stats) -> Option<String> {
+    let parts: Vec<String> = s
+        .latency
+        .iter()
+        .map(|(e, l)| format!("{e} {}/{} (n {})", l.p50, l.p95, l.n))
+        .collect();
+    (!parts.is_empty()).then(|| format!("  hook time ms p50/p95: {}", parts.join(" · ")))
 }
 
 /// PLAN-fael-context-loop §3, read together: repeats over the edits after

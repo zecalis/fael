@@ -15,9 +15,9 @@ fn golden_state() -> PathBuf {
         Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("stats-golden-{}", fael_core::ulid()));
     std::fs::create_dir_all(&state).unwrap();
     let rows = [
-        r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["A"]}"#,
-        r#"{"ts":"2026-09-26T00:01:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":20,"est_tokens":5,"ids":["A","B"],"session":"s1","said":[{"kind":"row","key":"A"},{"kind":"row","key":"B"},{"kind":"bodies"}]}"#,
-        r#"{"ts":"2026-09-26T00:02:00.000Z","repo":"/work/real","client":"codex","event":"edit","bytes":30,"est_tokens":7,"ids":["B"]}"#,
+        r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":10,"est_tokens":3,"ids":["A"],"ms":4}"#,
+        r#"{"ts":"2026-09-26T00:01:00.000Z","repo":"/work/real","client":"claude","event":"read","bytes":20,"est_tokens":5,"ids":["A","B"],"ms":8,"session":"s1","said":[{"kind":"row","key":"A"},{"kind":"row","key":"B"},{"kind":"bodies"}]}"#,
+        r#"{"ts":"2026-09-26T00:02:00.000Z","repo":"/work/real","client":"codex","event":"edit","bytes":30,"est_tokens":7,"ids":["B"],"ms":6}"#,
         // a pull's outcome line: earns the bodies line, counts as no injection
         r#"{"ts":"2026-09-26T00:03:00.000Z","repo":"/work/real","client":"cli","event":"find","bytes":0,"est_tokens":0,"ids":[],"session":"s1","found":["B"],"q":{"id":"B"}}"#,
         "not json",
@@ -75,7 +75,7 @@ fn stats_text_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push · bumped 0\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  hook time ms p50/p95: edit 6/6 (n 1) · read 4/8 (n 2)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push · bumped 0\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -91,7 +91,7 @@ fn stats_rows_matches_golden() {
     assert_eq!(
         normalize(&out, &state),
         format!(
-            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown) · shown 1\n  row B: pushed ×2 (unknown) · shown 1 · pulled 1 (+0 fael-induced)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push · bumped 0\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
+            "fael usage (<STATE>/usage.jsonl): 3 injections · 60 bytes · ~15 tokens into context\n  read: ×2 (~8 tokens)\n  edit: ×1 (~7 tokens)\n  hook time ms p50/p95: edit 6/6 (n 1) · read 4/8 (n 2)\n  client claude: ×2 (~8 tokens)\n  client codex: ×1 (~7 tokens)\n  row A: pushed ×2 (unknown) · shown 1\n  row B: pushed ×2 (unknown) · shown 1 · pulled 1 (+0 fael-induced)\n  retired at touch: 0 of 2 pushed row(s) closed or superseded within a day of a push · bumped 0\n  acted on after said: row 0/2 (0%) · bodies 1/1 (100%)\n{CONSTANTS}\n"
         ),
         "{out}"
     );
@@ -251,6 +251,7 @@ fn assert_rest_zero(v: serde_json::Value, out: &str) {
             "retired": {"pushed": 2, "at_touch": 0, "bumped": 0},
             "context_loop": {"confirmed_repeats": 0, "edits_after_close": 0, "useful_shows": 0},
             "experience": {"fixed": 0, "fixed_from_review": 0, "closed_with_check": 0, "repeats_with_check": 0, "edits_after_close_with_check": 0, "fix_commits": 0, "fix_commits_linked": 0},
+            "latency": {"edit": {"p50": 6, "p95": 6, "n": 1}, "read": {"p50": 4, "p95": 8, "n": 2}},
             "unused_rows": [],
             "flow": {"filed_to_close": {"median": 0, "p90": 0, "n": 0}, "start_to_done": {"median": 0, "p90": 0, "n": 0}, "done_to_merge": {"median": 0, "p90": 0, "n": 0}, "runs_with_pr": 0, "runs_total": 0},
             "throughput": [],
