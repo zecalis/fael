@@ -2,9 +2,10 @@
 //! `python`, `> f`) pushes that file as an edit — agents that edit through
 //! the shell get the stale-row hint and the edit record like an `Edit` call
 //! does — and a `git commit` gets its cited-row and checkpoint lines. A search
-//! or a shell read says nothing: rows reach the agent at the edit. Tool names
-//! match case-insensitively: Claude sends `Grep`/`Bash`/`Glob`, OpenCode
-//! `grep`/`bash`/`glob`, and Codex shell calls arrive as `Bash`.
+//! or a shell read says nothing: rows reach the agent at the edit. Claude and
+//! OpenCode wire only their shell tool here (`Bash`, `shell`/`bash`) — Grep and
+//! Glob spawn no `fael`. Tool names match case-insensitively; Codex shell
+//! calls arrive as `Bash`.
 
 use super::cited::commit_cites;
 use super::protocol::{Event, Reply, ctx};

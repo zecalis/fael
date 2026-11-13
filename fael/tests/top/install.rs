@@ -67,7 +67,7 @@ fn install_all_three_idempotent_and_leaves_what_is_not_fael_alone() {
     install(&home, &[]);
     let s = read(&claude);
     assert!(s.starts_with("{\n  \"theme\""), "key order kept: {s}");
-    for sub in ["stop", "session-start", "read", "edit", "search", "review"] {
+    for sub in ["stop", "session-start", "edit", "search", "review"] {
         assert!(
             s.contains(&format!("\"fael hook {sub} --client claude\"")),
             "{sub}: {s}"
@@ -75,7 +75,8 @@ fn install_all_three_idempotent_and_leaves_what_is_not_fael_alone() {
     }
     assert!(
         s.contains("Edit|Write|MultiEdit|NotebookEdit")
-            && s.contains("Glob|Grep|Bash")
+            && !s.contains("Glob|Grep")
+            && !s.contains("hook read")
             && s.contains("\"matcher\": \"ReportFindings\"")
             && s.contains("hook-stop"),
         "{s}"
@@ -265,17 +266,17 @@ fn install_repoints_stale_hook_without_client() {
     std::fs::create_dir_all(home.join(".claude")).unwrap();
     std::fs::write(
         &claude,
-        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "/old/fael hook read"}]}]}}"#,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "/old/fael hook edit"}]}]}}"#,
     )
     .unwrap();
     let out = install(&home, &["--client", "claude"]);
     assert!(out.contains("repointed"), "{out}");
     let s = read(&claude);
     assert!(!s.contains("/old/fael"), "{s}");
-    assert!(s.contains("hook read --client claude"), "{s}");
+    assert!(s.contains("hook edit --client claude"), "{s}");
     assert!(s.contains("\"timeout\": 10"), "{s}");
     // one entry, not old + new side by side
-    assert_eq!(s.matches("hook read").count(), 1, "{s}");
+    assert_eq!(s.matches("hook edit").count(), 1, "{s}");
     // a second run changes nothing
     let out = install(&home, &["--client", "claude"]);
     assert!(
@@ -292,7 +293,7 @@ fn install_adds_a_missing_hook_timeout_and_keeps_the_users() {
     std::fs::create_dir_all(home.join(".claude")).unwrap();
     std::fs::write(
         &claude,
-        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "fael hook read --client claude"}]}],
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "fael hook edit --client claude"}]}],
           "Stop": [{"hooks": [{"type": "command", "command": "fael hook stop --client claude", "timeout": 30}]}]}}"#,
     )
     .unwrap();
@@ -328,8 +329,8 @@ fn install_keeps_the_old_skill_as_bak() {
 #[test]
 fn install_dedupes_a_bare_and_a_suffixed_hook() {
     for settings in [
-        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "/old/fael hook read"}]}, {"matcher": "Read", "hooks": [{"type": "command", "command": "/new/fael hook read --client claude"}]}]}}"#,
-        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "/new/fael hook read --client claude"}]}, {"matcher": "Read", "hooks": [{"type": "command", "command": "/old/fael hook read"}]}]}}"#,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "/old/fael hook edit"}]}, {"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "/new/fael hook edit --client claude"}]}]}}"#,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "/new/fael hook edit --client claude"}]}, {"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "/old/fael hook edit"}]}]}}"#,
     ] {
         let home = std::env::temp_dir().join(format!("fael-install-{}", fael_core::ulid()));
         let claude = home.join(".claude/settings.json");
@@ -337,11 +338,52 @@ fn install_dedupes_a_bare_and_a_suffixed_hook() {
         std::fs::write(&claude, settings).unwrap();
         let out = install(&home, &["--client", "claude"]);
         let s = read(&claude);
-        assert_eq!(s.matches("hook read").count(), 1, "{out}\n{s}");
+        assert_eq!(s.matches("hook edit").count(), 1, "{out}\n{s}");
         assert!(!s.contains("/old/fael"), "{out}\n{s}");
         assert!(!s.contains("/new/fael"), "{out}\n{s}");
-        assert!(s.contains("hook read --client claude"), "{s}");
+        assert!(s.contains("hook edit --client claude"), "{s}");
     }
+}
+
+/// Wiring an older install left — a `Read` fael hook, `Glob|Grep|Bash` on search —
+/// is rewritten to the shell-only table; a hook of someone else's in those
+/// groups stays, and a second run changes nothing.
+#[test]
+fn install_retires_the_read_and_glob_grep_matchers() {
+    let home = std::env::temp_dir().join(format!("fael-install-{}", fael_core::ulid()));
+    let claude = home.join(".claude/settings.json");
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(
+        &claude,
+        r#"{"hooks": {"PostToolUse": [
+          {"matcher": "Read", "hooks": [{"type": "command", "command": "fael hook read --client claude", "timeout": 10}, {"type": "command", "command": "bun /x/other.ts hook-read"}]},
+          {"matcher": "Glob|Grep|Bash", "hooks": [{"type": "command", "command": "fael hook search --client claude", "timeout": 10}]}]}}"#,
+    )
+    .unwrap();
+    let out = install(&home, &["--client", "claude"]);
+    assert!(out.contains("PostToolUse(Read) retired"), "{out}");
+    let v: serde_json::Value = serde_json::from_str(&read(&claude)).unwrap();
+    let groups = v["hooks"]["PostToolUse"].as_array().unwrap();
+    let matchers: Vec<_> = groups
+        .iter()
+        .filter_map(|g| g["matcher"].as_str())
+        .collect();
+    assert!(!matchers.contains(&"Glob|Grep|Bash"), "{matchers:?}");
+    let s = read(&claude);
+    assert!(!s.contains("hook read"), "{s}");
+    assert!(s.contains("bun /x/other.ts hook-read"), "{s}");
+    assert_eq!(s.matches("hook search").count(), 1, "{s}");
+    let search = groups
+        .iter()
+        .find(|g| {
+            g["hooks"][0]["command"]
+                .as_str()
+                .is_some_and(|c| c.contains("hook search"))
+        })
+        .unwrap();
+    assert_eq!(search["matcher"], "Bash");
+    let out = install(&home, &["--client", "claude"]);
+    assert!(!out.contains("retired") && !out.contains("wrote"), "{out}");
 }
 
 /// Native Windows has no HOME (only USERPROFILE) — install must still find

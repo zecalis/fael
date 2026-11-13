@@ -40,3 +40,15 @@ fn installed_opencode_plugin_reports_session_cost() {
         "plugin reports no session cost: {p}"
     );
 }
+
+// Read, grep and glob say nothing, so the plugin spawns no `fael` for them:
+// only shell and edit tools reach a hook.
+#[test]
+fn installed_opencode_plugin_spawns_fael_for_shell_and_edit_only() {
+    let home = std::env::temp_dir().join(format!("fael-install-spawn-{}", fael_core::ulid()));
+    install(&home, &["--client", "opencode"]);
+    let p = std::fs::read_to_string(home.join(".config/opencode/plugins/fael.js")).unwrap();
+    assert!(!p.contains("\"grep\"") && !p.contains("\"glob\""), "{p}");
+    assert!(!p.contains("=== \"read\""), "{p}");
+    assert!(p.contains("hook(\"search\""), "{p}");
+}

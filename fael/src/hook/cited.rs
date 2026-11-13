@@ -104,7 +104,9 @@ pub(crate) fn is_commit(cmd: &str) -> bool {
     commits(cmd).next().is_some()
 }
 
-/// A tool event: the repo is resolved here, since a search with no files never
+/// A tool event (shell and edit calls on Claude and OpenCode; Read/Glob/Grep no
+/// longer reach it, so an id typed only into one of those is not a cite). The
+/// repo is resolved here, since a search with no files never
 /// reaches `push`.
 pub(crate) fn note_tool(e: &Event, input: &Value) {
     if e.session.as_deref().is_none_or(str::is_empty) || input.is_null() {

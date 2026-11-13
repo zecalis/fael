@@ -4,7 +4,8 @@ fael needs six calls from an agent's lifecycle. Each is one process spawn:
 Event JSON on stdin, Reply JSON on stdout, always exit 0 (hook calls that put something in context, 2026-11-13, n 12 edits / 6 session-starts: `edit` p50 26 ms, p95 37 ms; `session-start` p50 64 ms, p95 70 ms — `cmd: fael stats --json | jq -c .latency`, result `{"edit":{"p50":26,"p95":37,"n":12},"session-start":{"p50":64,"p95":70,"n":6}}`; your own number is in `fael stats`). Claude Code and Codex use a built-in adapter
 (`--client claude|codex`), and OpenCode gets a generated plugin
 ([`fael/skill/opencode.js`](../fael/skill/opencode.js), the reference implementation of
-this page). Any other agent calls the neutral format:
+this page). Claude Code and OpenCode wire only the shell (`search`) and edit tools: a read, grep or glob
+says nothing, so it spawns no `fael`. Any other agent calls the neutral format:
 
 ```
 fael hook <stop|session-start|read|edit|search|prompt>   < Event   > Reply
