@@ -1,0 +1,16 @@
+{
+  "session_id": "<session-id>",
+  "transcript_path": "/redacted/projects/<session-id>.jsonl",
+  "cwd": "<redacted-cwd>",
+  "scratchpad_dir": "<redacted-scratchpad>",
+  "prompt_id": "<redacted-prompt-id>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "<redacted-message>",
+  "background_tasks": [],
+  "session_crons": []
+}

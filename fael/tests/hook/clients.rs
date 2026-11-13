@@ -5,7 +5,7 @@ use super::{fael, flagged, repo, state, transcript};
 
 /// Redacted real CLI 0.166.0-alpha.5.1 hook payloads; substitute only local
 /// paths and identities, leaving the vendor's shape intact.
-fn codex_fixture(event: &str, d: &std::path::Path, id: &str) -> serde_json::Value {
+pub(super) fn codex_fixture(event: &str, d: &std::path::Path, id: &str) -> serde_json::Value {
     let raw = match event {
         "start" => include_str!("fixtures/codex-session-start.json"),
         "edit" => include_str!("fixtures/codex-edit.json"),
@@ -272,4 +272,81 @@ fn codex_subagent_start_and_stop_use_the_child_context() {
         "{usage}"
     );
     assert!(!flagged(&d, r#""parent""#));
+}
+
+/// Redacted real Claude Code 2.1.323 hook payloads, captured once from a
+/// headless session; only paths and identities are substituted.
+pub(super) fn claude_fixture(event: &str, d: &std::path::Path, id: &str) -> serde_json::Value {
+    let raw = match event {
+        "start" => include_str!("fixtures/claude-2.1.323-session-start.json"),
+        "prompt" => include_str!("fixtures/claude-2.1.323-prompt.json"),
+        "edit" => include_str!("fixtures/claude-2.1.323-edit.json"),
+        "stop" => include_str!("fixtures/claude-2.1.323-stop.json"),
+        "substop" => include_str!("fixtures/claude-2.1.323-subagent-stop.json"),
+        _ => unreachable!(),
+    };
+    let mut v: serde_json::Value = serde_json::from_str(raw).unwrap();
+    v["cwd"] = serde_json::json!(d);
+    v["session_id"] = id.into();
+    v["transcript_path"] = serde_json::json!(d.join(format!("{id}.jsonl")));
+    v
+}
+
+#[test]
+fn claude_real_payloads_start_prompt_edit_stop() {
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &[
+            "add",
+            "issue",
+            "old choice",
+            "--files",
+            "src/a.rs",
+            "--to",
+            "claude",
+        ],
+        "",
+    );
+    assert!(ok, "{err}");
+    let id = "claude-real-1";
+    std::fs::write(d.join(format!("{id}.jsonl")), "").unwrap();
+    let hook = |cmd: &str, p: serde_json::Value| {
+        fael(&d, &["hook", cmd, "--client", "claude"], &p.to_string())
+    };
+    let (ok, out, err) = hook("session-start", claude_fixture("start", &d, id));
+    assert!(ok && out.contains("old choice"), "{out}{err}");
+    let (ok, _, err) = hook("prompt", claude_fixture("prompt", &d, id));
+    assert!(ok, "{err}");
+    std::fs::write(d.join("src/a.rs"), "// a\n// probe\n").unwrap();
+    let mut edit = claude_fixture("edit", &d, id);
+    edit["tool_input"]["file_path"] = serde_json::json!(d.join("src/a.rs"));
+    let (ok, _, err) = hook("edit", edit);
+    assert!(ok, "{err}");
+    assert!(recorded_edits(&d).contains("src/a.rs"));
+    let mut stop = claude_fixture("stop", &d, id);
+    stop["last_assistant_message"] = "Found a bug: the parser is broken on empty input.".into();
+    let (ok, out, err) = hook("stop", stop);
+    assert!(ok && !out.contains("block"), "{out}{err}");
+    assert!(flagged(&d, &format!("\"{id}\"")));
+}
+
+#[test]
+fn claude_real_subagent_stop_is_the_child_not_the_parent() {
+    let d = repo();
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "decision", "old choice", "--files", "src/a.rs"],
+        "",
+    );
+    assert!(ok, "{err}");
+    let mut stop = claude_fixture("substop", &d, "claude-real-2");
+    stop["last_assistant_message"] = "Found a bug: the child broke it.".into();
+    let (ok, out, err) = fael(
+        &d,
+        &["hook", "stop", "--client", "claude"],
+        &stop.to_string(),
+    );
+    assert!(ok && out.is_empty(), "{out}{err}");
+    assert!(!flagged(&d, r#""claude-real-2""#));
 }
