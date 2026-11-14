@@ -136,6 +136,7 @@ pub(super) fn pairs(parsed: &Parsed, windowed: bool) -> Pairs<'_> {
         if v["event"] == "in-context" {
             in_context.extend(
                 ids("in_context")
+                    .chain(ids("in_context_notes"))
                     .map(|id| (repo, session, id))
                     .filter(|k| pushed.contains_key(k)),
             );
@@ -352,5 +353,23 @@ mod tests {
         let logs = HashMap::from([("/work/r".to_string(), log)]);
         let e = &super::value(&parsed, &logs).by_event["session-start"];
         assert_eq!((e.pushed, e.in_context_at_edit, e.acted), (4, 0, 3));
+    }
+
+    #[test]
+    fn a_note_in_in_context_notes_counts_as_a_hit() {
+        let log = Log {
+            rows: rows(&row("N1", "2026-09-20T00:00:00Z", "note", "")),
+            ..Default::default()
+        };
+        let usage = r#"{"ts":"2026-09-26T00:00:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":["Z9"],"session":"s0"}
+{"ts":"2026-09-26T00:00:10.000Z","repo":"/work/r","client":"claude","event":"session-start","bytes":9,"est_tokens":2,"ids":["N1"],"session":"s1"}
+{"ts":"2026-09-26T00:01:00.000Z","repo":"/work/r","client":"claude","event":"in-context","bytes":0,"est_tokens":0,"ids":[],"in_context":[],"in_context_notes":["N1"],"session":"s1"}
+"#;
+        let parsed = super::super::parse::parse(usage, std::path::Path::new("/s/usage.jsonl"), &[]);
+        let logs = HashMap::from([("/work/r".to_string(), log)]);
+        let v = super::value(&parsed, &logs);
+        assert_eq!(v.in_context_at_edit, 1);
+        let e = &v.by_event["session-start"];
+        assert_eq!((e.pushed, e.in_context_at_edit), (1, 1));
     }
 }
