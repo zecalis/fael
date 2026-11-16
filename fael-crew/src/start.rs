@@ -9,8 +9,8 @@ use super::State;
 use super::agent::unwait;
 use super::chunk::{Here, Row, end_live, row, set, tx};
 use super::holder::{
-    end_caller_seat, end_here, holder, holder_detail, holder_worktree, live_in_worktree, members,
-    ready_paired, stalled_since,
+    branch_in_worktree, end_caller_seat, end_here, holder, holder_detail, holder_worktree,
+    live_in_worktree, members, ready_paired, stalled_since,
 };
 use super::joint::{self, Joint};
 use super::ready::Ready;
@@ -374,7 +374,10 @@ fn end_seats(
 
 /// The one refusal left of the old overlap gate (issue 01M6KHWF): another live, non-stalled run
 /// in the worktree this start sits in (or leaves, for a pair), from a different known session —
-/// two agents there overwrite each other's files. The caller's own session never refuses itself,
+/// two agents there overwrite each other's files. Plus the branch seat (issue 01M7CRGP): the
+/// caller's checkout still sits on another chunk's latest run branch — its run ended, so the
+/// worktree seat is free, but edits would land on that chunk's branch. A pair joins the
+/// partner's branch on purpose, so it skips the branch seat. The caller's own session never refuses itself,
 /// and an unknown session (either side) never refuses: a wrong refusal is the cost to avoid. A stalled run is no refusal: `end_seats` ends it as before. Overlap of
 /// declared scopes never refuses. `--force --because` takes the seat; returns that receipt.
 fn seat_taken(
@@ -384,6 +387,7 @@ fn seat_taken(
     worktrees: &[Option<&str>],
     ms: &[String],
     o: &Start,
+    here_branch: Option<&str>,
 ) -> Result<Option<String>, String> {
     let except = seat.map(|p| p.run.as_str());
     let mut told = Vec::new();
@@ -395,18 +399,30 @@ fn seat_taken(
             }
         }
     }
+    // the branch seat (issue 01M7CRGP): another chunk's latest run branch checked out
+    // here — its run ended, so the seat above is free, but the edits would land there
+    if seat.is_none()
+        && let (Some(w), Some(b)) = (worktrees.first().copied().flatten(), here_branch)
+    {
+        for (other, run) in branch_in_worktree(tx, w, b, ms)? {
+            let t = format!("branch {b} in {w} is chunk {other}'s run {run} branch");
+            if !told.contains(&t) {
+                told.push(t);
+            }
+        }
+    }
     if told.is_empty() {
         return Ok(None);
     }
     let told = told.join("; ");
     if !o.force {
         return Err(format!(
-            "rejected: chunk {uid} cannot start here — {told} is live, and two agents in one worktree overwrite each other's files; wait for it, start from another worktree, or try `fael chunk start {uid} --force --because \"<what you will avoid>\"` to end it"
+            "rejected: chunk {uid} cannot start here — {told}; your edits would land on another chunk's branch or overwrite a live agent's files — cut your own branch (`git switch -c <name>`), start from another worktree, or try `fael chunk start {uid} --force --because \"<what you will avoid>\"` to take the seat"
         ));
     }
     let because = need_because(o, uid)?;
     Ok(Some(format!(
-        "started by --force past live {told} — because {because}"
+        "started by --force past {told} — because {because}"
     )))
 }
 
@@ -645,7 +661,7 @@ impl Store {
             .iter()
             .map(joint::Partner::text)
             .reduce(|a, b| format!("{a}; {b}"));
-        let seat_forced = seat_taken(&tx, uid, seat, &[caller_wt, wt], &ms, o)?;
+        let seat_forced = seat_taken(&tx, uid, seat, &[caller_wt, wt], &ms, o, here.branch)?;
         let (claim, forced) = claim_members(
             &tx,
             &ms,

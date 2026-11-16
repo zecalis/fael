@@ -69,6 +69,16 @@ fn the_board_model_is_what_the_start_runs() {
         (serde_json::json!("run-m"), serde_json::json!("hint-m"))
     );
     assert!(fael(&d, &["run", "end", "R1"]).0);
+    // another chunk starts on its own branch (issue 01M7CRGP): the seat gate
+    // refuses a start on the previous chunk's still-running branch
+    assert!(
+        Command::new("git")
+            .args(["switch", "-q", "-c", "api"])
+            .current_dir(&d)
+            .status()
+            .unwrap()
+            .success()
+    );
     // a bare start runs the approval's model, not the hint's
     let (_, out, _) = fael(
         &d,

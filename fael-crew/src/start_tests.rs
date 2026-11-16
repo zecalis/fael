@@ -1,7 +1,7 @@
 //! `chunk start`: one winner of a race, a pair all-or-none, per-member commands end only
 //! that member's run (SPEC §4 test matrix).
 
-use super::super::chunk::tests::{NOW, add, get, here, live, start, state};
+use super::super::chunk::tests::{NOW, add, get, here, here_on, live, start, state};
 use super::super::{Fields, Here, Owner, Start, Store};
 use rusqlite::params;
 
@@ -333,7 +333,7 @@ fn a_run_of_the_callers_own_session_ends_without_refusal() {
                 session: Some("s1".into()),
                 ..Start::default()
             },
-            &here("/w1"),
+            &here_on("/w1", "b2"),
         )
         .unwrap();
     assert!(st.forced.is_empty());
@@ -350,11 +350,12 @@ fn an_unknown_session_never_refuses() {
     let c = scoped(&mut s, "c", "lib/");
     let d = scoped(&mut s, "d", "bin/");
     start(&mut s, &a, "/w1").unwrap(); // run without a session
-    sess(&mut s, &b, "/w1", "s2").unwrap(); // caller known, other unknown
+    sess_on(&mut s, &b, "/w1", "b2", "s2").unwrap(); // caller known, other unknown
     assert_eq!((live(&s, &a), live(&s, &b)), (0, 1));
-    start(&mut s, &c, "/w1").unwrap(); // caller unknown, other known
+    s.start(&c, &Start::default(), &here_on("/w1", "b3"))
+        .unwrap(); // caller unknown, other known
     assert_eq!((live(&s, &b), live(&s, &c)), (0, 1));
-    sess(&mut s, &d, "/w1", "").unwrap(); // empty counts as unknown
+    sess_on(&mut s, &d, "/w1", "b4", "").unwrap(); // empty counts as unknown
 }
 
 /// A stalled run there is an agent that left: the start ends it, no refusal, as before.
@@ -368,7 +369,7 @@ fn a_stalled_run_in_the_same_worktree_is_ended_without_force() {
         stale: "2999-01-01T00:00:00Z".into(),
         ..Start::default()
     };
-    let st = s.start(&b, &o, &here("/w1")).unwrap();
+    let st = s.start(&b, &o, &here_on("/w1", "b2")).unwrap();
     assert!(st.forced.is_empty());
     assert_eq!(live(&s, &a), 0);
     assert_eq!(st.orphaned.len(), 1);
@@ -405,11 +406,23 @@ fn a_mixed_model_is_recorded_on_the_run_from_approve_or_start() {
 }
 
 fn sess(s: &mut Store, uid: &str, wt: &str, session: &str) -> Result<String, String> {
+    sess_on(s, uid, wt, "b", session)
+}
+
+/// `sess` on an explicit branch: one worktree holds one branch per chunk
+/// (issue 01M7CRGP), so a second chunk there cuts its own.
+fn sess_on(
+    s: &mut Store,
+    uid: &str,
+    wt: &str,
+    branch: &str,
+    session: &str,
+) -> Result<String, String> {
     let o = Start {
         session: Some(session.into()),
         ..Start::default()
     };
-    s.start(uid, &o, &here(wt)).map(|x| x.run)
+    s.start(uid, &o, &here_on(wt, branch)).map(|x| x.run)
 }
 
 #[test]
@@ -450,14 +463,14 @@ fn start_reports_the_chunk_it_orphaned_in_the_worktree() {
         stale: "2999-01-01T00:00:00Z".into(),
         ..Start::default()
     };
-    let go = |s: &mut Store, u: &str| s.start(u, &o, &here("/w")).unwrap();
-    assert!(go(&mut s, &a).orphaned.is_empty());
-    let again = go(&mut s, &a);
+    let go = |s: &mut Store, u: &str, b: &str| s.start(u, &o, &here_on("/w", b)).unwrap();
+    assert!(go(&mut s, &a, "b").orphaned.is_empty());
+    let again = go(&mut s, &a, "b");
     assert!(
         again.orphaned.is_empty(),
         "same chunk restarted: nothing orphaned"
     );
-    let st = go(&mut s, &b);
+    let st = go(&mut s, &b, "b2");
     assert_eq!(st.orphaned, vec![(a.clone(), "a".to_string())]);
     assert_eq!(state(&s, &a), "running", "informs only: state untouched");
 }
@@ -641,7 +654,7 @@ fn a_stack_start_keeps_its_own_seat_and_records_stack() {
         stale: "2999-01-01T00:00:00Z".into(), // c in /w2 is stalled: its seat is freed
         ..Start::default()
     };
-    let st = s.start(&b, &o, &here("/w2")).unwrap();
+    let st = s.start(&b, &o, &here_on("/w2", "sb")).unwrap();
     assert_ne!(st.run, ra, "stack keeps its own R, not the partner's");
     assert_eq!(
         live(&s, &c),
@@ -698,4 +711,39 @@ fn a_stack_without_an_ancestor_read_is_rejected() {
     };
     let e = s.start(&b, &o, &here("/w2")).unwrap_err();
     assert!(e.contains("stack needs ancestor"), "{e}");
+}
+
+/// The branch is a seat too (issue 01M7CRGP): the worktree still sits on another
+/// chunk's latest run branch after its run ended — a start there would land its
+/// edits on that chunk's branch, so it refuses with a way out, no branch rule.
+#[test]
+fn a_start_on_another_chunks_run_branch_is_refused() {
+    let mut s = Store::open_in_memory().unwrap();
+    let a = add(&mut s, "a", Some("a"));
+    let b = add(&mut s, "b", Some("b"));
+    let r = s
+        .start(&a, &Start::default(), &here_on("/w", "b"))
+        .unwrap()
+        .run;
+    s.run_end(&r, None, NOW).unwrap();
+    assert_eq!(state(&s, &a), "running", "run end keeps the state");
+    // the run ended but the checkout still sits on a's branch: refused
+    let e = s
+        .start(&b, &Start::default(), &here_on("/w", "b"))
+        .unwrap_err();
+    assert!(e.contains("branch b") && e.contains(&a), "{e}");
+    assert!(e.contains("git switch -c"), "{e}");
+    // the same chunk resumes there fine; --force takes the seat with a receipt
+    s.start(&a, &Start::default(), &here_on("/w", "b")).unwrap();
+    let forced = Start {
+        force: true,
+        because: Some("cut own branch next".into()),
+        ..Start::default()
+    };
+    let st = s.start(&b, &forced, &here_on("/w", "b")).unwrap();
+    assert!(
+        st.forced.iter().any(|f| f.contains("branch b")),
+        "{:?}",
+        st.forced
+    );
 }
