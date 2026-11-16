@@ -95,8 +95,7 @@ fn start_prints_the_contracts_on_its_scope_and_done_says_what_left_it() {
         git(&d, &["add", p]);
     }
     git(&d, &["commit", "-qm", "lane"]);
-    let out = f(&["chunk", "done", &a, "h", "--left", "none", "--run", "R"]);
-    // e3: held detail above the done line, then the outside block
+    let out = f(&["chunk", "done", &a, "h", "--left", "none", "--run", "R"]); // e3: held detail above the done line, then the outside block
     let pos = |n: &str| out.lines().position(|l| l.contains(n)).unwrap();
     assert!(pos("inspect:") < pos("→ review"), "{out}");
     let at = pos("declared scope:");
@@ -107,6 +106,7 @@ fn start_prints_the_contracts_on_its_scope_and_done_says_what_left_it() {
 
     // a chunk whose scope holds no contract prints no heading
     let c = chunk("c", "c/");
+    git(&d, &["switch", "-q", "-c", "lane-c"]);
     let out = f(&["chunk", "start", &c, "--run", "R2"]);
     assert!(!out.contains("contracts:"), "{out}");
 }

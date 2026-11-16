@@ -225,3 +225,34 @@ pub(super) fn live_in_worktree(
         .map(|(u, run, _)| (u, run))
         .collect())
 }
+
+/// The branch is a seat too (issue 01M7CRGP): `(uid, run)` of the chunks outside
+/// `ms` whose latest run sits in `worktree` on `branch` — live or ended. A run
+/// that ended frees the worktree seat above, but the checkout still sits on its
+/// branch, so a start there would land its edits on that chunk's branch (and the
+/// chunk's next commit sweeps them). Terminal chunks (`done`, `replaced`,
+/// `dropped`) hold no seat: nothing commits there again. The store names no
+/// branch rule (decision 01M6XHTFT): the caller refuses with a way out, never a name.
+pub(super) fn branch_in_worktree(
+    tx: &Transaction,
+    worktree: &str,
+    branch: &str,
+    ms: &[String],
+) -> Result<Vec<(String, String)>, String> {
+    let mut q = tx
+        .prepare(
+            "SELECT c.uid, r.start FROM run r JOIN chunk c ON c.id = r.chunk
+              WHERE r.worktree = ?1 AND r.branch = ?2
+                AND c.state NOT IN ('done', 'replaced', 'dropped')
+                AND r.id = (SELECT MAX(id) FROM run WHERE chunk = r.chunk)",
+        )
+        .map_err(err)?;
+    let rows = q
+        .query_map([worktree, branch], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })
+        .map_err(err)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(err)?;
+    Ok(rows.into_iter().filter(|(u, _)| !ms.contains(u)).collect())
+}

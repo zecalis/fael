@@ -51,7 +51,7 @@ fn resume(o: &mut String, p: &Prev) {
         let wt = p.worktree.as_deref().unwrap_or("?");
         let _ = writeln!(
             o,
-            "branch {b} in {wt} — what it did: `git log origin/main..{b}` · `git status`"
+            "last run's branch {b} in {wt} — not yours: what it did: `git log origin/main..{b}` · `git status`"
         );
     }
 }

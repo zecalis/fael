@@ -160,12 +160,16 @@ fn run_end_forced_takeover_and_fencing() {
     let e = s.after(&c, &other, "why", &here_on("/b", "x")).unwrap_err();
     assert!(e.contains("was started in"), "after is fenced too: {e}");
     assert_eq!(live(&s, &c), 1, "a fenced after ends no run");
-    // one worktree is one seat: another chunk's stalled run there ends, the start goes through
+    // one worktree is one seat, but the branch is a seat too (issue 01M7CRGP):
+    // another chunk's stalled run there ends, yet its branch stays — refused
     let stalled = Start {
         stale: "2999-01-01T00:00:00Z".into(),
         ..Start::default()
     };
-    s.start(&other, &stalled, &here("/c")).unwrap();
+    let e = s.start(&other, &stalled, &here("/c")).unwrap_err();
+    assert!(e.contains("branch b") && e.contains(&c), "{e}");
+    // on a fresh branch the start goes through and the stalled run ends
+    s.start(&other, &stalled, &here_on("/c", "other")).unwrap();
     assert_eq!((live(&s, &c), live(&s, &other)), (0, 1));
     assert_eq!(
         state(&s, &c),
@@ -228,12 +232,12 @@ fn a_data_wait_turns_ready_on_its_date_and_after_blocks() {
     }
     let e = s.after(&a, &m, "loop", &here("/a")).unwrap_err();
     assert!(e.contains("loop"), "{e}");
-    for (c, wt) in [(&a, "/a"), (&m, "/b")] {
+    for (c, wt, br) in [(&a, "/a", "ba"), (&m, "/b", "bm")] {
         if c == &m {
             s.owner(&a, Owner::Drop, Some("posted by hand"), NOW)
                 .unwrap();
         }
-        start(&mut s, c, wt).unwrap();
+        s.start(c, &Start::default(), &here_on(wt, br)).unwrap();
     }
     s.wait(
         &m,

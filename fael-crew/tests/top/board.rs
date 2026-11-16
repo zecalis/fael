@@ -121,10 +121,12 @@ fn the_binary_speaks_board_v1() {
     let gone = f(&["chunk", "add", "gone", "--brief", "b"]);
     f(&["chunk", "start", &ask, "--run", "R0"]);
     f(&["chunk", "wait", &ask, "Which tone?", "--on", "owner"]);
+    git(&d, &["switch", "-q", "-c", "gone-b"]);
     f(&["chunk", "start", &gone, "--run", "R1"]);
     let bad = run(&d, &state, &["run", "end", "R1", "--cost", "-1"]);
     assert!(!bad.status.success(), "a negative cost is rejected");
     f(&["run", "end", "R1", "--cost", "0.42"]);
+    git(&d, &["switch", "-q", "-c", "a-b"]);
     f(&["chunk", "start", &a, "--run", "R2", "--client", "claude"]);
     write(d.join(".fael/shared"), "# every lane\ndocs/\n");
 

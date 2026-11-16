@@ -74,6 +74,28 @@ fn say_joint(o: &Start, st: &fael_crew::Started, store: &Store, here: &Here) -> 
     Ok(())
 }
 
+/// What a start says before the brief: chunks orphaned in this worktree, and a
+/// checkout that moved since the last run (or sits on another chunk's branch the
+/// seat gate just refused to inherit) — facts, never inside the brief.
+fn say_start_notes(st: &fael_crew::Started, here: &Here) {
+    for (u, t) in &st.orphaned {
+        println!(
+            "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --left none|<ids>"
+        );
+    }
+    for c in &st.chunks {
+        if let Some(p) = &c.resume
+            && let Some(b) = p.branch.as_deref()
+            && here.branch.is_some_and(|h| h != b)
+        {
+            println!(
+                "note: you are on branch {}, last run was on branch {b} — `git status` before the first edit",
+                here.branch.unwrap_or("?")
+            );
+        }
+    }
+}
+
 /// `fael chunk start <uid>`: claim it, bind the caller's session, print the brief.
 pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), String> {
     a.only(
@@ -145,11 +167,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     // each linked issue's id → its row, so the agent reads what to fix without a find
     resolve_issue_rows(r, &mut st);
     resolve_cited_rows(r, &mut st);
-    for (u, t) in &st.orphaned {
-        println!(
-            "note: chunk {u} \"{t}\" was still running in this worktree — its run ended, the chunk stays running; if it shipped: fael chunk done {u} \"<handoff>\" --left none|<ids>"
-        );
-    }
+    say_start_notes(&st, here);
     // c5: same-session retry returns the live R short — sections, answers, notes,
     // hand-offs and held rows stay in the first brief (session invariant); --full
     // reprints the whole brief from lifecycle truth (crew.db run + plan sections).
