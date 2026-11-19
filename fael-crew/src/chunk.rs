@@ -3,6 +3,7 @@
 //! makes it valid.
 
 use super::lookup::{label, lookup, no_chunk};
+use super::state_hint::way_on;
 use super::store::{Store, err};
 use super::{State, check};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
@@ -71,11 +72,7 @@ pub(super) fn set(
     if to != r.state {
         check(r.state, to).map_err(|e| {
             let mut msg = format!("{e} ({})", r.uid);
-            if matches!(to, State::Done | State::Review)
-                && matches!(r.state, State::Open | State::Draft)
-            {
-                msg += &format!(" — start first: `fael chunk start {}`", r.uid);
-            }
+            msg += &way_on(r.state, to, &r.uid).unwrap_or_default();
             msg
         })?;
         tx.execute(

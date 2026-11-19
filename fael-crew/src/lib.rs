@@ -33,6 +33,7 @@ mod section;
 mod shared;
 mod start;
 mod start_brief;
+mod state_hint;
 mod status;
 mod store;
 mod touch;

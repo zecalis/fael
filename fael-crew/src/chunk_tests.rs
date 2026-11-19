@@ -442,6 +442,40 @@ fn accept_takes_only_a_review_chunk() {
     assert_eq!(state(&s, &r), "done");
 }
 
+/// A `done` the state table refuses names the step that moves the chunk, not the `done`
+/// the agent just typed (the table's own "try fael chunk done" is circular here).
+#[test]
+fn a_refused_done_names_the_step_that_unblocks_the_chunk() {
+    let mut s = Store::open_in_memory().unwrap();
+    let [d, o, w, p, x] = ["d", "o", "w", "p", "x"].map(|t| add(&mut s, t, Some("brief")));
+    let draft = add(&mut s, "idea", None);
+    start(&mut s, &w, "/w").unwrap();
+    s.wait(&w, "owner", "which?", None, &[], &here("/w"))
+        .unwrap();
+    s.owner(&p, Owner::Park, Some("later"), NOW).unwrap();
+    s.owner(&x, Owner::Drop, Some("no"), NOW).unwrap();
+    start(&mut s, &d, "/d").unwrap();
+    s.done(&d, "h", Some(1), None, &here("/d")).unwrap();
+    for (u, pr, needle) in [
+        (&draft, Some(2), "adds a brief (`fael chunk edit "),
+        (&o, Some(2), "start first: `fael chunk start "),
+        (&w, Some(2), "`fael chunk answer "),
+        (&p, None, "`fael chunk unpark "),
+        (&x, Some(2), "is dropped, history"),
+    ] {
+        let e = s.done(u, "h", pr, None, &here("/w")).unwrap_err();
+        assert!(e.contains("cannot become"), "{e}");
+        assert!(e.contains(needle), "{e}");
+        assert!(e.contains(u.as_str()), "{e}");
+    }
+    // a done chunk's plain second done amends; `--out` skips that and is told how
+    let mut copy = |_: &str| Ok("/out".to_string());
+    let e = s
+        .done(&d, "h", None, Some(&mut copy), &here("/d"))
+        .unwrap_err();
+    assert!(e.contains("amends its hand-off"), "{e}");
+}
+
 /// `chunk done` with no uid finds the chunk by the worktree's live run: held there only.
 #[test]
 fn held_names_the_chunk_of_this_worktree_only() {
