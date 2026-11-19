@@ -67,7 +67,8 @@ pub(super) fn all() -> Vec<Line> {
         ),
         line(
             Kind::Inbox {
-                id: "7".into(),
+                ids: vec!["7".into()],
+                more: vec![],
                 uid: "01C".into(),
             },
             "fael: new note for chunk 01C: use v2 — reply: fael chunk note 01C \"<text>\" · full: fael chunk show 01C\n",

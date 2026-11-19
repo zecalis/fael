@@ -94,7 +94,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
             text,
         });
     }
-    rest.extend(super::inbox::lines(&c));
+    rest.extend(super::inbox::lines(&c, &out));
     if matches!(sync, super::autosync::SessionSync::Running) {
         rest.push(Line::notice(
             "fael: sync still running — teammates' rows arrive at the next read\n".into(),
