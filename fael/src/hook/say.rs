@@ -111,9 +111,15 @@ pub(crate) enum Kind {
     /// within the window, in this or a sibling worktree. Said once per file
     /// and session.
     Peer { file: String },
-    /// A `fael chunk note` left for the running chunk since its run started:
-    /// said once per note event.
-    Inbox { id: String, uid: String },
+    /// The `fael chunk note`s left for the running chunk since its run started,
+    /// one line per push: each note is said once per session. `ids` are the
+    /// notes listed (a `said` entry each); `more` the older ones the line only
+    /// counts, spent with it.
+    Inbox {
+        ids: Vec<String>,
+        more: Vec<String>,
+        uid: String,
+    },
     /// The held chunk's brief, scope or title was edited after its run started; the key
     /// names the edit event, so a later edit says again.
     BriefDrift { key: String },
@@ -137,6 +143,11 @@ pub(crate) enum Kind {
 pub(crate) const FIXED_KEY: &str = "~fixed";
 
 impl Kind {
+    /// The seen-list line of one inbox note.
+    pub(crate) fn inbox_key(uid: &str, id: &str) -> String {
+        format!("~inbox:{uid}:{id}")
+    }
+
     /// The seen-list lines this kind names — spent only under `Once::Key`.
     pub(crate) fn keys(&self) -> Vec<String> {
         match self {
@@ -147,7 +158,11 @@ impl Kind {
             Kind::Fixed => vec![FIXED_KEY.into()],
             Kind::Overlap { owner, file } => vec![format!("~overlap:{owner}:{file}")],
             Kind::Peer { file } => vec![format!("~peer:{file}")],
-            Kind::Inbox { id, uid } => vec![format!("~inbox:{uid}:{id}")],
+            Kind::Inbox { ids, more, uid } => ids
+                .iter()
+                .chain(more)
+                .map(|id| Kind::inbox_key(uid, id))
+                .collect(),
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Handoff => vec!["~handoff".into()],
             Kind::Retired { id } => vec![format!("~retired:{id}")],
@@ -190,7 +205,7 @@ impl Kind {
             Kind::Finding { file, .. } => vec![file.clone()],
             Kind::Overlap { owner, file } => vec![format!("{owner}:{file}")],
             Kind::Peer { file } => vec![file.clone()],
-            Kind::Inbox { id, .. } => vec![id.clone()],
+            Kind::Inbox { ids, .. } => ids.clone(),
             Kind::Checkpoint { key } | Kind::BriefDrift { key } => vec![key.clone()],
             Kind::Retired { id } => vec![id.clone()],
             Kind::ChunkBrief { uid } => vec![uid.clone()],

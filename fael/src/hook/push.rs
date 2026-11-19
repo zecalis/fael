@@ -232,7 +232,7 @@ pub(crate) fn push(e: &Event, at: At) -> Reply {
     // the next edit (SessionStart-only before). ShellEdit stays silent: the
     // card admits Edit only, so a shell-edit push drops it in say_within.
     if at == At::Edit {
-        lines.extend(super::inbox::lines(&c));
+        lines.extend(super::inbox::lines(&c, &out));
     }
     lines.extend(notes);
     // the hint and the stashed notice share the budget the rows left
