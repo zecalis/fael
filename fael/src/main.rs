@@ -43,6 +43,10 @@ fn main() -> ExitCode {
     reset_sigpipe();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let mut argv = synonyms::rewrite(raw.clone());
+    // Step-1 retire batch: a deprecated flag still works — it only says so.
+    for w in help::retired_warns(&argv) {
+        eprintln!("{w}");
+    }
     // plan/chunk/board/sweep/run are fael crew's — before help, so `fael chunk --help` is its
     if let Some(code) = crew::dispatch(&argv) {
         return code;

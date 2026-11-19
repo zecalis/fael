@@ -80,6 +80,24 @@ pub(super) fn usage(parsed: &Parsed) -> FlagUsage {
     FlagUsage { since, by_flag }
 }
 
+/// Step-1 retire batch (cli-tiers chunk retire): of the tier table's W/W GAP
+/// flags (never app-contract), the ones with no ok, help-read or reject row
+/// in the window — CLI and MCP together, since both ride the same flag names.
+/// `tier` is that (cmd, flag) list with `by_flag`'s cmd shape (`chunk done`,
+/// not `done`); a flag with any use row is never a candidate.
+pub fn retire_candidates(by_flag: &[FlagUse], tier: &[(&str, &str)]) -> Vec<(String, String)> {
+    tier.iter()
+        .filter(|(c, f)| {
+            !by_flag.iter().any(|u| {
+                u.cmd == *c
+                    && u.flag.as_deref() == Some(*f)
+                    && (u.ok > 0 || u.help > 0 || u.reject > 0)
+            })
+        })
+        .map(|(c, f)| ((*c).to_string(), (*f).to_string()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::parse::parse;
@@ -123,5 +141,38 @@ mod tests {
         assert_eq!((f.calls, f.agent, f.human, f.auto), (3, 1, 1, 1));
         let fr = super::super::friction::friction(&p);
         assert_eq!(fr.total.calls, 1, "{fr:?}");
+    }
+
+    /// Case that must fail (cli-tiers §3): a flag with ≥1 ok/help/reject row
+    /// in the window is never listed — only the all-zero tier flag is.
+    #[test]
+    fn retire_lists_only_flags_without_any_use_row() {
+        use super::{FlagUse, retire_candidates};
+        let row = |cmd: &str, flag: &str, ok: usize, help: usize, reject: usize| FlagUse {
+            cmd: cmd.into(),
+            flag: Some(flag.into()),
+            calls: ok + help + reject,
+            agent: ok + help + reject,
+            human: 0,
+            auto: 0,
+            ok,
+            help,
+            reject,
+        };
+        let by_flag = vec![
+            row("bump", "to", 1, 0, 0),
+            row("find", "by", 0, 1, 0),
+            row("doctor", "fat", 0, 0, 1),
+        ];
+        let got = retire_candidates(
+            &by_flag,
+            &[
+                ("bump", "to"),
+                ("find", "by"),
+                ("doctor", "fat"),
+                ("board", "watch"),
+            ],
+        );
+        assert_eq!(got, vec![("board".to_string(), "watch".to_string())]);
     }
 }

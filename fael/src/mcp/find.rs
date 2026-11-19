@@ -1,7 +1,7 @@
 //! The MCP `find` tool — the same rows as the CLI, ids just shown marked seen.
 //! Split out of mcp.rs at the 400-line ratchet.
 
-use super::args::{files, repo_for, s, unknown_note, with_notes};
+use super::args::{files, repo_for, retired_note, s, unknown_note, with_notes};
 use crate::{Repo, aliases, core};
 use serde_json::Value;
 
@@ -19,7 +19,7 @@ pub(crate) const KNOWN: &[&str] = &[
 pub(super) fn find(a: &Value) -> Result<String, String> {
     let extra = unknown_note(a, KNOWN);
     let res = find_checked(a).map(|(text, _)| text);
-    with_notes(res, vec![extra])
+    with_notes(res, vec![extra, retired_note("find", a)])
 }
 
 fn find_checked(a: &Value) -> Result<(String, Vec<String>), String> {
