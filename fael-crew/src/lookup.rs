@@ -15,29 +15,63 @@ pub(super) fn split_ref(key: &str) -> Option<(&str, &str)> {
     (!p.is_empty() && !l.is_empty()).then_some((p, l))
 }
 
-/// The plans holding `label`, for the ambiguous-label hint.
-fn plans_of(tx: &Transaction, label: &str) -> Vec<String> {
+/// Every chunk carrying `label`: `(plan, uid)`, the plan as `name` or `app/name`.
+fn owners_of(tx: &Transaction, label: &str) -> Vec<(String, String)> {
     tx.prepare(
-        "SELECT DISTINCT CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END
-         FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.label = ?1 ORDER BY 1",
+        "SELECT CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END, c.uid
+         FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.label = ?1 ORDER BY 1, 2",
     )
     .and_then(|mut q| {
-        q.query_map([label], |r| r.get(0))?
-            .collect::<Result<Vec<String>, _>>()
+        q.query_map([label], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()
     })
     .unwrap_or_default()
 }
 
-/// The hint an ambiguous or misplaced label carries: how to retype it plus the
-/// export that lists the uids. Keeps the `try --plan` and `plan export` needles.
-fn retype_hint(plans: &[String], label: &str) -> String {
-    match plans.first() {
-        Some(p) => format!(
-            " — try --plan {p} {label} or {p}/{label} (`fael plan export {p}` lists its uids)"
-        ),
-        None => format!(
+/// Most owners a reject lists: a label every plan reuses (`b1`) would print them all.
+const LISTED: usize = 8;
+
+/// The hint an ambiguous label carries: each plan's chunk with its uid — the one the agent
+/// means is in the list, no export needed — then how to retype it. Keeps the `try --plan`
+/// and `plan export` needles.
+fn retype_hint(owners: &[(String, String)], label: &str) -> String {
+    let Some((p, _)) = owners.first() else {
+        return format!(
             " — try --plan <plan> {label} or <plan>/{label} (`fael plan export <plan>` lists its uids)"
-        ),
+        );
+    };
+    let mut list: Vec<String> = owners
+        .iter()
+        .take(LISTED)
+        .map(|(plan, uid)| format!("{plan}/{label} = {uid}"))
+        .collect();
+    if owners.len() > LISTED {
+        list.push(format!("{} more", owners.len() - LISTED));
+    }
+    format!(
+        ": {} — try --plan {p} {label} or {p}/{label} (`fael plan export {p}` lists its uids)",
+        list.join(", ")
+    )
+}
+
+/// `uid (plan/label)` — `uid (plan "title")` for a chunk with no label — for each uid a
+/// prefix names, so the agent picks one without a find. A uid the db lost prints bare.
+fn named(tx: &Transaction, uid: &str) -> String {
+    let at: Option<String> = tx
+        .query_row(
+            "SELECT CASE p.app WHEN '' THEN p.name ELSE p.app || '/' || p.name END
+                 || CASE WHEN c.label IS NULL OR c.label = ''
+                         THEN ' \"' || substr(c.title, 1, 40) || '\"'
+                         ELSE '/' || c.label END
+             FROM chunk c JOIN plan p ON p.id = c.plan WHERE c.uid = ?1",
+            [uid],
+            |r| r.get(0),
+        )
+        .optional()
+        .unwrap_or_default();
+    match at {
+        Some(a) => format!("{uid} ({a})"),
+        None => uid.to_string(),
     }
 }
 
@@ -61,7 +95,7 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
         [h] => return Ok(Some(h.clone())),
         [] => {}
         _ => {
-            let hint = retype_hint(&plans_of(tx, key), key);
+            let hint = retype_hint(&owners_of(tx, key), key);
             return Err(format!(
                 "rejected: label {key} names more than one chunk — use the uid{hint}"
             ));
@@ -87,7 +121,7 @@ pub(super) fn lookup(tx: &Transaction, key: &str) -> Result<Option<Hit>, String>
             "rejected: uid prefix {key} names {} chunks — use more of the uid; try `fael chunk show <more of the uid>`: {}",
             many.len(),
             many.iter()
-                .map(|h| h.1.as_str())
+                .map(|h| named(tx, &h.1))
                 .collect::<Vec<_>>()
                 .join(", ")
         )),

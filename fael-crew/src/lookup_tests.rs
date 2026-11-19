@@ -55,9 +55,13 @@ fn a_label_in_two_plans_asks_for_the_uid() {
         )
         .unwrap();
     let a = labeled(&mut s, "inbox", "b1").unwrap();
-    labeled(&mut s, "p2", "b1").unwrap();
+    let a2 = labeled(&mut s, "p2", "b1").unwrap();
     let e = s.show("b1").unwrap_err();
     assert!(e.contains("more than one chunk"), "{e}");
+    // every owner is named with its uid, so the retype needs no export first
+    assert!(e.contains(&format!("inbox/b1 = {a}")), "{e}");
+    assert!(e.contains(&format!("p2/b1 = {a2}")), "{e}");
+    assert!(e.contains("try --plan inbox b1 or inbox/b1"), "{e}");
     assert_eq!(s.show(&a).unwrap().uid, a, "the uid still works");
     // --plan picks the label's plan, and checks a uid it is given
     assert_eq!(s.uid_in("b1", "inbox").unwrap(), a);
@@ -183,16 +187,39 @@ fn a_unique_uid_prefix_of_8_names_the_chunk_for_every_verb() {
     s.start("01AAAAAAAA0", &Start::default(), &here("/w"))
         .unwrap();
     assert_eq!(state(&s, "01AAAAAAAA0000000000000000"), "running");
-    // ambiguous: rejected with both uids
+    // ambiguous: rejected with both uids, each with the plan and title that tell them apart
     let e = s.show("01AAAAAAAA").unwrap_err();
     assert!(e.contains("names 2 chunks"), "{e}");
     assert!(
-        e.contains("01AAAAAAAA0000000000000000, 01AAAAAAAA1000000000000000"),
+        e.contains("01AAAAAAAA0000000000000000 (inbox \"a\")"),
+        "{e}"
+    );
+    assert!(
+        e.contains("01AAAAAAAA1000000000000000 (inbox \"b\")"),
         "{e}"
     );
     // too short, and a prefix nothing starts with
     assert!(s.show("01AAAAA").unwrap_err().contains("too short"));
     assert!(s.show("01ZZZZZZZZ").unwrap_err().contains("no chunk"));
+}
+
+#[test]
+fn an_ambiguous_prefix_names_each_chunk_by_plan_and_label() {
+    let mut s = Store::open_in_memory().unwrap();
+    let (a, b) = (
+        labeled(&mut s, "inbox", "b1").unwrap(),
+        labeled(&mut s, "inbox", "b2").unwrap(),
+    );
+    for (u, to) in [
+        (&a, "01BBBBBBBB0000000000000000"),
+        (&b, "01BBBBBBBB1000000000000000"),
+    ] {
+        let q = "UPDATE chunk SET uid = ?1 WHERE uid = ?2";
+        s.conn.execute(q, [to, u.as_str()]).unwrap();
+    }
+    let e = s.show("01BBBBBBBB").unwrap_err();
+    assert!(e.contains("01BBBBBBBB0000000000000000 (inbox/b1)"), "{e}");
+    assert!(e.contains("01BBBBBBBB1000000000000000 (inbox/b2)"), "{e}");
 }
 
 #[test]
