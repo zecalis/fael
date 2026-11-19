@@ -273,6 +273,28 @@ pub(super) fn outcomes_text(o: &core::stats::RowOutcomes) -> String {
         .collect()
 }
 
+/// One agent session repeating a call ≥ 20×/minute. Calls 10–150 ms apart are one
+/// shell loop inside one turn, not an agent re-asking: with different arguments it
+/// is a fan-out (batch the ids, read the rejects); with one argument it is a retry.
+pub(super) fn session_leak_line(l: &core::stats::Leak) -> String {
+    let rej = if l.rejects > 0 {
+        format!(", {} rejected", l.rejects)
+    } else {
+        String::new()
+    };
+    if l.distinct * 2 > l.calls {
+        format!(
+            "  warning: `{}` called ×{} within a minute with {} different arguments{rej} in one agent session — a shell loop over ids, not a poll: pass several ids in one call (`fael chunk show a b`, `fael find a b`) or read `fael board --json` / `plan export --json` once; a loop never reads its rejects, so run one first",
+            l.cmd, l.calls, l.distinct
+        )
+    } else {
+        format!(
+            "  warning: `{}` called ×{} within a minute{rej} with {} distinct call(s) in one agent session — a retry loop, not a test: read the rejection and change the call, or poll with `fael board --json --watch` or `plan export --since`, with backoff",
+            l.cmd, l.calls, l.distinct
+        )
+    }
+}
+
 /// Warning lines by code, most first — none, no line.
 pub(super) fn print_warnings(s: &core::stats::Stats) {
     if let Some(w) = s.asks.get(core::stats::ASK_WARN).filter(|w| w.events > 0) {
@@ -292,18 +314,40 @@ pub(super) fn print_warnings(s: &core::stats::Stats) {
                 l.cmd, l.calls
             );
         } else {
-            println!(
-                "  warning: `{}` called ×{} within a minute in one agent session — a poll/retry loop, not a test: poll with `fael board --json --watch` or `plan export --since`, with backoff",
-                l.cmd, l.calls
-            );
+            println!("{}", session_leak_line(l));
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::outcomes_text;
-    use crate::core::stats::{Pulled, RowOutcomes};
+    use super::{outcomes_text, session_leak_line};
+    use crate::core::stats::{Leak, Pulled, RowOutcomes};
+
+    #[test]
+    fn a_session_burst_names_fanout_or_retry_by_its_distinct_calls() {
+        let mut l = Leak {
+            cmd: "chunk show".into(),
+            calls: 297,
+            distinct: 194,
+            rejects: 267,
+            ..Leak::default()
+        };
+        let fan = session_leak_line(&l);
+        assert!(
+            fan.contains("194 different arguments, 267 rejected"),
+            "{fan}"
+        );
+        assert!(fan.contains("`fael chunk show a b`"), "{fan}");
+        assert!(!fan.contains("retry loop"), "{fan}");
+        (l.distinct, l.rejects) = (1, 0);
+        let retry = session_leak_line(&l);
+        assert!(
+            retry.contains("retry loop") && retry.contains("1 distinct call"),
+            "{retry}"
+        );
+        assert!(!retry.contains("rejected"), "{retry}");
+    }
 
     #[test]
     fn only_the_outcomes_a_row_has_are_printed() {
