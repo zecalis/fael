@@ -85,11 +85,12 @@ fn row_cands(log: &core::Log) -> Vec<(String, String)> {
 /// a cleanup agent can `fael close` it without re-deriving the detector.
 fn row_problem(log: &core::Log, cands: &[(String, String)]) -> core::Problem {
     let w = core::abbrev(log);
-    let eg: Vec<String> = cands
-        .iter()
-        .take(5)
-        .map(|(id, tok)| format!("{} → {tok}", w.short(id)))
-        .collect();
+    let (eg, more) = core::split_shown(
+        cands
+            .iter()
+            .map(|(id, tok)| format!("{} → {tok}", w.short(id)))
+            .collect(),
+    );
     core::Problem::info(
         core::ProblemKind::Phantom,
         format!(
@@ -101,6 +102,7 @@ fn row_problem(log: &core::Log, cands: &[(String, String)]) -> core::Problem {
         ),
     )
     .with_ids(unique_ids(cands))
+    .with_more(more)
 }
 
 /// This doctor reads only this repo's log, so an id from another repo's log
@@ -113,11 +115,11 @@ const CROSS_REPO: &str = "an id from another repo's log? cite its key instead \
 /// is nothing to close) — the file and line are what to fix, and they are in
 /// the example, exactly where the reader lands.
 fn md_problem(refs: &[core::MdRef]) -> core::Problem {
-    let eg: Vec<String> = refs
-        .iter()
-        .take(5)
-        .map(|(p, n, t, _)| format!("{p}:{n} → {t}"))
-        .collect();
+    let (eg, more) = core::split_shown(
+        refs.iter()
+            .map(|(p, n, t, _)| format!("{p}:{n} → {t}"))
+            .collect(),
+    );
     core::Problem::info(
         core::ProblemKind::Phantom,
         format!(
@@ -128,6 +130,7 @@ fn md_problem(refs: &[core::MdRef]) -> core::Problem {
             eg.join("; ")
         ),
     )
+    .with_more(more)
 }
 
 /// A markdown citation of a superseded row still resolves, but to the old
@@ -135,16 +138,16 @@ fn md_problem(refs: &[core::MdRef]) -> core::Problem {
 /// the fix is a copy, not a lookup.
 fn md_superseded(log: &core::Log, refs: &[core::MdRef]) -> core::Problem {
     let w = core::abbrev(log);
-    let eg: Vec<String> = refs
-        .iter()
-        .take(5)
-        .map(|(p, n, t, s)| {
-            format!(
-                "{p}:{n} → {t} (superseded → {})",
-                w.short(s.as_deref().unwrap_or_default())
-            )
-        })
-        .collect();
+    let (eg, more) = core::split_shown(
+        refs.iter()
+            .map(|(p, n, t, s)| {
+                format!(
+                    "{p}:{n} → {t} (superseded → {})",
+                    w.short(s.as_deref().unwrap_or_default())
+                )
+            })
+            .collect(),
+    );
     core::Problem::info(
         core::ProblemKind::Phantom,
         format!(
@@ -154,6 +157,7 @@ fn md_superseded(log: &core::Log, refs: &[core::MdRef]) -> core::Problem {
             eg.join("; ")
         ),
     )
+    .with_more(more)
 }
 
 fn unique_ids(cands: &[(String, String)]) -> Vec<String> {

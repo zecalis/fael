@@ -33,11 +33,11 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
     if hits.is_empty() {
         return None;
     }
-    let eg: Vec<String> = hits
-        .iter()
-        .take(5)
-        .map(|(r, f, n)| format!("{} → {f} ({:.1} MiB)", w.short(&r.id), *n as f64 / MIB))
-        .collect();
+    let (eg, more) = core::split_shown(
+        hits.iter()
+            .map(|(r, f, n)| format!("{} → {f} ({:.1} MiB)", w.short(&r.id), *n as f64 / MIB))
+            .collect(),
+    );
     Some(
         core::Problem::info(
             core::ProblemKind::NoVerdict,
@@ -49,6 +49,7 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
                 eg.join("; ")
             ),
         )
-        .with_ids(hits.iter().map(|(r, _, _)| r.id.clone()).collect()),
+        .with_ids(hits.iter().map(|(r, _, _)| r.id.clone()).collect())
+        .with_more(more),
     )
 }

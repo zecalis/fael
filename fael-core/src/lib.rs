@@ -44,7 +44,7 @@ pub use import::{Opts as ImportOpts, Report as ImportReport, import};
 
 pub use doctor::{
     Kind as ProblemKind, Problem, Report as DoctorReport, Severity, current_month,
-    fix as doctor_fix, precision as doctor_precision, scan as doctor_scan,
+    fix as doctor_fix, precision as doctor_precision, scan as doctor_scan, split_shown,
 };
 
 pub use hook::last_row_ms;

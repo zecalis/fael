@@ -52,17 +52,17 @@ pub(super) fn problem(log: &core::Log, cfg: &core::Config, expand: bool) -> Opti
 /// pre-self-heal rows when old and new rows share the output. `ids` carries
 /// every row behind the line, so `--json` never hides one.
 fn fat_problem(fat: &[FatRow], legacy: Option<usize>, full: bool) -> core::Problem {
-    let shown: Vec<&str> = fat.iter().map(|(_, s, _)| s.as_str()).collect();
-    let n = if full {
-        shown.len()
+    let all: Vec<String> = fat.iter().map(|(_, s, _)| s.clone()).collect();
+    let (shown, more) = if full {
+        (all, vec![])
     } else {
-        shown.len().min(5)
+        core::split_shown(all)
     };
     let mut detail = format!(
         "{} open row(s) carry no key, several topics, or long text — split them so one can \
          be superseded alone (e.g. {})",
         fat.len(),
-        shown[..n].join("; ")
+        shown.join("; ")
     );
     if let Some(n) = legacy {
         detail.push_str(&format!(
@@ -71,6 +71,7 @@ fn fat_problem(fat: &[FatRow], legacy: Option<usize>, full: bool) -> core::Probl
     }
     core::Problem::info(core::ProblemKind::Fat, detail)
         .with_ids(fat.iter().map(|(id, _, _)| id.clone()).collect())
+        .with_more(more)
 }
 
 /// The collapsed legacy line: no ids, just the count and the cleanup pass.

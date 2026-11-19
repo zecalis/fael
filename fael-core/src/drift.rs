@@ -20,11 +20,12 @@ pub fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
     }
     drifted.sort_by_key(|&(n, _)| std::cmp::Reverse(n)); // stable: ties keep log order
     let w = core::abbrev(log);
-    let eg: Vec<String> = drifted
-        .iter()
-        .take(5)
-        .map(|(n, r)| format!("{} ×{n} {}", w.short(&r.id), headline(r)))
-        .collect();
+    let (eg, more) = core::split_shown(
+        drifted
+            .iter()
+            .map(|(n, r)| format!("{} ×{n} {}", w.short(&r.id), headline(r)))
+            .collect(),
+    );
     Some(
         core::Problem::info(
             core::ProblemKind::Drifted,
@@ -37,7 +38,8 @@ pub fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
                 eg.join("; ")
             ),
         )
-        .with_ids(drifted.iter().map(|(_, r)| r.id.clone()).collect()),
+        .with_ids(drifted.iter().map(|(_, r)| r.id.clone()).collect())
+        .with_more(more),
     )
 }
 

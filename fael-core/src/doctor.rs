@@ -172,6 +172,20 @@ pub struct Problem {
     /// A problem with close actions is by definition `fixable` (the adapter
     /// applies them), and its `ids` are the rows being closed.
     pub closes: Vec<(String, String)>,
+    /// Example entries past the `SHOWN` cap, in the shape `detail` shows them.
+    /// Text mode names the command that prints them; `--json` folds them into
+    /// `detail`, so no kind lists five and hides the rest.
+    pub more: Vec<String>,
+}
+
+/// How many example entries a kind's line shows before it points at `--json`.
+pub const SHOWN: usize = 5;
+
+/// The first `SHOWN` of `items` and the rest — a builder prints the first
+/// into `detail` and hands the rest to `Problem::with_more`.
+pub fn split_shown(mut items: Vec<String>) -> (Vec<String>, Vec<String>) {
+    let rest = items.split_off(items.len().min(SHOWN));
+    (items, rest)
 }
 
 impl Problem {
@@ -184,6 +198,7 @@ impl Problem {
             detail,
             ids: vec![],
             closes: vec![],
+            more: vec![],
         }
     }
 
@@ -196,7 +211,14 @@ impl Problem {
             detail,
             ids: vec![],
             closes: vec![],
+            more: vec![],
         }
+    }
+
+    /// Attach the example entries `detail` left out (see `split_shown`).
+    pub fn with_more(mut self, more: Vec<String>) -> Problem {
+        self.more = more;
+        self
     }
 
     /// Attach the full row ids `detail` only sketches (`--json` prints them).

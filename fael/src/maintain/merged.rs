@@ -29,19 +29,17 @@ pub(super) fn problem(root: &Path, prs: &BTreeMap<String, Vec<Merge>>) -> Option
     if landed.is_empty() {
         return None;
     }
-    Some(core::Problem::info(
-        core::ProblemKind::Merged,
-        format!(
-            "{} local branch(es) already merged upstream but still exist — \
-             safe to delete (e.g. {})",
-            landed.len(),
-            landed[..landed.len().min(5)]
-                .iter()
-                .map(|b| format!("`git branch -D {b}`"))
-                .collect::<Vec<_>>()
-                .join("; ")
-        ),
-    ))
+    let eg = landed
+        .iter()
+        .map(|b| format!("`git branch -D {b}`"))
+        .collect();
+    let (eg, more) = core::split_shown(eg);
+    let n = landed.len();
+    let detail = format!(
+        "{n} local branch(es) already merged upstream but still exist — safe to delete (e.g. {})",
+        eg.join("; ")
+    );
+    Some(core::Problem::info(core::ProblemKind::Merged, detail).with_more(more))
 }
 
 /// Local branches that are gone upstream (their PR merged) but still sit in
