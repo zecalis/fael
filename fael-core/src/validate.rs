@@ -126,7 +126,7 @@ pub fn validate_restore(row: &Row, cfg: &Config) -> Result<(), String> {
     }
     if row.restores.as_deref().is_none_or(|e| e.trim().is_empty()) {
         return Err(
-            "rejected: restore needs the id of the superseding row — write it with `fael restore <id>` (`--edge` picks the edge)"
+            "rejected: restore needs the id of the superseding row — write it with `fael restore <id>`"
                 .into(),
         );
     }

@@ -166,7 +166,7 @@ fn close_superseder_after_restore_keeps_target_open() {
 }
 
 #[test]
-fn restore_with_two_edges_names_the_flag_and_edge_rejects() {
+fn restore_with_two_edges_names_positional_reverts() {
     let d = repo();
     let (a, b) = superseded_pair(&d);
     let c = add(
@@ -183,10 +183,19 @@ fn restore_with_two_edges_names_the_flag_and_edge_rejects() {
             &a,
         ],
     );
+    // two active edges never pick one silently: the error names the
+    // superseder ids to pass positionally — never a flag
     let (ok, _, err) = fael(&d, &["restore", &a], "");
     assert!(!ok, "two active edges must not pick one silently");
-    assert!(err.contains("--edge"), "{err}");
-    // --edge is retired: naming the edge directly is rejected
+    assert!(!err.contains("--edge"), "{err}");
+    assert!(err.contains(&b) && err.contains(&c), "{err}");
+    // a superseder id names its own edge directly: each reverts alone
+    for edge in [&b, &c] {
+        let (ok, out, err) = fael(&d, &["restore", edge], "");
+        assert!(ok, "{edge}: {err}");
+        assert!(out.contains("restored"), "{out}");
+    }
+    // --edge is retired: naming the edge that way is rejected
     for args in [
         vec!["restore".to_string(), "--edge".to_string(), b.clone()],
         vec!["restore".to_string(), "--edge".to_string(), c.clone()],

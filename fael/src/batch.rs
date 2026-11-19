@@ -141,7 +141,7 @@ pub(crate) fn batch_bump(a: &crate::Args, ids: &[String]) -> Result<ExitCode, St
 }
 /// Chunk 6b: batch add — a JSON array on stdin, one object per row
 /// (`{kind, text, files[], key?, to?, title?, revisit?, urgent?,
-/// urgent_before?, supersedes?, follows?, force?}`). Every row runs the same
+/// supersedes?, follows?, force?}`). Every row runs the same
 /// validate + self-heal as a single add; a rejected row reports alone while
 /// the rest still save (never all-or-nothing, so no resending the batch).
 /// Exit is failure when any row rejected — the saved ones stay saved.

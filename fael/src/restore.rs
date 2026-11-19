@@ -4,8 +4,8 @@
 
 use crate::{core, hook};
 
-/// `fael restore [<id>] [--edge <id>]`: `target` names the row to reopen,
-/// `edge` names the superseding row directly. An already-open row or an
+/// `fael restore [<id>]`: `id` names the row to reopen, or the superseding
+/// row directly when several edges still hide one row. An already-open row or an
 /// already-reverted edge prints info and writes nothing (exit 0).
 pub(crate) fn restore(
     r: &crate::Repo,

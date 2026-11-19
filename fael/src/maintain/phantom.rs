@@ -95,8 +95,7 @@ fn row_problem(log: &core::Log, cands: &[(String, String)]) -> core::Problem {
         core::ProblemKind::Phantom,
         format!(
             "{} reference(s) to ids with no row — check the citation, then re-file \
-             with --supersedes (e.g. {}) · compact --prune can remove closed rows, \
-             so an old citation may point at a pruned row · {CROSS_REPO}",
+             with --supersedes (e.g. {}) · {CROSS_REPO}",
             cands.len(),
             eg.join("; ")
         ),
@@ -124,8 +123,7 @@ fn md_problem(refs: &[core::MdRef]) -> core::Problem {
         core::ProblemKind::Phantom,
         format!(
             "{} reference(s) to ids with no row in markdown — fix the citation where it is \
-             written (e.g. {}) · compact --prune can remove closed rows, so an old citation \
-             may point at a pruned row · {CROSS_REPO}",
+             written (e.g. {}) · {CROSS_REPO}",
             refs.len(),
             eg.join("; ")
         ),

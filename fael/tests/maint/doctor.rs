@@ -137,7 +137,6 @@ fn doctor_flags_open_row_citing_fake_id() {
         out.contains("note [Phantom]: 1 reference(s)") && out.contains(&fake),
         "{out}"
     );
-    assert!(out.contains("compact --prune"), "{out}");
     // `--json` carries the citing row's full id under a lowercase label
     let (_, out, _) = fael(&d, &["doctor", "--json"]);
     let ps: Vec<serde_json::Value> = serde_json::from_str(out.trim()).unwrap();
