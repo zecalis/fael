@@ -9,7 +9,7 @@
 use super::parse::Parsed;
 use crate::ts_ms;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Calls of one shape inside the window that make it look like a leak.
 pub const LEAK_CALLS: usize = 20;
@@ -26,11 +26,16 @@ pub struct Leak {
     pub stream: String,
     /// Calls in the busiest window.
     pub calls: usize,
+    /// Different `sig`s among them: many = one shell loop over different
+    /// arguments (a fan-out), one = the same call retried.
+    pub distinct: usize,
+    /// Of `calls`, how many were rejected.
+    pub rejects: usize,
 }
 
 pub(super) fn leaks(parsed: &Parsed) -> Vec<Leak> {
     type Key = (String, Vec<String>, String);
-    let mut by: HashMap<Key, Vec<i64>> = HashMap::new();
+    let mut by: HashMap<Key, Vec<(i64, String, bool)>> = HashMap::new();
     for v in &parsed.calls {
         let (Some(cmd), Some(ms)) = (v["cmd"].as_str(), v["ts"].as_str().and_then(ts_ms)) else {
             continue;
@@ -48,26 +53,33 @@ pub(super) fn leaks(parsed: &Parsed) -> Vec<Leak> {
             })
             .unwrap_or_default();
         let stream = v["session"].as_str().or(v["repo"].as_str()).unwrap_or("");
+        let sig = v["sig"].as_str().unwrap_or("").to_string();
         by.entry((by_cmd, flags, stream.to_string()))
             .or_default()
-            .push(ms);
+            .push((ms, sig, v["outcome"] == "reject"));
     }
     let mut out: Vec<Leak> = by
         .into_iter()
         .filter_map(|((cmd, flags, stream), mut ts)| {
             ts.sort_unstable();
-            let (mut lo, mut best) = (0, 0);
+            let (mut lo, mut best, mut at) = (0, 0, (0, 0));
             for hi in 0..ts.len() {
-                while ts[hi] - ts[lo] > LEAK_WINDOW_MS {
+                while ts[hi].0 - ts[lo].0 > LEAK_WINDOW_MS {
                     lo += 1;
                 }
-                best = best.max(hi - lo + 1);
+                if hi - lo + 1 > best {
+                    (best, at) = (hi - lo + 1, (lo, hi));
+                }
             }
+            let win = &ts[at.0..=at.1];
+            let distinct = win.iter().map(|w| &w.1).collect::<HashSet<_>>().len();
             (best >= LEAK_CALLS).then_some(Leak {
                 cmd,
                 flags,
                 stream,
                 calls: best,
+                distinct,
+                rejects: win.iter().filter(|w| w.2).count(),
             })
         })
         .collect();
@@ -85,11 +97,34 @@ mod tests {
     }
 
     fn call(sec: u32, cmd: &str, session: &str) -> String {
+        call_as(sec, cmd, session, "s", "help")
+    }
+
+    fn call_as(sec: u32, cmd: &str, session: &str, sig: &str, outcome: &str) -> String {
         format!(
-            r#"{{"ts":"2026-10-26T10:{:02}:{:02}.000Z","repo":"/r","client":"cli","event":"call","cmd":"{cmd}","sub":"x","flags":["help"],"session":"{session}","outcome":"help"}}"#,
+            r#"{{"ts":"2026-10-26T10:{:02}:{:02}.000Z","repo":"/r","client":"cli","event":"call","cmd":"{cmd}","sub":"x","flags":["help"],"session":"{session}","outcome":"{outcome}","sig":"{sig}"}}"#,
             sec / 60,
             sec % 60
         )
+    }
+
+    #[test]
+    fn the_burst_says_how_many_calls_differ_and_how_many_were_rejected() {
+        // a shell loop over 30 different ids, 25 of them rejected
+        let lines: Vec<String> = (0..30)
+            .map(|i| {
+                let outcome = if i < 25 { "reject" } else { "ok" };
+                call_as(i, "chunk", "s1", &format!("sig{i}"), outcome)
+            })
+            .collect();
+        let l = leaks(&parsed(&lines));
+        assert_eq!((l[0].calls, l[0].distinct, l[0].rejects), (30, 30, 25));
+        // the same call 25 times: one sig
+        let same: Vec<String> = (0..25)
+            .map(|i| call_as(i, "chunk", "s1", "one", "ok"))
+            .collect();
+        let l = leaks(&parsed(&same));
+        assert_eq!((l[0].calls, l[0].distinct, l[0].rejects), (25, 1, 0));
     }
 
     #[test]
