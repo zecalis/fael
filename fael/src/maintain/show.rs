@@ -10,7 +10,8 @@ use core::ProblemKind as K;
 /// What a reader does with one problem line.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Class {
-    /// Fails `doctor` (exit 1) and `--fix` cannot repair it.
+    /// Fails `doctor` (exit 1) whether or not `--fix` can repair it; a fixable
+    /// error keeps its `[--fix]` mark but is never shown as a note.
     Error,
     /// A judgement only the reader can make: check it, then close, re-file or bump.
     Decide,
@@ -23,11 +24,11 @@ enum Class {
 
 /// Exhaustive on purpose: a new kind must say which it is.
 fn class(p: &core::Problem) -> Class {
-    if p.fixable {
-        return Class::Fix;
-    }
     if p.severity == core::Severity::Error {
         return Class::Error;
+    }
+    if p.fixable {
+        return Class::Fix;
     }
     match p.kind {
         K::Local
@@ -215,5 +216,28 @@ mod tests {
         assert_eq!(full_detail(&p), "7 rows (e.g. a) · the rest: b; c");
         let whole = core::Problem::info(K::Drifted, "2 rows (e.g. a; b)".into());
         assert!(!text(&rep(vec![whole])).contains("more"));
+    }
+
+    /// A fixable error (a broken log line) makes `doctor` exit 1, so it reads as
+    /// an error — first, counted as one — and still carries its `[--fix]` mark.
+    #[test]
+    fn a_fixable_error_is_an_error_not_a_note() {
+        let broken = core::Problem {
+            kind: K::Broken,
+            severity: core::Severity::Error,
+            fixable: true,
+            file: None,
+            detail: "b".into(),
+            ids: vec![],
+            closes: vec![],
+            more: vec![],
+        };
+        let fixable =
+            core::Problem::info(K::Gone, "g".into()).with_closes(vec![("i".into(), "gone".into())]);
+        let out = text(&rep(vec![fixable, broken]));
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0], "fael doctor: 1 error(s) · 1 --fix clears now");
+        assert!(lines[1].starts_with("error [Broken] [--fix]:"), "{out}");
+        assert!(lines[2].starts_with("note [Gone] [--fix]:"), "{out}");
     }
 }
