@@ -18,7 +18,7 @@ fn brew_copy(base: &Path) -> std::path::PathBuf {
 }
 
 #[test]
-fn upgrade_dry_run_names_the_channel_and_runs_nothing() {
+fn upgrade_dry_run_rejects_and_runs_nothing() {
     let base = std::env::temp_dir().join(format!("fael-chan-{}", fael_core::ulid()));
     let home = base.join("home");
     std::fs::create_dir_all(home.join(".codex")).unwrap();
@@ -46,15 +46,13 @@ fn upgrade_dry_run_names_the_channel_and_runs_nothing() {
         )
         .output()
         .unwrap();
-    let out = String::from_utf8_lossy(&o.stdout);
-    assert!(
-        out.contains("channel: brew — runs `brew upgrade zecalis/tap/fael`"),
-        "{out}"
-    );
-    assert!(!home.join(".codex/hooks.json").exists(), "{out}");
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(!o.status.success(), "retired --dry-run was accepted");
+    assert!(err.contains("takes no --dry-run"), "{err}");
+    assert!(!home.join(".codex/hooks.json").exists(), "{err}");
 }
 
-/// `fael upgrade --yes <args>` from a fake Cellar with a fake `brew` (`script`
+/// `fael upgrade` from a fake Cellar with a fake `brew` (`script`
 /// is its body) first on PATH. Returns (output, base) — `base/ran` is what brew was given.
 fn upgrade_via_fake_brew(
     script: &str,
@@ -89,7 +87,7 @@ fn upgrade_via_fake_brew(
         .env_remove("FAEL_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("FAEL_SESSION")
-        .args(["upgrade", "--yes"])
+        .args(["upgrade"])
         .args(args)
         .env("HOME", &home)
         .env(
@@ -130,23 +128,33 @@ fn upgrade_stops_when_the_channel_command_fails() {
     assert!(!base.join("home/.codex/hooks.json").exists());
 }
 
-/// `--client` reaches the new binary's wiring pass: only that client is written.
+/// `--client` is retired: it rejects before the channel command runs and
+/// no wiring is written — install wires every client it finds.
 #[test]
-fn upgrade_forwards_client_to_the_wiring_pass() {
+fn upgrade_client_rejects_before_the_channel_command() {
     let (o, base) = upgrade_via_fake_brew("", &[".codex", ".claude"], &["--client", "codex"]);
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    assert!(base.join("home/.codex/hooks.json").exists());
+    assert!(!o.status.success(), "retired --client was accepted");
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains("takes no --client"),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(
+        !base.join("ran").exists(),
+        "the channel command ran before validation"
+    );
+    assert!(!base.join("home/.codex/hooks.json").exists());
     assert!(!base.join("home/.claude/settings.json").exists());
 }
 
-/// A typo'd `--client` errors before the channel command runs: validation
-/// comes before any side effect (review #253 finding 1).
+/// A typo'd `--client` rejects the same way: validation comes before any
+/// side effect (review #253 finding 1).
 #[test]
 fn upgrade_rejects_an_unknown_client_before_the_channel_command() {
     let (o, base) = upgrade_via_fake_brew("", &[".codex"], &["--client", "bogus"]);
     assert!(!o.status.success(), "bogus client was accepted");
     assert!(
-        String::from_utf8_lossy(&o.stderr).contains("unknown client"),
+        String::from_utf8_lossy(&o.stderr).contains("takes no --client"),
         "{}",
         String::from_utf8_lossy(&o.stderr)
     );
@@ -158,9 +166,9 @@ fn upgrade_rejects_an_unknown_client_before_the_channel_command() {
 
 /// The reject names `upgrade`, the command that ran, not `install`, which shares the check.
 #[test]
-fn upgrade_unknown_client_reject_names_upgrade_not_install() {
+fn upgrade_client_reject_names_upgrade_not_install() {
     let (o, _) = upgrade_via_fake_brew("", &[".codex"], &["--client", "foo"]);
     let err = String::from_utf8_lossy(&o.stderr);
-    assert!(err.contains("fael upgrade: unknown client"), "{err}");
+    assert!(err.contains("upgrade takes no --client"), "{err}");
     assert!(!err.contains("fael install"), "{err}");
 }

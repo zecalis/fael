@@ -5,28 +5,8 @@ use std::path::{Path, PathBuf};
 
 /// The verbs `chunk` takes — what usage lines and the call line's `sub` name.
 pub const CHUNK_VERBS: &[&str] = &[
-    "add",
-    "show",
-    "status",
-    "start",
-    "edit",
-    "move",
-    "note",
-    "touch",
-    "wait",
-    "after",
-    "unafter",
-    "ask",
-    "reply",
-    "answer",
-    "done",
-    "accept",
-    "drop",
-    "park",
-    "unpark",
-    "apply",
-    "approve",
-    "unapprove",
+    "add", "show", "status", "start", "edit", "move", "note", "touch", "wait", "after", "unafter",
+    "ask", "reply", "answer", "done", "accept", "drop", "park", "unpark", "apply", "approve",
 ];
 
 /// The verbs `plan` takes — `show` is `export` by another name.

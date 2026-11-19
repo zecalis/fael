@@ -1,6 +1,6 @@
 //! `fael report` and `fael stats --since`: the binary against a scratch state
-//! dir — the page lands where `--out` says, counts only the window, and a bad
-//! flag is rejected before anything is written.
+//! dir — the page lands in the default `state/report.html`, counts the default
+//! window, and a bad flag is rejected before anything is written.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -34,25 +34,16 @@ fn dir() -> PathBuf {
 }
 
 #[test]
-fn report_writes_the_window_it_was_asked_for() {
+fn report_writes_the_default_file() {
     let d = dir();
-    let out = d.join("r.html");
-    let (ok, stdout, err) = fael(
-        &d,
-        &[
-            "report",
-            "--since",
-            "2026-09-30",
-            "--out",
-            out.to_str().unwrap(),
-        ],
-    );
+    let (ok, stdout, err) = fael(&d, &["report"]);
     assert!(ok, "{err}");
     assert!(stdout.contains("report written to"), "{stdout}");
-    let page = std::fs::read_to_string(&out).unwrap();
+    let page = std::fs::read_to_string(d.join("state/report.html")).unwrap();
     assert!(page.contains("fael find NEW"), "{page}");
-    assert!(!page.contains("fael find OLD"), "{page}");
-    assert!(page.contains("fael stats --json --since 2026-09-30"));
+    assert!(page.contains("fael find OLD"), "{page}");
+    assert!(page.contains("fael stats --json"));
+    assert!(!page.contains("fael stats --json --since"));
     assert!(!page.contains("<script"));
     assert!(
         page.contains("Sessions with an edit, split two ways"),
@@ -77,9 +68,17 @@ fn stats_since_counts_only_the_window() {
 #[test]
 fn bad_flags_are_rejected_before_writing() {
     let d = dir();
-    let (ok, _, err) = fael(&d, &["report", "--since", "yesterday"]);
-    assert!(!ok && err.contains("YYYY-MM-DD"), "{err}");
-    let (ok, _, err) = fael(&d, &["report", "--json"]);
-    assert!(!ok && err.contains("report takes no --json"), "{err}");
+    for flag in [
+        &["--since", "2026-09-30"][..],
+        &["--out", "r.html"][..],
+        &["--json"][..],
+    ] {
+        let (ok, _, err) = fael(&d, &[&["report"], flag].concat());
+        assert!(!ok, "{flag:?} should reject");
+        assert!(
+            err.contains("takes no --") || err.contains("unknown flag"),
+            "{flag:?}: {err}"
+        );
+    }
     assert!(!d.join("state/report.html").exists());
 }

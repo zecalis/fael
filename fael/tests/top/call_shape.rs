@@ -62,17 +62,17 @@ fn a_reject_carries_shape_never_values() {
 #[test]
 fn an_ok_row_carries_flag_names_never_values() {
     let d = repo();
-    let (ok, _, err) = fael(&d, &["find", "--recall", "wide", "src/a.rs"]);
+    let (ok, _, err) = fael(&d, &["find", "--kind", "issue", "src/a.rs"]);
     assert!(ok, "{err}");
     let rows = calls(&d);
     assert_eq!(rows.len(), 1, "{rows:?}");
     assert_eq!(rows[0]["outcome"], "ok");
-    assert_eq!(rows[0]["flags"], serde_json::json!(["recall"]));
+    assert_eq!(rows[0]["flags"], serde_json::json!(["kind"]));
     assert_eq!(rows[0]["npos"], 1);
     assert!(rows[0].get("who").is_none(), "{rows:?}");
     let line = rows[0].to_string();
     assert!(
-        !line.contains("\"wide\"") && !line.contains("a.rs"),
+        !line.contains("\"issue\"") && !line.contains("a.rs"),
         "{line}"
     );
 }
@@ -96,7 +96,7 @@ fn a_call_with_no_session_is_a_human_row_outside_friction() {
     assert_eq!(rows[0]["cmd"], "stats");
     assert_eq!(rows[0]["flags"], serde_json::json!(["json"]));
     // an agent call in the same state; stats counts both as usage, only the agent as friction
-    let (ok, _, err) = fael(&d, &["find", "--recall", "wide"]);
+    let (ok, _, err) = fael(&d, &["find", "--kind", "issue"]);
     assert!(ok, "{err}");
     let o = Command::new(env!("CARGO_BIN_EXE_fael"))
         .args(["stats", "--json"])
@@ -110,7 +110,7 @@ fn a_call_with_no_session_is_a_human_row_outside_friction() {
     let by = v["usage"]["by_flag"].as_array().unwrap();
     let f = by
         .iter()
-        .find(|u| u["cmd"] == "find" && u["flag"] == "recall")
+        .find(|u| u["cmd"] == "find" && u["flag"] == "kind")
         .unwrap();
     assert_eq!(
         (f["agent"].clone(), f["human"].clone()),

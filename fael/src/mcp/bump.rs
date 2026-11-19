@@ -1,7 +1,7 @@
 //! The MCP `bump` tool — CLI-first and unlisted, still answered for clients
 //! that call it. Split out of mcp.rs at the 400-line ratchet.
 
-use super::args::{done, need, repo_for, retired_note, s, unknown_note, with_notes};
+use super::args::{done, need, repo_for, s, unknown_note, with_notes};
 use crate::hook::{ASK_WARN, record_asks};
 use crate::{Repo, core, read};
 use serde_json::Value;
@@ -11,22 +11,12 @@ use serde_json::Value;
 #[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
 pub(crate) const HIDDEN: &[&str] = &[];
 /// Every key `bump` reads.
-pub(crate) const KNOWN: &[&str] = &[
-    "id",
-    "claim",
-    "force",
-    "to",
-    "urgent",
-    "urgent_before",
-    "not_urgent",
-    "revisit",
-    "why",
-];
+pub(crate) const KNOWN: &[&str] = &["id", "claim", "force", "why"];
 
 pub(super) fn bump(a: &Value) -> Result<String, String> {
     let extra = unknown_note(a, KNOWN);
     let res = bump_checked(a);
-    with_notes(res, vec![extra, retired_note("bump", a)])
+    with_notes(res, vec![extra])
 }
 
 fn bump_checked(a: &Value) -> Result<String, String> {
@@ -45,20 +35,7 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     }
     let log = read(r);
     let id = need(a, "id")?;
-    let urgent = match (
-        a["urgent"].as_bool().unwrap_or(false),
-        s(a, "urgent_before"),
-        a["not_urgent"].as_bool().unwrap_or(false),
-    ) {
-        (false, None, false) => core::UrgentChange::Keep,
-        (true, None, false) => core::UrgentChange::End,
-        (false, Some(t), false) => core::UrgentChange::Before(t),
-        (false, None, true) => core::UrgentChange::Remove,
-        _ => return Err("rejected: urgent, urgent_before and not_urgent pick one — the queue takes a single position; try bump {id: \"<id>\", urgent: true}".into()),
-    };
-    let routing = s(a, "to").is_some()
-        || s(a, "revisit").is_some()
-        || !matches!(urgent, core::UrgentChange::Keep);
+    let routing = false;
     let (fh, note) = crate::filehash::for_bump(&r.root, &log, &id, routing)?;
     let stamp = crate::session::retire_stamp(r, &log, &id);
     let (row, _, mut warns) = core::bump_row(
@@ -69,9 +46,9 @@ fn bump_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
         &stamp,
         &id,
         core::BumpOpts {
-            to: s(a, "to"),
-            urgent,
-            revisit: s(a, "revisit"),
+            to: None,
+            urgent: core::UrgentChange::Keep,
+            revisit: None,
             held: None,
             fh: Some(fh),
             why: s(a, "why"),

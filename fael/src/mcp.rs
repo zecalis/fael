@@ -27,15 +27,6 @@ use std::time::SystemTime;
 
 const VERSION: &str = "2025-06-18";
 
-/// `fael mcp --pin`: every call acts on the server's own cwd — no `cwd` arg, no
-/// routing by absolute `files`. For a server reachable over HTTP (a proxy, a
-/// tunnel), where any caller could otherwise read every repo on the host.
-static PIN: AtomicBool = AtomicBool::new(false);
-
-pub(crate) fn pinned() -> bool {
-    PIN.load(Ordering::Relaxed)
-}
-
 /// The binary this server started from, as it stood then (01M4F5N7M).
 static EXE: OnceLock<Option<Stamp>> = OnceLock::new();
 /// The replaced-binary line went out — it is said once per server.
@@ -96,8 +87,7 @@ fn stale() -> bool {
     EXE.get().and_then(Option::as_ref).is_some_and(replaced)
 }
 
-pub fn serve(pin: bool) -> Result<(), String> {
-    PIN.store(pin, Ordering::Relaxed);
+pub fn serve() -> Result<(), String> {
     EXE.get_or_init(stamp);
     // This process's env is inherited at spawn, never per call. No request
     // binding exists: do not attribute writes, seen state or files to it.

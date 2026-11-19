@@ -116,7 +116,7 @@ pub(crate) fn binary(home: &Path, args: &[String], dry: bool, yes: bool) -> Resu
     // the new hook table and skill, so it writes the wiring: --wiring skips this step
     let new = super::hook_exe().map_or(exe, PathBuf::from);
     let s = Command::new(new)
-        .args(["upgrade", "--wiring", "--yes"])
+        .args(["upgrade", "--wiring"])
         .args(args)
         .status()
         .map_err(|e| format!("fael upgrade: the new binary did not start: {e}"))?;

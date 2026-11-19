@@ -1,5 +1,5 @@
-//! `fael compact` is authoritative for this writer's own rows: a pruned row and
-//! a folded close is not re-appended to the local log by the next sync. The
+//! `fael compact` folds old months (step-2: no `--prune` — folding only).
+//! A folded close is not re-appended to the local log by the next sync. The
 //! raw close stays on the own ref so a teammate who held the row first gets it.
 
 use super::*;
@@ -22,7 +22,7 @@ fn close(id: &str, by: &str, target: &str) -> String {
 }
 
 #[test]
-fn compact_prune_and_folded_closes_survive_a_sync() {
+fn compact_folded_closes_survive_a_sync() {
     let remote = bare("compact");
     let src = repo("compact-src", "Seed", "seed@example.com");
     let a = clone(&src, "compact-a", "Alice", "alice@example.com");
@@ -61,30 +61,22 @@ fn compact_prune_and_folded_closes_survive_a_sync() {
         "setup: on the ref"
     );
 
-    let (ok, out, err) = fael(&a, &["compact", "--prune"]);
+    let (ok, out, err) = fael(&a, &["compact"]);
     assert!(ok, "{err}");
-    assert!(out.contains("1 pruned"), "{out}");
+    assert!(out.contains("0 pruned"), "{out}");
     let (ok, _, err) = sync(&a);
     assert!(ok, "{err}");
 
     let seen = ids(&a);
-    assert!(!seen.contains(&PRUNED.to_string()), "pruned row came back");
-    assert!(!seen.contains(&CLOSE_P.to_string()), "its close came back");
-    assert!(
-        !seen.contains(&CLOSE_F.to_string()),
-        "folded close came back"
-    );
     assert!(seen.contains(&FOLDED.to_string()) && seen.contains(&keep));
 
     let body = ref_body(&remote, &own);
-    assert!(!body.contains(&format!("\"id\":\"{PRUNED}\"")), "{body}");
     assert!(body.contains(FOLDED) && body.contains(&keep));
 
     // other writers still ingest everything the ref carries now
     assert!(sync(&b).0);
     let seen = ids(&b);
     assert!(seen.contains(&FOLDED.to_string()) && seen.contains(&keep));
-    assert!(!seen.contains(&PRUNED.to_string()));
 }
 
 #[test]
@@ -116,10 +108,9 @@ fn teammate_holding_the_row_still_gets_a_folded_close() {
     )
     .unwrap();
     assert!(sync(&a).0);
-    let (ok, _, err) = fael(&a, &["compact", "--prune"]);
+    let (ok, _, err) = fael(&a, &["compact"]);
     assert!(ok, "{err}");
     assert!(sync(&a).0);
-    assert!(!ids(&a).contains(&CLOSE_F.to_string()));
 
     assert!(sync(&b).0);
     assert!(

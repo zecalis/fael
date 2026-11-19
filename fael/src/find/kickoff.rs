@@ -7,12 +7,13 @@ use crate::{Args, aliases};
 use fael_core::{self as core, Filter};
 
 pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
+    a.only("kickoff", &["json"])?;
     let r = crate::repo()?;
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
     let (mut log, branch_of) = crate::journal::read(&r);
     crate::hook::mark_dormant(&r, &mut log);
     let al = aliases::load(&r, &log, true);
-    let (limit, offset) = a.paging()?;
+    let (limit, offset) = (None, 0);
     // a plan anchor (`PLAN-x.md` → `plan:x`): without --limit the page is
     // PLAN_KICKOFF_ROWS (the cut line names the rest)
     let plan = files
@@ -55,11 +56,10 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let base = a.page_base("kickoff", anchor.map(String::as_str), limit);
     let (shown, text) = show(
         a,
-        a.has("full"),
+        false,
         &log,
         &rows,
-        // an explicit --limit wins over the token budget, same as find
-        limit.map_or(r.cfg.kickoff_tokens, |_| usize::MAX),
+        r.cfg.kickoff_tokens,
         core::Cut {
             total,
             offset,

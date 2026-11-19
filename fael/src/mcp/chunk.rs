@@ -74,14 +74,13 @@ fn text_alias(a: &Value) -> Value {
 /// A `start` with no `cwd`: the client's one root other than this server's launch dir, if it
 /// gave one — the seat it works in — else this server's own directory. The seat is recorded
 /// on the run, so a filled seat is said on the result line, never rejected: the first call
-/// claims. A pinned server has one workspace; a launcher's `run` already has its seat.
+/// claims. A launcher's `run` already has its seat.
 /// Returns the filled call plus the seat note, if the seat was filled in.
 fn with_start_seat(a: &Value) -> (Value, Option<String>) {
     let mut a = a.clone();
     let bare = s(&a, "verb").as_deref() == Some("start")
         && s(&a, "cwd").is_none()
-        && s(&a, "run").is_none()
-        && !super::pinned();
+        && s(&a, "run").is_none();
     if !bare {
         return (a, None);
     }
@@ -206,12 +205,8 @@ fn build_args(verb: &str, uid: &str, a: &Value) -> Result<Vec<String>, String> {
         note_session(&mut args, a);
     }
     // no cwd, no `run`: the call answers from the live run's seat, which fael holds
-    // (issue 01M6BK561); a pinned server has one workspace and no seat to look up
-    if matches!(verb, "done" | "wait" | "after")
-        && s(a, "cwd").is_none()
-        && s(a, "run").is_none()
-        && !super::pinned()
-    {
+    // (issue 01M6BK561)
+    if matches!(verb, "done" | "wait" | "after") && s(a, "cwd").is_none() && s(a, "run").is_none() {
         args.push("--seat".into());
     }
     if verb == "start" && a["force"].as_bool().unwrap_or(false) {

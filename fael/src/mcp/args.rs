@@ -26,14 +26,7 @@ pub(super) fn files(a: &Value) -> Vec<String> {
 /// The repo a call acts on. The server runs in the session's cwd, so an agent
 /// working in another worktree would write there: `cwd` wins, then the repo
 /// holding the first absolute `files` path, then the server's own cwd.
-/// Pinned (`fael mcp --pin`): the server's own cwd only.
 pub(super) fn repo_for(a: &Value) -> Result<Repo, String> {
-    if super::pinned() {
-        if s(a, "cwd").is_some() {
-            return Err("rejected: this server is pinned to one workspace — drop cwd; try the same call without cwd".into());
-        }
-        return repo();
-    }
     if let Some(d) = s(a, "cwd") {
         return repo_at(Path::new(&d));
     }
@@ -62,51 +55,11 @@ pub(super) fn done(id: &str, warns: &[String]) -> String {
         .join("\n")
 }
 
-/// `add --urgent` over MCP: `urgent` files at the back of the queue,
-/// `urgent_before` just above that row — one of the two at most.
+/// `add` urgent over MCP: `urgent: true` files at the back of the queue.
 pub(super) fn urgent_ask(a: &Value) -> Result<core::Urgent, String> {
-    match (
-        a["urgent"].as_bool().unwrap_or(false),
-        s(a, "urgent_before"),
-    ) {
-        (false, None) => Ok(core::Urgent::Unset),
-        (true, None) => Ok(core::Urgent::End),
-        (false, Some(t)) => Ok(core::Urgent::Before(t)),
-        (true, Some(_)) => Err(
-            "rejected: urgent and urgent_before pick one — the queue takes a single position; try urgent: true alone"
-                .into(),
-        ),
-    }
-}
-
-/// Step-1 retire batch (cli-tiers): the tool's args name a flag with 0 calls
-/// since 2026-11-01 — one `note:` line, never a reject. MCP keys use `_`
-/// where the CLI flag uses `-` (`urgent_before` → `--urgent-before`).
-pub(super) fn retired_note(tool: &str, a: &Value) -> Option<String> {
-    let keys: &[&str] = match tool {
-        "find" => &["by", "to", "revisit", "recall"],
-        "add" => &["urgent_before"],
-        "bump" => &["to", "revisit", "urgent", "urgent_before", "not_urgent"],
-        _ => return None,
-    };
-    let mut hit: Vec<String> = keys
-        .iter()
-        .filter(|k| {
-            !a[k].is_null() && a[k] != Value::Bool(false) && a[k] != Value::String(String::new())
-        })
-        .map(|k| format!("--{}", k.replace('_', "-")))
-        .collect();
-    hit.sort();
-    hit.dedup();
-    match hit.as_slice() {
-        [] => None,
-        [one] => Some(format!(
-            "note: {one} is deprecated — 0 calls since 2026-11-01, removed next release"
-        )),
-        many => Some(format!(
-            "note: {} are deprecated — 0 calls since 2026-11-01, removed next release",
-            many.join(", ")
-        )),
+    match a["urgent"].as_bool().unwrap_or(false) {
+        false => Ok(core::Urgent::Unset),
+        true => Ok(core::Urgent::End),
     }
 }
 /// Unknown top-level keys as a `note:` line — never a reject, so a newer

@@ -1,5 +1,5 @@
 //! Batch bump: several ids ride one `fael bump` call bare; a bad id reports
-//! alone while the rest save; field flags still take one id.
+//! alone while the rest save; retired field flags reject outright.
 
 use super::{fael, repo, row_json};
 
@@ -23,9 +23,9 @@ fn several_ids_ride_one_call_bare() {
     assert!(!ok, "{out}");
     assert!(out.contains("rejected: 01NOPE"), "{out}");
     assert!(out.contains(&a), "{out}");
-    // field flags move one row — several ids with any of them is rejected
+    // retired field flags reject before any write, even one id at a time
     let (ok, _, err) = fael(&d, &["bump", &a, &b, "--to", "ploy"], "");
-    assert!(!ok && err.contains("one row"), "{err}");
+    assert!(!ok && err.contains("takes no"), "{err}");
     let (ok, _, err) = fael(&d, &["bump", &a, &b, "--urgent"], "");
-    assert!(!ok && err.contains("one row"), "{err}");
+    assert!(!ok && err.contains("takes no"), "{err}");
 }

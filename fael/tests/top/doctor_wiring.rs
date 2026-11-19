@@ -48,7 +48,7 @@ fn doctor_reports_wiring_behind_the_binary_and_clears_after_install() {
     let out = fael(&home, &repo, &["doctor"]);
     assert!(out.contains("[Wiring]"), "nothing installed yet: {out}");
 
-    fael(&home, &repo, &["install", "--client", "claude"]);
+    fael(&home, &repo, &["install"]);
     let out = fael(&home, &repo, &["doctor"]);
     assert!(!out.contains("[Wiring]"), "wiring is current: {out}");
 
@@ -66,9 +66,9 @@ fn doctor_reports_wiring_behind_the_binary_and_clears_after_install() {
 #[test]
 fn doctor_reports_a_stale_opencode_plugin_and_install_refreshes_it() {
     let (home, repo) = scratch();
+    std::fs::create_dir_all(home.join(".config/opencode")).unwrap();
     // scratch() seeds a .claude dir, so both clients are detected wiring
-    fael(&home, &repo, &["install", "--client", "claude"]);
-    fael(&home, &repo, &["install", "--client", "opencode"]);
+    fael(&home, &repo, &["install"]);
     assert!(
         !fael(&home, &repo, &["doctor"]).contains("[Wiring]"),
         "wiring is current"
@@ -84,7 +84,7 @@ fn doctor_reports_a_stale_opencode_plugin_and_install_refreshes_it() {
     let out = fael(&home, &repo, &["doctor"]);
     assert!(out.contains("[Wiring]"), "stale plugin: {out}");
     assert!(out.contains("fael upgrade"), "{out}");
-    fael(&home, &repo, &["install", "--client", "opencode"]);
+    fael(&home, &repo, &["install"]);
     assert!(
         !fael(&home, &repo, &["doctor"]).contains("[Wiring]"),
         "plugin refreshed"
@@ -137,7 +137,7 @@ fn session_start_writes_the_wiring_that_is_behind_and_says_so_once() {
 fn session_start_tells_codex_to_trust_the_hooks_it_wrote() {
     let (home, repo) = scratch();
     std::fs::create_dir_all(home.join(".codex")).unwrap();
-    fael(&home, &repo, &["install", "--client", "codex"]);
+    fael(&home, &repo, &["install"]);
     let hooks = home.join(".codex/hooks.json");
     let mut old: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&hooks).unwrap()).unwrap();

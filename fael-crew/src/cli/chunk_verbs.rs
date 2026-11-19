@@ -1,4 +1,4 @@
-//! `fael chunk approve|unapprove|accept|show` over several uids (plan fael-friction-2
+//! `fael chunk approve|accept|show` over several uids (plan fael-friction-2
 //! chunk-verbs): every uid runs in order, one result line per uid, a failed one never
 //! stops the rest. Flags (`--model`, `--client`) apply to every uid, and `--plan`
 //! resolves each key on its own, so one bad label rejects alone too. One uid keeps the
@@ -58,42 +58,6 @@ pub(crate) fn approve(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<()
                 println!("{}", failed(r, e));
             }
             Ok(uid) => match s.approve(&uid, Some((m.as_deref(), c.as_deref())), now) {
-                Ok(text) => println!("chunk {uid} → {text}"),
-                Err(e) => {
-                    bad += 1;
-                    println!("{}", failed(r, e));
-                }
-            },
-        }
-    }
-    if bad > 0 {
-        return Err(summary(bad, uids.len()));
-    }
-    Ok(())
-}
-
-/// `fael chunk unapprove <uid>…`: every uid leaves the queue.
-pub(crate) fn unapprove(a: &Args, r: &Repo, uids: &[&str], now: &str) -> Result<(), String> {
-    if uids.is_empty() {
-        return Err(bad(Some("unapprove")));
-    }
-    a.only("chunk unapprove", &["plan"])?;
-    let plan = a.one("plan");
-    let mut s = Store::open(&crate::plan::db(r))?;
-    if uids.len() == 1 {
-        let uid = resolve(&s, plan.as_deref(), uids[0])?;
-        let text = s.approve(&uid, None, now)?;
-        println!("chunk {uid} → {text}");
-        return Ok(());
-    }
-    let mut bad = 0;
-    for key in uids {
-        match resolve(&s, plan.as_deref(), key) {
-            Err(e) => {
-                bad += 1;
-                println!("{}", failed(r, e));
-            }
-            Ok(uid) => match s.approve(&uid, None, now) {
                 Ok(text) => println!("chunk {uid} → {text}"),
                 Err(e) => {
                     bad += 1;

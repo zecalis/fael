@@ -58,14 +58,14 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// Every flag `doctor` reads — anything else is rejected before it runs.
-const DOCTOR_FLAGS: &[&str] = &["fix", "json", "fat"];
+const DOCTOR_FLAGS: &[&str] = &["fix", "json"];
 
 pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     // a flag it never reads must not run silently: `--dry-run` once ran the real `--fix`
     a.only("doctor", DOCTOR_FLAGS).map_err(|e| {
         let head = e.strip_suffix(" — try 'fael --help'").unwrap_or(&e);
         format!(
-            "{head} — it reads --fix (repair), --json and --fat (deprecated); \
+            "{head} — it reads --fix (repair) and --json; \
              plain `fael doctor` only reports"
         )
     })?;
@@ -101,13 +101,8 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     // Gone is judged through the resolver: a file that was renamed still
     // exists under its new path, so its rows still push and are not gone.
     let al = crate::aliases::load(&r, &log, true);
-    rep.problems.extend(rows::open_row_notes(
-        &log,
-        &r.root,
-        &al,
-        &r.cfg,
-        a.has("fat"),
-    ));
+    rep.problems
+        .extend(rows::open_row_notes(&log, &r.root, &al, &r.cfg, false));
     // `--fix` also applies the mechanical closes the report carries
     // (confirmed `[Shipped]` notes, stuck `[Superseded]` chains, `[Gone]`
     // rows) — the adapter half (core never runs `gh`, so it can never take
@@ -213,14 +208,12 @@ fn say(json: bool, line: &str) {
 }
 
 pub fn compact(a: &Args) -> Result<ExitCode, String> {
+    a.only("compact", &["json"])?;
     let r = repo()?;
-    if let Some(b) = a.one("before") {
-        valid_month(&b)?;
-    }
     let opts = core::CompactOpts {
-        writer: a.one("writer"),
-        before: a.one("before"),
-        prune: a.has("prune"),
+        writer: None,
+        before: None,
+        prune: false,
     };
     // prune judges "gone" through the resolver, so the aliases are loaded
     // the same way kickoff loads them (refresh = pick up latest renames)
@@ -266,26 +259,10 @@ pub fn compact(a: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn valid_month(b: &str) -> Result<(), String> {
-    if core::is_month(b) {
-        Ok(())
-    } else {
-        Err(format!(
-            "rejected: --before {b:?} is not yyyy-mm (e.g. 2026-08)"
-        ))
-    }
-}
-
 pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
+    a.only("import", &["json"])?;
     let r = repo()?;
-    let mut maps = vec![];
-    for m in a.many("map") {
-        let (old, new) = m
-            .split_once('=')
-            .filter(|(o, n)| !o.is_empty() && !n.is_empty())
-            .ok_or_else(|| format!("rejected: --map {m:?} — write --map old/=new/"))?;
-        maps.push((old.to_string(), new.to_string()));
-    }
+    let maps = vec![];
     let sp = PathBuf::from(src);
     let sp = if sp.is_absolute() { sp } else { r.cwd.join(sp) };
     // a repo root: its journal, where every row lands since #418, plus a frozen

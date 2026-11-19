@@ -22,7 +22,7 @@ fn ask_is_said_once_until_the_row_is_bumped() {
     let b = edit_or_silent(&d, "sB", "src/a.rs");
     assert!(!asked(&b) && !b.contains("fael close"), "{b}");
 
-    let (ok, _, err) = fael(&d, &["bump", &id, "--to", "owner"], "");
+    let (ok, _, err) = fael(&d, &["bump", &id], "");
     assert!(ok, "{err}");
     std::fs::write(d.join("src/a.rs"), "// v4 longer still\n").unwrap();
     let c = edit_or_silent(&d, "sC", "src/a.rs");

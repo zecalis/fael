@@ -91,23 +91,17 @@ const HIDDEN_COMMANDS: &[&str] = &[
 
 /// Flags hidden from core `find/add/bump/doctor/stats --help` (chunk
 /// `hide-flags`; `core_is_a_strict_subset_of_full` holds the hiding).
-/// Unique strings: find 10 + add 5 + bump 5 + doctor 1 + stats 3 = 19.
+/// Unique strings: find 5 + add 3 + stats 3 = 11 (step-2 retired `--by`,
+/// `--to`, `--revisit`, `--recall`, `--urgent-before`, `--not-urgent`, `--fat`).
 const HIDDEN_FLAGS: &[&str] = &[
     "--since",
-    "--by",
-    "--to",
-    "--revisit",
     "--text",
-    "--recall",
     "--kind",
     "--full",
     "--all",
     "--urgent",
-    "--urgent-before",
     "--force",
     "--dry-run",
-    "--not-urgent",
-    "--fat",
     "--rows",
     "--day",
     "--misses",
@@ -139,11 +133,12 @@ const CREW_WORKFLOW_FLAGS: &[&str] = &[
 ];
 
 // Known gaps reported to the owner as removable-by-hand (retire chunk):
-// `chunk done --review`, `unapprove`, `board --watch`, `restore
-// --edge`, `report/compact/import/mcp/kickoff/install` maintenance flags,
-// `run beat`. No skill, brief/rules, AGENTS.md, README.md or app contract
-// names them — see the done hand-off. New workflow flags must not be added
-// here: name them in the fitting skill instead (new-flag rule).
+// `chunk done --review`. No skill, brief/rules, AGENTS.md, README.md or app contract
+// names it — see the done hand-off. (Step-2 retired the rest: `unapprove`,
+// `board --watch`, `restore --edge`, `run beat`, and the
+// `report/compact/import/mcp/kickoff/install` maintenance flags.)
+// New workflow flags must not be added here: name them in the fitting skill
+// instead (new-flag rule).
 
 /// The app contract: what the SwiftUI board app calls (classify, `Fael.swift`
 /// line numbers; `board --json` is `tests/golden/board-v1.json` `"v": 1`).

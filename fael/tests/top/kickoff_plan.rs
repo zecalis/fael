@@ -1,5 +1,5 @@
-//! `fael kickoff PLAN-x.md` (anchor `plan:x`, no file needed): at most 5 rows
-//! without --limit, the plan's handoff first.
+//! `fael kickoff PLAN-x.md` (anchor `plan:x`, no file needed): at most 5 rows,
+//! the plan's handoff first.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,6 +14,18 @@ fn fael(dir: &Path, args: &[&str]) -> String {
         .unwrap();
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     String::from_utf8_lossy(&o.stdout).into_owned()
+}
+
+fn fael_raw(dir: &Path, args: &[&str]) -> (bool, String, String) {
+    let root = dir.ancestors().find(|p| p.join(".git").exists()).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_fael"))
+        .args(args)
+        .current_dir(dir)
+        .env("FAEL_STATE_DIR", root.join("state"))
+        .output()
+        .unwrap();
+    let s = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    (o.status.success(), s(&o.stdout), s(&o.stderr))
 }
 
 fn repo() -> PathBuf {
@@ -55,11 +67,18 @@ fn a_plan_kickoff_caps_at_five_rows() {
     let out = fael(&d, &["kickoff", "PLAN-foo.md"]);
     assert_eq!(rows(&out), 5, "{out}");
     assert!(out.contains("--offset 5"), "{out}");
-    // an explicit --limit wins, and a non-plan kickoff is not capped
-    assert_eq!(
-        rows(&fael(&d, &["kickoff", "PLAN-foo.md", "--limit", "7"])),
-        7
-    );
+    // --limit/--offset are retired step-2: rejected, and a non-plan kickoff is not capped
+    for args in [
+        &["kickoff", "PLAN-foo.md", "--limit", "7"][..],
+        &["kickoff", "PLAN-foo.md", "--offset", "5"][..],
+    ] {
+        let (ok, _, err) = fael_raw(&d, args);
+        assert!(!ok, "{args:?} should reject");
+        assert!(
+            err.contains("takes no --") || err.contains("unknown flag"),
+            "{args:?}: {err}"
+        );
+    }
     assert!(rows(&fael(&d, &["kickoff"])) > 5);
 }
 
@@ -77,17 +96,24 @@ fn a_plan_path_from_a_subdirectory_names_the_same_plan() {
 }
 
 #[test]
-fn offset_pages_on_without_repeat_or_gap() {
+fn paging_flags_are_rejected() {
     let d = repo();
     for i in 0..8 {
         note(&d, &format!("other note {i}"), &format!("foo:topic-{i}"));
     }
     let first = fael(&d, &["kickoff", "PLAN-foo.md"]);
-    let second = fael(&d, &["kickoff", "PLAN-foo.md", "--offset", "5"]);
-    let all = fael(&d, &["kickoff", "PLAN-foo.md", "--limit", "8"]);
-    let mut paged: Vec<&str> = rows(&first);
-    paged.extend(rows(&second));
-    assert_eq!(paged, rows(&all), "{first}{second}");
+    assert_eq!(rows(&first).len(), 5, "{first}");
+    for args in [
+        &["kickoff", "PLAN-foo.md", "--offset", "5"][..],
+        &["kickoff", "PLAN-foo.md", "--limit", "8"][..],
+    ] {
+        let (ok, _, err) = fael_raw(&d, args);
+        assert!(!ok, "{args:?} should reject");
+        assert!(
+            err.contains("takes no --") || err.contains("unknown flag"),
+            "{args:?}: {err}"
+        );
+    }
 }
 
 #[test]

@@ -12,6 +12,7 @@ pub(crate) fn restore(
     a: &crate::Args,
     target: Option<&str>,
 ) -> Result<(), String> {
+    a.only("restore", &["json"])?;
     let log = crate::read(r);
     let out = core::restore_row(
         &r.fael,
@@ -20,7 +21,7 @@ pub(crate) fn restore(
         &r.cfg,
         &crate::stamp(r),
         target,
-        a.one("edge").as_deref(),
+        None,
     )?;
     out.warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "restore", Some(&r.root), &out.warns);

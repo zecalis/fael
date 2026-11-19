@@ -1,5 +1,5 @@
 //! Lists in the real binary: titles headline a row and the body is pulled by id;
-//! `--limit/--offset` page after ranking, the cut line prints the exact next
+//! `find --limit/--offset` pages after ranking, the cut line prints the exact next
 //! call, and MCP `find` returns the same rows. (Split from cli.rs — 400-line cap.)
 
 use std::path::{Path, PathBuf};
@@ -59,8 +59,8 @@ fn an_explicit_limit_wins_over_the_token_budget() {
     assert!(ok && rows(&out) == 5 && !out.contains("more"), "{err}{out}");
 }
 
-/// Same for `kickoff`: a tiny `kickoff_tokens` still cuts a plain kickoff,
-/// but `--limit 5` lists 5 rows.
+/// Same for `kickoff`: a tiny `kickoff_tokens` still cuts a plain kickoff.
+/// `--limit`/`--offset` are retired step-2: rejected, never silent.
 #[test]
 fn a_kickoff_limit_wins_over_the_token_budget() {
     let d = repo();
@@ -77,18 +77,18 @@ fn a_kickoff_limit_wins_over_the_token_budget() {
     let rows = |out: &str| out.lines().filter(|l| l.starts_with("- [")).count();
     let (ok, out, err) = fael(&d, &["kickoff"]);
     assert!(ok && rows(&out) < 5, "{err}{out}");
-    let (ok, out, err) = fael(&d, &["kickoff", "--limit", "5"]);
-    assert!(ok && rows(&out) == 5 && !out.contains("more"), "{err}{out}");
-    // a limit below the total still cuts by count and names the next call
-    let (ok, out, err) = fael(&d, &["kickoff", "--limit", "2"]);
-    assert!(ok && rows(&out) == 2, "{err}{out}");
-    assert!(
-        out.contains("next: fael kickoff --limit 2 --offset 2"),
-        "{out}"
-    );
-    // an offset alone names no limit, so the budget still cuts
-    let (ok, out, err) = fael(&d, &["kickoff", "--offset", "1"]);
-    assert!(ok && rows(&out) < 4, "{err}{out}");
+    for args in [
+        &["kickoff", "--limit", "5"][..],
+        &["kickoff", "--limit", "2"][..],
+        &["kickoff", "--offset", "1"][..],
+    ] {
+        let (ok, _, err) = fael(&d, args);
+        assert!(!ok, "{args:?} should reject");
+        assert!(
+            err.contains("takes no --") || err.contains("unknown flag"),
+            "{args:?}: {err}"
+        );
+    }
 }
 
 #[test]
@@ -136,20 +136,32 @@ fn find_pages_and_names_the_next_call() {
 }
 
 #[test]
-fn kickoff_pages_too() {
+fn kickoff_has_no_paging_flags() {
     let d = repo();
     // kickoff drops rows whose files are all gone — the file must exist
     std::fs::write(d.join("src/a.rs"), "").unwrap();
     for t in ["paging alpha", "paging beta", "paging gamma"] {
         add_issue(&d, t);
     }
-    let (ok, out, err) = fael(&d, &["kickoff", "--limit", "2"]);
+    let (ok, out, err) = fael(&d, &["kickoff"]);
     assert!(ok, "{err}");
-    assert_eq!(out.lines().count(), 4, "{out}");
-    assert!(
-        out.ends_with("… +1 more — next: fael kickoff --limit 2 --offset 2\n"),
+    assert_eq!(
+        out.lines().filter(|l| l.starts_with("- [")).count(),
+        3,
         "{out}"
     );
+    assert!(!out.contains("more — next:"), "{out}");
+    for args in [
+        &["kickoff", "--limit", "2"][..],
+        &["kickoff", "--offset", "1"][..],
+    ] {
+        let (ok, _, err) = fael(&d, args);
+        assert!(!ok, "{args:?} should reject");
+        assert!(
+            err.contains("takes no --") || err.contains("unknown flag"),
+            "{args:?}: {err}"
+        );
+    }
 }
 
 #[test]

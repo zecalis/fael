@@ -131,7 +131,7 @@ fn rows_batch_names_the_ninth_file_and_a_normal_row_stays_quiet() {
 }
 
 #[test]
-fn bare_bump_reports_and_a_routing_bump_does_not() {
+fn bare_bump_reports() {
     let d = repo();
     sparse_over_cap(&d, "src/big.bin");
     let (_, text) = call(
@@ -139,9 +139,6 @@ fn bare_bump_reports_and_a_routing_bump_does_not() {
         "add",
         serde_json::json!({"kind": "issue", "text": "big one", "files": ["src/big.bin"]}),
     );
-    let id = id_of(&text);
-    let (err, text) = call(&d, "bump", serde_json::json!({"id": id, "urgent": true}));
-    assert!(!err && !text.contains("not stamped"), "{text}");
     let id = id_of(&text);
     let (err, text) = call(&d, "bump", serde_json::json!({"id": id}));
     assert!(!err, "{text}");

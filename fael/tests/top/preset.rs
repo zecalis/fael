@@ -105,14 +105,16 @@ fn preset_body_is_defaults_no_hidden_semantics() {
 }
 
 #[test]
-fn preset_dry_run_writes_nothing_unknown_preset_rejects() {
+fn preset_dry_run_rejects_unknown_preset_rejects() {
     let (home, repo) = scratch();
-    let (ok, out, _) = fael(
+    // `--dry-run` is retired: the preset is not previewed, nothing is written
+    let (ok, out, err) = fael(
         &home,
         &repo,
         &["install", "--preset", "multi-agent", "--dry-run"],
     );
-    assert!(ok, "{out}");
+    assert!(!ok, "retired --dry-run was accepted: {out}");
+    assert!(err.contains("takes no --dry-run"), "{err}");
     assert!(!repo.join(".fael/config.toml").exists(), "{out}");
     let (ok, _, err) = fael(&home, &repo, &["install", "--preset", "nope"]);
     assert!(!ok, "unknown preset must reject");

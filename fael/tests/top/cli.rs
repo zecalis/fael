@@ -298,16 +298,17 @@ fn add_to_routes_lowercases_and_supersedes() {
     );
     assert!(ok, "{err}");
     let id = out.split_whitespace().next().unwrap().to_string();
-    let (_, out, _) = fael(&d, &["find", "--json", "--to", "finance"]);
+    let (_, out, _) = fael(&d, &["find", "--json", "--files", "src/a.rs"]);
     assert!(out.contains("\"to\":\"finance\""), "{out}");
-    // upper-case query matches the stored lowercase
-    let (_, out, _) = fael(&d, &["find", "--to", "FINANCE"]);
-    assert!(out.contains("which date counts?"), "{out}");
-    let (_, out, _) = fael(&d, &["find", "--to", "someone"]);
-    assert!(out.is_empty(), "{out}");
-    // `to` narrows only: the file query still shows the row, with the suffix
-    let (_, out, _) = fael(&d, &["find", "--files", "src/a.rs"]);
-    assert!(out.contains("which date counts? (to: finance)"), "{out}");
+    // `find --to` is retired step-2: the flag is rejected, upper or lower case
+    for to in ["finance", "FINANCE", "someone"] {
+        let (ok, _, err) = fael(&d, &["find", "--to", to]);
+        assert!(!ok, "--to {to} should reject");
+        assert!(
+            err.contains("takes no --to") || err.contains("unknown flag"),
+            "{err}"
+        );
+    }
     // answering via supersedes removes it from the to-do (verify, not reimplement)
     let (ok, _, err) = fael(
         &d,
@@ -322,20 +323,17 @@ fn add_to_routes_lowercases_and_supersedes() {
         ],
     );
     assert!(ok, "{err}");
-    // the superseded row answers only as such: no open row is routed there
-    let (_, out, _) = fael(&d, &["find", "--to", "finance"]);
-    assert!(out.starts_with("no open row matches"), "{out}");
 }
 
 #[test]
-fn mcp_add_find_to() {
+fn mcp_add_find_lists_titles_and_full_pulls_bodies() {
     use std::io::Write;
     let d = repo();
     let msgs = [
         r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add","arguments":{"kind":"issue","text":"whose call is it really when the pager fires at night","files":["src/a.rs"],"to":"Ploy","title":"short headline"}}}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"find","arguments":{"to":"ploy","limit":10}}}"#,
-        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find","arguments":{"to":"ploy","full":true}}}"#,
-        r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find","arguments":{"to":"delamind"}}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"find","arguments":{"kind":"issue","limit":10}}}"#,
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find","arguments":{"kind":"issue","full":true}}}"#,
+        r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find","arguments":{"kind":"issue","text":"nobody-here"}}}"#,
     ];
     let mut c = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("mcp")
@@ -365,7 +363,7 @@ fn mcp_add_find_to() {
     let text = r[2]["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("pager fires at night"), "{text}");
     let none = r[3]["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(none.starts_with("no rows match to=delamind"), "{out}");
+    assert!(none.starts_with("no rows match"), "{out}");
 }
 
 #[test]

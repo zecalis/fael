@@ -8,7 +8,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "add",
         "write a row",
-        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user|report] [--revisit date|text] [--urgent|--urgent-before id] [--supersedes id [--replace old --with new, no <text>]] [--follows id] [--then \"<still to do>\"] [--force] [--dry-run] [--json]
+        "fael add <kind> \"<text>\" [--title t] [--files a,b] [--key k] [--to who] [--from user|report] [--revisit date|text] [--urgent] [--supersedes id [--replace old --with new, no <text>]] [--follows id] [--then \"<still to do>\"] [--force] [--dry-run] [--json]
     (chat in any language; write rows in English; file each in the same message as your next tool call, never alone;
      no --files = the files this session edited, as the edit hook recorded;
      --title = the ≤15-word headline lists show, the body is pulled by id — give one to any
@@ -35,7 +35,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
      convention (plan:<name>:handoff; chunk-<n> only for a chunk run in parallel) is
      rejected before the write — the reject ends with the `try` call that passes;
      --force files it as is, or a path that looks like a typo;
-     --dry-run prints the verdict and the row the real add would write, writing nothing; deprecated: --urgent-before — 0 calls since 2026-11-01, removed next release;
+     --dry-run prints the verdict and the row the real add would write, writing nothing;
      a repeat on these files or key, \"Supersedes <id>\" in the text, and the
      only key on these files are filled in for you;
      text mode prints `<id> → <path>` on stdout first (the first word is the id,
@@ -55,10 +55,10 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     ),
     (
         "bump",
-        "still true after its files changed (restamps), or new to/urgent/revisit",
-        "fael bump <id> [<id>...] [--to who] [--revisit date|text] [--urgent|--urgent-before id|--not-urgent] [--why text]
-    (same id, text and files — one bump event per id; text and files never change through bump; several ids ride one call bare — with --to/--urgent/--revisit it takes one id)
-    a bare bump is the 'still true' verdict on a row whose files changed: restamps it from disk; --why \"<short>\" records an 'unrelated edit' answer; deprecated: --to --revisit --urgent --urgent-before --not-urgent — 0 calls since 2026-11-01, removed next release",
+        "still true after its files changed (restamps)",
+        "fael bump <id> [<id>...] [--why text]
+    (same id, text and files — one bump event per id; text and files never change through bump; several ids ride one call bare)
+    a bare bump is the 'still true' verdict on a row whose files changed: restamps it from disk; --why \"<short>\" records an 'unrelated edit' answer",
     ),
     (
         "claim",
@@ -81,7 +81,7 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "find",
         "search rows",
-        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--by writer] [--to who] [--revisit[=text]] [--all] [--full] [--limit N] [--offset M] [--text query] [--recall wide]
+        "fael find [text|id ...] [--files a,b] [--key glob] [--kind k] [--since yyyy-mm[-dd]] [--all] [--full] [--limit N] [--offset M] [--text query]
      (an exact id or unique prefix pulls that row's body — and, if it is closed,
       why: `closed: <text> (<sha>)`; several ids print every body in one call,
       a bad id reports alone and the exit is 1; several words with no id are
@@ -100,7 +100,6 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
       text finds rows holding every word, in any order (literal AND, not regex -
       a query with regex metachars prints a hint suggesting --key glob or two finds); on a busy file add
       one: fael find --files src/a.rs \"timeout\"; --key globs: --key 'feature:*' (a bare key also matches its k:* children);
-     --recall wide also pulls rows sharing a key with an exact hit and the text match off any file, exact hits first; deprecated: --by --to --revisit --recall — 0 calls since 2026-11-01, removed next release;
      a cut list prints the exact next call — rerun it with the new --offset)",
     ),
     (
@@ -118,9 +117,8 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "kickoff",
         "the session brief",
-        "fael kickoff [file|anchor] [--full] [--limit N] [--offset M]
-    (the session brief: open rows ranked for a file, anchor or the whole repo;
-    an explicit --limit N is not cut by budget.kickoff_tokens; deprecated: --full --limit --offset — 0 calls since 2026-11-01, removed next release)",
+        "fael kickoff [file|anchor]
+    (the session brief: open rows ranked for a file, anchor or the whole repo)",
     ),
     (
         "mv",
@@ -147,7 +145,7 @@ fael chunk unafter <uid> <other> \"<why>\" [--plan p]
 fael chunk done <uid> \"<handoff>\" --left none|<id|uid>,… [--pr N[,M...]|owner/repo#N|URL[,M...] | --out <path> | --no-change] [--review clean|fixed|failed] [--run R]
 owner: fael chunk answer|drop|park <uid> \"<text>\" · fael chunk accept|unpark <uid> [--plan p]
 planner: fael chunk apply --json - [--plan p]   (stdin: [{\"op\":\"merge\",\"chunks\":[a,b]} · {\"op\":\"split\",\"chunk\":a,\"into\":[{\"title\":…,\"label\":…,\"brief\":…,\"size\":…,\"model\":…,\"scope\":…,\"reads\":…},…]} · {\"op\":\"pair\",\"chunks\":[a,b]} · {\"op\":\"after\",\"chunk\":a,\"on\":b,\"why\":…}])
-fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapprove <uid> [--plan p] (unapprove: deprecated, unused since 2026-11-01)
+fael chunk approve <uid> [--model M] [--client C] [--plan p]
     (inbox or a plan from `fael plan new`; add prints
      the new uid, no brief = draft; add and edit warn on a --scope path whose directory is
      missing or a typo of a name beside it; --issue links open ledger issues it fixes (its
@@ -173,7 +171,7 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "board",
         "every registered repo's plans and chunks: needs you, queue, running, blocked",
-        "fael board [--json] [--open] [--plan p] | fael board --json --watch | fael board --drop <root>
+        "fael board [--json] [--open] [--plan p] | fael board --json | fael board --drop <root>
     (the owner's view, run from anywhere: each repo whose crew.db a `fael plan`
      or `fael chunk` command wrote is listed in ~/.local/state/fael/projects;
      --json is the app's contract (\"v\": 1, tests/golden/board-v1.json): a removed or
@@ -182,10 +180,7 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
      keeps one plan's chunks; the text view folds blocked into per-plan counts and
      --plan lists them; a path in .fael/shared (one prefix per line) is
      nobody's claim: it never makes an overlap; a repo whose crew.db cannot be read
-     stays listed with its error and the command exits 1; --watch streams board lines for a terminal or agent (the app reads `--json` only; --watch deprecated — 0 calls since 2026-11-01, removed next release) and stays up,
-     rereads each second only the project whose db, ledger jsonl or
-     git refs moved, prints a compact board line at start and on each change, and
-     exits when stdin closes; --drop takes a finished repo off the registry until a
+     stays listed with its error and the command exits 1; --drop takes a finished repo off the registry until a
      chunk command there adds it back)",
     ),
     (
@@ -251,13 +246,11 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "run",
         "end one chunk start, or mark it seen",
-        "fael run end R [--cost USD] | fael run beat R
+        "fael run end R [--cost USD]
     (ends every live run row of start R — the launcher's cleanup after the agent
      exits; never another start, never a chunk's state; none left exits 0; claims
      each row's branch diff as done would, and done keeps it (a lead rebases the
-     lane after), and says each path outside the declared scope as done does; beat:
-     start R's live rows are seen now — the launcher calls it while a headless client
-     runs, so a long run never reads stalled; deprecated: run beat — 0 calls since 2026-11-01, removed next release)
+     lane after), and says each path outside the declared scope as done does)
   --cost USD   what the client reported the run cost (opencode: `opencode session export <sessionID>` `.info.cost`; claude's total_cost_usd), a
                decimal >= 0; kept on start R's rows and shown as run.cost on the board;
                headless wrapper: R=$(fael chunk start <uid> --run <new-R> --client <c> --model <m>) && { <run the agent on \"$R\">; fael run end \"$R\" --cost <USD from the client's session export>; }",
@@ -265,11 +258,10 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "restore",
         "revert a supersede edge",
-        "fael restore [<id>] [--edge id]
+        "fael restore [<id>]
     (revert a supersede edge with an event row — the row keeps its id and opens
-     again; <id> reopens that row when one edge still hides it, --edge names
-     the superseding row when several do; an already-open row or an
-     already-reverted edge is info, never an error; deprecated: --edge — 0 calls since 2026-11-01, removed next release)",
+     again; <id> reopens that row when one edge still hides it; an already-open row or an
+     already-reverted edge is info, never an error)",
     ),
     (
         "verify",
@@ -327,16 +319,16 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "report",
         "one offline HTML page for a lead",
-        "fael report [--out f] [--open] [--since d]
+        "fael report
     (one offline HTML page answering three questions: what memory reached the
      agents, what is noise, did fael add friction — every number is a field of
-     `fael stats --json` for the same --since (default: this and last month); default --out is report.html in
-     the state dir, never .fael/; --open hands it to the OS opener; deprecated: --out --open --since — 0 calls since 2026-11-01, removed next release)",
+     `fael stats --json` for the same window (this and last month); the file is report.html in
+     the state dir, never .fael/)",
     ),
     (
         "doctor",
         "check the log; --fix repairs what it can",
-        "fael doctor [--fix] [--fat] [--json]
+        "fael doctor [--fix] [--json]
      (check the log and the repo; the first line counts what needs a decision and what --fix clears now, the lines
       follow in that order and `info` (where rows live, a metric, a branch hint, machine state) comes last, never a
       problem; [Gone] and [PartGone] name the git fact behind each missing file — the commit that removed it,
@@ -350,22 +342,20 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
       skipped); [NoVerdict] lists rows on a file over the 1 MiB push cap — push never says whether it changed since the
       row was written (note only, never --fix); [Unstamped] lists rows with no file stamp — `fael bump <id>` stamps
       one you checked is still true (note only, never --fix); [Secret] flags a row that holds a token — rotate it,
-      then `fael purge <id>` (never --fix); --json prints each problem's full row ids for a cleanup pass; --fat lists
-      every fat row, deprecated — 0 calls since 2026-11-01, removed next release, including pre-self-heal legacy rows
-      that stay collapsed to one line by default)",
+      then `fael purge <id>` (never --fix); --json prints each problem's full row ids for a cleanup pass)",
     ),
     (
         "compact",
         "fold old rows per writer",
-        "fael compact [--writer id] [--before yyyy-mm] [--prune]
-    (fold old rows into per-writer summaries; --prune deletes; deprecated: --writer --before --prune — 0 calls since 2026-11-01, removed next release)",
+        "fael compact
+    (fold old rows into per-writer summaries)",
     ),
     (
         "import",
         "import another clone's log",
-        "fael import <path> [--map old/=new/]
+        "fael import <path>
     (import rows from a log file, a log dir or a repo root (its journal plus any .fael/log); a close folds into its
-     row; importing twice is safe; --map rewrites a path prefix, repeatable; deprecated: --map — 0 calls since 2026-11-01, removed next release)",
+     row; importing twice is safe)",
     ),
     (
         "sync",
@@ -378,23 +368,22 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
     (
         "mcp",
         "MCP server on stdio",
-        "fael mcp [--pin]
-    (serve find/add/close/chunk over stdio for MCP clients)
-    --pin: every call acts on this cwd only — set it before exposing over HTTP; deprecated: --pin — 0 calls since 2026-11-01, removed next release",
+        "fael mcp
+    (serve find/add/close/chunk over stdio for MCP clients)",
     ),
     (
         "install",
         "install hooks and skills for a client",
-        "fael install [--client claude|codex|opencode] [--preset multi-agent] [--dry-run]
-    (install hooks and skills for an agent client; --dry-run prints without writing;
+        "fael install [--preset multi-agent]
+    (install hooks and skills for an agent client;
      --preset multi-agent writes the repo's .fael/config.toml from proven defaults only
      (no new behavior: the file parses to Config::default), leaving an existing
-     config alone — one setup for multi-agent teams, then no hand-tuning; deprecated: --client --dry-run --yes — 0 calls since 2026-11-01, removed next release)",
+     config alone — one setup for multi-agent teams, then no hand-tuning)",
     ),
     (
         "upgrade",
         "update the binary, hooks and skills (alias: update)",
-        "fael upgrade [--client claude|codex|opencode] [--dry-run] [--yes]
-    (updates the binary by the channel it came from — brew, npm or the shell/ps1 installer's fael-update — then the new binary writes hooks and skills; asks first, --yes skips the question, --dry-run shows the channel, the command and the wiring changes; `fael update` is the same; deprecated: --client --dry-run --yes — 0 calls since 2026-11-01, removed next release; session-start runs `--auto` itself once a day, detached — off with FAEL_NO_AUTO_UPDATE=1 or `auto_update = false` in ~/.config/fael/config.toml)",
+        "fael upgrade
+    (updates the binary by the channel it came from — brew, npm or the shell/ps1 installer's fael-update — then the new binary writes hooks and skills; asks first; `fael update` is the same; session-start runs `--auto` itself once a day, detached — off with FAEL_NO_AUTO_UPDATE=1 or `auto_update = false` in ~/.config/fael/config.toml)",
     ),
 ];

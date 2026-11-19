@@ -1,4 +1,4 @@
-//! `fael restore` through the real binary: reopening by target or by edge,
+//! `fael restore` through the real binary: reopening by id,
 //! idempotency (a repeat writes nothing), rejects, doctor precision after,
 //! and the intended B+A-open → next-add-Holds behaviour (format.md §Restore).
 
@@ -166,7 +166,7 @@ fn close_superseder_after_restore_keeps_target_open() {
 }
 
 #[test]
-fn restore_names_edge_when_two_hide() {
+fn restore_with_two_edges_names_the_flag_and_edge_rejects() {
     let d = repo();
     let (a, b) = superseded_pair(&d);
     let c = add(
@@ -186,19 +186,20 @@ fn restore_names_edge_when_two_hide() {
     let (ok, _, err) = fael(&d, &["restore", &a], "");
     assert!(!ok, "two active edges must not pick one silently");
     assert!(err.contains("--edge"), "{err}");
-    // revert one edge: A still hidden behind the other
-    let (ok, out, err) = fael(&d, &["restore", "--edge", &b], "");
-    assert!(ok, "{err}");
-    assert!(out.contains("restored"), "{out}");
-    let (ok, out, _) = fael(&d, &["find", "--json", "--files", "src/a.rs"], "");
-    assert!(ok);
-    assert!(!lists(&out, &a), "C still hides A: {out}");
-    // revert the last edge: A opens
-    let (ok, _, err) = fael(&d, &["restore", "--edge", &c], "");
-    assert!(ok, "{err}");
-    let (ok, out, _) = fael(&d, &["find", "--json", "--files", "src/a.rs"], "");
-    assert!(ok);
-    assert!(lists(&out, &a), "{out}");
+    // --edge is retired: naming the edge directly is rejected
+    for args in [
+        vec!["restore".to_string(), "--edge".to_string(), b.clone()],
+        vec!["restore".to_string(), "--edge".to_string(), c.clone()],
+    ] {
+        let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+        let (ok, _, err) = fael(&d, &argv, "");
+        assert!(!ok, "{argv:?} should reject");
+        assert!(
+            err.contains("unknown flag") || err.contains("takes no --edge"),
+            "{argv:?}: {err}"
+        );
+    }
+    let _ = (b, c);
 }
 
 #[test]
@@ -219,14 +220,20 @@ fn restore_unknown_and_edgeless_reject() {
     let (ok, _, err) = fael(&d, &["restore", "deadbeef"], "");
     assert!(!ok);
     assert!(err.contains("no row"), "{err}");
-    // --edge on a row that supersedes nothing names no edge
+    // --edge is retired: rejected at the CLI, never reaching the edge math
     let (ok, _, err) = fael(&d, &["restore", "--edge", &a], "");
     assert!(!ok);
-    assert!(err.contains("supersedes nothing"), "{err}");
-    // --edge and target disagree
-    let (ok, _, err) = fael(&d, &["restore", &b, "--edge", &b], "");
+    assert!(
+        err.contains("unknown flag") || err.contains("takes no --edge"),
+        "{err}"
+    );
+    // a second positional is not an edge: wrong arity
+    let (ok, _, err) = fael(&d, &["restore", &b, &b], "");
     assert!(!ok, "B supersedes A, so it cannot revert an edge into B");
-    assert!(err.contains("not"), "{err}");
+    assert!(
+        err.contains("wrong arguments") || err.contains("not"),
+        "{err}"
+    );
 }
 
 #[test]

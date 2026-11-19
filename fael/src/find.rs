@@ -38,6 +38,12 @@ use fael_core::{self as core, Filter, Log, Row};
 pub(crate) use page_base::PageBase;
 
 pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
+    a.only(
+        "find",
+        &[
+            "files", "key", "kind", "since", "text", "full", "all", "limit", "offset", "json",
+        ],
+    )?;
     let r = super::repo()?;
     // the union read tags journal-only rows with their stamped branch
     let (mut log, branch_of) = super::journal::read(&r);
@@ -63,13 +69,10 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
         key: a.one("key").or(text_key),
         kind: a.one("kind"),
         since: a.one("since"),
-        by: a.one("by"),
-        to: a.one("to").map(|t| t.trim().to_lowercase()),
-        // bare `--revisit` = any revisit, `--revisit=<text>` narrows to it
-        revisit: a
-            .has("revisit")
-            .then(|| a.one("revisit").unwrap_or_default()),
-        recall: core::parse_recall(a.one("recall").as_deref())?,
+        by: None,
+        to: None,
+        revisit: None,
+        recall: None,
         all: a.has("all"),
         limit,
         offset,

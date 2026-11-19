@@ -339,33 +339,16 @@ pub(crate) fn close_row_as(
     Ok((row, path, warns))
 }
 
-/// `fael bump <id>` — new `to`/`urgent`/`revisit` on the same row, under its id (a bump event).
-/// At most one of `--urgent` (back of the queue), `--urgent-before <id>`
-/// (just above that row), `--not-urgent` (leave the queue); none keeps the
-/// old number. `--why "<short>"` records the agent's answer to a stale ask
-/// ("unrelated edit") in the bump event. Absent `--revisit` keeps the old date/text; a value sets it.
+/// `fael bump <id>` — restamps the row ("still true") under its id (a bump event).
+/// `--why "<short>"` records the agent's answer to a stale ask
+/// ("unrelated edit") in the bump event.
 pub(crate) fn bump(
     r: &crate::Repo,
     a: &crate::Args,
     id: &str,
 ) -> Result<(core::Row, PathBuf, Vec<String>), String> {
-    let urgent = match (a.has("urgent"), a.one("urgent-before"), a.has("not-urgent")) {
-        (false, None, false) => core::UrgentChange::Keep,
-        (true, None, false) => core::UrgentChange::End,
-        (false, Some(t), false) => core::UrgentChange::Before(t),
-        (false, None, true) => core::UrgentChange::Remove,
-        _ => {
-            return Err(
-                "rejected: bump takes at most one of --urgent, --urgent-before, --not-urgent"
-                    .into(),
-            );
-        }
-    };
-    // bare `--revisit` names no date or text — that only filters on `find`
-    let revisit = a.revisit_value()?;
     let log = crate::read(r);
-    let moves =
-        a.one("to").is_some() || revisit.is_some() || !matches!(urgent, core::UrgentChange::Keep);
+    let moves = false;
     let (fh, note) = crate::filehash::for_bump(&r.root, &log, id, moves)?;
     let stamp = crate::session::retire_stamp(r, &log, id);
     let (row, path, mut warns) = core::bump_row(
@@ -376,9 +359,9 @@ pub(crate) fn bump(
         &stamp,
         id,
         core::BumpOpts {
-            to: a.one("to"),
-            urgent,
-            revisit,
+            to: None,
+            urgent: core::UrgentChange::Keep,
+            revisit: None,
             held: None,
             fh: Some(fh),
             why: a.one("why"),

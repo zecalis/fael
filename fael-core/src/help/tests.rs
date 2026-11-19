@@ -116,43 +116,13 @@ fn core_is_a_strict_subset_of_full() {
     for (cmd, hidden) in [
         (
             "find",
-            [
-                "--since",
-                "--by",
-                "--to",
-                "--revisit",
-                "--text",
-                "--recall",
-                "--kind",
-                "--full",
-                "--all",
-            ]
-            .as_slice(),
+            ["--since", "--text", "--kind", "--full", "--all"].as_slice(),
         ),
         (
             "add",
-            [
-                "--urgent",
-                "--urgent-before",
-                "--revisit",
-                "--force",
-                "--dry-run",
-            ]
-            .as_slice(),
+            ["--urgent", "--revisit", "--force", "--dry-run"].as_slice(),
         ),
-        (
-            "bump",
-            [
-                "--to",
-                "--revisit",
-                "--urgent",
-                "--urgent-before",
-                "--not-urgent",
-                "--why",
-            ]
-            .as_slice(),
-        ),
-        ("doctor", ["--fat"].as_slice()),
+        ("bump", ["--why"].as_slice()),
         (
             "stats",
             ["--rows", "--day", "--days", "--misses", "--session"].as_slice(),
@@ -273,49 +243,4 @@ fn all_flag_beats_verb_help() {
     for args in ["chunk approve --help --all", "help chunk approve --all"] {
         assert_eq!(super::for_argv(&argv(args)), full, "{args}");
     }
-}
-
-/// Step-1 retire batch: every retired flag is named with its deprecation in
-/// the full section, and none leaks into the core `fael <cmd> --help` —
-/// the default surface is unchanged.
-#[test]
-fn retired_flags_deprecated_in_full_only() {
-    for (cmd, flag) in super::RETIRED_FLAGS {
-        let full = super::for_command_full(cmd).unwrap_or_default();
-        assert!(
-            full.contains(&format!("--{flag}")),
-            "{cmd}: --{flag} missing from full help"
-        );
-        assert!(
-            full.contains("deprecated"),
-            "{cmd}: no deprecation line in full help"
-        );
-        if let Some(core) = super::core::section(cmd) {
-            assert!(
-                !core.contains(&format!("--{flag}")),
-                "{cmd}: --{flag} leaks into core help"
-            );
-        }
-    }
-    // verb-level retirements warn, never reject: the argv scan names them.
-    let argv = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
-    assert_eq!(super::retired_warns(&argv("board --json --watch")).len(), 1);
-    assert_eq!(
-        super::retired_warns(&argv("bump 01M1 --to ploy --revisit 2026-01-01")),
-        vec![
-            "warn: --to is deprecated — 0 calls since 2026-11-01, removed next release".to_string(),
-            "warn: --revisit is deprecated — 0 calls since 2026-11-01, removed next release"
-                .to_string(),
-        ]
-    );
-    assert!(super::retired_warns(&argv("run beat R")).len() == 1);
-    assert!(super::retired_warns(&argv("find --recall wide")).len() == 1);
-    // a help request stays quiet; text after `--` is never a flag.
-    assert!(super::retired_warns(&argv("find --help --all")).is_empty());
-    assert!(super::retired_warns(&argv("add note --files a.rs -- --watch")).is_empty());
-    // `update` is `upgrade` under another name.
-    assert_eq!(super::retired_warns(&argv("update --yes")).len(), 1);
-    // used flags stay silent.
-    assert!(super::retired_warns(&argv("find --since 2026-11-01")).is_empty());
-    assert!(super::retired_warns(&argv("chunk done U --review clean --left none")).is_empty());
 }

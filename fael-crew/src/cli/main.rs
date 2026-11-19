@@ -109,7 +109,6 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("sweep", []) => sweep::cmd(&a),
         ("chunk", rest) => chunk::cmd(&a, rest),
         ("run", [end, r]) if end == "end" => chunk::run_end(&a, r),
-        ("run", [beat, r]) if beat == "beat" => chunk::run_beat(&a, r),
         ("", []) => {
             println!("{}", usage());
             Ok(ExitCode::SUCCESS)
@@ -141,8 +140,7 @@ run 'fael-crew <command> --help' for the flags of one command."
     )
 }
 
-/// `git <args>` in `dir`: trimmed stdout when it exits 0 and prints something. Answered from
-/// the --watch cache while the board lives (`board::git_output`).
+/// `git <args>` in `dir`: trimmed stdout when it exits 0 and prints something.
 pub(crate) fn git(dir: &Path, args: &[&str]) -> Option<String> {
     let (code, out) = board::git_output(dir, args)?;
     let s = out.trim().to_string();

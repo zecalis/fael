@@ -137,7 +137,7 @@ pub fn upgrade(client: Option<String>, dry: bool, yes: bool, wiring: bool) -> Re
             return Ok(());
         }
     }
-    cmd(client, dry, !yes, None)
+    cmd(client, dry, !yes && !wiring, None)
 }
 
 pub fn cmd(

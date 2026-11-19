@@ -5,8 +5,9 @@ use std::path::Path;
 use std::process::Command;
 
 fn install(home: &Path) -> String {
+    std::fs::create_dir_all(home.join(".claude")).ok();
     let o = Command::new(env!("CARGO_BIN_EXE_fael"))
-        .args(["install", "--client", "claude"])
+        .args(["install"])
         .env("HOME", home)
         // never the developer's real usage log (fael:01M4F3G0)
         .env("FAEL_STATE_DIR", home.join("state"))
