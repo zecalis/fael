@@ -34,7 +34,7 @@ fn a_row_on_a_file_over_the_push_cap_is_listed() {
     let id = add(&d, "big asset choice", "src/big.bin");
     let (_, out, _) = fael(&d, &["doctor"]);
     assert!(
-        out.contains("note [NoVerdict]: 1 open row(s)")
+        out.contains("info [NoVerdict]: 1 open row(s)")
             && out.contains(&format!("{} → src/big.bin (2.0 MiB)", &id[..8]))
             && out.contains("generic hint stands"),
         "{out}"

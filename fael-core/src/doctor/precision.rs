@@ -101,22 +101,24 @@ pub fn precision(log: &Log) -> Option<Problem> {
     rules.sort_unstable();
     let mut parts = vec![];
     let mut ids: Vec<String> = vec![];
+    let mut more: Vec<String> = vec![];
     for rule in rules {
         let (right, wrong) = per[rule];
         let labeled = right + wrong;
         let mut eg = egs[rule].clone();
         eg.sort();
-        let shown: Vec<String> = eg
-            .iter()
-            .take(5)
-            .map(|(id, ok)| {
-                format!(
-                    "{} {}",
-                    w.short(id),
-                    if *ok { "re-confirmed" } else { "still open" }
-                )
-            })
-            .collect();
+        let (shown, rest) = super::split_shown(
+            eg.iter()
+                .map(|(id, ok)| {
+                    format!(
+                        "{} {}",
+                        w.short(id),
+                        if *ok { "re-confirmed" } else { "still open" }
+                    )
+                })
+                .collect(),
+        );
+        more.extend(rest.into_iter().map(|e| format!("{rule}: {e}")));
         ids.extend(eg.iter().map(|(id, _)| id.clone()));
         parts.push(format!(
             "{rule} {right}/{labeled} correct, {labeled} restored of {} edges ({})",
@@ -137,6 +139,7 @@ pub fn precision(log: &Log) -> Option<Problem> {
                 parts.join("; ")
             ),
         )
-        .with_ids(ids),
+        .with_ids(ids)
+        .with_more(more),
     )
 }

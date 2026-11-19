@@ -36,11 +36,11 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
     if hits.is_empty() {
         return None;
     }
-    let eg: Vec<String> = hits
-        .iter()
-        .take(5)
-        .map(|(r, f)| format!("{} → {f}", w.short(&r.id)))
-        .collect();
+    let (eg, more) = core::split_shown(
+        hits.iter()
+            .map(|(r, f)| format!("{} → {f}", w.short(&r.id)))
+            .collect(),
+    );
     Some(
         core::Problem::info(
             core::ProblemKind::Unstamped,
@@ -52,6 +52,7 @@ pub(super) fn problem(log: &core::Log, root: &Path) -> Option<core::Problem> {
                 eg.join("; ")
             ),
         )
-        .with_ids(hits.iter().map(|(r, _)| r.id.clone()).collect()),
+        .with_ids(hits.iter().map(|(r, _)| r.id.clone()).collect())
+        .with_more(more),
     )
 }

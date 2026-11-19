@@ -5,14 +5,17 @@
 mod alive;
 pub(crate) use fael_core::drift;
 mod fat;
+mod files;
 mod hooks_seen;
 mod merged;
 mod noverdict;
 mod orphan;
 mod phantom;
+mod removed;
 mod rows;
 mod shared;
 mod shipped;
+mod show;
 mod status;
 mod unstamped;
 
@@ -54,7 +57,18 @@ pub(crate) fn gone_ids(
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// Every flag `doctor` reads — anything else is rejected before it runs.
+const DOCTOR_FLAGS: &[&str] = &["fix", "json", "fat"];
+
 pub fn doctor(a: &Args) -> Result<ExitCode, String> {
+    // a flag it never reads must not run silently: `--dry-run` once ran the real `--fix`
+    a.only("doctor", DOCTOR_FLAGS).map_err(|e| {
+        let head = e.strip_suffix(" — try 'fael --help'").unwrap_or(&e);
+        format!(
+            "{head} — it reads --fix (repair), --json and --fat (deprecated); \
+             plain `fael doctor` only reports"
+        )
+    })?;
     let r = repo()?;
     let month = core::current_month();
     // rows live in the clone's journal (a fresh worktree has no tree log): scan
@@ -102,7 +116,7 @@ pub fn doctor(a: &Args) -> Result<ExitCode, String> {
     if a.has("fix") {
         fix_closes(&r, &mut rep, a.has("json"));
     }
-    show(&rep, a.has("json"));
+    show::show(&rep, a.has("json"));
     Ok(if rep.errors().count() > 0 {
         ExitCode::FAILURE
     } else {
@@ -195,56 +209,6 @@ fn say(json: bool, line: &str) {
         eprintln!("{line}");
     } else {
         println!("{line}");
-    }
-}
-
-fn show(rep: &core::DoctorReport, json: bool) {
-    if json {
-        let ps: Vec<_> = rep
-            .problems
-            .iter()
-            .map(|p| {
-                serde_json::json!({
-                    "kind": kind_label(&p.kind).to_lowercase(),
-                    "severity": format!("{:?}", p.severity).to_lowercase(),
-                    "fixable": p.fixable,
-                    "ids": p.ids,
-                    "detail": p.detail,
-                })
-            })
-            .collect();
-        println!("{}", serde_json::Value::Array(ps));
-        return;
-    }
-    if rep.problems.is_empty() {
-        println!("fael doctor: clean");
-        return;
-    }
-    let errs = rep.errors().count();
-    println!(
-        "fael doctor: {} problem(s) ({} error(s), {} note(s))",
-        rep.problems.len(),
-        errs,
-        rep.problems.len() - errs
-    );
-    for p in &rep.problems {
-        let sev = if p.severity == core::Severity::Error {
-            "error"
-        } else {
-            "note"
-        };
-        let fix = if p.fixable { " [--fix]" } else { "" };
-        println!("{sev} [{}]{fix}: {}", kind_label(&p.kind), p.detail);
-    }
-}
-
-/// The `[Shipped?]` / `[Shipped kept]` labels for the two Shipped variants —
-/// every other kind renders as its debug name.
-fn kind_label(k: &core::ProblemKind) -> String {
-    match k {
-        core::ProblemKind::ShippedMaybe => "Shipped?".into(),
-        core::ProblemKind::ShippedKept => "Shipped kept".into(),
-        _ => format!("{k:?}"),
     }
 }
 

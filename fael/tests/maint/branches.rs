@@ -109,7 +109,7 @@ fn doctor_flags_merged_branches() {
     let (ok, out) = doctor(Some(r#"[{"headRefName":"feat/landed"}]"#));
     assert!(ok, "{out}");
     assert!(
-        out.contains("note [Merged]: 1 local branch(es)")
+        out.contains("info [Merged]: 1 local branch(es)")
             && out.contains("git branch -D feat/landed"),
         "{out}"
     );

@@ -337,22 +337,22 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p] · fael chunk unapp
         "doctor",
         "check the log; --fix repairs what it can",
         "fael doctor [--fix] [--fat] [--json]
-     (check the log and the repo for problems; --fix repairs what it can:
-      broken/torn lines move to quarantine, conflict markers are stripped,
-      encoding is normalised, and the mechanically provable rows are closed —
-      stuck [Superseded] chains, [Gone] rows, confirmed [Shipped] status notes;
-      everything else stays report-only with its ready `fael close` command —
+     (check the log and the repo; the first line counts what needs a decision and what --fix clears now, the lines
+      follow in that order and `info` (where rows live, a metric, a branch hint, machine state) comes last, never a
+      problem; [Gone] and [PartGone] name the git fact behind each missing file — the commit that removed it,
+      `never in git` or `deleted, not committed` — evidence, never a verdict; a kind that lists 5 examples ends
+      `+N more: fael doctor --json`, which prints the rest; a flag it does not read is rejected, so --fix --dry-run
+      never repairs; --fix repairs what it can: broken/torn lines move to quarantine, conflict markers are stripped,
+      encoding is normalised, and the mechanically provable rows are closed — stuck [Superseded] chains, [Gone]
+      rows, confirmed [Shipped] status notes; everything else stays report-only with its ready `fael close` command —
       rules and facts on a landed branch are listed as [Shipped kept], never closed; [Phantom] flags citations of ids
-      with no row behind them — in rows, in close reasons and in the prose of
-      every *.md in the repo (fenced code skipped); [NoVerdict] lists rows on a
-      file over the 1 MiB push cap — push never says whether it changed since the
-      row was written (note only, never --fix); [Unstamped] lists rows with no
-      file stamp — `fael bump <id>` stamps one you checked is still true (note
-      only, never --fix); [Secret] flags a row that
-      holds a token — rotate it, then `fael purge <id>` (never --fix); --json prints each
-      problem's full row ids for a cleanup pass; --fat lists every fat row, deprecated — 0 calls since 2026-11-01, removed next release,
-      including pre-self-heal legacy rows that stay collapsed to one line by
-      default)",
+      with no row behind them — in rows, in close reasons and in the prose of every *.md in the repo (fenced code
+      skipped); [NoVerdict] lists rows on a file over the 1 MiB push cap — push never says whether it changed since the
+      row was written (note only, never --fix); [Unstamped] lists rows with no file stamp — `fael bump <id>` stamps
+      one you checked is still true (note only, never --fix); [Secret] flags a row that holds a token — rotate it,
+      then `fael purge <id>` (never --fix); --json prints each problem's full row ids for a cleanup pass; --fat lists
+      every fat row, deprecated — 0 calls since 2026-11-01, removed next release, including pre-self-heal legacy rows
+      that stay collapsed to one line by default)",
     ),
     (
         "compact",

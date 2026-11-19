@@ -30,14 +30,18 @@ fn doctor_notes_local_and_gone_rows() {
     // [GhOffline] (no `gh` in a remote-less repo: the `gh` checks are
     // skipped, never silent)
     let (ok, out, _) = fael(&d, &["doctor"]);
-    assert!(ok && out.contains("3 problem(s)"), "{out}");
+    assert!(
+        ok && out.starts_with("fael doctor: nothing to decide · 3 info\n"),
+        "{out}"
+    );
     // adopted: the row sits in the journal, no union line or commit asked for
     std::fs::write(d.join("src/a.rs"), "").unwrap();
     let (ok, _, _) = fael(&d, &["add", "note", "first row", "--files", "src/a.rs"]);
     assert!(ok);
     let (ok, out, _) = fael(&d, &["doctor"]);
     assert!(
-        ok && out.contains("2 problem(s) (0 error(s), 2 note(s))") && out.contains("note [Local]"),
+        ok && out.starts_with("fael doctor: nothing to decide · 2 info\n")
+            && out.contains("info [Local]"),
         "{out}"
     );
     assert!(!d.join(".gitattributes").exists(), "{out}");
@@ -73,7 +77,7 @@ fn doctor_notes_local_and_gone_rows() {
     assert!(
         out.contains("note [Gone] [--fix]: 1 open row(s)")
             && out.contains("note [PartGone]: 1 open row(s)")
-            && out.contains("(src/removed.rs): `fael close"),
+            && out.contains("(src/removed.rs — never in git): `fael close"),
         "{out}"
     );
 }

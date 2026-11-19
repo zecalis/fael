@@ -284,6 +284,31 @@ fn doctor_spawns_a_fixed_number_however_many_branches() {
     }
 }
 
+/// `[Gone]`/`[PartGone]` name the commit that removed each missing file from
+/// one `git log` for the whole set — never one per file or per row.
+#[test]
+fn doctor_explains_missing_files_with_one_log() {
+    for k in [1, 12] {
+        let d = repo(4);
+        for i in 0..k {
+            let note = format!("gone {i}");
+            let file = format!("m{i}.rs");
+            spawns(&d, &["add", "note", &note, "--files", &file, "--force"], "");
+        }
+        let seen = warm(&d, &["doctor"]);
+        let logs = seen
+            .iter()
+            .filter(|s| s.contains("log --no-renames"))
+            .count();
+        assert_eq!(logs, 1, "{k} missing files:\n{}", seen.join("\n"));
+        assert!(
+            seen.len() <= DOCTOR_MAX,
+            "{k} missing files:\n{}",
+            seen.join("\n")
+        );
+    }
+}
+
 /// `fael sync` writes every month file of the tree through one
 /// `hash-object`, however many months the journal spans.
 #[test]

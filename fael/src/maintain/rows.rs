@@ -1,11 +1,12 @@
 //! The open-row checks behind `doctor` (Gone/PartGone/Stale/Orphan), plus the
-//! Merged/Shipped/Fat notes that build on the same rows. Split out of
+//! Merged/Shipped/Fat notes that build on the same rows (`files` holds the
+//! Gone/PartGone/Stale half). Split out of
 //! `maintain.rs` for the 400-line cap; the `gh` half of Orphan and the merge
 //! evidence of Merged/Shipped live here, never in core (core spawns no
 //! processes). Every row-based note carries the full ids a cleanup agent
 //! needs (`doctor --json` prints them) — not just the abbreviated examples.
 
-use super::{alive, drift, fat, merged, noverdict, orphan, phantom, shipped, unstamped};
+use super::{drift, fat, files, merged, noverdict, orphan, shipped, unstamped};
 use crate::core;
 use std::collections::HashSet;
 use std::path::Path;
@@ -19,7 +20,7 @@ pub(super) fn open_row_notes(
     cfg: &core::Config,
     expand_fat: bool,
 ) -> Vec<core::Problem> {
-    let mut out = files_notes(log, root, al);
+    let mut out = files::notes(log, root, al);
     out.extend(branch_notes(log));
     // a supersede marker whose newest version is already closed: the whole
     // chain is hidden with no close row — a pre-chain-close binary's trap
@@ -69,123 +70,6 @@ pub(super) fn open_row_notes(
     out
 }
 
-/// Gone/PartGone/Stale: what each row's `files[]` (or backticked pointer)
-/// still holds on disk.
-fn files_notes(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<core::Problem> {
-    let mut out = vec![];
-    // a missing file that lives on the row's own unmerged branch is not gone
-    let branches = alive::BranchFiles::new(root);
-    let missing: Vec<(&core::Row, Vec<&str>)> = core::find(log, &core::Filter::default())
-        .into_iter()
-        .map(|row| (row, branches.missing(row, core::gone_files(root, row, al))))
-        .filter(|(_, m)| !m.is_empty())
-        .collect();
-    // every file gone — the same test as `core::gone`, after the branch check
-    let all_gone = |row: &core::Row, m: &[&str]| m.len() == row.files.len();
-    let gone: Vec<&core::Row> = missing
-        .iter()
-        .filter(|(row, m)| all_gone(row, m))
-        .map(|(row, _)| *row)
-        .collect();
-    if !gone.is_empty() {
-        let w = core::abbrev(log);
-        let eg: Vec<String> = gone
-            .iter()
-            .take(5)
-            .map(|row| {
-                format!(
-                    "{} ({}): `fael close {} \"gone\"`",
-                    w.short(&row.id),
-                    row.files.join(", "),
-                    w.short(&row.id)
-                )
-            })
-            .collect();
-        // mechanically closable: every file is gone from every branch, so the
-        // row never pushes again — `doctor --fix` applies exactly the ready
-        // command above (force, same identity rule as the close path)
-        let closes: Vec<(String, String)> = gone
-            .iter()
-            .map(|row| (row.id.clone(), "gone".into()))
-            .collect();
-        out.push(
-            core::Problem::info(
-                core::ProblemKind::Gone,
-                format!(
-                    "{} open row(s) name only files that no longer exist, so they never push — \
-                     re-file them on the new path or close them (e.g. {})",
-                    gone.len(),
-                    eg.join("; ")
-                ),
-            )
-            .with_closes(closes),
-        );
-    }
-    // some files gone, some left: the row still pushes, but it likely describes
-    // the repo as it was (a tool swapped out, a config file removed)
-    let w = core::abbrev(log);
-    let part: Vec<(String, String)> = missing
-        .iter()
-        .filter(|(row, m)| !all_gone(row, m))
-        .map(|(row, m)| {
-            (
-                row.id.clone(),
-                format!(
-                    "{} ({}): `fael close {} \"part-gone\"`",
-                    w.short(&row.id),
-                    m.join(", "),
-                    w.short(&row.id)
-                ),
-            )
-        })
-        .collect();
-    if !part.is_empty() {
-        let eg: Vec<&str> = part.iter().take(5).map(|(_, e)| e.as_str()).collect();
-        out.push(
-            core::Problem::info(
-                core::ProblemKind::PartGone,
-                format!(
-                    "{} open row(s) still name a file that no longer exists — check the text still \
-                     holds, then re-file with `--supersedes` or `fael close <id>` (e.g. {})",
-                    part.len(),
-                    eg.join("; ")
-                ),
-            )
-            .with_ids(part.iter().map(|(id, _)| id.clone()).collect()),
-        );
-    }
-    // prose rot: the row's text points at a backticked path with no file
-    // behind it, so the next reader follows a dead pointer. The example is a
-    // ready command (same id the gate resolves); an issue still owes its
-    // `<cause> → <fix>` + guard — the detector never invents them.
-    let stale = stale_rows(log, root, al);
-    if !stale.is_empty() {
-        let w = core::abbrev(log);
-        let eg: Vec<String> = stale
-            .iter()
-            .take(5)
-            .map(|(id, e)| format!("{e}: `fael close {} \"stale\"`", w.short(id)))
-            .collect();
-        out.push(
-            core::Problem::info(
-                core::ProblemKind::Stale,
-                format!(
-                    "{} open row(s) name a path in backticks that is not on disk — check the text \
-                     still holds, then re-file with `--supersedes` or close it (e.g. {})",
-                    stale.len(),
-                    eg.join("; ")
-                ),
-            )
-            .with_ids(stale.iter().map(|(id, _)| id.clone()).collect()),
-        );
-    }
-    // id rot: prose — in open rows, close texts and any `*.md` under the repo
-    // — cites an id with no row behind it (id-refs chunk 3 + ids:doctor-plans);
-    // a closed row's own text stays quiet
-    out.extend(phantom::problems(log, root));
-    out
-}
-
 /// Orphan: open rows filed on a branch whose PR died unmerged. One shared
 /// `gh pr list --state all` call for the whole repo (`orphan::rows`, the same
 /// list `[Merged]` and `[Shipped]` read).
@@ -197,18 +81,19 @@ fn branch_notes(log: &core::Log) -> Vec<core::Problem> {
     let w = core::abbrev(log);
     let n: usize = orphan.iter().map(|(_, ids)| ids.len()).sum();
     let ids: Vec<String> = orphan.iter().flat_map(|(_, i)| i.iter().cloned()).collect();
-    let eg: Vec<String> = orphan
-        .iter()
-        .take(5)
-        .map(|(b, i)| {
-            let shorts: Vec<&str> = i.iter().map(|id| w.short(id)).collect();
-            let first = shorts.first().copied().unwrap_or("?");
-            format!(
-                "{b} → {}: `fael close {first} \"orphan\"`",
-                shorts.join(", ")
-            )
-        })
-        .collect();
+    let (eg, more) = core::split_shown(
+        orphan
+            .iter()
+            .map(|(b, i)| {
+                let shorts: Vec<&str> = i.iter().map(|id| w.short(id)).collect();
+                let first = shorts.first().copied().unwrap_or("?");
+                format!(
+                    "{b} → {}: `fael close {first} \"orphan\"`",
+                    shorts.join(", ")
+                )
+            })
+            .collect(),
+    );
     vec![
         core::Problem::info(
             core::ProblemKind::Orphan,
@@ -218,7 +103,8 @@ fn branch_notes(log: &core::Log) -> Vec<core::Problem> {
                 eg.join("; ")
             ),
         )
-        .with_ids(ids),
+        .with_ids(ids)
+        .with_more(more),
     ]
 }
 
@@ -283,17 +169,18 @@ fn superseded_note(log: &core::Log) -> Option<core::Problem> {
     if stuck.is_empty() {
         return None;
     }
-    let eg: Vec<String> = stuck
-        .iter()
-        .take(5)
-        .map(|r| {
-            format!(
-                "{} → `fael close {} \"superseded\"`",
-                w.short(&r.id),
-                w.short(&r.id)
-            )
-        })
-        .collect();
+    let (eg, more) = core::split_shown(
+        stuck
+            .iter()
+            .map(|r| {
+                format!(
+                    "{} → `fael close {} \"superseded\"`",
+                    w.short(&r.id),
+                    w.short(&r.id)
+                )
+            })
+            .collect(),
+    );
     // mechanically closable: the head is already closed, so the relaxed guard
     // lets each stuck version through — `doctor --fix` applies exactly the
     // ready command above (force, same identity rule as the close path)
@@ -311,7 +198,8 @@ fn superseded_note(log: &core::Log) -> Option<core::Problem> {
                 eg.join("; ")
             ),
         )
-        .with_closes(closes),
+        .with_closes(closes)
+        .with_more(more),
     )
 }
 
@@ -335,7 +223,7 @@ fn not_english_note(log: &core::Log, cfg: &core::Config) -> Option<core::Problem
         return None;
     }
     let langs = cfg.lang_rows.join("/");
-    let eg: Vec<&str> = hits.iter().take(5).map(|(_, e)| e.as_str()).collect();
+    let (eg, more) = core::split_shown(hits.iter().map(|(_, e)| e.clone()).collect());
     Some(
         core::Problem::info(
             core::ProblemKind::NotEnglish,
@@ -346,26 +234,7 @@ fn not_english_note(log: &core::Log, cfg: &core::Config) -> Option<core::Problem
                 eg.join("; ")
             ),
         )
-        .with_ids(hits.iter().map(|(id, _)| id.clone()).collect()),
+        .with_ids(hits.iter().map(|(id, _)| id.clone()).collect())
+        .with_more(more),
     )
-}
-
-/// `(full id, short-id → dead backticked path(s))` for every open row whose
-/// text still points at a path with no file behind it (row-hygiene chunk 4).
-/// The full id rides along so `doctor --json` can hand a cleanup agent the
-/// actionable id, not just the sketched example.
-fn stale_rows(log: &core::Log, root: &Path, al: &core::Aliases) -> Vec<(String, String)> {
-    core::find(log, &core::Filter::default())
-        .into_iter()
-        .filter_map(|row| {
-            let refs = core::stale_refs(root, row, al);
-            let w = core::abbrev(log);
-            (!refs.is_empty()).then(|| {
-                (
-                    row.id.clone(),
-                    format!("{} → {}", w.short(&row.id), refs.join(", ")),
-                )
-            })
-        })
-        .collect()
 }

@@ -110,7 +110,7 @@ pub(super) fn problems(
     }
     let mut out = vec![];
     if !sure.is_empty() {
-        let eg: Vec<String> = sure.iter().take(5).map(Landed::example).collect();
+        let (eg, more) = core::split_shown(sure.iter().map(Landed::example).collect());
         let closes: Vec<(String, String)> = sure
             .iter()
             .map(|l| (l.id.clone(), l.close_text()))
@@ -125,11 +125,12 @@ pub(super) fn problems(
                     eg.join("; ")
                 ),
             )
-            .with_closes(closes),
+            .with_closes(closes)
+            .with_more(more),
         );
     }
     if !kept.is_empty() {
-        let eg: Vec<String> = kept.iter().take(5).map(Landed::example_keep).collect();
+        let (eg, more) = core::split_shown(kept.iter().map(Landed::example_keep).collect());
         out.push(
             core::Problem::info(
                 core::ProblemKind::ShippedKept,
@@ -142,11 +143,12 @@ pub(super) fn problems(
                     eg.join("; ")
                 ),
             )
-            .with_ids(kept.iter().map(|l| l.id.clone()).collect()),
+            .with_ids(kept.iter().map(|l| l.id.clone()).collect())
+            .with_more(more),
         );
     }
     if !maybe.is_empty() {
-        let eg: Vec<String> = maybe.iter().take(5).map(Landed::example).collect();
+        let (eg, more) = core::split_shown(maybe.iter().map(Landed::example).collect());
         out.push(
             core::Problem::info(
                 core::ProblemKind::ShippedMaybe,
@@ -157,7 +159,8 @@ pub(super) fn problems(
                     eg.join("; ")
                 ),
             )
-            .with_ids(maybe.iter().map(|l| l.id.clone()).collect()),
+            .with_ids(maybe.iter().map(|l| l.id.clone()).collect())
+            .with_more(more),
         );
     }
     out
