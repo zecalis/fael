@@ -1,7 +1,7 @@
 //! The MCP `bump` tool — CLI-first and unlisted, still answered for clients
 //! that call it. Split out of mcp.rs at the 400-line ratchet.
 
-use super::args::{done, need, repo_for, s, unknown_note, with_notes};
+use super::args::{done, need, repo_for, retired_note, s, unknown_note, with_notes};
 use crate::hook::{ASK_WARN, record_asks};
 use crate::{Repo, core, read};
 use serde_json::Value;
@@ -26,7 +26,7 @@ pub(crate) const KNOWN: &[&str] = &[
 pub(super) fn bump(a: &Value) -> Result<String, String> {
     let extra = unknown_note(a, KNOWN);
     let res = bump_checked(a);
-    with_notes(res, vec![extra])
+    with_notes(res, vec![extra, retired_note("bump", a)])
 }
 
 fn bump_checked(a: &Value) -> Result<String, String> {

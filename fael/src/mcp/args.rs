@@ -79,6 +79,36 @@ pub(super) fn urgent_ask(a: &Value) -> Result<core::Urgent, String> {
     }
 }
 
+/// Step-1 retire batch (cli-tiers): the tool's args name a flag with 0 calls
+/// since 2026-11-01 — one `note:` line, never a reject. MCP keys use `_`
+/// where the CLI flag uses `-` (`urgent_before` → `--urgent-before`).
+pub(super) fn retired_note(tool: &str, a: &Value) -> Option<String> {
+    let keys: &[&str] = match tool {
+        "find" => &["by", "to", "revisit", "recall"],
+        "add" => &["urgent_before"],
+        "bump" => &["to", "revisit", "urgent", "urgent_before", "not_urgent"],
+        _ => return None,
+    };
+    let mut hit: Vec<String> = keys
+        .iter()
+        .filter(|k| {
+            !a[k].is_null() && a[k] != Value::Bool(false) && a[k] != Value::String(String::new())
+        })
+        .map(|k| format!("--{}", k.replace('_', "-")))
+        .collect();
+    hit.sort();
+    hit.dedup();
+    match hit.as_slice() {
+        [] => None,
+        [one] => Some(format!(
+            "note: {one} is deprecated — 0 calls since 2026-11-01, removed next release"
+        )),
+        many => Some(format!(
+            "note: {} are deprecated — 0 calls since 2026-11-01, removed next release",
+            many.join(", ")
+        )),
+    }
+}
 /// Unknown top-level keys as a `note:` line — never a reject, so a newer
 /// client sending a field this binary does not know keeps working
 /// (forward-compat). The agent dropped the key silently before (opencode

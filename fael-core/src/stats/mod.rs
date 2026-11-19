@@ -55,7 +55,7 @@ pub use aggregate::{
     AskCount, Constants, Count, NonEnglish, Rounds, RowStatus, STATS_SCHEMA, Stats, TopRow,
     aggregate,
 };
-pub use by_flag::{FlagUsage, FlagUse};
+pub use by_flag::{FlagUsage, FlagUse, retire_candidates};
 pub use capture::Capture;
 pub use cross::{CrossAgent, Reuse};
 pub use day::{
