@@ -33,7 +33,10 @@ pub(crate) fn lines(root: &Path, text: &str) -> Vec<String> {
     let ancestors = ancestors_of(root, &base);
     let mut out = vec![];
     for tok in toks {
-        if !known.contains(&tok) || ancestors.contains(&tok) {
+        let Some(full) = known.get(&tok) else {
+            continue;
+        };
+        if ancestors.contains(full) {
             continue;
         }
         out.push(format!(
@@ -43,11 +46,11 @@ pub(crate) fn lines(root: &Path, text: &str) -> Vec<String> {
     out
 }
 
-/// The subset of `toks` git knows as commits, in one `cat-file --batch-check`.
-fn existing(root: &Path, toks: &[String]) -> std::collections::HashSet<String> {
+/// `tok -> full sha` for the subset of `toks` git knows as commits, in one `cat-file --batch-check`.
+fn existing(root: &Path, toks: &[String]) -> std::collections::HashMap<String, String> {
     use std::io::Write;
     use std::process::Stdio;
-    let mut known = std::collections::HashSet::new();
+    let mut known = std::collections::HashMap::new();
     let Ok(mut child) = fael_core::git_cmd()
         .args(["cat-file", "--batch-check"])
         .current_dir(root)
@@ -70,12 +73,12 @@ fn existing(root: &Path, toks: &[String]) -> std::collections::HashSet<String> {
     });
     let Ok(out) = out else { return known };
     for (line, tok) in String::from_utf8_lossy(&out.stdout).lines().zip(toks) {
-        if line
-            .split_whitespace()
-            .nth(1)
-            .is_some_and(|t| t == "commit")
-        {
-            known.insert(tok.clone());
+        let mut cols = line.split_whitespace();
+        let (Some(full), Some(kind)) = (cols.next(), cols.next()) else {
+            continue;
+        };
+        if kind == "commit" {
+            known.insert(tok.clone(), full.to_string());
         }
     }
     known
@@ -148,5 +151,18 @@ mod tests {
             "{got:?}"
         );
         let _ = std::fs::remove_dir_all(&dir);
+        // short shas resolve before the ancestry check — an on-branch prefix stays silent
+        let dir2 = std::env::temp_dir().join(format!("fael-unmerged-{}", fael_core::ulid()));
+        std::fs::create_dir_all(&dir2).unwrap();
+        git(&dir2, &["init", "-q", "-b", "main"]);
+        let on2 = commit(&dir2, "on main");
+        git(&dir2, &["update-ref", "refs/remotes/origin/main", &on2]);
+        let short = &on2[..8];
+        let quiet2 = lines(&dir2, &format!("fixed in {short}"));
+        assert!(
+            quiet2.is_empty(),
+            "on-branch short sha → silent: {quiet2:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir2);
     }
 }
