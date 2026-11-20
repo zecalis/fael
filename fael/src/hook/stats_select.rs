@@ -125,6 +125,19 @@ pub(super) fn tally_rate(t: &core::stats::Tally) -> String {
     )
 }
 
+/// Last-7d split for the friction total line, shared by the full section
+/// and the short default so the two cannot drift. Empty with no recent calls.
+pub(super) fn last_7d_suffix(last: &core::stats::Tally) -> String {
+    match last.calls {
+        0 => String::new(),
+        c => format!(
+            " · last 7d: {}/100, first-call {}%",
+            per100(last.rejects + last.help + last.find_repeat, c),
+            last.first_call_ok * 100 / c
+        ),
+    }
+}
+
 /// The short default's friction line: the total rate alone — no per-reason
 /// list, no gate rules (both live in the friction section). `None` when
 /// there were no calls at all (and no lone gate line to print).
@@ -140,9 +153,10 @@ pub(super) fn total_line(f: &core::stats::Friction) -> Option<String> {
         };
     }
     Some(format!(
-        "  friction per 100 calls ({} calls): {}{gate}",
+        "  friction per 100 calls ({} calls): {}{gate}{}",
         f.total.calls,
         tally_rate(&f.total),
+        last_7d_suffix(&f.last_7d),
     ))
 }
 
@@ -313,6 +327,9 @@ pub(super) fn print_default(s: &core::stats::Stats, path: &Path) {
     }
     println!("{} (rows)", usage_line(s, path));
     if let Some(l) = skipped_line(s) {
+        println!("{l} (rows)");
+    }
+    if let Some(l) = stats_text::latency_line(s) {
         println!("{l} (rows)");
     }
     if let Some(l) = stats_text::value_line(s) {

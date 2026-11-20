@@ -4,7 +4,9 @@
 > struct as-is, so the CLI, the desktop app and any outside reader share the
 > shape by construction. The human text (`fael stats`) is short by default —
 > one line per story (rows, value, outcome, said, friction, capture,
-> warnings), each ending in its section name; `fael stats --all` prints the
+> warnings), each ending in its section name — the rows story adds the hook
+> latency line when timed, the friction line carries the last-7d split;
+> `fael stats --all` prints the
 > full page and `fael stats <section>` one part (rows, value, outcome,
 > across, models, capture, said, friction, warnings). The text is unstable
 > by design; only `--json` is a contract.
