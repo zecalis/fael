@@ -280,19 +280,11 @@ pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
             _ => vec![format!("  friction per 100 calls (0 calls): n/a{gate}")],
         };
     }
-    let r = &f.last_7d;
-    let recent = match r.calls {
-        0 => String::new(),
-        c => format!(
-            " · last 7d: {}/100, first-call {}%",
-            super::stats_select::per100(r.rejects + r.help + r.find_repeat, c),
-            r.first_call_ok * 100 / c
-        ),
-    };
     let mut out = vec![format!(
-        "  friction per 100 calls ({} calls): {}{gate}{recent}",
+        "  friction per 100 calls ({} calls): {}{gate}{}",
         f.total.calls,
         tally_text(&f.total),
+        super::stats_select::last_7d_suffix(&f.last_7d),
     )];
     let mut by: Vec<_> = f.by_command.iter().collect();
     by.sort_by_key(|(k, t)| (std::cmp::Reverse(t.calls), *k));
