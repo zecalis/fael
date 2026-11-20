@@ -6,10 +6,9 @@
 //! (`fat_reasons`) — never duplicated here.
 //!
 //! PLAN-fael-durable-log chunk 4: rows born before self-heal (chunk 3) are
-//! `legacy` — they collapse to one line (`N legacy rows — fael doctor --fat
-//! --json for a one-time pass`) so a repo with a hundred old rows still gets
-//! a skimmable `doctor`. `--fat` expands them for the one-time cleanup pass;
-//! new fat rows always list individually.
+//! `legacy` — they collapse to one line so a repo with a hundred old rows
+//! still gets a skimmable `doctor`; `doctor --json` prints every row id for
+//! the cleanup pass. New fat rows always list individually.
 
 use crate::core;
 
@@ -24,8 +23,8 @@ type FatRow = (String, String, Option<u64>);
 
 /// The `[Fat]` doctor problem, if any open row is fat — kept here (not in
 /// `maintain.rs`) so `open_row_notes` stays under the 100-line function cap.
-/// Without `expand`, legacy rows collapse to a single line; `--fat` lists
-/// every fat row for the one-time cleanup pass.
+/// Legacy rows always collapse to a single line; `doctor --json` carries
+/// every row id for the cleanup pass.
 pub(super) fn problem(log: &core::Log, cfg: &core::Config, expand: bool) -> Option<core::Problem> {
     let fat = rows(log, cfg);
     if fat.is_empty() {
@@ -46,8 +45,7 @@ pub(super) fn problem(log: &core::Log, cfg: &core::Config, expand: bool) -> Opti
     Some(fat_problem(&listed, Some(legacy.len()), false))
 }
 
-/// One `[Fat]` problem. `full` lists every fat row — the `--fat` cleanup pass
-/// exists to enumerate them all, so it must not drop any; otherwise the detail
+/// One `[Fat]` problem. `full` lists every fat row, otherwise the detail
 /// skims with up to 5 examples. The optional `legacy` suffix collapses
 /// pre-self-heal rows when old and new rows share the output. `ids` carries
 /// every row behind the line, so `--json` never hides one.
@@ -66,7 +64,7 @@ fn fat_problem(fat: &[FatRow], legacy: Option<usize>, full: bool) -> core::Probl
     );
     if let Some(n) = legacy {
         detail.push_str(&format!(
-            " · {n} legacy rows — fael doctor --fat --json for a one-time pass"
+            " · {n} legacy rows — fael doctor --json lists every row id"
         ));
     }
     core::Problem::info(core::ProblemKind::Fat, detail)
@@ -74,11 +72,12 @@ fn fat_problem(fat: &[FatRow], legacy: Option<usize>, full: bool) -> core::Probl
         .with_more(more)
 }
 
-/// The collapsed legacy line: no ids, just the count and the cleanup pass.
+/// The collapsed legacy line: no ids, just the count — `doctor --json`
+/// lists every row id for the cleanup pass.
 fn legacy_problem(n: usize) -> core::Problem {
     core::Problem::info(
         core::ProblemKind::Fat,
-        format!("{n} legacy rows — fael doctor --fat --json for a one-time pass"),
+        format!("{n} legacy rows — fael doctor --json lists every row id"),
     )
 }
 
@@ -156,7 +155,7 @@ mod tests {
     fn legacy_rows_collapse_to_one_line() {
         let p = problem(&legacy_only(), &crate::core::Config::default(), false).unwrap();
         assert_eq!(
-            p.detail, "1 legacy rows — fael doctor --fat --json for a one-time pass",
+            p.detail, "1 legacy rows — fael doctor --json lists every row id",
             "{}",
             p.detail
         );
@@ -166,8 +165,7 @@ mod tests {
     fn mixed_lists_new_and_collapses_legacy() {
         let p = problem(&log(), &crate::core::Config::default(), false).unwrap();
         assert!(
-            p.detail
-                .contains("1 legacy rows — fael doctor --fat --json"),
+            p.detail.contains("1 legacy rows — fael doctor --json"),
             "{}",
             p.detail
         );
@@ -223,7 +221,7 @@ mod tests {
                 p.detail
             );
         }
-        // without `--fat` the same repo skims with five examples
+        // collapsed to one line; the same repo lists every row id under --json
         let g = problem(&l, &crate::core::Config::default(), false).unwrap();
         let named = l
             .rows

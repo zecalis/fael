@@ -90,18 +90,15 @@ pub(crate) fn tools() -> Value {
             }},
         },
     ]);
-    // pinned: one workspace, so no `cwd` to route by
-    if !crate::mcp::pinned() {
-        let tools = t.as_array_mut().unwrap();
-        for tool in tools.iter_mut() {
-            tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
-        }
-        // `chunk start` without it takes this server's dir as its seat and says so
-        // (mcp/chunk.rs) — said on the one tool that records it, in place of the
-        // shared line, so bytes hold.
-        if let Some(c) = tools.iter_mut().find(|x| x["name"] == "chunk") {
-            c["inputSchema"]["properties"]["cwd"]["description"] = json!("seat; default here");
-        }
+    let tools = t.as_array_mut().unwrap();
+    for tool in tools.iter_mut() {
+        tool["inputSchema"]["properties"]["cwd"] = cwd.clone();
+    }
+    // `chunk start` without it takes this server's dir as its seat and says so
+    // (mcp/chunk.rs) — said on the one tool that records it, in place of the
+    // shared line, so bytes hold.
+    if let Some(c) = tools.iter_mut().find(|x| x["name"] == "chunk") {
+        c["inputSchema"]["properties"]["cwd"]["description"] = json!("seat; default here");
     }
     t
 }

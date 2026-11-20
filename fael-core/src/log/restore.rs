@@ -18,8 +18,9 @@ pub struct Restored {
 }
 
 /// Revert one supersede edge: `target` (`fael restore <B>`) picks the edge by
-/// its target, `edge` (`--edge <A>`) names the superseder directly. Several
-/// still-active edges into one target reject and name `--edge`. An
+/// its target, or names the superseder directly (`fael restore <A>` reverts
+/// A's edge). Several still-active edges into one target reject and name the
+/// superseder ids to pass positionally. An
 /// already-open row, or an already-reverted edge, is info — exit 0, nothing
 /// written — never an error.
 pub fn restore_row(
@@ -85,18 +86,35 @@ enum Pick {
 
 fn pick_edge(log: &Log, target: Option<&str>, edge: Option<&str>) -> Result<Pick, String> {
     match (target, edge) {
-        (None, None) => Err(
-            "rejected: restore needs a row — `fael restore <id>` or `fael restore --edge <id>`"
-                .into(),
-        ),
-        (Some(t), None) => edge_into(log, t),
+        (None, None) => Err("rejected: restore needs a row — `fael restore <id>`".into()),
+        (Some(t), None) => {
+            let id = resolve_row(log, t)?.id.clone();
+            match active_edges_into(log, &id).as_slice() {
+                // hidden behind one edge: revert it; behind several: name one
+                // superseder positionally — `fael restore <edge-id>`
+                [_] => edge_into(log, t),
+                [_, _, ..] => {
+                    let es = active_edges_into(log, &id);
+                    Err(format!(
+                        "{} edges still supersede {id} ({}) — revert one with `fael restore <edge-id>`",
+                        es.len(),
+                        es.join(", ")
+                    ))
+                }
+                // not hidden: a superseder id names its own edge directly
+                [] => match edge_from(log, t) {
+                    Ok((a, b)) => Ok(Pick::Revert(a, b)),
+                    Err(_) => Ok(Pick::Open(id)),
+                },
+            }
+        }
         (None, Some(e)) => edge_from(log, e).map(|(a, b)| Pick::Revert(a, b)),
         (Some(t), Some(e)) => {
             let (a, b) = edge_from(log, e)?;
             let want = resolve_row(log, t)?.id.clone();
             if b != want {
                 return Err(format!(
-                    "rejected: --edge {e} reverts {b}, not {want} — drop one of the two"
+                    "rejected: {e} reverts {b}, not {want} — pick one id"
                 ));
             }
             Ok(Pick::Revert(a, b))
@@ -104,30 +122,35 @@ fn pick_edge(log: &Log, target: Option<&str>, edge: Option<&str>) -> Result<Pick
     }
 }
 
+/// The still-active edges into `target`, oldest first.
+fn active_edges_into(log: &Log, target: &str) -> Vec<String> {
+    let rev = reverted(log);
+    let mut active: Vec<String> = log
+        .rows
+        .iter()
+        .filter(|r| r.supersedes.as_deref() == Some(target) && !rev.contains(r.id.as_str()))
+        .map(|r| r.id.clone())
+        .collect();
+    active.sort_unstable();
+    active
+}
+
 /// The still-active edge into `target` — or `Open` when none is left.
 fn edge_into(log: &Log, target: &str) -> Result<Pick, String> {
     let b = resolve_row(log, target)?.id.clone();
-    let rev = reverted(log);
-    let mut active: Vec<&str> = log
-        .rows
-        .iter()
-        .filter(|r| r.supersedes.as_deref() == Some(b.as_str()) && !rev.contains(r.id.as_str()))
-        .map(|r| r.id.as_str())
-        .collect();
-    active.sort_unstable();
-    match active.as_slice() {
+    match active_edges_into(log, &b).as_slice() {
         [] => Ok(Pick::Open(b)),
-        [e] => Ok(Pick::Revert(e.to_string(), b)),
+        [e] => Ok(Pick::Revert(e.clone(), b)),
         es => Err(format!(
-            "{} edges still supersede {b} ({}) — revert one with `fael restore --edge <id>`",
+            "{} edges still supersede {b} ({}) — revert one with `fael restore <edge-id>`",
             es.len(),
             es.join(", ")
         )),
     }
 }
 
-/// The edge an `--edge` names — its superseder plus its target. A row that
-/// supersedes nothing names no edge.
+/// The edge a superseder id names — the superseder plus its target. A row
+/// that supersedes nothing names no edge.
 fn edge_from(log: &Log, edge: &str) -> Result<(String, String), String> {
     let a = resolve_row(log, edge)?;
     match a.supersedes.as_deref() {

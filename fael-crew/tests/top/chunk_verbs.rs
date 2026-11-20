@@ -1,4 +1,4 @@
-//! `fael chunk approve|unapprove|accept|show` over several uids, and `chunk list|ls`
+//! `fael chunk approve|accept|show` over several uids, and `chunk list|ls`
 //! (plan fael-friction-2 chunk-verbs): every uid runs in order, one result line per
 //! uid, a failed one never stops the rest; `list` names the reads that do.
 
@@ -105,15 +105,15 @@ fn a_bad_uid_rejects_alone_while_the_rest_land() {
     assert!(err.contains("1 of 3 chunks rejected"), "{err}");
 }
 
-/// `unapprove` and `show` take several uids too.
+/// `approve` and `show` take several uids too.
 #[test]
-fn unapprove_and_show_take_several_uids() {
+fn approve_and_show_take_several_uids() {
     let d = repo();
     let (a, b) = (hinted(&d), hinted(&d));
-    let (ok, out, err) = fael(&d, &["chunk", "unapprove", &a, &b]);
+    let (ok, out, err) = fael(&d, &["chunk", "approve", &a, &b]);
     assert!(ok, "{err}");
-    assert!(out.contains(&format!("chunk {a} → unapproved")), "{out}");
-    assert!(out.contains(&format!("chunk {b} → unapproved")), "{out}");
+    assert!(out.contains(&format!("chunk {a} → approved")), "{out}");
+    assert!(out.contains(&format!("chunk {b} → approved")), "{out}");
     let (ok, out, err) = fael(&d, &["chunk", "show", &a, &b]);
     assert!(ok, "{err}");
     assert!(out.contains(&a) && out.contains(&b), "{out}");

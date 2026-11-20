@@ -4,14 +4,15 @@
 
 use crate::{core, hook};
 
-/// `fael restore [<id>] [--edge <id>]`: `target` names the row to reopen,
-/// `edge` names the superseding row directly. An already-open row or an
+/// `fael restore [<id>]`: `id` names the row to reopen, or the superseding
+/// row directly when several edges still hide one row. An already-open row or an
 /// already-reverted edge prints info and writes nothing (exit 0).
 pub(crate) fn restore(
     r: &crate::Repo,
     a: &crate::Args,
     target: Option<&str>,
 ) -> Result<(), String> {
+    a.only("restore", &["json"])?;
     let log = crate::read(r);
     let out = core::restore_row(
         &r.fael,
@@ -20,7 +21,7 @@ pub(crate) fn restore(
         &r.cfg,
         &crate::stamp(r),
         target,
-        a.one("edge").as_deref(),
+        None,
     )?;
     out.warns.iter().for_each(|w| eprintln!("{w}"));
     hook::record_asks("cli", hook::ASK_WARN, "restore", Some(&r.root), &out.warns);

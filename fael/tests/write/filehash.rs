@@ -152,7 +152,7 @@ fn oversize_file_is_not_stamped() {
 }
 
 #[test]
-fn claim_and_routing_bump_keep_the_hash_and_bare_bump_restamps() {
+fn claim_keeps_the_hash_and_bare_bump_restamps() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// v1\n").unwrap();
     let (ok, out, err) = fael(&d, &["add", "issue", "x", "--files", "src/a.rs"], "");
@@ -168,14 +168,8 @@ fn claim_and_routing_bump_keep_the_hash_and_bare_bump_restamps() {
     assert_eq!(fh(&d, "x"), before, "claim must carry the old map");
     let claimed = out.split_whitespace().next().unwrap().to_string();
 
-    // re-routing is not a check either
-    let (ok, out, err) = fael(&d, &["bump", &claimed, "--urgent"], "");
-    assert!(ok, "{err}");
-    assert_eq!(fh(&d, "x"), before, "a routing bump must carry the old map");
-    let routed = out.split_whitespace().next().unwrap().to_string();
-
     // a bare bump is the "still true" check: it restamps from disk
-    let (ok, _, err) = fael(&d, &["bump", &routed], "");
+    let (ok, _, err) = fael(&d, &["bump", &claimed], "");
     assert!(ok, "{err}");
     assert_eq!(fh(&d, "x")["src/a.rs"], git_blob(&d, "src/a.rs").as_str());
     assert_ne!(fh(&d, "x"), before);
@@ -379,7 +373,7 @@ fn a_normal_row_and_the_legitimate_gaps_print_no_extra_line() {
 }
 
 #[test]
-fn bare_bump_says_what_it_left_out_but_claim_and_routing_bump_do_not() {
+fn bare_bump_says_what_it_left_out_but_claim_does_not() {
     let d = repo();
     sparse_over_cap(&d, "src/big.bin");
     let (ok, out, err) = fael(&d, &["add", "issue", "x", "--files", "src/big.bin"], "");
@@ -388,10 +382,7 @@ fn bare_bump_says_what_it_left_out_but_claim_and_routing_bump_do_not() {
     let (ok, out, err) = fael(&d, &["claim", &id], "");
     assert!(ok && !err.contains("not stamped"), "{err}");
     let claimed = out.split_whitespace().next().unwrap().to_string();
-    let (ok, out, err) = fael(&d, &["bump", &claimed, "--urgent"], "");
-    assert!(ok && !err.contains("not stamped"), "{err}");
-    let routed = out.split_whitespace().next().unwrap().to_string();
-    let (ok, _, err) = fael(&d, &["bump", &routed], "");
+    let (ok, _, err) = fael(&d, &["bump", &claimed], "");
     assert!(ok, "{err}");
     assert!(
         err.contains(&format!("{NOTE}src/big.bin (over 16 MiB)")),

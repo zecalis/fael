@@ -130,7 +130,7 @@ the same journal. To bring in rows from another clone or machine, copy its log o
 
 ```bash
 fael import ../other-clone               # that clone's journal (+ any .fael/log); importing twice is safe
-fael import old.jsonl --map src/=lib/      # one log file, a path prefix rewritten on the way in
+fael import old.jsonl                    # one log file
 ```
 
 To share between clones through git instead, see [sync-format.md](sync-format.md):
@@ -152,7 +152,7 @@ tunnel are off-the-shelf processes you run.
 ```text
 Claude (iPhone app / claude.ai) ──HTTPS──> Cloudflare Access ──> cloudflared (outbound only)
    └ request headers: service token            └ refuses without it   └ stdio->HTTP MCP bridge
-                                                                         └ fael mcp --pin  (cwd = the clone)
+                                                                         └ fael mcp  (cwd = the clone)
 ```
 
 ### 1. Pick the VM — the invoice must read $0.00
@@ -186,11 +186,11 @@ No DB, no Redis, no Docker.
 
 ### 3. Serve the ledger
 
-Run `fael mcp --pin` from the clone behind any stdio->HTTP MCP bridge that serves Streamable
-HTTP (e.g. `npx -y supergateway --stdio "fael mcp --pin" --outputTransport streamableHttp
---port 8000`), bound to `127.0.0.1` only. `--pin` makes the server act on its own cwd: a call
-with a `cwd` arg is rejected (`this server is pinned to one workspace — drop cwd`), so no caller
-can reach another directory on the host. Never expose a non-pinned `fael mcp` over HTTP.
+Run `fael mcp` from the clone behind any stdio->HTTP MCP bridge that serves Streamable
+HTTP (e.g. `npx -y supergateway --stdio "fael mcp" --outputTransport streamableHttp
+--port 8000`), bound to `127.0.0.1` only. Never expose `fael mcp` over HTTP to an
+untrusted network: every call acts with the server's own filesystem access, routed
+by its `cwd` arg or the first absolute `files` path.
 
 ### 4. Tunnel and auth
 

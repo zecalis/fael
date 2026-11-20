@@ -11,7 +11,7 @@ use std::process::ExitCode;
 /// Canonical in `fael-core::work` (the read seam owns the closed vocabulary);
 /// the command reuses it so the two cannot drift.
 pub(crate) const VERBS: &[&str] = fael_core::work::CHUNK_VERBS;
-pub(crate) const USAGE: &str = "fael chunk add|show|status|start|edit|move|note|touch|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve|unapprove — try 'fael chunk --help'";
+pub(crate) const USAGE: &str = "fael chunk add|show|status|start|edit|move|note|touch|wait|after|unafter|ask|reply|answer|done|accept|drop|park|unpark|apply|approve — try 'fael chunk --help'";
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
     if rest.is_empty() {
@@ -44,7 +44,7 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<ExitCode, String> {
 /// a label two plans share — a `plan/label` key always resolves through its
 /// own plan, so cross-plan is `after <uid> p2/b1` with no flag (issue
 /// 01M5KTQY8DTT8APQ2BFGSCSAZY). The verbs that take several keys
-/// (`show`, `approve`, `unapprove`, `accept`) keep `--plan` and resolve each key
+/// (`show`, `approve`, `accept`) keep `--plan` and resolve each key
 /// in `chunk_verbs`, so one bad key never stops the rest.
 fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<String>)>, String> {
     let (Some(plan), [verb, key, ..]) = (a.one("plan"), rest) else {
@@ -52,7 +52,7 @@ fn in_plan(a: &Args, rest: &[String], r: &Repo) -> Result<Option<(Args, Vec<Stri
     };
     if matches!(
         verb.as_str(),
-        "add" | "move" | "apply" | "show" | "approve" | "unapprove" | "accept"
+        "add" | "move" | "apply" | "show" | "approve" | "accept"
     ) {
         return Ok(None);
     }
@@ -200,7 +200,6 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
             say(uid, to);
         }
         ["approve", ..] => crate::chunk_verbs::approve(a, r, &rest[1..], &now)?,
-        ["unapprove", ..] => crate::chunk_verbs::unapprove(a, r, &rest[1..], &now)?,
         ["apply", ..] => queue(a, &rest, &mut s()?, &now)?,
         _ => return Err(crate::chunk_verbs::bad(rest.first().copied())),
     }
@@ -247,7 +246,7 @@ fn read(a: &Args, r: &Repo, rest: &[&str]) -> Result<ExitCode, String> {
 }
 
 /// The planner's batch: `apply` reads merge/split/pair/after ops off stdin. The owner's
-/// queue mark (`approve`, `unapprove`, `accept`) lives in `chunk_verbs`, which takes
+/// queue mark (`approve`, `accept`) lives in `chunk_verbs`, which takes
 /// several uids; this keeps only the stdin batch.
 fn touch(
     a: &Args,
@@ -363,17 +362,6 @@ pub(crate) fn run_end(a: &Args, run: &str) -> Result<ExitCode, String> {
             }
         }
         st.run_end(run, cost, &fael_core::rfc3339(fael_core::now_ms()))?;
-    }
-    Ok(ExitCode::SUCCESS)
-}
-
-/// `fael run beat R`: start R's live rows are seen now — the launcher calls it while a
-/// headless client runs; none left exits 0.
-pub(crate) fn run_beat(a: &Args, run: &str) -> Result<ExitCode, String> {
-    a.only("run beat", &[])?;
-    let path = db(&repo()?);
-    if path.exists() {
-        Store::open(&path)?.beat(run, &fael_core::rfc3339(fael_core::now_ms()))?;
     }
     Ok(ExitCode::SUCCESS)
 }

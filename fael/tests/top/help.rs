@@ -150,24 +150,14 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     for present in ["--files", "--key", "--limit", "--offset"] {
         assert!(out.contains(present), "{present} missing: {out}");
     }
-    for hidden in [
-        "--since",
-        "--by",
-        "--to",
-        "--revisit",
-        "--text",
-        "--recall",
-        "--kind",
-        "--full",
-        "--all",
-    ] {
+    for hidden in ["--since", "--text", "--kind", "--full", "--all"] {
         assert!(!out.contains(hidden), "{hidden} leaks: {out}");
     }
     assert!(!out.contains("--recall"), "recall leaks: {out}");
     // `--help --all` is the full surface again
     let (ok, full, err) = fael(&d, &["find", "--help", "--all"]);
     assert!(ok, "{err}");
-    for hidden in ["--since", "--recall", "--kind", "--full", "--all"] {
+    for hidden in ["--since", "--kind", "--full", "--all"] {
         assert!(full.contains(hidden), "{hidden} missing: {full}");
     }
     // same for add: workflow flags hide (--urgent/--revisit/--force/--dry-run), core stays
@@ -184,38 +174,30 @@ fn core_help_hides_advanced_flags_and_all_shows_them() {
     ] {
         assert!(out.contains(present), "{present} missing: {out}");
     }
-    for hidden in [
-        "--urgent",
-        "--urgent-before",
-        "--revisit",
-        "--force",
-        "--dry-run",
-    ] {
+    for hidden in ["--urgent", "--revisit", "--force", "--dry-run"] {
         assert!(!out.contains(hidden), "{hidden} leaks: {out}");
     }
     let (ok, full, err) = fael(&d, &["add", "--help", "--all"]);
     assert!(ok, "{err}");
-    for hidden in ["--force", "--dry-run", "--urgent-before", "--revisit"] {
+    for hidden in ["--force", "--dry-run", "--revisit"] {
         assert!(full.contains(hidden), "{hidden} missing: {full}");
     }
-    // bump: every flag is workflow, so the core is the bare id
+    // bump: only --why hides, so the core is the bare id
     let (ok, out, err) = fael(&d, &["bump", "--help"]);
     assert!(ok, "{err}");
     assert!(out.contains("fael bump <id>"), "{out}");
-    for hidden in ["--to", "--revisit", "--urgent", "--not-urgent", "--why"] {
-        assert!(!out.contains(hidden), "{hidden} leaks: {out}");
-    }
+    assert!(!out.contains("--why"), "--why leaks: {out}");
     let (ok, full, err) = fael(&d, &["bump", "--help", "--all"]);
     assert!(ok, "{err}");
-    assert!(full.contains("--to"), "{full}");
-    // doctor: --fat hides, --fix/--json stay
+    assert!(full.contains("--why"), "{full}");
+    // doctor: --fat retired, core and full share flags
     let (ok, out, err) = fael(&d, &["doctor", "--help"]);
     assert!(ok, "{err}");
     assert!(out.contains("--fix"), "{out}");
     assert!(!out.contains("--fat"), "--fat leaks: {out}");
     let (ok, full, err) = fael(&d, &["doctor", "--help", "--all"]);
     assert!(ok, "{err}");
-    assert!(full.contains("--fat"), "{full}");
+    assert!(!full.contains("--fat"), "--fat leaks: {full}");
     // stats: --rows/--day/--misses hide, --json/--since/--all stay (--all is
     // public core: the short default names the section it came from)
     let (ok, out, err) = fael(&d, &["stats", "--help"]);
@@ -246,10 +228,6 @@ fn hidden_flags_still_run() {
     // every hidden CLI flag still parses and runs — hiding is discovery only
     for args in [
         &["find", "--since", "2026-01"][..],
-        &["find", "--by", "nobody"],
-        &["find", "--to", "nobody"],
-        &["find", "--revisit"],
-        &["find", "--recall", "wide"][..],
         &["find", "--kind", "issue"],
         &["find", "--full"],
         &["find", "--all"],
@@ -258,6 +236,20 @@ fn hidden_flags_still_run() {
     ] {
         let (ok, _, err) = fael(&d, args);
         assert!(ok, "{args:?} {err}");
+    }
+    // retired flags now reject
+    for args in [
+        &["find", "--by", "nobody"][..],
+        &["find", "--to", "nobody"],
+        &["find", "--revisit"],
+        &["find", "--recall", "wide"][..],
+    ] {
+        let (ok, _, err) = fael(&d, args);
+        assert!(!ok, "{args:?} should reject");
+        assert!(
+            err.contains("unknown flag") || err.contains("takes no"),
+            "{args:?}: {err}"
+        );
     }
     // hidden bump/doctor/stats flags still run too
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
@@ -280,18 +272,34 @@ fn hidden_flags_still_run() {
         ],
     );
     assert!(ok, "{err}");
-    // bump --to still parses: unknown id fails on the id, never on the flag
+    // bump --to now rejects: retired step-2
     let (ok, _, err) = fael(
         &d,
         &["bump", "01J00000000000000000000000", "--to", "nobody"],
     );
     assert!(!ok, "bump with a bad id should fail");
     assert!(
-        !err.contains("unknown flag"),
-        "bump --to no longer parses: {err}"
+        err.contains("unknown flag") || err.contains("takes no --to"),
+        "bump --to should reject: {err}"
     );
-    let (ok, _, err) = fael(&d, &["doctor", "--fat"]);
-    assert!(ok, "{err}");
+    for args in [
+        &["bump", "01J00000000000000000000000", "--urgent"][..],
+        &["bump", "01J00000000000000000000000", "--not-urgent"],
+        &[
+            "bump",
+            "01J00000000000000000000000",
+            "--revisit",
+            "tomorrow",
+        ],
+        &["doctor", "--fat"][..],
+    ] {
+        let (ok, _, err) = fael(&d, args);
+        assert!(!ok, "{args:?} should reject");
+        assert!(
+            err.contains("unknown flag") || err.contains("takes no"),
+            "{args:?}: {err}"
+        );
+    }
     let (ok, _, err) = fael(&d, &["stats", "--rows"]);
     assert!(ok, "{err}");
     let (ok, _, err) = fael(&d, &["stats", "--misses"]);

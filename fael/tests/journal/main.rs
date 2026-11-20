@@ -173,8 +173,7 @@ fn close_row(id: &str, target: &str) -> String {
 }
 
 /// compact must rewrite the journal too, reading both roots as one log:
-/// a `--prune`d row cannot resurface through the union, and a close that
-/// lives only in the journal still folds (01M3HQHJ2).
+/// a close that lives only in the journal still folds (01M3HQHJ2).
 #[test]
 fn compact_rewrites_both_roots_without_resurrection() {
     let d = repo("journal-compact");
@@ -197,14 +196,13 @@ fn compact_rewrites_both_roots_without_resurrection() {
     // the close for the kept row lives only in the journal (a failed tree write)
     std::fs::write(jrnl.join("2000-01.close.jsonl"), format!("{r1}\n{r2}\n")).unwrap();
 
-    let (ok, out, err) = fael(&d, &["compact", "--prune"]);
+    let (ok, out, err) = fael(&d, &["compact"]);
     assert!(ok, "{err} {out}");
     // past-month sources are gone from both roots
     assert!(!tree.join("2000-01.jsonl").exists());
     assert!(!jrnl.join("2000-01.jsonl").exists());
-    // the pruned row stays gone — the journal does not resurrect it
+    // the journal does not resurrect folded rows
     let (_, all, _) = fael(&d, &["find", "--all"]);
-    assert!(!all.contains("pruned gone"), "{all}");
     // the journal-only close folded: hidden by default, listed with --all
     let (_, open, _) = fael(&d, &["find"]);
     assert!(!open.contains("kept closed"), "{open}");

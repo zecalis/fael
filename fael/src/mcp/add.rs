@@ -1,16 +1,14 @@
 //! The MCP `add` tool — one row, `rows: [...]` batch, `dry_run` preview.
 //! Split out of mcp.rs at the 400-line ratchet.
 
-use super::args::{
-    done, files, need, repo_for, retired_note, s, unknown_note, urgent_ask, with_notes,
-};
+use super::args::{done, files, need, repo_for, s, unknown_note, urgent_ask, with_notes};
 use crate::hook::record_row_asks;
 use crate::{Repo, write::AddOpts, write::add_row};
 use serde_json::Value;
 
 /// Hidden `add` properties: read but not in the schema surface.
 #[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
-pub(crate) const HIDDEN: &[&str] = &["urgent_before", "dry_run", "then"];
+pub(crate) const HIDDEN: &[&str] = &["dry_run", "then"];
 /// Every key `add` reads: the schema surface plus HIDDEN plus routing.
 pub(crate) const KNOWN: &[&str] = &[
     "kind",
@@ -23,7 +21,6 @@ pub(crate) const KNOWN: &[&str] = &[
     "from",
     "revisit",
     "urgent",
-    "urgent_before",
     "supersedes",
     "follows",
     "then",
@@ -37,7 +34,7 @@ pub(super) fn add(a: &Value) -> Result<String, String> {
     // own): that note lives in `add_rows` so it stays beside the batch.
     let extra = unknown_note(a, KNOWN);
     let res = add_checked(a);
-    with_notes(res, vec![extra, retired_note("add", a)])
+    with_notes(res, vec![extra])
 }
 
 fn add_checked(a: &Value) -> Result<String, String> {
@@ -152,7 +149,6 @@ fn add_rows(a: &Value, rows: &[Value], r: &Repo) -> Result<(String, Vec<String>)
             "from",
             "revisit",
             "urgent",
-            "urgent_before",
             "supersedes",
             "follows",
             "then",

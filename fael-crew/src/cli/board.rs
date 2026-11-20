@@ -1,4 +1,4 @@
-//! `fael board [--json] [--open] [--watch] [--lean]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
+//! `fael board [--json] [--open] [--lean]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
 //! plans and chunks, and four lists of uids across them — needs you (§5), the queue (§3),
 //! running, blocked. The app's only read; `"v": 1` is the contract
 //! (`tests/golden/board-v1.json`). Live git: one worktree list and one base per project.
@@ -87,7 +87,7 @@ struct Worktree {
 }
 
 pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
-    a.only("board", &["json", "open", "plan", "drop", "watch", "lean"])?;
+    a.only("board", &["json", "open", "plan", "drop", "lean"])?;
     if let Some(root) = a.one("drop") {
         return registry::unregister(&root);
     }
@@ -95,12 +95,6 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         && db(&r).exists()
     {
         register(&r);
-    }
-    if a.has("watch") {
-        if !a.has("json") {
-            return Err("rejected: --watch prints board lines: `fael board --json --watch`".into());
-        }
-        return watch::run(a);
     }
     let (at, stale) = clock();
     // one thread per repo: each read waits mostly on its own git/gh children

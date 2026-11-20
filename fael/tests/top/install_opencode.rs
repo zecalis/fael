@@ -5,10 +5,10 @@
 use std::path::Path;
 use std::process::Command;
 
-fn install(home: &Path, args: &[&str]) -> String {
+fn install(home: &Path) -> String {
+    std::fs::create_dir_all(home.join(".config/opencode")).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_fael"))
         .arg("install")
-        .args(args)
         .env("HOME", home)
         .env("FAEL_STATE_DIR", home.join("state"))
         // fael on PATH (install refuses without it), no claude CLI
@@ -33,7 +33,7 @@ fn install(home: &Path, args: &[&str]) -> String {
 #[test]
 fn installed_opencode_plugin_reports_session_cost() {
     let home = std::env::temp_dir().join(format!("fael-install-cost-{}", fael_core::ulid()));
-    install(&home, &["--client", "opencode"]);
+    install(&home);
     let p = std::fs::read_to_string(home.join(".config/opencode/plugins/fael.js")).unwrap();
     assert!(
         p.contains("cost_of_messages"),
@@ -46,7 +46,7 @@ fn installed_opencode_plugin_reports_session_cost() {
 #[test]
 fn installed_opencode_plugin_spawns_fael_for_shell_and_edit_only() {
     let home = std::env::temp_dir().join(format!("fael-install-spawn-{}", fael_core::ulid()));
-    install(&home, &["--client", "opencode"]);
+    install(&home);
     let p = std::fs::read_to_string(home.join(".config/opencode/plugins/fael.js")).unwrap();
     assert!(!p.contains("\"grep\"") && !p.contains("\"glob\""), "{p}");
     assert!(!p.contains("=== \"read\""), "{p}");

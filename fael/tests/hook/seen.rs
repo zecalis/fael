@@ -225,8 +225,8 @@ fn a_bumped_row_is_not_pushed_again() {
     assert!(ok, "{err}");
     let id = out.split_whitespace().next().unwrap().to_string();
     assert!(edit_a(&d, "").contains("bumped login loops"));
-    for args in [&["bump", &id, "--to", "ploy"][..], &["bump", &id]] {
-        let (ok, _, err) = fael(&d, args, "");
+    for _ in 0..2 {
+        let (ok, _, err) = fael(&d, &["bump", &id], "");
         assert!(ok, "{err}");
     }
     let (ok, _, err) = fael(

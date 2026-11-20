@@ -60,19 +60,17 @@ impl Args {
                 continue;
             }
             match name.as_str() {
-                "all" | "force" | "json" | "dry-run" | "yes" | "fix" | "prune" | "urgent"
-                | "not-urgent" | "full" | "rows" | "fat" | "day" | "pin" | "open" | "misses"
-                | "days" | "wiring" | "auto" | "no-worktree" | "watch" | "input" | "lean"
-                | "merged" | "no-change" | "seat" => {
+                "all" | "force" | "json" | "dry-run" | "fix" | "urgent" | "full" | "rows"
+                | "day" | "open" | "misses" | "days" | "wiring" | "auto" | "no-worktree"
+                | "input" | "lean" | "merged" | "no-change" | "seat" => {
                     a.flags.entry(name).or_default();
                 }
-                "files" | "key" | "supersedes" | "follows" | "then" | "kind" | "since" | "by"
-                | "client" | "writer" | "before" | "map" | "to" | "from" | "title"
-                | "urgent-before" | "limit" | "offset" | "text" | "edge" | "out" | "replace"
-                | "append" | "with" | "plan" | "brief" | "size" | "model" | "scope" | "after"
-                | "run" | "on" | "until" | "pr" | "cost" | "app" | "area" | "label" | "returns"
-                | "check" | "issue" | "drop" | "section" | "session" | "reads" | "uid"
-                | "option" | "worktree" | "verdict" | "review" | "parent" | "recall" | "wait"
+                "files" | "key" | "supersedes" | "follows" | "then" | "kind" | "since"
+                | "client" | "to" | "from" | "title" | "limit" | "offset" | "text" | "out"
+                | "replace" | "append" | "with" | "plan" | "brief" | "size" | "model" | "scope"
+                | "after" | "run" | "on" | "until" | "pr" | "cost" | "app" | "area" | "label"
+                | "returns" | "check" | "issue" | "drop" | "section" | "session" | "reads"
+                | "uid" | "option" | "worktree" | "verdict" | "review" | "parent" | "wait"
                 | "ask" | "left" | "as" | "why" | "preset" | "cwd" | "because" | "msg"
                 | "detail" | "status" => {
                     let v = inline

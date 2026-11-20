@@ -43,10 +43,6 @@ fn main() -> ExitCode {
     reset_sigpipe();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let mut argv = synonyms::rewrite(raw.clone());
-    // Step-1 retire batch: a deprecated flag still works — it only says so.
-    for w in help::retired_warns(&argv) {
-        eprintln!("{w}");
-    }
     // plan/chunk/board/sweep/run are fael crew's — before help, so `fael chunk --help` is its
     if let Some(code) = crew::dispatch(&argv) {
         return code;
@@ -139,17 +135,17 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("compact", []) => maintain::compact(&a),
         ("import", [src]) => maintain::import(&a, src),
         ("sync", []) => sync::sync(&repo()?).map(|()| ExitCode::SUCCESS),
-        ("mcp", []) => mcp::serve(a.has("pin")).map(|()| ExitCode::SUCCESS),
+        ("mcp", []) => mcp::serve().map(|()| ExitCode::SUCCESS),
         ("install" | "upgrade" | "update", []) => {
-            let (client, dry) = (a.one("client"), a.has("dry-run"));
+            a.only(cmd, &["preset", "wiring", "auto"])?;
             // install writes unasked; upgrade/update update the binary, look first and
             // ask (`--wiring` = the new binary's half)
             if cmd == "install" {
-                install::cmd(client, dry, false, a.one("preset"))
+                install::cmd(None, false, false, a.one("preset"))
             } else if a.has("auto") {
-                install::auto::run(a.has("dry-run"), client.is_some())
+                install::auto::run(false, false)
             } else {
-                install::upgrade(client, dry, a.has("yes"), a.has("wiring"))
+                install::upgrade(None, false, false, a.has("wiring"))
             }
             .map(|()| ExitCode::SUCCESS)
         }
@@ -238,13 +234,9 @@ fn add(a: &Args, kind: &str, text: &str) -> Result<(), String> {
         (f, Some(b)) if f.is_empty() => b.files.clone(),
         (f, _) => f,
     };
-    let urgent = match (a.has("urgent"), a.one("urgent-before")) {
-        (false, None) => core::Urgent::Unset,
-        (true, None) => core::Urgent::End,
-        (false, Some(t)) => core::Urgent::Before(t),
-        (true, Some(_)) => {
-            return Err("rejected: --urgent and --urgent-before pick one — the queue takes a single position".into());
-        }
+    let urgent = match a.has("urgent") {
+        false => core::Urgent::Unset,
+        true => core::Urgent::End,
     };
     // bare `--revisit` names no date or text — that only filters on `find`
     let revisit = a.revisit_value()?;

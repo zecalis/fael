@@ -1,10 +1,9 @@
 //! MCP `find` answers like the CLI: filters, id shapes, text search.
 
-use super::{main_and_worktree, mcp_tool, mcp_tool_env, texts};
+use super::{main_and_worktree, mcp_tool, texts};
 
-/// Issue 01M3HMYS: MCP `find` gains the CLI's `by` and `all` filters.
 #[test]
-fn find_filters_by_writer_and_includes_closed() {
+fn find_includes_closed_with_all() {
     let (_, wt) = main_and_worktree();
     // a second file, so the two notes do not auto-supersede each other
     std::fs::write(wt.join("src/b.rs"), "// b\n").unwrap();
@@ -17,14 +16,6 @@ fn find_filters_by_writer_and_includes_closed() {
         ],
     );
     let raw = texts(&wt);
-    let writer = raw
-        .split("\"by\":\"")
-        .nth(1)
-        .unwrap()
-        .split('"')
-        .next()
-        .unwrap()
-        .to_string();
     let id = raw
         .lines()
         .find(|l| l.contains("keeper row two"))
@@ -56,15 +47,6 @@ fn find_filters_by_writer_and_includes_closed() {
     );
     let all = find(serde_json::json!({"text": "keeper row", "all": true}));
     assert!(all.contains("keeper row two"), "{all}");
-    // `by` narrows to this writer; a bogus writer matches nothing
-    let mine = find(serde_json::json!({"by": writer}));
-    assert!(mine.contains("keeper row one"), "{mine}");
-    let none = find(serde_json::json!({"by": "no-such-writer"}));
-    // an empty find names the dead filter
-    assert!(
-        none.starts_with("no rows match by=no-such-writer"),
-        "{none}"
-    );
 }
 
 /// PLAN-fael-id-refs chunk-1 + fael-secretary c2: MCP `find {"id"}` answers
@@ -235,60 +217,4 @@ fn find_id_follows_a_row_in_another_repo() {
             && !miss.contains("MCP:"),
         "{miss}"
     );
-}
-
-/// f1: MCP `find {"recall": "wide"}` unions the exact file hits, the rows
-/// sharing a key with one, and the text match off any file — in that order,
-/// never the unrelated row; without it only today's exact hit.
-#[test]
-fn find_recall_wide_unions_key_sharing_and_unfiled_text() {
-    let (_, wt) = main_and_worktree();
-    for f in ["src/x.rs", "src/y.rs", "src/z.rs", "src/w.rs"] {
-        std::fs::write(wt.join(f), "// x\n").unwrap();
-    }
-    // x and y share a key: past the 1 s same-burst window y would supersede x
-    // and hide it — pin the window open so the setup never depends on the clock
-    let added = mcp_tool_env(
-        &wt,
-        "add",
-        &[
-            serde_json::json!({"kind": "note", "text": "sunset deploy on x", "files": ["src/x.rs"], "key": "k"}),
-            serde_json::json!({"kind": "note", "text": "unrelated bookkeeping", "files": ["src/y.rs"], "key": "k"}),
-            serde_json::json!({"kind": "note", "text": "sunset deploy on z", "files": ["src/z.rs"]}),
-            serde_json::json!({"kind": "note", "text": "unrelated other", "files": ["src/w.rs"]}),
-        ],
-        &[("FAEL_BURST_MS", "3600000")],
-    );
-    assert!(
-        added.iter().all(|v| v["result"]["isError"] == false),
-        "{added:?}"
-    );
-    let find = |args: serde_json::Value| {
-        let r = mcp_tool(&wt, "find", &[args]);
-        assert_eq!(r[0]["result"]["isError"], false, "{r:?}");
-        r[0]["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .to_string()
-    };
-    // default: only today's exact hit
-    let narrow = find(serde_json::json!({"files": ["src/x.rs"], "text": "sunset deploy"}));
-    assert!(narrow.contains("sunset deploy on x"), "{narrow}");
-    assert!(
-        !narrow.contains("bookkeeping")
-            && !narrow.contains("sunset deploy on z")
-            && !narrow.contains("unrelated other"),
-        "{narrow}"
-    );
-    // wide: exact, key-sharing, unfiled text — in that order, never D
-    let wide =
-        find(serde_json::json!({"files": ["src/x.rs"], "text": "sunset deploy", "recall": "wide"}));
-    let (a, b, c) = (
-        wide.find("sunset deploy on x"),
-        wide.find("unrelated bookkeeping"),
-        wide.find("sunset deploy on z"),
-    );
-    assert!(a.is_some() && b.is_some() && c.is_some(), "{wide}");
-    assert!(a.unwrap() < b.unwrap() && b.unwrap() < c.unwrap(), "{wide}");
-    assert!(!wide.contains("unrelated other"), "{wide}");
 }

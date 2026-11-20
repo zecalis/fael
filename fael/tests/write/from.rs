@@ -126,18 +126,10 @@ fn claiming_a_report_does_not_mark_it_checked() {
     report_stays_unchecked_after(&["claim"]);
 }
 
-#[test]
-fn routing_a_report_does_not_mark_it_checked() {
-    for flags in [
-        vec!["bump", "--to", "codex"],
-        vec!["bump", "--revisit", "2999-01"],
-        vec!["bump", "--urgent"],
-        vec!["bump", "--not-urgent"],
-    ] {
-        report_stays_unchecked_after(&flags);
-    }
-}
-
+/// Step-2 retired the routing bumps (`--to`/`--revisit`/`--urgent`): every
+/// `bump` is now the "still true" check and marks a report checked, so the
+/// old routing-leaves-unchecked case has no bump form left — `claim` above
+/// is the one move that still leaves it unchecked.
 fn report_stays_unchecked_after(args: &[&str]) {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// before\n").unwrap();

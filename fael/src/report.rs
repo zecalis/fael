@@ -1,4 +1,4 @@
-//! `fael report [--out f] [--open] [--since d]` (PLAN-fael-dev-adoption
+//! `fael report` (PLAN-fael-dev-adoption
 //! chunk 2): one offline HTML page that answers three questions to take to a
 //! lead — what memory reached the agents, what is noise, did fael add
 //! friction — and nothing else. Every number is a field of the `Stats` that
@@ -9,7 +9,6 @@ use crate::{Args, core, hook};
 use core::stats::Stats;
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::path::PathBuf;
 
 mod sections;
 
@@ -37,8 +36,8 @@ pub(crate) fn since(a: &Args) -> Result<Option<i64>, String> {
 }
 
 pub(crate) fn report(a: &Args) -> Result<(), String> {
-    a.only("report", &["out", "open", "since"])?;
-    let since_ms = since(a)?;
+    a.only("report", &[])?;
+    let since_ms = None;
     let u = hook::load(since_ms);
     let cfg = crate::repo().map(|r| r.cfg).unwrap_or_default();
     let s = hook::aggregate(&u, &cfg, true);
@@ -69,54 +68,19 @@ pub(crate) fn report(a: &Args) -> Result<(), String> {
             );
         }
     }
-    let window = match a.one("since") {
-        Some(d) if d == "all" => "all recorded usage".into(),
-        // a bare date is local midnight: name the zone and the canonical UTC
-        // instant, so the window reconstructs cross-timezone
-        Some(d) if d.len() == 10 => {
-            let tz = hook::local_tz_offset_min();
-            let from = since_ms
-                .map(|ms| core::rfc3339(ms.max(0) as u64))
-                .unwrap_or_default();
-            format!("since {d} ({}; from {from})", core::tz_offset_string(tz))
-        }
-        Some(d) => format!("since {d}"),
-        None if s.rounds.since.is_empty() => "this and last month".into(),
-        None => format!("since {} (this and last month)", s.rounds.since),
+    let window = match s.rounds.since.is_empty() {
+        true => "this and last month".into(),
+        false => format!("since {} (this and last month)", s.rounds.since),
     };
-    let flag = a
-        .one("since")
-        .map(|d| format!(" --since {d}"))
-        .unwrap_or_default();
-    let out = a
-        .one("out")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| core::stats::state_dir().join("report.html"));
+    let flag = String::new();
+    let out = core::stats::state_dir().join("report.html");
     if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     std::fs::write(&out, render(&s, &info, &window, &flag))
         .map_err(|e| format!("{}: {e}", out.display()))?;
     println!("fael: report written to {}", out.display());
-    if a.has("open") {
-        open(&out);
-    }
     Ok(())
-}
-
-/// The OS opener; a failure is one hint line, never an error — the file is
-/// already written.
-fn open(path: &std::path::Path) {
-    let cmd = if cfg!(target_os = "macos") {
-        "open"
-    } else if cfg!(windows) {
-        "explorer"
-    } else {
-        "xdg-open"
-    };
-    if std::process::Command::new(cmd).arg(path).status().is_err() {
-        println!("fael: could not run {cmd} — open the file yourself");
-    }
 }
 
 fn esc(s: &str) -> String {

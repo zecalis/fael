@@ -310,14 +310,14 @@ fn off_takes_a_stored_receipt_silently() {
 #[test]
 fn auto_rejects_flags_it_would_ignore() {
     let base = world(&["v99.0.0"], "", "", "99.0.0");
-    for args in [
-        &["upgrade", "--auto", "--dry-run"][..],
-        &["upgrade", "--auto", "--client", "codex"][..],
+    for (args, flag) in [
+        (&["upgrade", "--auto", "--dry-run"][..], "--dry-run"),
+        (&["upgrade", "--auto", "--client", "codex"][..], "--client"),
     ] {
         let o = fael(&base, args, &[]).output().unwrap();
         let err = String::from_utf8_lossy(&o.stderr);
         assert!(
-            !o.status.success() && err.contains("takes no --dry-run"),
+            !o.status.success() && err.contains(&format!("takes no {flag}")),
             "{args:?}: {err}"
         );
     }

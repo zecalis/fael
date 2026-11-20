@@ -29,7 +29,7 @@ fn import_a_fael_log_drops_nothing() {
 }
 
 #[test]
-fn import_map_moves_a_subtree() {
+fn import_map_is_retired() {
     let d = repo();
     std::fs::create_dir_all(d.join("old-mem")).unwrap();
     std::fs::write(
@@ -37,12 +37,14 @@ fn import_map_moves_a_subtree() {
         "{\"v\":1,\"ts\":\"2026-01-01T00:00:00Z\",\"by\":\"w\",\"id\":\"m1\",\"kind\":\"note\",\"text\":\"t\",\"files\":[\"svc/a.rs\"]}\n",
     )
     .unwrap();
-    let (ok, _, err) = fael(&d, &["import", "old-mem", "--map", "svc/=services/svc/"]);
-    assert!(ok, "{err}");
-    let (_, out, _) = fael(&d, &["find", "--files", "services/svc/a.rs"]);
-    assert!(out.contains("→ services/svc/a.rs"), "{out}");
-    let (ok, _, err) = fael(&d, &["import", "old-mem", "--map", "no-equals-here"]);
-    assert!(!ok && err.contains("--map"), "{err}");
+    for map in ["svc/=services/svc/", "no-equals-here"] {
+        let (ok, _, err) = fael(&d, &["import", "old-mem", "--map", map]);
+        assert!(!ok, "--map {map} should reject");
+        assert!(
+            err.contains("unknown flag") || err.contains("takes no --map"),
+            "{err}"
+        );
+    }
 }
 
 #[test]

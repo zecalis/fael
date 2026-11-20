@@ -85,8 +85,7 @@ pub(crate) fn emit_warns(warns: &[String]) {
 
 /// [`written`] for a row moved in place (`bump`, `claim`, `next`): the id
 /// is the row's own, so its `supersedes` is the edge it was filed with, not
-/// something this call replaced — never said. The receiver lines only when
-/// this call `routed` it (`bump --to`): a claim is not a hand-off.
+/// something this call replaced — never said.
 pub(crate) fn moved(
     a: &crate::Args,
     r: &crate::Repo,
@@ -107,36 +106,10 @@ pub(crate) fn moved(
     }
 }
 
-/// Batch bump — `fael bump <id> [<id>...]` restamps each row ("still true",
-/// like a bare single bump); a bad id reports alone while the rest save
-/// (never all-or-nothing, like batch close above). Field flags
-/// (--to/--urgent/--revisit) move one row, so several ids with any of them is
-/// rejected — re-run bare, or one at a time. A single id keeps the plain
-/// result, so callers see the same error as before.
+/// Batch bump — `fael bump <id> [<id>...]` restamps each row ("still true");
+/// a bad id reports alone while the rest save. A single id keeps the plain result.
 pub(crate) fn batch_bump(a: &crate::Args, ids: &[String]) -> Result<ExitCode, String> {
-    a.only(
-        "bump",
-        &[
-            "to",
-            "urgent",
-            "urgent-before",
-            "not-urgent",
-            "revisit",
-            "why",
-            "json",
-        ],
-    )?;
-    let fielded = a.one("to").is_some()
-        || a.has("urgent")
-        || a.one("urgent-before").is_some()
-        || a.has("not-urgent")
-        || a.has("revisit");
-    if ids.len() > 1 && fielded {
-        return Err(
-            "rejected: --to/--urgent/--revisit move one row — bump several ids bare, or one at a time"
-                .into(),
-        );
-    }
+    a.only("bump", &["why", "json"])?;
     let r = crate::repo()?;
     let (mut failed, mut first) = (0, String::new());
     for id in ids {
@@ -144,7 +117,7 @@ pub(crate) fn batch_bump(a: &crate::Args, ids: &[String]) -> Result<ExitCode, St
             Ok((row, path, warns)) => {
                 emit_warns(&warns);
                 record_asks("cli", ASK_WARN, "bump", Some(&r.root), &warns);
-                moved(a, &r, &row, &path, a.one("to").is_some());
+                moved(a, &r, &row, &path, false);
             }
             Err(e) => {
                 failed += 1;
@@ -168,7 +141,7 @@ pub(crate) fn batch_bump(a: &crate::Args, ids: &[String]) -> Result<ExitCode, St
 }
 /// Chunk 6b: batch add — a JSON array on stdin, one object per row
 /// (`{kind, text, files[], key?, to?, title?, revisit?, urgent?,
-/// urgent_before?, supersedes?, follows?, force?}`). Every row runs the same
+/// supersedes?, follows?, force?}`). Every row runs the same
 /// validate + self-heal as a single add; a rejected row reports alone while
 /// the rest still save (never all-or-nothing, so no resending the batch).
 /// Exit is failure when any row rejected — the saved ones stay saved.
@@ -314,16 +287,9 @@ pub(crate) fn batch_row(v: &serde_json::Value) -> Result<BatchRow, String> {
         .filter_map(serde_json::Value::as_str)
         .map(String::from)
         .collect();
-    let urgent = match (v["urgent"].as_bool().unwrap_or(false), one("urgent_before")) {
-        (false, None) => core::Urgent::Unset,
-        (true, None) => core::Urgent::End,
-        (false, Some(t)) => core::Urgent::Before(t),
-        (true, Some(_)) => {
-            return Err(
-                "rejected: urgent and urgent_before pick one — the queue takes a single position"
-                    .into(),
-            );
-        }
+    let urgent = match v["urgent"].as_bool().unwrap_or(false) {
+        false => core::Urgent::Unset,
+        true => core::Urgent::End,
     };
     Ok(BatchRow {
         kind,

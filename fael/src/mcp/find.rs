@@ -1,7 +1,7 @@
 //! The MCP `find` tool — the same rows as the CLI, ids just shown marked seen.
 //! Split out of mcp.rs at the 400-line ratchet.
 
-use super::args::{files, repo_for, retired_note, s, unknown_note, with_notes};
+use super::args::{files, repo_for, s, unknown_note, with_notes};
 use crate::{Repo, aliases, core};
 use serde_json::Value;
 
@@ -9,17 +9,16 @@ use serde_json::Value;
 /// agents find them through the note when they guess). Declared beside KNOWN
 /// so a new schema prop lands with its entry here (or fails the test).
 #[allow(dead_code)] // test-only: documents which KNOWN entries are hidden from the schema
-pub(crate) const HIDDEN: &[&str] = &["since", "by", "to", "revisit", "recall"];
+pub(crate) const HIDDEN: &[&str] = &["since"];
 /// Every key `find` reads: the schema surface plus HIDDEN plus routing.
 pub(crate) const KNOWN: &[&str] = &[
-    "id", "ids", "text", "files", "key", "kind", "full", "all", "limit", "offset", "since", "by",
-    "to", "revisit", "recall",
+    "id", "ids", "text", "files", "key", "kind", "full", "all", "limit", "offset", "since",
 ];
 
 pub(super) fn find(a: &Value) -> Result<String, String> {
     let extra = unknown_note(a, KNOWN);
     let res = find_checked(a).map(|(text, _)| text);
-    with_notes(res, vec![extra, retired_note("find", a)])
+    with_notes(res, vec![extra])
 }
 
 fn find_checked(a: &Value) -> Result<(String, Vec<String>), String> {
@@ -87,17 +86,16 @@ fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let (text, anchor, text_key) = crate::find::text_or_anchor(&log, None, text.as_ref(), r);
     let mut files = core::normalize_files(&files(a), &r.cwd, &r.root)?;
     files.extend(anchor);
-    let revisit = revisit_arg(a);
     let f = core::Filter {
         text: text.cloned(),
         files: aliases::load(r, &log, true).expand_all(&files),
         key: s(a, "key").or(text_key),
         kind: s(a, "kind"),
         since: s(a, "since"),
-        by: s(a, "by"),
-        to: s(a, "to").map(|t| t.trim().to_lowercase()),
-        revisit,
-        recall: core::parse_recall(s(a, "recall").as_deref())?,
+        by: None,
+        to: None,
+        revisit: None,
+        recall: None,
         all: a["all"].as_bool().unwrap_or(false),
         limit: match a["limit"].as_u64() {
             Some(0) => {
@@ -180,15 +178,6 @@ fn auto_route(
         }
         core::Ref::Missing => missed(r, log, t),
     })
-}
-
-/// `revisit: true` = any revisit, a string narrows to it (CLI `--revisit[=text]`).
-fn revisit_arg(a: &serde_json::Value) -> Option<String> {
-    match (a["revisit"].as_bool(), s(a, "revisit")) {
-        (_, Some(v)) => Some(v),
-        (Some(true), None) => Some(String::new()),
-        _ => None,
-    }
 }
 
 /// Regex metachars are literal AND here, same hint as the CLI (MCP: `key`).

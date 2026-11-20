@@ -15,7 +15,6 @@ mod board_merged;
 mod board_prs;
 mod board_read;
 mod board_shape;
-mod board_watch;
 mod chunk;
 mod chunk_amend;
 mod chunk_apply_plan;

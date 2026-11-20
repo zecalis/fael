@@ -132,7 +132,7 @@ fn a_bump_syncs_as_an_event_under_the_same_id() {
     point(&a, &remote);
     point(&b, &remote);
     let id = add(&a, "row bumped on the first clone");
-    let (ok, out, err) = fael(&a, &["bump", &id, "--to", "ploy"]);
+    let (ok, out, err) = fael(&a, &["bump", &id, "--why", "still true"]);
     assert!(ok, "{err}");
     assert!(out.starts_with(&id), "the bump keeps the id: {out}");
     assert!(sync(&a).0);
@@ -142,19 +142,19 @@ fn a_bump_syncs_as_an_event_under_the_same_id() {
         .iter()
         .find(|r| r["id"] == id.as_str())
         .expect("arrives");
-    assert_eq!(row["to"], "ploy", "{row}");
+    assert_eq!(row["id"], id.as_str(), "{row}");
     assert_eq!(got.len(), 1, "the event never lists: {got:?}");
     let body = ref_body(&remote, &fael_refs(&remote)[0]);
-    let raw = body
+    let event = body
         .lines()
-        .find(|l| l.contains(&format!("\"id\":\"{id}\"")))
+        .find(|l| l.contains(&format!("\"bumps\":\"{id}\"")))
         .unwrap();
-    assert!(!raw.contains("ploy"), "the row ships as written: {raw}");
+    assert!(event.contains("still true"), "the why rides the event");
     assert!(body.contains(&format!("\"bumps\":\"{id}\"")), "{body}");
 }
 
 /// Two clones bump one row before either syncs: after a full round both fold
-/// the same newest event — the later bump wins on both sides.
+/// the same newest event — one row, identical on both sides.
 #[test]
 fn concurrent_bumps_converge_on_the_newest_event() {
     let remote = bare("bump2");
@@ -165,9 +165,9 @@ fn concurrent_bumps_converge_on_the_newest_event() {
     let id = add(&a, "row bumped on both clones");
     assert!(sync(&a).0);
     assert!(sync(&b).0);
-    let (ok, _, err) = fael(&a, &["bump", &id, "--to", "ploy"]);
+    let (ok, _, err) = fael(&a, &["bump", &id, "--why", "first"]);
     assert!(ok, "{err}");
-    let (ok, _, err) = fael(&b, &["bump", &id, "--to", "vela"]);
+    let (ok, _, err) = fael(&b, &["bump", &id, "--why", "second"]);
     assert!(ok, "{err}");
     for d in [&a, &b, &a] {
         assert!(sync(d).0);
@@ -175,6 +175,5 @@ fn concurrent_bumps_converge_on_the_newest_event() {
     let (ra, rb) = (rows(&a), rows(&b));
     assert_eq!(ra.len(), 1, "{ra:?}");
     assert_eq!(ra[0]["id"], id.as_str());
-    assert_eq!(ra[0]["to"], "vela", "the later bump wins: {ra:?}");
     assert_eq!(ra, rb, "both clones fold to the same row");
 }
