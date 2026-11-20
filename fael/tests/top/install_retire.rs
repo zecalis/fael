@@ -76,6 +76,16 @@ fn run(home: &Path, cmd: &str, args: &[&str]) -> String {
         .args(args)
         .env("HOME", home)
         .env("FAEL_STATE_DIR", home.join("state"))
+        // fael on PATH (install refuses without it)
+        .env(
+            "PATH",
+            std::env::join_paths([
+                Path::new(env!("CARGO_BIN_EXE_fael")).parent().unwrap(),
+                Path::new("/usr/bin"),
+                Path::new("/bin"),
+            ])
+            .unwrap(),
+        )
         .output()
         .unwrap();
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
