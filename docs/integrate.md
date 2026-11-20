@@ -152,7 +152,7 @@ tunnel are off-the-shelf processes you run.
 ```text
 Claude (iPhone app / claude.ai) ──HTTPS──> Cloudflare Access ──> cloudflared (outbound only)
    └ request headers: service token            └ refuses without it   └ stdio->HTTP MCP bridge
-                                                                         └ fael mcp --pin  (cwd = the clone)
+                                                                         └ fael mcp  (cwd = the clone)
 ```
 
 ### 1. Pick the VM — the invoice must read $0.00

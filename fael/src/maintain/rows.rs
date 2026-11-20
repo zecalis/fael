@@ -52,7 +52,7 @@ pub(super) fn open_row_notes(
     out.extend(shipped::problems(log, root, &prs));
     // fat rows: the add-time warnings the agent skipped, repeated per row so
     // one topic per row can still be superseded alone; pre-self-heal legacy
-    // rows stay collapsed to one line unless `--fat` asks for the full list
+    // rows stay collapsed to one line (`doctor --json` lists every row id)
     out.extend(fat::problem(log, cfg, expand_fat));
     // rows not in the accepted `[lang] rows` scripts: the add-time warning
     // repeated as one batch, so a translate pass can supersede them all

@@ -289,7 +289,7 @@ pub(super) fn session_leak_line(l: &core::stats::Leak) -> String {
         )
     } else {
         format!(
-            "  warning: `{}` called ×{} within a minute{rej} with {} distinct call(s) in one agent session — a retry loop, not a test: read the rejection and change the call, or poll with `fael board --json --watch` or `plan export --since`, with backoff",
+            "  warning: `{}` called ×{} within a minute{rej} with {} distinct call(s) in one agent session — a retry loop, not a test: read the rejection and change the call, or poll with `plan export --since`, with backoff",
             l.cmd, l.calls, l.distinct
         )
     }
