@@ -14,8 +14,12 @@ pub(crate) const CAP: usize = 500;
 /// uncommitted porcelain paths, deduped, capped. Fail-open: no worktree diff reads empty.
 pub(crate) fn of(dir: &Path, st: &Store, uid: &str, branch: Option<&str>) -> Vec<String> {
     let committed = super::chunk_run::touched(dir, st, uid, branch).unwrap_or_default();
-    let porcelain = crate::git(dir, &["status", "--porcelain"])
-        .map(|o| parse_porcelain(&o))
+    // untrimmed: `crate::git` trim()s the whole output, which eats the first
+    // porcelain line's leading status space (' M a.rs' -> 'M a.rs') and truncates
+    // its path by one char in parse_porcelain below.
+    let porcelain = crate::board::git_output(dir, &["status", "--porcelain"])
+        .filter(|(code, _)| *code == Some(0))
+        .map(|(_, o)| parse_porcelain(&o))
         .unwrap_or_default();
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
@@ -53,7 +57,7 @@ pub(crate) fn parse_porcelain(out: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_porcelain;
+    use super::{of, parse_porcelain};
 
     #[test]
     fn porcelain_keeps_paths_skips_noise_and_rename_old_side() {
@@ -72,5 +76,40 @@ mod tests {
     #[test]
     fn short_lines_are_skipped_never_panic() {
         assert!(parse_porcelain("M\n M\n??\n").is_empty());
+    }
+
+    #[test]
+    fn of_keeps_first_unstaged_path() {
+        let dir = std::env::temp_dir().join(format!(
+            "fael-observed-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let git = |args: &[&str]| {
+            assert!(
+                std::process::Command::new("git")
+                    .args(args)
+                    .current_dir(&dir)
+                    .output()
+                    .unwrap()
+                    .status
+                    .success()
+            );
+        };
+        git(&["init"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(dir.join("a.rs"), "one").unwrap();
+        git(&["add", "a.rs"]);
+        git(&["commit", "-m", "one"]);
+        std::fs::write(dir.join("a.rs"), "two").unwrap();
+        let st = fael_crew::Store::open_in_memory().unwrap();
+        let got = of(&dir, &st, "missing", None);
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(got, vec!["a.rs".to_string()]);
     }
 }
