@@ -28,7 +28,7 @@ fn add_issue(d: &Path, text: &str, files: &str) -> String {
 fn doctor_rejects_a_flag_it_never_reads_and_writes_nothing() {
     let d = repo();
     let id = add_issue(&d, "on a gone file", "src/deleted.rs");
-    for flags in [&["--fix", "--dry-run"][..], &["--force"], &["--yes"]] {
+    for flags in [&["--fix", "--dry-run"][..], &["--force"]] {
         let mut args = vec!["doctor"];
         args.extend(flags);
         let (ok, out, err) = fael(&d, &args);
@@ -38,11 +38,17 @@ fn doctor_rejects_a_flag_it_never_reads_and_writes_nothing() {
             "{err}"
         );
     }
+    // `--yes` and `--fat` are retired step-2: gone from the parser entirely
+    for flags in [&["--yes"][..], &["--json", "--fat"]] {
+        let mut args = vec!["doctor"];
+        args.extend(flags);
+        let (ok, out, err) = fael(&d, &args);
+        assert!(!ok && out.is_empty(), "{args:?}: {out}");
+        assert!(err.contains("unknown flag"), "{err}");
+    }
     // `--fix --dry-run` once ran the real fix: the Gone row must still be open
     let (_, out, _) = fael(&d, &["find", &id]);
     assert!(!out.contains("closed"), "{out}");
-    let (ok, out, err) = fael(&d, &["doctor", "--json", "--fat"]);
-    assert!(ok && out.starts_with('['), "{out} {err}");
 }
 
 #[test]
