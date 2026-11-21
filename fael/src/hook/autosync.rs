@@ -39,7 +39,26 @@ fn session_bound() -> Duration {
         .ok()
         .and_then(|v| v.parse().ok())
         .map(Duration::from_millis)
-        .unwrap_or(Duration::from_secs(3))
+        .unwrap_or(Duration::from_millis(500))
+}
+
+/// A sync that ran this recently already brought the teammates' rows in, so a
+/// new session start spawns its sync detached and does not wait for it: a
+/// no-op sync over ssh took ~7 s, so the wait bought nothing and cost the
+/// start its whole bound (measured 2026-11-21, session-start p50 3236 ms).
+const RECENT: Duration = Duration::from_secs(120);
+
+/// The repo's last auto-sync log was written less than [`RECENT`] ago.
+fn synced_recently(root: &Path) -> bool {
+    recent(&state_dir().join(log_name(root)), RECENT)
+}
+
+fn recent(file: &Path, within: Duration) -> bool {
+    std::fs::metadata(file)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < within)
 }
 
 /// What the session-start sync did.
@@ -108,9 +127,13 @@ pub(crate) fn start_session(e: &Event) -> SessionSync {
     if seen_before(&r.session, &r.wt, &format!("sync:{}", newest(&r.repo))) {
         return SessionSync::Skipped;
     }
+    let recently = synced_recently(&r.repo.root);
     let Some(mut child) = spawn(&r.repo) else {
         return SessionSync::Skipped;
     };
+    if recently {
+        return SessionSync::Skipped;
+    }
     let bound = session_bound();
     let t = Instant::now();
     loop {
@@ -175,4 +198,22 @@ fn newest(r: &crate::Repo) -> String {
     let (log, by) = (crate::read(r), crate::writer(r));
     let mine = log.rows.iter().chain(&log.closes).filter(|x| x.by == by);
     mine.map(|x| x.id.as_str()).max().unwrap_or("").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::recent;
+    use std::time::Duration;
+
+    #[test]
+    fn recent_reads_a_fresh_file_only() {
+        let dir = std::env::temp_dir().join(format!("fael-recent-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("auto-sync.log");
+        assert!(!recent(&f, Duration::from_secs(60)), "missing file");
+        std::fs::write(&f, "x").unwrap();
+        assert!(recent(&f, Duration::from_secs(60)), "just written");
+        assert!(!recent(&f, Duration::ZERO), "outside the window");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
