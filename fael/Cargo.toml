@@ -18,7 +18,7 @@ default = ["bundled-sqlite"]
 bundled-sqlite = ["fael-core/bundled-sqlite"]
 
 [dev-dependencies]
-rusqlite = "0.41"
+rusqlite = "0.43"
 
 [lints]
 workspace = true
