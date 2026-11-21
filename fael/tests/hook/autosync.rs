@@ -236,7 +236,14 @@ fn session_start_waits_for_sync_and_shows_the_fresh_row() {
     assert!(ok, "{err}");
 
     let ev = format!(r#"{{"cwd":{},"session":"s1"}}"#, json(&d));
-    let (ok, out, _) = fael(&d, &["hook", "session-start"], &ev);
+    // the wait bound is a perf knob (default 500ms): this test proves the
+    // wait itself, so it gives Windows CI room to finish a local sync.
+    let (ok, out, _) = fael_env(
+        &d,
+        &["hook", "session-start"],
+        &ev,
+        &[("FAEL_SYNC_WAIT_MS", "15000")],
+    );
     assert!(ok, "{out}");
     assert!(out.contains("the teammate decided this for you"), "{out}");
 }
