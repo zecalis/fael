@@ -43,9 +43,9 @@ fn session_bound() -> Duration {
 }
 
 /// A sync that ran this recently already brought the teammates' rows in, so a
-/// new session start spawns its sync detached and does not wait for it: a
-/// no-op sync over ssh took ~7 s, so the wait bought nothing and cost the
-/// start its whole bound (measured 2026-11-21, session-start p50 3236 ms).
+/// new session start skips its sync entirely: a no-op sync over ssh took ~7 s,
+/// so even a detached spawn bought nothing and left a stray ssh child
+/// (measured 2026-11-21, session-start p50 3236 ms).
 const RECENT: Duration = Duration::from_secs(120);
 
 /// The repo's last auto-sync log was written less than [`RECENT`] ago.
@@ -128,12 +128,12 @@ pub(crate) fn start_session(e: &Event) -> SessionSync {
         return SessionSync::Skipped;
     }
     let recently = synced_recently(&r.repo.root);
-    let Some(mut child) = spawn(&r.repo) else {
-        return SessionSync::Skipped;
-    };
     if recently {
         return SessionSync::Skipped;
     }
+    let Some(mut child) = spawn(&r.repo) else {
+        return SessionSync::Skipped;
+    };
     let bound = session_bound();
     let t = Instant::now();
     loop {
