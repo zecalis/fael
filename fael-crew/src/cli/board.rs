@@ -1,4 +1,4 @@
-//! `fael board [--json] [--open] [--lean]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
+//! `fael board [--json] [--open] [--lean] [--project <name>]` (PLAN-fael-board b3b, SPEC §10): every registered repo's
 //! plans and chunks, and four lists of uids across them — needs you (§5), the queue (§3),
 //! running, blocked. The app's only read; `"v": 1` is the contract
 //! (`tests/golden/board-v1.json`). Live git: one worktree list and one base per project.
@@ -87,7 +87,10 @@ struct Worktree {
 }
 
 pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
-    a.only("board", &["json", "open", "plan", "drop", "lean"])?;
+    a.only(
+        "board",
+        &["json", "open", "plan", "drop", "lean", "project"],
+    )?;
     if let Some(root) = a.one("drop") {
         return registry::unregister(&root);
     }
@@ -98,7 +101,7 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
     }
     let (at, stale) = clock();
     // one thread per repo: each read waits mostly on its own git/gh children
-    let roots = registered();
+    let roots = only_project(registered(), a.one("project").as_deref())?;
     let mut projects: Vec<Project> = std::thread::scope(|sc| {
         let jobs: Vec<_> = roots
             .iter()
@@ -132,6 +135,27 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
         print!("{out}");
     }
     Ok(ExitCode::from(u8::from(broken)))
+}
+
+/// `--project <name|root>` (hidden, issue 01M7TAZ1): the app rereads one repo, not all of
+/// them. A name no registered repo owns is an error, never an empty board that reads as live.
+fn only_project(
+    roots: Vec<std::path::PathBuf>,
+    want: Option<&str>,
+) -> Result<Vec<std::path::PathBuf>, String> {
+    let Some(w) = want else { return Ok(roots) };
+    let named = |r: &std::path::PathBuf| {
+        r.file_name().is_some_and(|n| n.to_string_lossy() == w) || r.to_string_lossy() == w
+    };
+    let kept: Vec<_> = roots.iter().filter(|r| named(r)).cloned().collect();
+    if kept.is_empty() {
+        let have: Vec<String> = roots.iter().map(|r| Project::named(r).name).collect();
+        return Err(format!(
+            "rejected: no registered project named {w} — registered: {}",
+            have.join(", ")
+        ));
+    }
+    Ok(kept)
 }
 
 /// One registered repo as the board shows it, `--open` and `--plan` applied; None = not on it.

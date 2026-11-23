@@ -48,6 +48,7 @@ const REJECTS: &[(&str, &str)] = &[
     (" rows (", "id_ambiguous"),
     ("is a ledger", "not_a_chunk"),
     ("lists its roots", "no_root"),
+    ("no registered project", "no_root"),
     ("no chunk", "chunk_missing"),
     ("is not on the board", "chunk_missing"),
     ("lives in", "chunk_missing"),
