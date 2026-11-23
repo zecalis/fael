@@ -62,3 +62,43 @@ fn an_agents_cut_has_no_ledger_the_plain_board_does() {
     let v = board(&[]);
     assert!(v["projects"][0]["ledger"]["issues"].is_array());
 }
+
+/// `--project <name>` rereads one registered repo; a name nobody owns fails, never an empty
+/// board that reads as live (issue 01M7TAZ1).
+#[test]
+fn project_cut_reads_one_repo_and_an_unknown_name_fails() {
+    let tmp = std::env::temp_dir().join(format!("fael-project-{}", fael_core::ulid()));
+    let state = tmp.join("state");
+    let repo = |name: &str| {
+        let d = tmp.join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        let ok = Command::new("git")
+            .args(["init", "-q", "-b", "main"])
+            .current_dir(&d)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok);
+        let d = d.canonicalize().unwrap();
+        fael(&d, &state, &["chunk", "add", "x", "--brief", "b"]);
+        fael(&d, &state, &["board", "--json"]); // registers it
+        d
+    };
+    let (a, _b) = (repo("alpha"), repo("beta"));
+    let all: Value = serde_json::from_str(&fael(&a, &state, &["board", "--json"])).unwrap();
+    assert_eq!(all["projects"].as_array().unwrap().len(), 2);
+    let one: Value =
+        serde_json::from_str(&fael(&a, &state, &["board", "--json", "--project", "beta"])).unwrap();
+    let ps = one["projects"].as_array().unwrap();
+    assert_eq!(ps.len(), 1);
+    assert_eq!(ps[0]["name"], "beta");
+    let o = Command::new(crate::common::fael_bin())
+        .args(["board", "--json", "--project", "nope"])
+        .current_dir(&a)
+        .env("FAEL_STATE_DIR", &state)
+        .env_remove("FAEL_DIR")
+        .output()
+        .unwrap();
+    assert!(!o.status.success());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("no registered project named nope"));
+}
