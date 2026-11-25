@@ -323,7 +323,7 @@ fn resolve_cited_rows(r: &Repo, st: &mut fael_crew::Started) {
 
 /// issue 01M5H3FGB: a fence rejection that names `--run R` gets the whole retype appended,
 /// built from the args passed. The run is never picked for the agent.
-fn with_retype(
+pub(crate) fn with_retype(
     e: String,
     uid: &str,
     handoff: &str,
@@ -334,7 +334,10 @@ fn with_retype(
         .nth(1)
         .and_then(|t| t.split_whitespace().next())
     {
-        return format!("{e}\nretype: {} --run {run}", done_cmd(uid, handoff, flag));
+        return format!(
+            "{e}\nretype: {} --run {run}",
+            crate::chunk_retype::done_cmd(uid, handoff, flag)
+        );
     }
     // a linked issue still open: the way out is handing it to the next chunk — name it
     // in --left instead of closing it now
@@ -352,7 +355,7 @@ fn with_retype(
         let bare = lines.join("\n");
         return format!(
             "{e}\nhanding the rest to the next chunk? name the still-open issue in --left: {}",
-            done_cmd(uid, &bare, |f| match f {
+            crate::chunk_retype::done_cmd(uid, &bare, |f| match f {
                 "left" => Some("<id>[,<ids>]".into()),
                 _ => flag(f),
             })
@@ -361,30 +364,17 @@ fn with_retype(
     // a missing --left: the same line, the one answer left to the agent as a placeholder —
     // fael cannot know that nothing is left, so it never types `none` for it
     if e.starts_with("rejected: chunk done needs --left") {
-        return format!(
-            "{e}\ntry: {} --left none|<ids>",
-            done_cmd(uid, handoff, flag)
-        );
+        let cmd = crate::chunk_retype::done_cmd(uid, handoff, |f| match f {
+            "left" => Some("none|<ids>".into()),
+            _ => flag(f),
+        });
+        return format!("{e}\ntry: {cmd}");
     }
     e
 }
 
-/// `fael chunk done <uid> "<handoff>"` with the flags the caller passed, in a fixed order.
-fn done_cmd(uid: &str, handoff: &str, flag: impl Fn(&str) -> Option<String>) -> String {
-    let q = |v: &str| format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\""));
-    let mut cmd = format!("fael chunk done {uid} {}", q(handoff));
-    for f in ["pr", "out", "review", "left", "no-change"] {
-        match flag(f) {
-            Some(v) if v.is_empty() => cmd += &format!(" --{f}"),
-            Some(v) => cmd += &format!(" --{f} {}", if v.contains(' ') { q(&v) } else { v }),
-            None => {}
-        }
-    }
-    cmd
-}
-
 /// A flag's value for the retype line; a bare flag (`--no-change`) is the empty string.
-fn flag_of(a: &Args, f: &str) -> Option<String> {
+pub(crate) fn flag_of(a: &Args, f: &str) -> Option<String> {
     match f {
         "no-change" => a.has(f).then(String::new),
         _ => a.one(f),

@@ -10,7 +10,14 @@ use std::process::{Command, ExitCode};
 /// `chunk done "<result>"`: the uid and, without `--pr`/`--out`, the PR come from this worktree.
 pub(crate) fn done(a: &Args, r: &Repo, handoff: &str, here: &Here) -> Result<(), String> {
     let st = Store::open(&crate::plan::db(r))?;
-    let uid = uid(&st, here, "done")?;
+    let uid = uid(&st, here, "done").map_err(|e| {
+        let held: Vec<String> = Store::held(&st, here.worktree)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(u, ..)| u)
+            .collect();
+        crate::chunk_retype::uidless(e, &held, handoff, |f| crate::chunk_run::flag_of(a, f))
+    })?;
     // `--no-change` names no PR: the branch's own is not the work reviewed (issue 01M62XEX)
     let pr = if a.has("pr") || a.has("out") || a.has("no-change") {
         None
@@ -32,7 +39,7 @@ pub(crate) fn handoff_text(arg: &str) -> Result<String, String> {
         .map_err(|e| format!("rejected: hand-off `-`: cannot read stdin: {e}"))?;
     let text = text.trim_end_matches(['\n', '\r']).to_string();
     match text.trim().is_empty() {
-        true => Err("rejected: hand-off `-` read an empty stdin — pipe the text in".into()),
+        true => Err("rejected: hand-off `-` read an empty stdin — pipe the text in: fael chunk done <uid> - --left none|<ids> <<'EOF'\n<what you did, what is left>\nEOF".into()),
         false => Ok(text),
     }
 }
