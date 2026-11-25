@@ -26,6 +26,7 @@ pub fn notes(db: &Path, worktree: &str, session: &str) -> Option<(String, Vec<No
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .ok()?;
+    // a `--no-worktree` run has none: nothing is its own worktree, every note shows
     let run_wt = run_wt.unwrap_or_default();
     // event.session and event.worktree ride COLUMNS (no VERSION bump): an old db
     // lacks one or both — each read falls back to the next, so a shared db opens
@@ -33,7 +34,8 @@ pub fn notes(db: &Path, worktree: &str, session: &str) -> Option<(String, Vec<No
     const READS: [&str; 3] = [
         "SELECT id, COALESCE(text, ''), session FROM event
          WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
-           AND COALESCE(text, '') != '' AND COALESCE(worktree, '') != ?3 ORDER BY id",
+           AND COALESCE(text, '') != ''
+           AND (?3 = '' OR COALESCE(worktree, '') != ?3) ORDER BY id",
         "SELECT id, COALESCE(text, ''), session FROM event
          WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
            AND COALESCE(text, '') != '' AND ?3 = ?3 ORDER BY id",
