@@ -225,7 +225,6 @@ fn said_names_each_line_said_and_and_keeps_both_sides() {
             "peer",
             "inbox",
             "checkpoint",
-            "handoff",
             "briefdrift",
             "retired",
             "chunkbrief"
