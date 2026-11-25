@@ -36,7 +36,9 @@ pub fn bare(cmd: &str) -> Option<&'static str> {
   wait <uid> \"<question>\" --on owner|data
   show <uid|label>          one chunk as the board has it
   add \"<title>\"             a new draft (--plan inbox|<plan>)
-one verb: fael chunk <verb> --help · all verbs: fael chunk --help
+  also: status edit move note touch after unafter ask reply apply approve
+  owner: answer accept drop park unpark
+one verb: fael chunk <verb> --help · every flag: fael chunk --help
 uids: fael board --open lists uids (`fael plan export <plan>` lists them per plan)",
         ),
         "plan" => Some(
