@@ -62,8 +62,9 @@ fn normalize(out: &str, state: &Path) -> String {
 // Chunk `as` learns stack + cwd says the seat (2026-11-06, fael:01M6QCTD): schema 4064 → 4069 — `as` gains `|stack` (+6) and the chunk cwd names the seat default (+3), paid by two em-dashes to hyphens (-4).
 // Chunk `because` joins the schema (2026-11-09): schema 4069 → 4068 — `start --force --because` through MCP alone, paid by trimming find/add/chunk prop sentences.
 // Chunk `status` joins MCP (2026-11-11, fael:01M73BZA0E64Q4CX4E36DHCQBW): schema 4068 → 4065 — `status` (+7) paid by trimming force `takeover`→`take` (-4) and because `force receipt`→`receipt` (-6).
+// Chunk `left` says done needs it (2026-11-25, note 01M89J2T): schema 4065 → 4074 — `left`→`done:none|ids` (+9); half of 226 `done` rejects for a missing --left in 2026-11 came through MCP, whose only hint was the word `left`.
 const CONSTANTS: &str =
-    "  constants per session: SKILL.md 3294 bytes (~830 est) + MCP schema 4065 bytes (~1018 est)";
+    "  constants per session: SKILL.md 3294 bytes (~830 est) + MCP schema 4074 bytes (~1020 est)";
 
 #[test]
 fn stats_text_matches_golden() {
@@ -244,7 +245,7 @@ fn assert_rest_zero(v: serde_json::Value, out: &str) {
             "by_client": {"claude": {"events": 2, "est_tokens": 8}, "codex": {"events": 1, "est_tokens": 7}},
             "top_rows": [{"id": "A", "pushes": 2}, {"id": "B", "pushes": 2}],
             "asks": {"warning": {"events": 0, "bytes": 0, "codes": {}}},
-            "constants": {"skill_bytes": 3294, "skill_est": 830, "mcp_schema_bytes": 4065, "mcp_schema_est": 1018},
+            "constants": {"skill_bytes": 3294, "skill_est": 830, "mcp_schema_bytes": 4074, "mcp_schema_est": 1020},
             "rounds": {"rows_added": 0, "since": "2026-09-26", "since_utc": "2026-09-26T00:00:00.000Z", "since_local": "2026-09-26T00:00:00.000+00:00", "tz_offset": "+00:00"},
             "non_english_rows": {"rows": 0, "non_english": 0},
             "lifecycle": {"decision": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "issue": {"live": 0, "held": 0, "dormant": 0, "retired": 0}, "note": {"live": 0, "held": 0, "dormant": 0, "retired": 0}},
