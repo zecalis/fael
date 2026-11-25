@@ -20,6 +20,12 @@ const REJECTS: &[(&str, &str)] = &[
     ("is held by run", "held"),
     // another live run in this worktree (issue 01M6KHWF): the same family, someone holds the seat
     ("cannot start here —", "held"),
+    // chunk done refusals (fael-crew chunk.rs / cli/chunk_run.rs): apart from the state move
+    // they once shared `chunk_state` with (note 01M89MGT) — a newer run or another
+    // worktree holds the seat; a linked issue is still open
+    ("no longer holds it", "held"),
+    ("not here (", "held"),
+    ("done refuses —", "linked_open"),
     ("unknown command", "unknown_command"),
     ("unknown tool", "unknown_command"),
     ("unknown chunk verb", "unknown_command"),

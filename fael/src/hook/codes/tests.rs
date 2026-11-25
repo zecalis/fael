@@ -123,6 +123,22 @@ fn start_refusals_read_apart_from_state_moves() {
             "held",
         ),
         (
+            "rejected: chunk 01M5AAAA's latest run is 01M5SSSS (claude), not 01M5RRRR — that start no longer holds it; try `fael chunk show 01M5AAAA` for the run that does",
+            "held",
+        ),
+        (
+            "rejected: chunk 01M5AAAA's run 01M5RRRR (claude) was started in /w/a, not here (/w/b) — if 01M5RRRR is yours, try the same command with --run 01M5RRRR; else `fael chunk show 01M5AAAA`",
+            "held",
+        ),
+        (
+            "rejected: chunk 01M5AAAA done refuses — linked issues still open — close each before done:\nopen linked issue 01AAA \"x\" — close it first: fael close 01AAA \"...\"",
+            "linked_open",
+        ),
+        (
+            "rejected: a waiting chunk cannot become done — try `fael chunk start` to set it, from open | waiting",
+            "chunk_state",
+        ),
+        (
             "rejected: no plan 'umbrella' to be the parent of page-a — a parent is a plan of the same app; try `fael plan list` to pick one",
             "no_plan",
         ),
