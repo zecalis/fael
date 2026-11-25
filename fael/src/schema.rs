@@ -85,7 +85,7 @@ pub(crate) fn tools() -> Value {
                 "with": str_("partner"),
                 "as": str_("pair|lane|follow|stack"),
                 "pr": {"type": ["string", "integer"], "description": "PR"},
-                "left": {"type": ["string", "array"], "description": "left"},
+                "left": {"type": ["string", "array"], "description": "done:none|ids"},
                 "review": str_("clean|fixed|failed"),
             }},
         },
