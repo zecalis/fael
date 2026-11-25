@@ -16,6 +16,7 @@ mod chunk_observed;
 mod chunk_pr_files;
 mod chunk_pr_open;
 mod chunk_prs;
+mod chunk_retype;
 mod chunk_run;
 mod chunk_scope;
 mod chunk_scope_cited;
