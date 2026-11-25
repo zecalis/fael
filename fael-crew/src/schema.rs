@@ -97,6 +97,8 @@ pub(super) const COLUMNS: &[(&str, &str, &str)] = &[
     ("run", "force_reason", "TEXT"),
     ("run", "touch_msg", "TEXT"),
     ("event", "session", "TEXT"),
+    // the writer's worktree: inbox keeps a run's own notes silent (01M88ZGB)
+    ("event", "worktree", "TEXT"),
 ];
 
 /// The additions `c` lacks, as one sql batch (`""` = none). A read only: every open

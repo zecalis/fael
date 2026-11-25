@@ -156,7 +156,7 @@ fn verb(a: &Args, rest: &[String], r: &Repo) -> Result<ExitCode, String> {
                         .map(|s| s.trim().to_string())
                         .find(|s| !s.is_empty())
                 });
-            crate::chunk_run::note(&mut s()?, uid, text, &now, session)?;
+            crate::chunk_run::note(&mut s()?, uid, text, &now, session, &wt)?;
         }
         ["touch", uid, files @ ..] => touch(a, r, &mut s()?, uid, files, &here)?,
         ["wait", uid, text] => {

@@ -11,52 +11,46 @@ use std::path::Path;
 /// or notes filed outside any session).
 pub type Note = (i64, String, Option<String>);
 
-/// The live chunk's uid and its notes since the run started.
+/// The live chunk's uid and its notes since the run started, minus the notes
+/// written from the run's own worktree: its own checkpoints, which the next
+/// `chunk start` brief prints anyway (decision 01M88ZGB).
 /// `None` with no db, no tables or no live run; empty notes = nothing new.
 pub fn notes(db: &Path, worktree: &str, session: &str) -> Option<(String, Vec<Note>)> {
     let c = readonly(db)?;
-    let (uid, started): (String, String) = c
+    let (uid, started, run_wt): (String, String, Option<String>) = c
         .query_row(
-            "SELECT c.uid, r.started FROM run r JOIN chunk c ON c.id = r.chunk
+            "SELECT c.uid, r.started, r.worktree FROM run r JOIN chunk c ON c.id = r.chunk
              WHERE (r.worktree = ?1 OR (?2 <> '' AND r.session = ?2)) AND r.ended IS NULL
              ORDER BY c.seq LIMIT 1",
             [worktree, session],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .ok()?;
-    // event.session rides COLUMNS (no VERSION bump): old dbs lack it — fall back
-    // to the session-less read so a shared db opens both ways (issue 01M4MN60).
-    let with_session = c
-        .prepare(
-            "SELECT id, COALESCE(text, ''), session FROM event
-             WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
-               AND COALESCE(text, '') != '' ORDER BY id",
-        )
-        .ok();
-    if let Some(mut q) = with_session {
-        let out = q
-            .query_map(rusqlite::params![uid, started], |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, Option<String>>(2)?,
-                ))
-            })
-            .ok()?
-            .collect::<Result<Vec<_>, _>>()
-            .ok()?;
-        return Some((uid, out));
-    }
-    let mut q = c
-        .prepare(
-            "SELECT id, COALESCE(text, '') FROM event
-             WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
-               AND COALESCE(text, '') != '' ORDER BY id",
-        )
-        .ok()?;
+    // a `--no-worktree` run has none: nothing is its own worktree, every note shows
+    let run_wt = run_wt.unwrap_or_default();
+    // event.session and event.worktree ride COLUMNS (no VERSION bump): an old db
+    // lacks one or both — each read falls back to the next, so a shared db opens
+    // every way (issue 01M4MN60). Every variant binds ?3 so one call fits all.
+    const READS: [&str; 3] = [
+        "SELECT id, COALESCE(text, ''), session FROM event
+         WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
+           AND COALESCE(text, '') != ''
+           AND (?3 = '' OR COALESCE(worktree, '') != ?3) ORDER BY id",
+        "SELECT id, COALESCE(text, ''), session FROM event
+         WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
+           AND COALESCE(text, '') != '' AND ?3 = ?3 ORDER BY id",
+        "SELECT id, COALESCE(text, ''), NULL FROM event
+         WHERE chunk_uid = ?1 AND by = 'note' AND at >= ?2
+           AND COALESCE(text, '') != '' AND ?3 = ?3 ORDER BY id",
+    ];
+    let mut q = READS.iter().find_map(|sql| c.prepare(sql).ok())?;
     let out = q
-        .query_map(rusqlite::params![uid, started], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, None))
+        .query_map(rusqlite::params![uid, started, run_wt], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
         })
         .ok()?
         .collect::<Result<Vec<_>, _>>()
@@ -105,6 +99,38 @@ mod tests {
             Some("U1".into()),
             "same session, other worktree"
         );
+        let _ = std::fs::remove_file(p);
+    }
+
+    /// A note written from the run's own worktree is its own checkpoint: left
+    /// out. Another worktree's (owner, peer) and an unstamped old one stay; a db
+    /// with `session` but no `worktree` column still reads, sessions kept.
+    #[test]
+    fn own_worktree_notes_are_left_out() {
+        let p = db();
+        let c = rusqlite::Connection::open(&p).unwrap();
+        c.execute_batch(
+            "ALTER TABLE event ADD COLUMN session TEXT;
+             UPDATE event SET session = 'P' WHERE id = 3;",
+        )
+        .unwrap();
+        let (_, ns) = notes(&p, "/w", "").unwrap();
+        assert_eq!(
+            ns,
+            vec![(3, "hello".into(), Some("P".into()))],
+            "no worktree column"
+        );
+        c.execute_batch(
+            "ALTER TABLE event ADD COLUMN worktree TEXT;
+             UPDATE event SET worktree = '/w' WHERE id = 3;
+             INSERT INTO event(id, chunk_uid, at, by, text, worktree) VALUES
+               (5, 'U1', '2026-01-05T00:00:00Z', 'note', 'from the owner', '/main'),
+               (6, 'U1', '2026-01-05T00:00:00Z', 'note', 'old, unstamped', NULL);",
+        )
+        .unwrap();
+        drop(c);
+        let ids: Vec<i64> = notes(&p, "/w", "").unwrap().1.iter().map(|n| n.0).collect();
+        assert_eq!(ids, vec![5, 6], "own worktree's note 3 left out");
         let _ = std::fs::remove_file(p);
     }
 

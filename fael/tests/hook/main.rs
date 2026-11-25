@@ -194,6 +194,17 @@ fn git(d: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&o.stdout).trim().to_string()
 }
 
+/// A sibling worktree of `d`'s clone (`<d>-wt`, branch `wt`): a note written
+/// there is another worktree's word, said by the inbox line (01M88ZGB).
+fn sibling(d: &Path) -> PathBuf {
+    let wt = d.with_file_name(format!("{}-wt", d.file_name().unwrap().to_string_lossy()));
+    git(
+        d,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "wt"],
+    );
+    wt
+}
+
 fn commit(d: &Path, msg: &str) {
     std::fs::write(d.join("src/a.rs"), format!("// {msg}\n")).unwrap();
     assert!(
