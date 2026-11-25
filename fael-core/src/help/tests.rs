@@ -244,3 +244,17 @@ fn all_flag_beats_verb_help() {
         assert_eq!(super::for_argv(&argv(args)), full, "{args}");
     }
 }
+
+/// Issue 01M891M09: agents spent a round on `fael chunk --help` to learn the
+/// verbs the short list left out. The short list (bare `fael chunk` and the
+/// unknown-verb reject) names every verb, so it answers without a second call.
+#[test]
+fn bare_chunk_names_every_verb() {
+    let out = super::bare("chunk").expect("chunk has a short list");
+    for v in crate::work::CHUNK_VERBS {
+        assert!(
+            out.split(|c: char| !c.is_alphanumeric()).any(|w| w == *v),
+            "bare chunk lacks verb {v}:\n{out}"
+        );
+    }
+}
