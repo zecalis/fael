@@ -40,8 +40,9 @@ pub enum SayKind {
     Inbox,
     /// A step commit in a worktree holding a chunk: ask for the checkpoint note.
     Checkpoint,
-    /// A commit in a session that edited and filed nothing: ask for the
-    /// hand-off note the next session needs.
+    /// Legacy: no hook says it now — the commit ask for a hand-off note in a
+    /// session that edited and filed nothing was cut at 14 of 201 (7%),
+    /// decision 01M88ZGB; old usage still holds it.
     Handoff,
     /// Legacy: no hook says it now (the held-chunk line went), old usage still holds it.
     Held,

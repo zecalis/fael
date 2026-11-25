@@ -128,42 +128,12 @@ fn checkpoint(repo: &crate::Repo, session: &str) -> Option<super::say::Line> {
     })
 }
 
-/// A commit in a session that edited files but filed no row: ask for the
-/// hand-off note once per session. Silent with no edits, when the session
-/// already filed, or in a worktree holding a chunk run (the caller says
-/// Checkpoint instead, never both). The files are the session's edit list
-/// (`push::note_edit`), newest first.
-fn handoff(c: &super::protocol::Ctx) -> Option<super::say::Line> {
-    if c.session.is_empty() {
-        return None;
-    }
-    let mine = super::state::session_id(&c.session);
-    let filed = c
-        .log
-        .rows
-        .iter()
-        .any(|r| r.session().is_some_and(|w| w == mine));
-    if filed {
-        return None;
-    }
-    let edited = super::state::edited_files(&c.session, &c.repo.root, 3);
-    if edited.is_empty() {
-        return None;
-    }
-    Some(super::say::Line {
-        kind: super::say::Kind::Handoff,
-        text: format!(
-            "fael: nothing filed this session — what must the next session know? fael add note \"…\" --files {}\n",
-            edited.join(",")
-        ),
-    })
-}
-
 /// A `git commit` naming open issues (PLAN-fael-agent-ergonomics chunk 5):
 /// one line per cited id with its ready `fael close`, each id once per
 /// session; in a worktree holding a chunk run, the checkpoint ask. (The
 /// `fix:` commit line was cut at 2 of 65 earned — decision
-/// `product:push-noise-bar`.) Nothing to say = silence. Each line is its
+/// `product:push-noise-bar`; the hand-off ask for a session that edited and
+/// filed nothing was cut at 14 of 201 — decision 01M88ZGB.) Nothing to say = silence. Each line is its
 /// kind through the `Outbox` like every other push line, with a usage row
 /// so `fael stats` reads its yield.
 fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
@@ -208,8 +178,6 @@ fn commit_reply(e: &Event, tool: &str, input: &Value) -> Reply {
         text,
     }];
     if let Some(line) = checkpoint(&c.repo, &c.session) {
-        lines.push(line);
-    } else if let Some(line) = handoff(&c) {
         lines.push(line);
     }
     out.say_within(c.repo.cfg.push_tokens, lines);

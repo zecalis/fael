@@ -80,10 +80,6 @@ pub(super) fn all() -> Vec<Line> {
             "fael: checkpoint — after this commit: fael chunk note 01C \"<done; next>\" — the next chunk start resumes from it\n",
         ),
         line(
-            Kind::Handoff,
-            "fael: nothing filed this session — what must the next session know? fael add note \"…\" --files a.rs\n",
-        ),
-        line(
             Kind::BriefDrift {
                 key: "~drift:01C@7".into(),
             },
@@ -113,10 +109,9 @@ pub(super) fn slot(k: &Kind) -> usize {
         Kind::Peer { .. } => 8,
         Kind::Inbox { .. } => 9,
         Kind::Checkpoint { .. } => 10,
-        Kind::Handoff => 11,
-        Kind::BriefDrift { .. } => 12,
-        Kind::Retired { .. } => 13,
-        Kind::ChunkBrief { .. } => 14,
+        Kind::BriefDrift { .. } => 11,
+        Kind::Retired { .. } => 12,
+        Kind::ChunkBrief { .. } => 13,
     }
 }
 

@@ -2,7 +2,7 @@
 //! rows as an edit; a read or a search — `Read`, `Grep`, `Glob`, `cat`, a hit
 //! list — says nothing, on every client. Rows reach the agent at the edit.
 
-use super::{fael, fael_env, json, repo, state};
+use super::{fael, json, repo, state};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
@@ -221,8 +221,8 @@ fn a_read_or_a_search_says_nothing() {
     );
 }
 
-/// The commit-ask: a session that edited and filed nothing is asked once,
-/// at its first `git commit`. The line names the session's edited files.
+/// The commit-ask was cut (decision 01M88ZGB, 14 of 201 earned): a session
+/// that edited and filed nothing hears nothing at its commit.
 fn edit_in(d: &Path, session: &str, file: &str) {
     std::fs::write(d.join(file), "// edited\n").unwrap();
     let input = format!(
@@ -243,50 +243,17 @@ fn commit_search(d: &Path, session: &str) -> String {
     out
 }
 
-const HANDOFF: &str = "nothing filed this session";
-
 #[test]
-fn a_first_commit_after_an_edit_with_no_row_asks_for_the_handoff_once() {
+fn a_commit_after_an_edit_with_no_row_asks_nothing() {
     let d = repo();
     seed(&d);
     edit_in(&d, "s-h1", "src/a.rs");
-    let first = commit_search(&d, "s-h1");
-    assert!(first.contains(HANDOFF), "{first}");
-    assert!(first.contains("fael add note"), "{first}");
-    assert!(first.contains("src/a.rs"), "{first}");
-    let second = commit_search(&d, "s-h1");
-    assert!(
-        !second.contains(HANDOFF),
-        "second commit stays silent: {second}"
-    );
+    let out = commit_search(&d, "s-h1");
+    assert!(!out.contains("fael add note"), "{out}");
 }
 
 #[test]
-fn a_commit_with_no_edit_is_silent() {
-    let d = repo();
-    seed(&d);
-    let out = commit_search(&d, "s-h2");
-    assert!(!out.contains(HANDOFF), "{out}");
-}
-
-#[test]
-fn a_session_that_filed_is_never_asked() {
-    let d = repo();
-    seed(&d);
-    edit_in(&d, "s-h3", "src/a.rs");
-    let (ok, _, err) = fael_env(
-        &d,
-        &["add", "note", "hand-off state", "--files", "src/a.rs"],
-        "",
-        &[("FAEL_SESSION", "s-h3")],
-    );
-    assert!(ok, "{err}");
-    let out = commit_search(&d, "s-h3");
-    assert!(!out.contains(HANDOFF), "{out}");
-}
-
-#[test]
-fn a_worktree_holding_a_chunk_run_gets_checkpoint_never_handoff() {
+fn a_worktree_holding_a_chunk_run_gets_the_checkpoint_at_a_commit() {
     let d = repo();
     seed(&d);
     edit_in(&d, "s-h4", "src/a.rs");
@@ -297,8 +264,4 @@ fn a_worktree_holding_a_chunk_run_gets_checkpoint_never_handoff() {
     assert!(ok, "{err}");
     let out = commit_search(&d, "s-h4");
     assert!(out.contains("checkpoint — after this commit"), "{out}");
-    assert!(
-        !out.contains(HANDOFF),
-        "checkpoint instead, never both: {out}"
-    );
 }
