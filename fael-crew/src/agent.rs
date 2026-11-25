@@ -424,6 +424,20 @@ impl Store {
         now: &str,
         session: Option<&str>,
     ) -> Result<(), String> {
+        self.note_from(uid, text, now, session, None)
+    }
+
+    /// `note` with the writer's worktree recorded: the inbox line leaves out a
+    /// note written from the live run's own worktree — its own checkpoint, which
+    /// the next `chunk start` brief prints anyway (decision 01M88ZGB).
+    pub fn note_from(
+        &mut self,
+        uid: &str,
+        text: &str,
+        now: &str,
+        session: Option<&str>,
+        worktree: Option<&str>,
+    ) -> Result<(), String> {
         let tx = tx(self)?;
         let r = row(&tx, uid)?;
         if r.state.terminal() && r.state != State::Done {
@@ -438,6 +452,12 @@ impl Store {
             let _ = tx.execute(
                 "UPDATE event SET session = ?1 WHERE id = ?2",
                 rusqlite::params![s, tx.last_insert_rowid()],
+            );
+        }
+        if let Some(w) = worktree.filter(|w| !w.is_empty()) {
+            let _ = tx.execute(
+                "UPDATE event SET worktree = ?1 WHERE id = ?2",
+                rusqlite::params![w, tx.last_insert_rowid()],
             );
         }
         tx.commit().map_err(err)

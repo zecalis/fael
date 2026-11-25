@@ -487,3 +487,33 @@ fn held_names_the_chunk_of_this_worktree_only() {
     assert_eq!(held[0].0, u);
     assert!(s.held("/elsewhere").unwrap().is_empty());
 }
+
+/// `note_from` stamps the writer's worktree, and core's inbox read leaves out
+/// the note written from the live run's own worktree (decision 01M88ZGB): the
+/// owner's word from the main checkout still reaches the running agent.
+#[test]
+fn inbox_leaves_out_the_runs_own_worktree_notes() {
+    let path = std::env::temp_dir().join(format!("fael-crew-inbox-{}.db", fael_core::ulid()));
+    let mut s = Store::open(&path).unwrap();
+    let a = add(&mut s, "a", Some("brief"));
+    start(&mut s, &a, "/b").unwrap();
+    s.note_from(&a, "done step 1; next step 2", NOW, None, Some("/b"))
+        .unwrap();
+    s.note_from(&a, "owner: use the v2 fixture", NOW, None, Some("/main"))
+        .unwrap();
+    s.note(&a, "unstamped", NOW, None).unwrap();
+    assert_eq!(
+        get(
+            &s,
+            "SELECT worktree FROM event WHERE text = 'done step 1; next step 2' AND chunk_uid = ?1",
+            &a
+        )
+        .as_deref(),
+        Some("/b")
+    );
+    drop(s);
+    let (_, ns) = fael_core::work::inbox_notes(&path, "/b", "").unwrap();
+    let texts: Vec<&str> = ns.iter().map(|n| n.1.as_str()).collect();
+    assert_eq!(texts, ["owner: use the v2 fixture", "unstamped"]);
+    let _ = std::fs::remove_file(path);
+}

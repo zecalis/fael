@@ -479,8 +479,9 @@ pub(crate) fn note(
     text: &str,
     now: &str,
     session: Option<String>,
+    worktree: &str,
 ) -> Result<(), String> {
-    st.note(uid, text, now, session.as_deref())?;
+    st.note_from(uid, text, now, session.as_deref(), Some(worktree))?;
     println!("chunk {uid} → noted for the next start");
     print!("{}", st.drift_line(uid));
     Ok(())
