@@ -234,6 +234,7 @@ fn assert_provenance_window(v: &mut serde_json::Value, _out: &str) {
 fn assert_rest_zero(v: serde_json::Value, out: &str) {
     // its own json! call: one literal with every kind passes the macro's recursion limit
     let said = serde_json::json!({"row": {"said": 2, "earned": 0, "by_event": {"read": {"said": 2, "earned": 0}}}, "note": {"said": 0, "earned": 0}, "brief": {"said": 0, "earned": 0}, "ask": {"said": 0, "earned": 0}, "pointer": {"said": 0, "earned": 0}, "bodies": {"said": 1, "earned": 1, "by_event": {"read": {"said": 1, "earned": 1}}}, "notice": {"said": 0, "earned": 0}, "cited": {"said": 0, "earned": 0}, "finding": {"said": 0, "earned": 0}, "fixed": {"said": 0, "earned": 0}, "fixcommit": {"said": 0, "earned": 0}, "held": {"said": 0, "earned": 0}, "overlap": {"said": 0, "earned": 0}, "peer": {"said": 0, "earned": 0}, "inbox": {"said": 0, "earned": 0}, "checkpoint": {"said": 0, "earned": 0}, "handoff": {"said": 0, "earned": 0}, "briefdrift": {"said": 0, "earned": 0}, "retired": {"said": 0, "earned": 0}, "chunkbrief": {"said": 0, "earned": 0}});
+    let friction = serde_json::json!({"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "by_client": {}, "shape_gate": 0, "shape_gate_rules": {}, "last_7d": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}}, "top_stream": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}}, "last_7d_top_stream": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}}});
     assert_eq!(
         v,
         serde_json::json!({
@@ -255,7 +256,7 @@ fn assert_rest_zero(v: serde_json::Value, out: &str) {
             "unused_rows": [],
             "flow": {"filed_to_close": {"median": 0, "p90": 0, "n": 0}, "start_to_done": {"median": 0, "p90": 0, "n": 0}, "done_to_merge": {"median": 0, "p90": 0, "n": 0}, "runs_with_pr": 0, "runs_total": 0},
             "throughput": [],
-            "friction": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}, "by_command": {}, "by_client": {}, "shape_gate": 0, "shape_gate_rules": {}, "last_7d": {"calls": 0, "rejects": 0, "help": 0, "find_repeat": 0, "first_call_ok": 0, "reasons": {}}},
+            "friction": friction,
             "usage": {"since": "", "by_flag": []},
             "said": said,
         }),

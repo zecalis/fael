@@ -23,7 +23,7 @@
 use super::parse::Parsed;
 use crate::ts_ms;
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 /// How many calls after one a reject, help or repeat still counts against it.
 pub const FIRST_CALL_WINDOW: usize = 2;
@@ -59,6 +59,56 @@ pub struct Friction {
     /// The same totals for calls of the last 7 days, whatever the window —
     /// rejects fixed weeks ago do not hide today's rate.
     pub last_7d: Tally,
+    /// The one stream (session) with the most friction, and its counts: one
+    /// looping session can carry the headline (issue 01M88QVV), so the reader
+    /// sees its share and the rate without it. Empty when no call was friction.
+    pub top_stream: Tally,
+    /// The same for the last 7 days.
+    pub last_7d_top_stream: Tally,
+}
+
+impl Tally {
+    /// Rejects + help + find repeats: the calls that cost another round.
+    pub fn bad(&self) -> usize {
+        self.rejects + self.help + self.find_repeat
+    }
+
+    /// These counts less `part`'s — the rate with one stream left out.
+    pub fn without(&self, part: &Tally) -> Tally {
+        let mut reasons = self.reasons.clone();
+        for (k, n) in &part.reasons {
+            if let Some(v) = reasons.get_mut(k) {
+                *v = v.saturating_sub(*n);
+            }
+        }
+        reasons.retain(|_, n| *n > 0);
+        Tally {
+            calls: self.calls.saturating_sub(part.calls),
+            rejects: self.rejects.saturating_sub(part.rejects),
+            help: self.help.saturating_sub(part.help),
+            find_repeat: self.find_repeat.saturating_sub(part.find_repeat),
+            first_call_ok: self.first_call_ok.saturating_sub(part.first_call_ok),
+            reasons,
+        }
+    }
+
+    fn add(&mut self, c: &Call, rep: bool, first_ok: bool) {
+        self.calls += 1;
+        if c.outcome == Outcome::Reject {
+            self.rejects += 1;
+            *self.reasons.entry(c.reason.to_string()).or_default() += 1;
+        }
+        self.help += (c.outcome == Outcome::Help) as usize;
+        self.find_repeat += rep as usize;
+        self.first_call_ok += first_ok as usize;
+    }
+}
+
+/// `own` replaces `top` when it cost more rounds.
+fn keep_top(top: &mut Tally, own: Tally) {
+    if own.bad() > top.bad() {
+        *top = own;
+    }
 }
 
 #[derive(PartialEq)]
@@ -109,7 +159,7 @@ pub(super) fn friction(parsed: &Parsed) -> Friction {
 
 fn friction_at(parsed: &Parsed, now: i64) -> Friction {
     let cutoff = now - 7 * 86_400_000;
-    let mut streams: HashMap<String, Vec<Call>> = HashMap::new();
+    let mut streams: BTreeMap<String, Vec<Call>> = BTreeMap::new();
     let mut out = Friction::default();
     // `who: "human"` is a call outside an agent session — usage, never friction
     for v in parsed.calls.iter().filter(|v| is_agent_call(v)) {
@@ -157,6 +207,7 @@ fn friction_at(parsed: &Parsed, now: i64) -> Friction {
     }
     for calls in streams.values_mut() {
         calls.sort_by_key(|c| c.ms);
+        let (mut own, mut own_7d) = (Tally::default(), Tally::default());
         let rep: Vec<bool> = (0..calls.len()).map(|i| repeat(calls, i)).collect();
         let bad = |i: usize| calls[i].outcome != Outcome::Ok || rep[i];
         for (i, c) in calls.iter().enumerate() {
@@ -164,236 +215,21 @@ fn friction_at(parsed: &Parsed, now: i64) -> Friction {
                 && (i..calls.len().min(i + 1 + FIRST_CALL_WINDOW)).all(|j| !bad(j));
             let by = out.by_command.entry(c.by.clone()).or_default();
             let cl = out.by_client.entry(c.client.to_string()).or_default();
-            let recent = (c.ms >= cutoff).then_some(&mut out.last_7d);
-            for t in [Some(&mut out.total), Some(by), Some(cl), recent]
-                .into_iter()
-                .flatten()
-            {
-                t.calls += 1;
-                if c.outcome == Outcome::Reject {
-                    t.rejects += 1;
-                    *t.reasons.entry(c.reason.to_string()).or_default() += 1;
-                }
-                t.help += (c.outcome == Outcome::Help) as usize;
-                t.find_repeat += rep[i] as usize;
-                t.first_call_ok += first_ok as usize;
+            let recent = c.ms >= cutoff;
+            for t in [&mut out.total, by, cl, &mut own] {
+                t.add(c, rep[i], first_ok);
+            }
+            if recent {
+                out.last_7d.add(c, rep[i], first_ok);
+                own_7d.add(c, rep[i], first_ok);
             }
         }
+        keep_top(&mut out.top_stream, own);
+        keep_top(&mut out.last_7d_top_stream, own_7d);
     }
     out
 }
 
 #[cfg(test)]
-mod tests {
-    use super::super::parse::parse;
-    use std::path::{Path, PathBuf};
-
-    /// `(minute, cmd, outcome, empty, sig)` calls in one session → friction.
-    fn run(calls: &[(u32, &str, &str, bool, &str)]) -> super::Friction {
-        let text: String = calls
-            .iter()
-            .map(|(m, cmd, outcome, empty, sig)| {
-                format!(
-                    "{{\"ts\":\"2026-10-07T00:{m:02}:00.000Z\",\"repo\":\"/work/r\",\"client\":\"cli\",\"event\":\"call\",\"session\":\"s\",\"cmd\":\"{cmd}\",\"outcome\":\"{outcome}\",\"reason\":\"unknown_flag\",\"empty\":{empty},\"sig\":\"{sig}\"}}\n"
-                )
-            })
-            .collect();
-        let p = parse(
-            &text,
-            Path::new("/work/state/usage.jsonl"),
-            &[PathBuf::from("/tmp")],
-        );
-        assert_eq!(p.n, 0, "call lines are no injections");
-        super::friction(&p)
-    }
-
-    /// One call line; `session` empty = the line carries none.
-    #[allow(clippy::too_many_arguments)]
-    fn line(
-        m: u32,
-        session: &str,
-        client: &str,
-        cmd: &str,
-        outcome: &str,
-        empty: bool,
-        sig: &str,
-    ) -> String {
-        let session = if session.is_empty() {
-            String::new()
-        } else {
-            format!("\"session\":\"{session}\",")
-        };
-        format!(
-            "{{\"ts\":\"2026-10-07T00:{m:02}:00.000Z\",\"repo\":\"/work/r\",\"client\":\"{client}\",\"event\":\"call\",{session}\"cmd\":\"{cmd}\",\"outcome\":\"{outcome}\",\"empty\":{empty},\"sig\":\"{sig}\"}}\n"
-        )
-    }
-
-    #[test]
-    fn last_7d_counts_only_calls_within_a_week_of_now() {
-        let l = [
-            line(0, "s", "cli", "find", "ok", false, "a"),
-            line(1, "s", "cli", "add", "reject", false, "b"),
-        ];
-        let p = parse(
-            &l.concat(),
-            Path::new("/work/state/usage.jsonl"),
-            &[PathBuf::from("/tmp")],
-        );
-        let day = 86_400_000;
-        let t = crate::ts_ms("2026-10-07T00:00:00.000Z").unwrap();
-        let near = super::friction_at(&p, t + 6 * day).last_7d;
-        assert_eq!((near.calls, near.rejects), (2, 1));
-        let far = super::friction_at(&p, t + 8 * day);
-        assert_eq!((far.last_7d.calls, far.total.calls), (0, 2));
-    }
-
-    fn of(lines: &[String]) -> super::Friction {
-        let p = parse(
-            &lines.concat(),
-            Path::new("/work/state/usage.jsonl"),
-            &[PathBuf::from("/tmp")],
-        );
-        super::friction(&p)
-    }
-
-    #[test]
-    fn sessions_do_not_mix_their_calls() {
-        // s1's empty find, then s2's find, interleaved: not a repeat of s1's
-        let f = of(&[
-            line(0, "s1", "cli", "find", "ok", true, "a"),
-            line(1, "s2", "cli", "find", "ok", false, "b"),
-            line(2, "s1", "cli", "add", "ok", false, "c"),
-        ]);
-        assert_eq!(
-            (f.total.find_repeat, f.total.first_call_ok),
-            (0, 3),
-            "{f:?}"
-        );
-    }
-
-    #[test]
-    fn a_line_without_a_session_streams_by_repo_and_client() {
-        let f = of(&[
-            line(0, "", "mcp", "find", "ok", true, "a"),
-            line(1, "", "mcp", "find", "ok", false, "b"),
-        ]);
-        assert_eq!(f.total.find_repeat, 1, "{f:?}");
-        // another client's find is another agent
-        let f = of(&[
-            line(0, "", "mcp", "find", "ok", true, "a"),
-            line(1, "", "cli", "find", "ok", false, "b"),
-        ]);
-        assert_eq!(f.total.find_repeat, 0, "{f:?}");
-    }
-
-    #[test]
-    fn friction_splits_by_client() {
-        let f = of(&[
-            line(0, "a", "opencode", "find", "reject", false, "a"),
-            line(1, "b", "claude", "find", "ok", false, "b"),
-            line(2, "b", "claude", "add", "ok", false, "c"),
-        ]);
-        assert_eq!(f.by_client["opencode"].rejects, 1, "{f:?}");
-        assert_eq!(f.by_client["claude"].calls, 2, "{f:?}");
-    }
-
-    #[test]
-    fn calls_are_read_in_time_order_not_file_order() {
-        // written out of order: the empty find is the earlier call
-        let f = of(&[
-            line(1, "s", "cli", "find", "ok", false, "b"),
-            line(0, "s", "cli", "find", "ok", true, "a"),
-        ]);
-        assert_eq!(f.total.find_repeat, 1, "{f:?}");
-    }
-
-    #[test]
-    fn calls_at_the_tail_of_a_stream_are_judged_on_the_calls_that_exist() {
-        // one call after, then the stream ends: both clean, both succeed
-        let f = of(&[
-            line(0, "s", "cli", "add", "ok", false, "a"),
-            line(1, "s", "cli", "add", "ok", false, "b"),
-        ]);
-        assert_eq!(f.total.first_call_ok, 2, "{f:?}");
-    }
-
-    #[test]
-    fn a_lone_clean_call_is_a_first_call_success() {
-        let f = run(&[(0, "add", "ok", false, "a")]);
-        assert_eq!((f.total.calls, f.total.first_call_ok), (1, 1));
-        assert_eq!(f.total.rejects + f.total.help + f.total.find_repeat, 0);
-    }
-
-    #[test]
-    fn a_reject_is_friction_and_spoils_the_call_before_it() {
-        let f = run(&[
-            (0, "add", "ok", false, "a"),
-            (1, "find", "reject", false, "b"),
-        ]);
-        assert_eq!((f.total.rejects, f.total.first_call_ok), (1, 0));
-        assert_eq!(f.total.reasons["unknown_flag"], 1);
-        assert_eq!(f.by_command["find"].reasons["unknown_flag"], 1);
-        assert_eq!(f.by_command["add"].first_call_ok, 0);
-    }
-
-    #[test]
-    fn a_shape_gate_reject_is_counted_apart_and_spoils_nothing() {
-        let gate = line(1, "s", "cli", "add", "reject", false, "b").replace(
-            "\"reject\"",
-            "\"reject\",\"reason\":\"shape_gate\",\"rules\":[\"untitled\",\"no_key\"]",
-        );
-        let f = of(&[
-            line(0, "s", "cli", "find", "ok", false, "a"),
-            gate,
-            line(2, "s", "cli", "add", "ok", false, "c"),
-        ]);
-        assert_eq!(f.shape_gate, 1);
-        assert_eq!(f.shape_gate_rules["untitled"], 1, "{f:?}");
-        assert_eq!((f.total.calls, f.total.rejects), (2, 0));
-        assert_eq!(f.total.first_call_ok, 2, "{f:?}");
-        assert!(f.total.reasons.is_empty(), "{f:?}");
-    }
-
-    #[test]
-    fn a_verb_gets_its_own_line() {
-        let start = line(0, "s", "cli", "chunk", "reject", false, "a").replace(
-            "\"reject\"",
-            "\"reject\",\"reason\":\"chunk_state\",\"sub\":\"start\"",
-        );
-        let f = of(&[start, line(1, "s", "cli", "chunk", "ok", false, "b")]);
-        assert_eq!(
-            f.by_command["chunk start"].reasons["chunk_state"], 1,
-            "{f:?}"
-        );
-        assert_eq!(f.by_command["chunk"].calls, 1, "{f:?}");
-    }
-
-    #[test]
-    fn a_reject_beyond_the_window_does_not_spoil() {
-        let f = run(&[
-            (0, "add", "ok", false, "a"),
-            (1, "add", "ok", false, "b"),
-            (2, "add", "ok", false, "c"),
-            (3, "add", "ok", false, "d"),
-            (4, "find", "help", false, "e"),
-        ]);
-        assert_eq!((f.total.help, f.total.first_call_ok), (1, 2));
-    }
-
-    #[test]
-    fn find_after_empty_find_is_a_repeat_but_refining_a_hit_is_not() {
-        let f = run(&[(0, "find", "ok", true, "a"), (1, "find", "ok", false, "b")]);
-        assert_eq!((f.total.find_repeat, f.total.first_call_ok), (1, 0));
-        let f = run(&[(0, "find", "ok", false, "a"), (1, "find", "ok", false, "b")]);
-        assert_eq!((f.total.find_repeat, f.total.first_call_ok), (0, 2));
-        // a reject or help after an empty find is counted once, as itself
-        let f = run(&[
-            (0, "find", "ok", true, "a"),
-            (1, "find", "help", false, "b"),
-        ]);
-        assert_eq!((f.total.find_repeat, f.total.help), (0, 1));
-        // the same empty call again is a re-poll, not a fix
-        let f = run(&[(0, "find", "ok", true, "a"), (1, "find", "ok", true, "a")]);
-        assert_eq!(f.total.find_repeat, 0);
-    }
-}
+#[path = "friction_tests.rs"]
+mod tests;

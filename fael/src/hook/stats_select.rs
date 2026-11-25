@@ -127,15 +127,39 @@ pub(super) fn tally_rate(t: &core::stats::Tally) -> String {
 
 /// Last-7d split for the friction total line, shared by the full section
 /// and the short default so the two cannot drift. Empty with no recent calls.
-pub(super) fn last_7d_suffix(last: &core::stats::Tally) -> String {
+pub(super) fn last_7d_suffix(f: &core::stats::Friction) -> String {
+    let last = &f.last_7d;
     match last.calls {
         0 => String::new(),
         c => format!(
-            " · last 7d: {}/100, first-call {}%",
-            per100(last.rejects + last.help + last.find_repeat, c),
-            last.first_call_ok * 100 / c
+            " · last 7d: {}/100, first-call {}%{}",
+            per100(last.bad(), c),
+            last.first_call_ok * 100 / c,
+            top_suffix(last, &f.last_7d_top_stream),
         ),
     }
+}
+
+/// (Threshold trial) A session that holds this share of the friction or
+/// more is named on the line: one loop then carries the rate (issue 01M88QVV).
+const TOP_SHARE_PCT: usize = 25;
+
+/// ` (top session N of M, P%; without it R/100)` when one session holds
+/// `TOP_SHARE_PCT` of the friction or more, else empty.
+pub(super) fn top_suffix(all: &core::stats::Tally, top: &core::stats::Tally) -> String {
+    let (bad, own) = (all.bad(), top.bad());
+    if bad == 0 || own * 100 < bad * TOP_SHARE_PCT {
+        return String::new();
+    }
+    let rest = all.without(top);
+    let without = match rest.calls {
+        0 => "n/a".to_string(),
+        c => format!("{}/100", per100(rest.bad(), c)),
+    };
+    format!(
+        " (top session {own} of {bad}, {}%; without it {without})",
+        own * 100 / bad
+    )
 }
 
 /// The short default's friction line: the total rate alone — no per-reason
@@ -153,10 +177,11 @@ pub(super) fn total_line(f: &core::stats::Friction) -> Option<String> {
         };
     }
     Some(format!(
-        "  friction per 100 calls ({} calls): {}{gate}{}",
+        "  friction per 100 calls ({} calls): {}{}{gate}{}",
         f.total.calls,
         tally_rate(&f.total),
-        last_7d_suffix(&f.last_7d),
+        top_suffix(&f.total, &f.top_stream),
+        last_7d_suffix(f),
     ))
 }
 
@@ -356,3 +381,7 @@ pub(super) fn print_default(s: &core::stats::Stats, path: &Path) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "stats_select_tests.rs"]
+mod tests;

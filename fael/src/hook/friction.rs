@@ -281,10 +281,11 @@ pub(super) fn lines(f: &core::stats::Friction) -> Vec<String> {
         };
     }
     let mut out = vec![format!(
-        "  friction per 100 calls ({} calls): {}{gate}{}",
+        "  friction per 100 calls ({} calls): {}{}{gate}{}",
         f.total.calls,
         tally_text(&f.total),
-        super::stats_select::last_7d_suffix(&f.last_7d),
+        super::stats_select::top_suffix(&f.total, &f.top_stream),
+        super::stats_select::last_7d_suffix(f),
     )];
     let mut by: Vec<_> = f.by_command.iter().collect();
     by.sort_by_key(|(k, t)| (std::cmp::Reverse(t.calls), *k));
