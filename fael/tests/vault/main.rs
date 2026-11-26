@@ -136,7 +136,11 @@ fn add_creates_exactly_one_file_with_aliases() {
         })
         .expect("aliases entry");
     assert!(short.len() >= 8 && id.starts_with(&short), "{body}");
-    assert!(files[0].to_string_lossy().ends_with(&format!("-{short}.md")));
+    assert!(
+        files[0]
+            .to_string_lossy()
+            .ends_with(&format!("-{short}.md"))
+    );
     assert!(body.contains(&format!("id: \"{id}\"")), "{body}");
     assert!(body.contains("kind: \"note\""), "{body}");
     assert!(body.contains("the vault holds open rows"), "{body}");
@@ -161,7 +165,15 @@ fn supersede_swaps_the_file() {
     let (d, root) = repo();
     let (ok, out, err) = fael(
         &d,
-        &["add", "issue", "old bug text", "--title", "Old bug", "--files", "src/a.rs"],
+        &[
+            "add",
+            "issue",
+            "old bug text",
+            "--title",
+            "Old bug",
+            "--files",
+            "src/a.rs",
+        ],
         "",
     );
     assert!(ok, "{err}");
@@ -169,8 +181,15 @@ fn supersede_swaps_the_file() {
     let (ok, out, err) = fael(
         &d,
         &[
-            "add", "issue", "new bug text", "--title", "Old bug",
-            "--files", "src/a.rs", "--supersedes", &old,
+            "add",
+            "issue",
+            "new bug text",
+            "--title",
+            "Old bug",
+            "--files",
+            "src/a.rs",
+            "--supersedes",
+            &old,
         ],
         "",
     );
@@ -190,7 +209,11 @@ fn supersede_swaps_the_file() {
 fn cited_ids_become_links() {
     let (d, root) = repo();
     let first = add_note(&d, "the referenced row", "Referenced row");
-    let second = add_note(&d, &format!("see also {first} for context"), "Referencing row");
+    let second = add_note(
+        &d,
+        &format!("see also {first} for context"),
+        "Referencing row",
+    );
     assert_ne!(first, second);
     let files = md_files(&root);
     assert_eq!(files.len(), 2, "{files:?}");
@@ -199,9 +222,21 @@ fn cited_ids_become_links() {
     let linked = body
         .lines()
         .filter(|l| l.contains("[[") && l.contains("]]"))
-        .any(|l| first.starts_with(l.split("[[").nth(1).unwrap_or("").split("]]").next().unwrap_or("!")));
+        .any(|l| {
+            first.starts_with(
+                l.split("[[")
+                    .nth(1)
+                    .unwrap_or("")
+                    .split("]]")
+                    .next()
+                    .unwrap_or("!"),
+            )
+        });
     assert!(linked, "cited id links as [[short]]: {body}");
-    assert!(!body.contains(&first), "raw id must be linked, not pasted: {body}");
+    assert!(
+        !body.contains(&first),
+        "raw id must be linked, not pasted: {body}"
+    );
     let _ = std::fs::remove_dir_all(&d);
 }
 
@@ -227,7 +262,11 @@ fn rebuild_reproduces_bytes_and_clears_stale() {
     assert_eq!(before.len(), 2);
     // stale files: a forged projection, a foreign file, a crashed tmp
     let kind_dir = root.join("note");
-    std::fs::write(kind_dir.join("forged-12345678.md"), "---\nid: \"x\"\n---\nforged\n").unwrap();
+    std::fs::write(
+        kind_dir.join("forged-12345678.md"),
+        "---\nid: \"x\"\n---\nforged\n",
+    )
+    .unwrap();
     std::fs::write(kind_dir.join("notes.txt"), "not a projection").unwrap();
     std::fs::write(kind_dir.join("crash-12345678.md.tmp"), "half written").unwrap();
     let (ok, out, err) = fael(&d, &["vault", "rebuild"], "");
@@ -263,7 +302,11 @@ fn no_vault_dir_means_no_cost() {
         );
     }
     std::fs::create_dir_all(d.join(".fael")).unwrap();
-    let (ok, _, err) = fael(&d, &["add", "note", "no vault here", "--files", "doc:seed"], "");
+    let (ok, _, err) = fael(
+        &d,
+        &["add", "note", "no vault here", "--files", "doc:seed"],
+        "",
+    );
     assert!(ok, "{err}");
     // no vault projected beside the journal, and the add still worked
     assert!(!d.join(".git/fael/vault").exists());

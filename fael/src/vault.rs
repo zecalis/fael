@@ -97,12 +97,17 @@ fn safe(s: &str, fallback: &str) -> String {
 }
 
 fn filename(log: &core::Log, row: &core::Row) -> String {
-    let title = row.title.as_deref().unwrap_or_else(|| row.text.lines().next().unwrap_or(""));
+    let title = row
+        .title
+        .as_deref()
+        .unwrap_or_else(|| row.text.lines().next().unwrap_or(""));
     format!("{}-{}.md", slug(title), id8(log, &row.id))
 }
 
 fn path_for(repo_root: &Path, log: &core::Log, row: &core::Row) -> PathBuf {
-    repo_root.join(safe(&row.kind, "note")).join(filename(log, row))
+    repo_root
+        .join(safe(&row.kind, "note"))
+        .join(filename(log, row))
 }
 
 /// One JSON string — valid YAML for any scalar, byte-stable for any input.
@@ -116,8 +121,14 @@ fn splice(text: &str, tok: &str, link: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(i) = rest.find(tok) {
-        let before = rest[..i].chars().next_back().is_some_and(|c| c.is_alphanumeric());
-        let after = rest[i + tok.len()..].chars().next().is_some_and(|c| c.is_alphanumeric());
+        let before = rest[..i]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_alphanumeric());
+        let after = rest[i + tok.len()..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_alphanumeric());
         let linked = rest[..i].ends_with("[[") && rest[i + tok.len()..].starts_with("]]");
         if before || after || linked {
             out.push_str(&rest[..i + tok.len()]);
@@ -156,7 +167,11 @@ fn linkify(log: &core::Log, text: &str, open: &HashSet<&str>) -> String {
 
 /// The file bytes for one open row: sorted frontmatter, then the linked body.
 fn render(row: &core::Row, log: &core::Log, open: &HashSet<&str>) -> String {
-    let mut fm = format!("---\naliases: [{}]\nby: {}\n", q(&id8(log, &row.id)), q(&row.by));
+    let mut fm = format!(
+        "---\naliases: [{}]\nby: {}\n",
+        q(&id8(log, &row.id)),
+        q(&row.by)
+    );
     if row.files.is_empty() {
         fm.push_str("files: []\n");
     } else {
@@ -174,7 +189,11 @@ fn render(row: &core::Row, log: &core::Log, open: &HashSet<&str>) -> String {
     if let Some(key) = row.key.as_deref() {
         fm.push_str(&format!("key: {}\n", q(key)));
     }
-    fm.push_str(&format!("kind: {}\nts: {}\n---\n", q(&row.kind), q(&row.ts)));
+    fm.push_str(&format!(
+        "kind: {}\nts: {}\n---\n",
+        q(&row.kind),
+        q(&row.ts)
+    ));
     let body = linkify(log, &row.text, open);
     match body.ends_with('\n') {
         true => format!("{fm}{body}"),
@@ -285,7 +304,9 @@ pub(crate) fn refresh(r: &Repo, id: &str) -> Result<(), String> {
 /// Returns `(written, removed)`. Creates the dirs — only `rebuild` calls it.
 pub(crate) fn reconcile(r: &Repo) -> Result<(usize, usize), String> {
     let Some((vault, _)) = vault_dir(r) else {
-        return Err("vault: no vault dir — set git config fael.vault <dir> or run in a git repo".into());
+        return Err(
+            "vault: no vault dir — set git config fael.vault <dir> or run in a git repo".into(),
+        );
     };
     let log = open_log(r);
     let rows = core::find(&log, &core::Filter::default());
@@ -308,7 +329,10 @@ pub(crate) fn reconcile(r: &Repo) -> Result<(usize, usize), String> {
             };
             for f in files.flatten() {
                 let p = f.path();
-                let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let name = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
                 // `*.md.tmp` is a crashed write's litter — never a kept file
                 if !name.ends_with(".md") && !name.ends_with(".md.tmp") {
                     continue;
