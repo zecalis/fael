@@ -46,6 +46,10 @@ pub(crate) fn purge(r: &crate::Repo, a: &Args, id: &str) -> Result<(), String> {
             out.id, out.title, out.rows, out.closes,
         );
     }
+    // the row is gone from the log — its file goes with one reconcile.
+    if let Err(e) = crate::vault::reconcile(r) {
+        eprintln!("warn: vault: {e}");
+    }
     Ok(())
 }
 

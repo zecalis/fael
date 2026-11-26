@@ -301,13 +301,18 @@ pub(crate) fn refresh(r: &Repo, id: &str) -> Result<(), String> {
 
 /// Diff the vault against the open set: write missing/changed files, delete
 /// files with no open row behind them (wrong path, foreign, or closed).
-/// Returns `(written, removed)`. Creates the dirs — only `rebuild` calls it.
+/// Returns `(written, removed)`. No-op when the vault dir does not exist —
+/// the five reconciled commands (`sync`, `import`, `purge`, `restore`,
+/// `bump`) never create a vault; only `rebuild` does.
 pub(crate) fn reconcile(r: &Repo) -> Result<(usize, usize), String> {
     let Some((vault, _)) = vault_dir(r) else {
         return Err(
             "vault: no vault dir — set git config fael.vault <dir> or run in a git repo".into(),
         );
     };
+    if !vault.is_dir() {
+        return Ok((0, 0));
+    }
     let log = open_log(r);
     let rows = core::find(&log, &core::Filter::default());
     let open: HashSet<&str> = rows.iter().map(|r| r.id.as_str()).collect();
@@ -354,8 +359,10 @@ pub(crate) fn reconcile(r: &Repo) -> Result<(usize, usize), String> {
 
 /// `fael vault rebuild` — the whole open set, now. Creates the vault dir.
 fn rebuilt(r: &Repo) -> Result<String, String> {
+    let (vault, _) = vault_dir(r)
+        .ok_or("vault: no vault dir — set git config fael.vault <dir> or run in a git repo")?;
+    std::fs::create_dir_all(&vault).map_err(|e| format!("vault: {vault:?}: {e}"))?;
     let (wrote, removed) = reconcile(r)?;
-    let (vault, _) = vault_dir(r).expect("reconcile resolved it");
     let root = vault.join(safe(&repo_name(&r.root), "repo"));
     Ok(format!(
         "vault: {wrote} written, {removed} removed → {}",

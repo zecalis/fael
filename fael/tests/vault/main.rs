@@ -2,7 +2,11 @@
 //! rows as markdown files, kept in sync by add/close/supersede.
 //!
 //! Thin entry like the suites beside it — every test runs the real binary in
-//! a temp git repo with `fael.vault` pointed at a temp dir.
+//! a temp git repo with `fael.vault` pointed at a temp dir:
+//! `reconcile` (sync, import, purge, restore and bump keep the vault equal
+//! to a rebuild without one).
+
+mod reconcile;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
