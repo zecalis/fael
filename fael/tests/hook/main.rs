@@ -67,6 +67,7 @@ mod stop_risk;
 mod tags;
 mod turn;
 mod usage_month;
+mod vault_session;
 mod worktree_push;
 mod writer;
 mod writer_dual;

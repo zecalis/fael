@@ -77,6 +77,7 @@ or a plan, run `fael verify <id>` — it prints recorded vs now and never edits 
 Rules: every row needs `--files` · write so it stands without this chat · verify ids with
 `fael find`, never from memory · before ending a session that changed files, add a row ·
 read `docs/architecture.md` §1 before deciding where code belongs.
+Open rows are also `.md` files under `<git-common-dir>/fael/vault` (or `git config fael.vault`) — one per open row, readable with `Read`/`grep`.
 
 ## Plan Workflow
 

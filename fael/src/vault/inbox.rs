@@ -61,7 +61,7 @@ pub(super) fn ingest(r: &Repo) -> Result<(), String> {
 /// One inbox file → one row id. The row is written before the file is deleted,
 /// so a crash between leaves both; the re-run then hits the content-hash key
 /// below (`recall::exact` in the write path) and files nothing twice.
-fn file(r: &Repo, p: &Path) -> Result<String, String> {
+pub(crate) fn file(r: &Repo, p: &Path) -> Result<String, String> {
     let raw = std::fs::read(p).map_err(|e| format!("unreadable ({e})"))?;
     let (meta, body) = frontmatter(&raw)?;
     if body.trim().is_empty() {
