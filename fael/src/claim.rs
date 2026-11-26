@@ -96,24 +96,28 @@ pub(crate) fn claim(r: &Repo, id: &str, force: bool) -> Result<Claimed, String> 
 }
 
 /// The best issue to work on next, claimed in the same step: open, not waiting,
-/// routed to nobody or to this reader, not held by a branch that still exists —
+/// routed to nobody or to this reader, not held by a branch that still exists,
+/// and linked to no open chunk (a chunk that fixes it owns it — `chunk add/edit
+/// --issue`; read-only through `core::work`, fail-open with no crew.db) —
 /// ranked like every list (yours, then urgent, then newest).
 pub(crate) fn next(r: &Repo, reader: &str) -> Result<Claimed, String> {
     let _lock = exclusive(r)?;
     let (stamp, branch) = me(r)?;
     let log = read(r);
     let day = core::today();
+    let db = core::work::db_for(r.journal.as_deref(), &r.fael);
     let ready: Vec<&core::Row> = core::find(&log, &core::Filter::default())
         .into_iter()
         .filter(|x| x.kind == "issue")
         .filter(|x| x.to_who().is_none_or(|t| core::to_matches(t, reader)))
         .filter(|x| !core::row_waiting(x, &day))
         .filter(|x| x.held().is_none_or(|h| h != branch && !alive(r, h)))
+        .filter(|x| core::work::linked_open_chunks(&db, &x.id).is_empty())
         .collect();
     let first = core::ranked(ready, Some(reader), |_| 0, core::fresh_ts)
         .into_iter()
         .next()
-        .ok_or("rejected: no ready issue — every open one is held, waiting or routed to someone else (fael find --kind issue)")?;
+        .ok_or("rejected: no ready issue — every open one is held, waiting, linked to an open chunk, or routed to someone else (fael find --kind issue)")?;
     take(r, &log, &stamp, &branch, &first.id.clone(), false)
 }
 
