@@ -11,6 +11,7 @@
 //! `fael sync` — there the lock cannot help.
 
 use crate::{Repo, core, read};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 type Claimed = (core::Row, PathBuf, Vec<String>);
@@ -57,6 +58,26 @@ fn remote_alive(common: &Path, branch: &str) -> bool {
                     .is_some_and(|(_, n)| n.starts_with("refs/remotes/") && n.ends_with(&tail))
             })
         })
+}
+
+/// Listing-time view of holds: a hold whose branch no longer exists is
+/// already free for `next` and `claim`, so listings show it as free too.
+/// In-memory only — the stored hold stays until a claim restamps it (which
+/// then warns `(branch gone)`). One refs read per holding branch, however
+/// many rows it holds; with no clone to prove death against, keep every hold.
+pub(crate) fn hide_dead_holds(r: &Repo, log: &mut core::Log) {
+    if r.journal.is_none() {
+        return;
+    }
+    let mut gone: HashMap<String, bool> = HashMap::new();
+    for row in &mut log.rows {
+        let Some(h) = row.held().map(str::to_string) else {
+            continue;
+        };
+        if *gone.entry(h.clone()).or_insert_with(|| !alive(r, &h)) {
+            row.extra.remove("held");
+        }
+    }
 }
 
 fn me(r: &Repo) -> Result<(core::Stamp, String), String> {

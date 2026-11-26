@@ -135,6 +135,39 @@ fn a_hold_whose_branch_is_gone_is_taken_over_without_force() {
     );
 }
 
+/// Issue 01M89VZYT: a hold whose branch is gone reads as free in listings —
+/// text, JSON and the jq shape agree with `next`, while the stored hold
+/// stays until a claim restamps it.
+#[test]
+fn a_dead_branch_hold_is_hidden_from_find() {
+    let d = repo();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "init"]);
+    git(&d, &["switch", "-q", "-c", "feat/dead"]);
+    let (id, _) = issue(&d, "stale hold", "src/a.rs", &[]);
+    assert!(fael(&d, &["claim", &id]).0);
+    git(&d, &["switch", "-q", "feat/one"]);
+    git(&d, &["branch", "-q", "-D", "feat/dead"]);
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue"]);
+    assert!(ok, "{err}");
+    let line = out
+        .lines()
+        .find(|l| l.contains("stale hold"))
+        .unwrap()
+        .to_string();
+    assert!(!line.contains("held @"), "{out}");
+    let (ok, out, err) = fael(&d, &["find", "--kind", "issue", "--json"]);
+    assert!(ok, "{err}");
+    let row: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+    assert!(row.get("held").is_none(), "{out}");
+    // the stored hold is untouched: a claim still takes it over with the warning
+    let (ok, _, err) = fael(&d, &["claim", &id]);
+    assert!(
+        ok && err.contains("was held @feat/dead (branch gone)"),
+        "{err}"
+    );
+}
+
 /// A hold that arrived by `fael sync` names a branch this clone only knows as
 /// `origin/<branch>`: it is alive, so a plain claim is refused.
 #[test]

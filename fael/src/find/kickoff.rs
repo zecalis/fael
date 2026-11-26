@@ -12,6 +12,7 @@ pub(crate) fn kickoff(a: &Args, anchor: Option<&String>) -> Result<(), String> {
     let files = core::normalize_files(&Vec::from_iter(anchor.cloned()), &r.cwd, &r.root)?;
     let (mut log, branch_of) = crate::journal::read(&r);
     crate::hook::mark_dormant(&r, &mut log);
+    crate::claim::hide_dead_holds(&r, &mut log);
     let al = aliases::load(&r, &log, true);
     let (limit, offset) = (None, 0);
     // a plan anchor (`PLAN-x.md` → `plan:x`): without --limit the page is
