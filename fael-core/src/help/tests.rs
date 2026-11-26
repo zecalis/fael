@@ -245,6 +245,18 @@ fn all_flag_beats_verb_help() {
     }
 }
 
+/// Issue 01M89VZYQ: the add section promised `find --to`, which find
+/// rejects since step-2 retirement — it must name the working way instead.
+#[test]
+fn add_help_never_promises_find_to() {
+    for section in [
+        super::for_command("add").unwrap(),
+        super::for_command_full("add").unwrap(),
+    ] {
+        assert!(!section.contains("find --to"), "got:\n{section}");
+    }
+}
+
 /// Issue 01M891M09: agents spent a round on `fael chunk --help` to learn the
 /// verbs the short list left out. The short list (bare `fael chunk` and the
 /// unknown-verb reject) names every verb, so it answers without a second call.
