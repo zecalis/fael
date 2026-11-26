@@ -12,6 +12,7 @@ mod derive;
 mod filehash;
 mod follows;
 mod from;
+mod ingest;
 mod keys;
 mod paths;
 mod recall;
