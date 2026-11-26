@@ -17,7 +17,7 @@ Fixed one with no row yet? File it now; close it after the commit — a row clos
 `fael add issue "<what broke>" --key <k>` then ``fael close --key <k> "<cause> → <fix>; guard `<test path>` or don't <X> because <Y>; tried <what failed>[; (#N)]"``.
 Would a new agent reading only code and tests know this? Yes → a test, named in `guard`. No → what not to do, and why.
 Name `(fael:<id>)` in the fix commit — a squash keeps it, a sha does not.
-In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this repo is fael).
+In fael itself? `gh issue create -R zecalis/fael`, not a row here.
 
 - `fael find [<text>] [--files <path>] [--key plan:x]` — the session brief, rows about a file or key, or a text search
 - `fael add decision "<the choice, why, what was rejected>" --title "<headline>" --files a,b` — never what code does, progress, or which files changed
@@ -28,9 +28,10 @@ In fael itself? `gh issue create -R zecalis/fael`, not a row here (unless this r
 - Work for someone else or your next session: `fael add issue "<what to do; how to tell it is done>" --files a,b --to <person|opencode|codex|claude> --key <topic>:handoff`. Handed one? Do it, then `fael close <id> "<what you did, how>"`; the sender reads that
 - A repeat on your open row's key supersedes it (`fael restore <id>` undoes); `--key` starts a new topic.
 
-A reject ends with `try <call>`: run it. Close: ``fael close <id> "slow tick → backoff; guard `tests/backoff.rs`"``
+A reject ends with `try <call>`: run it.
 
 Each row is read months later with no chat: one or two standalone sentences, one topic (a `;`/`·` list is rejected),
 with a ≤15-word `--title` (count first: required past 60 words/400 chars).
 `--files` names the paths or anchor `fael find` showed — never invent one; default: this session's edited files.
 Type an id only once this session's `fael find` or `add` printed it — never from memory.
+- Vault (<git-common-dir>/fael/vault): only open rows as .md: Read/grep; inbox/ via fael vault ingest.

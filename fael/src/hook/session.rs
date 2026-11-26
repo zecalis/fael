@@ -18,6 +18,15 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     let Some(mut c) = ctx(e) else { return no() };
     // decision 01M5528X: a dormant row is never in the session brief
     crate::hook::mark_dormant_start(&c.repo, &mut c.log);
+    // vault inbox notes become from:user rows, dormancy drops its files —
+    // fail-open, silent unless something broke; a filing re-reads the log
+    let (mut vault_warns, vault_changed) = crate::vault::session_sync(&c.repo);
+    if vault_changed {
+        let (log, tags) = crate::journal::read(&c.repo);
+        c.log = log;
+        c.tags = tags;
+        crate::hook::mark_dormant_start(&c.repo, &mut c.log);
+    }
     // a run killed mid-turn never reaches Stop: its session is kept from the first turn
     super::stop::seen(e);
     // and its model is reported from the first turn (cost follows on Stop)
@@ -100,7 +109,10 @@ pub(crate) fn session_start(e: &Event) -> Reply {
             "fael: sync still running — teammates' rows arrive at the next read\n".into(),
         ));
     }
-    for warn in (warnings(&c.repo, adopted).into_iter()).chain(crate::install::auto::notice()) {
+    for warn in (warnings(&c.repo, adopted).into_iter())
+        .chain(crate::install::auto::notice())
+        .chain(std::mem::take(&mut vault_warns))
+    {
         rest.push(Line::notice(format!("{warn}\n")));
     }
     out.say_within(leftover, rest);

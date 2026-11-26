@@ -21,6 +21,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 mod inbox;
+mod session;
+
+pub(crate) use session::session_sync;
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<(), String> {
     match rest {
