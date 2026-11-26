@@ -309,5 +309,9 @@ pub fn import(a: &Args, src: &str) -> Result<ExitCode, String> {
             rep.adds, rep.folded, rep.carried, rep.skipped
         );
     }
+    // raw `core::append`s bypass the write path — one reconcile, same as sync.
+    if let Err(e) = crate::vault::reconcile(&r) {
+        eprintln!("warn: vault: {e}");
+    }
     Ok(ExitCode::SUCCESS)
 }

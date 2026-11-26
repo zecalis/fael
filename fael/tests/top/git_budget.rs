@@ -31,8 +31,9 @@ const STATS_MAX: usize = 13;
 /// fixed probes (remotes ×2, branches, merged, recent log).
 const DOCTOR_MAX: usize = 8;
 /// `sync` push = config and remote probes, one `ls-remote`, then one
-/// `hash-object`, `mktree`, `commit-tree` and `push` however many month files.
-const SYNC_MAX: usize = 16;
+/// `hash-object`, `mktree`, `commit-tree` and `push` however many month files,
+/// plus one `config fael.vault` probe for the vault reconcile.
+const SYNC_MAX: usize = 17;
 
 fn git(d: &Path, args: &[&str]) {
     let ok = Command::new("git")

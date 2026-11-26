@@ -33,5 +33,9 @@ pub(crate) fn restore(
     } else {
         println!("{}", out.message);
     }
+    // a reopened row (or reverted edge) changes the open set — one reconcile.
+    if let Err(e) = crate::vault::reconcile(r) {
+        eprintln!("warn: vault: {e}");
+    }
     Ok(())
 }

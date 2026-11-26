@@ -77,6 +77,11 @@ fn run(r: &Repo, remote: &str) -> Result<(), String> {
     } else {
         println!("synced: pushed {}, ingested {ingested}", p.pushed);
     }
+    // ingested rows/closes (and tombstoned purges) bypass the write path, so
+    // the vault follows with one reconcile — silent, never a vault without one.
+    if let Err(e) = crate::vault::reconcile(r) {
+        eprintln!("warn: vault: {e}");
+    }
     Ok(())
 }
 

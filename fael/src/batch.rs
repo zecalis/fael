@@ -128,6 +128,13 @@ pub(crate) fn batch_bump(a: &crate::Args, ids: &[String]) -> Result<ExitCode, St
             }
         }
     }
+    // a bump restamps the row in place (and can revive a dormant row), so the
+    // open set may have changed — one reconcile when anything saved.
+    if failed < ids.len()
+        && let Err(e) = crate::vault::reconcile(&r)
+    {
+        eprintln!("warn: vault: {e}");
+    }
     if failed == 0 {
         Ok(ExitCode::SUCCESS)
     } else if ids.len() == 1 {
