@@ -22,7 +22,7 @@ Reply  {"block": false, "context"?: str, "notice"?: str}
 | a file was written | `edit` | `cwd`, `session`, `files` | append `context` to the tool result |
 | a file was found via search or the shell | `search` | `cwd`, `session`, plus `files` — or the raw call as `tool`, `tool_input`, `tool_response` | append `context` to the tool result |
 | the user sent a prompt | `prompt` | `cwd`, `session`, `text` (the prompt) | nothing: silent no-op; no turn state or context is written |
-| the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text` | nothing to do: fael files the reply's `fael <kind>:` lines and never blocks (`block` is always `false`, kept for old integrations) |
+| the agent is about to end its turn | `stop` | `cwd`, `session`, `reply`, `text` | fael records citations, updates the fix/risk stash and emits an earned user receipt; it never files reply lines or blocks (`block` is always `false`, kept for old integrations) |
 
 OpenCode 2 replaced its plugin API, so the one file carries two implementations:
 OpenCode 1 calls the named `Fael` export, OpenCode 2 loads the default
@@ -85,9 +85,10 @@ contract tests alone do not establish full parity.
   decision or issue a push reminded the agent of (once per file per session), and the turn's receipt
   on `stop`. Show it where only the user sees it (a toast, a status line); a client with no such
   channel drops it. Claude Code and Codex receive `systemMessage` (Codex TUI delivery and model-context isolation verified on 0.171.0-alpha.13.2; Desktop rendering remains unverified). Never put it in `context`. `[notify] user = false` turns it off.
-- `reply` — the assistant's **last message only**. fael files its `fael decision|issue|note: <text> [files: a,b]`
-  lines (column 0, outside code fences); leave it out and fael reads the last message of `session` as a Claude
-  transcript. Send it once per turn end — the same lines twice in a session file once.
+- `reply` — the assistant's **last message only**, read for cited ids and fix/risk signals.
+  Use `fael add` to file a row: reply-line capture was removed. Without `reply`, the neutral
+  adapter can read a Claude transcript; Codex supplies `last_assistant_message` and never
+  parses its rollout as a Claude transcript.
 - `text` — the assistant's text in this session (or at least the last message). The issue rule
   looks for "found a bug", "inconsistent", "might break", and similar; leave it out and fael reads `session` as a Claude transcript.
 - `agent` — only when the event fires inside a sub-agent: any id that is stable for that sub-agent. A
@@ -169,6 +170,49 @@ probe exercised the real sandbox without a remote model.
 Writing `.git/config` remained denied. Scratch repos and `FAEL_STATE_DIR`
 isolated the probes from the real ledger and usage log. Other platforms and
 older Codex versions were not exercised.
+
+## Codex acceptance checklist
+
+**Acceptance remains incomplete.** On 2026-11-27, installed CLI
+`0.171.0-alpha.13.2` and Desktop `26.1120.41243` (build `30607`) were identified.
+The app-server `hooks/list` read reported enabled, trusted user hooks for
+SessionStart, UserPromptSubmit, PostToolUse, Stop, SubagentStart and SubagentStop.
+Trust was already persisted by the user; the probe neither changed trust nor
+used a hook-trust bypass.
+
+A scratch CLI run and `codex exec resume <thread-id>` used a local Responses
+stub to supply a shell call, with the journal write grant above and an isolated
+`FAEL_STATE_DIR`. Each turn ran `fael add note <unique-text> --files probe.txt`.
+Both rows carried the same `CODEX_THREAD_ID` and explicit file; Stop advanced
+the session tally once per turn. Reply lines filed no extra row, as designed.
+Set `sandbox_mode = "workspace-write"` together with `writable_roots` for the
+resumed invocation as well: the probe's initial `--sandbox` flag alone did not
+make a later `exec resume` invocation use that policy.
+
+Use a disposable Git repo, isolated `FAEL_STATE_DIR` and `FAEL_NO_AUTO_UPDATE=1`
+for each acceptance run. Keep hooks user-trusted and grant only the shared
+journal path. Record versions, redacted hook payloads, thread ids and actual
+rows; CLI exit zero alone is not a pass. The checklist below distinguishes
+current observations from work still required:
+
+| Scenario | Exercise and acceptance bar | Current evidence |
+|---|---|---|
+| Fresh session and shell | Start a chat; print `CODEX_THREAD_ID`; file a unique note with explicit files; compare its stored session and files. | CLI shell attribution passed with a local stub. Desktop unverified. |
+| Two turns in one live chat | Send a second prompt without resuming; prompt hook stays silent; no duplicate row or unsolicited turn. | Not exercised in the current acceptance run. |
+| CLI derived files | Edit a file, then use shell `fael add` without `--files`; require only that thread's edits, or an explicit-files error when ambiguous. | Not exercised in the current acceptance run. |
+| Long shell command | Run a command that yields a process id; finish it through `write_stdin`; only actual edits enter this thread's edit list. | Not exercised on the current version. |
+| `apply_patch` | Edit a seeded file through the host tool; verify only that file's context and one reminder per file/session. | Not exercised on the current version. |
+| MCP | Call find/add/close with explicit files; check rows and closure. Attempt missing files and require an explicit-files error, never inferred chat identity. | Sandbox subprocess add/close passed in the journal-access probe; live Codex MCP find/add/close remains unverified. |
+| Stop | File with `fael add`; end the turn; verify one earned receipt and no duplicate tally consumption. Reply text must not file rows. | CLI scratch tally advanced once per turn; no reply capture. Receipt rendering in this run unverified. |
+| Resume | Resume the saved thread with the intended sandbox policy; file another unique note; session identity and said-once state must persist. | CLI identity and explicit files passed. Said-once push state not exercised. |
+| Compact | Compact a live chat; retain the real `source: compact` payload; context returns only to the compacted thread. | Historical 0.166.0-alpha.5.1 evidence above; not rerun on the current version. |
+| Subagent | Start/end a child; compare parent session id, child agent id and transcript path; child context must not consume the parent's state. | Historical child-tool evidence above; current lifecycle acceptance remains unverified. |
+| Concurrent chats | Open chats A and B on one scratch clone; edit disjoint files and file rows concurrently; each row/edit list belongs only to its caller. | Concurrent sandbox writes passed separately; live chat isolation remains unverified. |
+| Desktop | Repeat supported scenarios in the actual GUI and capture user-only notices. | UI automation explicitly denied access to the Codex app for safety reasons. Manual runtime evidence is required. |
+
+A trusted-hook listing, mock model response, fixture test or CLI observation does
+not establish Desktop parity. Keep `codex-parity` p4 unfinished until the missing
+runtime evidence is recorded; unsupported paths are limitations, not passes.
 
 ## One worktree per agent
 
