@@ -44,6 +44,9 @@ pub(crate) fn session_start(e: &Event) -> Reply {
         c.log = log;
         c.tags = tags;
     }
+    // a hold whose branch is gone reads as free everywhere else, so the
+    // brief shows it as free too — in-memory only, never written back
+    crate::claim::hide_dead_holds(&c.repo, &mut c.log);
     // PLAN-fael-auto-update chunk 3: the daily self-update check, detached too
     crate::install::auto::start();
     // a compacted or cleared context lost the rows pushed into it — tell them again

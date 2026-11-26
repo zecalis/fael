@@ -48,6 +48,7 @@ pub(crate) fn find(a: &Args, text: Option<&String>) -> Result<(), String> {
     // the union read tags journal-only rows with their stamped branch
     let (mut log, branch_of) = super::journal::read(&r);
     super::hook::mark_dormant(&r, &mut log);
+    super::claim::hide_dead_holds(&r, &mut log);
     // Identity (F-IDENT, c2): `resolve_identity` is the only id lookup — an
     // id-shaped query is an id lookup, never text, unless `--text` forces a
     // text search (the escape hatch for the old fallback).

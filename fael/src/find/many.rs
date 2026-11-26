@@ -85,6 +85,7 @@ pub(crate) fn find_many(a: &Args, ids: &[String]) -> Result<(), String> {
     let r = crate::repo()?;
     let (mut base, jtags) = journal::read(&r);
     crate::hook::mark_dormant(&r, &mut base);
+    crate::claim::hide_dead_holds(&r, &mut base);
     let spell = |left: &[String]| format!("fael find {}", left.join(" "));
     let p = pull(&r, base, jtags, ids, a.has("json"), &spell);
     print!("{}", p.text);

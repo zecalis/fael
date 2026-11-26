@@ -44,6 +44,7 @@ fn find_checked(a: &Value) -> Result<(String, Vec<String>), String> {
 fn find_inner(a: &Value, r: &Repo) -> Result<(String, Vec<String>), String> {
     let (mut log, branch_of) = crate::journal::read(r);
     crate::hook::mark_dormant(r, &mut log);
+    crate::claim::hide_dead_holds(r, &mut log);
     if let Some(ids) = a["ids"].as_array() {
         return ids_call(ids, r, log, branch_of);
     }
@@ -240,6 +241,7 @@ fn followed(w: &crate::find::owner::Elsewhere) -> Result<(String, Vec<String>), 
     let o = crate::repo_at(&w.at).map_err(|e| format!("rejected: {e}"))?;
     let (mut log, tags) = crate::journal::read(&o);
     crate::hook::mark_dormant(&o, &mut log);
+    crate::claim::hide_dead_holds(&o, &mut log);
     // Same canonical lookup: the id came from `row_elsewhere`, so it is One
     // content row; anything else is a typed miss, never silent.
     let row = match core::resolve_identity(&log, &w.id) {
