@@ -24,9 +24,10 @@ pub(super) const COMMANDS: &[(&str, &str, &str)] = &[
      as a note, the part still to do as the issue; not --supersedes (that one means the same bug);
      --replace old --with new re-files the --supersedes row with that one passage changed
      (no text; files, key, title and from carry over; old must occur in the body exactly once);
-     --to who routes an issue: it lists in full at the session start of whoever's git user.name
-     is `who` (lowercased), or of every session of the agent client named `who` (opencode, codex,
-     claude); fael find --to who lists theirs. The receipt prints the line to paste to them and,
+     --to who routes an issue: it lists as (to: who) in find, is handed
+     over at the session start of whoever's git user.name is `who` (lowercased),
+     or of every session of the agent client named `who` (opencode, codex,
+     claude); fael next claims yours first. The receipt prints the line to paste to them and,
      for a client, the headless command that starts it on the row (printed, never run);
      key it `<topic>:handoff` and `fael stats` counts it when picked up; the receiver closes it
      with how it went (fael close <id> \"...\") and the sender reads that on fael find --all;
