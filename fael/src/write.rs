@@ -246,8 +246,14 @@ pub(crate) fn add_row(
     // chunk 6e: the id just filed is already in this session's context — mark
     // it seen so the next push does not repeat it; the turn's receipt counts it.
     // c1: a no-op retry (T5/T6) writes nothing — emit zero new side-effects.
-    if !is_noop(&warns) {
+    let noop = is_noop(&warns);
+    if !noop {
         hook::note_filed(&r.root, &row);
+        // the vault projection follows the write, never the write it: a vault
+        // failure warns, and no vault means one dir check and nothing more.
+        if let Err(e) = crate::vault::refresh(r, &row.id) {
+            warns.push(format!("vault: {e}"));
+        }
     }
     Ok((row, path, warns))
 }
@@ -333,8 +339,15 @@ pub(crate) fn close_row_as(
         core::close_row(&r.fael, r.journal.as_deref(), &log, &r.cfg, &stamp, id, why)?;
     warns.append(&mut core_warns);
     // c1: a no-op retry writes nothing — emit zero new side-effects.
-    if !is_noop(&warns) {
+    let noop = is_noop(&warns);
+    if !noop {
         hook::note_closed(&r.root, &row);
+        // the closed row leaves the vault in the same call that closes it.
+        if let Some(t) = row.reference.clone()
+            && let Err(e) = crate::vault::refresh(r, &t)
+        {
+            warns.push(format!("vault: {e}"));
+        }
     }
     Ok((row, path, warns))
 }

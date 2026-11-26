@@ -326,6 +326,14 @@ fael chunk approve <uid> [--model M] [--client C] [--plan p]
      the state dir, never .fael/)",
     ),
     (
+        "vault",
+        "the open rows as markdown files",
+        "fael vault rebuild
+    (hidden: project the open rows to one .md file per row under <vault>/<repo>/<kind>/ —
+      the jsonl log stays the source of truth, the vault is derived and rebuild reproduces it
+      byte for byte; a vault write failure warns, never fails the add or close; issue 01M8BDGV)",
+    ),
+    (
         "doctor",
         "check the log; --fix repairs what it can",
         "fael doctor [--fix] [--json]

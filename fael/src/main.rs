@@ -31,6 +31,7 @@ mod session_env;
 mod sync;
 mod synonyms;
 mod unmerged;
+mod vault;
 mod verify;
 mod write;
 
@@ -119,6 +120,8 @@ fn run(argv: Vec<String>) -> Result<ExitCode, String> {
         ("mv", [old, new]) => mv::mv(&a, old, new).map(|()| ExitCode::SUCCESS),
         // hidden: what fael-crew asks for mid-`chunk start|done` (see held.rs)
         ("held", [kind]) => held::cmd(kind, a.one("since")),
+        // hidden: the open rows as markdown files (see vault.rs, issue 01M8BDGV)
+        ("vault", rest) => vault::cmd(&a, rest).map(|()| ExitCode::SUCCESS),
         ("restore", [] | [_]) => restore::restore(&repo()?, &a, rest.first().map(String::as_str))
             .map(|()| ExitCode::SUCCESS),
         ("verify", [id]) => verify::cmd(id),
