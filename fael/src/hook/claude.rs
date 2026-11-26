@@ -138,17 +138,9 @@ fn patch_files(patch: &str) -> Vec<String> {
         .collect()
 }
 
-/// The user line, Claude Code only: its `systemMessage` shows to the user
-/// and never reaches the model. Codex's stays out of model context (measured
-/// on `codex exec`) but no run showed it reaching the user, so Codex says
-/// nothing (issue 01M68FTR, `docs/architecture.md` user channel).
-fn user_line(r: &super::protocol::Reply, codex: bool) -> Option<&str> {
-    (!codex).then_some(r.notice.as_deref()).flatten()
-}
-
 /// `additionalContext` for the agent, `systemMessage` for the user — each
 /// only when there is one; nothing at all prints nothing.
-fn print_reply(event: &str, r: super::protocol::Reply, codex: bool) {
+fn print_reply(event: &str, r: super::protocol::Reply) {
     let mut out = serde_json::Map::new();
     if let Some(ctx) = r.context() {
         out.insert(
@@ -156,7 +148,7 @@ fn print_reply(event: &str, r: super::protocol::Reply, codex: bool) {
             serde_json::json!({"hookEventName": event, "additionalContext": ctx}),
         );
     }
-    if let Some(n) = user_line(&r, codex) {
+    if let Some(n) = r.notice.as_deref() {
         out.insert("systemMessage".into(), n.into());
     }
     if !out.is_empty() {
@@ -207,7 +199,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             } else {
                 stop(&e)
             };
-            if let Some(n) = user_line(&r, codex) {
+            if let Some(n) = r.notice.as_deref() {
                 println!("{}", serde_json::json!({"systemMessage": n}));
             }
             ExitCode::SUCCESS
@@ -226,12 +218,11 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                     "SessionStart"
                 },
                 session_start(&e),
-                codex,
             );
             ExitCode::SUCCESS
         }
         "prompt" => {
-            print_reply("UserPromptSubmit", prompt_reply(stdin, client), codex);
+            print_reply("UserPromptSubmit", prompt_reply(stdin, client));
             ExitCode::SUCCESS
         }
         "read" | "edit" | "search" => {
@@ -266,7 +257,7 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
                 }
                 _ => super::protocol::Reply::default(),
             };
-            print_reply("PostToolUse", reply, codex);
+            print_reply("PostToolUse", reply);
             ExitCode::SUCCESS
         }
         // ReportFindings (Claude Code only): each finding as a ready `add issue`
@@ -279,7 +270,6 @@ pub(crate) fn run(event: &str, stdin: &str, client: &str) -> ExitCode {
             print_reply(
                 "PostToolUse",
                 super::review::report_reply(&e, &p.tool_input),
-                codex,
             );
             ExitCode::SUCCESS
         }

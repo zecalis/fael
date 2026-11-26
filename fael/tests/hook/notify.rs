@@ -1,7 +1,7 @@
 //! The user channel (PLAN-fael-visible-secretary chunk 4): Claude's
 //! `systemMessage` carries one line per beat — brief, reminder, receipt —
 //! only when fael did something, at most one reminder per file per session,
-//! never for codex (unverified channel), and `additionalContext` stays byte-identical with the
+//! Claude and Codex both deliver it, and `additionalContext` stays byte-identical with the
 //! channel on or off.
 
 use super::{fael, fael_env, json, repo};
@@ -104,7 +104,7 @@ fn reminder_once_per_file_then_the_turn_receipt() {
 }
 
 #[test]
-fn codex_and_notify_off_print_no_user_line() {
+fn codex_notice_and_notify_off_preserve_agent_context() {
     let d = repo();
     std::fs::write(d.join("src/a.rs"), "// a\n").unwrap();
     let (ok, _, err) = fael(
@@ -114,7 +114,13 @@ fn codex_and_notify_off_print_no_user_line() {
     );
     assert!(ok, "{err}");
     let on = edit(&d, "codex").unwrap();
-    assert!(on["systemMessage"].is_null(), "{on}");
+    assert!(
+        on["systemMessage"]
+            .as_str()
+            .unwrap()
+            .contains("reminded agent"),
+        "{on}"
+    );
     std::fs::write(d.join(".fael/config.toml"), "[notify]\nuser = false\n").unwrap();
     // a fresh session: the seen list would hide the row otherwise; drop the
     // edit lists too, or peer same-file would change the context under test
@@ -124,7 +130,7 @@ fn codex_and_notify_off_print_no_user_line() {
         r#"{{"cwd":{},"session_id":"s2","tool_name":"Edit","tool_input":{{"file_path":"src/a.rs"}}}}"#,
         json(&d)
     );
-    let off = hook(&d, "edit", "claude", &input).unwrap();
+    let off = hook(&d, "edit", "codex", &input).unwrap();
     assert!(off["systemMessage"].is_null(), "{off}");
     assert_eq!(
         on["hookSpecificOutput"]["additionalContext"],
@@ -175,4 +181,32 @@ fn session_start_briefs_the_user_on_rows_said() {
         on["hookSpecificOutput"]["additionalContext"],
         off["hookSpecificOutput"]["additionalContext"]
     );
+}
+
+#[test]
+fn codex_stop_receipt_is_user_only_and_said_once() {
+    let d = repo();
+    let (ok, _, err) = fael_env(
+        &d,
+        &[
+            "add",
+            "issue",
+            "cache misses",
+            "--files",
+            "src/a.rs",
+            "--key",
+            "cache:miss",
+        ],
+        "",
+        &[("CODEX_THREAD_ID", "codex-notice")],
+    );
+    assert!(ok, "{err}");
+    let input = format!(r#"{{"cwd":{},"session_id":"codex-notice"}}"#, json(&d));
+    let out = hook(&d, "stop", "codex", &input).unwrap();
+    assert_eq!(
+        out["systemMessage"],
+        "fael: this turn — filed 1 (#cache:miss)"
+    );
+    assert!(out.get("hookSpecificOutput").is_none(), "{out}");
+    assert!(hook(&d, "stop", "codex", &input).is_none());
 }

@@ -40,7 +40,7 @@ pub(crate) struct Reply {
     #[serde(skip_serializing_if = "Option::is_none")]
     context: Option<String>,
     /// One line for the user, never the agent (PLAN-fael-visible-secretary
-    /// chunk 4): Claude's `systemMessage`, an OpenCode toast. A client with
+    /// chunk 4): Claude/Codex `systemMessage`, an OpenCode toast. A client with
     /// no such channel drops it — it must never land in `context`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) notice: Option<String>,
