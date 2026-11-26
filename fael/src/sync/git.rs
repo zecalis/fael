@@ -247,6 +247,8 @@ pub(crate) fn commit_tree(root: &Path, tree: &str, parent: Option<&str>) -> Resu
 
 /// Push the commit at `refname`, fast-forward only, never force. `Ok(Some)`
 /// on success, `Ok(None)` when the remote moved under us (retry once).
+/// `--no-verify`: the ledger ref never carries code, so a team's code
+/// pre-push gate (e.g. vela's) must not refuse it (issue 01M89J19).
 pub(crate) fn push(
     root: &Path,
     remote: &str,
@@ -254,7 +256,12 @@ pub(crate) fn push(
     commit: &str,
 ) -> Result<Option<()>, String> {
     let o = fael_core::git_cmd()
-        .args(["push", remote, &format!("{commit}:{refname}")])
+        .args([
+            "push",
+            "--no-verify",
+            remote,
+            &format!("{commit}:{refname}"),
+        ])
         .current_dir(root)
         .output()
         .map_err(|e| format!("fael: git push: {e}"))?;
