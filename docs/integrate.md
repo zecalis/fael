@@ -71,7 +71,8 @@ confirmed parent/agent identity fields. An app-server compact plus continuation
 emitted the real `SessionStart` with `source: compact`, retained as a fixture.
 Workspace-write probes received
 `lock: Operation not permitted` at the `.git/fael` journal; attribution writes
-were checked in an unrestricted scratch repo. Desktop GUI lifecycle and newly
+were checked in an unrestricted scratch repo. A narrow permission-profile remedy is
+documented in [Codex sandbox journal access](#codex-sandbox-journal-access). Desktop GUI lifecycle and newly
 trusted subagent lifecycle wiring still require the runtime acceptance pass;
 contract tests alone do not establish full parity.
 
@@ -110,6 +111,64 @@ records them as `who: "auto"` — counted in `stats.usage.by_flag`, never in
 
 Also register `fael mcp` (stdio, tools `find` / `add` / `close`, plus `chunk` for fael crew). If the agent can load skills,
 use the one `fael install` writes (`~/.claude/skills/fael/SKILL.md`).
+
+## Codex sandbox journal access
+
+`lock: Operation not permitted (os error 1)` can mean Codex made `.git`
+read-only, including fael's journal. This is a filesystem permission failure.
+Grant the journal directory explicit write access in the host configuration.
+
+Resolve the shared journal from the checkout that the agent uses:
+
+```sh
+git rev-parse --path-format=absolute --git-common-dir
+```
+
+Append `/fael` to that output. In a linked worktree this is the main clone's
+shared Git directory, not the worktree's `.git` pointer or its private Git directory.
+For the legacy `workspace-write` mode, append the resolved directory to
+`writable_roots` in the owner's Codex configuration, keeping existing entries:
+
+```toml
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+writable_roots = ["/absolute/path/to/clone/.git/fael"]
+```
+
+The equivalent one-run override is
+`codex exec --sandbox workspace-write -c 'sandbox_workspace_write.writable_roots=["/absolute/path/to/clone/.git/fael"]' <prompt>`.
+For a host using named permission profiles instead, extend the built-in workspace
+protections and grant just that directory:
+
+```toml
+default_permissions = "fael-workspace"
+
+[permissions.fael-workspace]
+extends = ":workspace"
+
+[permissions.fael-workspace.filesystem]
+"/absolute/path/to/clone/.git/fael" = "write"
+```
+
+Replace the example with the resolved absolute path. Select this profile in the
+host that starts the CLI or MCP process. Legacy `sandbox_mode` settings can take
+precedence over `default_permissions`; use the host's active configuration rather
+than adding an unused profile. See [Codex permissions](https://learn.chatgpt.com/docs/permissions)
+for profile selection and precedence. `fael install` does not change sandbox permissions.
+
+Verified on macOS with codex-cli `0.171.0-alpha.13.2` on 2026-11-27 using
+`codex sandbox -P fael-workspace -C <checkout> <command>`: shell `fael add`
+and stdio MCP `add` both failed without the grant and succeeded with it, in a
+main checkout and a linked worktree. A fresh journal could also be created.
+A separate `codex exec --sandbox workspace-write` probe used the legacy
+`writable_roots` override above: concurrent sessions each completed shell and
+MCP `add`/`close` against the shared journal. Without the override both add
+paths were denied. A local Responses API stub supplied the tool calls, so the
+probe exercised the real sandbox without a remote model.
+Writing `.git/config` remained denied. Scratch repos and `FAEL_STATE_DIR`
+isolated the probes from the real ledger and usage log. Other platforms and
+older Codex versions were not exercised.
 
 ## One worktree per agent
 
