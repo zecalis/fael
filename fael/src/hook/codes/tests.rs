@@ -94,6 +94,10 @@ fn rejects_read_as_their_family() {
             "rejected: nothing written — text is 131 words with no title — add --title \"<h>\" — try `fael add note \"<one topic>\" --title \"<≤15-word headline>\" --files <paths>`",
             "shape_gate",
         ),
+        (
+            "rejected: 2 inbox file(s) left in place — fix the frontmatter or body and re-run `fael vault ingest`",
+            "partial",
+        ),
     ] {
         assert_eq!(reject(msg), want, "{msg}");
     }

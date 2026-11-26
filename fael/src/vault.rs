@@ -11,10 +11,16 @@
 //! (tmp + rename). The write path (`write::add_row`, `write::close_row_as`)
 //! calls `refresh` — only when the vault dir already exists (no vault = one
 //! `git config` read, then zero cost).
+//!
+//! `fael vault ingest` files `<vault>/inbox/*.md` as `from: user` rows through
+//! the same write path, then deletes each file — the human side of the vault.
+//! A file that fails stays in place with its reason; any failure exits 1.
 
 use crate::{Args, Repo, core};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+
+mod inbox;
 
 pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<(), String> {
     match rest {
@@ -25,7 +31,15 @@ pub(crate) fn cmd(a: &Args, rest: &[String]) -> Result<(), String> {
             println!("{root}");
             Ok(())
         }
-        _ => Err("rejected: wrong arguments for \"vault\" — try 'fael vault rebuild'".into()),
+        [v] if v == "ingest" => {
+            a.only("vault", &[])?;
+            let r = crate::repo()?;
+            inbox::ingest(&r)
+        }
+        _ => Err(
+            "rejected: wrong arguments for \"vault\" — try 'fael vault rebuild' or 'fael vault ingest'"
+                .into(),
+        ),
     }
 }
 

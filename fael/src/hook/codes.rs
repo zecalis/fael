@@ -77,6 +77,7 @@ const REJECTS: &[(&str, &str)] = &[
     ("closes rejected", "partial"),
     ("bumps rejected", "partial"),
     ("chunks rejected", "partial"),
+    ("left in place", "partial"),
     ("already closed", "row_state"),
     ("superseded", "row_state"),
     ("held @", "row_state"),
