@@ -236,7 +236,7 @@ fn session_start_waits_for_sync_and_shows_the_fresh_row() {
     assert!(ok, "{err}");
 
     let ev = format!(r#"{{"cwd":{},"session":"s1"}}"#, json(&d));
-    // the wait bound is a perf knob (default 500ms): this test proves the
+    // the wait bound is a perf knob (default detached per 01M89HSS): this test proves the
     // wait itself, so it gives Windows CI room to finish a local sync.
     let (ok, out, _) = fael_env(
         &d,

@@ -36,7 +36,7 @@ pub(crate) fn session_start(e: &Event) -> Reply {
     // 2026-10-03 and its dir is garbage (issue 01M56WGH)
     let _ = std::fs::remove_dir_all(state_dir().join("stop-block"));
     mark_started(&c.session, &c.repo.root);
-    // waited up to the bound: a finished sync is re-read below so the
+    // detached by default (01M89HSS): a finished sync is re-read below so the
     // kickoff sees it; a still-running one gets its one line at the outbox
     let sync = super::autosync::start_session(e);
     if matches!(sync, super::autosync::SessionSync::Done) {

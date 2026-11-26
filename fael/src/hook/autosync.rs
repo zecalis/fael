@@ -1,8 +1,11 @@
 //! Auto sync (PLAN-fael-journal-transport chunk 6): session start, and a Stop
 //! that lets a turn through, start one `fael sync` when `fael.remote` is set —
 //! once per session and worktree for each newest row this writer has filed.
-//! Session start waits for its sync up to a bound so teammates' rows reach
-//! the kickoff; a sync still running past the bound stays detached and the
+//! Session start detaches its sync (issue 01M89HSS): waiting never paid off —
+//! an ssh sync takes seconds, so the old 500ms bound always expired and every
+//! cold start paid it for a `Running` anyway. The detached rows reach the
+//! session's later reads; `FAEL_SYNC_WAIT_MS` restores a wait when wanted.
+//! A sync still running past the bound stays detached and the
 //! start says so in one line, and the rows reach the session's later reads.
 //! A turn's new rows go out at the next Stop (detached, never waited for),
 //! and a Stop with nothing new starts nothing. Never per `add`.
@@ -31,15 +34,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// How long session start waits for its sync (Threshold trial: the owner
-/// sets it) — never blocks a start past it. `FAEL_SYNC_WAIT_MS` overrides it
-/// (tests); Stop never waits.
+/// How long session start waits for its sync (issue 01M89HSS: ssh syncs
+/// take 7-10s so a 500ms bound never finished — every cold start paid the
+/// full bound for a `Running` anyway, p50 792ms). Default is detached (bound
+/// 0): the sync's rows reach later reads, not the kickoff. `FAEL_SYNC_WAIT_MS`
+/// overrides it (tests); Stop never waits.
 fn session_bound() -> Duration {
     std::env::var("FAEL_SYNC_WAIT_MS")
         .ok()
         .and_then(|v| v.parse().ok())
         .map(Duration::from_millis)
-        .unwrap_or(Duration::from_millis(500))
+        .unwrap_or(Duration::ZERO)
 }
 
 /// A sync that ran this recently already brought the teammates' rows in, so a
@@ -118,7 +123,8 @@ pub(crate) fn start(e: &Event) {
 }
 
 /// Session start's sync: like [`start`], but waits up to [`session_bound`]
-/// so the kickoff sees what the sync ingests. Past the bound the child is
+/// so the kickoff sees what the sync ingests (default detached, bound 0 per
+/// 01M89HSS — `FAEL_SYNC_WAIT_MS` restores the wait). Past the bound the child is
 /// left running detached ([`SessionSync::Running`]).
 pub(crate) fn start_session(e: &Event) -> SessionSync {
     let Some(r) = ready(e) else {
