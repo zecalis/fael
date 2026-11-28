@@ -77,6 +77,8 @@ pub(super) fn brief(
                     resume: None,
                     issues: vec![],
                     cited: vec![],
+                    landed: vec![],
+                    landed_more: 0,
                     started: None,
                     base: None,
                 };
