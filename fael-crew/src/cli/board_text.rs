@@ -18,6 +18,9 @@ fn gated<'a>(b: &'a Board<'a>, plan_cut: bool) -> Vec<(&'a str, &'a str)> {
         .collect()
 }
 
+/// Most `group` lines the text board prints; the rest ride a count.
+const GROUP_MAX: usize = 5;
+
 pub(super) fn text(b: &Board, plan_cut: bool) -> String {
     let all: HashMap<&str, &BoardChunk> = b
         .projects
@@ -75,6 +78,24 @@ pub(super) fn text(b: &Board, plan_cut: bool) -> String {
         out.push_str(&format!("{head}\n"));
         for (uid, tag) in rows {
             out.push_str(&chunk_line(&all, uid, tag));
+        }
+    }
+    let group: Vec<String> = b
+        .projects
+        .iter()
+        .filter_map(|p| p.ledger.as_ref())
+        .flat_map(|l| l.group_lines())
+        .collect();
+    if !group.is_empty() {
+        out.push_str("group\n");
+        for g in group.iter().take(GROUP_MAX) {
+            out.push_str(&format!("  {g}\n"));
+        }
+        if group.len() > GROUP_MAX {
+            out.push_str(&format!(
+                "  +{} more — `fael board --json` (ledger issues `fits`/`shares`) or /fael-sweep\n",
+                group.len() - GROUP_MAX
+            ));
         }
     }
     if !plan_cut && !b.blocked.is_empty() {

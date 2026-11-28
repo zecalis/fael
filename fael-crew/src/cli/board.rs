@@ -258,6 +258,14 @@ fn project(
         .filter_map(|r| Some((r.worktree.as_deref()?, r.id.as_str())))
         .collect();
     let worktrees = worktrees(&r.root, r.cfg.plan_worktrees.as_deref(), &live);
+    // before `--open` drops the running chunks: an issue fits a running chunk's scope too
+    let in_flight: Vec<(String, Vec<String>)> = b
+        .chunks
+        .iter()
+        .filter(|c| matches!(c.state.as_str(), "open" | "running" | "waiting"))
+        .filter(|c| !c.scope.is_empty())
+        .map(|c| (c.uid.clone(), c.scope.clone()))
+        .collect();
     // SPEC §4: the planner's one read — every open chunk, with its scope and overlaps
     if open {
         b.chunks.retain(|c| c.state == "open");
@@ -273,7 +281,7 @@ fn project(
         ledger: if cut {
             None
         } else {
-            Some(ledger::read(&r, &s.fixers()?))
+            Some(ledger::read(&r, &s.fixers()?, &in_flight))
         },
         ..Project::named(root)
     }))

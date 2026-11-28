@@ -167,6 +167,7 @@ pub(crate) fn start(a: &Args, r: &Repo, uid: &str, here: &Here) -> Result<(), St
     // each linked issue's id → its row, so the agent reads what to fix without a find
     resolve_issue_rows(r, &mut st);
     resolve_cited_rows(r, &mut st);
+    crate::chunk_landed::resolve(r, &mut st);
     say_start_notes(&st, here);
     // c5: same-session retry returns the live R short — sections, answers, notes,
     // hand-offs and held rows stay in the first brief (session invariant); --full

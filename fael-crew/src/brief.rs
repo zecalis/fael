@@ -250,6 +250,8 @@ impl Started {
             if !full {
                 handoffs(&mut o, "before this, handed off", &c.after, true);
             }
+            // above the TLDR: read before the brief is acted on
+            landed(&mut o, c);
             // zero-knowledge first line: what to do, then the exact close verb
             let task = if c.brief == c.title || c.brief.trim().is_empty() {
                 c.title.clone()
@@ -489,6 +491,10 @@ impl Started {
         }
     }
 }
+
+#[path = "brief_landed.rs"]
+mod landed_text;
+use landed_text::landed;
 
 #[cfg(test)]
 #[path = "brief_tests.rs"]

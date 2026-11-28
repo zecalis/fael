@@ -44,6 +44,8 @@ fn chunk(uid: &str) -> Brief {
         resume: None,
         issues: vec![],
         cited: vec![],
+        landed: vec![],
+        landed_more: 0,
         started: None,
         base: None,
     }
@@ -614,4 +616,30 @@ fn the_brief_names_the_run_base_short() {
     }
     .text();
     assert!(t.contains("base abcdef12"), "{t}");
+}
+
+#[test]
+fn what_landed_since_the_brief_comes_before_the_tldr_and_is_silent_when_none() {
+    let one = |c: Brief| Started {
+        run: "R".into(),
+        chunks: vec![c],
+        orphaned: vec![],
+        resumed: false,
+        forced: vec![],
+    };
+    let quiet = one(chunk("A")).render(false, false);
+    assert!(!quiet.contains("landed since"), "{quiet}");
+    let mut c = chunk("A");
+    c.started = Some("2026-11-20T10:00:00Z".into());
+    c.landed = vec!["abc1234 fix(x): y".into()];
+    c.landed_more = 2;
+    let t = one(c).render(false, false);
+    let at = t.find("landed since this brief was written (2026-11-20): 3 commit(s)");
+    let tldr = t.find("TLDR:");
+    assert!(at.is_some() && at < tldr, "above the TLDR: {t}");
+    assert!(t.contains("- abc1234 fix(x): y\n(2 more not shown)"), "{t}");
+    assert!(
+        t.contains("`fael chunk done A \"<the commit that fixed it>\" --left none --no-change`"),
+        "{t}"
+    );
 }

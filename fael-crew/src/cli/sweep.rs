@@ -35,6 +35,13 @@ struct Issue {
     /// so the sweeper may close the issue in one call. Fael never closes it; absent = none
     #[serde(skip_serializing_if = "Option::is_none")]
     fix_landed: Option<String>,
+    /// open/running/waiting chunks whose scope covers this issue's files — link it there
+    /// (`fael chunk edit <uid> --issue +<id>`) instead of a new chunk, when one cause
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    fits: Vec<String>,
+    /// other untriaged issues on the same files — one chunk candidate, when one cause
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    shares: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -78,11 +85,12 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
     crate::plan::in_repo(&r)?;
     let log = crate::read(&r);
     let open = core::find(&log, &core::Filter::default());
+    let active_scopes = scopes(&r);
     let input = Input {
         v: 1,
         root: r.root.to_string_lossy().into_owned(),
-        issues: untriaged(&r, &log, &open),
-        active_scopes: scopes(&r),
+        issues: untriaged(&r, &log, &open, &active_scopes),
+        active_scopes,
         claimed: claimed(&open),
         drifted: drifted(&log, &r),
     };
@@ -94,7 +102,7 @@ pub(crate) fn cmd(a: &Args) -> Result<ExitCode, String> {
 }
 
 /// Untriaged open issues with bodies and naming commits — what the sweep judges.
-fn untriaged(r: &Repo, log: &core::Log, open: &[&core::Row]) -> Vec<Issue> {
+fn untriaged(r: &Repo, log: &core::Log, open: &[&core::Row], active: &[Scope]) -> Vec<Issue> {
     let fixers = fixers(r);
     let mut issues: Vec<&core::Row> = open.iter().copied().filter(|x| x.kind == "issue").collect();
     issues.sort_by_key(|x| x.id.clone());
@@ -123,8 +131,18 @@ fn untriaged(r: &Repo, log: &core::Log, open: &[&core::Row]) -> Vec<Issue> {
     let ids: Vec<String> = live.iter().map(|x| x.id.clone()).collect();
     let commits = issue_commits(r, &ids);
     let base = crate::git(&r.root, &["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+    let in_flight: Vec<(String, Vec<String>)> = active
+        .iter()
+        .map(|s| (s.uid.clone(), s.scope.clone()))
+        .collect();
+    let peers: Vec<(String, Vec<String>)> = live
+        .iter()
+        .map(|x| (x.id.clone(), x.files.clone()))
+        .collect();
     live.iter()
         .map(|x| Issue {
+            fits: crate::group_hint::fits(&x.files, &in_flight),
+            shares: crate::group_hint::shares(&x.id, &x.files, &peers),
             fix_landed: commits
                 .get(&x.id)
                 .and_then(|c| landed(&r.root, base.as_deref()?, c)),

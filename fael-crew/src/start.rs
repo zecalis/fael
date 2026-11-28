@@ -96,6 +96,13 @@ pub struct Brief {
     /// `cited rows now` (cli layer fills after `Store::start`): one line per ledger row the
     /// title or brief cites, with its live state — the store never reads the ledger
     pub cited: Vec<String>,
+    /// `<sha> <subject>` of commits on the default branch since `started` (the brief's age)
+    /// that touch the scope, newest first, capped — the cli layer fills it after
+    /// `Store::start` (the store runs no git); with how many more there were. A run's own
+    /// drift starts at its base, so without this the window between writing the brief and
+    /// starting it is invisible.
+    pub landed: Vec<String>,
+    pub landed_more: usize,
     /// section drift baseline: the later of the chunk's last `edited brief` event (its
     /// creation when never edited) and the previous run's start (None when neither
     /// exists) — a plan section updated past it changed after the brief was written
